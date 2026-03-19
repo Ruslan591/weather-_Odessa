@@ -379,13 +379,11 @@ const locations = {
 
 //===== загрузка open meteo =====
 async function loadCurrentWeather(lat, lon){
-
-const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,pressure_msl,wind_speed_10m,wind_direction_10m`;
-
-const r = await fetch(url);
-const d = await r.json();
-
-return d.current;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,pressure_msl,wind_speed_10m,wind_direction_10m,time`;
+    const r = await fetch(url);
+    const d = await r.json();
+    // возвращаем current вместе с временем
+    return d.current;
 }
 
 // ===== Обёртка для районов =====
@@ -506,20 +504,19 @@ const results = await Promise.all(
 
 
 results.forEach(({name,w})=>{
+    // w.time есть, это ISO 2026-03-19T19:00
+    const t = new Date(w.time);
+    const timeStr = `${t.getUTCDate()} число, ${t.getUTCHours()}:00 UTC`;
+
     html += `
     <div class="row">
         <div>${name}</div>
-        <div>${w.temperature_2m}°C | ${w.wind_speed_10m} м/с<br>
-        <span class="small">${w.time}</span></div>
+        <div>
+            ${w.temperature_2m}°C | ${w.wind_speed_10m} м/с<br>
+            <span class="small">${timeStr}</span>
+        </div>
     </div>`;
 });
-// Кнопка и лог один раз
-html += `
-<div class="card">
-    <b>Районы</b>
-    <div id="districtsLog" class="small"></div>
-    <button onclick="loadDistrictsUI()">Обновить районы</button>
-</div>`;
 
 document.getElementById("districts").innerHTML = html;
 }
