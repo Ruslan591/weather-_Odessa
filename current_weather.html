@@ -189,17 +189,69 @@ function parseSynop(line){
         wind = parseInt(w.slice(3,5));
     }
 
-    return {temp,dew,pressure,wind,windDir,weather,cloud,raw:line};
+    const time = parts[1]; // 16091
+
+return {temp,dew,pressure,wind,windDir,weather,cloud,raw:line,time};
 
 }
 
 // ===== расшифровки =====
 function weatherText(code){
+
     if(!code) return "-";
-    if(code==="00") return "Ясно";
-    if(code==="61") return "Дождь";
-    if(code==="80") return "Ливень";
-    return "Код " + code;
+
+    const map = {
+        "00":"Ясно",
+        "01":"Малооблачно",
+        "02":"Переменная облачность",
+        "03":"Пасмурно",
+
+        "45":"Туман",
+        "48":"Туман с изморосью",
+
+        "51":"Морось",
+        "61":"Дождь",
+        "63":"Сильный дождь",
+
+        "71":"Снег",
+        "73":"Сильный снег",
+
+        "80":"Ливень",
+        "95":"Гроза"
+    };
+
+    return map[code] || "Код " + code;
+}
+function formatTime(t){
+
+    if(!t) return "-";
+
+    const day = t.slice(0,2);
+    const hour = t.slice(2,4);
+
+    return `${day} число, ${hour}:00 UTC`;
+}
+function windArrow(deg){
+
+    if(deg == null) return "";
+
+    return `<span style="
+        display:inline-block;
+        transform:rotate(${deg}deg);
+        font-size:18px;
+    ">↑</span>`;
+}
+
+function tempColor(t){
+
+    if(t == null) return "#eee";
+
+    if(t < 0) return "#4da3ff";
+    if(t < 10) return "#90caf9";
+    if(t < 20) return "#81c784";
+    if(t < 30) return "#ffb74d";
+
+    return "#ff5252";
 }
 
 function cloudText(c){
@@ -219,7 +271,10 @@ function render(d){
 
     el.innerHTML = `
 
-    <div class="big">${d.temp ?? "-"}°C</div>
+    <div class="small">Наблюдение: ${formatTime(d.time)}</div>
+    <div class="big" style="color:${tempColor(d.temp)}">
+    ${d.temp ?? "-"}°C
+</div>
 
     <div class="row">
         <div>Ощущение (точка росы)</div>
@@ -232,12 +287,13 @@ function render(d){
     </div>
 
     <div class="row">
-        <div>Ветер</div>
-        <div class="value">
-            ${d.wind ?? "-"} м/с 
-            ${d.windDir ? degToText(d.windDir) : ""}
-        </div>
+    <div>Ветер</div>
+    <div class="value">
+        ${d.wind ?? "-"} м/с 
+        ${d.windDir ? degToText(d.windDir) : ""}
+        ${windArrow(d.windDir)}
     </div>
+</div>
 
     <div class="row">
         <div>Облачность</div>
@@ -254,6 +310,7 @@ function render(d){
 }
 
 load();
+setInterval(load, 1800000); // 30 мин
 
 </script>
 
