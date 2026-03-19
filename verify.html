@@ -1,0 +1,49 @@
+<!DOCTYPE html>  <html lang="ru">  
+<head>  
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="manifest.json">
+
+
+<meta name="theme-color" content="#121212">
+<title>Рейтинг моделей</title> 
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head> 
+<script src="verify.js"></script>
+<body> 
+<h1>Рейтинг моделей</h1>
+<div style="text-align:center; margin:10px 0;">
+  <a href="forecast.html" style="color:#FFD700; text-decoration:underline;">← Почасовой прогноз</a>
+</div>
+<div id="lastUpdate" style="color:#aaa;font-size:0.9em;">
+Последнее обновление: нет
+</div>
+<br>
+<canvas id="chart" height="260"></canvas> 
+<div style="text-align:center">
+
+<button onclick="setPeriod('24h')">24 часа</button>
+<button onclick="setPeriod('3d')">3 дня</button>
+<button onclick="setPeriod('all')">Всё время</button>
+<br>
+
+<button onclick="setParam('temp')">Температура</button>
+<button onclick="setParam('pressure')">Давление</button>
+<button onclick="setParam('wind')">Ветер</button>
+<button onclick="setParam('windDir')">Направление</button>
+<button onclick="setMode('error')">Ошибка</button>
+<button onclick="setMode('value')">Значение</button>
+<br><br>
+
+<button onclick="showData()">Показать данные</button>
+<button onclick="verifyAll()">Обновить проверку</button>
+</div>
+<br><br>
+<button onclick="initFile()">Выбрать файл</button>
+<button onclick="exportDB()">Сохранить (перезаписать)</button>
+<div id="rating">Загрузка...</div> 
+
+<link rel="stylesheet" href="verify.css">
+</body>  
+</html>  
