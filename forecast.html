@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<// html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Почасовой прогноз Одесса 24ч</title>
+<link rel="stylesheet" href="forecast.css">
+</head>
+<body>
+
+<div class="main-title">
+  <!-- Кнопка выбора срока прогноза -->
+<span class="forecast-button" onclick="toggleForecastMenu()">
+  <span id="forecastDays">1 день</span> ▼
+  <div id="forecastMenu" class="forecast-menu" style="display:none;">
+    <div onclick="setForecastDays(2, event)">2 дня</div>
+    <div onclick="setForecastDays(3, event)">3 дня</div>
+    <div onclick="setForecastDays(5, event)">5 дней</div>
+    <div onclick="setForecastDays(7, event)">7 дней</div>
+    <div onclick="setForecastDays(10, event)">10 дней</div>
+    <div onclick="setForecastDays(16, event)">16 дней</div>
+  </div>
+</span>
+   
+  <span class="model-button" onclick="toggleModelMenu()">
+    <span id="modelName">ECMWF</span> ▼
+    <div id="modelMenu" class="model-menu">
+      <div onclick="setModel('ecmwf_ifs', event)">ECMWF IFS HRES</div>
+      <div onclick="setModel('icon_eu', event)">ICON EU</div>
+      <div onclick="setModel('ukmo_global_deterministic_10km', event)">UKMO Global</div>
+      <div onclick="setModel('meteofrance_arpege_europe', event)">ARPEGE Europe</div>
+      <div onclick="setModel('jma_gsm', event)">JMA GSM</div>
+      <div onclick="setModel('gfs_global', event)">GFS Global</div>
+    </div>
+</span>
+</div>
+<div id="content">
+ <!-- Контейнер для графиков и таблиц -->
+  <div id="graphs" style="display:flex; flex-direction:column; gap:12px; max-width:340px; margin:0 auto;"></div>
+   <!--  Контейнер для почасового прогноза -->
+<div id="forecast"></div>
+
+
+</div>
+<script src="forecast.js"></script>
+<div style="text-align:center; margin:15px 0;">
+  <a href="verify.html" style="color:#FFD700; text-decoration:underline;">→ Рейтинг моделей</a>
+</div>
+</body>
+</html>
