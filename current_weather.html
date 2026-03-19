@@ -11,7 +11,8 @@ body{
     background:#121212;
     color:#eee;
     font-family:sans-serif;
-    margin:0;
+    max-width:900px;
+    margin:auto
 }
 
 /* --- верхняя панель --- */
@@ -23,6 +24,10 @@ body{
     background:#1e1e1e;
     position:sticky;
     top:0;
+}
+
+canvas{
+width:100% !important;
 }
 
 .nav a{
@@ -104,6 +109,14 @@ button{
 
 <div class="container">
 
+<div id="loadingLog" style="
+font-size:12px;
+opacity:0.8;
+max-width:600px;
+margin:10px auto;
+text-align:left;
+"></div>
+
 <div class="card" id="main">
 Загрузка...
 </div>
@@ -117,42 +130,58 @@ button{
 <script>
 
 // ===== загрузка =====
-async function load(){
-
-    try{
-
-        setStatus("Подключение...");
-
-        const ogimet =
-        "https://www.ogimet.com/display_synops2.php?lang=en&lugar=33837&tipo=ALL&ord=REV&nil=SI&fmt=txt";
-
-        const url = "https://api.allorigins.win/raw?url=" + encodeURIComponent(ogimet);
-
-        setStatus("Загрузка SYNOP...");
-
-        const r = await fetch(url);
-        const text = await r.text();
-
-        setStatus("Поиск последней сводки...");
-
-        const line = text.split("\n").find(l => l.includes("AAXX"));
-
-        if(!line) throw "SYNOP не найден";
-
-        setStatus("Разбор данных...");
-
-        const d = parseSynop(line);
-
-        setStatus("Отрисовка...");
-
-        render(d);
-
-    }catch(e){
-
-        setStatus("Ошибка: " + e);
-
+function log(msg){
+    const el = document.getElementById("loadingLog");
+    if(el){
+        el.innerHTML += msg + "<br>";
     }
+    console.log(msg);
+}
 
+async function loadSynop(){
+
+log("Старт загрузки SYNOP");
+
+const ogimet =
+"https://www.ogimet.com/display_synops2.php?lang=en&lugar=33837&tipo=ALL&ord=REV&nil=SI&fmt=txt";
+
+log("Подготовка URL");
+
+const url = "https://api.allorigins.win/raw?url=" + encodeURIComponent(ogimet);
+
+log("Отправка запроса на прокси");
+
+const controller = new AbortController();
+const timeout = setTimeout(()=>controller.abort(), 10000);
+
+let r;
+
+try{
+    r = await fetch(url,{signal:controller.signal});
+}catch(e){
+    log("Ошибка запроса: " + e);
+    throw "Ошибка сети";
+}
+
+clearTimeout(timeout);
+
+log("Ответ получен");
+
+const text = await r.text();
+
+log("Текст получен, поиск SYNOP");
+
+const line = text.split("\n").find(l => l.includes("AAXX"));
+
+if(!line){
+    log("SYNOP не найден");
+    throw "SYNOP not found";
+}
+
+log("SYNOP найден");
+log(line);
+
+return parseSynop(line);
 }
 
 function setStatus(text){
@@ -280,7 +309,27 @@ function degToText(d){
     return dirs[Math.round(d/45)%8];
 }
 
-// ===== вывод =====
+// ===== погода по районам =====
+const locations = {
+    "Котовского": [46.560, 30.800],
+    "Центр": [46.482, 30.723],
+    "Таирова": [46.400, 30.650],
+    "Аркадия": [46.430, 30.760],
+    "Застава": [46.520, 30.650]
+};
+
+//===== загрузка open meteo =====
+async function loadCurrentWeather(lat, lon){
+
+const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,pressure_msl,wind_speed_10m,wind_direction_10m`;
+
+const r = await fetch(url);
+const d = await r.json();
+
+return d.current;
+}
+
+// ===== вывод SYNOP =====
 function render(d){
 
     const el = document.getElementById("main");
@@ -323,6 +372,27 @@ function render(d){
 
     <div class="small">${d.raw}</div>
     `;
+}
+
+//===== вывод по районам =====
+async function loadAllLocations(){
+
+let html = "<h3>Погода по районам</h3>";
+
+for(const name in locations){
+
+    const [lat,lon] = locations[name];
+
+    const w = await loadCurrentWeather(lat,lon);
+
+    html += `
+    <div class="row">
+        <div>${name}</div>
+        <div>${w.temperature_2m}°C | ${w.wind_speed_10m} м/с</div>
+    </div>`;
+}
+
+document.getElementById("districts").innerHTML = html;
 }
 
 load();
