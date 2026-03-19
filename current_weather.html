@@ -81,6 +81,7 @@ width:100% !important;
 .small{
     color:#aaa;
     font-size:12px;
+    min-height:60px;
 }
 
 /* кнопка */
@@ -167,56 +168,83 @@ async function load(){
 
 }
 
-async function loadSynop(){
+function logTo(elId, msg){
+    const el = document.getElementById(elId);
+    if(!el) return;
 
-log("Старт загрузки SYNOP");
+    el.innerHTML += msg + "<br>";
+    console.log(msg);
+}
+
+function clearLogLater(elId, delay = 5000){
+    setTimeout(()=>{
+        const el = document.getElementById(elId);
+        if(el) el.innerHTML = "";
+    }, delay);
+}
+
+//===== загрузка SYNOP =====
+async function loadSynop(){
 
 const ogimet =
 "https://www.ogimet.com/display_synops2.php?lang=en&lugar=33837&tipo=ALL&ord=REV&nil=SI&fmt=txt";
 
-log("Подготовка URL");
-
 const url = "https://api.allorigins.win/raw?url=" + encodeURIComponent(ogimet);
 
-log("Отправка запроса на прокси");
-
 const controller = new AbortController();
-const timeout = setTimeout(()=>controller.abort(), 20000);
+const timeout = setTimeout(()=>controller.abort(), 20000); // 20 сек
 
 let r;
 
 try{
     r = await fetch(url,{signal:controller.signal});
 }catch(e){
-    log("Ошибка запроса: " + e);
-    throw "Ошибка сети";
+    throw "Ошибка сети или таймаут";
 }
 
 clearTimeout(timeout);
 
-log("Ответ получен");
-
 const text = await r.text();
-
-log("Текст получен, поиск SYNOP");
 
 const line = text.split("\n").find(l => l.includes("AAXX"));
 
-if(!line){
-    log("SYNOP не найден");
-    throw "SYNOP not found";
-}
-
-log("SYNOP найден");
-log(line);
+if(!line) throw "SYNOP не найден";
 
 return parseSynop(line);
 }
 
-function setStatus(text){
-    document.getElementById("main").innerHTML = `
-        <div style="text-align:center">${text}</div>
-    `;
+//===== Обёртка для SYNOP (UI-логика) =====
+async function loadSynopUI(){
+
+    const logId = "synopLog";
+    document.getElementById(logId).innerHTML = "";
+
+    setStatus("Загрузка SYNOP...");
+
+    try{
+
+        logTo(logId, "🚀 Старт загрузки");
+
+        logTo(logId, "⏳ Подготовка запроса...");
+        logTo(logId, "🌐 Отправка на прокси...");
+
+        const synop = await loadSynop();
+
+        logTo(logId, "📥 Ответ получен");
+        logTo(logId, "🔍 Парсинг данных...");
+
+        render(synop);
+
+        logTo(logId, "✅ Готово");
+
+        clearLogLater(logId);
+
+    }catch(e){
+
+        logTo(logId, "❌ Ошибка: " + e);
+        setStatus("Ошибка SYNOP");
+
+    }
 }
 
 // ===== парсинг =====
@@ -360,6 +388,58 @@ const d = await r.json();
 return d.current;
 }
 
+// ===== Обёртка для районов =====
+async function loadDistrictsUI(){
+
+    const logId = "districtsLog";
+    document.getElementById(logId).innerHTML = "";
+
+    logTo(logId, "🚀 Старт загрузки районов");
+
+    try{
+
+        const entries = Object.entries(locations);
+
+        logTo(logId, "⏳ Подготовка координат...");
+        logTo(logId, "🌐 Запрос к Open-Meteo...");
+
+        const results = await Promise.all(
+            entries.map(([name,[lat,lon]]) =>
+                loadCurrentWeather(lat,lon)
+                    .then(w => ({name,w}))
+            )
+        );
+
+        logTo(logId, "📥 Данные получены");
+
+        let html = "<h3>Погода по районам</h3>";
+
+        results.forEach(({name,w})=>{
+            
+
+            html += `
+            <div class="row">
+                <div>${name}</div>
+                <div>
+                    ${w.temperature_2m}°C | ${w.wind_speed_10m} м/с<br>
+                    <span class="small">${t}</span>
+                </div>
+            </div>`;
+        });
+
+        document.getElementById("districts").innerHTML = html;
+
+        logTo(logId, "✅ Готово");
+
+        clearLogLater(logId);
+
+    }catch(e){
+
+        logTo(logId, "❌ Ошибка: " + e);
+
+    }
+}
+
 // ===== вывод SYNOP =====
 function render(d){
 
@@ -402,7 +482,12 @@ function render(d){
     </div>
 
     <div class="small">${d.raw}</div>
-    `;
+
+    <div class="card">
+    <b>SYNOP</b>
+    <div id="synopLog" class="small"></div>
+    <button onclick="loadSynopUI()">Обновить SYNOP</button>
+</div>`;
 }
 
 //===== вывод по районам =====
@@ -418,8 +503,7 @@ const results = await Promise.all(
             .then(w => ({name,w}))
     )
 );
-const t = new Date(w.time).toLocaleTimeString();
-const correctedWind = model.wind * 0.7;
+
 
 results.forEach(({name,w})=>{
     html += `
@@ -429,12 +513,22 @@ results.forEach(({name,w})=>{
         <span class="small">${w.time}</span></div>
     </div>`;
 });
+// Кнопка и лог один раз
+html += `
+<div class="card">
+    <b>Районы</b>
+    <div id="districtsLog" class="small"></div>
+    <button onclick="loadDistrictsUI()">Обновить районы</button>
+</div>`;
 
 document.getElementById("districts").innerHTML = html;
 }
 
-load();
-setInterval(load, 1800000); // 30 мин
+loadSynopUI();
+loadDistrictsUI();
+
+setInterval(loadSynopUI, 1800000);
+setInterval(loadDistrictsUI, 900000); // районы чаще (15 мин)
 
 </script>
 
