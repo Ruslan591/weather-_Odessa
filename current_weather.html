@@ -119,33 +119,49 @@ button{
 // ===== загрузка =====
 async function load(){
 
-    const el = document.getElementById("main");
-    el.innerHTML = "Загрузка...";
-
     try{
+
+        setStatus("Подключение...");
 
         const ogimet =
         "https://www.ogimet.com/display_synops2.php?lang=en&lugar=33837&tipo=ALL&ord=REV&nil=SI&fmt=txt";
 
         const url = "https://api.allorigins.win/raw?url=" + encodeURIComponent(ogimet);
 
+        setStatus("Загрузка SYNOP...");
+
         const r = await fetch(url);
         const text = await r.text();
+
+        setStatus("Поиск последней сводки...");
 
         const line = text.split("\n").find(l => l.includes("AAXX"));
 
         if(!line) throw "SYNOP не найден";
 
+        setStatus("Разбор данных...");
+
         const d = parseSynop(line);
+
+        setStatus("Отрисовка...");
 
         render(d);
 
     }catch(e){
-        el.innerHTML = "Ошибка: " + e;
+
+        setStatus("Ошибка: " + e);
+
     }
 
 }
 
+function setStatus(text){
+    document.getElementById("main").innerHTML = `
+        <div class="card">
+            <div style="text-align:center">${text}</div>
+        </div>
+    `;
+}
 // ===== парсинг =====
 function parseSynop(line){
 
