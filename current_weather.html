@@ -255,16 +255,21 @@ pressure = p < 500 ? 1000 + p : 900 + p;
 
     });
 
-    const aaxxi = parts.indexOf("AAXX");
+    const aaxxIndex = parts.indexOf("AAXX");
 
-    if(aaxxi>=0 && parts.length>aaxxi+4){
-        const w = parts[aaxxi+4];
-        windDir = parseInt(w.slice(1,3))*10;
-        wind = parseInt(w.slice(3,5));
-    }
+let time = null;
 
-    const time = parts[1]; // 16091
+if(aaxxIndex >= 0 && parts[aaxxIndex + 1]){
+    const t = parts[aaxxIndex + 1];
 
+    const day = t.slice(0,2);
+    const hour = t.slice(2,4);
+
+    time = {
+        day,
+        hour
+    };
+}
 return {temp,dew,pressure,wind,windDir,weather,cloud,raw:line,time};
 
 }
@@ -300,10 +305,7 @@ function formatTime(t){
 
     if(!t) return "-";
 
-    const day = t.slice(0,2);
-    const hour = t.slice(2,4);
-
-    return `${day} число, ${hour}:00 UTC`;
+    return `${t.day} число, ${t.hour}:00 UTC`;
 }
 function windArrow(deg){
 
@@ -416,12 +418,15 @@ const results = await Promise.all(
             .then(w => ({name,w}))
     )
 );
+const t = new Date(w.time).toLocaleTimeString();
+const correctedWind = model.wind * 0.7;
 
 results.forEach(({name,w})=>{
     html += `
     <div class="row">
         <div>${name}</div>
-        <div>${w.temperature_2m}°C | ${w.wind_speed_10m} м/с</div>
+        <div>${w.temperature_2m}°C | ${w.wind_speed_10m} м/с<br>
+        <span class="small">${w.time}</span></div>
     </div>`;
 });
 
