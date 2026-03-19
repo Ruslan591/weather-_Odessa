@@ -1,5 +1,3 @@
-<script>  
-
 async function exportDB(){
 
   if(!db){
@@ -817,4 +815,3 @@ if ('serviceWorker' in navigator) {
     .catch(err => console.log('Ошибка SW:', err));
 }
 alert('SW registered');
-</script>
