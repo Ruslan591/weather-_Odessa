@@ -3,22 +3,126 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="forecast.css">
-<title>Текущая погода</title>
+<title>Погода сейчас</title>
+<style>
+body {
+  background: #121212;
+  color: #eee;
+  font-family: Arial, sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  flex-direction: column;
+  min-height: 100vh;
+  margin: 0;
+  padding: 20px;
+}
+
+.weather-card {
+  background: #1f1f1f;
+  border-radius: 15px;
+  padding: 20px 30px;
+  text-align: center;
+  max-width: 350px;
+  margin: 0 auto;
+  box-shadow: 0 0 15px rgba(0,0,0,0.5);
+}
+
+.weather-card h1 {
+  font-size: 3em;
+  margin: 10px 0;
+}
+
+.weather-card .info {
+  font-size: 1.1em;
+  margin: 5px 0;
+}
+
+.weather-card button {
+  margin-top: 15px;
+  padding: 8px 16px;
+  font-size: 1em;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: #FFD700;
+  color: #121212;
+  font-weight: bold;
+  transition: 0.2s;
+}
+
+.weather-card button:hover {
+  background: #ffea00;
+}
+
+#lastUpdate {
+  font-size: 0.9em;
+  color: #aaa;
+  margin-top: 5px;
+}
+</style>
 </head>
 <body>
-<h1>Текущая погода</h1>
-<div style="text-align:center; margin:10px 0;">
-  <a href="index.html" style="color:#FFD700; text-decoration:underline;">← Рейтинг моделей</a>
-</div>
-<div style="text-align:center; margin-top:10px;">
+
+<div class="weather-card" id="weatherCard">
+  <div id="weather">
+    <h1>-- °C</h1>
+    <div class="info">Давление: -- hPa</div>
+    <div class="info">Ветер: -- м/с, --°</div>
+    <pre id="synop" style="text-align:left;"></pre>
+    <div id="lastUpdate">Последнее обновление: нет</div>
+  </div>
   <button onclick="fetchSynop()">Обновить</button>
 </div>
 
-<div id="weather" style="font-size:1.2em; color:#eee;">
-  Загрузка...
-</div>
+<script>
+async function fetchSynop(){
+    try{
+        const proxies = [
+            "https://api.allorigins.win/raw?url=",
+            "https://corsproxy.io/?",
+        ];
+        const ogimet = "https://www.ogimet.com/display_synops2.php?lang=en&lugar=33837&tipo=ALL&ord=REV&nil=SI&fmt=txt";
+        let text = null;
+        for(const p of proxies){
+            try{
+                const r = await fetch(p + encodeURIComponent(ogimet));
+                text = await r.text();
+                break;
+            }catch(e){console.log("Proxy fail:", p);}
+        }
+        if(!text) throw "Все прокси не ответили";
+        const line = text.split("\n").find(l=>l.includes("AAXX"));
+        if(!line) throw "SYNOP не найден";
 
-<script src="weather_online.js" defer></script>
+        const parts = line.trim().split(" ");
+        const aaxxi = parts.indexOf("AAXX");
+        const t = parts[aaxxi+0];
+        const windGroup = parts[aaxxi + 4];
+        const tempGroup = parts.find(g=>g.startsWith("1"));
+        const pressureGroup = parts.find(g=>g.startsWith("4"));
+
+        const temp = tempGroup ? ((tempGroup[1]==='1'?-1:1) * parseInt(tempGroup.slice(2))/10) : null;
+        const pressure = pressureGroup ? 1000 + parseInt(pressureGroup.slice(1))/10 : null;
+        const windDir = windGroup ? parseInt(windGroup.slice(1,3))*10 : null;
+        const wind = windGroup ? parseInt(windGroup.slice(3,5)) : null;
+
+        document.querySelector("#weatherCard h1").innerText = temp + " °C";
+        document.querySelectorAll(".info")[0].innerText = "Давление: "+pressure+" hPa";
+        document.querySelectorAll(".info")[1].innerText = "Ветер: "+wind+" м/с, "+windDir+"°";
+        document.getElementById("synop").innerText = line;
+        document.getElementById("lastUpdate").innerText = "Последнее обновление: "+new Date().toLocaleTimeString();
+    }catch(e){
+        alert("Ошибка загрузки SYNOP: "+e);
+        console.log(e);
+    }
+}
+
+// первый запуск
+fetchSynop();
+// автообновление каждые 10 минут
+setInterval(fetchSynop, 600000);
+</script>
+
 </body>
 </html>
