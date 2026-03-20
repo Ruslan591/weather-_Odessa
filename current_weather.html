@@ -6,29 +6,53 @@
 <title>Текущая погода</title>
 
 <style>
+:root{
+    --bg:#121212;
+    --card:#1e1e1e;
+    --card2:#181818;
+    --text:#eee;
+    --muted:#aaa;
+    --line:#333;
+    --accent:#4da3ff;
+    --good:#81c784;
+    --warm:#ffb74d;
+    --hot:#ff5252;
+}
+
+*{
+    box-sizing:border-box;
+}
+
 body{
-    background:#121212;
-    color:#eee;
-    font-family:sans-serif;
     margin:0;
-    padding:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:sans-serif;
 }
 
 .header{
     display:flex;
     justify-content:space-between;
     align-items:center;
-    padding:12px 15px;
-    background:#1e1e1e;
+    gap:12px;
+    padding:12px 16px;
+    background:var(--card);
     position:sticky;
     top:0;
     z-index:10;
+    border-bottom:1px solid var(--line);
+}
+
+.nav{
+    display:flex;
+    gap:14px;
+    flex-wrap:wrap;
 }
 
 .nav a{
-    margin-left:12px;
-    color:#aaa;
+    color:var(--muted);
     text-decoration:none;
+    font-size:14px;
 }
 
 .nav a:hover{
@@ -36,61 +60,151 @@ body{
 }
 
 .container{
-    padding:15px;
-    max-width:900px;
+    max-width:1100px;
     margin:auto;
+    padding:14px;
 }
 
 .card{
-    background:#1e1e1e;
-    border-radius:12px;
-    padding:15px;
-    margin-bottom:15px;
+    background:var(--card);
+    border-radius:14px;
+    padding:14px;
+    margin-bottom:14px;
 }
 
-.row{
-    display:flex;
-    justify-content:space-between;
-    gap:15px;
-    padding:8px 0;
-    border-bottom:1px solid #333;
-}
-
-.row:last-child{
-    border-bottom:none;
-}
-
-.value{
+.cardTitle{
+    font-size:15px;
     font-weight:bold;
-    text-align:right;
+    margin-bottom:10px;
 }
 
-.big{
-    font-size:32px;
-    text-align:center;
-    margin:10px 0 15px;
+.hero{
+    display:grid;
+    grid-template-columns: 1.15fr 1fr;
+    gap:14px;
+    align-items:stretch;
+}
+
+.mainTemp{
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    min-height:170px;
+    background:linear-gradient(180deg,#202020,#1a1a1a);
+    border-radius:14px;
+    padding:16px;
+}
+
+.mainTempTop{
+    color:var(--muted);
+    font-size:12px;
+    margin-bottom:10px;
+}
+
+.tempLine{
+    display:flex;
+    align-items:baseline;
+    gap:12px;
+    flex-wrap:wrap;
+}
+
+.tempBig{
+    font-size:54px;
+    font-weight:700;
+    line-height:1;
+}
+
+.tempFeel{
+    font-size:18px;
+    color:var(--muted);
+}
+
+.weatherLine{
+    margin-top:10px;
+    font-size:16px;
+}
+
+.windHero{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+    margin-top:14px;
+}
+
+.miniStat{
+    background:var(--card2);
+    border-radius:12px;
+    padding:12px;
+}
+
+.miniLabel{
+    color:var(--muted);
+    font-size:12px;
+    margin-bottom:4px;
+}
+
+.miniValue{
+    font-size:20px;
+    font-weight:bold;
+}
+
+.grid2{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:14px;
+}
+
+.rowsCompact{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px 14px;
+}
+
+.stat{
+    background:var(--card2);
+    border-radius:12px;
+    padding:10px 12px;
+    min-height:64px;
+}
+
+.stat .label{
+    color:var(--muted);
+    font-size:12px;
+    margin-bottom:5px;
+}
+
+.stat .value{
+    font-size:16px;
+    font-weight:600;
 }
 
 .small{
-    color:#aaa;
+    color:var(--muted);
     font-size:12px;
     line-height:1.45;
+}
+
+.logbox{
+    background:var(--card2);
+    border-radius:10px;
+    padding:10px;
+    min-height:20px;
+    margin-top:10px;
 }
 
 .buttons{
     display:flex;
     gap:10px;
     flex-wrap:wrap;
+    margin-top:10px;
 }
 
 button{
-    flex:1;
-    min-width:180px;
-    padding:10px;
+    padding:10px 12px;
     background:#333;
     color:white;
     border:none;
-    border-radius:8px;
+    border-radius:10px;
     cursor:pointer;
 }
 
@@ -98,45 +212,93 @@ button:hover{
     background:#444;
 }
 
-h3{
-    margin-top:0;
+details{
+    background:var(--card2);
+    border-radius:12px;
+    padding:12px;
+}
+
+summary{
+    cursor:pointer;
+    font-weight:600;
 }
 
 .raw{
-    margin-top:12px;
     word-break:break-word;
-}
-
-.logbox{
     margin-top:10px;
-    padding:10px;
-    background:#181818;
-    border-radius:8px;
-    min-height:20px;
 }
 
-@media (max-width:640px){
+.districtList{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+}
+
+.districtCard{
+    background:var(--card2);
+    border-radius:12px;
+    padding:12px;
+}
+
+.districtHead{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:10px;
+    margin-bottom:8px;
+}
+
+.districtName{
+    font-weight:bold;
+}
+
+.districtTemp{
+    font-size:24px;
+    font-weight:700;
+}
+
+.line2{
+    display:flex;
+    justify-content:space-between;
+    gap:12px;
+    margin-top:6px;
+    font-size:14px;
+}
+
+.badge{
+    display:inline-block;
+    padding:3px 8px;
+    border-radius:999px;
+    background:#2a2a2a;
+    font-size:12px;
+    color:#ddd;
+}
+
+@media (max-width:850px){
+    .hero,
+    .grid2,
+    .districtList,
+    .rowsCompact{
+        grid-template-columns:1fr;
+    }
+
+    .tempBig{
+        font-size:46px;
+    }
+}
+
+@media (max-width:560px){
     .header{
         flex-direction:column;
         align-items:flex-start;
-        gap:8px;
     }
 
-    .row{
-        flex-direction:column;
-        gap:4px;
+    .tempBig{
+        font-size:42px;
     }
 
-    .value{
-        text-align:left;
-    }
-
-    .buttons{
-        flex-direction:column;
-    }
-
-    button{
-        width:100%;
+    .windHero{
+        grid-template-columns:1fr;
     }
 }
 </style>
@@ -153,28 +315,29 @@ h3{
 
 <div class="container">
 
-    <div class="card" id="main">
-        Загрузка SYNOP...
-    </div>
+    <div id="synopBlock" class="card">Загрузка SYNOP...</div>
 
-    <div class="card">
-        <h3>SYNOP</h3>
-        <div id="synopLog" class="small logbox"></div>
-        <div class="buttons">
-            <button onclick="loadSynopUI()">Обновить SYNOP</button>
+    <div class="grid2">
+        <div class="card">
+            <div class="cardTitle">Обновление SYNOP</div>
+            <div id="synopLog" class="small logbox"></div>
+            <div class="buttons">
+                <button onclick="loadSynopUI()">Обновить SYNOP</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="cardTitle">Обновление районов</div>
+            <div id="districtsLog" class="small logbox"></div>
+            <div class="buttons">
+                <button onclick="loadDistrictsUI()">Обновить районы</button>
+            </div>
         </div>
     </div>
 
-    <div class="card" id="districts">
-        Загрузка районов...
-    </div>
-
     <div class="card">
-        <h3>Районы</h3>
-        <div id="districtsLog" class="small logbox"></div>
-        <div class="buttons">
-            <button onclick="loadDistrictsUI()">Обновить районы</button>
-        </div>
+        <div class="cardTitle">Погода по районам</div>
+        <div id="districts">Загрузка районов...</div>
     </div>
 
 </div>
@@ -186,7 +349,6 @@ h3{
 function logTo(elId, msg){
     const el = document.getElementById(elId);
     if(!el) return;
-
     const time = new Date().toLocaleTimeString("ru-RU");
     el.innerHTML += `[${time}] ${msg}<br>`;
     console.log(msg);
@@ -200,12 +362,8 @@ function clearLogLater(elId, delay = 7000){
 }
 
 // ========================================
-// 2. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+// 2. ВСПОМОГАТЕЛЬНОЕ
 // ========================================
-function setMainStatus(text){
-    document.getElementById("main").innerHTML = text;
-}
-
 function tempColor(t){
     if(t == null) return "#eee";
     if(t < 0) return "#4da3ff";
@@ -226,14 +384,23 @@ function degToText(d){
     return dirs[Math.round(d / 45) % 8];
 }
 
-function cloudText(c){
-    if(c == null) return "-";
-    return `${c}/8`;
+function pressureTrendText(code){
+    const map = {
+        "0":"рост, затем падение",
+        "1":"рост, затем стабильно",
+        "2":"рост",
+        "3":"падение/стабильно, затем рост",
+        "4":"без изменений",
+        "5":"падение, затем рост",
+        "6":"падение",
+        "7":"рост/стабильно, затем падение",
+        "8":"неустойчиво"
+    };
+    return map[code] || "-";
 }
 
 function weatherText(code){
     if(!code) return "-";
-
     const map = {
         "00":"Ясно",
         "01":"Малооблачно",
@@ -247,40 +414,81 @@ function weatherText(code){
         "51":"Слабая морось",
         "53":"Морось",
         "55":"Сильная морось",
+        "56":"Переохлаждённая морось",
+        "57":"Сильная переохлаждённая морось",
         "61":"Слабый дождь",
         "63":"Дождь",
         "65":"Сильный дождь",
+        "66":"Переохлаждённый дождь",
+        "67":"Сильный переохлаждённый дождь",
         "71":"Слабый снег",
         "73":"Снег",
         "75":"Сильный снег",
-        "80":"Ливневый дождь",
+        "77":"Снежные зёрна",
+        "80":"Слабый ливень",
         "81":"Ливень",
         "82":"Сильный ливень",
-        "95":"Гроза"
+        "85":"Слабый снежный заряд",
+        "86":"Сильный снежный заряд",
+        "95":"Гроза",
+        "96":"Гроза с градом",
+        "99":"Сильная гроза с градом"
     };
-
     return map[code] || `Код ${code}`;
 }
 
-function pressureTrendText(code){
+function weatherCodeText(code){
     const map = {
-        "0":"Рост, затем падение; выше чем 3 часа назад",
-        "1":"Рост, затем без изменений; выше",
-        "2":"Рост; выше",
-        "3":"Падение или без изменений, затем рост; выше",
-        "4":"Без изменений; как 3 часа назад",
-        "5":"Падение, затем рост; ниже",
-        "6":"Падение; ниже",
-        "7":"Рост или без изменений, затем падение; ниже",
-        "8":"Без изменений или неравномерно; ниже",
+        0:"Ясно",
+        1:"Преимущественно ясно",
+        2:"Переменная облачность",
+        3:"Пасмурно",
+        45:"Туман",
+        48:"Туман с изморозью",
+        51:"Слабая морось",
+        53:"Морось",
+        55:"Сильная морось",
+        61:"Слабый дождь",
+        63:"Дождь",
+        65:"Сильный дождь",
+        71:"Слабый снег",
+        73:"Снег",
+        75:"Сильный снег",
+        77:"Снежные зёрна",
+        80:"Слабый ливень",
+        81:"Ливень",
+        82:"Сильный ливень",
+        85:"Слабый снежный заряд",
+        86:"Сильный снежный заряд",
+        95:"Гроза"
     };
-    return map[code] || "-";
+    return map[code] || `Код ${code}`;
 }
 
-function formatLocalApiTime(s){
-    if(!s) return "-";
-    const [date, time] = s.split("T");
-    return `${date} ${time}`;
+function cloudText(c){
+    if(c == null) return "-";
+    return `${c}/8`;
+}
+
+function cloudAmountText(n){
+    const map = {
+        0:"Ясно",
+        1:"1/8 или меньше",
+        2:"2/8",
+        3:"3/8",
+        4:"4/8",
+        5:"5/8",
+        6:"6/8",
+        7:"7/8 или более",
+        8:"8/8",
+        9:"Небо не видно"
+    };
+    return map[n] || `${n}/8`;
+}
+
+function visibilityText(code){
+    if(code == null) return "-";
+    return code;
 }
 
 function formatSynopLocalTime(timeUTC){
@@ -293,35 +501,39 @@ function formatSynopLocalTime(timeUTC){
     const dt = new Date(Date.UTC(
         year,
         month,
-        parseInt(timeUTC.day, 10),
-        parseInt(timeUTC.hour, 10),
+        parseInt(timeUTC.day,10),
+        parseInt(timeUTC.hour,10),
         0,
         0
     ));
 
     return dt.toLocaleString("ru-RU", {
-        day: "2-digit",
-        month: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit"
+        day:"2-digit",
+        month:"2-digit",
+        hour:"2-digit",
+        minute:"2-digit"
     });
 }
 
+function formatLocalApiTime(s){
+    if(!s) return "-";
+    const [date,time] = s.split("T");
+    return `${date} ${time}`;
+}
+
 // ========================================
-// 3. ЗАГРУЗКА SYNOP
+// 3. SYNOP ЗАГРУЗКА
 // ========================================
 async function loadSynop(){
-
     const ogimet = "https://www.ogimet.com/display_synops2.php?lang=en&lugar=33837&tipo=ALL&ord=REV&nil=SI&fmt=txt";
     const url = "https://api.allorigins.win/raw?url=" + encodeURIComponent(ogimet);
 
     const controller = new AbortController();
-    const timeout = setTimeout(()=>controller.abort(), 20000);
+    const timeout = setTimeout(()=>controller.abort(), 25000);
 
     let r;
-
     try{
-        r = await fetch(url, { signal: controller.signal });
+        r = await fetch(url,{signal:controller.signal});
     }catch(e){
         throw "Ошибка сети или таймаут";
     }
@@ -330,10 +542,7 @@ async function loadSynop(){
 
     const text = await r.text();
     const line = text.split("\n").find(l => l.includes("AAXX"));
-
-    if(!line){
-        throw "SYNOP не найден";
-    }
+    if(!line) throw "SYNOP не найден";
 
     return parseSynop(line);
 }
@@ -342,7 +551,6 @@ async function loadSynop(){
 // 4. ПАРСИНГ SYNOP
 // ========================================
 function parseSynop(line){
-
     const parts = line.trim().split(/\s+/);
     const aaxxIndex = parts.indexOf("AAXX");
 
@@ -352,74 +560,76 @@ function parseSynop(line){
 
     const yyggiw = parts[aaxxIndex + 1] || null;
     const station = parts[aaxxIndex + 2] || null;
-    const group3 = parts[aaxxIndex + 3] || null;
-    const group4 = parts[aaxxIndex + 4] || null;
-    const group5 = parts[aaxxIndex + 5] || null;
-    const group6 = parts[aaxxIndex + 6] || null;
-    const group7 = parts[aaxxIndex + 7] || null;
-    const group8 = parts[aaxxIndex + 8] || null;
-    const group9 = parts[aaxxIndex + 9] || null;
+    const iRiXhVV = parts[aaxxIndex + 3] || null;
+    const Nddff = parts[aaxxIndex + 4] || null;
+    const g1 = parts[aaxxIndex + 5] || null;
+    const g2 = parts[aaxxIndex + 6] || null;
+    const g3 = parts[aaxxIndex + 7] || null;
+    const g4 = parts[aaxxIndex + 8] || null;
+    const g5 = parts[aaxxIndex + 9] || null;
 
+    let timeUTC = null;
+    let precipIndicator = null;
+    let stationType = null;
+    let cloudBase = null;
+    let visibility = null;
+    let cloud = null;
+    let windDir = null;
+    let wind = null;
     let temp = null;
     let dew = null;
     let pressureStation = null;
     let pressureSea = null;
     let pressureTrendCode = null;
     let pressureTrendValue = null;
-    let wind = null;
-    let windDir = null;
-    let cloud = null;
-    let visibility = null;
+    let precipGroup = null;
     let weatherNow = null;
     let weatherBetween = null;
     let cloudGroup = null;
-    let precipGroup = null;
 
-    let timeUTC = null;
-    if(yyggiw && yyggiw.length >= 4){
+    if(yyggiw && yyggiw.length >= 5){
         timeUTC = {
             day: yyggiw.slice(0,2),
             hour: yyggiw.slice(2,4),
+            iw: yyggiw.slice(4,5),
             raw: yyggiw
         };
+        precipIndicator = yyggiw[4];
     }
 
-    if(group3 && group3.length === 5){
-        cloud = group4 && group4[0] !== "/" ? parseInt(group4[0], 10) : null;
-        visibility = group3.slice(3,5);
+    if(iRiXhVV && iRiXhVV.length === 5){
+        stationType = iRiXhVV[0];
+        cloudBase = iRiXhVV[2];
+        visibility = iRiXhVV.slice(3,5);
     }
 
-    if(group4 && group4.length === 5){
-        const dd = group4.slice(1,3);
-        const ff = group4.slice(3,5);
-
-        windDir = dd.includes("/") ? null : parseInt(dd, 10) * 10;
-        wind = ff.includes("/") ? null : parseInt(ff, 10);
+    if(Nddff && Nddff.length === 5){
+        cloud = Nddff[0] !== "/" ? parseInt(Nddff[0],10) : null;
+        windDir = Nddff.slice(1,3).includes("/") ? null : parseInt(Nddff.slice(1,3),10) * 10;
+        wind = Nddff.slice(3,5).includes("/") ? null : parseInt(Nddff.slice(3,5),10);
     }
 
-    if(group5 && group5.startsWith("1") && group5.length === 5){
-        const sign = group5[1] === "1" ? -1 : 1;
-        temp = sign * parseInt(group5.slice(2), 10) / 10;
+    if(g1 && g1.startsWith("1") && g1.length === 5){
+        temp = (g1[1] === "1" ? -1 : 1) * parseInt(g1.slice(2),10) / 10;
     }
 
-    if(group6 && group6.startsWith("2") && group6.length === 5){
-        const sign = group6[1] === "1" ? -1 : 1;
-        dew = sign * parseInt(group6.slice(2), 10) / 10;
+    if(g2 && g2.startsWith("2") && g2.length === 5){
+        dew = (g2[1] === "1" ? -1 : 1) * parseInt(g2.slice(2),10) / 10;
     }
 
-    if(group7 && group7.startsWith("3") && group7.length === 5){
-        const p = parseInt(group7.slice(1), 10) / 10;
+    if(g3 && g3.startsWith("3") && g3.length === 5){
+        const p = parseInt(g3.slice(1),10) / 10;
         pressureStation = p < 100 ? 1000 + p : 900 + p;
     }
 
-    if(group8 && group8.startsWith("4") && group8.length === 5){
-        const p = parseInt(group8.slice(1), 10) / 10;
+    if(g4 && g4.startsWith("4") && g4.length === 5){
+        const p = parseInt(g4.slice(1),10) / 10;
         pressureSea = p < 500 ? 1000 + p : 900 + p;
     }
 
-    if(group9 && group9.startsWith("5") && group9.length === 5){
-        pressureTrendCode = group9[1];
-        pressureTrendValue = parseInt(group9.slice(2), 10) / 10;
+    if(g5 && g5.startsWith("5") && g5.length === 5){
+        pressureTrendCode = g5[1];
+        pressureTrendValue = parseInt(g5.slice(2),10) / 10;
     }
 
     let ptr = aaxxIndex + 10;
@@ -440,14 +650,27 @@ function parseSynop(line){
         ptr++;
     }
 
+    let cloudLow = null;
+    let cloudMid = null;
+    let cloudHigh = null;
+
+    if(cloudGroup && cloudGroup.length === 5){
+        cloudLow = cloudGroup[2];
+        cloudMid = cloudGroup[3];
+        cloudHigh = cloudGroup[4];
+    }
+
     return {
         raw: line,
         station,
         timeUTC,
-        cloud,
+        precipIndicator,
+        stationType,
+        cloudBase,
         visibility,
-        wind,
+        cloud,
         windDir,
+        wind,
         temp,
         dew,
         pressureStation,
@@ -457,7 +680,10 @@ function parseSynop(line){
         precipGroup,
         weatherNow,
         weatherBetween,
-        cloudGroup
+        cloudGroup,
+        cloudLow,
+        cloudMid,
+        cloudHigh
     };
 }
 
@@ -465,107 +691,223 @@ function parseSynop(line){
 // 5. ОТРИСОВКА SYNOP
 // ========================================
 function renderSynop(d){
-    const el = document.getElementById("main");
+    const apparent = (d.temp != null && d.wind != null)
+        ? Math.round((d.temp - (d.wind * 0.7)) * 10) / 10
+        : null;
 
-    el.innerHTML = `
-        <div class="small">Наблюдение: ${formatSynopLocalTime(d.timeUTC)}</div>
-        <div class="small">Станция: ${d.station ?? "-"}</div>
+    document.getElementById("synopBlock").innerHTML = `
+        <div class="hero">
+            <div class="mainTemp">
+                <div class="mainTempTop">
+                    Станция ${d.station ?? "-"} · Наблюдение: ${formatSynopLocalTime(d.timeUTC)}
+                </div>
 
-        <div class="big" style="color:${tempColor(d.temp)}">
-            ${d.temp ?? "-"}°C
-        </div>
+                <div class="tempLine">
+                    <div class="tempBig" style="color:${tempColor(d.temp)}">${d.temp ?? "-"}°C</div>
+                    <div class="tempFeel">ощущается как ${apparent ?? "-"}°C</div>
+                </div>
 
-        <div class="row">
-            <div>Точка росы</div>
-            <div class="value">${d.dew ?? "-"}°C</div>
-        </div>
+                <div class="weatherLine">
+                    <span class="badge">${weatherText(d.weatherNow)}</span>
+                </div>
 
-        <div class="row">
-            <div>Давление на станции</div>
-            <div class="value">${d.pressureStation ?? "-"} гПа</div>
-        </div>
+                <div class="windHero">
+                    <div class="miniStat">
+                        <div class="miniLabel">Ветер</div>
+                        <div class="miniValue">
+                            ${d.wind ?? "-"} м/с
+                            ${d.windDir != null ? degToText(d.windDir) : ""}
+                            ${windArrow(d.windDir)}
+                        </div>
+                    </div>
 
-        <div class="row">
-            <div>Давление к уровню моря</div>
-            <div class="value">${d.pressureSea ?? "-"} гПа</div>
-        </div>
+                    <div class="miniStat">
+                        <div class="miniLabel">Точка росы</div>
+                        <div class="miniValue">${d.dew ?? "-"}°C</div>
+                    </div>
+                </div>
+            </div>
 
-        <div class="row">
-            <div>Барическая тенденция</div>
-            <div class="value">
-                ${pressureTrendText(d.pressureTrendCode)}<br>
-                <span class="small">${d.pressureTrendValue ?? "-"} гПа за 3 часа</span>
+            <div class="card" style="margin:0;">
+                <div class="cardTitle">Основное</div>
+                <div class="rowsCompact">
+                    <div class="stat">
+                        <div class="label">Давление MSL</div>
+                        <div class="value">${d.pressureSea ?? "-"} гПа</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="label">Давление станции</div>
+                        <div class="value">${d.pressureStation ?? "-"} гПа</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="label">Облачность</div>
+                        <div class="value">${cloudText(d.cloud)}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="label">Видимость</div>
+                        <div class="value">${visibilityText(d.visibility)}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="label">Тенденция давления</div>
+                        <div class="value">${pressureTrendText(d.pressureTrendCode)}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="label">Изменение за 3 часа</div>
+                        <div class="value">${d.pressureTrendValue ?? "-"} гПа</div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div class="row">
-            <div>Ветер</div>
-            <div class="value">
-                ${d.wind ?? "-"} м/с
-                ${d.windDir != null ? degToText(d.windDir) : ""}
-                ${windArrow(d.windDir)}
-            </div>
-        </div>
+        <div class="grid2" style="margin-top:14px;">
+            <details open>
+                <summary>Полная расшифровка SYNOP</summary>
+                <div class="rowsCompact" style="margin-top:12px;">
+                    <div class="stat">
+                        <div class="label">YYGGiw</div>
+                        <div class="value">${d.timeUTC?.raw ?? "-"}</div>
+                    </div>
 
-        <div class="row">
-            <div>Общая облачность</div>
-            <div class="value">${cloudText(d.cloud)}</div>
-        </div>
+                    <div class="stat">
+                        <div class="label">Код станции</div>
+                        <div class="value">${d.station ?? "-"}</div>
+                    </div>
 
-        <div class="row">
-            <div>Видимость</div>
-            <div class="value">${d.visibility ?? "-"}</div>
-        </div>
+                    <div class="stat">
+                        <div class="label">iRiXhVV</div>
+                        <div class="value">${d.stationType ?? "-"} / h=${d.cloudBase ?? "-"} / VV=${d.visibility ?? "-"}</div>
+                    </div>
 
-        <div class="row">
-            <div>Явления в срок наблюдения</div>
-            <div class="value">${weatherText(d.weatherNow)}</div>
-        </div>
+                    <div class="stat">
+                        <div class="label">Nddff</div>
+                        <div class="value">${d.cloud ?? "-"} / ${d.windDir ?? "-"}° / ${d.wind ?? "-"} м/с</div>
+                    </div>
 
-        <div class="row">
-            <div>Между сроками</div>
-            <div class="value">${d.weatherBetween ?? "-"}</div>
-        </div>
+                    <div class="stat">
+                        <div class="label">Температура (1snTTT)</div>
+                        <div class="value">${d.temp ?? "-"}°C</div>
+                    </div>
 
-        <div class="row">
-            <div>Осадки</div>
-            <div class="value">${d.precipGroup ?? "-"}</div>
-        </div>
+                    <div class="stat">
+                        <div class="label">Точка росы (2snTdTdTd)</div>
+                        <div class="value">${d.dew ?? "-"}°C</div>
+                    </div>
 
-        <div class="row">
-            <div>Группа облаков</div>
-            <div class="value">${d.cloudGroup ?? "-"}</div>
-        </div>
+                    <div class="stat">
+                        <div class="label">Давление станции (3PoPoPoPo)</div>
+                        <div class="value">${d.pressureStation ?? "-"} гПа</div>
+                    </div>
 
-        <div class="small raw">${d.raw}</div>
+                    <div class="stat">
+                        <div class="label">Давление MSL (4PPPP)</div>
+                        <div class="value">${d.pressureSea ?? "-"} гПа</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="label">Тенденция (5appp)</div>
+                        <div class="value">${pressureTrendText(d.pressureTrendCode)} · ${d.pressureTrendValue ?? "-"} гПа</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="label">Осадки (группа 6)</div>
+                        <div class="value">${d.precipGroup ?? "нет"}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="label">Явления в срок (группа 7)</div>
+                        <div class="value">${weatherText(d.weatherNow)}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="label">Между сроками</div>
+                        <div class="value">${d.weatherBetween ?? "-"}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="label">Группа облачности (8NhCLCMCH)</div>
+                        <div class="value">${d.cloudGroup ?? "нет"}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="label">Количество общей облачности</div>
+                        <div class="value">${d.cloud != null ? cloudAmountText(d.cloud) : "-"}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="label">Облака нижнего яруса</div>
+                        <div class="value">${d.cloudLow ?? "-"}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="label">Облака среднего яруса</div>
+                        <div class="value">${d.cloudMid ?? "-"}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="label">Облака верхнего яруса</div>
+                        <div class="value">${d.cloudHigh ?? "-"}</div>
+                    </div>
+                </div>
+
+                <div class="small raw"><b>Исходная строка:</b><br>${d.raw}</div>
+            </details>
+
+            <details>
+                <summary>Технические данные</summary>
+                <div class="rowsCompact" style="margin-top:12px;">
+                    <div class="stat">
+                        <div class="label">Индикатор осадков (iw)</div>
+                        <div class="value">${d.precipIndicator ?? "-"}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="label">Нижняя граница облаков (h)</div>
+                        <div class="value">${d.cloudBase ?? "-"}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="label">Видимость (VV)</div>
+                        <div class="value">${d.visibility ?? "-"}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="label">Направление ветра</div>
+                        <div class="value">${d.windDir ?? "-"}° ${d.windDir != null ? degToText(d.windDir) : ""}</div>
+                    </div>
+                </div>
+            </details>
+        </div>
     `;
 }
 
 // ========================================
-// 6. UI-ОБЁРТКА SYNOP
+// 6. UI SYNOP
 // ========================================
 async function loadSynopUI(){
     const logId = "synopLog";
     document.getElementById(logId).innerHTML = "";
 
-    setMainStatus("Загрузка SYNOP...");
-
     try{
-        logTo(logId, "Старт загрузки SYNOP");
-        logTo(logId, "Подготовка URL Ogimet");
-        logTo(logId, "Отправка запроса на прокси");
+        logTo(logId,"Старт загрузки SYNOP");
+        logTo(logId,"Подготовка URL Ogimet");
+        logTo(logId,"Отправка запроса на прокси");
 
         const synop = await loadSynop();
 
-        logTo(logId, "Ответ получен");
-        logTo(logId, "Разбор SYNOP");
+        logTo(logId,"Ответ получен");
+        logTo(logId,"Разбор SYNOP");
         renderSynop(synop);
-        logTo(logId, "SYNOP успешно отображён");
+        logTo(logId,"SYNOP успешно отображён");
 
         clearLogLater(logId);
     }catch(e){
-        setMainStatus("Ошибка загрузки SYNOP");
-        logTo(logId, "Ошибка: " + e);
+        document.getElementById("synopBlock").innerHTML = `<div class="cardTitle">Ошибка</div><div class="small">${e}</div>`;
+        logTo(logId,"Ошибка: " + e);
     }
 }
 
@@ -603,97 +945,69 @@ async function loadCurrentWeather(lat, lon){
     return d.current;
 }
 
-function weatherCodeText(code){
-    const map = {
-        0:"Ясно",
-        1:"Преимущественно ясно",
-        2:"Переменная облачность",
-        3:"Пасмурно",
-        45:"Туман",
-        48:"Туман с изморозью",
-        51:"Слабая морось",
-        53:"Морось",
-        55:"Сильная морось",
-        61:"Слабый дождь",
-        63:"Дождь",
-        65:"Сильный дождь",
-        71:"Слабый снег",
-        73:"Снег",
-        75:"Сильный снег",
-        80:"Ливневый дождь",
-        81:"Ливень",
-        82:"Сильный ливень",
-        95:"Гроза"
-    };
-    return map[code] || `Код ${code}`;
-}
-
 function renderDistricts(results){
-    let html = `<h3>Погода по районам</h3>`;
+    let html = `<div class="districtList">`;
 
-    results.forEach(({name, w})=>{
+    results.forEach(({name,w})=>{
+        const hasPrecip = (w.precipitation > 0 || w.rain > 0 || w.showers > 0 || w.snowfall > 0);
+
         html += `
-            <div class="card" style="margin-bottom:12px;">
-                <div><b>${name}</b></div>
-                <div class="small" style="margin-top:4px;">Обновление: ${formatLocalApiTime(w.time)}</div>
-
-                <div class="row">
-                    <div>Температура</div>
-                    <div class="value">${w.temperature_2m ?? "-"}°C</div>
+            <div class="districtCard">
+                <div class="districtHead">
+                    <div>
+                        <div class="districtName">${name}</div>
+                        <div class="small">${formatLocalApiTime(w.time)}</div>
+                    </div>
+                    <div class="districtTemp">${w.temperature_2m ?? "-"}°C</div>
                 </div>
 
-                <div class="row">
-                    <div>Ощущается как</div>
-                    <div class="value">${w.apparent_temperature ?? "-"}°C</div>
+                <div class="line2">
+                    <div>Ощущается</div>
+                    <div>${w.apparent_temperature ?? "-"}°C</div>
                 </div>
 
-                <div class="row">
+                <div class="line2">
                     <div>Погода</div>
-                    <div class="value">${weatherCodeText(w.weather_code)}</div>
+                    <div>${weatherCodeText(w.weather_code)}</div>
                 </div>
 
-                <div class="row">
-                    <div>Облачность</div>
-                    <div class="value">${w.cloud_cover ?? "-"}%</div>
-                </div>
-
-                <div class="row">
-                    <div>Влажность</div>
-                    <div class="value">${w.relative_humidity_2m ?? "-"}%</div>
-                </div>
-
-                <div class="row">
-                    <div>Давление MSL</div>
-                    <div class="value">${w.pressure_msl ?? "-"} гПа</div>
-                </div>
-
-                <div class="row">
-                    <div>Давление у поверхности</div>
-                    <div class="value">${w.surface_pressure ?? "-"} гПа</div>
-                </div>
-
-                <div class="row">
+                <div class="line2">
                     <div>Ветер</div>
-                    <div class="value">
+                    <div>
                         ${w.wind_speed_10m ?? "-"} м/с
                         ${w.wind_direction_10m != null ? degToText(w.wind_direction_10m) : ""}
                         ${windArrow(w.wind_direction_10m)}
                     </div>
                 </div>
 
-                <div class="row">
+                <div class="line2">
                     <div>Порывы</div>
-                    <div class="value">${w.wind_gusts_10m ?? "-"} м/с</div>
+                    <div>${w.wind_gusts_10m ?? "-"} м/с</div>
                 </div>
 
-                ${(w.precipitation > 0 || w.rain > 0 || w.showers > 0 || w.snowfall > 0) ? `
-                <div class="row">
+                <div class="line2">
+                    <div>Давление</div>
+                    <div>${w.pressure_msl ?? "-"} гПа</div>
+                </div>
+
+                <div class="line2">
+                    <div>Облачность</div>
+                    <div>${w.cloud_cover ?? "-"}%</div>
+                </div>
+
+                <div class="line2">
+                    <div>Влажность</div>
+                    <div>${w.relative_humidity_2m ?? "-"}%</div>
+                </div>
+
+                ${hasPrecip ? `
+                <div class="line2">
                     <div>Осадки</div>
-                    <div class="value">
+                    <div>
                         ${w.precipitation ?? 0} мм
-                        ${w.rain > 0 ? `<br><span class="small">дождь: ${w.rain} мм</span>` : ""}
-                        ${w.showers > 0 ? `<br><span class="small">ливень: ${w.showers} мм</span>` : ""}
-                        ${w.snowfall > 0 ? `<br><span class="small">снег: ${w.snowfall} мм</span>` : ""}
+                        ${w.rain > 0 ? ` · дождь ${w.rain} мм` : ""}
+                        ${w.showers > 0 ? ` · ливень ${w.showers} мм` : ""}
+                        ${w.snowfall > 0 ? ` · снег ${w.snowfall} мм` : ""}
                     </div>
                 </div>
                 ` : ""}
@@ -701,6 +1015,7 @@ function renderDistricts(results){
         `;
     });
 
+    html += `</div>`;
     document.getElementById("districts").innerHTML = html;
 }
 
@@ -710,33 +1025,33 @@ async function loadDistrictsUI(){
     document.getElementById("districts").innerHTML = "Загрузка районов...";
 
     try{
-        logTo(logId, "Старт загрузки районов");
-        logTo(logId, "Подготовка координат");
-        logTo(logId, "Отправка запросов в Open-Meteo");
+        logTo(logId,"Старт загрузки районов");
+        logTo(logId,"Подготовка координат");
+        logTo(logId,"Отправка запросов в Open-Meteo");
 
         const entries = Object.entries(locations);
 
         const results = await Promise.all(
-            entries.map(async ([name, coords])=>{
-                const [lat, lon] = coords;
-                const w = await loadCurrentWeather(lat, lon);
-                return { name, w };
+            entries.map(async ([name,coords])=>{
+                const [lat,lon] = coords;
+                const w = await loadCurrentWeather(lat,lon);
+                return {name,w};
             })
         );
 
-        logTo(logId, "Данные районов получены");
+        logTo(logId,"Данные районов получены");
         renderDistricts(results);
-        logTo(logId, "Карточки районов построены");
+        logTo(logId,"Карточки районов построены");
 
         clearLogLater(logId);
     }catch(e){
-        document.getElementById("districts").innerHTML = "Ошибка загрузки районов";
-        logTo(logId, "Ошибка: " + e);
+        document.getElementById("districts").innerHTML = `<div class="small">Ошибка загрузки районов: ${e}</div>`;
+        logTo(logId,"Ошибка: " + e);
     }
 }
 
 // ========================================
-// 8. АВТОЗАГРУЗКА
+// 8. СТАРТ
 // ========================================
 loadSynopUI();
 loadDistrictsUI();
