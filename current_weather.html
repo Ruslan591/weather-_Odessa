@@ -743,6 +743,79 @@ function weatherIcon(code){
     return "⛅";
 }
 
+function synopWeatherText(code){
+    if(code == null) return "-";
+
+    const map = {
+        "00":"Ясно",
+        "01":"Облака рассеиваются",
+        "02":"Состояние неба без изменений",
+        "03":"Облачность развивается",
+        "04":"Дымка или дым",
+        "05":"Мгла",
+        "10":"Дымка",
+        "11":"Поземный туман",
+        "12":"Сплошной туман",
+        "17":"Гроза без осадков",
+        "20":"Морось или снежные зёрна",
+        "21":"Дождь",
+        "22":"Снег",
+        "24":"Гололёд",
+        "25":"Ливень",
+        "26":"Снегопад",
+        "27":"Град",
+        "28":"Туман",
+        "29":"Гроза",
+        "45":"Туман",
+        "48":"Туман с отложением изморози",
+        "51":"Слабая морось",
+        "53":"Умеренная морось",
+        "55":"Сильная морось",
+        "56":"Переохлаждённая слабая морось",
+        "57":"Переохлаждённая сильная морось",
+        "61":"Слабый дождь",
+        "63":"Умеренный дождь",
+        "65":"Сильный дождь",
+        "66":"Слабый переохлаждённый дождь",
+        "67":"Сильный переохлаждённый дождь",
+        "71":"Слабый снег",
+        "73":"Умеренный снег",
+        "75":"Сильный снег",
+        "77":"Снежные зёрна",
+        "80":"Слабый ливень",
+        "81":"Умеренный ливень",
+        "82":"Сильный ливень",
+        "85":"Слабый снежный ливень",
+        "86":"Сильный снежный ливень",
+        "95":"Гроза",
+        "96":"Гроза с мелким градом",
+        "99":"Гроза с сильным градом"
+    };
+
+    return map[String(code).padStart(2,"0")] || `Код ${code}`;
+}
+
+function synopWeatherIcon(code, isDay){
+    if(code == null) return isDay ? "⛅" : "🌙";
+
+    code = String(code).padStart(2, "0");
+    const day = isDay === true;
+
+    if(code === "00") return day ? "☀️" : "🌙";
+    if(["01","02","03"].includes(code)) return day ? "⛅" : "🌙☁️";
+    if(["04","05","10","11","12","28","45","48"].includes(code)) return "🌫️";
+
+    if(["20","21","24","25","51","53","55","56","57","61","63","65","66","67","80","81","82"].includes(code)) return "🌧️";
+
+    if(["22","26","71","73","75","77","85","86"].includes(code)) return "🌨️";
+
+    if(["17","29","95","96","99"].includes(code)) return "⛈️";
+
+    if(code === "27") return "🧊";
+
+    return day ? "⛅" : "🌙☁️";
+}
+
 function openMeteoWeatherText(code){
     const map = {
         0: "Ясно",
@@ -995,7 +1068,11 @@ function parseSynop(line){
         cloudHighCode = cloudGroup[4];
     }
 
+    const obsHourUtc = yyggi ? parseInt(yyggi.slice(2,4), 10) : null;
+const synopIsDay = Number.isFinite(obsHourUtc) ? (obsHourUtc >= 6 && obsHourUtc < 18) : null;
+
     return {
+        synopIsDay,
         raw: line,
         parts,
         yyggi,
@@ -1100,8 +1177,8 @@ function renderSynop(d){
     const main = document.getElementById("main");
 
     const localTime = localTimeFromSynopYYGGi(d.yyggi);
-    const wx = weatherText(d.weatherNow);
-    const wxIco = weatherIcon(d.weatherNow);
+    const wx = synopWeatherText(d.weatherNow);
+const wxIco = synopWeatherIcon(d.weatherNow, d.synopIsDay);
 
     let precipLine = "";
     if(d.precipGroup){
