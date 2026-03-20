@@ -639,6 +639,66 @@ function formatAutoTime(isoString){
     });
 }
 
+// ===== Ощущается как =====
+function calcRelativeHumidity(tempC, dewC){
+    const t = Number(tempC);
+    const td = Number(dewC);
+
+    if(!Number.isFinite(t) || !Number.isFinite(td)) return null;
+
+    const es = 6.112 * Math.exp((17.62 * t) / (243.12 + t));
+    const e = 6.112 * Math.exp((17.62 * td) / (243.12 + td));
+    const rh = (e / es) * 100;
+
+    if(!Number.isFinite(rh)) return null;
+    return Math.max(0, Math.min(100, rh));
+}
+
+function calcFeelsLike(tempC, windMs, dewC){
+    const t = Number(tempC);
+    const vMs = Number(windMs);
+    const td = Number(dewC);
+
+    if(!Number.isFinite(t)) return null;
+
+    const rh = calcRelativeHumidity(t, td);
+
+    /* Жара: heat index */
+    if(Number.isFinite(rh) && t >= 27){
+        const tf = t * 9/5 + 32;
+        const hiF =
+            -42.379 +
+            2.04901523 * tf +
+            10.14333127 * rh -
+            0.22475541 * tf * rh -
+            0.00683783 * tf * tf -
+            0.05481717 * rh * rh +
+            0.00122874 * tf * tf * rh +
+            0.00085282 * tf * rh * rh -
+            0.00000199 * tf * tf * rh * rh;
+
+        const hiC = (hiF - 32) * 5/9;
+        if(Number.isFinite(hiC)) return hiC;
+    }
+
+    /* Холод: wind chill */
+    if(Number.isFinite(vMs)){
+        const vKmh = vMs * 3.6;
+
+        if(t <= 10 && vKmh > 4.8){
+            const wc =
+                13.12 +
+                0.6215 * t -
+                11.37 * Math.pow(vKmh, 0.16) +
+                0.3965 * t * Math.pow(vKmh, 0.16);
+
+            if(Number.isFinite(wc)) return wc;
+        }
+    }
+
+    return t;
+}
+
 /* =========================================================
    3. ЛОГИ
 ========================================================= */
@@ -1178,8 +1238,10 @@ function renderSynop(d){
 
     const localTime = localTimeFromSynopYYGGi(d.yyggi);
     const wx = synopWeatherText(d.weatherNow);
-const wxIco = synopWeatherIcon(d.weatherNow, d.synopIsDay);
-
+    const wxIco = synopWeatherIcon(d.weatherNow, d.synopIsDay);
+    const feelsLike = calcFeelsLike(d.temp, d.windSpeed, d.dew);
+    const humidity = calcRelativeHumidity(d.temp, d.dew);
+    
     let precipLine = "";
     if(d.precipGroup){
         precipLine = `
@@ -1198,7 +1260,7 @@ const wxIco = synopWeatherIcon(d.weatherNow, d.synopIsDay);
             <div class="heroMain">
                 <div class="small">Температура воздуха</div>
                 <div class="heroTemp ${tempClass(d.temp)}">${fmt1(d.temp,"°C")}</div>
-                <div class="heroFeels">Ощущается как: <b>${fmt1(d.dew,"°C")}</b></div>
+                <div class="heroFeels">Ощущается как: <b>${fmt1(feelsLike,"°C")}</b></div>
                 <div class="heroWeather"><span class="wxIcon">${wxIco}</span>${escapeHtml(wx)}</div>
             </div>
 
@@ -1241,6 +1303,11 @@ const wxIco = synopWeatherIcon(d.weatherNow, d.synopIsDay);
                 <div class="row">
                     <div class="label">Точка росы</div>
                     <div class="value">${fmt1(d.dew,"°C")}</div>
+                </div>
+                
+                <div class="row">
+                <div class="label">Отн. влажность</div>
+                <div class="value">${fmt0(humidity," %")}</div>
                 </div>
 
                 <div class="row">
