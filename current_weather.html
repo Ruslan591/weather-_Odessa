@@ -195,6 +195,16 @@ a{
     margin-top:4px;
 }
 
+.value svg{
+    display:block;
+}
+
+@media (max-width:520px){
+    .value{
+        max-width:70%;
+    }
+}
+
 .tempCold{ color:#7ec8ff; }
 .tempCool{ color:#9dd6ff; }
 .tempMild{ color:#8ad68a; }
@@ -557,6 +567,60 @@ function cloudAmountText(n){
         8:"8/8 сплошная"
     };
     return map[n] || `${n}/8`;
+}
+
+function cloudSvg(kind, code){
+    const k = String(code ?? "");
+
+    const icons = {
+        low: {
+            "1": `<svg viewBox="0 0 64 36" width="44" height="24" aria-hidden="true"><ellipse cx="22" cy="22" rx="14" ry="8" fill="none" stroke="currentColor" stroke-width="2"/><ellipse cx="36" cy="18" rx="15" ry="9" fill="none" stroke="currentColor" stroke-width="2"/></svg>`,
+            "2": `<svg viewBox="0 0 64 36" width="44" height="24" aria-hidden="true"><ellipse cx="18" cy="23" rx="10" ry="6" fill="none" stroke="currentColor" stroke-width="2"/><ellipse cx="32" cy="18" rx="12" ry="8" fill="none" stroke="currentColor" stroke-width="2"/><ellipse cx="46" cy="22" rx="10" ry="6" fill="none" stroke="currentColor" stroke-width="2"/></svg>`,
+            "3": `<svg viewBox="0 0 64 36" width="44" height="24" aria-hidden="true"><path d="M12 28 C14 18,20 12,28 10 C32 4,40 4,44 10 C52 12,56 18,54 28 Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M40 22 l-4 7 h4 l-3 6" fill="none" stroke="currentColor" stroke-width="2"/></svg>`,
+            "4": `<svg viewBox="0 0 64 36" width="44" height="24" aria-hidden="true"><path d="M6 22 Q16 14 26 22 T46 22 T58 22" fill="none" stroke="currentColor" stroke-width="2"/></svg>`,
+            "5": `<svg viewBox="0 0 64 36" width="44" height="24" aria-hidden="true"><path d="M6 18 Q12 14 18 18 T30 18 T42 18 T54 18" fill="none" stroke="currentColor" stroke-width="2"/><path d="M6 24 Q12 20 18 24 T30 24 T42 24 T54 24" fill="none" stroke="currentColor" stroke-width="2"/></svg>`,
+            "6": `<svg viewBox="0 0 64 36" width="44" height="24" aria-hidden="true"><rect x="8" y="14" width="48" height="10" rx="5" fill="none" stroke="currentColor" stroke-width="2"/></svg>`,
+            "7": `<svg viewBox="0 0 64 36" width="44" height="24" aria-hidden="true"><rect x="8" y="14" width="48" height="10" rx="5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M18 26 l-2 5 M30 26 l-2 5 M42 26 l-2 5" stroke="currentColor" stroke-width="2"/></svg>`,
+            "8": `<svg viewBox="0 0 64 36" width="44" height="24" aria-hidden="true"><ellipse cx="18" cy="22" rx="10" ry="6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M28 18 Q34 14 40 18 T52 18" fill="none" stroke="currentColor" stroke-width="2"/></svg>`,
+            "9": `<svg viewBox="0 0 64 36" width="44" height="24" aria-hidden="true"><path d="M12 28 C14 18,20 12,28 10 C32 3,40 3,44 10 C52 12,56 18,54 28 Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M46 11 C48 7,51 5,54 4" fill="none" stroke="currentColor" stroke-width="2"/></svg>`
+        },
+        mid: {
+            "1": `<svg viewBox="0 0 64 36" width="44" height="24"><path d="M8 20 L56 20" stroke="currentColor" stroke-width="2"/><path d="M12 14 L52 14" stroke="currentColor" stroke-width="1.5" opacity="0.65"/></svg>`,
+            "2": `<svg viewBox="0 0 64 36" width="44" height="24"><path d="M8 18 L56 18" stroke="currentColor" stroke-width="3"/><path d="M8 23 L56 23" stroke="currentColor" stroke-width="3"/></svg>`,
+            "3": `<svg viewBox="0 0 64 36" width="44" height="24"><ellipse cx="16" cy="18" rx="7" ry="4" fill="none" stroke="currentColor" stroke-width="2"/><ellipse cx="30" cy="18" rx="7" ry="4" fill="none" stroke="currentColor" stroke-width="2"/><ellipse cx="44" cy="18" rx="7" ry="4" fill="none" stroke="currentColor" stroke-width="2"/></svg>`,
+            "4": `<svg viewBox="0 0 64 36" width="44" height="24"><ellipse cx="18" cy="18" rx="8" ry="4" fill="none" stroke="currentColor" stroke-width="2"/><ellipse cx="38" cy="20" rx="10" ry="5" fill="none" stroke="currentColor" stroke-width="2"/></svg>`,
+            "5": `<svg viewBox="0 0 64 36" width="44" height="24"><path d="M8 14 Q14 10 20 14 T32 14 T44 14 T56 14" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 22 Q14 18 20 22 T32 22 T44 22 T56 22" fill="none" stroke="currentColor" stroke-width="2"/></svg>`,
+            "6": `<svg viewBox="0 0 64 36" width="44" height="24"><path d="M10 22 C20 12,44 12,54 22" fill="none" stroke="currentColor" stroke-width="2"/></svg>`,
+            "7": `<svg viewBox="0 0 64 36" width="44" height="24"><path d="M8 14 Q14 10 20 14 T32 14 T44 14 T56 14" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 24 Q14 20 20 24 T32 24 T44 24 T56 24" fill="none" stroke="currentColor" stroke-width="2"/></svg>`,
+            "8": `<svg viewBox="0 0 64 36" width="44" height="24"><path d="M10 24 L18 12 L26 24 Z M28 24 L36 10 L44 24 Z" fill="none" stroke="currentColor" stroke-width="2"/></svg>`,
+            "9": `<svg viewBox="0 0 64 36" width="44" height="24"><ellipse cx="14" cy="18" rx="6" ry="3.5" fill="none" stroke="currentColor" stroke-width="2"/><ellipse cx="26" cy="22" rx="6" ry="3.5" fill="none" stroke="currentColor" stroke-width="2"/><ellipse cx="38" cy="16" rx="6" ry="3.5" fill="none" stroke="currentColor" stroke-width="2"/><ellipse cx="50" cy="21" rx="6" ry="3.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>`
+        },
+        high: {
+            "1": `<svg viewBox="0 0 64 36" width="44" height="24"><path d="M10 22 C18 18,22 10,30 14 C38 18,42 10,52 14" fill="none" stroke="currentColor" stroke-width="2"/></svg>`,
+            "2": `<svg viewBox="0 0 64 36" width="44" height="24"><path d="M10 20 C18 16,22 12,30 14 C38 16,44 12,54 16" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>`,
+            "3": `<svg viewBox="0 0 64 36" width="44" height="24"><path d="M10 20 C18 16,22 12,30 14 C38 16,44 12,54 16" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M44 10 C46 7,49 5,53 4" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>`,
+            "4": `<svg viewBox="0 0 64 36" width="44" height="24"><path d="M10 22 C18 12,24 12,30 20 C36 28,42 12,54 16" fill="none" stroke="currentColor" stroke-width="2"/></svg>`,
+            "5": `<svg viewBox="0 0 64 36" width="44" height="24"><path d="M8 20 C14 16,20 16,26 20" fill="none" stroke="currentColor" stroke-width="2"/><path d="M30 18 L56 18" stroke="currentColor" stroke-width="1.8"/></svg>`,
+            "6": `<svg viewBox="0 0 64 36" width="44" height="24"><path d="M8 14 C14 10,20 10,26 14" fill="none" stroke="currentColor" stroke-width="2"/><path d="M30 12 L56 12" stroke="currentColor" stroke-width="1.8"/></svg>`,
+            "7": `<svg viewBox="0 0 64 36" width="44" height="24"><path d="M8 14 L56 14" stroke="currentColor" stroke-width="1.8"/><path d="M8 20 L56 20" stroke="currentColor" stroke-width="1.8"/></svg>`,
+            "8": `<svg viewBox="0 0 64 36" width="44" height="24"><path d="M8 18 L56 18" stroke="currentColor" stroke-width="1.6"/><path d="M14 12 L50 24" stroke="currentColor" stroke-width="1.2" opacity="0.6"/></svg>`,
+            "9": `<svg viewBox="0 0 64 36" width="44" height="24"><ellipse cx="16" cy="16" rx="6" ry="3" fill="none" stroke="currentColor" stroke-width="2"/><ellipse cx="30" cy="18" rx="6" ry="3" fill="none" stroke="currentColor" stroke-width="2"/><ellipse cx="44" cy="15" rx="6" ry="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>`
+        }
+    };
+
+    return icons[kind]?.[k] || `<svg viewBox="0 0 64 36" width="44" height="24" aria-hidden="true"><path d="M8 18 L56 18" stroke="currentColor" stroke-width="2"/></svg>`;
+}
+
+function cloudRow(label, kind, code, text){
+    return `
+        <div class="row">
+            <div class="label">${escapeHtml(label)}</div>
+            <div class="value" style="display:flex;align-items:center;justify-content:flex-end;gap:10px;text-align:right">
+                <span style="display:inline-flex;opacity:.9">${cloudSvg(kind, code)}</span>
+                <span>${escapeHtml(text)}</span>
+            </div>
+        </div>
+    `;
 }
 
 function visibilityText(code){
@@ -931,50 +995,50 @@ function openMeteoWeatherIcon(code, isDay){
 // Облачность
 function cloudGenusLow(code){
     const map = {
-        "0":"Нет Cu/Cb",
-        "1":"Cumulus humilis / fractus",
-        "2":"Cumulus mediocris / congestus",
-        "3":"Cumulonimbus calvus",
-        "4":"Stratocumulus cumulogenitus",
-        "5":"Stratocumulus не cumulogenitus",
-        "6":"Stratus / fractostratus",
-        "7":"Stratus fractus / Cu плохой погоды",
-        "8":"Cumulus + Stratocumulus",
-        "9":"Cumulonimbus capillatus"
+        "0":"— Нет облаков нижнего яруса",
+        "1":"☁️ Кучевые плоские или разорванные",
+        "2":"☁️ Кучевые средние или мощные",
+        "3":"🌩️ Кучево-дождевые без волокнистой вершины",
+        "4":"☁️ Слоисто-кучевые, образованные из кучевых",
+        "5":"☁️ Слоисто-кучевые",
+        "6":"🌫️ Слоистые или разорванно-слоистые",
+        "7":"🌧️ Разорванно-слоистые / облака плохой погоды",
+        "8":"☁️ Кучевые и слоисто-кучевые",
+        "9":"⛈️ Кучево-дождевые с волокнистой вершиной"
     };
-    return map[code] || "-";
+    return map[code] || "— Неизвестный код";
 }
 
 function cloudGenusMid(code){
     const map = {
-        "0":"Нет Ac/As/Ns",
-        "1":"Altostratus translucidus",
-        "2":"Altostratus opacus / Nimbostratus",
-        "3":"Altocumulus translucidus",
-        "4":"Altocumulus patchy",
-        "5":"Altocumulus bands",
-        "6":"Altocumulus spreading",
-        "7":"Altocumulus двойной слой",
-        "8":"Altocumulus castellanus",
-        "9":"Altocumulus chaotic"
+        "0":"— Нет облаков среднего яруса",
+        "1":"☁️ Высокослоистые просвечивающие",
+        "2":"🌧️ Высокослоистые плотные или слоисто-дождевые",
+        "3":"☁️ Высококучевые просвечивающие",
+        "4":"☁️ Высококучевые пятнами",
+        "5":"☁️ Высококучевые полосами",
+        "6":"☁️ Высококучевые, распространяющиеся по небу",
+        "7":"☁️ Высококучевые в двух слоях",
+        "8":"⛈️ Высококучевые башенкообразные",
+        "9":"☁️ Высококучевые хаотичные"
     };
-    return map[code] || "-";
+    return map[code] || "— Неизвестный код";
 }
 
 function cloudGenusHigh(code){
     const map = {
-        "0":"Нет Ci/Cs/Cc",
-        "1":"Cirrus fibratus",
-        "2":"Cirrus spissatus",
-        "3":"Cirrus spissatus cumulonimbogenitus",
-        "4":"Cirrus uncinus / fibratus",
-        "5":"Cirrus + Cirrostratus, низко над горизонтом",
-        "6":"Cirrus + Cirrostratus, выше 45°",
-        "7":"Cirrostratus покрывает небо",
-        "8":"Cirrostratus не покрывает полностью",
-        "9":"Cirrocumulus"
+        "0":"— Нет облаков верхнего яруса",
+        "1":"☁️ Перистые нитевидные",
+        "2":"☁️ Перистые плотные",
+        "3":"☁️ Перистые плотные от кучево-дождевых",
+        "4":"☁️ Перистые крючковидные или нитевидные",
+        "5":"☁️ Перистые и перисто-слоистые у горизонта",
+        "6":"☁️ Перистые и перисто-слоистые выше 45°",
+        "7":"🌥️ Перисто-слоистые покрывают небо",
+        "8":"🌥️ Перисто-слоистые не покрывают всё небо",
+        "9":"☁️ Перисто-кучевые"
     };
-    return map[code] || "-";
+    return map[code] || "— Неизвестный код";
 }
 
 function precipitationText(group1Indicator, group6){
@@ -1329,39 +1393,32 @@ function renderSynop(d){
             </div>
 
             <div class="card" style="margin:0">
-                <div class="cardTitle">Облака и атмосфера</div>
+    <div class="cardTitle">Облака и атмосфера</div>
 
-                <div class="row">
-                    <div class="label">Общая облачность</div>
-                    <div class="value">${escapeHtml(cloudAmountText(d.totalCloud))}</div>
-                </div>
+    <div class="row">
+        <div class="label">Общая облачность</div>
+        <div class="value">${escapeHtml(cloudAmountText(d.totalCloud))}</div>
+    </div>
 
-                <div class="row">
-                    <div class="label">Группа 8NhCLCMCH</div>
-                    <div class="value">${escapeHtml(d.cloudGroup || "-")}</div>
-                </div>
+    <div class="row">
+        <div class="label">Группа 8NhCLCMCH</div>
+        <div class="value">${escapeHtml(d.cloudGroup || "-")}</div>
+    </div>
 
-                <div class="row">
-                    <div class="label">Нижний ярус</div>
-                    <div class="value">${escapeHtml(cloudGenusLow(d.cloudLowCode))}</div>
-                </div>
+    <div class="row">
+        <div class="label">Количество по Nh</div>
+        <div class="value">${d.cloudTotalOkta != null ? escapeHtml(cloudAmountText(d.cloudTotalOkta)) : "-"}</div>
+    </div>
 
-                <div class="row">
-                    <div class="label">Средний ярус</div>
-                    <div class="value">${escapeHtml(cloudGenusMid(d.cloudMidCode))}</div>
-                </div>
+    ${cloudRow("Нижний ярус", "low", d.cloudLowCode, cloudGenusLow(d.cloudLowCode))}
+    ${cloudRow("Средний ярус", "mid", d.cloudMidCode, cloudGenusMid(d.cloudMidCode))}
+    ${cloudRow("Верхний ярус", "high", d.cloudHighCode, cloudGenusHigh(d.cloudHighCode))}
 
-                <div class="row">
-                    <div class="label">Верхний ярус</div>
-                    <div class="value">${escapeHtml(cloudGenusHigh(d.cloudHighCode))}</div>
-                </div>
-
-                <div class="row">
-                    <div class="label">Видимость</div>
-                    <div class="value">${visibilityText(d.visibility)}</div>
-                </div>
-            </div>
-        </div>
+    <div class="row">
+        <div class="label">Видимость</div>
+        <div class="value">${visibilityText(d.visibility)}</div>
+    </div>
+</div>
 
         <details>
             <summary>Полная расшифровка SYNOP</summary>
