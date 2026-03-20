@@ -242,7 +242,7 @@ a{
 
 .districtName{
     font-weight:700;
-    font-size:17px;
+    font-size:15px;
 }
 
 .districtTemp{
@@ -256,7 +256,7 @@ a{
     justify-content:space-between;
     gap:10px;
     padding:4px 0;
-    font-size:15px;
+    font-size:13px;
 }
 
 .districtLine span:first-child{
@@ -743,6 +743,59 @@ function weatherIcon(code){
     return "⛅";
 }
 
+function openMeteoWeatherText(code){
+    const map = {
+        0: "Ясно",
+        1: "Преимущественно ясно",
+        2: "Переменная облачность",
+        3: "Пасмурно",
+        45: "Туман",
+        48: "Туман с инеем",
+        51: "Слабая морось",
+        53: "Умеренная морось",
+        55: "Сильная морось",
+        56: "Слабая ледяная морось",
+        57: "Сильная ледяная морось",
+        61: "Слабый дождь",
+        63: "Умеренный дождь",
+        65: "Сильный дождь",
+        66: "Слабый ледяной дождь",
+        67: "Сильный ледяной дождь",
+        71: "Слабый снег",
+        73: "Умеренный снег",
+        75: "Сильный снег",
+        77: "Снежные зёрна",
+        80: "Слабый ливень",
+        81: "Умеренный ливень",
+        82: "Сильный ливень",
+        85: "Слабый снежный ливень",
+        86: "Сильный снежный ливень",
+        95: "Гроза",
+        96: "Гроза с мелким градом",
+        99: "Гроза с сильным градом"
+    };
+    return map[code] ?? `Код ${code}`;
+}
+
+function openMeteoWeatherIcon(code, isDay){
+    const day = Number(isDay) === 1;
+
+    if(code === 0) return day ? "☀️" : "🌙";
+    if(code === 1) return day ? "🌤️" : "🌙☁️";
+    if(code === 2) return day ? "⛅" : "🌙☁️";
+    if(code === 3) return "☁️";
+    if(code === 45 || code === 48) return "🌫️";
+
+    if([51,53,55,56,57].includes(code)) return "🌦️";
+    if([61,63,65,66,67].includes(code)) return "🌧️";
+    if([71,73,75,77,85,86].includes(code)) return "🌨️";
+    if([80,81,82].includes(code)) return "🌦️";
+    if([95,96,99].includes(code)) return "⛈️";
+
+    return day ? "🌤️" : "🌙";
+}
+
+// Облачность
 function cloudGenusLow(code){
     const map = {
         "0":"Нет Cu/Cb",
@@ -1302,8 +1355,10 @@ function renderDistricts(results){
         const showers = safeNum(w.showers);
         const snow = safeNum(w.snowfall);
         const timeStr = formatAutoTime(w.time);
-        const wx = weatherText(w.weather_code);
-        const wxIco = weatherIcon(w.weather_code);
+        const wxCode = safeNum(w.weather_code);
+        const isDay = safeNum(w.is_day);
+        const wx = openMeteoWeatherText(wxCode);
+        const wxIco = openMeteoWeatherIcon(wxCode, isDay);
 
         html += `
             <div class="districtCard">
