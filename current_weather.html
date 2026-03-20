@@ -110,24 +110,16 @@ button{
 
 <div class="container">
 
-<div id="loadingLog" style="
-font-size:12px;
-opacity:0.8;
-max-width:600px;
-margin:10px auto;
-text-align:left;
-"></div>
-
-<div class="card" id="main">
-Загрузка...
+<div<div class="card" id="main">
+    <div class="small">Данные SYNOP ещё не загружены</div>
+    <div id="synopLog" class="small"></div>
+    <button onclick="loadSynopUI()">Обновить SYNOP</button>
 </div>
 
 <div class="card" id="districts">
-Загрузка районов...
-</div>
-
-<div class="card">
-<button onclick="load()">Обновить</button>
+    <div class="small">Данные по районам ещё не загружены</div>
+    <div id="districtsLog" class="small"></div>
+    <button onclick="loadDistrictsUI()">Обновить районы</button>
 </div>
 
 </div>
@@ -135,38 +127,7 @@ text-align:left;
 <script>
 
 // ===== загрузка =====
-function log(msg){
-    const el = document.getElementById("loadingLog");
-    if(el){
-        el.innerHTML += msg + "<br>";
-    }
-    console.log(msg);
-}
 
-async function load(){
-
-    document.getElementById("loadingLog").innerHTML = "";
-
-    setStatus("Загрузка...");
-
-    try{
-
-        const synop = await loadSynop();
-
-        render(synop);
-
-        await loadAllLocations();
-
-        log("SYNOP успешно отображён");
-
-    }catch(e){
-
-        setStatus("Ошибка загрузки");
-        log("Ошибка: " + e);
-
-    }
-
-}
 
 function logTo(elId, msg){
     const el = document.getElementById(elId);
@@ -181,6 +142,28 @@ function clearLogLater(elId, delay = 5000){
         const el = document.getElementById(elId);
         if(el) el.innerHTML = "";
     }, delay);
+}
+
+function setSynopStatus(text){
+    const el = document.getElementById("main");
+    if(!el) return;
+
+    el.innerHTML = `
+        <div class="small">${text}</div>
+        <div id="synopLog" class="small"></div>
+        <button onclick="loadSynopUI()">Обновить SYNOP</button>
+    `;
+}
+
+function setDistrictsStatus(text){
+    const el = document.getElementById("districts");
+    if(!el) return;
+
+    el.innerHTML = `
+        <div class="small">${text}</div>
+        <div id="districtsLog" class="small"></div>
+        <button onclick="loadDistrictsUI()">Обновить районы</button>
+    `;
 }
 
 //===== загрузка SYNOP =====
@@ -216,34 +199,29 @@ return parseSynop(line);
 //===== Обёртка для SYNOP (UI-логика) =====
 async function loadSynopUI(){
 
+    setSynopStatus("Загрузка SYNOP...");
     const logId = "synopLog";
-    document.getElementById(logId).innerHTML = "";
-
-    setStatus("Загрузка SYNOP...");
 
     try{
-
         logTo(logId, "🚀 Старт загрузки");
-
-        logTo(logId, "⏳ Подготовка запроса...");
-        logTo(logId, "🌐 Отправка на прокси...");
+        logTo(logId, "⏳ Подготовка запроса");
+        logTo(logId, "🌐 Отправка на прокси");
 
         const synop = await loadSynop();
 
         logTo(logId, "📥 Ответ получен");
-        logTo(logId, "🔍 Парсинг данных...");
+        logTo(logId, "🔍 Парсинг SYNOP");
+        logTo(logId, "🖼 Обновление карточки");
 
         render(synop);
 
-        logTo(logId, "✅ Готово");
+        logTo("synopLog", "✅ Готово");
 
-        clearLogLater(logId);
+        clearLogLater("synopLog", 7000);
 
     }catch(e){
-
-        logTo(logId, "❌ Ошибка: " + e);
-        setStatus("Ошибка SYNOP");
-
+        setSynopStatus("Ошибка загрузки SYNOP");
+        logTo("synopLog", "❌ Ошибка: " + e);
     }
 }
 
@@ -252,54 +230,61 @@ function parseSynop(line){
 
     const parts = line.trim().split(/\s+/);
 
-    let temp=null, dew=null, pressure=null;
-    let wind=null, windDir=null;
-    let weather=null, cloud=null;
+    let temp = null;
+    let dew = null;
+    let pressure = null;
+    let wind = null;
+    let windDir = null;
+    let weather = null;
+    let cloud = null;
 
-    parts.forEach(g=>{
+    parts.forEach(g => {
 
-        if(g.startsWith("1")){
-            const sign = g[1]==="1" ? -1 : 1;
-            temp = sign * parseInt(g.slice(2))/10;
+        if(/^1\d{4}$/.test(g)){
+            const sign = g[1] === "1" ? -1 : 1;
+            temp = sign * parseInt(g.slice(2), 10) / 10;
         }
 
-        if(g.startsWith("2")){
-            const sign = g[1]==="1" ? -1 : 1;
-            dew = sign * parseInt(g.slice(2))/10;
+        if(/^2\d{4}$/.test(g)){
+            const sign = g[1] === "1" ? -1 : 1;
+            dew = sign * parseInt(g.slice(2), 10) / 10;
         }
 
-        if(g.startsWith("4")){
-            let p = parseInt(g.slice(1)) / 10;
-pressure = p < 500 ? 1000 + p : 900 + p;
+        if(/^4\d{4}$/.test(g)){
+            const p = parseInt(g.slice(1), 10) / 10;
+            pressure = p < 500 ? 1000 + p : 900 + p;
         }
 
-        if(g.startsWith("7")){
+        if(/^7\d{4}$/.test(g)){
             weather = g.slice(1,3);
         }
 
-        if(g.startsWith("8")){
-            cloud = g.slice(1,2);
+        if(/^8\d{4}$/.test(g)){
+            cloud = g[1];
         }
-
     });
 
     const aaxxIndex = parts.indexOf("AAXX");
+    let time = null;
 
-let time = null;
+    if(aaxxIndex >= 0 && parts[aaxxIndex + 1]){
+        const t = parts[aaxxIndex + 1];
+        time = {
+            day: t.slice(0,2),
+            hour: t.slice(2,4)
+        };
+    }
 
-if(aaxxIndex >= 0 && parts[aaxxIndex + 1]){
-    const t = parts[aaxxIndex + 1];
+    if(aaxxIndex >= 0 && parts[aaxxIndex + 4]){
+        const w = parts[aaxxIndex + 4];
 
-    const day = t.slice(0,2);
-    const hour = t.slice(2,4);
+        if(/^\d{5}$/.test(w)){
+            windDir = parseInt(w.slice(0,2), 10) * 10;
+            wind = parseInt(w.slice(3,5), 10);
+        }
+    }
 
-    time = {
-        day,
-        hour
-    };
-}
-return {temp,dew,pressure,wind,windDir,weather,cloud,raw:line,time};
-
+    return { temp, dew, pressure, wind, windDir, weather, cloud, raw: line, time };
 }
 
 // ===== расшифровки =====
@@ -389,52 +374,58 @@ async function loadCurrentWeather(lat, lon){
 // ===== Обёртка для районов =====
 async function loadDistrictsUI(){
 
+    setDistrictsStatus("Загрузка районов...");
     const logId = "districtsLog";
-    document.getElementById(logId).innerHTML = "";
-
-    logTo(logId, "🚀 Старт загрузки районов");
 
     try{
+        logTo(logId, "🚀 Старт загрузки районов");
 
         const entries = Object.entries(locations);
 
-        logTo(logId, "⏳ Подготовка координат...");
-        logTo(logId, "🌐 Запрос к Open-Meteo...");
+        logTo(logId, "📍 Подготовка координат");
+        logTo(logId, `🌐 Запросов: ${entries.length}`);
 
         const results = await Promise.all(
-            entries.map(([name,[lat,lon]]) =>
-                loadCurrentWeather(lat,lon)
-                    .then(w => ({name,w}))
-            )
+            entries.map(async ([name, [lat, lon]]) => {
+                logTo(logId, `⏳ ${name}: отправка запроса`);
+                const w = await loadCurrentWeather(lat, lon);
+                logTo(logId, `📥 ${name}: ответ получен`);
+                return { name, w };
+            })
         );
 
-        logTo(logId, "📥 Данные получены");
+        logTo(logId, "🖼 Сборка блока районов");
 
-        let html = "<h3>Погода по районам</h3>";
+        let html = `
+            <h3>Погода по районам</h3>
+            <div id="districtsLog" class="small"></div>
+        `;
 
-        results.forEach(({name,w})=>{
-            
+        results.forEach(({name, w}) => {
+            const t = new Date(w.time);
+            const timeStr = `${String(t.getUTCDate()).padStart(2,"0")} число, ${String(t.getUTCHours()).padStart(2,"0")}:00 UTC`;
 
             html += `
             <div class="row">
                 <div>${name}</div>
                 <div>
                     ${w.temperature_2m}°C | ${w.wind_speed_10m} м/с<br>
-                    <span class="small">${t}</span>
+                    <span class="small">${timeStr}</span>
                 </div>
             </div>`;
         });
 
+        html += `<button onclick="loadDistrictsUI()">Обновить районы</button>`;
+
         document.getElementById("districts").innerHTML = html;
 
-        logTo(logId, "✅ Готово");
+        logTo("districtsLog", "✅ Готово");
 
-        clearLogLater(logId);
+        clearLogLater("districtsLog", 7000);
 
     }catch(e){
-
-        logTo(logId, "❌ Ошибка: " + e);
-
+        setDistrictsStatus("Ошибка загрузки районов");
+        logTo("districtsLog", "❌ Ошибка: " + e);
     }
 }
 
@@ -444,14 +435,14 @@ function render(d){
     const el = document.getElementById("main");
 
     el.innerHTML = `
-
     <div class="small">Наблюдение: ${formatTime(d.time)}</div>
+
     <div class="big" style="color:${tempColor(d.temp)}">
-    ${d.temp ?? "-"}°C
-</div>
+        ${d.temp ?? "-"}°C
+    </div>
 
     <div class="row">
-        <div>Ощущение (точка росы)</div>
+        <div>Точка росы</div>
         <div class="value">${d.dew ?? "-"}°C</div>
     </div>
 
@@ -461,13 +452,13 @@ function render(d){
     </div>
 
     <div class="row">
-    <div>Ветер</div>
-    <div class="value">
-        ${d.wind ?? "-"} м/с 
-        ${d.windDir ? degToText(d.windDir) : ""}
-        ${windArrow(d.windDir)}
+        <div>Ветер</div>
+        <div class="value">
+            ${d.wind ?? "-"} м/с
+            ${d.windDir != null ? degToText(d.windDir) : ""}
+            ${windArrow(d.windDir)}
+        </div>
     </div>
-</div>
 
     <div class="row">
         <div>Облачность</div>
@@ -479,47 +470,13 @@ function render(d){
         <div class="value">${weatherText(d.weather)}</div>
     </div>
 
-    <div class="small">${d.raw}</div>
+    <div class="small" style="margin-top:10px;">${d.raw}</div>
 
-    <div class="card">
-    <b>SYNOP</b>
-    <div id="synopLog" class="small"></div>
+    <div id="synopLog" class="small" style="margin-top:10px;"></div>
     <button onclick="loadSynopUI()">Обновить SYNOP</button>
-</div>`;
+    `;
 }
 
-//===== вывод по районам =====
-async function loadAllLocations(){
-
-let html = "<h3>Погода по районам</h3>";
-
-const entries = Object.entries(locations);
-
-const results = await Promise.all(
-    entries.map(([name,[lat,lon]]) =>
-        loadCurrentWeather(lat,lon)
-            .then(w => ({name,w}))
-    )
-);
-
-
-results.forEach(({name,w})=>{
-    // w.time есть, это ISO 2026-03-19T19:00
-    const t = new Date(w.time);
-    const timeStr = `${t.getUTCDate()} число, ${t.getUTCHours()}:00 UTC`;
-
-    html += `
-    <div class="row">
-        <div>${name}</div>
-        <div>
-            ${w.temperature_2m}°C | ${w.wind_speed_10m} м/с<br>
-            <span class="small">${timeStr}</span>
-        </div>
-    </div>`;
-});
-
-document.getElementById("districts").innerHTML = html;
-}
 
 loadSynopUI();
 loadDistrictsUI();
