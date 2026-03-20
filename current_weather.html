@@ -6,9 +6,6 @@
 <title>Текущая погода</title>
 
 <style>
-/* =========================
-   1. БАЗОВОЕ ОФОРМЛЕНИЕ
-   ========================= */
 body{
     background:#121212;
     color:#eee;
@@ -17,9 +14,6 @@ body{
     padding:0;
 }
 
-/* =========================
-   2. ВЕРХНЯЯ ПАНЕЛЬ
-   ========================= */
 .header{
     display:flex;
     justify-content:space-between;
@@ -29,40 +23,29 @@ body{
     position:sticky;
     top:0;
     z-index:10;
-    border-bottom:1px solid #2c2c2c;
 }
 
 .nav a{
     margin-left:12px;
     color:#aaa;
     text-decoration:none;
-    font-size:14px;
 }
 
 .nav a:hover{
     color:#fff;
 }
 
-/* =========================
-   3. ОСНОВНОЙ КОНТЕЙНЕР
-   ========================= */
 .container{
+    padding:15px;
     max-width:900px;
     margin:auto;
-    padding:15px;
-    box-sizing:border-box;
 }
 
-/* =========================
-   4. КАРТОЧКИ
-   ========================= */
 .card{
     background:#1e1e1e;
     border-radius:12px;
     padding:15px;
     margin-bottom:15px;
-    box-sizing:border-box;
-    border:1px solid #2a2a2a;
 }
 
 .row{
@@ -83,10 +66,9 @@ body{
 }
 
 .big{
-    font-size:30px;
+    font-size:32px;
     text-align:center;
-    margin:12px 0;
-    font-weight:bold;
+    margin:10px 0 15px;
 }
 
 .small{
@@ -95,72 +77,45 @@ body{
     line-height:1.45;
 }
 
-.sectionTitle{
-    font-size:18px;
-    font-weight:bold;
-    margin-bottom:10px;
-}
-
-/* =========================
-   5. КНОПКИ
-   ========================= */
 .buttons{
     display:flex;
-    flex-direction:column;
     gap:10px;
+    flex-wrap:wrap;
 }
 
 button{
-    width:100%;
-    padding:11px 14px;
+    flex:1;
+    min-width:180px;
+    padding:10px;
     background:#333;
     color:white;
     border:none;
     border-radius:8px;
     cursor:pointer;
-    font-size:14px;
 }
 
 button:hover{
     background:#444;
 }
 
-/* =========================
-   6. ЛОГИ ЗАГРУЗКИ
-   ========================= */
-.logBox{
-    background:#181818;
-    border:1px solid #2a2a2a;
-    border-radius:10px;
-    padding:10px 12px;
+h3{
+    margin-top:0;
+}
+
+.raw{
     margin-top:12px;
-    font-size:12px;
-    color:#bbb;
-    line-height:1.5;
-    min-height:18px;
-    white-space:normal;
     word-break:break-word;
 }
 
-/* =========================
-   7. СЕТКА РАЙОНОВ
-   ========================= */
-.districtGrid{
-    display:grid;
-    grid-template-columns:1fr;
-    gap:12px;
+.logbox{
+    margin-top:10px;
+    padding:10px;
+    background:#181818;
+    border-radius:8px;
+    min-height:20px;
 }
 
-/* =========================
-   8. АДАПТАЦИЯ ПОД ЭКРАН
-   ========================= */
-@media (min-width: 720px){
-    .districtGrid{
-        grid-template-columns:1fr 1fr;
-    }
-}
-
-@media (max-width: 640px){
+@media (max-width:640px){
     .header{
         flex-direction:column;
         align-items:flex-start;
@@ -176,18 +131,18 @@ button:hover{
         text-align:left;
     }
 
-    .big{
-        font-size:28px;
+    .buttons{
+        flex-direction:column;
+    }
+
+    button{
+        width:100%;
     }
 }
 </style>
 </head>
-
 <body>
 
-<!-- =========================
-     9. ВЕРХНЯЯ ПАНЕЛЬ НАВИГАЦИИ
-     ========================= -->
 <div class="header">
     <div><b>Погода сейчас</b></div>
     <div class="nav">
@@ -196,64 +151,61 @@ button:hover{
     </div>
 </div>
 
-<!-- =========================
-     10. ОСНОВНОЙ КОНТЕЙНЕР
-     ========================= -->
 <div class="container">
 
-    <!-- =========================
-         11. КАРТОЧКА SYNOP
-         ========================= -->
     <div class="card" id="main">
         Загрузка SYNOP...
     </div>
 
-    <!-- =========================
-         12. КАРТОЧКА РАЙОНОВ
-         ========================= -->
+    <div class="card">
+        <h3>SYNOP</h3>
+        <div id="synopLog" class="small logbox"></div>
+        <div class="buttons">
+            <button onclick="loadSynopUI()">Обновить SYNOP</button>
+        </div>
+    </div>
+
     <div class="card" id="districts">
         Загрузка районов...
+    </div>
+
+    <div class="card">
+        <h3>Районы</h3>
+        <div id="districtsLog" class="small logbox"></div>
+        <div class="buttons">
+            <button onclick="loadDistrictsUI()">Обновить районы</button>
+        </div>
     </div>
 
 </div>
 
 <script>
-/* =========================================================
-   13. СПРАВОЧНИК РАЙОНОВ
-   Координаты можно потом подправить точнее
-   ========================================================= */
-const locations = {
-    "Котовского": [46.560, 30.800],
-    "Центр": [46.482, 30.723],
-    "Таирова": [46.400, 30.650],
-    "Аркадия": [46.430, 30.760],
-    "Застава": [46.520, 30.650]
-};
+// ========================================
+// 1. ЛОГИ
+// ========================================
+function logTo(elId, msg){
+    const el = document.getElementById(elId);
+    if(!el) return;
 
-/* =========================================================
-   14. УТИЛИТЫ ДЛЯ ВРЕМЕНИ
-   ========================================================= */
-function pad2(v){
-    return String(v).padStart(2, "0");
+    const time = new Date().toLocaleTimeString("ru-RU");
+    el.innerHTML += `[${time}] ${msg}<br>`;
+    console.log(msg);
 }
 
-function formatIsoUtc(iso){
-    if(!iso) return "-";
-
-    const d = new Date(iso);
-    if(isNaN(d.getTime())) return iso;
-
-    return `${pad2(d.getUTCDate())}.${pad2(d.getUTCMonth()+1)} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())} UTC`;
+function clearLogLater(elId, delay = 7000){
+    setTimeout(()=>{
+        const el = document.getElementById(elId);
+        if(el) el.innerHTML = "";
+    }, delay);
 }
 
-function formatSynopTime(timeObj){
-    if(!timeObj || !timeObj.day || !timeObj.hour) return "-";
-    return `${timeObj.day} число, ${timeObj.hour}:00 UTC`;
+// ========================================
+// 2. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+// ========================================
+function setMainStatus(text){
+    document.getElementById("main").innerHTML = text;
 }
 
-/* =========================================================
-   15. УТИЛИТЫ ДЛЯ ВНЕШНЕГО ВИДА
-   ========================================================= */
 function tempColor(t){
     if(t == null) return "#eee";
     if(t < 0) return "#4da3ff";
@@ -264,24 +216,21 @@ function tempColor(t){
 }
 
 function windArrow(deg){
-    if(deg == null || isNaN(deg)) return "";
+    if(deg == null) return "";
     return `<span style="display:inline-block;transform:rotate(${deg}deg);font-size:18px;">↑</span>`;
 }
 
 function degToText(d){
-    if(d == null || isNaN(d)) return "-";
+    if(d == null) return "-";
     const dirs = ["С","СВ","В","ЮВ","Ю","ЮЗ","З","СЗ"];
     return dirs[Math.round(d / 45) % 8];
 }
 
 function cloudText(c){
-    if(c == null || c === "") return "-";
-    return c + "/8";
+    if(c == null) return "-";
+    return `${c}/8`;
 }
 
-/* =========================================================
-   16. РАСШИФРОВКА ПОГОДЫ SYNOP
-   ========================================================= */
 function weatherText(code){
     if(!code) return "-";
 
@@ -290,491 +239,237 @@ function weatherText(code){
         "01":"Малооблачно",
         "02":"Переменная облачность",
         "03":"Пасмурно",
+        "04":"Дымка",
+        "05":"Мгла",
+        "10":"Дымка",
         "45":"Туман",
         "48":"Туман с изморозью",
-        "51":"Морось",
-        "61":"Дождь",
-        "63":"Сильный дождь",
-        "71":"Снег",
-        "73":"Сильный снег",
-        "80":"Ливень",
+        "51":"Слабая морось",
+        "53":"Морось",
+        "55":"Сильная морось",
+        "61":"Слабый дождь",
+        "63":"Дождь",
+        "65":"Сильный дождь",
+        "71":"Слабый снег",
+        "73":"Снег",
+        "75":"Сильный снег",
+        "80":"Ливневый дождь",
+        "81":"Ливень",
+        "82":"Сильный ливень",
         "95":"Гроза"
     };
 
-    return map[code] || ("Код " + code);
+    return map[code] || `Код ${code}`;
 }
 
-/* =========================================================
-   17. РАСШИФРОВКА ПОГОДЫ OPEN-METEO
-   ========================================================= */
-function openMeteoWeatherText(code){
+function pressureTrendText(code){
     const map = {
-        0: "Ясно",
-        1: "Преимущественно ясно",
-        2: "Переменная облачность",
-        3: "Пасмурно",
-        45: "Туман",
-        48: "Туман с изморозью",
-        51: "Слабая морось",
-        53: "Морось",
-        55: "Сильная морось",
-        56: "Переохлаждённая морось",
-        57: "Сильная переохлаждённая морось",
-        61: "Слабый дождь",
-        63: "Дождь",
-        65: "Сильный дождь",
-        66: "Переохлаждённый дождь",
-        67: "Сильный переохлаждённый дождь",
-        71: "Слабый снег",
-        73: "Снег",
-        75: "Сильный снег",
-        77: "Снежные зёрна",
-        80: "Слабый ливень",
-        81: "Ливень",
-        82: "Сильный ливень",
-        85: "Слабый снегопад",
-        86: "Сильный снегопад",
-        95: "Гроза",
-        96: "Гроза с градом",
-        99: "Сильная гроза с градом"
+        "0":"Рост, затем падение; выше чем 3 часа назад",
+        "1":"Рост, затем без изменений; выше",
+        "2":"Рост; выше",
+        "3":"Падение или без изменений, затем рост; выше",
+        "4":"Без изменений; как 3 часа назад",
+        "5":"Падение, затем рост; ниже",
+        "6":"Падение; ниже",
+        "7":"Рост или без изменений, затем падение; ниже",
+        "8":"Без изменений или неравномерно; ниже",
     };
-
-    return map[code] || ("Код " + code);
+    return map[code] || "-";
 }
 
-/* =========================================================
-   18. ФУНКЦИИ РАБОТЫ С ЛОГАМИ
-   ========================================================= */
-function appendLog(elId, msg){
-    const el = document.getElementById(elId);
-    if(!el) return;
-    el.innerHTML += msg + "<br>";
-    console.log(msg);
+function formatLocalApiTime(s){
+    if(!s) return "-";
+    const [date, time] = s.split("T");
+    return `${date} ${time}`;
 }
 
-function clearLogLater(elId, delay = 7000){
-    setTimeout(() => {
-        const el = document.getElementById(elId);
-        if(el) el.innerHTML = "";
-    }, delay);
+function formatSynopLocalTime(timeUTC){
+    if(!timeUTC) return "-";
+
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+
+    const dt = new Date(Date.UTC(
+        year,
+        month,
+        parseInt(timeUTC.day, 10),
+        parseInt(timeUTC.hour, 10),
+        0,
+        0
+    ));
+
+    return dt.toLocaleString("ru-RU", {
+        day: "2-digit",
+        month: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit"
+    });
 }
 
-/* =========================================================
-   19. СТАТУС SYNOP
-   ========================================================= */
-function setSynopStatus(text){
-    document.getElementById("main").innerHTML = `
-        <div class="sectionTitle">SYNOP</div>
-        <div>${text}</div>
-        <div class="logBox" id="synopLog"></div>
-        <div class="buttons">
-            <button onclick="loadSynopUI()">Обновить SYNOP</button>
-        </div>
-    `;
-}
-
-/* =========================================================
-   20. СТАТУС РАЙОНОВ
-   ========================================================= */
-function setDistrictsStatus(text){
-    document.getElementById("districts").innerHTML = `
-        <div class="sectionTitle">Погода по районам</div>
-        <div>${text}</div>
-        <div class="logBox" id="districtsLog"></div>
-        <div class="buttons">
-            <button onclick="loadDistrictsUI()">Обновить районы</button>
-        </div>
-    `;
-}
-
-/* =========================================================
-   21. ЗАГРУЗКА SYNOP С OGIMET ЧЕРЕЗ ПРОКСИ
-   Здесь получаем сырую строку сводки
-   ========================================================= */
+// ========================================
+// 3. ЗАГРУЗКА SYNOP
+// ========================================
 async function loadSynop(){
 
-    const ogimet =
-        "https://www.ogimet.com/display_synops2.php?lang=en&lugar=33837&tipo=ALL&ord=REV&nil=SI&fmt=txt";
-
+    const ogimet = "https://www.ogimet.com/display_synops2.php?lang=en&lugar=33837&tipo=ALL&ord=REV&nil=SI&fmt=txt";
     const url = "https://api.allorigins.win/raw?url=" + encodeURIComponent(ogimet);
 
     const controller = new AbortController();
-
-    // Таймаут мягче, чем раньше
-    const timeout = setTimeout(() => controller.abort(), 25000);
+    const timeout = setTimeout(()=>controller.abort(), 20000);
 
     let r;
 
     try{
         r = await fetch(url, { signal: controller.signal });
     }catch(e){
-        clearTimeout(timeout);
-        throw new Error("Ошибка сети или таймаут при загрузке SYNOP");
+        throw "Ошибка сети или таймаут";
     }
 
     clearTimeout(timeout);
 
-    if(!r.ok){
-        throw new Error("HTTP " + r.status + " при загрузке SYNOP");
-    }
-
     const text = await r.text();
-
     const line = text.split("\n").find(l => l.includes("AAXX"));
 
     if(!line){
-        throw new Error("Строка SYNOP не найдена");
+        throw "SYNOP не найден";
     }
 
     return parseSynop(line);
 }
 
-/* =========================================================
-   22. ПАРСИНГ SYNOP
-   Извлекаем температуру, точку росы, давление, ветер и т.д.
-   ========================================================= */
+// ========================================
+// 4. ПАРСИНГ SYNOP
+// ========================================
 function parseSynop(line){
 
     const parts = line.trim().split(/\s+/);
+    const aaxxIndex = parts.indexOf("AAXX");
+
+    if(aaxxIndex === -1){
+        throw "В строке нет AAXX";
+    }
+
+    const yyggiw = parts[aaxxIndex + 1] || null;
+    const station = parts[aaxxIndex + 2] || null;
+    const group3 = parts[aaxxIndex + 3] || null;
+    const group4 = parts[aaxxIndex + 4] || null;
+    const group5 = parts[aaxxIndex + 5] || null;
+    const group6 = parts[aaxxIndex + 6] || null;
+    const group7 = parts[aaxxIndex + 7] || null;
+    const group8 = parts[aaxxIndex + 8] || null;
+    const group9 = parts[aaxxIndex + 9] || null;
 
     let temp = null;
     let dew = null;
-    let pressure = null;
+    let pressureStation = null;
+    let pressureSea = null;
+    let pressureTrendCode = null;
+    let pressureTrendValue = null;
     let wind = null;
     let windDir = null;
-    let weather = null;
     let cloud = null;
+    let visibility = null;
+    let weatherNow = null;
+    let weatherBetween = null;
+    let cloudGroup = null;
+    let precipGroup = null;
 
-    parts.forEach(g => {
-
-        if(g.startsWith("1") && g.length === 5){
-            const sign = g[1] === "1" ? -1 : 1;
-            temp = sign * parseInt(g.slice(2), 10) / 10;
-        }
-
-        if(g.startsWith("2") && g.length === 5){
-            const sign = g[1] === "1" ? -1 : 1;
-            dew = sign * parseInt(g.slice(2), 10) / 10;
-        }
-
-        if(g.startsWith("4") && g.length === 5){
-            const p = parseInt(g.slice(1), 10) / 10;
-            pressure = p < 500 ? 1000 + p : 900 + p;
-        }
-
-        if(g.startsWith("7") && g.length === 5){
-            weather = g.slice(1, 3);
-        }
-
-        if(g.startsWith("8") && g.length === 5){
-            cloud = g.slice(1, 2);
-        }
-    });
-
-    const aaxxIndex = parts.indexOf("AAXX");
-    let time = null;
-
-    if(aaxxIndex >= 0 && parts[aaxxIndex + 1]){
-        const t = parts[aaxxIndex + 1];
-        time = {
-            day: t.slice(0, 2),
-            hour: t.slice(2, 4)
+    let timeUTC = null;
+    if(yyggiw && yyggiw.length >= 4){
+        timeUTC = {
+            day: yyggiw.slice(0,2),
+            hour: yyggiw.slice(2,4),
+            raw: yyggiw
         };
     }
 
-    // 4-я цифровая группа после AAXX, как ты и хотел раньше
-    if(aaxxIndex >= 0 && parts.length > aaxxIndex + 4){
-        const w = parts[aaxxIndex + 4];
-        if(w && w.length >= 5){
-            windDir = parseInt(w.slice(1, 3), 10) * 10;
-            wind = parseInt(w.slice(3, 5), 10);
-        }
+    if(group3 && group3.length === 5){
+        cloud = group4 && group4[0] !== "/" ? parseInt(group4[0], 10) : null;
+        visibility = group3.slice(3,5);
+    }
+
+    if(group4 && group4.length === 5){
+        const dd = group4.slice(1,3);
+        const ff = group4.slice(3,5);
+
+        windDir = dd.includes("/") ? null : parseInt(dd, 10) * 10;
+        wind = ff.includes("/") ? null : parseInt(ff, 10);
+    }
+
+    if(group5 && group5.startsWith("1") && group5.length === 5){
+        const sign = group5[1] === "1" ? -1 : 1;
+        temp = sign * parseInt(group5.slice(2), 10) / 10;
+    }
+
+    if(group6 && group6.startsWith("2") && group6.length === 5){
+        const sign = group6[1] === "1" ? -1 : 1;
+        dew = sign * parseInt(group6.slice(2), 10) / 10;
+    }
+
+    if(group7 && group7.startsWith("3") && group7.length === 5){
+        const p = parseInt(group7.slice(1), 10) / 10;
+        pressureStation = p < 100 ? 1000 + p : 900 + p;
+    }
+
+    if(group8 && group8.startsWith("4") && group8.length === 5){
+        const p = parseInt(group8.slice(1), 10) / 10;
+        pressureSea = p < 500 ? 1000 + p : 900 + p;
+    }
+
+    if(group9 && group9.startsWith("5") && group9.length === 5){
+        pressureTrendCode = group9[1];
+        pressureTrendValue = parseInt(group9.slice(2), 10) / 10;
+    }
+
+    let ptr = aaxxIndex + 10;
+
+    if(parts[ptr] && parts[ptr].startsWith("6")){
+        precipGroup = parts[ptr];
+        ptr++;
+    }
+
+    if(parts[ptr] && parts[ptr].startsWith("7")){
+        weatherNow = parts[ptr].slice(1,3);
+        weatherBetween = parts[ptr].slice(3,5);
+        ptr++;
+    }
+
+    if(parts[ptr] && parts[ptr].startsWith("8")){
+        cloudGroup = parts[ptr];
+        ptr++;
     }
 
     return {
-        temp,
-        dew,
-        pressure,
+        raw: line,
+        station,
+        timeUTC,
+        cloud,
+        visibility,
         wind,
         windDir,
-        weather,
-        cloud,
-        raw: line,
-        time
+        temp,
+        dew,
+        pressureStation,
+        pressureSea,
+        pressureTrendCode,
+        pressureTrendValue,
+        precipGroup,
+        weatherNow,
+        weatherBetween,
+        cloudGroup
     };
 }
 
-/* =========================================================
-   23. UI-ОБЁРТКА ДЛЯ ЗАГРУЗКИ SYNOP
-   Показывает подробный статус загрузки
-   ========================================================= */
-async function loadSynopUI(){
-
-    setSynopStatus("Загрузка SYNOP...");
-
-    try{
-        appendLog("synopLog", "🚀 Старт загрузки SYNOP");
-        appendLog("synopLog", "🧭 Формирование URL Ogimet");
-        appendLog("synopLog", "🌐 Отправка запроса на прокси");
-        appendLog("synopLog", "⏳ Ожидание ответа...");
-
-        const synop = await loadSynop();
-
-        appendLog("synopLog", "📥 Ответ получен");
-        appendLog("synopLog", "🔍 Разбор строки SYNOP");
-        appendLog("synopLog", "✅ Данные SYNOP обработаны");
-
-        renderSynop(synop);
-
-        appendLog("synopLog", "🖼️ Карточка SYNOP обновлена");
-
-        clearLogLater("synopLog", 8000);
-
-    }catch(e){
-        setSynopStatus("Ошибка загрузки SYNOP");
-        appendLog("synopLog", "❌ " + (e.message || e));
-    }
-}
-
-/* =========================================================
-   24. ЗАГРУЗКА ПОГОДЫ ПО РАЙОНУ С OPEN-METEO
-   Берём расширенный current
-   ========================================================= */
-async function loadCurrentWeather(lat, lon){
-
-    const now = new Date();
-    const dateStr =
-        `${now.getUTCFullYear()}-${pad2(now.getUTCMonth()+1)}-${pad2(now.getUTCDate())}`;
-
-    const url =
-        `https://api.open-meteo.com/v1/forecast` +
-        `?latitude=${lat}` +
-        `&longitude=${lon}` +
-        `&current=temperature_2m,weather_code,cloud_cover,pressure_msl,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation,is_day,relative_humidity_2m,rain,apparent_temperature,showers,snowfall,surface_pressure` +
-        `&timezone=GMT` +
-        `&wind_speed_unit=ms` +
-        `&start_date=${dateStr}` +
-        `&end_date=${dateStr}`;
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
-
-    let r;
-
-    try{
-        r = await fetch(url, { signal: controller.signal });
-    }catch(e){
-        clearTimeout(timeout);
-        throw new Error("Ошибка сети или таймаут Open-Meteo");
-    }
-
-    clearTimeout(timeout);
-
-    if(!r.ok){
-        throw new Error("HTTP " + r.status);
-    }
-
-    const d = await r.json();
-
-    if(!d || !d.current){
-        throw new Error("В ответе нет блока current");
-    }
-
-    return d.current;
-}
-
-/* =========================================================
-   25. ФОРМИРОВАНИЕ HTML ДЛЯ КАРТОЧКИ РАЙОНА
-   ========================================================= */
-function districtCardHtml(name, w){
-
-    const weather = openMeteoWeatherText(w.weather_code);
-    const timeStr = formatIsoUtc(w.time);
-    const dayNight = w.is_day === 1 ? "день" : "ночь";
-
-    let extra = "";
-
-    if((w.precipitation ?? 0) > 0){
-        extra += `
-            <div class="row">
-                <div>Осадки</div>
-                <div class="value">${w.precipitation} мм</div>
-            </div>
-        `;
-    }
-
-    if((w.rain ?? 0) > 0){
-        extra += `
-            <div class="row">
-                <div>Дождь</div>
-                <div class="value">${w.rain} мм</div>
-            </div>
-        `;
-    }
-
-    if((w.showers ?? 0) > 0){
-        extra += `
-            <div class="row">
-                <div>Ливень</div>
-                <div class="value">${w.showers} мм</div>
-            </div>
-        `;
-    }
-
-    if((w.snowfall ?? 0) > 0){
-        extra += `
-            <div class="row">
-                <div>Снег</div>
-                <div class="value">${w.snowfall} мм</div>
-            </div>
-        `;
-    }
-
-    return `
-        <div class="card">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
-                <div><b>${name}</b></div>
-                <div class="small">${timeStr}</div>
-            </div>
-
-            <div class="big" style="color:${tempColor(w.temperature_2m)}">
-                ${w.temperature_2m ?? "-"}°C
-            </div>
-
-            <div class="row">
-                <div>Погода</div>
-                <div class="value">${weather}</div>
-            </div>
-
-            <div class="row">
-                <div>Ощущается</div>
-                <div class="value">${w.apparent_temperature ?? "-"}°C</div>
-            </div>
-
-            <div class="row">
-                <div>Влажность</div>
-                <div class="value">${w.relative_humidity_2m ?? "-"}%</div>
-            </div>
-
-            <div class="row">
-                <div>Облачность</div>
-                <div class="value">${w.cloud_cover ?? "-"}%</div>
-            </div>
-
-            <div class="row">
-                <div>Давление MSL</div>
-                <div class="value">${w.pressure_msl ?? "-"} гПа</div>
-            </div>
-
-            <div class="row">
-                <div>Давление у поверхности</div>
-                <div class="value">${w.surface_pressure ?? "-"} гПа</div>
-            </div>
-
-            <div class="row">
-                <div>Ветер</div>
-                <div class="value">
-                    ${w.wind_speed_10m ?? "-"} м/с
-                    ${w.wind_direction_10m != null ? degToText(w.wind_direction_10m) : ""}
-                    ${windArrow(w.wind_direction_10m)}
-                </div>
-            </div>
-
-            <div class="row">
-                <div>Порывы</div>
-                <div class="value">${w.wind_gusts_10m ?? "-"} м/с</div>
-            </div>
-
-            <div class="row">
-                <div>Состояние</div>
-                <div class="value">${dayNight}</div>
-            </div>
-
-            ${extra}
-        </div>
-    `;
-}
-
-/* =========================================================
-   26. UI-ОБЁРТКА ДЛЯ ЗАГРУЗКИ РАЙОНОВ
-   Подробно пишет статус по каждой точке
-   ========================================================= */
-async function loadDistrictsUI(){
-
-    setDistrictsStatus("Загрузка районов...");
-
-    try{
-        appendLog("districtsLog", "🚀 Старт загрузки районов");
-
-        const entries = Object.entries(locations);
-        appendLog("districtsLog", `📍 Точек для загрузки: ${entries.length}`);
-        appendLog("districtsLog", "🌐 Отправка запросов в Open-Meteo");
-
-        const results = await Promise.all(
-            entries.map(async ([name, [lat, lon]]) => {
-                appendLog("districtsLog", `⏳ ${name}: запрос отправлен`);
-
-                try{
-                    const w = await loadCurrentWeather(lat, lon);
-                    appendLog("districtsLog", `📥 ${name}: ответ получен`);
-                    return { name, w, error: null };
-                }catch(e){
-                    appendLog("districtsLog", `❌ ${name}: ${e.message || e}`);
-                    return { name, w: null, error: e.message || String(e) };
-                }
-            })
-        );
-
-        let html = `
-            <div class="sectionTitle">Погода по районам</div>
-            <div class="logBox" id="districtsLog"></div>
-            <div class="districtGrid" id="districtGrid"></div>
-            <div class="buttons" style="margin-top:12px;">
-                <button onclick="loadDistrictsUI()">Обновить районы</button>
-            </div>
-        `;
-
-        document.getElementById("districts").innerHTML = html;
-
-        // заново переносим лог в новый блок, потому что innerHTML уже заменили
-        appendLog("districtsLog", "✅ Построение карточек районов");
-
-        let cardsHtml = "";
-
-        results.forEach(({name, w, error}) => {
-            if(error || !w){
-                cardsHtml += `
-                    <div class="card">
-                        <div><b>${name}</b></div>
-                        <div class="small">Ошибка загрузки данных</div>
-                    </div>
-                `;
-            }else{
-                cardsHtml += districtCardHtml(name, w);
-            }
-        });
-
-        document.getElementById("districtGrid").innerHTML = cardsHtml;
-
-        appendLog("districtsLog", "🖼️ Карточки районов обновлены");
-
-        clearLogLater("districtsLog", 8000);
-
-    }catch(e){
-        setDistrictsStatus("Ошибка загрузки районов");
-        appendLog("districtsLog", "❌ " + (e.message || e));
-    }
-}
-
-/* =========================================================
-   27. ОТРИСОВКА КАРТОЧКИ SYNOP
-   ========================================================= */
+// ========================================
+// 5. ОТРИСОВКА SYNOP
+// ========================================
 function renderSynop(d){
+    const el = document.getElementById("main");
 
-    document.getElementById("main").innerHTML = `
-        <div class="sectionTitle">SYNOP</div>
-
-        <div class="small">Наблюдение: ${formatSynopTime(d.time)}</div>
+    el.innerHTML = `
+        <div class="small">Наблюдение: ${formatSynopLocalTime(d.timeUTC)}</div>
+        <div class="small">Станция: ${d.station ?? "-"}</div>
 
         <div class="big" style="color:${tempColor(d.temp)}">
             ${d.temp ?? "-"}°C
@@ -786,8 +481,21 @@ function renderSynop(d){
         </div>
 
         <div class="row">
-            <div>Давление</div>
-            <div class="value">${d.pressure ?? "-"} гПа</div>
+            <div>Давление на станции</div>
+            <div class="value">${d.pressureStation ?? "-"} гПа</div>
+        </div>
+
+        <div class="row">
+            <div>Давление к уровню моря</div>
+            <div class="value">${d.pressureSea ?? "-"} гПа</div>
+        </div>
+
+        <div class="row">
+            <div>Барическая тенденция</div>
+            <div class="value">
+                ${pressureTrendText(d.pressureTrendCode)}<br>
+                <span class="small">${d.pressureTrendValue ?? "-"} гПа за 3 часа</span>
+            </div>
         </div>
 
         <div class="row">
@@ -800,36 +508,239 @@ function renderSynop(d){
         </div>
 
         <div class="row">
-            <div>Облачность</div>
+            <div>Общая облачность</div>
             <div class="value">${cloudText(d.cloud)}</div>
         </div>
 
         <div class="row">
-            <div>Явления</div>
-            <div class="value">${weatherText(d.weather)}</div>
+            <div>Видимость</div>
+            <div class="value">${d.visibility ?? "-"}</div>
         </div>
 
-        <div class="small" style="margin-top:10px;">${d.raw}</div>
-
-        <div class="logBox" id="synopLog"></div>
-
-        <div class="buttons" style="margin-top:12px;">
-            <button onclick="loadSynopUI()">Обновить SYNOP</button>
+        <div class="row">
+            <div>Явления в срок наблюдения</div>
+            <div class="value">${weatherText(d.weatherNow)}</div>
         </div>
+
+        <div class="row">
+            <div>Между сроками</div>
+            <div class="value">${d.weatherBetween ?? "-"}</div>
+        </div>
+
+        <div class="row">
+            <div>Осадки</div>
+            <div class="value">${d.precipGroup ?? "-"}</div>
+        </div>
+
+        <div class="row">
+            <div>Группа облаков</div>
+            <div class="value">${d.cloudGroup ?? "-"}</div>
+        </div>
+
+        <div class="small raw">${d.raw}</div>
     `;
 }
 
-/* =========================================================
-   28. ПЕРВЫЙ ЗАПУСК СТРАНИЦЫ
-   ========================================================= */
+// ========================================
+// 6. UI-ОБЁРТКА SYNOP
+// ========================================
+async function loadSynopUI(){
+    const logId = "synopLog";
+    document.getElementById(logId).innerHTML = "";
+
+    setMainStatus("Загрузка SYNOP...");
+
+    try{
+        logTo(logId, "Старт загрузки SYNOP");
+        logTo(logId, "Подготовка URL Ogimet");
+        logTo(logId, "Отправка запроса на прокси");
+
+        const synop = await loadSynop();
+
+        logTo(logId, "Ответ получен");
+        logTo(logId, "Разбор SYNOP");
+        renderSynop(synop);
+        logTo(logId, "SYNOP успешно отображён");
+
+        clearLogLater(logId);
+    }catch(e){
+        setMainStatus("Ошибка загрузки SYNOP");
+        logTo(logId, "Ошибка: " + e);
+    }
+}
+
+// ========================================
+// 7. РАЙОНЫ
+// ========================================
+const locations = {
+    "Котовского": [46.560, 30.800],
+    "Центр": [46.482, 30.723],
+    "Таирова": [46.400, 30.650],
+    "Аркадия": [46.430, 30.760],
+    "Застава": [46.520, 30.650]
+};
+
+async function loadCurrentWeather(lat, lon){
+    const today = new Date().toISOString().slice(0,10);
+
+    const url =
+        `https://api.open-meteo.com/v1/forecast` +
+        `?latitude=${lat}` +
+        `&longitude=${lon}` +
+        `&current=temperature_2m,weather_code,cloud_cover,pressure_msl,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation,is_day,relative_humidity_2m,rain,apparent_temperature,showers,snowfall,surface_pressure` +
+        `&timezone=auto` +
+        `&wind_speed_unit=ms` +
+        `&start_date=${today}` +
+        `&end_date=${today}`;
+
+    const r = await fetch(url);
+    const d = await r.json();
+
+    if(!d.current){
+        throw new Error("Нет current в ответе Open-Meteo");
+    }
+
+    return d.current;
+}
+
+function weatherCodeText(code){
+    const map = {
+        0:"Ясно",
+        1:"Преимущественно ясно",
+        2:"Переменная облачность",
+        3:"Пасмурно",
+        45:"Туман",
+        48:"Туман с изморозью",
+        51:"Слабая морось",
+        53:"Морось",
+        55:"Сильная морось",
+        61:"Слабый дождь",
+        63:"Дождь",
+        65:"Сильный дождь",
+        71:"Слабый снег",
+        73:"Снег",
+        75:"Сильный снег",
+        80:"Ливневый дождь",
+        81:"Ливень",
+        82:"Сильный ливень",
+        95:"Гроза"
+    };
+    return map[code] || `Код ${code}`;
+}
+
+function renderDistricts(results){
+    let html = `<h3>Погода по районам</h3>`;
+
+    results.forEach(({name, w})=>{
+        html += `
+            <div class="card" style="margin-bottom:12px;">
+                <div><b>${name}</b></div>
+                <div class="small" style="margin-top:4px;">Обновление: ${formatLocalApiTime(w.time)}</div>
+
+                <div class="row">
+                    <div>Температура</div>
+                    <div class="value">${w.temperature_2m ?? "-"}°C</div>
+                </div>
+
+                <div class="row">
+                    <div>Ощущается как</div>
+                    <div class="value">${w.apparent_temperature ?? "-"}°C</div>
+                </div>
+
+                <div class="row">
+                    <div>Погода</div>
+                    <div class="value">${weatherCodeText(w.weather_code)}</div>
+                </div>
+
+                <div class="row">
+                    <div>Облачность</div>
+                    <div class="value">${w.cloud_cover ?? "-"}%</div>
+                </div>
+
+                <div class="row">
+                    <div>Влажность</div>
+                    <div class="value">${w.relative_humidity_2m ?? "-"}%</div>
+                </div>
+
+                <div class="row">
+                    <div>Давление MSL</div>
+                    <div class="value">${w.pressure_msl ?? "-"} гПа</div>
+                </div>
+
+                <div class="row">
+                    <div>Давление у поверхности</div>
+                    <div class="value">${w.surface_pressure ?? "-"} гПа</div>
+                </div>
+
+                <div class="row">
+                    <div>Ветер</div>
+                    <div class="value">
+                        ${w.wind_speed_10m ?? "-"} м/с
+                        ${w.wind_direction_10m != null ? degToText(w.wind_direction_10m) : ""}
+                        ${windArrow(w.wind_direction_10m)}
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div>Порывы</div>
+                    <div class="value">${w.wind_gusts_10m ?? "-"} м/с</div>
+                </div>
+
+                ${(w.precipitation > 0 || w.rain > 0 || w.showers > 0 || w.snowfall > 0) ? `
+                <div class="row">
+                    <div>Осадки</div>
+                    <div class="value">
+                        ${w.precipitation ?? 0} мм
+                        ${w.rain > 0 ? `<br><span class="small">дождь: ${w.rain} мм</span>` : ""}
+                        ${w.showers > 0 ? `<br><span class="small">ливень: ${w.showers} мм</span>` : ""}
+                        ${w.snowfall > 0 ? `<br><span class="small">снег: ${w.snowfall} мм</span>` : ""}
+                    </div>
+                </div>
+                ` : ""}
+            </div>
+        `;
+    });
+
+    document.getElementById("districts").innerHTML = html;
+}
+
+async function loadDistrictsUI(){
+    const logId = "districtsLog";
+    document.getElementById(logId).innerHTML = "";
+    document.getElementById("districts").innerHTML = "Загрузка районов...";
+
+    try{
+        logTo(logId, "Старт загрузки районов");
+        logTo(logId, "Подготовка координат");
+        logTo(logId, "Отправка запросов в Open-Meteo");
+
+        const entries = Object.entries(locations);
+
+        const results = await Promise.all(
+            entries.map(async ([name, coords])=>{
+                const [lat, lon] = coords;
+                const w = await loadCurrentWeather(lat, lon);
+                return { name, w };
+            })
+        );
+
+        logTo(logId, "Данные районов получены");
+        renderDistricts(results);
+        logTo(logId, "Карточки районов построены");
+
+        clearLogLater(logId);
+    }catch(e){
+        document.getElementById("districts").innerHTML = "Ошибка загрузки районов";
+        logTo(logId, "Ошибка: " + e);
+    }
+}
+
+// ========================================
+// 8. АВТОЗАГРУЗКА
+// ========================================
 loadSynopUI();
 loadDistrictsUI();
 
-/* =========================================================
-   29. АВТООБНОВЛЕНИЕ
-   SYNOP раз в 30 минут
-   Районы раз в 15 минут
-   ========================================================= */
 setInterval(loadSynopUI, 1800000);
 setInterval(loadDistrictsUI, 900000);
 </script>
