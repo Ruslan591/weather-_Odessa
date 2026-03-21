@@ -13,7 +13,7 @@
 <!-- =========================
      ВЕРХНЯЯ ПАНЕЛЬ
 ========================= -->
-<div class="header">
+<div<div class="header">
     <div class="headerTitle">Погода сейчас</div>
     <div class="nav">
         <a href="index.html">Рейтинг</a>
@@ -21,24 +21,7 @@
     </div>
 </div>
 
-<div class="heroTempRow">
-  <div class="heroTempLeft">
-    <div class="small">Температура воздуха</div>
-    <div class="heroTemp ${tempClass(d.temp)}">${fmt1(d.temp,"°C")}</div>
-    <div class="heroFeels">Ощущается как: <b>${fmt1(feelsLike,"°C")}</b></div>
-  </div>
-  <div class="heroWeather">
-    <span class="wxIcon">${wxIco}</span>${escapeHtml(wx)}
-  </div>
-</div>
-
 <div class="container">
-
-    <div class="card">
-        <div class="btnRow">
-            <button id="btnSynop" onclick="loadSynopUI()">Обновить SYNOP</button>
-        </div>
-    </div>
     <!-- =========================
          LOG SYNOP
     ========================= -->
