@@ -1231,6 +1231,44 @@ const synopIsDay = Number.isFinite(obsHourUtc) ? (obsHourUtc >= 6 && obsHourUtc 
     };
 }
 
+// IndexedDB для проверки последней телеграммы
+let db;
+
+function initDB(){
+    return new Promise((resolve,reject)=>{
+        const req = indexedDB.open("modelStats",1);
+        req.onupgradeneeded = e=>{
+            db = e.target.result;
+            if(!db.objectStoreNames.contains("stats")){
+                db.createObjectStore("stats",{keyPath:"time"});
+            }
+        };
+        req.onsuccess = e=>{
+            db = e.target.result;
+            resolve();
+        };
+        req.onerror = reject;
+    });
+}
+
+// Проверка, есть ли телеграмма с указанным временем
+async function recordExists(timeKey){
+    if(!db){
+        await initDB();
+    }
+    const tx = db.transaction("stats","readonly");
+    const store = tx.objectStore("stats");
+    const req = store.getAll();
+
+    return new Promise(res=>{
+        req.onsuccess = ()=>{
+            const exists = req.result.some(r => r.synopTime === timeKey);
+            res(exists);
+        };
+        req.onerror = ()=>res(false);
+    });
+}
+
 /* =========================================================
    6. ЗАГРУЗКА SYNOP
 ========================================================= */
@@ -1253,8 +1291,22 @@ async function loadSynop(){
         if(!line){
             throw new Error("SYNOP не найден");
         }
+        // вынесли в отдельную переменную
+        const synop = parseSynop(line);
 
-        return parseSynop(line);
+        // ======== проверка IndexedDB ========
+        if(!db){
+            await initDB();
+        }
+
+        const exists = await recordExists(synop.time);
+        if(exists){
+            console.log("Телеграмма уже есть в IndexedDB, пропускаем дальнейшую обработку");
+            return synop;
+        }
+        // =====================================
+
+        return synop;
     }finally{
         clearTimeout(timer);
     }
