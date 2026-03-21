@@ -949,16 +949,15 @@ function renderSynop(d){
         <div class="cardTitle">SYNOP ${d.station ? "станция " + escapeHtml(d.station) : ""}</div>
         <div class="subTitle">Наблюдение: ${escapeHtml(localTime)}</div>
 
-        <div class="heroTempRow">
-  <div class="heroTempLeft">
-    <div class="small">Температура воздуха</div>
-    <div class="heroTemp ${tempClass(d.temp)}">${fmt1(d.temp,"°C")}</div>
-    <div class="heroFeels">Ощущается как: <b>${fmt1(feelsLike,"°C")}</b></div>
-  </div>
-  <div class="heroWeather">
-    <span class="wxIcon">${wxIco}</span>${escapeHtml(wx)}
-  </div>
-</div>
+        <div class="synopHero">
+            <div class="heroMain">
+                <div class="heroTempRow">
+                    <div class="small">Температура воздуха</div>
+                    <div class="heroTemp ${tempClass(d.temp)}">${fmt1(d.temp,"°C")}</div>
+                    <div class="heroFeels">Ощущается как: <b>${fmt1(feelsLike,"°C")}</b></div>
+                    <div class="heroWeather"><span class="wxIcon">${wxIco}</span>${escapeHtml(wx)}</div>
+                </div>
+            </div>
 
             <div class="heroMeta">
                 <div class="miniCard">
