@@ -1,0 +1,441 @@
+<style>
+/* =========================
+   БАЗА
+========================= */
+*{
+    box-sizing:border-box;
+}
+
+html{
+    scroll-behavior:smooth;
+}
+
+body{
+    margin:0;
+    background:#121212;
+    color:#eee;
+    font-family:sans-serif;
+}
+
+a{
+    color:inherit;
+    text-decoration:none;
+}
+
+/* =========================
+   ВЕРХНЯЯ ПАНЕЛЬ
+========================= */
+.header{
+    position:sticky;
+    top:0;
+    z-index:50;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    padding:12px 16px;
+    background:rgba(30,30,30,0.96);
+    backdrop-filter:blur(8px);
+    border-bottom:1px solid #2b2b2b;
+}
+
+.headerTitle{
+    font-size:18px;
+    font-weight:700;
+}
+
+.nav{
+    display:flex;
+    gap:12px;
+    flex-wrap:wrap;
+}
+
+.nav a{
+    color:#aaa;
+    padding:6px 10px;
+    border-radius:8px;
+    transition:0.2s;
+}
+
+.nav a:hover{
+    color:#fff;
+    background:#2a2a2a;
+}
+
+/* =========================
+   КОНТЕЙНЕР
+========================= */
+.container{
+    max-width:1000px;
+    margin:0 auto;
+    padding:16px;
+}
+
+/* =========================
+   КАРТОЧКИ
+========================= */
+.card{
+    background:#1e1e1e;
+    border:1px solid #2e2e2e;
+    border-radius:14px;
+    padding:14px;
+    margin-bottom:14px;
+    transition:
+        opacity 0.6s ease,
+        max-height 0.8s ease,
+        margin 0.8s ease,
+        padding 0.8s ease,
+        transform 0.8s ease;
+}
+
+.cardTitle{
+    font-size:16px;
+    font-weight:700;
+    margin-bottom:12px;
+}
+
+.subTitle{
+    font-size:13px;
+    color:#aaa;
+    margin-bottom:10px;
+}
+
+.row{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:10px;
+    padding:8px 0;
+    border-bottom:1px solid #333;
+}
+
+.row:last-child{
+    border-bottom:none;
+}
+
+.label{
+    color:#bbb;
+}
+
+.value{
+    font-weight:700;
+    text-align:right;
+}
+
+.small{
+    font-size:12px;
+    color:#aaa;
+}
+
+.muted{
+    color:#888;
+}
+
+.center{
+    text-align:center;
+}
+
+/* =========================
+   HERO SYNOP
+========================= */
+.synopHero{
+    display:grid;
+    grid-template-columns:1.25fr 1fr;
+    gap:12px;
+}
+
+.heroMain{
+    background:linear-gradient(180deg,#232323,#1c1c1c);
+    border-radius:14px;
+    padding:14px;
+    border:1px solid #323232;
+}
+
+.heroTemp{
+    font-size:38px;
+    font-weight:800;
+    line-height:1;
+    margin:6px 0 10px;
+}
+
+.heroFeels{
+    font-size:15px;
+    color:#cfcfcf;
+}
+
+.heroWeather{
+    font-size:15px;
+    color:#ddd;
+    margin-top:10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center; /* выравнивание по вертикали */
+    gap: 0.5em; /* немного пространства между текстом и иконкой */
+}
+
+.heroTempRow {
+  display: flex;
+  align-items: center; /* выравнивание по вертикали */
+  gap: 0.5em; /* расстояние между температурой и иконкой */
+}
+
+.heroMeta{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+}
+
+.miniCard{
+    background:#242424;
+    border:1px solid #323232;
+    border-radius:12px;
+    padding:12px;
+}
+
+.miniValue{
+    font-size:19px;
+    font-weight:800;
+    margin-top:4px;
+}
+
+.value svg{
+    display:block;
+}
+
+@media (max-width:520px){
+    .value{
+        max-width:70%;
+    }
+}
+
+.tempCold{ color:#7ec8ff; }
+.tempCool{ color:#9dd6ff; }
+.tempMild{ color:#8ad68a; }
+.tempWarm{ color:#ffbf66; }
+.tempHot{ color:#ff6b6b; }
+
+/* =========================
+   СЕТКИ
+========================= */
+.grid2{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:14px;
+}
+
+.grid3{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:10px;
+}
+
+/* =========================
+   РАЙОНЫ
+========================= */
+.districtGrid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+}
+
+.districtCard{
+    background:#232323;
+    border:1px solid #323232;
+    border-radius:12px;
+    padding:12px;
+}
+
+.districtTop{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:8px;
+    margin-bottom:8px;
+}
+
+.districtName{
+    font-weight:700;
+    font-size:15px;
+}
+
+.districtTemp{
+    font-weight:800;
+    font-size:22px;
+    line-height:1;
+}
+
+.districtLine{
+    display:flex;
+    justify-content:space-between;
+    gap:10px;
+    padding:4px 0;
+    font-size:13px;
+}
+
+.districtLine span:first-child{
+    color:#aaa;
+}
+
+/* =========================
+   КНОПКИ
+========================= */
+.btnRow{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+}
+
+button{
+    width:100%;
+    padding:11px 14px;
+    background:#333;
+    color:#fff;
+    border:none;
+    border-radius:10px;
+    cursor:pointer;
+    font-size:14px;
+    transition:0.2s;
+}
+
+button:hover{
+    background:#444;
+}
+
+button:disabled{
+    opacity:0.65;
+    cursor:default;
+}
+
+/* =========================
+   LOG / STATUS
+========================= */
+.logBox{
+    overflow:hidden;
+    opacity:1;
+    max-height:500px;
+    transform:translateY(0);
+    transition:
+        opacity 1.8s ease,
+        max-height 1.8s ease,
+        margin 1.8s ease,
+        padding 1.8s ease,
+        transform 1.8s ease;
+}
+
+.logBox.hidden{
+    opacity:0;
+    max-height:0;
+    margin-top:0 !important;
+    margin-bottom:0 !important;
+    padding-top:0 !important;
+    padding-bottom:0 !important;
+    transform:translateY(-6px);
+}
+
+.logLine{
+    font-size:12px;
+    color:#bdbdbd;
+    padding:2px 0;
+    line-height:1.45;
+}
+
+/* =========================
+   DETAILS
+========================= */
+details{
+    background:#232323;
+    border:1px solid #323232;
+    border-radius:12px;
+    padding:10px 12px;
+    margin-top:10px;
+}
+
+summary{
+    cursor:pointer;
+    font-weight:700;
+    color:#eee;
+    list-style:none;
+}
+
+summary::-webkit-details-marker{
+    display:none;
+}
+
+summary::before{
+    content:"▸";
+    display:inline-block;
+    margin-right:8px;
+    transition:0.2s;
+}
+
+details[open] summary::before{
+    transform:rotate(90deg);
+}
+
+.codeBlock{
+    margin-top:10px;
+    background:#171717;
+    border:1px solid #303030;
+    border-radius:10px;
+    padding:10px;
+    font-size:12px;
+    white-space:pre-wrap;
+    word-break:break-word;
+    color:#cfcfcf;
+}
+
+/* =========================
+   ИКОНКИ / БЕЙДЖИ
+========================= */
+.badge{
+    display:inline-block;
+    padding:4px 8px;
+    border-radius:999px;
+    background:#2e2e2e;
+    color:#ddd;
+    font-size:12px;
+    margin:2px 4px 2px 0;
+}
+
+.wxIcon{
+    font-size:16px;
+    margin-right:6px;
+    vertical-align:-1px;
+    order: 2; /* ставим иконку после текста, можно убрать если не нужно */
+}
+
+/* =========================
+   АДАПТИВ
+========================= */
+@media (max-width:800px){
+    .synopHero,
+    .grid2,
+    .districtGrid,
+    .btnRow{
+        grid-template-columns:1fr;
+    }
+
+    .heroMeta{
+        grid-template-columns:1fr 1fr;
+    }
+}
+
+@media (max-width:520px){
+    .header{
+        align-items:flex-start;
+        flex-direction:column;
+    }
+
+    .heroTemp{
+        font-size:34px;
+    }
+
+    .grid3{
+        grid-template-columns:1fr;
+    }
+
+    .heroMeta{
+        grid-template-columns:1fr;
+    }
+}
+</style>
