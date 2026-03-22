@@ -769,10 +769,18 @@ function parseSynop(line){
     let cloudHighCode = null;
 
     if (cloudGroup && /^8[\d/]{4}$/.test(cloudGroup)) {
+    // окта
     cloudTotalOkta = cloudGroup[1] === "/" ? "/" : safeNum(cloudGroup[1]);
-    cloudLowCode = cloudGroup[2];
-    cloudMidCode = cloudGroup[3];
+
+    // ярусы — просто символы, без safeNum
+    cloudLowCode  = cloudGroup[2];
+    cloudMidCode  = cloudGroup[3];
     cloudHighCode = cloudGroup[4];
+
+    // расшифровка
+    cloudLowDesc  = cloudGenusLow(cloudLowCode);
+    cloudMidDesc  = cloudGenusLow(cloudMidCode);
+    cloudHighDesc = cloudGenusLow(cloudHighCode);
 }
 
     const obsHourUtc = yyggi ? parseInt(yyggi.slice(2,4), 10) : null;
