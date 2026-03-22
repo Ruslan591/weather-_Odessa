@@ -1048,7 +1048,7 @@ function renderSynop(d){
         <div class="value">${d.cloudTotalOkta != null ? escapeHtml(cloudAmountText(d.cloudTotalOkta)) : "-"}</div>
     </div>
 
-    ${cloudRow("Нижний ярус", "low", d.cloudLowCode, cloudGenusLow(d.cloudLowCode.trim()))}
+    ${cloudRow("Нижний ярус", "low", d.cloudLowCode, cloudGenusLow(d.cloudLowCode))}
     ${cloudRow("Средний ярус", "mid", d.cloudMidCode, cloudGenusMid(d.cloudMidCode))}
     ${cloudRow("Верхний ярус", "high", d.cloudHighCode, cloudGenusHigh(d.cloudHighCode))}
 
