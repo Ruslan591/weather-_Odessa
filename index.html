@@ -53,7 +53,6 @@
 <br><br>
 <button onclick="initFile()">Выбрать файл</button>
 <button onclick="exportDB()">Сохранить (перезаписать)</button>
-<button onclick="deleteLastRecord()">Удалить последнюю запись</button>
 <div id="rating">Загрузка...</div> 
 </div>
 
@@ -417,95 +416,58 @@ async function loadSynop(){
 }
 
 function parseSynop(line){
-    const parts = line.trim().split(/\s+/);
-
-    let synopTime = null;
+    const parts = line.trim().split(" ");
+    
+    const synopTime = parts[0];
+    
     let temp = null;
     let pressure = null;
     let wind = null;
     let windDir = null;
 
-    const aaxxi = parts.indexOf("AAXX");
-    if(aaxxi === -1){
-        throw "AAXX не найден";
-    }
-
-    // время SYNOP — первая группа после AAXX
-    synopTime = parts[aaxxi + 1];
-
-    // ищем только цифровые группы после AAXX
-    const numericGroups = parts.slice(aaxxi + 1).filter(g => /^\d{5}$/.test(g));
-
-    // 4-я цифровая группа после AAXX
-    if(numericGroups.length >= 4){
-        const windGroup = numericGroups[3];
-        windDir = parseInt(windGroup.slice(0, 2), 10) * 10;
-        wind = parseInt(windGroup.slice(3, 5), 10);
-    }
-
-    parts.forEach(g => {
-        if(/^1\d{4}$/.test(g)){
+    parts.forEach((g, i) => {
+        // Температура: группа начинается с 1
+        if(g.startsWith("1")) {
             const sign = g[1] === "1" ? -1 : 1;
-            temp = sign * parseInt(g.slice(2), 10) / 10;
+            temp = sign * parseInt(g.slice(2)) / 10;
         }
 
-        if(/^4\d{4}$/.test(g)){
-            const p = parseInt(g.slice(1), 10) / 10;
-            pressure = p < 100 ? 1000 + p : 900 + p;
+        // Давление: группа начинается с 4
+        if(g.startsWith("4")) {
+            pressure = 1000 + parseInt(g.slice(1)) / 10;
         }
+
+        // Ветер: 4-я группа после AAXX
+        // у нас g — любая группа, ищем четвёртую
+        // Обычно это после "AAXX код станции"
+        // Для твоего примера parts = ["AAXX","16091","33837","42982","60502",...]
+        // 60502 — 4-я после AAXX: index 4
     });
 
-    return {
-        time: synopTime,
-        temp,
-        pressure,
-        wind,
-        windDir,
-        synop: line
-    };
-}
-
-// ----- удаление последней сохраненной записи -----
-async function deleteLastRecord(){
-    if(!db){
-        await initDB();
+    // точная 4-я группа после AAXX
+    const aaxxi = parts.indexOf("AAXX");
+    if(aaxxi >= 0 && parts.length > aaxxi + 4){
+        const windGroup = parts[aaxxi + 4];
+        // 2-я и 3-я цифры → направление /10
+        windDir = parseInt(windGroup.slice(1,3)) * 10;
+        // 4-я и 5-я → скорость м/с
+        wind = parseInt(windGroup.slice(3,5));
     }
 
-    const tx = db.transaction("stats", "readonly");
-    const store = tx.objectStore("stats");
-    const req = store.getAll();
-
-    req.onsuccess = () => {
-        const data = req.result;
-
-        if(!data.length){
-            alert("База пустая");
-            return;
-        }
-
-        data.sort((a, b) => new Date(b.time) - new Date(a.time));
-        const last = data[0];
-
-        const delTx = db.transaction("stats", "readwrite");
-        const delStore = delTx.objectStore("stats");
-        delStore.delete(last.time);
-
-        delTx.oncomplete = async () => {
-            alert("Удалена последняя запись: " + last.time);
-            await render();
-            await drawChart();
-        };
-
-        delTx.onerror = () => {
-            alert("Ошибка удаления");
-        };
-    };
+    return {
+time: synopTime,
+temp,
+pressure,
+wind,
+windDir,
+synop: line
+};
 }
 
 async function loadForecast(model){
 
 const url =
-`https://api.open-meteo.com/v1/forecast?latitude=46.4406&longitude=30.7703&hourly=temperature_2m,pressure_msl,wind_speed_10m,wind_direction_10m&models=${model}&forecast_days=1&timezone=UTC&wind_speed_unit=ms`;
+`https://api.open-meteo.com/v1/forecast?latitude=46.4406&longitude=30.7703&hourly=temperature_2m,pressure_msl,wind_speed_10m,wind_direction_10m&models=${model}&forecast_days=1&timezone=UTC`;
 
 const r = await fetchWithTimeout(url);
 const d = await r.json();
@@ -578,10 +540,13 @@ models.forEach((m,i)=>{
 // берём время из первой модели
 const forecastTimes = forecasts[models[0]].time;
 
-const targetHour =
-`${synop.time.slice(0,4)}-${synop.time.slice(4,6)}-${synop.time.slice(6,8)}T${synop.time.slice(8,10)}`;
+const targetTime =
+synop.time.slice(0,4)+"-"+
+synop.time.slice(4,6)+"-"+
+synop.time.slice(6,8)+"T"+
+synop.time.slice(8,10)+":00";
 
-const hourIndex = forecastTimes.findIndex(t => t.slice(0, 13) === targetHour);
+const hourIndex = forecastTimes.findIndex(t => t.startsWith(targetTime));
 
 if(hourIndex === -1){
     throw "Не найдено совпадение времени прогноза и SYNOP";
@@ -825,8 +790,6 @@ const req = store.getAll();
 req.onsuccess = ()=>{
 
 const data = req.result;
-
-data.sort((a, b) => new Date(b.time) - new Date(a.time));
 
 let html = "<h3>Сохранённые данные</h3>";
 
