@@ -72,6 +72,8 @@
 
     const data = req.result;
 
+data.sort((a, b) => new Date(b.time) - new Date(a.time));
+
     if(!data.length){
       alert("База пустая");
       return;
