@@ -122,7 +122,7 @@ function safeNum(v){
     return Number.isFinite(n) ? n : null;
 }
 
-function degToText16(d) {
+function degToText(d) {
     if (d == null || Number.isNaN(d)) return "-";
     const dirs = ["С","ССВ","СВ","ВСВ","В","ВЮВ","ЮВ","ЮЮВ","Ю","ЮЮЗ","ЮЗ","ЗЮЗ","З","ЗСЗ","ССЗ","СССЗ"];
     return dirs[Math.round(d / 22.5) % 16];
