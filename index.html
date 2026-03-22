@@ -467,7 +467,7 @@ synop: line
 async function loadForecast(model){
 
 const url =
-`https://api.open-meteo.com/v1/forecast?latitude=46.4406&longitude=30.7703&hourly=temperature_2m,pressure_msl,wind_speed_10m,wind_direction_10m&models=${model}&forecast_days=1&timezone=UTC`;
+`https://api.open-meteo.com/v1/forecast?latitude=46.4406&longitude=30.7703&hourly=temperature_2m,pressure_msl,wind_speed_10m,wind_direction_10m&models=${model}&forecast_days=1&timezone=UTC&wind_speed_unit=ms`;
 
 const r = await fetchWithTimeout(url);
 const d = await r.json();
