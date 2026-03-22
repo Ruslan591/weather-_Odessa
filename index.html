@@ -72,7 +72,7 @@
 
     const data = req.result;
 
-data.sort((a, b) => new Date(b.time) - new Date(a.time));
+data.sort((a, b) => Number(b.synopTime) - Number(a.synopTime));
 
     if(!data.length){
       alert("База пустая");
