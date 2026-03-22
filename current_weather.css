@@ -65,15 +65,6 @@ a{
     background: #2a2a2a;
 }
 
-@media (max-width:520px){
-    .header{
-        flex-direction: row; /* вместо column */
-        align-items: center; /* горизонтально по центру */
-        flex-wrap: nowrap;   /* запрещаем перенос */
-        overflow-x: auto;    /* добавляем скролл, если не помещается */
-    }
-}
-
 /* =========================
    КОНТЕЙНЕР
 ========================= */
@@ -465,5 +456,14 @@ details[open] summary::before{
 
     .heroMeta{
         grid-template-columns:1fr;
+    }
+}
+
+@media (max-width:520px){
+    .header{
+        flex-direction: row !important; /* вместо column */
+        align-items: center !important; /* горизонтально по центру */
+        flex-wrap: nowrap !important;   /* запрещаем перенос */
+        overflow-x: auto !important;    /* добавляем скролл, если не помещается */
     }
 }
