@@ -380,7 +380,7 @@ function logTo(logId, msg){
    4. РАСШИФРОВКИ ПОГОДЫ / ОБЛАКОВ / ОСАДКОВ
 ========================================================= */
 function weatherText(code){
-    if(code == null) return "-";
+    if(code == null) return "";
 
     const map = {
         "00":"Ясно",
@@ -448,7 +448,7 @@ function weatherIcon(code){
 }
 
 function synopWeatherText(code){
-    if(code == null) return "-";
+    if(code == null) return " ";
 
     const map = {
         "00":"Ясно",
@@ -587,7 +587,7 @@ function cloudGenusLow(code){
         "9":"⛈️ Кучево-дождевые с волокнистой вершиной",
         "/":"Не видно"
     };
-    return map[code] || "— Неизвестный код";
+    return code in map ? map[code] : "— Неизвестный код";
 }
 
 function cloudGenusMid(code){
@@ -604,7 +604,7 @@ function cloudGenusMid(code){
         "9":"☁️ Высококучевые хаотичные",
         "/":"Не видно"
     };
-    return map[code] || "— Неизвестный код";
+    return code in map ? map[code] : "— Неизвестный код";
 }
 
 function cloudGenusHigh(code){
@@ -621,7 +621,7 @@ function cloudGenusHigh(code){
         "9":"☁️ Перисто-кучевые",
         "/":"Не видно"
     };
-    return map[code] || "— Неизвестный код";
+    return code in map ? map[code] : "— Неизвестный код";
 }
 
 function precipitationText(group1Indicator, group6){
@@ -742,7 +742,7 @@ function parseSynop(line){
             weatherNow = g.slice(1,3);
             weatherPast = g.slice(3,5);
         }
-        else if(/^8\d{4}$/.test(g)) cloudGroup = g;
+        else if(/^8[\d/]{4}$/.test(g)) cloudGroup = g;
     }
 
     let windDir = null;
