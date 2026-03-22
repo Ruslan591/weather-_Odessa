@@ -578,13 +578,10 @@ models.forEach((m,i)=>{
 // берём время из первой модели
 const forecastTimes = forecasts[models[0]].time;
 
-const targetTime =
-synop.time.slice(0,4)+"-"+
-synop.time.slice(4,6)+"-"+
-synop.time.slice(6,8)+"T"+
-synop.time.slice(8,10)+":00";
+const targetHour =
+`${synop.time.slice(0,4)}-${synop.time.slice(4,6)}-${synop.time.slice(6,8)}T${synop.time.slice(8,10)}`;
 
-const hourIndex = forecastTimes.findIndex(t => t.startsWith(targetTime));
+const hourIndex = forecastTimes.findIndex(t => t.slice(0, 13) === targetHour);
 
 if(hourIndex === -1){
     throw "Не найдено совпадение времени прогноза и SYNOP";
