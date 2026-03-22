@@ -768,12 +768,12 @@ function parseSynop(line){
     let cloudMidCode = null;
     let cloudHighCode = null;
 
-    if(cloudGroup && /^\d{5}$/.test(cloudGroup)){
-        cloudTotalOkta = safeNum(cloudGroup[1]);
-        cloudLowCode = cloudGroup[2];
-        cloudMidCode = cloudGroup[3];
-        cloudHighCode = cloudGroup[4];
-    }
+    if (cloudGroup && /^8[\d/]{4}$/.test(cloudGroup)) {
+    cloudTotalOkta = cloudGroup[1] === "/" ? "/" : safeNum(cloudGroup[1]);
+    cloudLowCode = cloudGroup[2];
+    cloudMidCode = cloudGroup[3];
+    cloudHighCode = cloudGroup[4];
+}
 
     const obsHourUtc = yyggi ? parseInt(yyggi.slice(2,4), 10) : null;
 const synopIsDay = Number.isFinite(obsHourUtc) ? (obsHourUtc >= 6 && obsHourUtc < 18) : null;
