@@ -793,6 +793,8 @@ req.onsuccess = ()=>{
 
 const data = req.result;
 
+data.sort((a,b)=> Number(b.synopTime) - Number(a.synopTime));
+
 let html = "<h3>Сохранённые данные</h3>";
 
 if(!data.length){
