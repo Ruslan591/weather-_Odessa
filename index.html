@@ -53,6 +53,7 @@
 <br><br>
 <button onclick="initFile()">Выбрать файл</button>
 <button onclick="exportDB()">Сохранить (перезаписать)</button>
+<button onclick="deleteLastRecord()">Удалить последнюю запись</button>
 <div id="rating">Загрузка...</div> 
 </div>
 
@@ -461,6 +462,43 @@ function parseSynop(line){
         wind,
         windDir,
         synop: line
+    };
+}
+
+// ----- удаление последней сохраненной записи -----
+async function deleteLastRecord(){
+    if(!db){
+        await initDB();
+    }
+
+    const tx = db.transaction("stats", "readonly");
+    const store = tx.objectStore("stats");
+    const req = store.getAll();
+
+    req.onsuccess = () => {
+        const data = req.result;
+
+        if(!data.length){
+            alert("База пустая");
+            return;
+        }
+
+        data.sort((a, b) => new Date(b.time) - new Date(a.time));
+        const last = data[0];
+
+        const delTx = db.transaction("stats", "readwrite");
+        const delStore = delTx.objectStore("stats");
+        delStore.delete(last.time);
+
+        delTx.oncomplete = async () => {
+            alert("Удалена последняя запись: " + last.time);
+            await render();
+            await drawChart();
+        };
+
+        delTx.onerror = () => {
+            alert("Ошибка удаления");
+        };
     };
 }
 
