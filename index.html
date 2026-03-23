@@ -393,11 +393,23 @@ function saveProxyTime(proxyTimes, proxy, ms, limit = 10) {
     }
 }
 
+/* =========================================================
+    ЗАГРУЗКА SYNOP
+========================================================= */
+function saveProxyTime(proxyTimes, proxy, ms, limit = 10) {
+    if (!proxyTimes[proxy]) proxyTimes[proxy] = [];
+    proxyTimes[proxy].push(ms);
+    if (proxyTimes[proxy].length > limit) {
+        proxyTimes[proxy] = proxyTimes[proxy].slice(-limit);
+    }
+}
+
 async function loadSynop() {
+    const stationCode = typeof STATION_CODE !== "undefined" ? STATION_CODE : "33837";
     const cacheBust = Date.now();
 
     const ogimet =
-        `https://www.ogimet.com/display_synops2.php?lang=en&lugar=33837&tipo=ALL&ord=REV&nil=SI&fmt=txt&_=${cacheBust}`;
+        `https://www.ogimet.com/display_synops2.php?lang=en&lugar=${stationCode}&tipo=ALL&ord=REV&nil=SI&fmt=txt&_=${cacheBust}`;
 
     const proxies = [
         "https://api.allorigins.win/raw?url=",
@@ -407,20 +419,15 @@ async function loadSynop() {
     ];
 
     const proxyStorageKey = "synopProxyTimes";
-
     let proxyTimes = JSON.parse(localStorage.getItem(proxyStorageKey) || "{}");
-    proxies.forEach(p => {
-        if (!proxyTimes[p]) proxyTimes[p] = [];
-    });
+    proxies.forEach(p => { if (!proxyTimes[p]) proxyTimes[p] = []; });
 
     function extractTelegramKey(text) {
         const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
-
         for (const line of lines) {
             const m = line.match(/^(\d{12})\s+AAXX\b/);
             if (m) return m[1];
         }
-
         return null;
     }
 
@@ -442,25 +449,16 @@ async function loadSynop() {
                     cache: "no-store"
                 });
 
-                if (!r.ok) {
-                    throw new Error("HTTP " + r.status);
-                }
+                if (!r.ok) throw new Error("HTTP " + r.status);
 
                 const text = await r.text();
-                if (!text || !text.trim()) {
-                    throw new Error("Пустой ответ");
-                }
+                if (!text || !text.trim()) throw new Error("Пустой ответ");
 
                 const telegramKey = extractTelegramKey(text);
                 const line = extractAAXXLine(text);
 
-                if (!telegramKey) {
-                    throw new Error("Ключ телеграммы YYYYMMDDHHMM не найден");
-                }
-
-                if (!line) {
-                    throw new Error("SYNOP не найден");
-                }
+                if (!telegramKey) throw new Error("Ключ телеграммы YYYYMMDDHHMM не найден");
+                if (!line) throw new Error("SYNOP не найден");
 
                 const ms = Math.round(performance.now() - started);
                 saveProxyTime(proxyTimes, proxy, ms);
@@ -471,7 +469,6 @@ async function loadSynop() {
             } catch (e) {
                 const ms = Math.round(performance.now() - started);
                 saveProxyTime(proxyTimes, proxy, ms);
-
                 console.log(`Proxy fail: ${proxy} (${ms} мс)`, e);
                 reject(e);
             } finally {
@@ -481,17 +478,15 @@ async function loadSynop() {
     });
 
     const settled = await Promise.allSettled(requests);
-
     localStorage.setItem(proxyStorageKey, JSON.stringify(proxyTimes));
 
     const successResults = settled
         .filter(r => r.status === "fulfilled")
         .map(r => r.value);
 
-    if (!successResults.length) {
-        throw new Error("Все прокси SYNOP не ответили");
-    }
+    if (!successResults.length) throw new Error("Все прокси SYNOP не ответили");
 
+    // Выбираем самую свежую телеграмму; если ключ одинаковый — берём самую быструю
     successResults.sort((a, b) => {
         if (a.telegramKey !== b.telegramKey) {
             return b.telegramKey.localeCompare(a.telegramKey);
@@ -500,18 +495,14 @@ async function loadSynop() {
     });
 
     const best = successResults[0];
-
     console.log(`Выбран прокси: ${best.proxy}, key=${best.telegramKey}, ${best.ms} мс`);
 
     if (!db) await initDB();
-
     const exists = await recordExists(best.telegramKey);
     if (exists) {
         console.log("Телеграмма уже есть в IndexedDB, пропускаем обработку");
         return parseSynop(best.line);
     }
-
-    // await saveRecord(best.telegramKey, best.text);
 
     return parseSynop(best.line);
 }
