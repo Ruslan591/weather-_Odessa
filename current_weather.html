@@ -721,21 +721,14 @@ function tendencyText(code){
    5. ПАРСИНГ SYNOP
 ========================================================= */
 function parseSynop(line) {
-    // Сначала разбиваем на строки, чтобы учитывать 333 и 555 на отдельных строках
-    const lines = line.split("\n").map(l => l.trim()).filter(Boolean);
-
-    // Склеиваем все части блока в один массив "parts", чтобы сохранить порядок
-    const parts = [];
-    lines.forEach(l => {
-        const p = l.split(/\s+/).filter(Boolean);
-        parts.push(...p);
-    });
-
+    const parts = line.trim().split(/\s+/);
     const aaxxIndex = parts.indexOf("AAXX");
-    if (aaxxIndex === -1) {
+
+    if(aaxxIndex === -1){
         throw new Error("AAXX не найден");
     }
 
+    // Основные переменные
     const yyggi = parts[aaxxIndex + 1] || null;
     const station = parts[aaxxIndex + 2] || null;
     const optionalCloudInstrument = parts[aaxxIndex + 3] || null;
@@ -746,99 +739,177 @@ function parseSynop(line) {
     const section555 = [];
     let currentSection = "main";
 
-    // Разделяем группы на секции
-    for (let i = aaxxIndex + 5; i < parts.length; i++) {
-        let g = parts[i].replace(/=+$/, "");
-        if (g === "333") { currentSection = "333"; continue; }
-        if (g === "555") { currentSection = "555"; continue; }
+    // Разделение на main / 333 / 555
+    for(let i = aaxxIndex + 5; i < parts.length; i++){
+        let g = parts[i].replace(/=+$/, ""); // убираем = только для парсинга
 
-        if (currentSection === "main") bodyGroups.push(g);
-        else if (currentSection === "333") section333.push(g);
-        else if (currentSection === "555") section555.push(g);
-    }
-
-    // ==== Основные группы ====
-    let temp = null, dew = null, stationPressure = null, seaPressure = null;
-    let tendencyCode = null, tendencyValue = null;
-    let precipGroup = null, weatherNow = null, weatherPast = null, cloudGroup = null;
-
-    for (const g of bodyGroups) {
-        if (/^1\d{4}$/.test(g)) temp = signedTenths(g);
-        else if (/^2\d{4}$/.test(g)) dew = signedTenths(g);
-        else if (/^3\d{4}$/.test(g)) stationPressure = stationPressureFromGroup(g);
-        else if (/^4\d{4}$/.test(g)) seaPressure = pressureFromGroup(g);
-        else if (/^5\d{4}/.test(g)) {
-            tendencyCode = g[1];
-            tendencyValue = parseInt(g.slice(2), 10) / 10;
+        if(g === "333"){
+            currentSection = "333";
+            continue;
         }
-        else if (/^6\d{4}$/.test(g)) precipGroup = g;
-        else if (/^7\d{4}$/.test(g)) {
-            weatherNow = g.slice(1, 3);
-            weatherPast = g.slice(3, 5);
+        if(g === "555"){
+            currentSection = "555";
+            continue;
         }
-        else if (/^8[\d/]{4}/.test(g)) cloudGroup = g;
+        if(!g) continue;
+
+        if(currentSection === "main") bodyGroups.push(g);
+        else if(currentSection === "333") section333.push(g);
+        else if(currentSection === "555") section555.push(g);
     }
 
-    // ==== Ветер и облачность ====
-    let windDir = null, windSpeed = null, totalCloud = null;
-    let lowCloudBase = null, visibility = null;
+    // Основные данные
+    let temp = null;
+    let dew = null;
+    let stationPressure = null;
+    let seaPressure = null;
+    let tendencyCode = null;
+    let tendencyValue = null;
+    let precipGroup = null;
+    let precipValue = null;
+    let weatherNow = null;
+    let weatherPast = null;
+    let cloudGroup = null;
 
-    if (windGroup && /^\d{5}$/.test(windGroup)) {
-        totalCloud = safeNum(windGroup[0]);
-        windDir = safeNum(windGroup.slice(1, 3));
-        if (windDir != null) windDir *= 10;
-        windSpeed = safeNum(windGroup.slice(3, 5));
-    }
+    // Дополнительные данные
+    let tempMax24h = null;
+    let tempMin24h = null;
+    let maxWindGust = null;
+    let sunHours = null;
 
-    if (optionalCloudInstrument && /^\d{2}[\d/]{1}\d{2}$/.test(optionalCloudInstrument)) {
-        lowCloudBase = optionalCloudInstrument[0];
-        visibility = optionalCloudInstrument.slice(3, 5);
-    }
+    let cloudTotalOkta = null;
+    let cloudLowCode = null;
+    let cloudMidCode = null;
+    let cloudHighCode = null;
+    let cloudLowDesc = null;
+    let cloudMidDesc = null;
+    let cloudHighDesc = null;
 
-    let cloudTotalOkta = null, cloudLowCode = null, cloudMidCode = null, cloudHighCode = null;
-    let cloudLowDesc = null, cloudMidDesc = null, cloudHighDesc = null;
+    let lowCloudBase = null;
+    let visibility = null;
+    let windDir = null;
+    let windSpeed = null;
 
-    if (cloudGroup && /^8[\d/]{4}/.test(cloudGroup)) {
-        cloudTotalOkta = cloudGroup[1] === "/" ? "/" : safeNum(cloudGroup[1]);
-        cloudLowCode = cloudGroup[2];
-        cloudMidCode = cloudGroup[3];
-        cloudHighCode = cloudGroup[4];
-
-        cloudLowDesc = cloudGenusLow(cloudLowCode);
-        cloudMidDesc = cloudGenusLow(cloudMidCode);
-        cloudHighDesc = cloudGenusLow(cloudHighCode);
-    }
-
-    // ==== Секция 333 ====
-    let visibility333 = null;
-    let cloud333 = [];
-    for (const g of section333) {
-        if (/^\d{4,5}$/.test(g)) {
-            visibility333 = g.slice(0, 2);
-            cloud333.push(g.slice(2));
-        }
-    }
-
-    // ==== Секция 555 ====
+    let weatherChange = [];
     let soilTempCode = null;
     let soilTempValue = null;
-    for (const g of section555) {
-        const match = g.match(/^(\d)\/(\d{3})$/);
-        if (match) {
-            soilTempCode = parseInt(match[1], 10);
-            soilTempValue = parseInt(match[2], 10) / 10;
+    let snowHeight = null;
+
+    const weatherCodes = {
+        "00": "нет явлений",
+        "01": "дождь слабый",
+        "02": "дождь умеренный",
+        "03": "снег",
+        "04": "метель",
+        "05": "туман",
+        "06": "гололёд",
+        "07": "пыльная буря",
+        "08": "дымка",
+        "09": "изморозь",
+        "10": "град",
+        // добавляй по стандартам WMO все коды
+    };
+
+    // Разбор main body
+    for(const g of bodyGroups){
+        if(/^1\d{4}$/.test(g)) temp = signedTenths(g);
+        else if(/^2\d{4}$/.test(g)) dew = signedTenths(g);
+        else if(/^3\d{4}$/.test(g)) stationPressure = stationPressureFromGroup(g);
+        else if(/^4\d{4}$/.test(g)) seaPressure = pressureFromGroup(g);
+        else if(/^5\d{4}/.test(g)){
+            tendencyCode = g[1];
+            tendencyValue = parseInt(g.slice(2),10) / 10;
+        }
+        else if(/^6\d{4}$/.test(g)){
+            precipGroup = g;
+            precipValue = parseInt(g.slice(1,4),10)/10;
+        }
+        else if(/^7\d{4}$/.test(g)){
+            weatherNow = weatherCodes[g.slice(1,3)] || null;
+            weatherPast = weatherCodes[g.slice(3,5)] || null;
+            weatherChange.push(weatherNow);
+        }
+        else if(/^8[\d/]{4}$/.test(g)){
+            cloudGroup = g;
+
+            cloudTotalOkta = cloudGroup[1] === "/" ? null : safeNum(cloudGroup[1]);
+            cloudLowCode  = cloudGroup[2] === "/" ? null : cloudGroup[2];
+            cloudMidCode  = cloudGroup[3] === "/" ? null : cloudGroup[3];
+            cloudHighCode = cloudGroup[4] === "/" ? null : cloudGroup[4];
+
+            cloudLowDesc  = cloudLowCode ? cloudGenusLow(cloudLowCode) : null;
+            cloudMidDesc  = cloudMidCode ? cloudGenusLow(cloudMidCode) : null;
+            cloudHighDesc = cloudHighCode ? cloudGenusLow(cloudHighCode) : null;
+        }
+        else if(/^50\d{3}$/.test(g)) maxWindGust = parseInt(g.slice(2),10);
+        else if(/^77\d{3}$/.test(g)) sunHours = parseInt(g.slice(2),10)/10;
+        else if(/^1\d{3}[0-9]$/.test(g)) tempMax24h = signedTenths(g);
+        else if(/^2\d{3}[0-9]$/.test(g)) tempMin24h = signedTenths(g);
+        else if(/^9\d{3}$/.test(g)) snowHeight = parseInt(g.slice(1),10)/10;
+    }
+
+    // Разбор wind
+    if(windGroup && /^\d{5}$/.test(windGroup)){
+        const t = windGroup;
+        totalCloud = safeNum(t[0]);
+        windDir = safeNum(t.slice(1,3)) * 10;
+        windSpeed = safeNum(t.slice(3,5));
+    }
+
+    // Разбор нижней облачности / видимости
+    if (optionalCloudInstrument && optionalCloudInstrument.length === 5) {
+        lowCloudBase = optionalCloudInstrument[0] === "/" ? null : optionalCloudInstrument[0];
+        visibility = optionalCloudInstrument.slice(3, 5).includes("/") ? null : optionalCloudInstrument.slice(3,5);
+    }
+
+    // Разбор секции 333
+    for(const g of section333){
+        const clean = g.replace(/=+$/,"");
+        const firstDigit = clean[0];
+        if(firstDigit === "1") tempMax24h = signedTenths(clean);
+        else if(firstDigit === "2") tempMin24h = signedTenths(clean);
+        else if(firstDigit === "6") {
+            precipValue = parseInt(clean.slice(1,4),10)/10;
+        }
+        else if(firstDigit === "7") {
+            const w = weatherCodes[clean.slice(1,3)] || null;
+            weatherChange.push(w);
+        }
+        else if(firstDigit === "50") maxWindGust = parseInt(clean.slice(2),10);
+        else if(firstDigit === "77") sunHours = parseInt(clean.slice(2),10)/10;
+        else if(firstDigit === "8") {
+            cloudLowCode  = clean[2]==="/"? null : clean[2];
+            cloudMidCode  = clean[3]==="/"? null : clean[3];
+            cloudHighCode = clean[4]==="/"? null : clean[4];
         }
     }
 
-    const obsHourUtc = yyggi ? parseInt(yyggi.slice(2, 4), 10) : null;
-    const synopIsDay = Number.isFinite(obsHourUtc) ? (obsHourUtc >= 6 && obsHourUtc < 18) : null;
+    // Разбор секции 555
+    for(const g of section555){
+        const clean = g.replace(/=+$/,"");
+        if(/^(\d)\/(\d{3})$/.test(clean)){
+            const m = clean.match(/^(\d)\/(\d{3})$/);
+            soilTempCode = parseInt(m[1],10);
+            soilTempValue = parseInt(m[2],10)/10;
+        }
+        else if(/^7\d{3}$/.test(clean)){
+            const w = weatherCodes[clean.slice(1,3)] || null;
+            weatherChange.push(w);
+        }
+        else if(/^77\d{3}$/.test(clean)){
+            sunHours = parseInt(clean.slice(2),10)/10;
+        }
+        else if(/^9\d{3}$/.test(clean)){
+            snowHeight = parseInt(clean.slice(1),10)/10;
+        }
+    }
 
-    // ==== В d.raw теперь сохраняем весь блок с 333 и 555 ====
-    const raw = lines.join("\n");
+    const obsHourUtc = yyggi ? parseInt(yyggi.slice(2,4), 10) : null;
+    const synopIsDay = Number.isFinite(obsHourUtc) ? (obsHourUtc >= 6 && obsHourUtc < 18) : null;
 
     return {
         synopIsDay,
-        raw,
+        raw: line,
         parts,
         yyggi,
         station,
@@ -846,11 +917,7 @@ function parseSynop(line) {
         windGroup,
         bodyGroups,
         section333,
-        visibility333,
-        cloud333,
         section555,
-        soilTempCode,
-        soilTempValue,
 
         temp,
         dew,
@@ -859,8 +926,10 @@ function parseSynop(line) {
         tendencyCode,
         tendencyValue,
         precipGroup,
+        precipValue,
         weatherNow,
         weatherPast,
+        weatherChange,
         cloudGroup,
 
         totalCloud,
@@ -875,7 +944,15 @@ function parseSynop(line) {
         cloudHighCode,
         cloudLowDesc,
         cloudMidDesc,
-        cloudHighDesc
+        cloudHighDesc,
+
+        tempMax24h,
+        tempMin24h,
+        maxWindGust,
+        sunHours,
+        soilTempCode,
+        soilTempValue,
+        snowHeight
     };
 }
 
