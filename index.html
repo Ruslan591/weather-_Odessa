@@ -382,7 +382,7 @@ function fetchWithTimeout(url, ms = 10000){
 }
 
 async function loadSynop() {
-    const ogimet = `https://www.ogimet.com/display_synops2.php?lang=en&lugar=${STATION_CODE}&tipo=ALL&ord=REV&nil=SI&fmt=txt`;
+    const ogimet = "https://www.ogimet.com/display_synops2.php?lang=en&lugar=33837&tipo=ALL&ord=REV&nil=SI&fmt=txt";
 
     const proxies = [
         "https://api.allorigins.win/raw?url=",
@@ -391,11 +391,9 @@ async function loadSynop() {
         "https://cors.x2u.in/"
     ];
 
-    // Загружаем статистику прокси из LocalStorage
     let proxyTimes = JSON.parse(localStorage.getItem("proxyTimes") || "{}");
     proxies.forEach(p => { if (!proxyTimes[p]) proxyTimes[p] = []; });
 
-    // Создаём промисы для всех прокси
     const requests = proxies.map(proxy => {
         return new Promise(async (resolve, reject) => {
             const controller = new AbortController();
@@ -431,7 +429,6 @@ async function loadSynop() {
         });
     });
 
-    // Берём первый успешный прокси
     let result;
     try {
         result = await Promise.any(requests);
@@ -440,22 +437,19 @@ async function loadSynop() {
         throw new Error("Все прокси SYNOP не ответили");
     }
 
-    // Сохраняем статистику прокси
     localStorage.setItem("proxyTimes", JSON.stringify(proxyTimes));
 
-    // Берём блок YYYYMMDDHHMM из строки AAXX для уникальности телеграммы
     const telegramKey = result.line.slice(0, 12);
 
-    // Проверяем IndexedDB по telegramKey
     if (!db) await initDB();
     const exists = await recordExists(telegramKey);
     if (exists) {
         console.log("Телеграмма уже есть в IndexedDB, пропускаем обработку");
-        return parseSynop(result.line); // возвращаем объект синопа
+        return parseSynop(result.line);
     }
 
-    // Если новая телеграмма, сохраняем её
-    // await saveRecord(telegramKey, result.text); // пример сохранения в IndexedDB
+    // Сохраняем новую запись (пример)
+    // await saveRecord(telegramKey, result.text);
 
     return parseSynop(result.line);
 }
