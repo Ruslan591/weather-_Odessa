@@ -1229,6 +1229,32 @@ function renderSynop(d){
   </div>
 </div>
 
+  <!-- Роза ветров -->
+  <div class="wind-card">
+    <svg id="windRose" width="150" height="150" viewBox="0 0 150 150">
+      <!-- Кольцо -->
+      <circle cx="75" cy="75" r="70" stroke="#ccc" stroke-width="5" fill="none"/>
+      
+      <!-- Треугольник-указатель -->
+      <polygon id="windPointer" points="0,-10 5,0 -5,0" fill="#007bff" transform="translate(75,75) rotate(0) translate(0,-60)"/>
+      
+      <!-- Деления сторон света -->
+      <line x1="75" y1="5" x2="75" y2="15" stroke="#aaa" stroke-width="1"/>
+      <line x1="75" y1="135" x2="75" y2="145" stroke="#aaa" stroke-width="1"/>
+      <line x1="5" y1="75" x2="15" y2="75" stroke="#aaa" stroke-width="1"/>
+      <line x1="135" y1="75" x2="145" y2="75" stroke="#aaa" stroke-width="1"/>
+      
+      <!-- Центр: скорость ветра -->
+      <text id="windSpeedText" x="75" y="82" font-size="18" text-anchor="middle" fill="#007bff" font-family="sans-serif">
+        0 м/с
+      </text>
+    </svg>
+  </div>
+</div>
+
+
+
+
             <div class="heroMeta">
                 <div class="miniCard">
                     <div class="small">Ветер</div>
@@ -1627,6 +1653,23 @@ loadDistrictsUI();
 
 setInterval(loadSynopUI, 30 * 60 * 1000);
 setInterval(loadDistrictsUI, 15 * 60 * 1000);
+
+<script>
+function updateWind(windDir, windSpeed) {
+    const pointer = document.getElementById("windPointer");
+    const speedText = document.getElementById("windSpeedText");
+    
+    // Поворачиваем треугольник по направлению ветра
+    pointer.setAttribute("transform", `translate(75,75) rotate(${windDir}) translate(0,-60)`);
+    
+    // Обновляем скорость в центре
+    speedText.textContent = `${windSpeed} м/с`;
+}
+
+// Пример использования с твоим parseSynop:
+const synopData = parseSynop(d.raw); // d.raw из текущей сводки
+updateWind(synopData.windDir || 0, synopData.windSpeed || 0);
+</script>
 </script>
 
 </body>
