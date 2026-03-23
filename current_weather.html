@@ -721,9 +721,17 @@ function tendencyText(code){
    5. ПАРСИНГ SYNOP
 ========================================================= */
 function parseSynop(line) {
-    const parts = line.trim().split(/\s+/);
-    const aaxxIndex = parts.indexOf("AAXX");
+    // Сначала разбиваем на строки, чтобы учитывать 333 и 555 на отдельных строках
+    const lines = line.split("\n").map(l => l.trim()).filter(Boolean);
 
+    // Склеиваем все части блока в один массив "parts", чтобы сохранить порядок
+    const parts = [];
+    lines.forEach(l => {
+        const p = l.split(/\s+/).filter(Boolean);
+        parts.push(...p);
+    });
+
+    const aaxxIndex = parts.indexOf("AAXX");
     if (aaxxIndex === -1) {
         throw new Error("AAXX не найден");
     }
@@ -738,7 +746,7 @@ function parseSynop(line) {
     const section555 = [];
     let currentSection = "main";
 
-    // Разделяем по секциям
+    // Разделяем группы на секции
     for (let i = aaxxIndex + 5; i < parts.length; i++) {
         const g = parts[i];
         if (g === "333") { currentSection = "333"; continue; }
@@ -825,9 +833,12 @@ function parseSynop(line) {
     const obsHourUtc = yyggi ? parseInt(yyggi.slice(2, 4), 10) : null;
     const synopIsDay = Number.isFinite(obsHourUtc) ? (obsHourUtc >= 6 && obsHourUtc < 18) : null;
 
+    // ==== В d.raw теперь сохраняем весь блок с 333 и 555 ====
+    const raw = lines.join("\n");
+
     return {
         synopIsDay,
-        raw: line,
+        raw,
         parts,
         yyggi,
         station,
