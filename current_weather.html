@@ -1107,6 +1107,8 @@ async function loadSynop() {
     console.log(`Выбран прокси: ${best.proxy}, key=${best.telegramKey}, ${best.ms} мс`);
 
     const synop = parseSynop(best.line);
+    
+    updateWindRose(d.windDir, d.windSpeed);
 
     if (!db) await initDB();
     const exists = await recordExists(best.telegramKey);
@@ -1116,6 +1118,25 @@ async function loadSynop() {
     }
 
     return synop;
+}
+
+/*==≠=====================≠===≠====≠=====
+    Роза ветров
+======≠================================*/
+function updateWindRose(windDir, windSpeed){
+    const pointer = document.getElementById("windPointer");
+    const speedText = document.getElementById("windSpeedText");
+
+    if(pointer){
+        pointer.setAttribute(
+            "transform",
+            `translate(75,75) rotate(${windDir || 0}) translate(0,-60)`
+        );
+    }
+
+    if(speedText){
+        speedText.textContent = windSpeed != null ? `${windSpeed}` : "-";
+    }
 }
 
 /*==========================================
@@ -1653,23 +1674,6 @@ loadDistrictsUI();
 
 setInterval(loadSynopUI, 30 * 60 * 1000);
 setInterval(loadDistrictsUI, 15 * 60 * 1000);
-
-<script>
-function updateWind(windDir, windSpeed) {
-    const pointer = document.getElementById("windPointer");
-    const speedText = document.getElementById("windSpeedText");
-    
-    // Поворачиваем треугольник по направлению ветра
-    pointer.setAttribute("transform", `translate(75,75) rotate(${windDir}) translate(0,-60)`);
-    
-    // Обновляем скорость в центре
-    speedText.textContent = `${windSpeed} м/с`;
-}
-
-// Пример использования с твоим parseSynop:
-const synopData = parseSynop(d.raw); // d.raw из текущей сводки
-updateWind(synopData.windDir || 0, synopData.windSpeed || 0);
-</script>
 </script>
 
 </body>
