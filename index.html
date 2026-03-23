@@ -381,38 +381,61 @@ function fetchWithTimeout(url, ms = 10000){
     ]);
 }
 
-async function loadSynop(){
+async function loadSynop() {
 
     const ogimet =
-    "https://www.ogimet.com/display_synops2.php?lang=en&lugar=33837&tipo=ALL&ord=REV&nil=SI&fmt=txt";
+        "https://www.ogimet.com/display_synops2.php?lang=en&lugar=33837&tipo=ALL&ord=REV&nil=SI&fmt=txt";
 
     const proxies = [
         "https://api.allorigins.win/raw?url=",
         "https://corsproxy.io/?",
     ];
 
-    let text = null;
+    // Загружаем статистику из localStorage или создаём пустую
+    let proxyTimes = JSON.parse(localStorage.getItem("proxyTimes") || "{}");
+    proxies.forEach(p => { if (!proxyTimes[p]) proxyTimes[p] = []; });
 
-    for(const p of proxies){
-        try{
+    // Сортируем прокси по среднему времени отклика
+    const avg = arr => arr.length ? arr.reduce((s, x) => s + x, 0) / arr.length : Infinity;
+    const sortedProxies = [...proxies].sort((a, b) => avg(proxyTimes[a]) - avg(proxyTimes[b]));
+
+    let text = null;
+    let lastError = null;
+
+    for (const p of sortedProxies) {
+        const started = performance.now();
+        try {
             const url = p + encodeURIComponent(ogimet);
             const r = await fetchWithTimeout(url, 15000);
-            text = await r.text();
+
+            const t = await r.text();
+            if (!t || !t.trim()) throw new Error("Пустой ответ");
+
+            // Сохраняем время отклика
+            const ms = performance.now() - started;
+            proxyTimes[p].push(ms);
+
+            console.log(`SYNOP proxy ok: ${p} (${Math.round(ms)} мс)`);
+
+            text = t;
             break;
-        }catch(e){
-            console.log("Proxy fail:", p);
+        } catch (e) {
+            const ms = performance.now() - started;
+            proxyTimes[p].push(ms);
+            lastError = e;
+            console.log(`Proxy fail: ${p} (${Math.round(ms)} мс)`, e);
         }
     }
 
-    if(!text){
-        throw "Все прокси SYNOP не ответили";
+    // Сохраняем статистику
+    localStorage.setItem("proxyTimes", JSON.stringify(proxyTimes));
+
+    if (!text) {
+        throw "Все прокси SYNOP не ответили" + (lastError?.message ? ": " + lastError.message : "");
     }
 
     const line = text.split("\n").find(l => l.includes("AAXX"));
-
-    if(!line){
-        throw "SYNOP не найден";
-    }
+    if (!line) throw "SYNOP не найден";
 
     return parseSynop(line);
 }
