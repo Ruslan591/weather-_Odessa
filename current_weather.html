@@ -872,7 +872,7 @@ async function recordExists(timeKey){
 /* =========================================================
    6. ЗАГРУЗКА SYNOP
 ========================================================= */
-async function loadSynop() {
+async function loadSynop(){
     const ogimet = `https://www.ogimet.com/display_synops2.php?lang=en&lugar=${STATION_CODE}&tipo=ALL&ord=REV&nil=SI&fmt=txt`;
 
     const proxies = [
@@ -881,52 +881,47 @@ async function loadSynop() {
     ];
 
     let text = null;
-    let lastError = null;
 
-    for (const proxy of proxies) {
+    for(const proxy of proxies){
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 15000);
 
-        try {
+        try{
             const url = proxy + encodeURIComponent(ogimet);
             const r = await fetch(url, { signal: controller.signal });
 
-            if (!r.ok) {
+            if(!r.ok){
                 throw new Error("HTTP " + r.status);
             }
 
             text = await r.text();
-
-            if (text && text.trim()) {
-                break;
-            }
-        } catch (e) {
-            lastError = e;
+            break;
+        }catch(e){
             console.log("Proxy fail:", proxy, e);
-        } finally {
+        }finally{
             clearTimeout(timer);
         }
     }
 
-    if (!text) {
-        throw new Error("Все прокси SYNOP не ответили" + (lastError ? ": " + lastError.message : ""));
+    if(!text){
+        throw new Error("Все прокси SYNOP не ответили");
     }
 
     const line = text.split("\n").find(l => l.includes("AAXX"));
 
-    if (!line) {
+    if(!line){
         throw new Error("SYNOP не найден");
     }
 
     const synop = parseSynop(line);
 
     // ======== проверка IndexedDB ========
-    if (!db) {
+    if(!db){
         await initDB();
     }
 
     const exists = await recordExists(synop.time);
-    if (exists) {
+    if(exists){
         console.log("Телеграмма уже есть в IndexedDB, пропускаем дальнейшую обработку");
         return synop;
     }
