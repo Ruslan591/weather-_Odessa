@@ -748,7 +748,7 @@ function parseSynop(line) {
 
     // Разделяем группы на секции
     for (let i = aaxxIndex + 5; i < parts.length; i++) {
-        const g = parts[i];
+        let g = parts[i].replace(/=+$/, "");
         if (g === "333") { currentSection = "333"; continue; }
         if (g === "555") { currentSection = "555"; continue; }
 
@@ -955,9 +955,29 @@ async function loadSynop() {
     }
 
     function extractAAXXLine(text) {
-        const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
-        return lines.find(l => /AAXX\b/.test(l)) || null;
+    const lines = text.split("\n").map(l => l.replace(/\r/g, ""));
+    const startIndex = lines.findIndex(l => /\bAAXX\b/.test(l));
+
+    if (startIndex === -1) return null;
+
+    const block = [];
+
+    for (let i = startIndex; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line.trim()) continue;
+
+        block.push(line.trim());
+
+        if (line.includes("=")) break;
+
+        const nextLine = lines[i + 1];
+        if (nextLine && /^\d{12}\s+AAXX\b/.test(nextLine.trim())) {
+            break;
+        }
     }
+
+    return block.join("\n");
+}
 
     const requests = proxies.map(proxy => {
         return new Promise(async (resolve, reject) => {
