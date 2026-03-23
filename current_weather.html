@@ -1107,8 +1107,6 @@ async function loadSynop() {
     console.log(`Выбран прокси: ${best.proxy}, key=${best.telegramKey}, ${best.ms} мс`);
 
     const synop = parseSynop(best.line);
-    
-    updateWindRose(d.windDir, d.windSpeed);
 
     if (!db) await initDB();
     const exists = await recordExists(best.telegramKey);
@@ -1480,6 +1478,7 @@ function renderSynop(d){
     `;
 }
 
+updateWindRose(synop.windDir, synop.windSpeed);
 /* =========================================================
    9. РЕНДЕР РАЙОНОВ
 ========================================================= */
