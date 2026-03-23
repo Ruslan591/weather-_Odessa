@@ -1032,28 +1032,20 @@ async function loadSynop() {
     }
 
     function extractAAXXLine(text) {
-    const lines = text.split("\n").map(l => l.replace(/\r/g, ""));
-    const startIndex = lines.findIndex(l => /\bAAXX\b/.test(l));
-
+    const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+    let startIndex = lines.findIndex(l => /(AAXX|BBXX|OOXX)\b/.test(l));
     if (startIndex === -1) return null;
 
-    const block = [];
-
+    // Берём строку AAXX/BBXX/OOXX и все следующие строки, которые не начинаются с новой AAXX/BBXX/OOXX
+    let resultLines = [];
     for (let i = startIndex; i < lines.length; i++) {
         const line = lines[i];
-        if (!line.trim()) continue;
-
-        block.push(line.trim());
-
-        if (line.includes("=")) break;
-
-        const nextLine = lines[i + 1];
-        if (nextLine && /^\d{12}\s+AAXX\b/.test(nextLine.trim())) {
-            break;
-        }
+        if (i !== startIndex && /(AAXX|BBXX|OOXX)\b/.test(line)) break;
+        resultLines.push(line);
     }
 
-    return block.join("\n");
+    // Объединяем в одну строку через пробел, сохраняя raw
+    return resultLines.join(" ");
 }
 
     const requests = proxies.map(proxy => {
