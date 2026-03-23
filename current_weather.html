@@ -872,7 +872,45 @@ async function recordExists(timeKey){
 /* =========================================================
    6. ЗАГРУЗКА SYNOP
 ========================================================= */
-async function loadSynop(){ const ogimet = https://www.ogimet.com/display_synops2.php?lang=en&lugar=${STATION_CODE}&tipo=ALL&ord=REV&nil=SI&fmt=txt; const url = "https://api.allorigins.win/raw?url=" + encodeURIComponent(ogimet); const controller = new AbortController(); const timer = setTimeout(()=>controller.abort(), 30000); try{ const r = await fetch(url,{signal:controller.signal}); if(!r.ok){ throw new Error("HTTP " + r.status); } const text = await r.text(); const line = text.split("\n").find(l => l.includes("AAXX")); if(!line){ throw new Error("SYNOP не найден"); } // вынесли в отдельную переменную const synop = parseSynop(line); // ======== проверка IndexedDB ======== if(!db){ await initDB(); } const exists = await recordExists(synop.time); if(exists){ console.log("Телеграмма уже есть в IndexedDB, пропускаем дальнейшую обработку"); return synop; } // ===================================== return synop; }finally{ clearTimeout(timer); } }
+async function loadSynop(){
+    const ogimet = `https://www.ogimet.com/display_synops2.php?lang=en&lugar=${STATION_CODE}&tipo=ALL&ord=REV&nil=SI&fmt=txt`;
+    const url = "https://api.allorigins.win/raw?url=" + encodeURIComponent(ogimet);
+
+    const controller = new AbortController();
+    const timer = setTimeout(()=>controller.abort(), 30000);
+
+    try{
+        const r = await fetch(url,{signal:controller.signal});
+        if(!r.ok){
+            throw new Error("HTTP " + r.status);
+        }
+
+        const text = await r.text();
+        const line = text.split("\n").find(l => l.includes("AAXX"));
+
+        if(!line){
+            throw new Error("SYNOP не найден");
+        }
+        // вынесли в отдельную переменную
+        const synop = parseSynop(line);
+
+        // ======== проверка IndexedDB ========
+        if(!db){
+            await initDB();
+        }
+
+        const exists = await recordExists(synop.time);
+        if(exists){
+            console.log("Телеграмма уже есть в IndexedDB, пропускаем дальнейшую обработку");
+            return synop;
+        }
+        // =====================================
+
+        return synop;
+    }finally{
+        clearTimeout(timer);
+    }
+}
 
 /* =========================================================
    7. ЗАГРУЗКА РАЙОНОВ
