@@ -501,10 +501,10 @@ async function loadSynop() {
     const exists = await recordExists(best.telegramKey);
     if (exists) {
         console.log("Телеграмма уже есть в IndexedDB, пропускаем обработку");
-        return parseSynop(best.line);
+        return parseSynop(line);
     }
 
-    return parseSynop(best.line);
+    return parseSynop(line);
 }
 
 function parseSynop(line){
