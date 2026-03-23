@@ -875,6 +875,7 @@ async function recordExists(timeKey){
 async function loadSynop() {
     const ogimet = `https://www.ogimet.com/display_synops2.php?lang=en&lugar=${STATION_CODE}&tipo=ALL&ord=REV&nil=SI&fmt=txt`;
 
+    // Список прокси
     const proxies = [
         "https://api.allorigins.win/raw?url=",
         "https://corsproxy.io/?",
@@ -882,57 +883,64 @@ async function loadSynop() {
         "https://cors.x2u.in/"
     ];
 
+    // Загружаем статистику из localStorage или создаём пустую
+    let proxyTimes = JSON.parse(localStorage.getItem("proxyTimes") || "{}");
+    proxies.forEach(p => { if (!proxyTimes[p]) proxyTimes[p] = []; });
+
+    // Сортируем прокси по среднему времени отклика (меньшее — быстрее)
+    const avg = arr => arr.length ? arr.reduce((s,x)=>s+x,0)/arr.length : Infinity;
+    const sortedProxies = [...proxies].sort((a,b) => avg(proxyTimes[a]) - avg(proxyTimes[b]));
+
     let text = null;
     let lastError = null;
 
-    for (const proxy of proxies) {
+    for (const proxy of sortedProxies) {
+        const url = proxy + encodeURIComponent(ogimet);
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 8000);
+        const started = performance.now();
 
         try {
-            const url = proxy + encodeURIComponent(ogimet);
             const r = await fetch(url, { signal: controller.signal });
-
-            if (!r.ok) {
-                throw new Error("HTTP " + r.status);
-            }
+            if (!r.ok) throw new Error("HTTP " + r.status);
 
             const t = await r.text();
+            if (!t || !t.trim()) throw new Error("Пустой ответ");
 
-            if (!t || !t.trim()) {
-                throw new Error("Пустой ответ");
-            }
+            // Замеряем время отклика
+            const ms = performance.now() - started;
+            proxyTimes[proxy].push(ms);
+
+            console.log(`SYNOP proxy ok: ${proxy} (${Math.round(ms)} мс)`);
 
             text = t;
-            console.log("SYNOP proxy ok:", proxy);
             break;
-        } catch (e) {
+
+        } catch(e) {
+            const ms = performance.now() - started;
+            proxyTimes[proxy].push(ms);
             lastError = e;
-            console.log("Proxy fail:", proxy, e);
+            console.log(`Proxy fail: ${proxy} (${Math.round(ms)} мс)`, e);
+
         } finally {
             clearTimeout(timer);
         }
     }
 
+    // Сохраняем обновлённую статистику
+    localStorage.setItem("proxyTimes", JSON.stringify(proxyTimes));
+
     if (!text) {
-        throw new Error(
-            "Все прокси SYNOP не ответили" +
-            (lastError?.message ? ": " + lastError.message : "")
-        );
+        throw new Error("Все прокси SYNOP не ответили" + (lastError?.message ? ": " + lastError.message : ""));
     }
 
     const line = text.split("\n").find(l => l.includes("AAXX"));
-
-    if (!line) {
-        throw new Error("SYNOP не найден");
-    }
+    if (!line) throw new Error("SYNOP не найден");
 
     const synop = parseSynop(line);
 
     // ======== проверка IndexedDB ========
-    if (!db) {
-        await initDB();
-    }
+    if (!db) await initDB();
 
     const exists = await recordExists(synop.time);
     if (exists) {
