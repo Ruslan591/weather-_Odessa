@@ -1021,11 +1021,12 @@ async function loadSynop() {
 /*==========================================
     6.1 ПРОСМОТР СТАТИСТИКИ В КОНСОЛИ
 =========≠=================≠====≠===========*/
-function getProxyStats() {
-    const proxyTimes = JSON.parse(localStorage.getItem("proxyTimes") || "{}");
+function getSynopMainProxyStats() {
+    const proxyTimes = JSON.parse(localStorage.getItem("synopProxyTimesMain") || "{}");
 
     for (const proxy in proxyTimes) {
         const arr = proxyTimes[proxy];
+
         if (!arr.length) {
             console.log(proxy, "нет данных");
             continue;
@@ -1039,6 +1040,10 @@ function getProxyStats() {
     }
 }
 
+/* ==========≠============≠===========
+    СБРОС СТАТИСТИКИ
+====≠≠=≠=≠========≠==================*/
+// localStorage.removeItem("synopProxyTimesMain");
 /* =========================================================
    7. ЗАГРУЗКА РАЙОНОВ
 ========================================================= */
