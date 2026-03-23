@@ -1233,6 +1233,9 @@ function renderSynop(d){
   </div>
 </div>
 
+/*======
+    роза ветров
+=======*/
  <div class="miniCard windMiniCard">
     <div class="small">Ветер</div>
 
@@ -1260,8 +1263,28 @@ function renderSynop(d){
     <div class="small">${escapeHtml(degToText(d.windDir))} ${windArrow(d.windDir)}</div>
 </div>
 
+*/=================
+    бсрометр
+==================*/
+<div class="miniCard pressureMiniCard">
+    <div class="small">Давление</div>
 
+    <div class="pressureMini">
+        <svg viewBox="0 0 100 100" width="84" height="84" aria-label="Давление">
+            <circle cx="50" cy="50" r="30" fill="none" stroke="currentColor" stroke-opacity="0.18" stroke-width="6"/>
 
+            <!-- стрелка барометра -->
+            <line x1="50" y1="50" x2="50" y2="20" stroke="currentColor" stroke-width="3" stroke-linecap="round"
+                  transform="rotate(${d.seaPressure != null ? ((d.seaPressure-980)/40*180-90) : 0} 50 50)"/>
+
+            <text x="50" y="56" text-anchor="middle" font-size="14" font-weight="700" fill="currentColor">
+                ${d.seaPressure != null ? d.seaPressure : "-"}
+            </text>
+        </svg>
+
+        <div class="pressureMiniUnit">гПа</div>
+    </div>
+</div>
 
             <div class="heroMeta">
                 <div class="miniCard">
