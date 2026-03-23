@@ -405,6 +405,18 @@ function saveProxyTime(proxyTimes, proxy, ms, limit = 10) {
     }
 }
 
+// ======== Проверка IndexedDB ========
+async function recordExists(key) {
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction("stats", "readonly");
+        const store = tx.objectStore("stats");
+        const request = store.get(key);
+
+        request.onsuccess = () => resolve(!!request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
 // ======== Основная функция загрузки SYNOP ========
 async function loadSynop() {
     const stationCode = typeof STATION_CODE !== "undefined" ? STATION_CODE : "33837";
@@ -423,7 +435,6 @@ async function loadSynop() {
     let proxyTimes = JSON.parse(localStorage.getItem(proxyStorageKey) || "{}");
     proxies.forEach(p => { if (!proxyTimes[p]) proxyTimes[p] = []; });
 
-    // ======== Вспомогательные функции ========
     function extractTelegramKey(text) {
         const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
         for (const line of lines) {
@@ -503,8 +514,8 @@ async function loadSynop() {
         return parseSynop(line);
     }
 
-    // ======== Можно сохранять телеграмму ========
-    // saveData({ time: telegramKey, text: successResults[0].text });
+    // ======== Сохраняем телеграмму ========
+    saveData({ time: telegramKey, text: successResults[0].text });
 
     return parseSynop(line);
 }
