@@ -1108,6 +1108,7 @@ async function loadSynop() {
 
     const synop = parseSynop(best.line);
 
+
     if (!db) await initDB();
     const exists = await recordExists(best.telegramKey);
     if (exists) {
@@ -1478,7 +1479,6 @@ function renderSynop(d){
     `;
 }
 
-updateWindRose(synop.windDir, synop.windSpeed);
 /* =========================================================
    9. РЕНДЕР РАЙОНОВ
 ========================================================= */
@@ -1664,6 +1664,9 @@ async function loadDistrictsUI(){
         btn.disabled = false;
     }
 }
+
+updateWindRose(synop.windDir, synop.windSpeed);
+
 
 /* =========================================================
    11. АВТОЗАПУСК
