@@ -1233,56 +1233,39 @@ function renderSynop(d){
   </div>
 </div>
 
-/*======
-    роза ветров
-=======*/
- <div class="miniCard windMiniCard">
-    <div class="small">Ветер</div>
 
-    <div class="windMini">
-        <svg viewBox="0 0 100 100" width="84" height="84" aria-label="Ветер">
-            <circle cx="50" cy="50" r="30" fill="none" stroke="currentColor" stroke-opacity="0.18" stroke-width="6"/>
-
-            <line x1="50" y1="14" x2="50" y2="19" stroke="currentColor" stroke-opacity="0.35" stroke-width="2"/>
-            <line x1="86" y1="50" x2="81" y2="50" stroke="currentColor" stroke-opacity="0.35" stroke-width="2"/>
-            <line x1="50" y1="86" x2="50" y2="81" stroke="currentColor" stroke-opacity="0.35" stroke-width="2"/>
-            <line x1="14" y1="50" x2="19" y2="50" stroke="currentColor" stroke-opacity="0.35" stroke-width="2"/>
-
-            <g transform="rotate(${d.windDir != null ? d.windDir : 0} 50 50)">
-                <polygon points="50,24 45,32 55,32" fill="currentColor"/>
-            </g>
-
-            <text x="50" y="56" text-anchor="middle" font-size="16" font-weight="700" fill="currentColor">
-                ${d.windSpeed != null ? d.windSpeed : "-"}
-            </text>
-        </svg>
-
-        <div class="windMiniUnit">м/с</div>
+ <div<div class="heroMeta">
+    <!-- Ветер -->
+    <div class="miniCard windMiniCard">
+        <div class="small">Ветер</div>
+        <div class="windMini">
+            <svg viewBox="0 0 100 100" width="84" height="84">
+                <circle cx="50" cy="50" r="30" fill="none" stroke="currentColor" stroke-opacity="0.18" stroke-width="6"/>
+                <g transform="rotate(${d.windDir != null ? d.windDir : 0} 50 50)">
+                    <polygon points="50,24 45,32 55,32" fill="currentColor"/>
+                </g>
+                <text x="50" y="56" text-anchor="middle" font-size="16" font-weight="700" fill="currentColor">
+                    ${d.windSpeed != null ? d.windSpeed : "-"}
+                </text>
+            </svg>
+            <div class="windMiniUnit">м/с</div>
+        </div>
     </div>
 
-    <div class="small">${escapeHtml(degToText(d.windDir))} ${windArrow(d.windDir)}</div>
-</div>
-
-*/=================
-    бсрометр
-==================*/
-<div class="miniCard pressureMiniCard">
-    <div class="small">Давление</div>
-
-    <div class="pressureMini">
-        <svg viewBox="0 0 100 100" width="84" height="84" aria-label="Давление">
-            <circle cx="50" cy="50" r="30" fill="none" stroke="currentColor" stroke-opacity="0.18" stroke-width="6"/>
-
-            <!-- стрелка барометра -->
-            <line x1="50" y1="50" x2="50" y2="20" stroke="currentColor" stroke-width="3" stroke-linecap="round"
-                  transform="rotate(${d.seaPressure != null ? ((d.seaPressure-980)/40*180-90) : 0} 50 50)"/>
-
-            <text x="50" y="56" text-anchor="middle" font-size="14" font-weight="700" fill="currentColor">
-                ${d.seaPressure != null ? d.seaPressure : "-"}
-            </text>
-        </svg>
-
-        <div class="pressureMiniUnit">гПа</div>
+    <!-- Давление -->
+    <div class="miniCard pressureMiniCard">
+        <div class="small">Давление</div>
+        <div class="pressureMini">
+            <svg viewBox="0 0 100 100" width="84" height="84">
+                <circle cx="50" cy="50" r="30" fill="none" stroke="currentColor" stroke-opacity="0.18" stroke-width="6"/>
+                <line x1="50" y1="50" x2="50" y2="20" stroke="currentColor" stroke-width="3" stroke-linecap="round"
+                      transform="rotate(${d.seaPressure != null ? ((d.seaPressure-980)/40*180-90) : 0} 50 50)"/>
+                <text x="50" y="56" text-anchor="middle" font-size="14" font-weight="700" fill="currentColor">
+                    ${d.seaPressure != null ? d.seaPressure : "-"}
+                </text>
+            </svg>
+            <div class="pressureMiniUnit">гПа</div>
+        </div>
     </div>
 </div>
 
