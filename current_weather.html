@@ -584,7 +584,7 @@ function openMeteoWeatherIcon(code, isDay){
 // Облачность
 function cloudGenusLow(code){
     const map = {
-        "0":"— Нет облаков нижнего яруса",
+        "0":" Нет облаков нижнего яруса",
         "1":"☁️ Кучевые плоские или разорванные",
         "2":"☁️ Кучевые средние или мощные",
         "3":"🌩️ Кучево-дождевые без волокнистой вершины",
@@ -601,7 +601,7 @@ function cloudGenusLow(code){
 
 function cloudGenusMid(code){
     const map = {
-        "0":"— Нет облаков среднего яруса",
+        "0":" Нет облаков среднего яруса",
         "1":"☁️ Высокослоистые просвечивающие",
         "2":"🌧️ Высокослоистые плотные или слоисто-дождевые",
         "3":"☁️ Высококучевые просвечивающие",
@@ -618,7 +618,7 @@ function cloudGenusMid(code){
 
 function cloudGenusHigh(code){
     const map = {
-        "0":"— Нет облаков верхнего яруса",
+        "0":" Нет облаков верхнего яруса",
         "1":"☁️ Перистые нитевидные",
         "2":"☁️ Перистые плотные",
         "3":"☁️ Перистые плотные от кучево-дождевых",
@@ -760,14 +760,14 @@ function parseSynop(line){
     let lowCloudBase = null;
     let visibility = null;
 
-    if(windGroup && /^\d{2}[\d/]{1}\d{2}$/.test(windGroup)){
+    if(windGroup && /^\d{5}$/.test(windGroup)){
         totalCloud = safeNum(windGroup[0]);
         windDir = safeNum(windGroup.slice(1,3));
         if(windDir != null) windDir *= 10;
         windSpeed = safeNum(windGroup.slice(3,5));
     }
 
-    if(optionalCloudInstrument && /^\d{5}$/.test(optionalCloudInstrument)){
+    if(optionalCloudInstrument && /^\d{2}[\d/]{1}\d{2}$/.test(optionalCloudInstrument)){
         lowCloudBase = optionalCloudInstrument[0];
         visibility = optionalCloudInstrument.slice(3,5);
     }
