@@ -1,16 +1,17 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
+<!DOCTYPE html>  <html lang="ru">  
+<head>  
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="verify.css">
+
 <meta name="theme-color" content="#121212">
 <title>Рейтинг моделей</title> 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-<body> 
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head> 
+
+<body> 
 <!-- =========================
      ВЕРХНЯЯ ПАНЕЛЬ
 ========================= -->
@@ -21,128 +22,365 @@
     </div>
     <div class="headerTitle">Рейтинг</div>
 </div>
-
 <div class="container">
-    <!-- Последнее обновление -->
-    <div id="lastUpdate" style="color:#aaa;font-size:0.9em;">
-        Последнее обновление: нет
-    </div>
-    <br>
 
-    <!-- График -->
-    <canvas id="chart" height="260"></canvas> 
+<!--≠========================================================
 
-    <!-- Кнопки фильтров -->
-    <div style="text-align:center">
-        <button onclick="setPeriod('24h')">24 часа</button>
-        <button onclick="setPeriod('3d')">3 дня</button>
-        <button onclick="setPeriod('all')">Всё время</button>
-        <br>
-        <button onclick="setParam('temp')">Температура</button>
-        <button onclick="setParam('pressure')">Давление</button>
-        <button onclick="setParam('wind')">Ветер</button>
-        <button onclick="setParam('windDir')">Направление</button>
-        <button onclick="setMode('error')">Ошибка</button>
-        <button onclick="setMode('value')">Значение</button>
-        <br><br>
-        <button onclick="showData()">Показать данные</button>
-        <button onclick="verifyAll()">Обновить проверку</button>
-        <br><br>
-        <button onclick="initFile()">Выбрать файл</button>
-        <button onclick="exportDB()">Сохранить (перезаписать)</button>
-    </div>
+≠===========================================================-->
+<div id="lastUpdate" style="color:#aaa;font-size:0.9em;">
+Последнее обновление: нет
+</div>
+<br>
+<canvas id="chart" height="260"></canvas> 
+<div style="text-align:center">
 
-    <div id="rating">Загрузка...</div> 
+<button onclick="setPeriod('24h')">24 часа</button>
+<button onclick="setPeriod('3d')">3 дня</button>
+<button onclick="setPeriod('all')">Всё время</button>
+<br>
+
+<button onclick="setParam('temp')">Температура</button>
+<button onclick="setParam('pressure')">Давление</button>
+<button onclick="setParam('wind')">Ветер</button>
+<button onclick="setParam('windDir')">Направление</button>
+<button onclick="setMode('error')">Ошибка</button>
+<button onclick="setMode('value')">Значение</button>
+<br><br>
+
+<button onclick="showData()">Показать данные</button>
+<button onclick="verifyAll()">Обновить проверку</button>
+</div>
+<br><br>
+<button onclick="initFile()">Выбрать файл</button>
+<button onclick="exportDB()">Сохранить (перезаписать)</button>
+<div id="rating">Загрузка...</div> 
 </div>
 
 <script>
-/* ==========================
-   Глобальные переменные
-========================== */
-let db; // IndexedDB
-let chartInstance = null; // Chart.js
-let currentPeriod = "all"; // "24h", "3d", "all"
-let currentParam = "temp"; // "temp", "pressure", "wind", "windDir"
+ async function exportDB(){
+
+  if(!db){
+    await initDB();
+  }
+
+  const tx = db.transaction("stats","readonly");
+  const store = tx.objectStore("stats");
+
+  const req = store.getAll();
+
+  req.onsuccess = () => {
+
+    const data = req.result;
+
+data.sort((a, b) => Number(b.synopTime) - Number(a.synopTime));
+
+    if(!data.length){
+      alert("База пустая");
+      return;
+    }
+
+    const json = JSON.stringify(data, null, 2);
+
+    const blob = new Blob([json], {
+      type: "application/json"
+    });
+
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "modelStats_backup.json";
+    a.click();
+
+    URL.revokeObjectURL(url);
+  };
+
+}
+// indexedDB.deleteDatabase("modelStats");
+let currentPeriod = "all";
+let currentParam = "temp";
 let chartMode = "error"; // "error" или "value"
+let chartInstance = null;
 const models=[  
-    "ecmwf_ifs",  
-    "icon_eu",  
-    "ukmo_global_deterministic_10km",  
-    "meteofrance_arpege_europe",  
-    "jma_gsm",  
-    "gfs_global"  
+"ecmwf_ifs",  
+"icon_eu",  
+"ukmo_global_deterministic_10km",  
+"meteofrance_arpege_europe",  
+"jma_gsm",  
+"gfs_global"  
 ];
 
-/* ==========================
-   HELPER: Подписи моделей
-========================== */
+function setParam(p){
+currentParam = p;
+drawChart();
+}
+
 function modelLabel(m){
-    switch(m){
-        case "ecmwf_ifs": return "ECMWF";
-        case "icon_eu": return "ICON";
-        case "ukmo_global_deterministic_10km": return "UKMO";
-        case "meteofrance_arpege_europe": return "ARPEGE";
-        case "jma_gsm": return "JMA";
-        case "gfs_global": return "GFS";
-    }
+
+switch(m){
+
+case "ecmwf_ifs": return "ECMWF";
+case "icon_eu": return "ICON";
+case "ukmo_global_deterministic_10km": return "UKMO";
+case "meteofrance_arpege_europe": return "ARPEGE";
+case "jma_gsm": return "JMA";
+case "gfs_global": return "GFS";
+
 }
 
-/* ==========================
-   IndexedDB: инициализация
-========================== */
+}
+
+let db;
+
+function setMode(mode){
+    chartMode = mode;
+    drawChart();
+}
+
+async function drawChart(){
+
+let stats = await loadStats();
+
+const now = Date.now();
+
+stats = stats.filter(d => {
+
+const t = new Date(d.time).getTime();
+
+if(currentPeriod === "24h") return now - t <= 24*3600*1000;
+if(currentPeriod === "3d") return now - t <= 3*24*3600*1000;
+
+return true;
+
+});
+
+if(!stats.length) return;
+
+const labels = stats.map(d => {
+
+const t = d.synopTime; // "202603161200"
+
+const year = t.slice(0,4);
+const month = t.slice(4,6);
+const day = t.slice(6,8);
+const hour = t.slice(8,10);
+
+return `${day}.${month} ${hour}:00`;
+
+});
+
+const datasets = models.map(m => {
+
+const data = stats.map(d => {
+
+const model = d.models[m];
+if(!model) return null;
+
+switch(currentParam){
+
+case "temp":
+return chartMode === "error"
+    ? Math.abs(model.temp - d.obs.temp)
+    : model.temp;
+
+case "pressure":
+return chartMode === "error"
+    ? Math.abs(model.pressure - d.obs.pressure)
+    : model.pressure;
+
+case "wind":
+return chartMode === "error"
+    ? Math.abs(model.wind - d.obs.wind)
+    : model.wind;
+
+case "windDir":
+return chartMode === "error"
+    ? windDirError(model.windDir, d.obs.windDir)
+    : model.windDir;
+
+}
+
+});
+
+return {
+label: modelLabel(m),
+data: data,
+borderWidth: 2,
+fill: false
+};
+
+});
+
+if(chartMode === "value"){
+
+    const synopData = stats.map(d => {
+
+        switch(currentParam){
+            case "temp": return d.obs.temp;
+            case "pressure": return d.obs.pressure;
+            case "wind": return d.obs.wind;
+            case "windDir": return d.obs.windDir;
+        }
+
+    });
+
+    datasets.push({
+        label: "SYNOP",
+        data: synopData,
+        borderWidth: 2,
+        fill: false,
+        pointRadius: 3,
+        tension: 0.1
+    });
+
+}
+
+const ctx = document.getElementById("chart");
+
+if(chartInstance){
+chartInstance.destroy();
+}
+
+let yMin, yMax;
+
+if(chartMode === "value" && currentParam === "pressure"){
+
+    const allValues = [];
+
+    stats.forEach(d => {
+        if(d.obs.pressure) allValues.push(d.obs.pressure);
+
+        for(const m of models){
+            if(d.models[m]){
+                allValues.push(d.models[m].pressure);
+            }
+        }
+    });
+
+    const min = Math.min(...allValues);
+    const max = Math.max(...allValues);
+
+    yMin = min - 0.5;
+    yMax = max + 0.5;
+}
+
+chartInstance = new Chart(ctx,{
+type:"line",
+data:{
+labels:labels,
+datasets:datasets
+},
+options:{
+responsive:true,
+plugins:{
+legend:{
+position:"bottom",
+labels:{
+color:"#eee",
+boxWidth:12,
+padding:15
+},
+maxHeight:60
+}
+},
+scales:{
+x:{
+ticks:{
+color:"#eee",
+maxRotation:45,
+minRotation:45,
+autoSkip:true,
+maxTicksLimit:8
+}
+},
+y:{
+beginAtZero:false,
+min: yMin,
+max: yMax,
+ticks:{
+color:"#eee"
+},
+title:{
+display:true,
+text: getYAxisLabel(),
+color:"#eee"
+}
+}
+}
+}
+});
+
+
+}
+
+function getYAxisLabel(){
+
+switch(currentParam){
+
+case "temp": return "Ошибка температуры °C";
+case "pressure": return "Ошибка давления hPa";
+case "wind": return "Ошибка ветра м/с";
+case "windDir": return "Ошибка направления °";
+
+}
+
+}
+
 function initDB(){
-    return new Promise((resolve,reject)=>{
-        const req = indexedDB.open("modelStats",1);
+return new Promise((resolve,reject)=>{
 
-        req.onupgradeneeded = e=>{
-            db = e.target.result;
-            db.createObjectStore("stats",{keyPath:"time"});
-        };
+const req = indexedDB.open("modelStats",1);
 
-        req.onsuccess = e=>{
-            db = e.target.result;
-            resolve();
-        };
+req.onupgradeneeded = e=>{
+db = e.target.result;
+db.createObjectStore("stats",{keyPath:"time"});
+};
 
-        req.onerror = reject;
-    });
+req.onsuccess = e=>{
+db = e.target.result;
+resolve();
+};
+
+req.onerror = reject;
+
+});
 }
 
-/* ==========================
-   IndexedDB: запись данных
-========================== */
+
+
 function saveData(data){
-    const tx = db.transaction("stats","readwrite");
-    const store = tx.objectStore("stats");
-    store.put(data);
+
+const tx = db.transaction("stats","readwrite");
+const store = tx.objectStore("stats");
+
+store.put(data);
+
 }
 
-/* ==========================
-   IndexedDB: загрузка всех данных
-========================== */
 function loadStats(){
-    return new Promise(res=>{
-        const tx=db.transaction("stats","readonly");
-        const store=tx.objectStore("stats");
-        const r=store.getAll();
-        r.onsuccess=()=>res(r.result);
-    });
+
+return new Promise(res=>{
+
+const tx=db.transaction("stats","readonly");
+const store=tx.objectStore("stats");
+
+const r=store.getAll();
+
+r.onsuccess=()=>res(r.result);
+
+});
+
 }
 
-/* ==========================
-   LocalStorage: fetch с таймаутом
-========================== */
 function fetchWithTimeout(url, ms = 10000){
     return Promise.race([
         fetch(url),
-        new Promise((_, reject) => setTimeout(() => reject("Timeout"), ms))
+        new Promise((_, reject) =>
+            setTimeout(() => reject("Timeout"), ms)
+        )
     ]);
 }
 
-/* ==========================
-   SYNOP: загрузка телеграммы с прокси
-   + сохранение статистики прокси в LocalStorage
-========================== */
 async function loadSynop() {
     const ogimet = "https://www.ogimet.com/display_synops2.php?lang=en&lugar=33837&tipo=ALL&ord=REV&nil=SI&fmt=txt";
 
@@ -165,6 +403,7 @@ async function loadSynop() {
             try {
                 const url = proxy + encodeURIComponent(ogimet);
                 const r = await fetch(url, { signal: controller.signal });
+
                 if (!r.ok) throw new Error("HTTP " + r.status);
 
                 const text = await r.text();
@@ -203,20 +442,21 @@ async function loadSynop() {
     const telegramKey = result.line.slice(0, 12);
 
     if (!db) await initDB();
-    const exists = await synopExists(telegramKey);
+    const exists = await recordExists(telegramKey);
     if (exists) {
         console.log("Телеграмма уже есть в IndexedDB, пропускаем обработку");
         return parseSynop(result.line);
     }
 
+    // Сохраняем новую запись (пример)
+    // await saveRecord(telegramKey, result.text);
+
     return parseSynop(result.line);
 }
 
-/* ==========================
-   SYNOP: парсер телеграммы
-========================== */
 function parseSynop(line){
     const parts = line.trim().split(" ");
+    
     const synopTime = parts[0];
     
     let temp = null;
@@ -224,269 +464,454 @@ function parseSynop(line){
     let wind = null;
     let windDir = null;
 
-    // температура и давление
     parts.forEach((g, i) => {
+        // Температура: группа начинается с 1
         if(g.startsWith("1")) {
             const sign = g[1] === "1" ? -1 : 1;
             temp = sign * parseInt(g.slice(2)) / 10;
         }
+
+        // Давление: группа начинается с 4
         if(g.startsWith("4")) {
             pressure = 1000 + parseInt(g.slice(1)) / 10;
         }
+
+        // Ветер: 4-я группа после AAXX
+        // у нас g — любая группа, ищем четвёртую
+        // Обычно это после "AAXX код станции"
+        // Для твоего примера parts = ["AAXX","16091","33837","42982","60502",...]
+        // 60502 — 4-я после AAXX: index 4
     });
 
-    // ветер: 4-я группа после AAXX
+    // точная 4-я группа после AAXX
     const aaxxi = parts.indexOf("AAXX");
     if(aaxxi >= 0 && parts.length > aaxxi + 4){
         const windGroup = parts[aaxxi + 4];
+        // 2-я и 3-я цифры → направление /10
         windDir = parseInt(windGroup.slice(1,3)) * 10;
+        // 4-я и 5-я → скорость м/с
         wind = parseInt(windGroup.slice(3,5));
     }
 
-    return { time: synopTime, temp, pressure, wind, windDir, synop: line };
+    return {
+time: synopTime,
+temp,
+pressure,
+wind,
+windDir,
+synop: line
+};
 }
 
-/* ==========================
-   Проверка существования SYNOP в IndexedDB
-========================== */
-async function synopExists(synopTime){
-    const tx = db.transaction("stats","readonly");
-    const store = tx.objectStore("stats");
-    const req = store.getAll();
-
-    return new Promise(res=>{
-        req.onsuccess = ()=>{
-            const exists = req.result.some(r => r.synopTime === synopTime);
-            res(exists);
-        };
-    });
-}
-
-/* ==========================
-   Загрузка прогноза модели
-========================== */
 async function loadForecast(model){
-    const url =
-    `https://api.open-meteo.com/v1/forecast?latitude=46.4406&longitude=30.7703&hourly=temperature_2m,pressure_msl,wind_speed_10m,wind_direction_10m&models=${model}&forecast_days=1&timezone=UTC&wind_speed_unit=ms`;
 
-    const r = await fetchWithTimeout(url);
-    const d = await r.json();
-    return d.hourly;
+const url =
+`https://api.open-meteo.com/v1/forecast?latitude=46.4406&longitude=30.7703&hourly=temperature_2m,pressure_msl,wind_speed_10m,wind_direction_10m&models=${model}&forecast_days=1&timezone=UTC&wind_speed_unit=ms`;
+
+const r = await fetchWithTimeout(url);
+const d = await r.json();
+
+return d.hourly;
+
 }
 
-/* ==========================
-   Вычисление ошибки направления ветра
-========================== */
-function windDirError(a,b){
-    let diff = Math.abs(a - b);
-    if(diff > 180) diff = 360 - diff;
-    return diff;
+function error(f,s){
+
+return{
+
+temp:f.temperature_2m-s.temp,
+pressure:f.pressure_msl-s.pressure,
+wind:f.wind_speed_10m-s.wind
+
+};
+
 }
 
-/* ==========================
-   Обновление всех данных (SYNOP + модели)
-========================== */
+async function synopExists(synopTime){
+
+const tx = db.transaction("stats","readonly");
+const store = tx.objectStore("stats");
+
+const req = store.getAll();
+
+return new Promise(res=>{
+req.onsuccess = ()=>{
+const exists = req.result.some(r => r.synopTime === synopTime);
+res(exists);
+};
+});
+
+}
+
 async function verifyAll(){
-    if(!db) await initDB();
-    const rating = document.getElementById("rating");
-    rating.innerHTML="Загрузка...";
+
+if(!db){
+await initDB();
+}
+const rating = document.getElementById("rating");
+rating.innerHTML="Загрузка...";
+
+try{
+
+rating.innerHTML = "Загрузка SYNOP...";
+const synop = await loadSynop();
+// проверяем есть ли уже такая сводка
+const exists = await synopExists(synop.time);
+
+if(exists){
+    rating.innerHTML = "Данные уже есть (обновление не требуется)";
+    return;
+}
+
+
+rating.innerHTML = "Загрузка моделей...";
+const forecasts = {};
+
+const results = await Promise.all(
+    models.map(m => loadForecast(m))
+);
+
+rating.innerHTML = "Обработка данных...";
+models.forEach((m,i)=>{
+    forecasts[m] = results[i];
+});
+
+// берём время из первой модели
+const forecastTimes = forecasts[models[0]].time;
+
+const targetTime =
+synop.time.slice(0,4)+"-"+
+synop.time.slice(4,6)+"-"+
+synop.time.slice(6,8)+"T"+
+synop.time.slice(8,10)+":00";
+
+const hourIndex = forecastTimes.findIndex(t => t.startsWith(targetTime));
+
+if(hourIndex === -1){
+    throw "Не найдено совпадение времени прогноза и SYNOP";
+}
+
+const modelsData = {};
+
+for(const m of models){
+
+    const h = forecasts[m];
+
+    modelsData[m] = {
+        temp: h.temperature_2m[hourIndex],
+        pressure: h.pressure_msl[hourIndex],
+        wind: h.wind_speed_10m[hourIndex],
+        windDir: Math.round(h.wind_direction_10m[hourIndex] / 10) * 10
+    };
+
+}
+
+const record = {
+time: new Date().toISOString(),
+synopTime: synop.time,
+obs: synop,
+models: modelsData,
+hourIndex: hourIndex
+};
+
+saveData(record);
+
+rating.innerHTML = "Данные записаны";
+
+
+
+
+
+}catch(e){
+
+rating.innerHTML="Ошибка: "+e;
+
+}
+
+}
+
+function windDirError(a,b){
+
+let diff = Math.abs(a - b);
+
+if(diff > 180){
+diff = 360 - diff;
+}
+
+return diff;
+
+}
+
+function setPeriod(p){
+
+currentPeriod = p;
+
+render();
+drawChart();
+
+}
+
+async function render(){
+
+let periodLabel = "";
+
+if(currentPeriod === "24h") periodLabel = " (24 часа)";
+if(currentPeriod === "3d") periodLabel = " (3 дня)";
+
+let stats = await loadStats();
+
+const now = Date.now();
+
+stats = stats.filter(d => {
+
+const t = new Date(d.time).getTime();
+
+if(currentPeriod === "24h") return now - t <= 24*3600*1000;
+if(currentPeriod === "3d") return now - t <= 3*24*3600*1000;
+
+return true;
+
+});
+
+if(!stats.length){
+document.getElementById("rating").innerHTML =
+"Нет данных. Нажмите «Обновить проверку»";
+return;
+}
+
+const errors = {};
+
+models.forEach(m=>{
+errors[m] = {
+temp: [],
+pressure: [],
+wind: [],
+windDir: []
+};
+});
+
+stats.forEach(d=>{
+
+for(const m in d.models){
+
+const model = d.models[m];
+
+errors[m].temp.push(Math.abs(model.temp - d.obs.temp));
+errors[m].pressure.push(Math.abs(model.pressure - d.obs.pressure));
+errors[m].wind.push(Math.abs(model.wind - d.obs.wind));
+errors[m].windDir.push(
+windDirError(model.windDir, d.obs.windDir)
+);
+
+}
+
+});
+
+function getMax(param){
+
+let max = 0;
+
+for(const m of models){
+const arr = errors[m][param];
+if(arr.length){
+const localMax = Math.max(...arr);
+if(localMax > max) max = localMax;
+}
+}
+
+return max || 1;
+}
+
+const maxTemp = getMax("temp");
+const maxPressure = getMax("pressure");
+const maxWind = getMax("wind");
+const maxWindDir = getMax("windDir");
+
+function avgNorm(arr, max){
+
+if(!arr.length) return 1;
+
+const sum = arr.reduce((a,b)=>a + (b / max), 0);
+
+return sum / arr.length;
+
+}
+
+const avg = arr =>
+arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 999;
+
+function buildRating(param, max){
+
+let r = [];
+
+for(const m of models){
+
+r.push({
+model:m,
+value:avgNorm(errors[m][param], max)
+});
+
+}
+
+r.sort((a,b)=>a.value-b.value);
+
+return r;
+
+}
+
+const tempRating = buildRating("temp", maxTemp);
+const pressRating = buildRating("pressure", maxPressure);
+const windRating = buildRating("wind", maxWind);
+const windDirRating = buildRating("windDir", maxWindDir);
+
+let totalRating = [];
+
+for(const m of models){
+
+const score =
+avgNorm(errors[m].temp, maxTemp) * 2 +
+avgNorm(errors[m].pressure, maxPressure) +
+avgNorm(errors[m].wind, maxWind) +
+avgNorm(errors[m].windDir, maxWindDir);
+
+totalRating.push({
+model:m,
+value:score
+});
+
+}
+
+totalRating.sort((a,b)=>a.value-b.value);
+function makeBlock(title,data,unit){
+
+let html = `<h3>${title}</h3>`;
+
+data.forEach((r,i)=>{
+
+html += `
+<div class="row">
+<div>${i+1}. ${modelLabel(r.model)}</div>
+<div>${r.value.toFixed(2)} ${unit}</div>
+</div>
+`;
+
+});
+
+return html;
+
+}
+
+
+let html = `<b>Рейтинг моделей${periodLabel}</b><br><br>`;
+
+html += makeBlock("Температура",tempRating,"°C");
+html += "<br>";
+html += makeBlock("Давление",pressRating,"hPa");
+html += "<br>";
+html += makeBlock("Ветер",windRating,"м/с");
+html += "<br>";
+html += makeBlock("Направление ветра",windDirRating,"°");
+html += "<br>";
+html += makeBlock("Итоговый рейтинг моделей",totalRating,"score");
+document.getElementById("rating").innerHTML = html;
+
+}
+async function showData(){
+
+if(!db){
+await initDB();
+}
+const tx = db.transaction("stats","readonly");
+const store = tx.objectStore("stats");
+
+const req = store.getAll();
+
+req.onsuccess = ()=>{
+
+const data = req.result;
+
+data.sort((a,b)=> Number(b.synopTime) - Number(a.synopTime));
+
+let html = "<h3>Сохранённые данные</h3>";
+
+if(!data.length){
+html += "Нет записей";
+document.getElementById("rating").innerHTML = html;
+return;
+}
+
+data.forEach(d=>{
+
+html += `<br><b>Записано:</b> ${d.time}<br>`;
+html += `<b>SYNOP:</b> ${d.synopTime}<br><br>`;
+
+html += `SYNOP<br>
+${d.obs.synop}<br><br>
+T ${d.obs.temp}<br>
+P ${d.obs.pressure}<br>
+W ${d.obs.wind}<br>
+Wd ${d.obs.windDir}<br><br>`;
+
+for(const m in d.models){
+
+const v = d.models[m];
+
+html += `${modelLabel(m)}<br>
+T ${v.temp}<br>
+P ${v.pressure}<br>
+W ${v.wind}<br>
+WD ${v.windDir}<br><br>`;
+
+}
+
+html += "<hr>";
+
+});
+
+document.getElementById("rating").innerHTML = html;
+
+};
+
+}
+
+
+
+async function autoUpdate(){
 
     try{
-        rating.innerHTML = "Загрузка SYNOP...";
-        const synop = await loadSynop();
-
-        const exists = await synopExists(synop.time);
-        if(exists){
-            rating.innerHTML = "Данные уже есть (обновление не требуется)";
-            return;
+        if(!db){
+            await initDB();
         }
 
-        rating.innerHTML = "Загрузка моделей...";
-        const forecasts = {};
-        const results = await Promise.all(models.map(m => loadForecast(m)));
-
-        models.forEach((m,i)=>{ forecasts[m] = results[i]; });
-
-        // находим час, соответствующий SYNOP
-        const forecastTimes = forecasts[models[0]].time;
-        const targetTime =
-            synop.time.slice(0,4)+"-"+synop.time.slice(4,6)+"-"+synop.time.slice(6,8)+"T"+
-            synop.time.slice(8,10)+":00";
-
-        const hourIndex = forecastTimes.findIndex(t => t.startsWith(targetTime));
-        if(hourIndex === -1) throw "Не найдено совпадение времени прогноза и SYNOP";
-
-        const modelsData = {};
-        for(const m of models){
-            const h = forecasts[m];
-            modelsData[m] = {
-                temp: h.temperature_2m[hourIndex],
-                pressure: h.pressure_msl[hourIndex],
-                wind: h.wind_speed_10m[hourIndex],
-                windDir: Math.round(h.wind_direction_10m[hourIndex]/10)*10
-            };
-        }
-
-        const record = {
-            time: new Date().toISOString(),
-            synopTime: synop.time,
-            obs: synop,
-            models: modelsData,
-            hourIndex: hourIndex
-        };
-
-        saveData(record);
-        rating.innerHTML = "Данные записаны";
+        await verifyAll();
 
     }catch(e){
-        rating.innerHTML="Ошибка: "+e;
+        console.log("Auto update error:", e);
     }
-}
-
-/* ==========================
-   Рендер графика и рейтинга моделей
-========================== */
-async function drawChart(){
-    let stats = await loadStats();
-    const now = Date.now();
-
-    stats = stats.filter(d => {
-        const t = new Date(d.time).getTime();
-        if(currentPeriod === "24h") return now - t <= 24*3600*1000;
-        if(currentPeriod === "3d") return now - t <= 3*24*3600*1000;
-        return true;
-    });
-
-    if(!stats.length) return;
-
-    const labels = stats.map(d => {
-        const t = d.synopTime;
-        return `${t.slice(6,8)}.${t.slice(4,6)} ${t.slice(8,10)}:00`;
-    });
-
-    const datasets = models.map(m => {
-        const data = stats.map(d=>{
-            const model = d.models[m];
-            if(!model) return null;
-            switch(currentParam){
-                case "temp": return chartMode==="error"?Math.abs(model.temp - d.obs.temp):model.temp;
-                case "pressure": return chartMode==="error"?Math.abs(model.pressure - d.obs.pressure):model.pressure;
-                case "wind": return chartMode==="error"?Math.abs(model.wind - d.obs.wind):model.wind;
-                case "windDir": return chartMode==="error"?windDirError(model.windDir,d.obs.windDir):model.windDir;
-            }
-        });
-        return { label:modelLabel(m), data:data, borderWidth:2, fill:false };
-    });
-
-    // если показываем фактические значения SYNOP
-    if(chartMode==="value"){
-        const synopData = stats.map(d => {
-            switch(currentParam){
-                case "temp": return d.obs.temp;
-                case "pressure": return d.obs.pressure;
-                case "wind": return d.obs.wind;
-                case "windDir": return d.obs.windDir;
-            }
-        });
-        datasets.push({
-            label:"SYNOP",
-            data:synopData,
-            borderWidth:2,
-            fill:false,
-            pointRadius:3,
-            tension:0.1
-        });
-    }
-
-    const ctx = document.getElementById("chart");
-    if(chartInstance) chartInstance.destroy();
-
-    chartInstance = new Chart(ctx,{
-        type:"line",
-        data:{ labels, datasets },
-        options:{
-            responsive:true,
-            plugins:{
-                legend:{ position:"bottom", labels:{ color:"#eee", boxWidth:12, padding:15 }, maxHeight:60 }
-            },
-            scales:{
-                x:{ ticks:{ color:"#eee", maxRotation:45, minRotation:45, autoSkip:true, maxTicksLimit:8 } },
-                y:{
-                    beginAtZero:false,
-                    ticks:{ color:"#eee" },
-                    title:{ display:true, text:getYAxisLabel(), color:"#eee" }
-                }
-            }
-        }
-    });
-}
-
-function getYAxisLabel(){
-    switch(currentParam){
-        case "temp": return chartMode==="error"?"Ошибка температуры °C":"Температура °C";
-        case "pressure": return chartMode==="error"?"Ошибка давления hPa":"Давление hPa";
-        case "wind": return chartMode==="error"?"Ошибка ветра м/с":"Ветер м/с";
-        case "windDir": return chartMode==="error"?"Ошибка направления °":"Направление °";
-    }
-}
-
-/* ==========================
-   Кнопки фильтров
-========================== */
-function setPeriod(p){ currentPeriod=p; render(); drawChart(); }
-function setParam(p){ currentParam=p; drawChart(); }
-function setMode(mode){ chartMode=mode; drawChart(); }
-
-/* ==========================
-   Показать данные из IndexedDB
-========================== */
-async function showData(){
-    if(!db) await initDB();
-    const tx = db.transaction("stats","readonly");
-    const store = tx.objectStore("stats");
-    const req = store.getAll();
-
-    req.onsuccess=()=>{
-        const data = req.result;
-        data.sort((a,b)=> Number(b.synopTime) - Number(a.synopTime));
-        let html = "<h3>Сохранённые данные</h3>";
-        if(!data.length){ html+="Нет записей"; document.getElementById("rating").innerHTML=html; return; }
-        data.forEach(d=>{
-            html += `<br><b>Записано:</b> ${d.time}<br>`;
-            html += `<b>SYNOP:</b> ${d.synopTime}<br><br>`;
-            html += `SYNOP<br>${d.obs.synop}<br><br>
-                     T ${d.obs.temp}<br>P ${d.obs.pressure}<br>W ${d.obs.wind}<br>Wd ${d.obs.windDir}<br><br>`;
-            for(const m in d.models){
-                const v=d.models[m];
-                html+=`${modelLabel(m)}<br>T ${v.temp}<br>P ${v.pressure}<br>W ${v.wind}<br>WD ${v.windDir}<br><br>`;
-            }
-            html+="<hr>";
-        });
-        document.getElementById("rating").innerHTML=html;
-    };
-}
-
-/* ==========================
-   Автообновление каждые 30 минут
-========================== */
-async function autoUpdate(){
-    try{
-        if(!db) await initDB();
-        await verifyAll();
-    }catch(e){ console.log("Auto update error:", e); }
 
     try{
         await render();
         await drawChart();
-        document.getElementById("lastUpdate").innerText = "Последнее обновление: " + new Date().toLocaleTimeString();
-    }catch(e){ console.log("Render error:", e); }
+        
+        // обновляем индикатор на странице
+        document.getElementById("lastUpdate").innerText =
+            "Последнее обновление: " + new Date().toLocaleTimeString();
 
-    setTimeout(autoUpdate, 1800000); // 30 минут
+    }catch(e){
+        console.log("Render error:", e);
+    }
+
+    // следующий запуск через 30 минут
+    setTimeout(autoUpdate, 1800000);
 }
 
-// первый запуск
+// первый запуск сразу
 autoUpdate();
-
+</script>  
+<script>
+if
+//alert('SW registered');
+  
 </script>
-</body>
-</html>
+</body>  
+</html>  
