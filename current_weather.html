@@ -898,7 +898,9 @@ async function loadSynop() {
         "https://cors.x2u.in/"
     ];
 
-    let proxyTimes = JSON.parse(localStorage.getItem("proxyTimes") || "{}");
+    const proxyStorageKey = "synopProxyTimesMain";
+
+    let proxyTimes = JSON.parse(localStorage.getItem(proxyStorageKey) || "{}");
     proxies.forEach(p => {
         if (!proxyTimes[p]) proxyTimes[p] = [];
     });
@@ -942,13 +944,13 @@ async function loadSynop() {
                 }
 
                 const telegramKey = extractTelegramKey(text);
-                const aaxxLine = extractAAXXLine(text);
+                const line = extractAAXXLine(text);
 
                 if (!telegramKey) {
                     throw new Error("Ключ телеграммы YYYYMMDDHHMM не найден");
                 }
 
-                if (!aaxxLine) {
+                if (!line) {
                     throw new Error("SYNOP не найден");
                 }
 
@@ -960,7 +962,7 @@ async function loadSynop() {
                 resolve({
                     proxy,
                     text,
-                    line: aaxxLine,
+                    line,
                     telegramKey,
                     ms
                 });
@@ -978,7 +980,7 @@ async function loadSynop() {
 
     const settled = await Promise.allSettled(requests);
 
-    localStorage.setItem("proxyTimes", JSON.stringify(proxyTimes));
+    localStorage.setItem(proxyStorageKey, JSON.stringify(proxyTimes));
 
     const successResults = settled
         .filter(r => r.status === "fulfilled")
@@ -1001,6 +1003,7 @@ async function loadSynop() {
 
     const synop = parseSynop(best.line);
 
+    // ======== проверка IndexedDB ========
     if (!db) {
         await initDB();
     }
@@ -1010,6 +1013,7 @@ async function loadSynop() {
         console.log("Телеграмма уже есть в IndexedDB, пропускаем дальнейшую обработку");
         return synop;
     }
+    // =====================================
 
     return synop;
 }
