@@ -872,6 +872,18 @@ async function recordExists(timeKey){
 /* =========================================================
    6. ЗАГРУЗКА SYNOP
 ========================================================= */
+function saveProxyTime(proxyTimes, proxy, ms, limit = 10) {
+    if (!proxyTimes[proxy]) {
+        proxyTimes[proxy] = [];
+    }
+
+    proxyTimes[proxy].push(ms);
+
+    if (proxyTimes[proxy].length > limit) {
+        proxyTimes[proxy] = proxyTimes[proxy].slice(-limit);
+    }
+}
+
 async function loadSynop() {
     const stationCode = typeof STATION_CODE !== "undefined" ? STATION_CODE : "33837";
     const cacheBust = Date.now();
@@ -941,7 +953,7 @@ async function loadSynop() {
                 }
 
                 const ms = Math.round(performance.now() - started);
-                proxyTimes[proxy].push(ms);
+                saveProxyTime(proxyTimes, proxy, ms);
 
                 console.log(`SYNOP proxy ok: ${proxy} (${ms} мс), key=${telegramKey}`);
 
@@ -954,7 +966,8 @@ async function loadSynop() {
                 });
             } catch (e) {
                 const ms = Math.round(performance.now() - started);
-                proxyTimes[proxy].push(ms);
+                saveProxyTime(proxyTimes, proxy, ms);
+
                 console.log(`Proxy fail: ${proxy} (${ms} мс)`, e);
                 reject(e);
             } finally {
@@ -984,9 +997,7 @@ async function loadSynop() {
 
     const best = successResults[0];
 
-    console.log(
-        `Выбран прокси: ${best.proxy}, key=${best.telegramKey}, ${best.ms} мс`
-    );
+    console.log(`Выбран прокси: ${best.proxy}, key=${best.telegramKey}, ${best.ms} мс`);
 
     const synop = parseSynop(best.line);
 
@@ -1001,6 +1012,27 @@ async function loadSynop() {
     }
 
     return synop;
+}
+
+/*==========================================
+    6.1 ПРОСМОТР СТАТИСТИКИ В КОНСОЛИ
+=========≠=================≠====≠===========*/
+function getProxyStats() {
+    const proxyTimes = JSON.parse(localStorage.getItem("proxyTimes") || "{}");
+
+    for (const proxy in proxyTimes) {
+        const arr = proxyTimes[proxy];
+        if (!arr.length) {
+            console.log(proxy, "нет данных");
+            continue;
+        }
+
+        const avg = Math.round(arr.reduce((a, b) => a + b, 0) / arr.length);
+        const min = Math.min(...arr);
+        const max = Math.max(...arr);
+
+        console.log(`${proxy} | avg=${avg} мс | min=${min} | max=${max} | n=${arr.length}`);
+    }
 }
 
 /* =========================================================
