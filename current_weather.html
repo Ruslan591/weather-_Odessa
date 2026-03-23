@@ -1068,16 +1068,27 @@ function renderSynop(d){
         <div class="subTitle">Наблюдение: ${escapeHtml(localTime)}</div>
 
         <div class="heroTempRow" style="display:flex; align-items:center; gap:20px;">
+  <!-- Левая часть: температура -->
   <div class="heroTempLeft">
     <div class="small">Температура воздуха</div>
-    <div class="heroTemp">${fmt1(d.temp,"°C")}</div>
+    <div class="heroTemp ${tempClass(d.temp)}">
+      ${fmt1(d.temp,"°C")}
+    </div>
     <div class="heroFeels">
       Ощущается как: <b>${fmt1(feelsLike,"°C")}</b>
     </div>
   </div>
+
+  <!-- Правая часть: иконка + текст -->
   <div class="heroWeather" style="display:flex; align-items:center; gap:10px;">
-    <span class="wxIcon" style="font-size:64px; line-height:1;">⛅</span>
-    <span style="font-size:18px;">${escapeHtml(wx)}</span>
+    <!-- Увеличенная иконка -->
+    <span class="wxIcon" style="font-size:64px; line-height:1;">
+      ${synopWeatherIcon(d.wxCode, isDay)}
+    </span>
+    <!-- Текстовое описание -->
+    <span style="font-size:18px;">
+      ${synopWeatherText(d.wxCode)}
+    </span>
   </div>
 </div>
 
