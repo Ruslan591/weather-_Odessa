@@ -1188,7 +1188,7 @@ async function loadCurrentWeather(lat, lon){
 ========================================================= */
 function renderSynop(d){
     const main = document.getElementById("main");
-
+window.d = d;
     const localTime = localTimeFromSynopYYGGi(d.yyggi);
     const wx = synopWeatherText(d.weatherNow);
     const wxIco = synopWeatherIcon(d.weatherNow, d.synopIsDay);
@@ -1633,7 +1633,9 @@ function renderSynop(d){
             </div>
         </details>
     `;
+    refreshWeatherWidgets();
 }
+
 
 /* =========================================================
    9. РЕНДЕР РАЙОНОВ
