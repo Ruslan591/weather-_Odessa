@@ -1,0 +1,78 @@
+/* =========================
+   ВЕТЕР + ДАВЛЕНИЕ
+========================= */
+
+.heroMeta{
+    display:flex;
+    flex-wrap:nowrap;
+    align-items:stretch;
+    gap:12px;
+}
+
+.heroMeta .miniCard{
+    flex:1 1 0;
+    width:auto;
+    min-width:0;
+    min-height:110px;
+    box-sizing:border-box;
+}
+
+/* одинаковая компоновка */
+.windMiniCard,
+.pressureMiniCard{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:flex-start;
+}
+
+.windMini,
+.pressureMini{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:100%;
+    margin:4px 0 2px;
+}
+
+/* одинаковый размер обоих индикаторов */
+.windMini svg,
+.pressureMini svg{
+    display:block;
+    width:100px;
+    height:100px;
+    flex:0 0 auto;
+}
+
+.pressureTrendRow{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+    margin-top:2px;
+    min-height:20px;
+}
+
+.pressureTrendValue{
+    font-size:11px;
+    color:#d8d8d8;
+    min-width:24px;
+    text-align:left;
+}
+
+/* на очень узких экранах */
+@media (max-width:520px){
+    .heroMeta{
+        gap:10px;
+    }
+
+    .heroMeta .miniCard{
+        flex:1 1 0;
+    }
+
+    .windMini svg,
+    .pressureMini svg{
+        width:96px;
+        height:96px;
+    }
+}
