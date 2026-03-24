@@ -1295,6 +1295,76 @@ function renderSynop(d){
         ${escapeHtml(degToText(d.windDir))}${d.windDir != null ? ` · ${d.windDir}°` : ""}
     </div>
 </div>
+
+<! -- Давление -- >
+<div class="miniCard pressureMiniCard">
+    <div class="small">Давление</div>
+
+    <div class="pressureMini">
+        <svg viewBox="0 0 100 100" width="100" height="100" aria-label="Давление">
+            <defs>
+                <linearGradient id="pressureArcGrad" x1="20" y1="68" x2="80" y2="68" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stop-color="#6fb6ff"/>
+                    <stop offset="45%" stop-color="#7fdc8a"/>
+                    <stop offset="70%" stop-color="#ffd166"/>
+                    <stop offset="100%" stop-color="#ff9f5c"/>
+                </linearGradient>
+            </defs>
+
+            <!-- фоновые метки -->
+            <line x1="22" y1="68" x2="27" y2="66" stroke="currentColor" stroke-opacity="0.30" stroke-width="1.6"/>
+            <line x1="29" y1="55" x2="33" y2="58" stroke="currentColor" stroke-opacity="0.30" stroke-width="1.6"/>
+            <line x1="39" y1="46" x2="42" y2="50" stroke="currentColor" stroke-opacity="0.30" stroke-width="1.6"/>
+            <line x1="50" y1="42" x2="50" y2="47" stroke="currentColor" stroke-opacity="0.45" stroke-width="2"/>
+            <line x1="61" y1="46" x2="58" y2="50" stroke="currentColor" stroke-opacity="0.30" stroke-width="1.6"/>
+            <line x1="71" y1="55" x2="67" y2="58" stroke="currentColor" stroke-opacity="0.30" stroke-width="1.6"/>
+            <line x1="78" y1="68" x2="73" y2="66" stroke="currentColor" stroke-opacity="0.30" stroke-width="1.6"/>
+
+            <!-- дуга -->
+            <path d="M 20 68 A 30 30 0 0 1 80 68"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-opacity="0.10"
+                  stroke-width="5"
+                  stroke-linecap="round"/>
+
+            <path d="M 20 68 A 30 30 0 0 1 80 68"
+                  fill="none"
+                  stroke="url(#pressureArcGrad)"
+                  stroke-width="4"
+                  stroke-linecap="round"/>
+
+            <!-- подписи по дуге -->
+            <text x="18" y="77" text-anchor="middle" font-size="6.5" fill="currentColor" fill-opacity="0.72">980</text>
+            <text x="34" y="47" text-anchor="middle" font-size="6.5" fill="currentColor" fill-opacity="0.72">1000</text>
+            <text x="66" y="47" text-anchor="middle" font-size="6.5" fill="currentColor" fill-opacity="0.72">1020</text>
+            <text x="82" y="77" text-anchor="middle" font-size="6.5" fill="currentColor" fill-opacity="0.72">1040</text>
+
+            <!-- указатель -->
+            <g transform="rotate(${d.seaPressure != null ? ((Math.max(980, Math.min(1040, d.seaPressure)) - 980) / 60 * 180 - 90) : 0} 50 68)">
+                <polygon points="50,34 45,43 55,43" fill="currentColor"/>
+            </g>
+
+            <!-- значение -->
+            <text x="50" y="78" text-anchor="middle" font-size="15" font-weight="800" fill="currentColor">
+                ${d.seaPressure != null ? d.seaPressure : "-"}
+            </text>
+            <text x="50" y="88" text-anchor="middle" font-size="7.5" fill="currentColor" fill-opacity="0.72">
+                гПа
+            </text>
+        </svg>
+    </div>
+
+    <div class="pressureTrendRow">
+        <svg viewBox="0 0 64 18" width="64" height="18" aria-label="Изменение давления">
+            ${
+                d.tendencyCode == null
+                ? `<line x1="6" y1="9" x2="58" y2="9" stroke="currentColor" stroke-opacity="0.25" stroke-width="1.8" stroke-linecap="round"/>`
+                : ({
+                    "0": `<polyline points="6,13 19,12 32,10 45,8 58,5" fill="none" stroke="currentColor" stroke-opacity="0.85" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`,
+                    "1": `<polyline points="6,14 18,13 30,11 42,7 58,4" fill="none" stroke="currentColor" stroke-opacity="0.85" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`,
+                    "2": `<polyline points="6,13 20,10 34,6 46,6 58,6" fill="none" stroke="currentColor" stroke-opacity="0.85" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`,
+                    "3": `<polyline points="6,5 18,8 30,11 42,13 58,14" fill="none" stroke="currentColor" stroke-opacity="0.85" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="
 <!-- ==========≠================================================≠==============================-->
 
             <div class="heroMeta">
