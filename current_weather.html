@@ -1253,27 +1253,53 @@ function renderSynop(d){
     </div>
 
     <!-- Давление -->
-    <div<div class="miniCard pressureMiniCard">
+    <div class="miniCard pressureMiniCard">
     <div class="small">Давление</div>
 
-    <div class="pressureValue">
-        ${d.seaPressure != null ? d.seaPressure : "-"}
-        <span class="pressureUnitInline">гПа</span>
-    </div>
+    <div class="pressureMini">
+        <svg viewBox="0 0 100 100" width="84" height="84" aria-label="Давление">
+            <defs>
+                <linearGradient id="pressureArcGrad" x1="18" y1="68" x2="82" y2="68" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stop-color="#6fb6ff"/>
+                    <stop offset="50%" stop-color="#8ad68a"/>
+                    <stop offset="100%" stop-color="#ffb35c"/>
+                </linearGradient>
+            </defs>
 
-    <div class="pressureBar">
-        <div class="pressureTicks">
-            <span>980</span>
-            <span>1000</span>
-            <span>1020</span>
-            <span>1040</span>
-        </div>
+            <!-- фоновая дуга -->
+            <path d="M 20 68 A 30 30 0 0 1 80 68"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-opacity="0.14"
+                  stroke-width="6"
+                  stroke-linecap="round"/>
 
-        <div class="pressureTrack">
-            <div class="pressureMarker"
-                 style="left:${d.seaPressure != null ? Math.max(0, Math.min(100, (d.seaPressure - 980) / 60 * 100)) : 0}%">
-            </div>
-        </div>
+            <!-- цветная дуга -->
+            <path d="M 20 68 A 30 30 0 0 1 80 68"
+                  fill="none"
+                  stroke="url(#pressureArcGrad)"
+                  stroke-width="6"
+                  stroke-linecap="round"/>
+
+            <!-- деления -->
+            <line x1="24" y1="67" x2="29" y2="64" stroke="currentColor" stroke-opacity="0.38" stroke-width="1.8"/>
+            <line x1="34" y1="54" x2="38" y2="58" stroke="currentColor" stroke-opacity="0.38" stroke-width="1.8"/>
+            <line x1="50" y1="48" x2="50" y2="54" stroke="currentColor" stroke-opacity="0.38" stroke-width="1.8"/>
+            <line x1="66" y1="54" x2="62" y2="58" stroke="currentColor" stroke-opacity="0.38" stroke-width="1.8"/>
+            <line x1="76" y1="67" x2="71" y2="64" stroke="currentColor" stroke-opacity="0.38" stroke-width="1.8"/>
+
+            <!-- указатель как у ветра -->
+            <g transform="rotate(${d.seaPressure != null ? ((Math.max(980, Math.min(1040, d.seaPressure)) - 980) / 60 * 180 - 90) : 0} 50 68)">
+                <polygon points="50,36 45,44 55,44" fill="currentColor"/>
+            </g>
+
+            <!-- число -->
+            <text x="50" y="84" text-anchor="middle" font-size="13" font-weight="700" fill="currentColor">
+                ${d.seaPressure != null ? d.seaPressure : "-"}
+            </text>
+        </svg>
+
+        <div class="pressureMiniUnit">гПа</div>
     </div>
 
     <div class="small">
