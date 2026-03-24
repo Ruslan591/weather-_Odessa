@@ -1234,7 +1234,7 @@ function renderSynop(d){
 </div>
 
 <!-- Блок ветра и давления -->
- <div<div class="heroMeta">
+ <div class="heroMeta">
 
 <!-- Ветер -->
     <div class="windMiniCard miniCard">
@@ -1249,10 +1249,10 @@ function renderSynop(d){
                     </linearGradient>
                 </defs>
 
-                <!-- круглая шкала -->
+                <!-- круговая шкала ветра -->
                 <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" stroke-opacity="0.1" stroke-width="5"/>
 
-                <!-- указатель -->
+                <!-- указатель ветра -->
                 <g transform="rotate(${d.windDir != null ? d.windDir : 0} 50 50)">
                     <polygon points="50,8 46,22 54,22" fill="url(#windGrad)"/>
                 </g>
@@ -1272,7 +1272,7 @@ function renderSynop(d){
         <div class="pressureMini">
             <svg viewBox="0 0 100 100" width="100" height="100">
                 <defs>
-                    <linearGradient id="pressureArcGrad" x1="20" y1="68" x2="80" y2="68" gradientUnits="userSpaceOnUse">
+                    <linearGradient id="pressureGrad" x1="20" y1="68" x2="80" y2="68" gradientUnits="userSpaceOnUse">
                         <stop offset="0%" stop-color="#6fb6ff"/>
                         <stop offset="45%" stop-color="#7fdc8a"/>
                         <stop offset="70%" stop-color="#ffd166"/>
@@ -1280,18 +1280,11 @@ function renderSynop(d){
                     </linearGradient>
                 </defs>
 
-                <!-- дуга -->
-                <path d="M 20 68 A 30 30 0 0 1 80 68"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-opacity="0.10"
-                      stroke-width="5"
-                      stroke-linecap="round"/>
-                <path d="M 20 68 A 30 30 0 0 1 80 68"
-                      fill="none"
-                      stroke="url(#pressureArcGrad)"
-                      stroke-width="4"
-                      stroke-linecap="round"/>
+                <!-- фон дуги -->
+                <path d="M 20 68 A 30 30 0 0 1 80 68" fill="none" stroke="currentColor" stroke-opacity="0.10" stroke-width="5" stroke-linecap="round"/>
+
+                <!-- градиент дуги -->
+                <path d="M 20 68 A 30 30 0 0 1 80 68" fill="none" stroke="url(#pressureGrad)" stroke-width="4" stroke-linecap="round"/>
 
                 <!-- линии шкалы -->
                 <g stroke="currentColor" stroke-opacity="0.3" stroke-width="1.6">
@@ -1310,7 +1303,7 @@ function renderSynop(d){
                 <text x="66" y="40" text-anchor="middle" font-size="6.5" fill="currentColor" fill-opacity="0.72" transform="rotate(35 66 40)">1020</text>
                 <text x="82" y="77" text-anchor="middle" font-size="6.5" fill="currentColor" fill-opacity="0.72">1040</text>
 
-                <!-- указатель -->
+                <!-- указатель давления -->
                 <g transform="rotate(${d.seaPressure != null ? ((Math.max(980, Math.min(1040, d.seaPressure)) - 980) / 60 * 180 - 90) : 0} 50 68)">
                     <polygon points="50,38 46,45 54,45" fill="currentColor"/>
                 </g>
@@ -1322,6 +1315,7 @@ function renderSynop(d){
                 <text x="50" y="88" text-anchor="middle" font-size="7.5" fill="currentColor" fill-opacity="0.72">гПа</text>
             </svg>
         </div>
+    </div>
     </div>
 <!-- ==========≠================================================≠==============================-->
 
