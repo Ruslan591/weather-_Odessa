@@ -1258,17 +1258,34 @@ function renderSynop(d){
 
     <div class="pressureMini">
         <svg viewBox="0 0 100 100" width="84" height="84" aria-label="Давление">
-            <circle cx="50" cy="50" r="30" fill="none" stroke="currentColor" stroke-opacity="0.18" stroke-width="6"/>
-
-            <line x1="50" y1="50" x2="50" y2="28"
+            <!-- дуга шкалы -->
+            <path d="M 22 68 A 32 32 0 0 1 78 68"
+                  fill="none"
                   stroke="currentColor"
-                  stroke-width="3"
-                  stroke-linecap="round"
-                  transform="rotate(${d.seaPressure != null ? ((d.seaPressure - 980) / 50 * 180 - 90) : 0} 50 50)"/>
+                  stroke-opacity="0.18"
+                  stroke-width="6"
+                  stroke-linecap="round"/>
 
-            <circle cx="50" cy="50" r="3" fill="currentColor" fill-opacity="0.9"/>
+            <!-- метки шкалы -->
+            <line x1="26" y1="66" x2="31" y2="63" stroke="currentColor" stroke-opacity="0.35" stroke-width="2"/>
+            <line x1="38" y1="49" x2="41" y2="54" stroke="currentColor" stroke-opacity="0.35" stroke-width="2"/>
+            <line x1="50" y1="44" x2="50" y2="50" stroke="currentColor" stroke-opacity="0.35" stroke-width="2"/>
+            <line x1="62" y1="49" x2="59" y2="54" stroke="currentColor" stroke-opacity="0.35" stroke-width="2"/>
+            <line x1="74" y1="66" x2="69" y2="63" stroke="currentColor" stroke-opacity="0.35" stroke-width="2"/>
 
-            <text x="50" y="68" text-anchor="middle" font-size="13" font-weight="700" fill="currentColor">
+            <!-- стрелка -->
+            <g transform="rotate(${d.seaPressure != null ? ((d.seaPressure - 980) / 50 * 180 - 90) : 0} 50 68)">
+                <line x1="50" y1="68" x2="50" y2="46"
+                      stroke="currentColor"
+                      stroke-width="3"
+                      stroke-linecap="round"/>
+            </g>
+
+            <!-- ось -->
+            <circle cx="50" cy="68" r="3.2" fill="currentColor"/>
+
+            <!-- цифры -->
+            <text x="50" y="84" text-anchor="middle" font-size="13" font-weight="700" fill="currentColor">
                 ${d.seaPressure != null ? d.seaPressure : "-"}
             </text>
         </svg>
