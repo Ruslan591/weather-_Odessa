@@ -201,13 +201,14 @@ a{
 
 .heroMeta{
     display:flex;
-    grid-template-columns:1fr 1fr;
-    gap:10px;
+    flex-wrap:wrap;
+    gap:12px;
+    align-items:stretch;
 }
 
 .miniCard{
-    min-width:110px;
-    max-width:110px;
+    flex:0 0 110px;
+    min-height:110px;
     box-sizing:border-box;
     background:#242424;
     border:1px solid #323232;
@@ -438,9 +439,7 @@ details[open] summary::before{
         grid-template-columns:1fr;
     }
 
-    .heroMeta{
-        grid-template-columns:1fr 1fr;
-    }
+    
 }
 
 @media (max-width:520px){
@@ -526,9 +525,10 @@ details[open] summary::before{
 }
 
 .heroMeta{
-    display:flex;        /* строки рядом */
-    gap:12px;            /* расстояние между карточками */
-    align-items:center;  /* выровнять по центру */
+    display:flex;
+    flex-wrap:wrap;
+    gap:12px;
+    align-items:stretch;
 }
 
 .windMiniCard, .pressureMiniCard{
