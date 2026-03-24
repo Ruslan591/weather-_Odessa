@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Текущая погода</title>
 <link rel="stylesheet" href="current_weather.css">
-<link rel="stylesheet" href="widgets.css">
 
 
 </head>
@@ -614,11 +613,11 @@ function openMeteoWeatherIcon(code, isDay){
 function cloudGenusLow(code){
     const map = {
         "0":" Нет облаков нижнего яруса",
-        "1":" Кучевые плоские или разорванные",
-        "2":" Кучевые средние или мощные",
-        "3":"️ Кучево-дождевые без волокнистой вершины",
-        "4":" Слоисто-кучевые, образованные из кучевых",
-        "5":" Слоисто-кучевые",
+        "1":"☁️ Кучевые плоские или разорванные",
+        "2":"☁️ Кучевые средние или мощные",
+        "3":"🌩️ Кучево-дождевые без волокнистой вершины",
+        "4":"☁️ Слоисто-кучевые, образованные из кучевых",
+        "5":"☁ Слоисто-кучевые",
         "6":"️ Слоистые или разорванно-слоистые",
         "7":"️ Разорванно-слоистые / облака плохой погоды",
         "8":" Кучевые и слоисто-кучевые",
@@ -1188,7 +1187,7 @@ async function loadCurrentWeather(lat, lon){
 ========================================================= */
 function renderSynop(d){
     const main = document.getElementById("main");
-window.d = d;
+
     const localTime = localTimeFromSynopYYGGi(d.yyggi);
     const wx = synopWeatherText(d.weatherNow);
     const wxIco = synopWeatherIcon(d.weatherNow, d.synopIsDay);
@@ -1429,6 +1428,29 @@ window.d = d;
         </div>
     </div>
 </div>
+
+<! -- влажность -- >
+    <div class="heroMeta">
+                <div class="miniCard">
+                 <div class="humidity-indicator">
+    <svg viewBox="0 0 120 60" width="120" height="60">
+        <defs>
+            <linearGradient id="humidityGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#00f"/>
+                <stop offset="50%" stop-color="#0ff"/>
+                <stop offset="100%" stop-color="#0f0"/>
+            </linearGradient>
+        </defs>
+        <!-- Фон дуги -->
+        <path d="M10,50 A50,50 0 0,1 110,50" stroke="#555" stroke-width="8" fill="none" />
+        <!-- Активная дуга -->
+        <path id="humidityArc" d="M10,50 A50,50 0 0,1 110,50" stroke="url(#humidityGradient)" stroke-width="8" fill="none"
+              stroke-dasharray="157" stroke-dashoffset="157" stroke-linecap="round" />
+        <!-- Цифра -->
+        <text id="humidityText" x="60" y="45" font-size="18" text-anchor="middle" fill="#fff">0%</text>
+    </svg>
+</div>
+      </div>          </div>
 <!-- ==========≠================================================≠==============================-->
 
             <div class="heroMeta">
@@ -1633,11 +1655,7 @@ window.d = d;
             </div>
         </details>
     `;
-    if (typeof refreshWeatherWidgets === "function") {
-    refreshWeatherWidgets();
 }
-}
-
 
 /* =========================================================
    9. РЕНДЕР РАЙОНОВ
@@ -1837,6 +1855,5 @@ setInterval(loadSynopUI, 30 * 60 * 1000);
 setInterval(loadDistrictsUI, 15 * 60 * 1000);
 </script>
 
-<script src="widgets.js"></script>
 </body>
 </html>
