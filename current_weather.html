@@ -1252,60 +1252,120 @@ function renderSynop(d){
         </div>
     </div>
 
-    <!-- Давление -->
-    <div class="miniCard pressureMiniCard">
-    <div class="small">Давление</div>
+<!-- Блок ветра и давления -->
+    <div<div class="miniCard meteoComboCard">
+    <div class="small">Ветер и давление</div>
 
-    <div class="pressureMini">
-        <svg viewBox="0 0 100 100" width="84" height="84" aria-label="Давление">
-            <defs>
-                <linearGradient id="pressureArcGrad" x1="18" y1="68" x2="82" y2="68" gradientUnits="userSpaceOnUse">
-                    <stop offset="0%" stop-color="#6fb6ff"/>
-                    <stop offset="50%" stop-color="#8ad68a"/>
-                    <stop offset="100%" stop-color="#ffb35c"/>
-                </linearGradient>
-            </defs>
+    <div class="meteoCombo">
+        <!-- ВЕТЕР -->
+        <div class="meteoGauge">
+            <div class="gaugeLabel">Ветер</div>
+            <svg viewBox="0 0 100 100" width="96" height="96" aria-label="Ветер">
+                <defs>
+                    <linearGradient id="windArcGrad" x1="20" y1="68" x2="80" y2="68" gradientUnits="userSpaceOnUse">
+                        <stop offset="0%" stop-color="#57b8ff"/>
+                        <stop offset="50%" stop-color="#7ce0c3"/>
+                        <stop offset="100%" stop-color="#ffd166"/>
+                    </linearGradient>
+                </defs>
 
-            <!-- фоновая дуга -->
-            <path d="M 20 68 A 30 30 0 0 1 80 68"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-opacity="0.14"
-                  stroke-width="6"
-                  stroke-linecap="round"/>
+                <path d="M 20 68 A 30 30 0 0 1 80 68"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-opacity="0.14"
+                      stroke-width="6"
+                      stroke-linecap="round"/>
 
-            <!-- цветная дуга -->
-            <path d="M 20 68 A 30 30 0 0 1 80 68"
-                  fill="none"
-                  stroke="url(#pressureArcGrad)"
-                  stroke-width="6"
-                  stroke-linecap="round"/>
+                <path d="M 20 68 A 30 30 0 0 1 80 68"
+                      fill="none"
+                      stroke="url(#windArcGrad)"
+                      stroke-width="6"
+                      stroke-linecap="round"/>
 
-            <!-- деления -->
-            <line x1="24" y1="67" x2="29" y2="64" stroke="currentColor" stroke-opacity="0.38" stroke-width="1.8"/>
-            <line x1="34" y1="54" x2="38" y2="58" stroke="currentColor" stroke-opacity="0.38" stroke-width="1.8"/>
-            <line x1="50" y1="48" x2="50" y2="54" stroke="currentColor" stroke-opacity="0.38" stroke-width="1.8"/>
-            <line x1="66" y1="54" x2="62" y2="58" stroke="currentColor" stroke-opacity="0.38" stroke-width="1.8"/>
-            <line x1="76" y1="67" x2="71" y2="64" stroke="currentColor" stroke-opacity="0.38" stroke-width="1.8"/>
+                <line x1="24" y1="67" x2="29" y2="64" stroke="currentColor" stroke-opacity="0.42" stroke-width="1.8"/>
+                <line x1="34" y1="54" x2="38" y2="58" stroke="currentColor" stroke-opacity="0.42" stroke-width="1.8"/>
+                <line x1="50" y1="48" x2="50" y2="54" stroke="currentColor" stroke-opacity="0.42" stroke-width="1.8"/>
+                <line x1="66" y1="54" x2="62" y2="58" stroke="currentColor" stroke-opacity="0.42" stroke-width="1.8"/>
+                <line x1="76" y1="67" x2="71" y2="64" stroke="currentColor" stroke-opacity="0.42" stroke-width="1.8"/>
 
-            <!-- указатель как у ветра -->
-            <g transform="rotate(${d.seaPressure != null ? ((Math.max(980, Math.min(1040, d.seaPressure)) - 980) / 60 * 180 - 90) : 0} 50 68)">
-                <polygon points="50,36 45,44 55,44" fill="currentColor"/>
-            </g>
+                <g transform="rotate(${d.windDir != null ? d.windDir : 0} 50 68)">
+                    <polygon points="50,36 45,44 55,44" fill="currentColor"/>
+                </g>
 
-            <!-- число -->
-            <text x="50" y="84" text-anchor="middle" font-size="13" font-weight="700" fill="currentColor">
-                ${d.seaPressure != null ? d.seaPressure : "-"}
-            </text>
-        </svg>
+                <text x="50" y="83" text-anchor="middle" font-size="16" font-weight="800" fill="currentColor">
+                    ${d.windSpeed != null ? d.windSpeed : "-"}
+                </text>
+            </svg>
+            <div class="gaugeUnit">м/с · ${escapeHtml(degToText(d.windDir))}</div>
+        </div>
 
-        <div class="pressureMiniUnit">гПа</div>
-    </div>
+        <!-- ДАВЛЕНИЕ -->
+        <div class="meteoGauge">
+            <div class="gaugeLabel">Давление</div>
+            <svg viewBox="0 0 100 100" width="96" height="96" aria-label="Давление">
+                <defs>
+                    <linearGradient id="pressureArcGrad" x1="20" y1="68" x2="80" y2="68" gradientUnits="userSpaceOnUse">
+                        <stop offset="0%" stop-color="#69b7ff"/>
+                        <stop offset="50%" stop-color="#7fe38b"/>
+                        <stop offset="100%" stop-color="#ffb84d"/>
+                    </linearGradient>
+                </defs>
 
-    <div class="small">
-        ${d.tendencyCode != null ? `Тенденция: ${escapeHtml(String(d.tendencyCode))}` : "—"}
+                <path d="M 20 68 A 30 30 0 0 1 80 68"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-opacity="0.14"
+                      stroke-width="6"
+                      stroke-linecap="round"/>
+
+                <path d="M 20 68 A 30 30 0 0 1 80 68"
+                      fill="none"
+                      stroke="url(#pressureArcGrad)"
+                      stroke-width="6"
+                      stroke-linecap="round"/>
+
+                <line x1="24" y1="67" x2="29" y2="64" stroke="currentColor" stroke-opacity="0.42" stroke-width="1.8"/>
+                <line x1="34" y1="54" x2="38" y2="58" stroke="currentColor" stroke-opacity="0.42" stroke-width="1.8"/>
+                <line x1="50" y1="48" x2="50" y2="54" stroke="currentColor" stroke-opacity="0.42" stroke-width="1.8"/>
+                <line x1="66" y1="54" x2="62" y2="58" stroke="currentColor" stroke-opacity="0.42" stroke-width="1.8"/>
+                <line x1="76" y1="67" x2="71" y2="64" stroke="currentColor" stroke-opacity="0.42" stroke-width="1.8"/>
+
+                <g transform="rotate(${d.seaPressure != null ? ((Math.max(980, Math.min(1040, d.seaPressure)) - 980) / 60 * 180 - 90) : 0} 50 68)">
+                    <polygon points="50,36 45,44 55,44" fill="currentColor"/>
+                </g>
+
+                <text x="50" y="83" text-anchor="middle" font-size="15" font-weight="800" fill="currentColor">
+                    ${d.seaPressure != null ? d.seaPressure : "-"}
+                </text>
+            </svg>
+
+            <div class="pressureTrendRow">
+                <svg viewBox="0 0 64 22" width="64" height="22" aria-label="Тенденция давления">
+                    ${
+                        d.tendencyCode == null
+                        ? `<line x1="8" y1="11" x2="56" y2="11" stroke="currentColor" stroke-opacity="0.35" stroke-width="2.2" stroke-linecap="round"/>`
+                        : ({
+                            "0": `<polyline points="8,15 24,13 40,10 56,7" fill="none" stroke="#7fe38b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`,
+                            "1": `<polyline points="8,16 20,15 32,12 44,8 56,6" fill="none" stroke="#7fe38b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`,
+                            "2": `<polyline points="8,15 24,12 40,8 56,8" fill="none" stroke="#7fe38b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`,
+                            "3": `<polyline points="8,8 24,11 40,13 56,15" fill="none" stroke="#ffb84d" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`,
+                            "4": `<polyline points="8,8 24,10 40,11 56,11" fill="none" stroke="#d9d9d9" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`,
+                            "5": `<polyline points="8,14 24,12 40,11 56,11" fill="none" stroke="#d9d9d9" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`,
+                            "6": `<polyline points="8,7 24,11 40,14 56,16" fill="none" stroke="#ff9b6b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`,
+                            "7": `<polyline points="8,6 20,8 32,12 44,15 56,16" fill="none" stroke="#ff9b6b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`,
+                            "8": `<polyline points="8,8 24,8 40,12 56,16" fill="none" stroke="#ff9b6b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`
+                        }[String(d.tendencyCode)] || `<line x1="8" y1="11" x2="56" y2="11" stroke="currentColor" stroke-opacity="0.35" stroke-width="2.2" stroke-linecap="round"/>`)
+                    }
+                </svg>
+
+                <div class="pressureTrendValue">
+                    ${d.tendencyValue != null ? `${d.tendencyValue.toFixed(1)} гПа` : "—"}
+                </div>
+            </div>
+        </div>
     </div>
 </div>
+<!-- ==========≠================================================≠==============================-->
 
             <div class="heroMeta">
                 <div class="miniCard">
