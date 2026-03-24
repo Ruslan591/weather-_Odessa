@@ -201,20 +201,15 @@ a{
 
 .heroMeta{
     display:flex;
-    flex-wrap:wrap;
+    flex-wrap:nowrap;
     gap:12px;
     align-items:stretch;
 }
 
 .miniCard{
-    flex:0 0 110px;
-    min-height:110px;
-    width: 50%;
-    box-sizing:border-box;
-    background:#242424;
-    border:1px solid #323232;
-    border-radius:12px;
-    padding:12px;
+    flex: 0 0 50%;           /* каждая плитка 50% ширины родителя */
+    min-width: 0;            /* важно для flex */
+    box-sizing: border-box;
 }
 
 .miniValue{
@@ -230,6 +225,12 @@ a{
 @media (max-width:520px){
     .value{
         max-width:70%;
+    }
+}
+
+@media (max-width:520px){
+    .heroMeta{
+        overflow-x: auto;
     }
 }
 
