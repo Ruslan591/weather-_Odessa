@@ -199,17 +199,17 @@ a{
     font-size: 1.1em;        /* можно чуть увеличить шрифт */
 }
 
-.heroMeta{
-    display:flex;
-    flex-wrap:nowrap;
-    gap:12px;
-    align-items:stretch;
+.heroMeta {
+    display: flex;
+    flex-wrap: nowrap; /* запрещаем перенос */
+    gap: 12px;
 }
 
-.miniCard{
-    flex: 0 0 50%;           /* каждая плитка 50% ширины родителя */
-    min-width: 0;            /* важно для flex */
+.miniCard {
+    flex: 0 0 50%;   /* каждая плитка занимает половину */
+    min-width: 0;    /* важно для корректного flex */
     box-sizing: border-box;
+    width: auto;     /* убираем старую фиксированную ширину 110px */
 }
 
 .miniValue{
