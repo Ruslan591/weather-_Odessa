@@ -473,60 +473,23 @@ details[open] summary::before{
 /*≠==============
     РОЗА ВЕТРОВ
 ================*/
-.meteoComboCard{
-    flex:1 1 240px;
-    max-width:none;
-    min-width:240px;
-}
-
-.meteoCombo{
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:12px;
-    margin-top:6px;
-}
-
-.meteoGauge{
+.windMiniCard{
     display:flex;
     flex-direction:column;
     align-items:center;
-    justify-content:flex-start;
-    background:#202020;
-    border:1px solid #303030;
-    border-radius:12px;
-    padding:10px 8px;
 }
 
-.gaugeLabel{
-    font-size:12px;
-    color:#bdbdbd;
-    margin-bottom:4px;
-}
-
-.gaugeUnit{
-    margin-top:2px;
-    font-size:11px;
-    color:#a9a9a9;
-    text-align:center;
-}
-
-.pressureTrendRow{
+.windMini{
     display:flex;
+    flex-direction:column;
     align-items:center;
     justify-content:center;
-    gap:8px;
-    margin-top:4px;
-    min-height:24px;
+    width:100%;
+    margin:4px 0 2px;
 }
 
-.pressureTrendValue{
-    font-size:11px;
-    color:#d6d6d6;
-    white-space:nowrap;
-}
-
-@media (max-width:520px){
-    .meteoCombo{
-        grid-template-columns:1fr;
-    }
+.windMini svg{
+    display:block;
+    width:100px;
+    height:100px;
 }
