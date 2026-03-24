@@ -1,46 +1,42 @@
-/* =========================
-   ВЕТЕР + ДАВЛЕНИЕ
-========================= */
-
 .heroMeta{
     display:flex;
     flex-wrap:nowrap;
-    align-items:stretch;
     gap:12px;
+    align-items:stretch;
 }
 
-.heroMeta .miniCard{
+.heroMeta > .miniCard{
     flex:1 1 0;
-    width:auto;
+    width:calc(50% - 6px);
     min-width:0;
-    min-height:110px;
+    max-width:calc(50% - 6px);
     box-sizing:border-box;
 }
 
-/* одинаковая компоновка */
 .windMiniCard,
 .pressureMiniCard{
     display:flex;
     flex-direction:column;
     align-items:center;
     justify-content:flex-start;
+    overflow:hidden;
 }
 
 .windMini,
 .pressureMini{
+    width:100%;
     display:flex;
     align-items:center;
     justify-content:center;
-    width:100%;
     margin:4px 0 2px;
 }
 
-/* одинаковый размер обоих индикаторов */
 .windMini svg,
 .pressureMini svg{
     display:block;
     width:100px;
     height:100px;
+    max-width:100%;
     flex:0 0 auto;
 }
 
@@ -51,6 +47,12 @@
     gap:6px;
     margin-top:2px;
     min-height:20px;
+    width:100%;
+}
+
+.pressureTrendRow svg{
+    flex:0 0 auto;
+    display:block;
 }
 
 .pressureTrendValue{
@@ -58,21 +60,22 @@
     color:#d8d8d8;
     min-width:24px;
     text-align:left;
+    flex:0 0 auto;
 }
 
-/* на очень узких экранах */
 @media (max-width:520px){
     .heroMeta{
         gap:10px;
     }
 
-    .heroMeta .miniCard{
-        flex:1 1 0;
+    .heroMeta > .miniCard{
+        width:calc(50% - 5px);
+        max-width:calc(50% - 5px);
     }
 
     .windMini svg,
     .pressureMini svg{
-        width:96px;
-        height:96px;
+        width:92px;
+        height:92px;
     }
 }
