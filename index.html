@@ -514,6 +514,12 @@ async function loadSynop() {
     const line = successResults[0].line;
     const telegramKey = successResults[0].telegramKey;
 
+    // 🚫 БЛОКИРУЕМ битые SYNOP
+if(line.includes("NILL")){
+    console.log("NILL SYNOP пропущен:", line);
+    throw new Error("NILL SYNOP");
+}
+
     // ======== IndexedDB ========
     if (!db) await initDB();
     const exists = await recordExists(telegramKey);
