@@ -92,7 +92,7 @@ data.sort((a, b) => Number(b.synopTime) - Number(a.synopTime));
 
     const a = document.createElement("a");
     a.href = url;
-    a.download = "modelStats_backup.json";
+    a.download = "baza/modelStats_backup.json";
     a.click();
 
     URL.revokeObjectURL(url);
@@ -100,35 +100,7 @@ data.sort((a, b) => Number(b.synopTime) - Number(a.synopTime));
 
 }
 // indexedDB.deleteDatabase("modelStats");
-async function removeBadLine(badLine) {
-  if (!db) await initDB();
 
-  const tx = db.transaction("stats", "readwrite");
-  const store = tx.objectStore("stats");
-
-  const req = store.getAll(); // получаем все записи
-
-  req.onsuccess = () => {
-    const data = req.result;
-
-    data.forEach(item => {
-      if (item.synopData === badLine) { // предполагается, что строка хранится в поле synopData
-        store.delete(item.id); // id — ключ записи
-      }
-    });
-
-    tx.oncomplete = () => {
-      console.log("Битая строка удалена");
-    };
-
-    tx.onerror = () => {
-      console.error("Ошибка при удалении строки");
-    };
-  };
-}
-
-// вызов
-removeBadLine("202603242100 AAXX 24211 33837 NILL=");
 
 //================================
 
