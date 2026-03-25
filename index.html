@@ -56,6 +56,7 @@
 <input type="file" id="importFile" accept=".json" style="display:none">
 <script src="baza.js" defer></script>
 <button onclick="exportDB()">Сохранить (перезаписать)</button>
+<button onclick="cleanDB()">Очистить базу</button>
 <div id="rating">Загрузка...</div> 
 </div>
 
@@ -967,19 +968,26 @@ async function cleanDB(){
 
     const req = store.getAll();
 
-    req.onsuccess = () => {
+    req.onsuccess = async () => {
 
         const data = req.result;
+
+        let removed = 0;
 
         data.forEach(d => {
 
             if(!d.obs || !d.obs.synop || d.obs.synop.includes("NILL")){
-                console.log("Удаляем:", d);
-
-                store.delete(d.time); // ВАЖНО: ключ = time
+                store.delete(d.time);
+                removed++;
             }
 
         });
+
+        alert("Удалено записей: " + removed);
+
+        // 👇 обновляем экран
+        await render();
+        await drawChart();
 
     };
 
