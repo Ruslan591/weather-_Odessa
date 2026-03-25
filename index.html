@@ -97,12 +97,29 @@ data.sort((a, b) => Number(b.synopTime) - Number(a.synopTime));
 
 }
 // indexedDB.deleteDatabase("modelStats");
-const badLine = "202603242100 AAXX 24211 33837 NILL==";
+async function removeBadLine(badLine) {
+  if (!db) await initDB();
 
-// Фильтруем базу, удаляя битую строку
-database = database.filter(line => line !== badLine);
+  const tx = db.transaction("stats", "readwrite");
+  const store = tx.objectStore("stats");
 
-console.log(database); // массив без битой строки
+  const req = store.getAll(); // получаем все записи
+
+  req.onsuccess = () => {
+    const data = req.result;
+
+    // проходим по всем и удаляем битую строку
+    data.forEach(item => {
+      if (item.synopData === badLine) {
+        store.delete(item.id); // id — ключ записи
+      }
+    });
+
+    tx.oncomplete = () => {
+      console.log("Битая строка удалена");
+    };
+  };
+}
 
 //================================
 
