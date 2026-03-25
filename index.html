@@ -9,6 +9,7 @@
 <title>Рейтинг моделей</title> 
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 </head> 
 
 <body> 
@@ -51,9 +52,9 @@
 <button onclick="verifyAll()">Обновить проверку</button>
 </div>
 <br><br>
-<!-- Кнопка выбора файла -->
-<input type="file" id="importFile" accept=".json">
 <button id="importBtn">Выбрать файл</button>
+<input type="file" id="importFile" accept=".json" style="display:none">
+<script src="baza.js" defer></script>
 <button onclick="exportDB()">Сохранить (перезаписать)</button>
 <div id="rating">Загрузка...</div> 
 </div>
