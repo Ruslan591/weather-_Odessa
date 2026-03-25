@@ -108,9 +108,8 @@ async function removeBadLine(badLine) {
   req.onsuccess = () => {
     const data = req.result;
 
-    // проходим по всем и удаляем битую строку
     data.forEach(item => {
-      if (item.synopData === badLine) {
+      if (item.synopData === badLine) { // предполагается, что строка хранится в поле synopData
         store.delete(item.id); // id — ключ записи
       }
     });
@@ -118,8 +117,15 @@ async function removeBadLine(badLine) {
     tx.oncomplete = () => {
       console.log("Битая строка удалена");
     };
+
+    tx.onerror = () => {
+      console.error("Ошибка при удалении строки");
+    };
   };
 }
+
+// вызов
+removeBadLine("202603242100 AAXX 24211 33837 NILL==");
 
 //================================
 
