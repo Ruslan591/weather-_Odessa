@@ -915,6 +915,11 @@ return;
 
 data.forEach(d=>{
 
+if(!d.obs || !d.models){
+    console.log("Пропущена битая запись:", d);
+    return;
+}
+
 html += `<br><b>Записано:</b> ${d.time}<br>`;
 html += `<b>SYNOP:</b> ${d.synopTime}<br><br>`;
 
@@ -937,6 +942,9 @@ WD ${v.windDir}<br><br>`;
 
 }
 
+
+
+
 html += "<hr>";
 
 });
@@ -947,7 +955,35 @@ document.getElementById("rating").innerHTML = html;
 
 }
 
+// удаление битых данных
+async function cleanDB(){
 
+    if(!db){
+        await initDB();
+    }
+
+    const tx = db.transaction("stats","readwrite");
+    const store = tx.objectStore("stats");
+
+    const req = store.getAll();
+
+    req.onsuccess = () => {
+
+        const data = req.result;
+
+        data.forEach(d => {
+
+            if(!d.obs || !d.obs.synop || d.obs.synop.includes("NILL")){
+                console.log("Удаляем:", d);
+
+                store.delete(d.time); // ВАЖНО: ключ = time
+            }
+
+        });
+
+    };
+
+}
 
 async function autoUpdate(){
 
