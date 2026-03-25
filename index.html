@@ -97,6 +97,15 @@ data.sort((a, b) => Number(b.synopTime) - Number(a.synopTime));
 
 }
 // indexedDB.deleteDatabase("modelStats");
+const badLine = "202603242100 AAXX 24211 33837 NILL==";
+
+// Фильтруем базу, удаляя битую строку
+database = database.filter(line => line !== badLine);
+
+console.log(database); // массив без битой строки
+
+//================================
+
 let currentPeriod = "all";
 let currentParam = "temp";
 let chartMode = "error"; // "error" или "value"
