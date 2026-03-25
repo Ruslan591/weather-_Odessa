@@ -1236,66 +1236,60 @@ function renderSynop(d){
 <!-- Блок ветра и давления -->
  <div class="heroMeta">
 
-<!-- Ветер -->
+    <!-- Ветер -->
     <div class="miniCard windMiniCard">
-    <div class="small">Ветер</div>
+        <div class="small">Ветер</div>
 
-    <div class="windMini">
-        <svg viewBox="0 0 100 100" width="100" height="100" aria-label="Ветер">
-            <!-- метки по кругу -->
-            <line x1="50" y1="12" x2="50" y2="18" stroke="currentColor" stroke-opacity="0.55" stroke-width="2"/>
-            <line x1="72.6" y1="18.1" x2="69.6" y2="23.3" stroke="currentColor" stroke-opacity="0.32" stroke-width="1.6"/>
-            <line x1="81.9" y1="27.4" x2="76.7" y2="30.4" stroke="currentColor" stroke-opacity="0.32" stroke-width="1.6"/>
-            <line x1="88" y1="50" x2="82" y2="50" stroke="currentColor" stroke-opacity="0.55" stroke-width="2"/>
-            <line x1="81.9" y1="72.6" x2="76.7" y2="69.6" stroke="currentColor" stroke-opacity="0.32" stroke-width="1.6"/>
-            <line x1="72.6" y1="81.9" x2="69.6" y2="76.7" stroke="currentColor" stroke-opacity="0.32" stroke-width="1.6"/>
-            <line x1="50" y1="88" x2="50" y2="82" stroke="currentColor" stroke-opacity="0.55" stroke-width="2"/>
-            <line x1="27.4" y1="81.9" x2="30.4" y2="76.7" stroke="currentColor" stroke-opacity="0.32" stroke-width="1.6"/>
-            <line x1="18.1" y1="72.6" x2="23.3" y2="69.6" stroke="currentColor" stroke-opacity="0.32" stroke-width="1.6"/>
-            <line x1="12" y1="50" x2="18" y2="50" stroke="currentColor" stroke-opacity="0.55" stroke-width="2"/>
-            <line x1="18.1" y1="27.4" x2="23.3" y2="30.4" stroke="currentColor" stroke-opacity="0.32" stroke-width="1.6"/>
-            <line x1="27.4" y1="18.1" x2="30.4" y2="23.3" stroke="currentColor" stroke-opacity="0.32" stroke-width="1.6"/>
+        <div class="windMini">
+            <svg viewBox="0 0 100 100" width="100" height="100" aria-label="Ветер">
+                <line x1="50" y1="12" x2="50" y2="18" stroke="currentColor" stroke-opacity="0.55" stroke-width="2"/>
+                <line x1="72.6" y1="18.1" x2="69.6" y2="23.3" stroke="currentColor" stroke-opacity="0.32" stroke-width="1.6"/>
+                <line x1="81.9" y1="27.4" x2="76.7" y2="30.4" stroke="currentColor" stroke-opacity="0.32" stroke-width="1.6"/>
+                <line x1="88" y1="50" x2="82" y2="50" stroke="currentColor" stroke-opacity="0.55" stroke-width="2"/>
+                <line x1="81.9" y1="72.6" x2="76.7" y2="69.6" stroke="currentColor" stroke-opacity="0.32" stroke-width="1.6"/>
+                <line x1="72.6" y1="81.9" x2="69.6" y2="76.7" stroke="currentColor" stroke-opacity="0.32" stroke-width="1.6"/>
+                <line x1="50" y1="88" x2="50" y2="82" stroke="currentColor" stroke-opacity="0.55" stroke-width="2"/>
+                <line x1="27.4" y1="81.9" x2="30.4" y2="76.7" stroke="currentColor" stroke-opacity="0.32" stroke-width="1.6"/>
+                <line x1="18.1" y1="72.6" x2="23.3" y2="69.6" stroke="currentColor" stroke-opacity="0.32" stroke-width="1.6"/>
+                <line x1="12" y1="50" x2="18" y2="50" stroke="currentColor" stroke-opacity="0.55" stroke-width="2"/>
+                <line x1="18.1" y1="27.4" x2="23.3" y2="30.4" stroke="currentColor" stroke-opacity="0.32" stroke-width="1.6"/>
+                <line x1="27.4" y1="18.1" x2="30.4" y2="23.3" stroke="currentColor" stroke-opacity="0.32" stroke-width="1.6"/>
 
-            <!-- подписи сторон света -->
-            <text x="50" y="9" text-anchor="middle" font-size="7.5" fill="currentColor" fill-opacity="0.8">С</text>
-            <text x="91" y="52.5" text-anchor="middle" font-size="7.5" fill="currentColor" fill-opacity="0.8">В</text>
-            <text x="50" y="96" text-anchor="middle" font-size="7.5" fill="currentColor" fill-opacity="0.8">Ю</text>
-            <text x="9" y="52.5" text-anchor="middle" font-size="7.5" fill="currentColor" fill-opacity="0.8">З</text>
+                <text x="50" y="9" text-anchor="middle" font-size="7.5" fill="currentColor" fill-opacity="0.8">С</text>
+                <text x="91" y="52.5" text-anchor="middle" font-size="7.5" fill="currentColor" fill-opacity="0.8">В</text>
+                <text x="50" y="96" text-anchor="middle" font-size="7.5" fill="currentColor" fill-opacity="0.8">Ю</text>
+                <text x="9" y="52.5" text-anchor="middle" font-size="7.5" fill="currentColor" fill-opacity="0.8">З</text>
 
-            <!-- цветовая точка/ободок по скорости -->
-            <circle cx="50" cy="50" r="31"
-                    fill="none"
-                    stroke="${
-                        d.windSpeed == null ? 'rgba(255,255,255,0.14)' :
-                        d.windSpeed <= 2 ? '#7ec8ff' :
-                        d.windSpeed <= 5 ? '#67d7a7' :
-                        d.windSpeed <= 9 ? '#ffd166' :
-                        d.windSpeed <= 14 ? '#ff9f5c' :
-                        '#ff6b6b'
-                    }"
-                    stroke-opacity="0.75"
-                    stroke-width="3"/>
+                <circle cx="50" cy="50" r="31"
+                        fill="none"
+                        stroke="${
+                            d.windSpeed == null ? 'rgba(255,255,255,0.14)' :
+                            d.windSpeed <= 2 ? '#7ec8ff' :
+                            d.windSpeed <= 5 ? '#67d7a7' :
+                            d.windSpeed <= 9 ? '#ffd166' :
+                            d.windSpeed <= 14 ? '#ff9f5c' :
+                            '#ff6b6b'
+                        }"
+                        stroke-opacity="0.75"
+                        stroke-width="3"/>
 
-            <!-- указатель -->
-            <g transform="rotate(${d.windDir != null ? d.windDir : 0} 50 50)">
-                <polygon points="50,16 45,26 55,26" fill="currentColor"/>
-            </g>
+                <g transform="rotate(${d.windDir != null ? d.windDir : 0} 50 50)">
+                    <polygon points="50,16 45,26 55,26" fill="currentColor"/>
+                </g>
 
-            <!-- скорость -->
-            <text x="50" y="53" text-anchor="middle" font-size="18" font-weight="800" fill="currentColor">
-                ${d.windSpeed != null ? d.windSpeed : "-"}
-            </text>
-            <text x="50" y="64" text-anchor="middle" font-size="8.5" fill="currentColor" fill-opacity="0.72">
-                м/с
-            </text>
-        </svg>
+                <text x="50" y="53" text-anchor="middle" font-size="18" font-weight="800" fill="currentColor">
+                    ${d.windSpeed != null ? d.windSpeed : "-"}
+                </text>
+                <text x="50" y="64" text-anchor="middle" font-size="8.5" fill="currentColor" fill-opacity="0.72">
+                    м/с
+                </text>
+            </svg>
+        </div>
+
+        <div class="small">
+            ${escapeHtml(degToText(d.windDir))}${d.windDir != null ? ` · ${d.windDir}°` : ""}
+        </div>
     </div>
-
-    <div class="small">
-        ${escapeHtml(degToText(d.windDir))}${d.windDir != null ? ` · ${d.windDir}°` : ""}
-    </div>
-</div>
-
 <! -- Давление -- >
 <div class="miniCard pressureMiniCard">
     <div class="small">Давление</div>
@@ -1359,7 +1353,7 @@ function renderSynop(d){
                 <!-- 985 -->
                 <line x1="21.1" y1="60.2" x2="25.3" y2="61.3"/>
                 <!-- 995 -->
-                <line x1="28.8" y1="47.0" x2="32.3" y2="49.6"/>
+                <line xнрр1="28.8" y1="47.0" x2="32.3" y2="49.6"/>
                 <!-- 1005 -->
                 <line x1="42.2" y1="39.2" x2="44.2" y2="43.0"/>
                 <!-- 1015 -->
@@ -1430,8 +1424,7 @@ function renderSynop(d){
 </div>
 
 <! -- влажность -- >
-    <div class="heroMeta">
-                <div class="miniCard">
+                    <div class="miniCard">
                  <div class="humidity-indicator">
     <svg viewBox="0 0 120 60" width="120" height="60">
         <defs>
@@ -1453,14 +1446,10 @@ function renderSynop(d){
       </div>          </div>
 <!-- ==========≠================================================≠==============================-->
 
-            <div class="heroMeta">
-                <div class="miniCard">
-                    <div class="small">Ветер</div>
-                    <div class="miniValue">${fmt0(d.windSpeed," м/с")}</div>
-                    <div class="small">${escapeHtml(degToText(d.windDir))} ${windArrow(d.windDir)}</div>
-                </div>
+            <div class="grid2" style="margin-top:20px">
+                
 
-                <div class="miniCard">
+                <div class="Card">
                     <div class="small">Давление QNH</div>
                     <div class="miniValue">${fmt1(d.seaPressure," гПа")}</div>
                     <div class="small">к уровню моря</div>
