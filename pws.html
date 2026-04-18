@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PWS — личные метеостанции</title>
+<link rel="stylesheet" href="current_weather.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.32/dist/uPlot.min.css">
+</head>
+<body>
+
+<div class="header">
+    <div class="nav">
+        <a href="index.html">ГМЦ ЧАМ</a>
+    </div>
+    <div class="headerTitle">PWS</div>
+    <div class="nav">
+        <a href="forecast.html">Прогноз</a>
+        <a href="verify.html">Рейтинг</a>
+    </div>
+</div>
+
+<div class="container">
+
+    <!-- Выбор станции -->
+    <div id="stationSelectWrap"></div>
+
+    <!-- Лог -->
+    <div id="pwsLogBox" class="card logBox hidden">
+        <div class="cardTitle">Загрузка PWS</div>
+        <div id="pwsLog"></div>
+    </div>
+
+    <!-- Данные станции -->
+    <div id="pwsContent"></div>
+
+<!-- История -->
+    <div class="card" id="histSection" style="margin-top:14px;"></div>
+
+</div>
+
+<script src="utils.js"></script>
+<script src="indicators.js"></script>
+<script src="pws.js"></script>
+<script src="pws_page.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/uplot@1.6.32/dist/uPlot.iife.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<script src="history.js"></script>
+<script>
+    /* Движок графика: "uplot" | "svg" | "chartjs" | "echarts"
+       Меняй здесь — интерфейс не трогать */
+    const HIST_ENGINE = "echarts";
+
+    function waitForUplot(cb, attempts) {
+        attempts = attempts || 0;
+        if(typeof uPlot !== "undefined") { cb(); return; }
+        if(attempts > 50) { console.error("uPlot не загрузился"); return; }
+        setTimeout(() => waitForUplot(cb, attempts + 1), 100);
+    }
+
+    waitForUplot(() => initHistorySection());
+</script>
+
+<!-- Фоновая подгрузка пропущенных сводок -->
+<script>
+(async function() {
+    // Подключаем IndexedDB и функции из verify.html минимально
+    // Просто тихий фоновый запрос без UI
+    try {
+        // Открываем ту же БД
+        const db = await new Promise((resolve, reject) => {
+            const req = indexedDB.open("modelStats", 1);
+            req.onupgradeneeded = e => {
+                e.target.result.createObjectStore("stats", { keyPath: "time" });
+            };
+            req.onsuccess = e => resolve(e.target.result);
+            req.onerror = reject;
+        });
+
+        // Последнее фоновое обновление
+        const lastBg = localStorage.getItem("lastBgUpdate");
+        const now = Date.now();
+        // Не чаще раза в 3 часа с других страниц
+        if (lastBg && now - Number(lastBg) < 3 * 3600 * 1000) return;
+        localStorage.setItem("lastBgUpdate", now);
+
+        // Перенаправляем на verify.html в скрытом iframe
+        // (он сам запустит autoUpdate)
+        const iframe = document.createElement("iframe");
+        iframe.src = "verify.html";
+        iframe.style.cssText = "display:none;width:0;height:0;border:0";
+        document.body.appendChild(iframe);
+        // Убираем iframe через 60 сек
+        setTimeout(() => iframe.remove(), 60000);
+    } catch(e) {
+        console.log("BG update error:", e);
+    }
+})();
+</script>
+
+</body>
+</html>

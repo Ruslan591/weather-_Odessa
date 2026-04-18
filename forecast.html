@@ -1,39 +1,36 @@
 <!DOCTYPE html>
-<// html lang="ru">
+<html lang="ru">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Почасовой прогноз Одесса 24ч</title>
 <link rel="stylesheet" href="forecast.css">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
 </head>
 <body>
 
-<!-- =========================
-     ВЕРХНЯЯ ПАНЕЛЬ
-========================= -->
 <div class="header">
     <div class="nav">
-        <a href="current_weather.html">Погода сейчас</a>
+        <a href="index.html">ГМЦ ЧАМ</a>
+        <a href="pws.html">PWS</a>
     </div>
-        <div class="headerTitle">Прогноз</div>
+    <div class="headerTitle">Прогноз</div>
     <div class="nav">
-    <a href="index.html">Рейтинг</a>
+        <a href="verify.html">Рейтинг</a>
     </div>
 </div>
 <div class="main-title">
-  <!-- Кнопка выбора срока прогноза -->
-<span class="forecast-button" onclick="toggleForecastMenu()">
+<span class="forecast-button" onclick="toggleForecastMenu(event)">
   <span id="forecastDays">1 день</span> ▼
   <div id="forecastMenu" class="forecast-menu" style="display:none;">
-    <div onclick="setForecastDays(2, event)">2 дня</div>
-    <div onclick="setForecastDays(3, event)">3 дня</div>
-    <div onclick="setForecastDays(5, event)">5 дней</div>
-    <div onclick="setForecastDays(7, event)">7 дней</div>
-    <div onclick="setForecastDays(10, event)">10 дней</div>
-    <div onclick="setForecastDays(16, event)">16 дней</div>
+    <div onclick="setForecastDays(2, event)">24 часа</div>
+    <div onclick="setForecastDays(3, event)">2 дня</div>
+    <div onclick="setForecastDays(5, event)">4 дня</div>
+    <div onclick="setForecastDays(7, event)">6 дней</div>
+    <div onclick="setForecastDays(10, event)">9 дней</div>
+    <div onclick="setForecastDays(16, event)">15 дней</div>
   </div>
 </span>
-   
   <span class="model-button" onclick="toggleModelMenu()">
     <span id="modelName">ECMWF</span> ▼
     <div id="modelMenu" class="model-menu">
@@ -47,45 +44,38 @@
 </span>
 </div>
 <div id="content">
- <!-- Контейнер для графиков и таблиц -->
-  <div id="graphs" style="display:flex; flex-direction:column; gap:12px; max-width:340px; margin:0 auto;"></div>
-   <!--  Контейнер для почасового прогноза -->
+  <div id="fcChart" style="max-width:340px; margin:0 auto; padding: 0 8px;">
+    <div class="fc-param-row" id="fcParamRow"></div>
+    <div id="fcChartWrap" style="background:#161616;border-radius:10px;overflow:hidden;padding:4px 0 0;"></div>
+    <div id="fcStats" class="fc-stats" style="display:none;margin-top:4px;"></div>
+</div>
 <div id="forecast"></div>
 
 <script>
-// --- Вспомогательные функции ---
-// Текущий выбор дней прогноза
-let forecastDays = localStorage.getItem("forecastDays") || 1;
+let forecastDays = parseInt(localStorage.getItem("forecastDays")) || 1;
 document.getElementById("forecastDays").innerText = forecastDays + (forecastDays > 1 ? " дня" : " день");
 
-// Переключение видимости меню
-function toggleForecastMenu(){
+function toggleForecastMenu(e){
+    e.stopPropagation();
     const menu = document.getElementById("forecastMenu");
     menu.style.display = menu.style.display === "block" ? "none" : "block";
 }
 
-// Выбор количества дней
 function setForecastDays(days, e){
-    e.stopPropagation(); // чтобы клик по пункту меню не закрыл меню через document
+    e.stopPropagation();
     forecastDays = days;
     localStorage.setItem("forecastDays", days);
     document.getElementById("forecastDays").innerText = days + (days > 1 ? " дня" : " день");
-    document.getElementById("forecastMenu").style.display = "none"; // скрыть меню
-    load(); // перезагрузить прогноз с новым количеством дней
+    document.getElementById("forecastMenu").style.display = "none";
+    load();
 }
 
-// Скрываем меню при клике вне кнопки/меню
 document.addEventListener("click", (e) => {
     const menu = document.getElementById("forecastMenu");
     const button = document.querySelector(".forecast-button");
-    if (!button.contains(e.target)) {
-        menu.style.display = "none";
-    }
+    if (!button.contains(e.target)) menu.style.display = "none";
 });
 
-
-
-// --- переменная модели
 function modelLabel(model){
     switch(model){
         case "ecmwf_ifs": return "ECMWF IFS";
@@ -98,7 +88,7 @@ function modelLabel(model){
     }
 }
 
-let weatherModel = localStorage.getItem("weatherModel") || "ecmwf_ifs04";
+let weatherModel = localStorage.getItem("weatherModel") || "ecmwf_ifs";
 document.getElementById("modelName").innerText = modelLabel(weatherModel);
 
 function toggleModelMenu() {
@@ -115,453 +105,1278 @@ function setModel(model, e) {
     load();
 }
 
-// скрываем меню при клике вне кнопки/меню
 document.addEventListener("click", (e) => {
     const menu = document.getElementById("modelMenu");
     const button = document.querySelector(".model-button");
-    if (!button.contains(e.target)) {
-        menu.style.display = "none";
-    }
+    if (!button.contains(e.target)) menu.style.display = "none";
 });
 
-// заглушка функции load()
-function load(){ console.log("Загружена модель:", weatherModel); }
-// --- включает или выключает CSS-класс active у родительского элемента --- 
-function toggle(el){el.parentElement.classList.toggle("active")}
-// --- преобразует градусы ветра в направление --- 
+function toggle(el){ el.parentElement.classList.toggle("active"); }
+
 function windDir(d){
     const dirs=["С","ССВ","СВ","ВСВ","В","ВЮВ","ЮВ","ЮЮВ","Ю","ЮЮЗ","ЮЗ","ЗЮЗ","З","ЗСЗ","СЗ","ССЗ"];
     return dirs[Math.round(d/22.5)%16];
 }
-// --- функция сглаживания линии графика
+
 function smooth(points){
     if(!points.length) return "";
-    let d=`M ${points[0].x} ${points[0].y}`;
-    for(let i=1;i<points.length-1;i++){
-        const xc=(points[i].x+points[i+1].x)/2;
-        const yc=(points[i].y+points[i+1].y)/2;
-        d+=` Q ${points[i].x} ${points[i].y} ${xc} ${yc}`;
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for(let i = 1; i < points.length - 1; i++){
+        const xc = (points[i].x + points[i+1].x) / 2;
+        const yc = (points[i].y + points[i+1].y) / 2;
+        d += ` Q ${points[i].x} ${points[i].y} ${xc} ${yc}`;
     }
-    const last=points[points.length-1];
-    d+=` T ${last.x} ${last.y}`;
+    const last = points[points.length - 1];
+    d += ` T ${last.x} ${last.y}`;
     return d;
 }
-// --- график
-function createGraph(dataSlice, timesSlice, color, hoursToShow = 24, graphId = 0){    
-  const nowTime = Date.now();
-    if(dataSlice.length === 0) return `<svg width="100%" height="90"></svg>`;
 
-    const w = 320, h = 90;
-    const step = w / Math.max(dataSlice.length - 1, 1);
-    const min = Math.min(...dataSlice);
-    const max = Math.max(...dataSlice);
-    const norm = v => h - 10 - (v - min) / (max - min || 1) * (h - 20);
+const FC_PARAMS = [
+    { key:"temp",     label:"Температура", color:"#ff8f00", unit:"°",    field: h => h.temperature_2m        },
+    { key:"pressure", label:"Давление",    color:"#4aa3ff", unit:" гПа", field: h => h.pressure_msl          },
+    { key:"humidity", label:"Влажность",   color:"#00bcd4", unit:"%",    field: h => h.relative_humidity_2m  },
+    { key:"wind",     label:"Ветер",       color:"#8bc34a", unit:" м/с", field: h => h.wind_speed_10m        },
+    { key:"winddir",  label:"Направление", color:"#74b9ff", unit:"°",    field: h => h.wind_direction_10m    },
+    { key:"rain",     label:"Осадки",      color:"#448aff", unit:" мм",  field: h => h.rain                  },
+    { key:"cloud",    label:"Облачность",  color:"#b0bec5", unit:"%",    field: h => h.cloud_cover           },
+];
 
-    let pts = [], labels = "", nowLine = "";
+let _fcParam = "temp";
+let _fcHours = null;
+let _fcTimes = null;
 
-    // Линии в 0:00
-    let dayLines = "";
-    timesSlice.forEach((tRaw, i)=>{
-    const t = new Date(tRaw);
-
-    const x = i * step;
-    const y = norm(dataSlice[i]);
-    pts.push({x, y});
-
-   // if(t.getTime() <= nowTime && nowTime < t.getTime() + 3600000)
-      //  nowLine = `<line x1="${x}" y1="0" x2="${x}" y2="${h}" stroke="#ffffff55" stroke-dasharray="4 4"/>`;
-
-    const hr = t.getHours();
-
-    if(hr === 0)
-        dayLines += `<line x1="${x}" y1="0" x2="${x}" y2="${h}" stroke="#666" stroke-dasharray="2 4"/>`;
-
-    if(hr % 3 === 0)
-        labels += `<text x="${x}" y="${h-2}" font-size="9" text-anchor="middle" fill="#888">${hr}</text>`;
-});
-
-// --- точная линия текущего времени ---
-const startTime = new Date(timesSlice[0]).getTime();
-const endTime = new Date(timesSlice[timesSlice.length - 1]).getTime();
-
-if(nowTime >= startTime && nowTime <= endTime){
-    const ratio = (nowTime - startTime) / (endTime - startTime);
-    const xNow = ratio * w;
-
-    nowLine = `<line x1="${xNow}" y1="0" x2="${xNow}" y2="${h}" stroke="#ffffff55" stroke-width="1.5"/>`;
+function buildFcParamRow(){
+    const row = document.getElementById("fcParamRow");
+    if(!row) return;
+    row.innerHTML = FC_PARAMS.map(p => `
+        <button class="fc-param-btn${p.key === _fcParam ? " active" : ""}"
+                data-key="${p.key}"
+                style="--c:${p.color}"
+                onclick="fcSwitchParam('${p.key}')">
+            ${p.label}
+        </button>`
+    ).join("");
 }
 
-    // Линия между первой и последней точкой
-    const baseY0 = pts[0].y;
-    const baseY1 = pts[pts.length-1].y;
-
-    // Путь для области между графиком и виртуальной линией
-    let areaPath = "M" + pts.map((p,i) => `${p.x},${p.y}`).join(" L");
-    areaPath += ` L${pts[pts.length-1].x},${baseY1} L${pts[0].x},${baseY0} Z`;
-
-    // Уникальный id градиента
-    const gradientId = `areaGradient${graphId}`;
-    const gradient = `
-    <defs>
-      <linearGradient id="${gradientId}" x1="0" y1="${Math.min(...pts.map(p=>p.y), baseY0, baseY1)}"
-                                     x2="0" y2="${Math.max(...pts.map(p=>p.y), baseY0, baseY1)}"
-                                     gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stop-color="${color}" stop-opacity="0.3"/>
-        <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
-      </linearGradient>
-    </defs>
-    `;
-
-    return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}">
-        ${gradient}
-        ${dayLines}
-        ${nowLine}
-        <path d="${areaPath}" fill="url(#${gradientId})" stroke="none"/>
-        <path d="${smooth(pts)}" fill="none" stroke="${color}" stroke-width="2.5"/>
-        ${labels}
-    </svg>`;
-}
-;
-
-function createStatsTable(dataSlice, unit, title){
-    if(!dataSlice || dataSlice.length === 0) return "";
-
-    const start = dataSlice[0];
-    const end = dataSlice[dataSlice.length-1];
-    const min = Math.min(...dataSlice);
-    const max = Math.max(...dataSlice);
-    const delta = end - start;
-    const velocity = delta / (dataSlice.length - 1 || 1);
-    const forecast = end + velocity * 3;
-
-    // Цвета для роста/падения
-    const trendColor = delta > 0 ? "#ff4444" : "#4fc3f7";
-    const forecastColor = forecast > end ? "#ff4444" : "#4fc3f7";
-
-    return `
-    <div class="stats-table" style="
-        display:grid; 
-        grid-template-columns: repeat(3, 1fr); 
-        gap:6px; 
-        background: linear-gradient(135deg, #222 0%, #111 100%); 
-        padding:10px; 
-        border-radius:8px;
-        color:#eee;
-        font-family:sans-serif;
-        font-size:12px;
-    ">
-        <div style="text-align:center;">
-            Start<br><b>${start.toFixed(1)}${unit}</b>
-        </div>
-        <div style="text-align:center;">
-            End<br><b style="color:${trendColor}">${end.toFixed(1)}${unit}</b>
-        </div>
-        <div style="text-align:center;">
-            Δ24h<br><b style="color:${trendColor}">${delta.toFixed(1)}${unit}</b>
-        </div>
-        <div style="text-align:center;">
-            Min<br><b>${min.toFixed(1)}${unit}</b>
-        </div>
-        <div style="text-align:center;">
-            Max<br><b>${max.toFixed(1)}${unit}</b>
-        </div>
-        <div style="text-align:center;">
-            Forecast +3h<br><b style="color:${forecastColor}">${forecast.toFixed(1)}${unit}</b>
-        </div>
-        <div style="grid-column:span 3; text-align:center; margin-top:4px; font-weight:bold; color:#ddd;">
-            ${title}
-        </div>
-    </div>
-    `;
+function fcSwitchParam(key){
+    _fcParam = key;
+    document.querySelectorAll(".fc-param-btn").forEach(b =>
+        b.classList.toggle("active", b.dataset.key === key)
+    );
+    if(_fcHours) renderForecastChart(_fcHours, _fcTimes);
 }
 
-
-
-
-// --- Основная функция ---
-async function load(){
-    const API= `https://api.open-meteo.com/v1/forecast?latitude=46.43&longitude=30.74&hourly=temperature_2m,apparent_temperature,pressure_msl,relative_humidity_2m,weather_code,visibility,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,showers,snowfall,snow_depth,shortwave_radiation,direct_radiation,diffuse_radiation,dew_point_2m,runoff,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high&models=${weatherModel}&timezone=auto&forecast_days=${forecastDays}&wind_speed_unit=ms`;
-    const r=await fetch(API);
-    const data=await r.json();
-    const h=data.hourly;
-    const hours=h.time.map((t,i)=>({
-        time:t,
-        temperature_2m:h.temperature_2m[i],
-        apparent_temperature:h.apparent_temperature[i],
-        pressure_msl:h.pressure_msl[i],
-        relative_humidity_2m:h.relative_humidity_2m[i],
-        weather_code:h.weather_code[i],
-        visibility:h.visibility[i],
-        wind_speed_10m:h.wind_speed_10m[i],
-        wind_gusts_10m:h.wind_gusts_10m[i],
-        wind_direction_10m:h.wind_direction_10m[i],
-        rain:h.precipitation[i]||0,
-        showers:h.showers[i]||0,
-        snowfall:h.snowfall[i],
-        snow_depth:h.snow_depth[i],
-        shortwave_radiation:h.shortwave_radiation[i],
-        direct_radiation:h.direct_radiation[i],
-        diffuse_radiation:h.diffuse_radiation[i],
-        dew_point_2m:h.dew_point_2m[i],
-        runoff:h.runoff[i],
-        cloud_cover:h.cloud_cover[i],
-        cloud_cover_low:h.cloud_cover_low[i],
-        cloud_cover_mid:h.cloud_cover_mid[i],
-        cloud_cover_high:h.cloud_cover_high[i]
-    }));
-
-// ----- 2️⃣ Финальный renderGraphs -----
-function renderGraphs(hours, h) {
-    const container = document.getElementById("graphs");
-    if(!hours || !h.time || hours.length === 0 || h.time.length === 0){
-        container.innerHTML = "<p>Данные ещё не загружены.</p>";
-        return;
+// =============================================
+// TOOLTIP
+// =============================================
+function fcShowTooltip(e, idx, data, times, cfg){
+    let tip = document.getElementById("fcTooltip");
+    if(!tip){
+        tip = document.createElement("div");
+        tip.id = "fcTooltip";
+        tip.style.cssText = `
+            position:fixed;z-index:999;pointer-events:none;
+            background:rgba(20,20,20,0.97);border:1px solid #333;border-radius:10px;
+            padding:10px 14px;font-size:12px;color:#eee;min-width:140px;
+            box-shadow:0 4px 24px rgba(0,0,0,0.5);transition:opacity 0.1s;
+        `;
+        document.body.appendChild(tip);
     }
-    container.innerHTML = "";
+    const val = data[idx];
+    const t = times[idx] ? new Date(times[idx]) : null;
+    const timeStr = t && !isNaN(t)
+        ? t.toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})
+        : "";
+    tip.innerHTML = `
+        <div style="color:#888;margin-bottom:6px;font-size:11px;">${timeStr}</div>
+        <div style="font-size:16px;font-weight:800;color:${cfg.color};">${val != null ? val.toFixed(1) + cfg.unit : "—"}</div>
+        <div style="color:#aaa;font-size:11px;">${cfg.label}</div>
+    `;
+    tip.style.opacity = "1";
+    const tipW = 160;
+    const left = e.clientX + tipW + 20 > window.innerWidth ? e.clientX - tipW - 12 : e.clientX + 12;
+    tip.style.left = left + "px";
+    tip.style.top  = (e.clientY - 40) + "px";
+}
 
-    const graphs = [
-        {data: hours.map(x=>x.temperature_2m), color:"#ff8f00", unit:"°", title:"Температура"},
-        {data: hours.map(x=>x.pressure_msl/1), color:"#4aa3ff", unit:"гПа", title:"Давление"},
-        {data: hours.map(x=>x.relative_humidity_2m), color:"#00bcd4", unit:"%", title:"Влажность"},
-        {data: hours.map(x=>x.wind_speed_10m), color:"#8bc34a", unit:"м/с", title:"Скорость ветра"},
-        {data: hours.map(x=>x.rain), color:"#448aff", unit:"мм/ч", title:"Осадки"},
+function fcHideTooltip(){
+    const tip = document.getElementById("fcTooltip");
+    if(tip) tip.style.opacity = "0";
+}
+
+// =============================================
+// CROSSHAIR helper — добавляет перекрестие в SVG
+// =============================================
+function addCrosshair(svgEl, pts, pad, iW, iH, W, color, data, times, cfg, extraY){
+    const ns = "http://www.w3.org/2000/svg";
+
+    const crossV = document.createElementNS(ns, "line");
+    crossV.setAttribute("stroke", "rgba(255,255,255,0.3)");
+    crossV.setAttribute("stroke-width", "1");
+    crossV.setAttribute("stroke-dasharray", "3 3");
+    crossV.style.display = "none";
+    svgEl.appendChild(crossV);
+
+    let crossH = null;
+    if(extraY !== false){
+        crossH = document.createElementNS(ns, "line");
+        crossH.setAttribute("stroke", "rgba(255,255,255,0.2)");
+        crossH.setAttribute("stroke-width", "1");
+        crossH.setAttribute("stroke-dasharray", "3 3");
+        crossH.style.display = "none";
+        svgEl.appendChild(crossH);
+    }
+
+    const dot = document.createElementNS(ns, "circle");
+    dot.setAttribute("r", "4");
+    dot.setAttribute("fill", color);
+    dot.setAttribute("stroke", "#111");
+    dot.setAttribute("stroke-width", "2");
+    dot.style.display = "none";
+    svgEl.appendChild(dot);
+
+    function move(mx){
+        let best = 0, bestDist = Infinity;
+        pts.forEach((p, i) => {
+            const dist = Math.abs(p.x - mx);
+            if(dist < bestDist){ bestDist = dist; best = i; }
+        });
+        const p = pts[best];
+        crossV.setAttribute("x1", p.x); crossV.setAttribute("y1", pad.t);
+        crossV.setAttribute("x2", p.x); crossV.setAttribute("y2", pad.t + iH);
+        crossV.style.display = "";
+        if(crossH){
+            crossH.setAttribute("x1", pad.l); crossH.setAttribute("y1", p.y);
+            crossH.setAttribute("x2", pad.l + iW); crossH.setAttribute("y2", p.y);
+            crossH.style.display = "";
+        }
+        dot.setAttribute("cx", p.x);
+        dot.setAttribute("cy", p.y);
+        dot.style.display = "";
+        return best;
+    }
+
+    function hide(){
+        crossV.style.display = "none";
+        if(crossH) crossH.style.display = "none";
+        dot.style.display = "none";
+        fcHideTooltip();
+    }
+
+    svgEl.addEventListener("mousemove", e => {
+        const rect = svgEl.getBoundingClientRect();
+        const mx = (e.clientX - rect.left) * W / rect.width;
+        const best = move(mx);
+        fcShowTooltip(e, best, data, times, cfg);
+    });
+    svgEl.addEventListener("mouseleave", hide);
+    svgEl.addEventListener("touchmove", e => {
+        const touch = e.touches[0];
+        const rect = svgEl.getBoundingClientRect();
+        const mx = (touch.clientX - rect.left) * W / rect.width;
+        const best = move(mx);
+        fcShowTooltip(touch, best, data, times, cfg);
+        e.preventDefault();
+    }, { passive: false });
+    svgEl.addEventListener("touchend", hide);
+}
+
+// =============================================
+// MAIN LINE CHART
+// =============================================
+function renderForecastChart(hours, times){
+    if(_fcParam === "winddir") return renderForecastWindDir(hours, times);
+    if(_fcParam === "cloud")   return renderForecastCloud(hours, times);
+
+    const wrap     = document.getElementById("fcChartWrap");
+    const statsBox = document.getElementById("fcStats");
+    if(!wrap) return;
+
+    const cfg  = FC_PARAMS.find(p => p.key === _fcParam);
+    const data = hours.map(h => cfg.field(h));
+
+    const W = 320, H = 160;
+    const pad = { t:24, r:10, b:28, l:38 };
+    const iW  = W - pad.l - pad.r;
+    const iH  = H - pad.t - pad.b;
+
+    const vAll = data.filter(v => v != null && !isNaN(v));
+    if(!vAll.length){ wrap.innerHTML = ""; return; }
+
+    let vMin = Math.min(...vAll), vMax = Math.max(...vAll);
+    const spread = vMax - vMin || 1;
+    vMin -= spread * 0.3;
+    vMax += spread * 0.3;
+
+    const tMin = new Date(times[0]).getTime();
+    const tMax = new Date(times[times.length - 1]).getTime();
+    const px = t => pad.l + (new Date(t).getTime() - tMin) / (tMax - tMin) * iW;
+    const py = v => pad.t + (1 - (v - vMin) / (vMax - vMin)) * iH;
+
+    const pts = times.map((t, i) => ({ x: px(t), y: py(data[i] ?? vMin) }));
+    const linePath = smooth(pts);
+
+    const x0 = pts[0].x,            y0 = pts[0].y;
+    const xN = pts[pts.length-1].x, yN = pts[pts.length-1].y;
+    const areaPath = linePath + ` L${xN},${yN} L${x0},${y0} Z`;
+
+    let yGrid = "", yLabels = "";
+    for(let i = 0; i <= 4; i++){
+        const v = vMin + (vMax - vMin) * (1 - i / 4);
+        const y = pad.t + iH * i / 4;
+        yGrid   += `<line x1="${pad.l}" y1="${y}" x2="${pad.l+iW}" y2="${y}" stroke="#252525" stroke-width="1"/>`;
+        yLabels += `<text x="${pad.l-4}" y="${y+4}" text-anchor="end" font-size="9" fill="#555">${v.toFixed(cfg.key==="pressure"?0:1)}</text>`;
+    }
+
+    const FC_DAY_NAMES = ["Вс","Пн","Вт","Ср","Чт","Пт","Сб"];
+    let xGrid = "", xLabels = "";
+    times.forEach((t, i) => {
+        const d  = new Date(t);
+        const hr = d.getHours();
+        const x  = px(t);
+        if(hr === 0){
+            xGrid += `<line x1="${x}" y1="${pad.t}" x2="${x}" y2="${pad.t+iH}" stroke="#444" stroke-dasharray="2 4"/>`;
+            const nextMidnight = times.slice(i+1).find(t2 => new Date(t2).getHours() === 0);
+            const xEnd = nextMidnight ? px(nextMidnight) : pad.l + iW;
+            const xMid = (x + xEnd) / 2;
+            const dayLabel = `${FC_DAY_NAMES[d.getDay()]} ${d.getDate()}`;
+            xLabels += `<text x="${xMid}" y="${pad.t - 6}" text-anchor="middle" font-size="8.5" fill="#777" font-weight="700">${dayLabel}</text>`;
+        }
+        if(hr % 6 === 0)
+            xLabels += `<text x="${x}" y="${H-6}" text-anchor="middle" font-size="9" fill="#555">${hr}:00</text>`;
+    });
+
+    let nowLine = "";
+    const nowTs = Date.now();
+    if(nowTs >= tMin && nowTs <= tMax){
+        const xNow = pad.l + (nowTs - tMin) / (tMax - tMin) * iW;
+        nowLine = `<line x1="${xNow}" y1="${pad.t}" x2="${xNow}" y2="${pad.t+iH}"
+                         stroke="rgba(255,255,255,0.3)" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+    }
+
+    const gradY0 = Math.min(y0, yN);
+    const gradY1 = Math.max(y0, yN) + iH * 0.4;
+    const gradId = "fcGrad_" + cfg.key;
+
+    wrap.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="display:block;">
+        <defs>
+            <linearGradient id="${gradId}" x1="0" y1="${gradY0}" x2="0" y2="${gradY1}"
+                            gradientUnits="userSpaceOnUse">
+                <stop offset="0%"   stop-color="${cfg.color}" stop-opacity="0.32"/>
+                <stop offset="100%" stop-color="${cfg.color}" stop-opacity="0"/>
+            </linearGradient>
+        </defs>
+        ${yGrid}${xGrid}${nowLine}
+        <path d="${areaPath}" fill="url(#${gradId})" stroke="none"/>
+        <line x1="${x0}" y1="${y0}" x2="${xN}" y2="${yN}"
+              stroke="${cfg.color}" stroke-opacity="0.22" stroke-width="1.5" stroke-dasharray="4 3"/>
+        <path d="${linePath}" fill="none" stroke="${cfg.color}" stroke-width="2.5"/>
+        ${yLabels}${xLabels}
+    </svg>`;
+
+    // Перекрестие
+    const svgEl = wrap.querySelector("svg");
+    if(svgEl) addCrosshair(svgEl, pts, pad, iW, iH, W, cfg.color, data, times, cfg, true);
+
+    // Статистика
+    const start = vAll[0], end = vAll[vAll.length-1];
+    const min = Math.min(...vAll), max = Math.max(...vAll);
+    const delta = end - start;
+    const avg = vAll.reduce((a,b)=>a+b,0) / vAll.length;
+    const f = (v, dec=1) => v.toFixed(dec) + cfg.unit;
+
+    const iMin = data.indexOf(min), iMax = data.indexOf(max);
+    const tFmt = idx => {
+        if(idx < 0 || !times[idx]) return "";
+        const d = new Date(times[idx]);
+        return isNaN(d) ? "" : d.toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+    };
+
+    if(statsBox){
+        statsBox.style.display = "grid";
+        let card4 = "";
+
+        if(cfg.key === "temp"){
+            const amplitude = max - min;
+            card4 = `
+            <div class="fc-stat-card">
+                <div class="fc-stat-label">Амплитуда</div>
+                <div class="fc-stat-value" style="color:#fdcb6e;">${amplitude.toFixed(1)}°</div>
+                <div class="fc-stat-time">макс − мин</div>
+            </div>`;
+        } else if(cfg.key === "pressure"){
+            const trendC = delta > 0 ? "#ff6b6b" : delta < 0 ? "#74b9ff" : "#888";
+            const trendWord = delta > 0 ? "↑ рост" : delta < 0 ? "↓ падение" : "→ стабильно";
+            card4 = `
+            <div class="fc-stat-card">
+                <div class="fc-stat-label">Тенденция</div>
+                <div class="fc-stat-value" style="color:${trendC};">${delta>0?"+":""}${delta.toFixed(1)} гПа</div>
+                <div class="fc-stat-time">${trendWord}</div>
+            </div>`;
+        } else if(cfg.key === "humidity"){
+            const highCount = data.filter(v => v != null && v > 80).length;
+            const highPct   = Math.round(highCount / data.filter(v => v != null).length * 100);
+            card4 = `
+            <div class="fc-stat-card">
+                <div class="fc-stat-label">Влажно (>80%)</div>
+                <div class="fc-stat-value" style="color:#00bcd4;">${highCount} ч</div>
+                <div class="fc-stat-time">${highPct}% времени</div>
+            </div>`;
+        } else if(cfg.key === "wind"){
+            const calmCount  = data.filter(v => v != null && v < 1).length;
+            const strongCount= data.filter(v => v != null && v >= 10).length;
+            if(strongCount > 0){
+                card4 = `
+                <div class="fc-stat-card">
+                    <div class="fc-stat-label">Сильный (≥10)</div>
+                    <div class="fc-stat-value" style="color:#ff9f5c;">${strongCount} ч</div>
+                    <div class="fc-stat-time">м/с и выше</div>
+                </div>`;
+            } else {
+                card4 = `
+                <div class="fc-stat-card">
+                    <div class="fc-stat-label">Штиль (&lt;1 м/с)</div>
+                    <div class="fc-stat-value" style="color:#74b9ff;">${calmCount} ч</div>
+                    <div class="fc-stat-time">из ${data.filter(v=>v!=null).length} ч</div>
+                </div>`;
+            }
+        } else if(cfg.key === "rain"){
+            const rainHours = data.filter(v => v != null && v > 0).length;
+            const totalHours= data.filter(v => v != null).length;
+            const dryPct    = Math.round((totalHours - rainHours) / totalHours * 100);
+            const total     = data.reduce((a,v) => a + (v ?? 0), 0);
+            const iPeak     = data.indexOf(max);
+            statsBox.innerHTML = `
+            <div class="fc-stat-card">
+                <div class="fc-stat-label">Сумма</div>
+                <div class="fc-stat-value" style="color:#448aff;">${total.toFixed(1)} мм</div>
+                <div class="fc-stat-time">за период</div>
+            </div>
+            <div class="fc-stat-card">
+                <div class="fc-stat-label">Часов с дождём</div>
+                <div class="fc-stat-value" style="color:#448aff;">${rainHours} ч</div>
+                <div class="fc-stat-time">из ${totalHours} ч</div>
+            </div>
+            <div class="fc-stat-card">
+                <div class="fc-stat-label">Пик</div>
+                <div class="fc-stat-value" style="color:#74b9ff;">${max.toFixed(1)} мм/ч</div>
+                <div class="fc-stat-time">${tFmt(iPeak)}</div>
+            </div>
+            <div class="fc-stat-card">
+                <div class="fc-stat-label">Без осадков</div>
+                <div class="fc-stat-value" style="color:#5fe08f;">${dryPct}%</div>
+                <div class="fc-stat-time">времени</div>
+            </div>`;
+            return;
+        }
+
+        statsBox.innerHTML = `
+        <div class="fc-stat-card">
+            <div class="fc-stat-label">Минимум</div>
+            <div class="fc-stat-value" style="color:${cfg.color};">${f(min)}</div>
+            <div class="fc-stat-time">${tFmt(iMin)}</div>
+        </div>
+        <div class="fc-stat-card">
+            <div class="fc-stat-label">Максимум</div>
+            <div class="fc-stat-value" style="color:${cfg.color};">${f(max)}</div>
+            <div class="fc-stat-time">${tFmt(iMax)}</div>
+        </div>
+        <div class="fc-stat-card">
+            <div class="fc-stat-label">Среднее</div>
+            <div class="fc-stat-value" style="color:#ccc;">${f(avg)}</div>
+            <div class="fc-stat-time">${vAll.length} значений</div>
+        </div>
+        ${card4}`;
+    }
+}
+
+// =============================================
+// WIND DIRECTION
+// =============================================
+function renderForecastWindDir(hours, times){
+    const wrap     = document.getElementById("fcChartWrap");
+    const statsBox = document.getElementById("fcStats");
+    if(!wrap) return;
+
+    const cfg  = FC_PARAMS.find(p => p.key === "winddir");
+    const data = hours.map(h => h.wind_direction_10m);
+    const spds = hours.map(h => h.wind_speed_10m);
+
+    const W = 320, H = 160;
+    const pad = { t:24, r:10, b:28, l:34 };
+    const iW  = W - pad.l - pad.r;
+    const iH  = H - pad.t - pad.b;
+
+    const tMin = new Date(times[0]).getTime();
+    const tMax = new Date(times[times.length - 1]).getTime();
+    const px = t => pad.l + (new Date(t).getTime() - tMin) / (tMax - tMin || 1) * iW;
+    const py = v => pad.t + (1 - v / 360) * iH;
+
+    const yRumbs = [
+        [0,"С"],[45,"СВ"],[90,"В"],[135,"ЮВ"],
+        [180,"Ю"],[225,"ЮЗ"],[270,"З"],[315,"СЗ"],[360,"С"]
+    ];
+    let yGrid = "", yLabels = "";
+    for(const [deg, lbl] of yRumbs){
+        const y = py(deg);
+        yGrid   += `<line x1="${pad.l}" y1="${y}" x2="${pad.l+iW}" y2="${y}" stroke="#252525" stroke-width="1"/>`;
+        yLabels += `<text x="${pad.l-4}" y="${y+4}" text-anchor="end" font-size="9" fill="#555">${lbl}</text>`;
+    }
+
+    const WD_DAY_NAMES = ["Вс","Пн","Вт","Ср","Чт","Пт","Сб"];
+    let xGrid = "", xLabels = "";
+    times.forEach((t, i) => {
+        const d  = new Date(t);
+        const hr = d.getHours();
+        const x  = px(t);
+        if(hr === 0){
+            xGrid += `<line x1="${x}" y1="${pad.t}" x2="${x}" y2="${pad.t+iH}" stroke="#444" stroke-dasharray="2 4"/>`;
+            const nextMidnight = times.slice(i+1).find(t2 => new Date(t2).getHours() === 0);
+            const xEnd = nextMidnight ? px(nextMidnight) : pad.l + iW;
+            const xMid = (x + xEnd) / 2;
+            xLabels += `<text x="${xMid}" y="${pad.t - 6}" text-anchor="middle" font-size="8.5" fill="#777" font-weight="700">${WD_DAY_NAMES[d.getDay()]} ${d.getDate()}</text>`;
+        }
+        if(hr % 6 === 0)
+            xLabels += `<text x="${x}" y="${H-6}" text-anchor="middle" font-size="9" fill="#555">${hr}:00</text>`;
+    });
+
+    let nowLine = "";
+    const nowTs = Date.now();
+    if(nowTs >= tMin && nowTs <= tMax){
+        const xNow = pad.l + (nowTs - tMin) / (tMax - tMin) * iW;
+        nowLine = `<line x1="${xNow}" y1="${pad.t}" x2="${xNow}" y2="${pad.t+iH}"
+                         stroke="rgba(255,255,255,0.3)" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+    }
+
+    const W_STOPS = [
+        {offset:0,    color:"#7ec8ff"},
+        {offset:0.13, color:"#67d7a7"},
+        {offset:0.36, color:"#ffd166"},
+        {offset:0.57, color:"#ff9f5c"},
+        {offset:1,    color:"#ff6b6b"},
+    ];
+    const vMax = 25;
+    function gradCol(spd){
+        const t = Math.min(spd ?? 0, vMax) / vMax;
+        const stops = W_STOPS;
+        const cl = Math.max(0, Math.min(1, t));
+        for(let i = 1; i < stops.length; i++){
+            const a = stops[i-1], b = stops[i];
+            if(cl <= b.offset){
+                const u = (cl - a.offset) / (b.offset - a.offset);
+                const hex = s => [parseInt(s.slice(1,3),16), parseInt(s.slice(3,5),16), parseInt(s.slice(5,7),16)];
+                const [r1,g1,b1] = hex(a.color), [r2,g2,b2] = hex(b.color);
+                const r = Math.round(r1+(r2-r1)*u);
+                const g = Math.round(g1+(g2-g1)*u);
+                const bv= Math.round(b1+(b2-b1)*u);
+                return "#"+[r,g,bv].map(v=>v.toString(16).padStart(2,"0")).join("");
+            }
+        }
+        return stops[stops.length-1].color;
+    }
+
+    const pts = times.map((t, i) => ({ x: px(t), y: py(data[i] ?? 0) }));
+    const connPts = pts.filter((_,i) => data[i] != null).map(p => `${p.x},${p.y}`).join(" ");
+    const connectLine = connPts
+        ? `<polyline points="${connPts}" fill="none" stroke="${cfg.color}" stroke-width="1" stroke-opacity="0.2" stroke-dasharray="3 3"/>`
+        : "";
+
+    let arrows = "";
+    times.forEach((t, i) => {
+        const dir = data[i];
+        if(dir == null || isNaN(dir)) return;
+        const col = gradCol(spds[i]);
+        const x = px(t);
+        const y = py(dir);
+        const rot = dir + 180;
+        arrows += `<g transform="translate(${x},${y}) rotate(${rot})">
+            <line x1="0" y1="-5" x2="0" y2="5" stroke="${col}" stroke-width="1.8" stroke-linecap="round"/>
+            <polyline points="-2.5,-1 0,-5 2.5,-1" fill="none" stroke="${col}" stroke-width="1.8" stroke-linejoin="round"/>
+        </g>`;
+    });
+
+    wrap.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="display:block;">
+        ${yGrid}${xGrid}${nowLine}${connectLine}${arrows}
+        ${yLabels}${xLabels}
+    </svg>`;
+
+    // Перекрестие (только вертикальная линия — scatter)
+    const svgEl = wrap.querySelector("svg");
+    if(svgEl) addCrosshair(svgEl, pts, pad, iW, iH, W, cfg.color, data, times, cfg, false);
+
+    // Статистика
+    if(statsBox){
+        const dirs8 = ["С","СВ","В","ЮВ","Ю","ЮЗ","З","СЗ"];
+        const rumbCounts = {};
+        data.filter(v => v != null).forEach(v => {
+            const r = dirs8[Math.round(v / 45) % 8];
+            rumbCounts[r] = (rumbCounts[r] || 0) + 1;
+        });
+        const dominant = Object.entries(rumbCounts).sort((a,b) => b[1]-a[1])[0] || ["-", 0];
+        let sinSum = 0, cosSum = 0, cnt = 0;
+        data.forEach(v => { if(v != null){ sinSum += Math.sin(v*Math.PI/180); cosSum += Math.cos(v*Math.PI/180); cnt++; } });
+        const meanDeg = cnt ? ((Math.atan2(sinSum/cnt, cosSum/cnt) * 180/Math.PI) + 360) % 360 : 0;
+        const meanRumb = dirs8[Math.round(meanDeg / 45) % 8];
+        const spdVals = spds.filter(v => v != null);
+        const avgSpd = spdVals.length ? spdVals.reduce((a,b)=>a+b,0)/spdVals.length : null;
+        const maxSpd = spdVals.length ? Math.max(...spdVals) : null;
+
+        statsBox.style.display = "grid";
+        statsBox.innerHTML = `
+        <div class="fc-stat-card">
+            <div class="fc-stat-label">Доминирующий</div>
+            <div class="fc-stat-value" style="color:${cfg.color};">${dominant[0]}</div>
+            <div class="fc-stat-time">${dominant[1]} ч</div>
+        </div>
+        <div class="fc-stat-card">
+            <div class="fc-stat-label">Среднее</div>
+            <div class="fc-stat-value" style="color:#ccc;">${meanRumb}</div>
+            <div class="fc-stat-time">${Math.round(meanDeg)}°</div>
+        </div>
+        <div class="fc-stat-card">
+            <div class="fc-stat-label">Сред. скорость</div>
+            <div class="fc-stat-value" style="color:#8bc34a;">${avgSpd != null ? avgSpd.toFixed(1) : "-"} м/с</div>
+            <div class="fc-stat-time">&nbsp;</div>
+        </div>
+        <div class="fc-stat-card">
+            <div class="fc-stat-label">Макс. скорость</div>
+            <div class="fc-stat-value" style="color:#ff9f5c;">${maxSpd != null ? maxSpd.toFixed(1) : "-"} м/с</div>
+            <div class="fc-stat-time">&nbsp;</div>
+        </div>`;
+    }
+}
+
+// =============================================
+// CLOUD COVER
+// =============================================
+function renderForecastCloud(hours, times){
+    const wrap     = document.getElementById("fcChartWrap");
+    const statsBox = document.getElementById("fcStats");
+    if(!wrap) return;
+
+    const W = 320, H = 160;
+    const pad = { t:24, r:10, b:28, l:34 };
+    const iW  = W - pad.l - pad.r;
+    const iH  = H - pad.t - pad.b;
+
+    const tMin = new Date(times[0]).getTime();
+    const tMax = new Date(times[times.length - 1]).getTime();
+    const px = t => pad.l + (new Date(t).getTime() - tMin) / (tMax - tMin || 1) * iW;
+    const py = v => pad.t + (1 - Math.max(0, Math.min(100, v)) / 100) * iH;
+
+    const layers = [
+        { field: h => h.cloud_cover_high ?? 0, color:"#cdd7e0", label:"Верхний" },
+        { field: h => h.cloud_cover_mid  ?? 0, color:"#8fa8bf", label:"Средний" },
+        { field: h => h.cloud_cover_low  ?? 0, color:"#4a6fa5", label:"Нижний"  },
     ];
 
-    const hoursToShow = 24 * (forecastDays-1);
-    const nowTime = new Date().getTime();
-    const timesDates = h.time.map(t => new Date(t));
-
-    function getSlice(data){
-    let startIndex = timesDates.findIndex(t => t.getTime() >= nowTime);
-    if(startIndex === -1) startIndex = 0;
-
-    startIndex = Math.max(0, startIndex - 1);
-
-    let endIndex = Math.min(startIndex + hoursToShow, data.length);
-    return {
-        data: data.slice(startIndex, endIndex),
-        time: h.time.slice(startIndex, endIndex)
-    };
-}
-
-    graphs.forEach((g, i) => {
-        const slice = getSlice(g.data);
-
-const graphHTML = createGraph(
-    slice.data,
-    slice.time,
-    g.color,
-    hoursToShow,
-    i+1
-);
-
-const statsHTML = createStatsTable(
-    slice.data,
-    g.unit,
-    g.title
-);
-        const wrapper = document.createElement("div");
-        wrapper.style.display = "flex";
-        wrapper.style.flexDirection = "column";
-        wrapper.style.gap = "4px";
-        wrapper.innerHTML = graphHTML + statsHTML;
-
-        container.appendChild(wrapper);
+    let yGrid = "", yLabels = "";
+    [0, 25, 50, 75, 100].forEach(v => {
+        const y = py(v);
+        yGrid   += `<line x1="${pad.l}" y1="${y}" x2="${pad.l+iW}" y2="${y}" stroke="#252525" stroke-width="1"/>`;
+        yLabels += `<text x="${pad.l-4}" y="${y+4}" text-anchor="end" font-size="9" fill="#555">${v}</text>`;
     });
-}
 
-    // --- Графики с таблицами ---
- //   document.getElementById("graphs").innerHTML =
-   //     createGraph(hours.map(x=>x.temperature_2m), h.time, "#ff8f00", 24, 1) + createStatsTable(hours.map(x=>x.temperature_2m),"°","Температура") +
-    //    createGraph(hours.map(x=>x.pressure_msl/1), h.time, "#4aa3ff", 24, 2) + createStatsTable(hours.map(x=>x.pressure_msl/1), "гПа","Давление") +
-     //   createGraph(hours.map(x=>x.relative_humidity_2m), h.time, "#00bcd4",24, 3) + createStatsTable(hours.map(x=>x.relative_humidity_2m), "%","Влажность") +
-    //    createGraph(hours.map(x=>x.wind_speed_10m), h.time, "#8bc34a", 24, 4) + createStatsTable(hours.map(x=>x.wind_speed_10m), "м/с","Скорость ветра") +
-   //     createGraph(hours.map(x=>x.rain), h.time, "#448aff", 24, 5) + createStatsTable(hours.map(x=>x.rain), "мм/ч","Осадки");
-        
-     // ----- 3️⃣ Вызов функции после загрузки данных -----
-if(hours && h && h.time) {
-    renderGraphs(hours, h);
-}   
+    const CL_DAY_NAMES = ["Вс","Пн","Вт","Ср","Чт","Пт","Сб"];
+    let xGrid = "", xLabels = "";
+    times.forEach((t, i) => {
+        const d  = new Date(t);
+        const hr = d.getHours();
+        const x  = px(t);
+        if(hr === 0){
+            xGrid += `<line x1="${x}" y1="${pad.t}" x2="${x}" y2="${pad.t+iH}" stroke="#444" stroke-dasharray="2 4"/>`;
+            const nextMidnight = times.slice(i+1).find(t2 => new Date(t2).getHours() === 0);
+            const xEnd = nextMidnight ? px(nextMidnight) : pad.l + iW;
+            const xMid = (x + xEnd) / 2;
+            xLabels += `<text x="${xMid}" y="${pad.t - 6}" text-anchor="middle" font-size="8.5" fill="#777" font-weight="700">${CL_DAY_NAMES[d.getDay()]} ${d.getDate()}</text>`;
+        }
+        if(hr % 6 === 0)
+            xLabels += `<text x="${x}" y="${H-6}" text-anchor="middle" font-size="9" fill="#555">${hr}:00</text>`;
+    });
 
-// расшифровка погоды
-function weatherCode(code, hour, cloud=0){
-    const night = (hour >= 21 || hour < 6);
-
-    const icon = {
-        clear: night ? "🌙" : "☀️",
-        few: night ? "🌙☁️" : "🌤️",
-        scattered: "⛅",
-        broken: "☁️",
-        fog: "🌫️",
-
-        drizzleLight:"🌦️",
-        drizzle:"🌦️",
-        drizzleHeavy:"🌧️",
-
-        rainLight:"🌦️",
-        rain:"🌧️",
-        rainHeavy:"🌧️🌧️",
-        freezingRainLight:"🌧️❄️",
-        freezingRainHeavy:"🌧️❄️❄️",
-
-        snowLight:"🌨️",
-        snow:"❄️",
-        snowHeavy:"❄️❄️",
-        snowGrains:"🌨️❄️",
-
-        showersLight:"🌦️",
-        showersModerate:"🌧️",
-        showersHeavy:"🌧️🌧️",
-
-        storm:"⛈️"
-    };
-
-    let text="";
-    let ico="";
-
-    switch(code){
-        case 0: // ясно
-        case 1: // небольшая облачность
-        case 2: // переменная облачность
-        case 3: // пасмурно
-            if(cloud < 10){text="Ясно"; ico=icon.clear;}
-            else if(cloud < 30){text="Небольшая облачность"; ico=icon.few;}
-            else if(cloud < 60){text="Переменная облачность"; ico=icon.scattered;}
-            else{text="Облачно"; ico=icon.broken;}
-            break;
-
-        // туман
-        case 45: case 48: text="Туман"; ico=icon.fog; break;
-
-        // морось
-        case 51: text="Слабая морось"; ico=icon.drizzleLight; break;
-        case 53: text="Морось"; ico=icon.drizzle; break;
-        case 55: text="Сильная морось"; ico=icon.drizzleHeavy; break;
-
-        // дождь
-        case 61: text="Лёгкий дождь"; ico=icon.rainLight; break;
-        case 63: text="Дождь"; ico=icon.rain; break;
-        case 65: text="Сильный дождь"; ico=icon.rainHeavy; break;
-
-        // замерзающий дождь
-        case 66: text="Лёгкий замерзающий дождь"; ico=icon.freezingRainLight; break;
-        case 67: text="Сильный замерзающий дождь"; ico=icon.freezingRainHeavy; break;
-
-        // снег
-        case 71: text="Лёгкий снег"; ico=icon.snowLight; break;
-        case 73: text="Снег"; ico=icon.snow; break;
-        case 75: text="Сильный снег"; ico=icon.snowHeavy; break;
-        case 77: text="Снежные крупинки"; ico=icon.snowGrains; break;
-
-        // ливни
-        case 80: text="Ливни слабые"; ico=icon.showersLight; break;
-        case 81: text="Ливни умеренные"; ico=icon.showersModerate; break;
-        case 82: text="Ливни сильные"; ico=icon.showersHeavy; break;
-
-        // снежные ливни
-        case 85: text="Слабый снежный ливень"; ico=icon.snowLight; break;
-        case 86: text="Сильный снежный ливень"; ico=icon.snowHeavy; break;
-
-        // грозы
-        case 95: text="Гроза"; ico=icon.storm; break;
-        case 96: text="Гроза с дождём слабая"; ico=icon.storm; break;
-        case 99: text="Гроза с дождём сильная"; ico=icon.storm; break;
-
-        default: text="Неизвестно"; ico="❓"; break;
+    let nowLine = "";
+    const nowTs = Date.now();
+    if(nowTs >= tMin && nowTs <= tMax){
+        const xNow = pad.l + (nowTs - tMin) / (tMax - tMin) * iW;
+        nowLine = `<line x1="${xNow}" y1="${pad.t}" x2="${xNow}" y2="${pad.t+iH}"
+                         stroke="rgba(255,255,255,0.3)" stroke-width="1.5" stroke-dasharray="4 3"/>`;
     }
 
-    return {text, icon: ico};
+    function makeArea(dataArr){
+        const pts = times.map((t, i) => ({ x: px(t), y: py(dataArr[i]) }));
+        const line = smooth(pts);
+        const x0 = pts[0].x, xN = pts[pts.length-1].x;
+        const bottom = pad.t + iH;
+        return { line, area: line + ` L${xN},${bottom} L${x0},${bottom} Z`, pts };
+    }
+
+    let defs = "", areas = "", lines = "";
+    const layerPts = [];
+    layers.forEach((layer, i) => {
+        const data = hours.map(layer.field);
+        const { line, area, pts } = makeArea(data);
+        layerPts.push(pts);
+        const gid = `cloudGrad_${i}`;
+        defs  += `<linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stop-color="${layer.color}" stop-opacity="0.55"/>
+            <stop offset="100%" stop-color="${layer.color}" stop-opacity="0.08"/>
+        </linearGradient>`;
+        areas += `<path d="${area}" fill="url(#${gid})" stroke="none"/>`;
+        lines += `<path d="${line}" fill="none" stroke="${layer.color}" stroke-width="1.5" stroke-opacity="0.8"/>`;
+    });
+
+    const legendItems = layers.map((l, i) =>
+        `<g transform="translate(${pad.l + i * 72}, ${H - 4})">
+            <rect x="0" y="-6" width="10" height="6" rx="2" fill="${l.color}" fill-opacity="0.7"/>
+            <text x="13" y="0" font-size="8" fill="${l.color}" fill-opacity="0.9">${l.label}</text>
+        </g>`
+    ).join("");
+
+    wrap.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="display:block;">
+        <defs>${defs}</defs>
+        ${yGrid}${xGrid}${nowLine}
+        ${areas}${lines}
+        ${legendItems}
+        ${yLabels}${xLabels}
+    </svg>`;
+
+    // Перекрестие для облачности — используем total cloud cover pts
+    const totalData = hours.map(h => h.cloud_cover ?? 0);
+    const totalPts  = times.map((t, i) => ({ x: px(t), y: py(totalData[i]) }));
+    const cloudCfg  = FC_PARAMS.find(p => p.key === "cloud");
+    const svgEl = wrap.querySelector("svg");
+    if(svgEl){
+        // Кастомный тултип для облачности с тремя ярусами
+        const ns = "http://www.w3.org/2000/svg";
+        const crossV = document.createElementNS(ns, "line");
+        crossV.setAttribute("stroke", "rgba(255,255,255,0.3)");
+        crossV.setAttribute("stroke-width", "1");
+        crossV.setAttribute("stroke-dasharray", "3 3");
+        crossV.style.display = "none";
+        svgEl.appendChild(crossV);
+        const dot = document.createElementNS(ns, "circle");
+        dot.setAttribute("r", "4");
+        dot.setAttribute("fill", cloudCfg.color);
+        dot.setAttribute("stroke", "#111");
+        dot.setAttribute("stroke-width", "2");
+        dot.style.display = "none";
+        svgEl.appendChild(dot);
+
+        function moveCloud(mx, clientX, clientY){
+            let best = 0, bestDist = Infinity;
+            totalPts.forEach((p, i) => {
+                const dist = Math.abs(p.x - mx);
+                if(dist < bestDist){ bestDist = dist; best = i; }
+            });
+            const p = totalPts[best];
+            crossV.setAttribute("x1", p.x); crossV.setAttribute("y1", pad.t);
+            crossV.setAttribute("x2", p.x); crossV.setAttribute("y2", pad.t + iH);
+            crossV.style.display = "";
+            dot.setAttribute("cx", p.x); dot.setAttribute("cy", p.y);
+            dot.style.display = "";
+
+            let tip = document.getElementById("fcTooltip");
+            if(!tip){
+                tip = document.createElement("div");
+                tip.id = "fcTooltip";
+                tip.style.cssText = `position:fixed;z-index:999;pointer-events:none;
+                    background:rgba(20,20,20,0.97);border:1px solid #333;border-radius:10px;
+                    padding:10px 14px;font-size:12px;color:#eee;min-width:140px;
+                    box-shadow:0 4px 24px rgba(0,0,0,0.5);transition:opacity 0.1s;`;
+                document.body.appendChild(tip);
+            }
+            const h = hours[best];
+            const t2 = times[best] ? new Date(times[best]) : null;
+            const timeStr = t2 && !isNaN(t2)
+                ? t2.toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})
+                : "";
+            tip.innerHTML = `
+                <div style="color:#888;margin-bottom:6px;font-size:11px;">${timeStr}</div>
+                <div style="font-size:15px;font-weight:800;color:#b0bec5;margin-bottom:6px;">${h.cloud_cover ?? "-"}% <span style="font-size:11px;color:#666;">общая</span></div>
+                ${layers.map(l => `<div style="color:${l.color};font-size:12px;">${l.label}: ${l.field(h).toFixed(0)}%</div>`).join("")}
+            `;
+            tip.style.opacity = "1";
+            const tipW = 160;
+            const left = clientX + tipW + 20 > window.innerWidth ? clientX - tipW - 12 : clientX + 12;
+            tip.style.left = left + "px";
+            tip.style.top  = (clientY - 40) + "px";
+        }
+
+        function hideCloud(){
+            crossV.style.display = "none";
+            dot.style.display = "none";
+            fcHideTooltip();
+        }
+
+        svgEl.addEventListener("mousemove", e => {
+            const rect = svgEl.getBoundingClientRect();
+            moveCloud((e.clientX - rect.left) * W / rect.width, e.clientX, e.clientY);
+        });
+        svgEl.addEventListener("mouseleave", hideCloud);
+        svgEl.addEventListener("touchmove", e => {
+            const touch = e.touches[0];
+            const rect = svgEl.getBoundingClientRect();
+            moveCloud((touch.clientX - rect.left) * W / rect.width, touch.clientX, touch.clientY);
+            e.preventDefault();
+        }, { passive: false });
+        svgEl.addEventListener("touchend", hideCloud);
+    }
+
+    if(statsBox){
+        const total  = hours.map(h => h.cloud_cover ?? 0);
+        const avg    = Math.round(total.reduce((a,b)=>a+b,0) / total.length);
+        const clear  = total.filter(v => v < 20).length;
+        const overcast = total.filter(v => v > 80).length;
+        const avgHigh = Math.round(hours.map(h => h.cloud_cover_high ?? 0).reduce((a,b)=>a+b,0) / hours.length);
+        statsBox.style.display = "grid";
+        statsBox.innerHTML = `
+        <div class="fc-stat-card">
+            <div class="fc-stat-label">Средняя</div>
+            <div class="fc-stat-value" style="color:#b0bec5;">${avg}%</div>
+            <div class="fc-stat-time">за период</div>
+        </div>
+        <div class="fc-stat-card">
+            <div class="fc-stat-label">Ясно (&lt;20%)</div>
+            <div class="fc-stat-value" style="color:#ffd166;">${clear} ч</div>
+            <div class="fc-stat-time">из ${total.length} ч</div>
+        </div>
+        <div class="fc-stat-card">
+            <div class="fc-stat-label">Пасмурно (&gt;80%)</div>
+            <div class="fc-stat-value" style="color:#778ca3;">${overcast} ч</div>
+            <div class="fc-stat-time">из ${total.length} ч</div>
+        </div>
+        <div class="fc-stat-card">
+            <div class="fc-stat-label">Верхний ярус</div>
+            <div class="fc-stat-value" style="color:#cdd7e0;">${avgHigh}%</div>
+            <div class="fc-stat-time">среднее</div>
+        </div>`;
+    }
+}
+
+// =============================================
+// WEATHER CODE & COMFORT
+// =============================================
+function weatherCode(code, hour, cloud, rain, snow){
+    const isDay = hour >= 6 && hour < 21;
+    if(snow > 0)  return { icon:"🌨️", text:"Снег" };
+    if(rain > 0.5) return { icon:"🌧️", text:"Дождь" };
+    if(code >= 95) return { icon:"⛈️",  text:"Гроза" };
+    if(code >= 80) return { icon:"🌦️", text:"Ливень" };
+    if(code >= 71) return { icon:"🌨️", text:"Снегопад" };
+    if(code >= 61) return { icon:"🌧️", text:"Дождь" };
+    if(code >= 51) return { icon:"🌦️", text:"Морось" };
+    if(code >= 45) return { icon:"🌫️", text:"Туман" };
+    if(cloud > 80) return { icon:"☁️",  text:"Пасмурно" };
+    if(cloud > 40) return { icon: isDay ? "⛅" : "🌙☁️", text:"Облачно" };
+    return { icon: isDay ? "☀️" : "🌙", text:"Ясно" };
 }
 
 function comfortLevel(h){
-    const temp = h.apparent_temperature;
-    const wind = h.wind_speed_10m;
-    const humidity = h.relative_humidity_2m;
-    const rain = h.rain + h.showers;
-    const snow = h.snowfall;
-    const sun = h.shortwave_radiation;
-    const cloud = h.cloud_cover;
-    const storm = (h.weather_code >= 95); // гроза
+    const t    = h.temperature_2m;
+    const feel = h.apparent_temperature;
+    const w    = h.wind_speed_10m;
+    const gust = h.wind_gusts_10m ?? w;
+    const r    = (h.rain ?? 0) + (h.showers ?? 0);
+    const snow = h.snowfall ?? 0;
+    const rh   = h.relative_humidity_2m ?? 50;
+    const vis  = h.visibility ?? 10000;
+    const code = h.weather_code ?? 0;
 
-    let comfort = "Комфортно";
-    let color = "#43A047";
-
-    // --- базовая температура ---
-    if(temp < -5) { comfort = "Очень холодно"; color="#1976D2"; }
-    else if(temp < 0) { comfort = "Холодно"; color="#4FC3F7"; }
-    else if(temp < 10) { comfort = wind>5 ? "Пронизывающий ветер" : "Прохладно"; color="#81D4FA"; }
-    else if(temp < 18) { comfort = wind>7 ? "Ветрено" : "Немного прохладно"; color="#AED581"; }
-    else if(temp < 26) { comfort = "Комфортно"; color="#43A047"; }
-    else if(temp < 32) { comfort = sun>500 ? "Жарко на солнце" : "Тепло"; color="#FFB300"; }
-    else { comfort = "Жарко"; color="#E53935"; }
-
-    // --- осадки и снег ---
-    if(rain > 0) { comfort += " с дождём"; color="#448AFF"; }
-    if(snow > 0) { comfort += " со снегом"; color="#90CAF9"; }
-
-    // --- высокая влажность ---
-    if(humidity > 80 && temp>20) { comfort += " и душно"; color="#FF7043"; }
-
-    // --- облачность снижает солнечный дискомфорт ---
-    if(sun>400 && cloud>70) { comfort += " (облачно, солнце скрыто)"; }
-
-    // --- гроза / сильные явления ---
-    if(storm) { comfort += " ⚡ Гроза!"; color="#D32F2F"; }
-
-    // --- можно добавить дополнительные параметры, если нужно ---
-    // например CAPE, CIN, UV и т.д.
-
-    return {comfort, color};
+    if(code >= 95)               return { comfort:"Гроза ⚡",       color:"#f9ca24" };
+    if(snow > 1)                 return { comfort:"Снегопад",        color:"#a8d8ea" };
+    if(vis < 200)                return { comfort:"Густой туман",    color:"#b2bec3" };
+    if(r > 5)                    return { comfort:"Сильный дождь",   color:"#2980b9" };
+    if(feel < -15)               return { comfort:"Сильный мороз",   color:"#74b9ff" };
+    if(feel < -5)                return { comfort:"Морозно",          color:"#a8d8ea" };
+    if(feel > 37)                return { comfort:"Опасная жара",     color:"#d63031" };
+    if(feel > 32)                return { comfort:"Очень жарко",      color:"#ff6b6b" };
+    if(r > 0.5)                  return { comfort:"Дождливо",         color:"#4a90d9" };
+    if(gust > 15)                return { comfort:"Шквалы",        color:"#fd9644" };
+    if(w > 10)                   return { comfort:"Ветренно",          color:"#ffd166" };
+    if(t > 26 && rh > 75)       return { comfort:"Душно",            color:"#e17055" };
+    if(t < 0)                    return { comfort:"Морозно",          color:"#a8d8ea" };
+    if(t < 8)                    return { comfort:"Холодно",          color:"#74b9ff" };
+    if(t < 14)                   return { comfort:"Прохладно",        color:"#55efc4" };
+    if(t <= 25)                  return { comfort:"Комфортно",        color:"#5fe08f" };
+    if(t <= 30)                  return { comfort:"Тепло",            color:"#fdcb6e" };
+    return                              { comfort:"Жарко",            color:"#ff6b6b" };
 }
 
-    // --- Почасовой прогноз ---
-    const now=new Date().getHours();
-    const next24=hours.slice(now, now+24*(forecastDays-1));
-    const days=["Вс","Пн","Вт","Ср","Чт","Пт","Сб"];
-    let html="";
-    next24.forEach((h,i)=>{
-        const d=new Date(h.time);
-        
-        const w = weatherCode(
-    h.weather_code,
-    d.getHours(),
-    h.cloud_cover,
-    h.rain,
-    h.snowfall
-);
+// =============================================
+// LOAD
+// =============================================
+async function load(){
+    const API = `https://api.open-meteo.com/v1/forecast?latitude=46.43&longitude=30.74&hourly=temperature_2m,apparent_temperature,pressure_msl,relative_humidity_2m,weather_code,visibility,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,precipitation_probability,showers,snowfall,snow_depth,shortwave_radiation,direct_radiation,diffuse_radiation,dew_point_2m,runoff,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high&models=${weatherModel}&timezone=auto&forecast_days=${forecastDays}&wind_speed_unit=ms`;
+    let data;
+    try {
+        const r = await fetch(API);
+        if(!r.ok) throw new Error(`HTTP ${r.status}`);
+        data = await r.json();
+    } catch(e) {
+        document.getElementById("forecast").innerHTML =
+            `<div style="padding:20px;text-align:center;color:#ff8f43;">
+                ⚠️ Ошибка загрузки прогноза: ${e.message}<br>
+                <span style="font-size:12px;color:#666;margin-top:6px;display:block;">
+                    Модель: ${weatherModel} · Попробуйте обновить страницу
+                </span>
+             </div>`;
+        return;
+    }
+    const h = data.hourly;
+    if(!h){
+        document.getElementById("forecast").innerHTML =
+            `<div style="padding:20px;text-align:center;color:#ff8f43;">⚠️ Нет данных от API</div>`;
+        return;
+    }
 
-        if(i===0 || days[d.getDay()]!==days[new Date(next24[i-1].time).getDay()]){
-            html+=`<div class="day-header">${days[d.getDay()]}, ${d.getDate()}</div>`;
-        }
-        let {comfort, color:c} = comfortLevel(h);        html+=`
+    const hours = h.time.map((t, i) => ({
+        time:                  t,
+        temperature_2m:        h.temperature_2m[i],
+        apparent_temperature:  h.apparent_temperature[i],
+        pressure_msl:          h.pressure_msl[i],
+        relative_humidity_2m:  h.relative_humidity_2m[i],
+        weather_code:          h.weather_code[i],
+        visibility:            h.visibility[i],
+        wind_speed_10m:        h.wind_speed_10m[i],
+        wind_gusts_10m:        h.wind_gusts_10m[i],
+        wind_direction_10m:    h.wind_direction_10m[i],
+        rain:                  h.precipitation[i] || 0,
+        showers:               h.showers[i]       || 0,
+        precip_prob:           h.precipitation_probability?.[i] ?? null,
+        snowfall:              h.snowfall[i],
+        snow_depth:            h.snow_depth[i],
+        shortwave_radiation:   h.shortwave_radiation[i],
+        direct_radiation:      h.direct_radiation[i],
+        diffuse_radiation:     h.diffuse_radiation[i],
+        dew_point_2m:          h.dew_point_2m[i],
+        runoff:                h.runoff[i],
+        cloud_cover:           h.cloud_cover[i],
+        cloud_cover_low:       h.cloud_cover_low[i],
+        cloud_cover_mid:       h.cloud_cover_mid[i],
+        cloud_cover_high:      h.cloud_cover_high[i],
+    }));
 
-        <div class="row">
-            <div class="indicator-line" style="background:${c}"></div>
-            <div class="summary" onclick="toggle(this)">
-                <div style="width:15%">${d.getHours()}:00</div>
-                <div style="width:20%;font-size:1.9em;text-align:center">${w.icon}</div>
-                <div style="width:25%;text-align:center;font-weight:bold;color:${h.temperature_2m>0?"#FF8F00":"#00E5FF"}">${h.temperature_2m.toFixed(1)}°</div>
-                <div style="width:15%">💨${Math.round(h.wind_speed_10m)}</div>
-                <div style="width:15%;text-align:right">☔${Math.round(h.rain+h.showers)}</div>
+    window._fcAllHours = hours;
+
+    const nowTime    = Date.now();
+    const timesDates = h.time.map(t => new Date(t));
+    const hoursToShow = 24 * (forecastDays - 1);
+
+    let startIndex = timesDates.findIndex(t => t.getTime() >= nowTime);
+    if(startIndex === -1) startIndex = 0;
+    startIndex = Math.max(0, startIndex - 1);
+    const endIndex = Math.min(startIndex + hoursToShow, hours.length);
+
+    let lastValidIndex = hours.length - 1;
+    for(let i = hours.length - 1; i >= 0; i--){
+        if(hours[i].temperature_2m != null){ lastValidIndex = i; break; }
+    }
+    const endIndex2 = Math.min(endIndex, lastValidIndex + 1);
+
+    _fcHours = hours.slice(startIndex, endIndex2);
+    _fcTimes = h.time.slice(startIndex, endIndex2);
+
+    buildFcParamRow();
+    renderForecastChart(_fcHours, _fcTimes);
+
+    const nowDate  = new Date();
+    const nowHr    = nowDate.getHours();
+    const todayKey = `${nowDate.getFullYear()}-${String(nowDate.getMonth()+1).padStart(2,'0')}-${String(nowDate.getDate()).padStart(2,'0')}`;
+
+    const byDay = {};
+    hours.forEach(h => {
+        const key = h.time.slice(0, 10);
+        if(!byDay[key]) byDay[key] = [];
+        byDay[key].push(h);
+    });
+
+    let html = "";
+    Object.keys(byDay).sort().forEach((dayKey, di) => {
+        const dayHoursCheck = byDay[dayKey];
+        const hasData = dayHoursCheck.some(h => h.temperature_2m != null);
+        if(!hasData) return;
+        const dayHours  = byDay[dayKey];
+        const dayDate   = new Date(dayKey + "T12:00:00");
+        const isToday   = dayKey === todayKey;
+        const dayLabel  = isToday
+            ? `Сегодня, ${dayDate.getDate()} ${MON_NAMES[dayDate.getMonth()]}`
+            : `${DAY_NAMES[dayDate.getDay()]}, ${dayDate.getDate()} ${MON_NAMES[dayDate.getMonth()]}`;
+
+        const nowPeriodId = currentPeriodId(nowHr);
+        const periodOrder = ["night","morn","day","eve"];
+        const futureHours = isToday
+            ? dayHours.filter(h => {
+                const hr = new Date(h.time).getHours();
+                const pId = currentPeriodId(hr);
+                return periodOrder.indexOf(pId) >= periodOrder.indexOf(nowPeriodId);
+            })
+            : dayHours;
+        const dayAgg = aggregateDay(futureHours.length ? futureHours : dayHours);
+        const { tMin, tMax, avgDir, avgSpd, precip, snow, wx, comfort, comfortColor } = dayAgg;
+
+        const defaultPeriod = isToday ? currentPeriodId(nowHr) : "day";
+
+        const visiblePeriods = PERIODS.filter(p => {
+            if(!isToday) return true;
+            return periodOrder.indexOf(p.id) >= periodOrder.indexOf(nowPeriodId);
+        });
+
+        const periodsHtml = visiblePeriods.map(p => {
+            const periodHrs = dayHours.filter(h => p.hours.includes(new Date(h.time).getHours()));
+            const agg = aggregatePeriod(periodHrs);
+            return renderPeriodCard(p.id, agg, dayKey, p.id === defaultPeriod);
+        }).join("");
+
+        const precipSummary = precip > 0.5
+            ? `<span style="font-size:15px;color:#74b9ff;">💧${precip.toFixed(1)} мм</span>`
+            : snow > 0.1
+            ? `<span style="font-size:15px;color:#a8d8ea;">❄ ${snow.toFixed(1)}</span>`
+            : "";
+
+        html += `
+        <div class="day-block" id="db_${dayKey}" style="margin-bottom:10px;">
+            <div style="
+                display:flex;align-items:baseline;justify-content:center;gap:12px;
+                padding:14px 12px 12px;
+                background:linear-gradient(180deg, ${comfortColor}22 0%, ${comfortColor}08 60%, transparent 100%);
+                border-bottom:1px solid ${comfortColor}33;
+            ">
+                <span style="font-size:42px;font-weight:800;color:#fff;line-height:1;">${dayDate.getDate()}</span>
+                <span style="font-size:22px;color:#bbb;text-transform:uppercase;letter-spacing:0.1em;align-self:center;">${MON_NAMES[dayDate.getMonth()]}</span>
+                <span style="font-size:18px;color:${isToday ? '#FFD700' : '#666'};font-weight:${isToday ? '700' : '400'};align-self:center;">${isToday ? '· сегодня' : '· ' + DAY_NAMES[dayDate.getDay()]}</span>
             </div>
-            <div class="details">
-                <div class="status-line" style="color:${c}">${w.text} • ${comfort}</div>
-                <div class="grid-container">
-                    <div><span class="label">Ощущается</span><div class="val">${h.apparent_temperature.toFixed(1)}°</div></div>
-                    <div><span class="label">Влажность</span><div class="val">${h.relative_humidity_2m}%</div></div>
-                    <div><span class="label">Ветер</span><div class="val">${windDir(h.wind_direction_10m)} ${Math.round(h.wind_speed_10m)} м/с</div></div>
-                    <div><span class="label">Порывы</span><div class="val">${Math.round(h.wind_gusts_10m)} м/с</div></div>
-                    <div><span class="label">Давление</span><div class="val">${(h.pressure_msl/1).toFixed(1)} гПа</div></div>
-                    <div><span class="label">Видимость</span><div class="val">${(h.visibility/1000).toFixed(0)} км</div></div>
-                    <div><span class="label">Облачность</span><div class="val">${h.cloud_cover}%</div></div>
-                    <div><span class="label">Слои L/M/H</span><div class="val">${h.cloud_cover_low}/${h.cloud_cover_mid}/${h.cloud_cover_high}</div></div>
-                    <div><span class="label">Снег</span><div class="val">${h.snowfall} мм</div></div>
-                    <div><span class="label">Покров</span><div class="val">${h.snow_depth} см</div></div>
+            <div class="day-summary" onclick="toggleDay('${dayKey}')">
+                <div class="indicator-line" style="background:${comfortColor};flex-shrink:0;"></div>
+                <div style="flex:1;min-width:0;">
+                    ${precipSummary ? `<div style="font-size:22px;margin-bottom:6px;">${precipSummary}</div>` : ""}
+                    <div style="display:flex;align-items:center;gap:16px;">
+                        <span style="font-size:44px;line-height:1;">${wx.icon}</span>
+                        <span style="font-size:22px;color:#aaa;">${wx.text}</span>
+                    </div>
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:6px;flex-shrink:0;">
+                    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
+                        <span style="font-size:30px;font-weight:800;color:#ff8f00;line-height:1;">${tMax!=null?tMax.toFixed(0)+'°':'-'}</span>
+                        <span style="font-size:22px;color:#74b9ff;line-height:1;">${tMin!=null?tMin.toFixed(0)+'°':'-'}</span>
+                    </div>
+                    <div style="font-size:18px;color:#aaa;text-align:right;">
+                        <i style="display:inline-block;transform:rotate(${avgDir+180}deg);font-style:normal;">↑</i>
+                        ${Math.round(avgSpd)} м/с
+                    </div>
+                    <div style="font-size:16px;color:${comfortColor};font-weight:600;">${comfort}</div>
+                </div>
+            </div>
+            <div class="day-body" id="dayBody_${dayKey}">
+                <div class="day-body-inner">
+                    <div class="day-body-inner-pad">
+                        <div class="periods-grid" id="pg_${dayKey}">${periodsHtml}</div>
+                        <div id="periodBodies_${dayKey}"></div>
+                    </div>
                 </div>
             </div>
         </div>`;
     });
-    document.getElementById("forecast").innerHTML=html;
+
+    document.getElementById("forecast").innerHTML = html;
+}
+
+// =============================================
+// КОНСТАНТЫ
+// =============================================
+const DAY_NAMES  = ["Вс","Пн","Вт","Ср","Чт","Пт","Сб"];
+const MON_NAMES  = ["янв","фев","мар","апр","май","июн","июл","авг","сен","окт","ноя","дек"];
+const PERIODS    = [
+    { id:"night", label:"Ночь",  hours:[0,1,2,3,4,5]           },
+    { id:"morn",  label:"Утро",  hours:[6,7,8,9,10,11]          },
+    { id:"day",   label:"День",  hours:[12,13,14,15,16,17]       },
+    { id:"eve",   label:"Вечер", hours:[18,19,20,21,22,23]       },
+];
+
+const tColors = [
+    [62,200,255],[157,214,255],[95,224,143],[255,216,77],[255,107,107]
+];
+function lerpRgb(norm){
+    const seg = (tColors.length - 1) * norm;
+    const i0  = Math.min(Math.floor(seg), tColors.length - 2);
+    const f   = seg - i0;
+    const a   = tColors[i0], b = tColors[i0+1];
+    return [
+        Math.round(a[0]+(b[0]-a[0])*f),
+        Math.round(a[1]+(b[1]-a[1])*f),
+        Math.round(a[2]+(b[2]-a[2])*f)
+    ];
+}
+
+function currentPeriodId(hr){
+    if(hr < 6)  return "night";
+    if(hr < 12) return "morn";
+    if(hr < 18) return "day";
+    return "eve";
+}
+
+function aggregatePeriod(hrs){
+    if(!hrs.length) return null;
+    const temps  = hrs.map(h => h.temperature_2m).filter(v => v != null);
+    const feels  = hrs.map(h => h.apparent_temperature).filter(v => v != null);
+    const winds  = hrs.map(h => h.wind_speed_10m).filter(v => v != null);
+    const gusts  = hrs.map(h => h.wind_gusts_10m).filter(v => v != null);
+    const precip = hrs.reduce((s,h) => s + (h.rain||0) + (h.showers||0), 0);
+    const snow   = hrs.reduce((s,h) => s + (h.snowfall||0), 0);
+    const prob   = Math.max(...hrs.map(h => h.precip_prob ?? 0));
+    const cloud  = Math.round(hrs.reduce((s,h) => s + (h.cloud_cover||0), 0) / hrs.length);
+    const code   = Math.max(...hrs.map(h => h.weather_code ?? 0));
+    let sx = 0, sy = 0;
+    hrs.forEach(h => {
+        const rad = (h.wind_direction_10m ?? 0) * Math.PI / 180;
+        sx += Math.sin(rad); sy += Math.cos(rad);
+    });
+    const avgDir = ((Math.atan2(sx/hrs.length, sy/hrs.length) * 180/Math.PI) + 360) % 360;
+    const avgSpd = winds.length ? winds.reduce((a,b)=>a+b,0)/winds.length : 0;
+    const maxGust= gusts.length ? Math.max(...gusts) : 0;
+    const tMin   = temps.length ? Math.min(...temps) : null;
+    const tMax   = temps.length ? Math.max(...temps) : null;
+    const tAvg   = temps.length ? temps.reduce((a,b)=>a+b,0)/temps.length : null;
+    const fAvg   = feels.length ? feels.reduce((a,b)=>a+b,0)/feels.length : null;
+    const rh     = Math.round(hrs.reduce((s,h)=>s+(h.relative_humidity_2m||0),0)/hrs.length);
+    const psl    = hrs.reduce((s,h)=>s+(h.pressure_msl||0),0)/hrs.length;
+    const vis    = Math.round(hrs.reduce((s,h)=>s+(h.visibility||10000),0)/hrs.length / 1000);
+    const midH   = hrs[Math.floor(hrs.length/2)];
+    const { comfort, color: comfortColor } = comfortLevel(midH);
+    const hrMid  = new Date(midH.time).getHours();
+    const wx     = weatherCode(code, hrMid, cloud, precip, snow);
+    return {
+        hrs, temps, tMin, tMax, tAvg, fAvg,
+        avgDir, avgSpd, maxGust,
+        precip, snow, prob, cloud, rh, psl, vis,
+        code, wx, comfort, comfortColor
+    };
+}
+
+function aggregateDay(dayHours){
+    const temps  = dayHours.map(h => h.temperature_2m).filter(v => v != null);
+    const precip = dayHours.reduce((s,h)=>s+(h.rain||0)+(h.showers||0), 0);
+    const snow   = dayHours.reduce((s,h)=>s+(h.snowfall||0), 0);
+    const cloud  = Math.round(dayHours.reduce((s,h)=>s+(h.cloud_cover||0),0)/dayHours.length);
+    const code   = Math.max(...dayHours.map(h => h.weather_code ?? 0));
+    let sx = 0, sy = 0;
+    dayHours.forEach(h => {
+        const rad = (h.wind_direction_10m ?? 0) * Math.PI / 180;
+        sx += Math.sin(rad); sy += Math.cos(rad);
+    });
+    const avgDir = ((Math.atan2(sx/dayHours.length, sy/dayHours.length) * 180/Math.PI) + 360) % 360;
+    const winds  = dayHours.map(h => h.wind_speed_10m).filter(v=>v!=null);
+    const avgSpd = winds.length ? winds.reduce((a,b)=>a+b,0)/winds.length : 0;
+    const tMin   = temps.length ? Math.min(...temps) : null;
+    const tMax   = temps.length ? Math.max(...temps) : null;
+    const dayH   = dayHours.find(h => new Date(h.time).getHours() === 14) || dayHours[Math.floor(dayHours.length/2)];
+    const { comfort, color: comfortColor } = comfortLevel(dayH);
+    const wx     = weatherCode(code, 14, cloud, precip, snow);
+    return { tMin, tMax, avgDir, avgSpd, precip, snow, wx, comfort, comfortColor };
+}
+
+function renderHourCard(h){
+    const d       = new Date(h.time);
+    const hr      = d.getHours();
+    const t       = h.temperature_2m;
+    const tNorm   = Math.max(0, Math.min(1, (t + 20) / 60));
+    const [r,g,b2]= lerpRgb(tNorm);
+    const rowBg   = `rgba(${r},${g},${b2},${(hr<6||hr>=23)?0.03:0.08})`;
+    const wx      = weatherCode(h.weather_code, hr, h.cloud_cover, h.rain, h.snowfall);
+    const { comfort, color: c } = comfortLevel(h);
+    const windDeg = h.wind_direction_10m ?? 0;
+    const precip  = (h.rain||0) + (h.showers||0);
+    const precipPct = Math.min(100, precip / 10 * 100);
+    const probPct = h.precip_prob ?? 0;
+    const cloudPct= h.cloud_cover ?? 0;
+
+    function bar(pct, color, bg="#222"){
+        return `<div style="flex:1;height:5px;background:${bg};border-radius:3px;overflow:hidden;">
+            <div style="width:${pct}%;height:100%;background:${color};border-radius:3px;"></div>
+        </div>`;
+    }
+    function barRow(label, pct, color, valStr, bg="#222"){
+        return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <span style="width:74px;flex-shrink:0;font-size:13px;color:#aaa;">${label}</span>
+            ${bar(pct, color, bg)}
+            <span style="font-size:13px;color:#777;width:44px;text-align:right;flex-shrink:0;">${valStr}</span>
+        </div>`;
+    }
+
+    const uid = h.time.replace(/[^0-9]/g, "");
+
+    return `
+    <div class="hour-row" style="background:${rowBg};" id="hr_${uid}">
+        <div class="hour-summary" onclick="toggleHourCard('${uid}')">
+            <div class="indicator-line" style="background:${c};"></div>
+            <div style="width:16%;font-size:15px;color:#aaa;">${hr}:00</div>
+            <div style="width:18%;font-size:1.7em;text-align:center;">${wx.icon}</div>
+            <div style="width:32%;text-align:center;font-weight:800;font-size:17px;color:${t>0?'#ff8f00':'#00e5ff'}">${t.toFixed(1)}°</div>
+            <div style="width:34%;text-align:center;">
+                <i style="display:inline-block;transform:rotate(${windDeg+180}deg);font-style:normal;font-size:15px;">↑</i>
+                <span style="font-size:14px;font-weight:600;margin-left:2px;">${Math.round(h.wind_speed_10m)}<span style="font-size:11px;color:#777;"> м/с</span></span>
+            </div>
+        </div>
+        <div class="hour-details" id="hd_${uid}">
+            <div class="hour-details-inner">
+                <div class="status-line" style="color:${c};font-size:14px;padding:8px 0;">${wx.text} · ${comfort}</div>
+                <div style="padding:8px 0;border-top:1px solid #222;display:flex;flex-direction:column;">
+                    ${barRow("Осадки", precipPct, "#4a90d9", precip>0?precip.toFixed(1)+" мм":"0 мм", "#1e2a3a")}
+                    ${barRow("Вер-ть", probPct, "#5b8fc9", probPct+"%")}
+                    ${barRow("Облака", cloudPct, "#666", cloudPct+"%")}
+                </div>
+                <div style="padding:8px 0;border-top:1px solid #222;">
+                    <div class="grid-container" style="gap:10px;">
+                        <div><span class="label" style="font-size:12px;">Ощущается</span><div class="val" style="font-size:15px;">${h.apparent_temperature.toFixed(1)}°</div></div>
+                        <div><span class="label" style="font-size:12px;">Влажность</span><div class="val" style="font-size:15px;">${h.relative_humidity_2m}%</div></div>
+                        <div><span class="label" style="font-size:12px;">Ветер</span><div class="val" style="font-size:15px;">${windDir(windDeg)} ${Math.round(h.wind_speed_10m)} м/с</div></div>
+                        <div><span class="label" style="font-size:12px;">Порывы</span><div class="val" style="font-size:15px;">${Math.round(h.wind_gusts_10m)} м/с</div></div>
+                        <div><span class="label" style="font-size:12px;">Давление</span><div class="val" style="font-size:15px;">${h.pressure_msl.toFixed(1)} гПа</div></div>
+                        <div><span class="label" style="font-size:12px;">Видимость</span><div class="val" style="font-size:15px;">${(h.visibility/1000).toFixed(0)} км</div></div>
+                        ${h.snowfall > 0 ? `<div><span class="label" style="font-size:12px;">Снег</span><div class="val" style="font-size:15px;">${h.snowfall} мм</div></div>` : ""}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>`;
+}
+
+function renderPeriodCard(pId, agg, dayKey, isActive){
+    if(!agg) return "";
+    const p = PERIODS.find(x => x.id === pId);
+    const tNorm = Math.max(0, Math.min(1, ((agg.tAvg??0) + 20) / 60));
+    const [r,g,b2] = lerpRgb(tNorm);
+    const bg = `rgba(${r},${g},${b2},0.06)`;
+    const precipStr = agg.precip > 0.1 ? `${agg.precip.toFixed(1)} мм` : (agg.snow > 0.1 ? `❄ ${agg.snow.toFixed(1)}` : "");
+    return `
+    <div class="period-card${isActive?' period-active':''}"
+         id="pc_${dayKey}_${pId}"
+         onclick="togglePeriod('${dayKey}','${pId}')"
+         style="background:${bg};">
+        <div style="font-size:12px;color:#666;margin-bottom:4px;">${p.label}</div>
+        <div style="font-size:1.6em;">${agg.wx.icon}</div>
+        <div style="font-weight:800;font-size:17px;color:${(agg.tAvg??0)>0?'#ff8f00':'#00e5ff'};margin:3px 0;">${agg.tAvg!=null?agg.tAvg.toFixed(0)+'°':'-'}</div>
+        <div style="font-size:12px;color:#777;margin-top:3px;">
+            <i style="display:inline-block;transform:rotate(${agg.avgDir+180}deg);font-style:normal;">↑</i>
+            ${Math.round(agg.avgSpd)}
+        </div>
+        ${precipStr ? `<div style="font-size:12px;color:#74b9ff;margin-top:3px;">${precipStr}</div>` : ""}
+    </div>`;
+}
+
+function renderPeriodBody(pId, agg, dayKey){
+    if(!agg) return "";
+    const hoursHtml = agg.hrs.map(h => renderHourCard(h)).join("");
+    return `
+    <div class="period-body" id="pb_${dayKey}_${pId}">
+        <div class="period-body-inner">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:10px 0 8px;border-bottom:1px solid #222;">
+                <div style="text-align:center;">
+                    <div style="font-size:12px;color:#666;">Мин/Макс</div>
+                    <div style="font-weight:800;font-size:17px;">${agg.tMin!=null?agg.tMin.toFixed(0)+'°':'-'} / ${agg.tMax!=null?agg.tMax.toFixed(0)+'°':'-'}</div>
+                </div>
+                <div style="text-align:center;">
+                    <div style="font-size:12px;color:#666;">Осадки</div>
+                    <div style="font-weight:800;font-size:17px;">${agg.precip>0.1?agg.precip.toFixed(1)+' мм':(agg.snow>0.1?'❄ '+agg.snow.toFixed(1):'нет')}</div>
+                </div>
+                <div style="text-align:center;">
+                    <div style="font-size:12px;color:#666;">Влажность</div>
+                    <div style="font-weight:800;font-size:17px;">${agg.rh}%</div>
+                </div>
+            </div>
+            <div style="padding:10px 0 6px;font-size:12px;color:#555;font-weight:600;letter-spacing:0.04em;">ПО ЧАСАМ</div>
+            ${hoursHtml}
+        </div>
+    </div>`;
+}
+
+let _openHourUid = null;
+
+function toggleHourCard(uid){
+    const det = document.getElementById("hd_" + uid);
+    if(!det) return;
+    const isOpen = det.classList.contains("open");
+    if(_openHourUid && _openHourUid !== uid){
+        const prev = document.getElementById("hd_" + _openHourUid);
+        if(prev) prev.classList.remove("open");
+    }
+    if(isOpen){
+        det.classList.remove("open");
+        _openHourUid = null;
+    } else {
+        det.classList.add("open");
+        _openHourUid = uid;
+    }
+}
+
+function toggleDay(dayKey){
+    const body = document.getElementById("dayBody_" + dayKey);
+    if(!body) return;
+    const isOpen = body.classList.contains("open");
+    document.querySelectorAll(".day-body").forEach(el => el.classList.remove("open"));
+    if(!isOpen){
+        body.classList.add("open");
+        const pbCont = document.getElementById("periodBodies_" + dayKey);
+        if(pbCont && !pbCont.innerHTML.trim()){
+            const firstActive = document.querySelector(`#pg_${dayKey} .period-card.period-active`);
+            if(firstActive){
+                const pId = firstActive.id.split("_").slice(-1)[0];
+                openPeriod(dayKey, pId);
+            }
+        }
+    }
+}
+
+function togglePeriod(dayKey, pId){
+    const pbCont  = document.getElementById("periodBodies_" + dayKey);
+    if(!pbCont) return;
+    const existing = document.getElementById("pb_" + dayKey + "_" + pId);
+    if(existing){
+        existing.classList.remove("open");
+        setTimeout(() => {
+            pbCont.innerHTML = "";
+            document.querySelectorAll(`#pg_${dayKey} .period-card`).forEach(el => el.classList.remove("period-active"));
+        }, 500);
+        return;
+    }
+    openPeriod(dayKey, pId);
+}
+
+function openPeriod(dayKey, pId){
+    if(!window._fcAllHours) return;
+    const p = PERIODS.find(x => x.id === pId);
+    if(!p) return;
+    const periodHrs = window._fcAllHours.filter(h =>
+        h.time.slice(0,10) === dayKey &&
+        p.hours.includes(new Date(h.time).getHours())
+    );
+    if(!periodHrs.length) return;
+    const agg = aggregatePeriod(periodHrs);
+    if(!agg) return;
+    const pbCont = document.getElementById("periodBodies_" + dayKey);
+    if(!pbCont) return;
+    const prevBody = pbCont.querySelector(".period-body");
+    if(prevBody){
+        prevBody.classList.remove("open");
+        setTimeout(() => {
+            pbCont.innerHTML = "";
+            _renderAndOpenPeriod(dayKey, pId, agg, pbCont);
+        }, 480);
+    } else {
+        _renderAndOpenPeriod(dayKey, pId, agg, pbCont);
+    }
+}
+
+function _renderAndOpenPeriod(dayKey, pId, agg, pbCont){
+    document.querySelectorAll(`#pg_${dayKey} .period-card`).forEach(el => el.classList.remove("period-active"));
+    const btn = document.getElementById("pc_" + dayKey + "_" + pId);
+    if(btn) btn.classList.add("period-active");
+    pbCont.innerHTML = renderPeriodBody(pId, agg, dayKey);
+    _openHourUid = null;
+    const pb = document.getElementById("pb_" + dayKey + "_" + pId);
+    if(pb) requestAnimationFrame(() => requestAnimationFrame(() => pb.classList.add("open")));
 }
 
 load();

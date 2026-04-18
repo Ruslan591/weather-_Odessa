@@ -1,0 +1,1328 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<link rel="stylesheet" href="verify.css">
+<meta name="theme-color" content="#121212">
+<title>Рейтинг моделей</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+</head>
+
+<body>
+<div class="header">
+    <div class="nav">
+        <a href="index.html">ГМЦ ЧАМ</a>
+        <a href="pws.html">PWS</a>
+        <a href="forecast.html">Прогноз</a>
+    </div>
+    <div class="headerTitle">Рейтинг</div>
+</div>
+
+<div class="container">
+
+<div id="lastUpdate" style="color:#aaa;font-size:0.9em;">Обновление...</div>
+<br>
+
+<canvas id="chart" height="220"></canvas>
+<div id="chartPlaceholder" class="chart-placeholder" style="display:none">
+    График недоступен для этого периода
+</div>
+
+<div style="text-align:center; margin-top:10px;">
+
+    <!-- ПЕРИОДЫ -->
+    <div class="period-group">
+        <button id="btn-24h"       onclick="setPeriod('24h')">24 часа</button>
+        <button id="btn-3d"        onclick="setPeriod('3d')">3 дня</button>
+        <button id="btn-16d"       onclick="setPeriod('16d')">16 дней</button>
+        <button id="btn-month-cur" onclick="setPeriod('month-cur')">Этот месяц</button>
+        <button id="btn-month"     onclick="setPeriod('month')">По месяцам</button>
+        <button id="btn-season"    onclick="setPeriod('season')">Сезон</button>
+    </div>
+
+    <!-- ПАРАМЕТРЫ -->
+    <div class="period-group" style="margin-top:6px">
+        <button id="btn-temp"       onclick="setParam('temp')">Температура</button>
+        <button id="btn-pressure"   onclick="setParam('pressure')">Давление</button>
+        <button id="btn-wind"       onclick="setParam('wind')">Ветер</button>
+        <button id="btn-windDir"    onclick="setParam('windDir')">Направление</button>
+        <button id="btn-cloudcover" onclick="setParam('cloudcover')">Облачность</button>
+        <button id="btn-precip"     onclick="setParam('precip')">Осадки</button>
+        <button id="btn-error"      onclick="setMode('error')">Ошибка</button>
+        <button id="btn-value"      onclick="setMode('value')">Значение</button>
+    </div>
+
+    <br>
+    <button onclick="showData()">Показать данные</button>
+    <button onclick="updateRecent()">Загрузить свежие</button>
+    <button id="stopBtn" onclick="stopHistory()" style="display:none;background:#8b0000;">⏹ Остановить</button>
+</div>
+
+<br>
+<button id="importBtn">Выбрать файл</button>
+<input type="file" id="importFile" accept=".json" style="display:none">
+<button onclick="exportDB()">Сохранить</button>
+<button onclick="checkDB()">Проверить базу</button>
+<button onclick="cleanDB()">Очистить мусор</button>
+<button onclick="rebuildHistory()" style="background:#4a3000;">🔄 Перестроить базу</button>
+<button onclick="clearAllDB()" style="background:#5a0000;">🗑 Сбросить базу</button>
+
+<br><br>
+
+<div id="stickyBar">
+    <!-- ВКЛАДКИ -->
+    <div class="tabs" id="mainTabs">
+        <button id="tab-main-btn" onclick="switchTab('main')">Рейтинг</button>
+        <button id="tab-lead-btn" onclick="switchTab('lead')">По заблаговременности</button>
+    </div>
+
+    <!-- Селектор месяца (горизонтальный скролл) -->
+    <div id="monthSelector" style="display:none; overflow-x:auto; -webkit-overflow-scrolling:touch;">
+        <div class="month-btn-row" id="monthBtnRow"></div>
+    </div>
+
+    <!-- Селектор сезона -->
+    <div id="seasonSelector" style="display:none;">
+        <div class="period-group">
+            <button id="btn-s-winter" onclick="setSeason('winter')">Зима дек–фев</button>
+            <button id="btn-s-spring" onclick="setSeason('spring')">Весна мар–май</button>
+            <button id="btn-s-summer" onclick="setSeason('summer')">Лето июн–авг</button>
+            <button id="btn-s-autumn" onclick="setSeason('autumn')">Осень сен–ноя</button>
+        </div>
+    </div>
+</div>
+
+<div id="rating">Загрузка...</div>
+
+</div>
+
+<script>
+/* =========================================================
+   СОСТОЯНИЕ
+========================================================= */
+let currentPeriod = "24h";
+let currentParam  = "temp";
+let chartMode     = "error";
+let currentMonth  = new Date().getMonth() + 1;
+let currentSeason = getCurrentSeason();
+let currentTab    = "main";
+let chartInstance = null;
+let db;
+
+const models = [
+    "ecmwf_ifs",
+    "icon_eu",
+    "icon_global",
+    "ukmo_global_deterministic_10km",
+    "meteofrance_arpege_europe",
+    "gfs_global",
+    "cma_grapes_global"
+];
+
+const MODEL_DATA_FILES = [
+    "modelData_2023.json",
+    "modelData_2024.json",
+    "modelData_2025.json",
+    "modelData_2026.json"
+];
+let jsonStatsCache = null;
+
+const LEAD_GROUPS = [
+    { label: "0–24 ч",    min: 0,   max: 24  },
+    { label: "24–48 ч",   min: 24,  max: 48  },
+    { label: "48–72 ч",   min: 48,  max: 72  },
+    { label: "72–120 ч",  min: 72,  max: 120 },
+    { label: "120–240 ч", min: 120, max: 240 }
+];
+
+const SEASON_MONTHS = {
+    winter: [12,1,2], spring: [3,4,5], summer: [6,7,8], autumn: [9,10,11]
+};
+const SEASON_LABELS = {
+    winter: "Зима (дек–фев)", spring: "Весна (мар–май)",
+    summer: "Лето (июн–авг)", autumn: "Осень (сен–ноя)"
+};
+const MONTH_NAMES = ["Январь","Февраль","Март","Апрель","Май","Июнь",
+                     "Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+
+function getCurrentSeason() {
+    const m = new Date().getMonth() + 1;
+    if ([12,1,2].includes(m))  return "winter";
+    if ([3,4,5].includes(m))   return "spring";
+    if ([6,7,8].includes(m))   return "summer";
+    return "autumn";
+}
+
+/* =========================================================
+   ВСПОМОГАТЕЛЬНЫЕ
+========================================================= */
+function modelLabel(m) {
+    const map = {
+        "ecmwf_ifs":"ECMWF", "icon_eu":"ICON-EU", "icon_global":"ICON-G",
+        "ukmo_global_deterministic_10km":"UKMO", "meteofrance_arpege_europe":"ARPEGE",
+        "jma_gsm":"JMA", "gfs_global":"GFS", "gem_global":"GEM", "cma_grapes_global":"CMA"
+    };
+    return map[m] || m;
+}
+
+function fetchWithTimeout(url, ms=10000) {
+    return Promise.race([fetch(url), new Promise((_,r)=>setTimeout(()=>r("Timeout"),ms))]);
+}
+
+function windDirError(a,b) {
+    let d = Math.abs(a-b);
+    return d > 180 ? 360-d : d;
+}
+
+function synopTimeToMs(tk) {
+    return new Date(tk.slice(0,4)+"-"+tk.slice(4,6)+"-"+tk.slice(6,8)+"T"+tk.slice(8,10)+":00:00Z").getTime();
+}
+function synopMonth(tk) { return parseInt(tk.slice(4,6)); }
+
+function setStatus(msg, spinning=false) {
+    const el = document.getElementById("lastUpdate");
+    el.innerHTML = '<span>'+(spinning?'<span class="spin">⏳</span> ':'')+msg+'</span>';
+    el.classList.remove("running");
+    requestAnimationFrame(function(){ requestAnimationFrame(function(){
+        const s = el.querySelector("span");
+        if (s && s.scrollWidth > el.clientWidth) el.classList.add("running");
+    }); });
+}
+
+/* =========================================================
+   INDEXEDDB
+========================================================= */
+function initDB() {
+    return new Promise(function(resolve, reject) {
+        const req = indexedDB.open("modelStats", 2);
+        req.onupgradeneeded = function(e) {
+            db = e.target.result;
+            if (!db.objectStoreNames.contains("stats"))
+                db.createObjectStore("stats", {keyPath:"synopTime"});
+        };
+        req.onsuccess = function(e) { db = e.target.result; resolve(); };
+        req.onerror   = reject;
+    });
+}
+
+function saveDataBatch(records) {
+    if (!db || !records.length) return Promise.resolve();
+    return new Promise(function(resolve, reject) {
+        const tx = db.transaction("stats","readwrite");
+        const store = tx.objectStore("stats");
+        records.forEach(function(d) { store.put(d); });
+        tx.oncomplete = resolve;
+        tx.onerror = reject;
+    });
+}
+
+function saveData(data) {
+    if (!db) return;
+    db.transaction("stats","readwrite").objectStore("stats").put(data);
+}
+
+async function synopExists(synopTime) {
+    if (!db) return false;
+    return new Promise(function(res) {
+        const req = db.transaction("stats","readonly").objectStore("stats").get(synopTime);
+        req.onsuccess = function() { res(req.result !== undefined); };
+        req.onerror   = function() { res(false); };
+    });
+}
+
+function dbGetAll() {
+    if (!db) return Promise.resolve([]);
+    return new Promise(function(res) {
+        const req = db.transaction("stats","readonly").objectStore("stats").getAll();
+        req.onsuccess = function() { res(req.result); };
+        req.onerror   = function() { res([]); };
+    });
+}
+
+/* =========================================================
+   ЗАГРУЗКА ДАННЫХ
+========================================================= */
+async function loadJsonStats() {
+    if (jsonStatsCache) return jsonStatsCache;
+
+    const prevStatus = document.getElementById("lastUpdate").innerText;
+    setStatus("📂 Загрузка исторических данных...", true);
+
+    let result = [];
+    for (const file of MODEL_DATA_FILES) {
+        try {
+            const r = await fetch(file);
+            if (!r.ok) continue;
+            result = result.concat(await r.json());
+        } catch(e) { console.log("Не удалось загрузить", file, e); }
+    }
+    jsonStatsCache = result;
+    setStatus(prevStatus);
+    return result;
+}
+
+async function loadAllStats() {
+    const jsonData = await loadJsonStats();
+    const dbData   = await dbGetAll();
+    const map = new Map();
+    for (const d of jsonData) map.set(d.synopTime, d);
+    for (const d of dbData)   map.set(d.synopTime, d);
+    return Array.from(map.values());
+}
+
+async function loadStats() {
+    const now     = Date.now();
+    const cutoffs = {"24h":24*3600*1000, "3d":3*24*3600*1000, "16d":16*24*3600*1000};
+
+    if (currentPeriod in cutoffs) {
+        const dbData = await dbGetAll();
+        return dbData.filter(function(d) { return now - synopTimeToMs(d.synopTime) <= cutoffs[currentPeriod]; });
+    }
+
+    const all = await loadAllStats();
+
+    if (currentPeriod === "month-cur") {
+        const nowDate = new Date();
+        return all.filter(function(d) {
+            return synopMonth(d.synopTime) === nowDate.getUTCMonth()+1 &&
+                   parseInt(d.synopTime.slice(0,4)) === nowDate.getUTCFullYear();
+        });
+    }
+    if (currentPeriod === "month") {
+        return all.filter(function(d) { return synopMonth(d.synopTime) === currentMonth; });
+    }
+    if (currentPeriod === "season") {
+        return all.filter(function(d) { return SEASON_MONTHS[currentSeason].includes(synopMonth(d.synopTime)); });
+    }
+    return all;
+}
+
+/* =========================================================
+   ПАРСИНГ SYNOP
+========================================================= */
+function formatOgimetDate(d) {
+    return d.getUTCFullYear()
+        + String(d.getUTCMonth()+1).padStart(2,"0")
+        + String(d.getUTCDate()).padStart(2,"0")
+        + String(d.getUTCHours()).padStart(2,"0")+"00";
+}
+
+function parseAllSynops(text) {
+    const result = [];
+    for (const line of text.split("\n").map(function(l){return l.trim();}).filter(Boolean)) {
+        const m = line.match(/^33837,(\d{4}),(\d{2}),(\d{2}),(\d{2}),\d{2},(AAXX\s.+)$/);
+        if (!m) continue;
+        const y=m[1], mo=m[2], dd=m[3], hh=m[4], synopLine=m[5];
+        if (synopLine.includes("NILL")) continue;
+        const telegramKey = y+mo+dd+hh;
+        try {
+            const parsed = parseSynop(synopLine, telegramKey);
+            if (parsed && parsed.temp !== null) result.push({telegramKey, synopLine, parsed});
+        } catch(e) {}
+    }
+    return result;
+}
+
+// ЗАМЕНИТЬ функцию parseSynop полностью:
+function parseSynop(line, telegramKey) {
+    const parts     = line.trim().split(/\s+/);
+    const sec333    = parts.indexOf("333");
+    const sec555    = parts.indexOf("555");
+    const mainEnd   = sec333 !== -1 ? sec333 : (sec555 !== -1 ? sec555 : parts.length);
+    const mainParts = parts.slice(0, mainEnd);
+
+    let temp=null, pressure=null, wind=null, windDir=null;
+    let cloudcover=null, precip=null, ww=null, dew=null, visibility=null;
+
+    // Раздел 0: AAXX YYGGiw IIiii — пропускаем первые 3 группы
+    // mainParts[0]=AAXX, [1]=YYGGiw, [2]=IIiii, [3]=iRiXhVV, [4]=Nddff, далее параметры
+
+    // iR — индикатор осадков (первая цифра группы iRiXhVV)
+    let iR = null;
+    const grp3 = mainParts[3]; // iRiXhVV
+    if (grp3 && grp3.length === 5) {
+        iR = parseInt(grp3[0]);
+        // Видимость VV
+        const VV = grp3.slice(3,5);
+        if (VV !== "//" && !isNaN(parseInt(VV))) {
+            const vv = parseInt(VV);
+            if (vv <= 50)       visibility = vv * 100;
+            else if (vv <= 80)  visibility = (vv - 50) * 1000;
+            else if (vv === 89) visibility = 70000;
+        }
+    }
+
+    // Nddff — облачность и ветер
+    const grp4 = mainParts[4]; // Nddff
+    if (grp4 && /^\d{5}$/.test(grp4)) {
+        const N = parseInt(grp4[0]);
+        cloudcover = N <= 8 ? Math.round(N / 8 * 100) : null;
+        windDir    = parseInt(grp4.slice(1,3)) * 10;
+        wind       = parseInt(grp4.slice(3,5));
+        if (isNaN(windDir)) windDir = null;
+        if (isNaN(wind))    wind    = null;
+    }
+
+    // Группы раздела 1 начиная с [5]
+    for (let i = 5; i < mainParts.length; i++) {
+        const g = mainParts[i];
+        if (!g || g.length !== 5) continue;
+
+        // 1snTTT — температура
+        if (/^1[01]\d{3}$/.test(g))
+            temp = (g[1]==="1" ? -1 : 1) * parseInt(g.slice(2)) / 10;
+
+        // 2snTdTdTd — точка росы
+        else if (/^2[01]\d{3}$/.test(g))
+            dew  = (g[1]==="1" ? -1 : 1) * parseInt(g.slice(2)) / 10;
+
+        // 4PPPP — давление на уровне моря
+        else if (/^4\d{4}$/.test(g)) {
+            const val = parseInt(g.slice(1)) / 10;
+            pressure  = val < 500 ? 1000 + val : 900 + val;
+            if (pressure < 920 || pressure > 1050) pressure = null;
+        }
+
+        // 6RRRtR — осадки, только если iR=1 или iR=2 (осадки включены)
+        // iR=0: осадки включены (выпали), iR=1: осадки включены (не выпали)
+        // iR=3: осадки не включены, iR=4: осадки не включены
+        else if (/^6\d{4}$/.test(g) && (iR === 0 || iR === 1 || iR === 2)) {
+            const RRR = parseInt(g.slice(1,4));
+            if (RRR === 990) precip = 0;
+            else if (RRR >= 991 && RRR <= 999) precip = (RRR - 990) * 0.1;
+            else if (RRR === 0) precip = 0;
+            else precip = RRR;
+        }
+
+        // 7wwW1W2 — текущая погода
+        else if (/^7\d{4}$/.test(g))
+            ww = parseInt(g.slice(1,3));
+    }
+
+    return {time:telegramKey, temp, dew, pressure, wind, windDir,
+            cloudcover, precip, ww, visibility, synop:line};
+}
+
+async function loadSynopRecent(days) {
+    if (days === undefined) days = 16;
+    const now=new Date(), end=formatOgimetDate(now);
+    const from=new Date(now.getTime()-days*24*3600*1000), begin=formatOgimetDate(from);
+    const url="https://www.ogimet.com/cgi-bin/getsynop?block=33837&begin="+begin+"&end="+end;
+    const proxies=["https://corsproxy.io/?","https://api.allorigins.win/raw?url=","https://proxy.cors.sh/","https://cors.x2u.in/"];
+    const requests=proxies.map(function(proxy) {
+        return new Promise(async function(resolve, reject) {
+            const ctrl=new AbortController(), timer=setTimeout(function(){ctrl.abort();},10000);
+            try {
+                const r=await fetch(proxy+encodeURIComponent(url),{signal:ctrl.signal,cache:"no-store"});
+                if (!r.ok) throw new Error("HTTP "+r.status);
+                const text=await r.text();
+                if (!text.trim()) throw new Error("Пустой ответ");
+                resolve(text);
+            } catch(e) { reject(e); } finally { clearTimeout(timer); }
+        });
+    });
+    const settled=await Promise.allSettled(requests);
+    const ok=settled.filter(function(r){return r.status==="fulfilled";}).map(function(r){return r.value;});
+    if (!ok.length) throw new Error("Все прокси не ответили");
+    ok.sort(function(a,b){return b.length-a.length;});
+    return parseAllSynops(ok[0]);
+}
+
+/* =========================================================
+   ЗАГРУЗКА МОДЕЛЕЙ
+========================================================= */
+async function loadForecastPast(model, pastDays) {
+    const url = "https://api.open-meteo.com/v1/forecast?latitude=46.4406&longitude=30.7703" +
+        "&hourly=temperature_2m,pressure_msl,wind_speed_10m,wind_direction_10m,wind_gusts_10m" +
+        ",cloud_cover,precipitation,weather_code,visibility,dew_point_2m" +
+        "&pressure_level=850&pressure_level_variables=temperature" +
+        "&models=" + model +
+        "&forecast_days=1&past_days=" + pastDays +
+        "&timezone=UTC&wind_speed_unit=ms";
+    const r = await fetchWithTimeout(url, 15000);
+    const d = await r.json();
+    return d.hourly || null;
+}
+
+
+function buildModelsData(forecasts, hourIndex, synopHour) {
+    const modelsData = {};
+    for (const m of models) {
+        const h = forecasts[m];
+        if (!h) { console.warn("Нет данных модели:", m); continue; }
+        function getVal(arr) {
+            if (!arr || hourIndex < 0 || hourIndex >= arr.length) return null;
+            const v = arr[hourIndex];
+            return (v === null || v === undefined || isNaN(v)) ? null : v;
+        }
+        function getPrecipSum(arr) {
+            if (!arr) return null;
+            const hours = (synopHour % 6 === 0) ? 6 : 3;
+            let sum = 0;
+            for (let i = hourIndex - hours + 1; i <= hourIndex; i++) {
+                if (i < 0 || i >= arr.length || arr[i] == null) return null;
+                sum += arr[i];
+            }
+            return Math.round(sum * 10) / 10;
+        }
+        modelsData[m] = {
+            temp:        getVal(h.temperature_2m),
+            pressure:    getVal(h.pressure_msl),
+            wind:        getVal(h.wind_speed_10m),
+            windDir:     h.wind_direction_10m && getVal(h.wind_direction_10m) !== null
+                             ? Math.round(getVal(h.wind_direction_10m)/10)*10 : null,
+            gusts:       getVal(h.wind_gusts_10m),
+            cloudcover:  getVal(h.cloud_cover),
+            precip:      getPrecipSum(h.precipitation),
+            weatherCode: getVal(h.weather_code),
+            visibility:  getVal(h.visibility),
+            dewPoint:    getVal(h.dew_point_2m),
+            temp850:     getVal(h.temperature_850hPa)
+        };
+    }
+    return modelsData;
+}
+
+/* =========================================================
+   АВТООБНОВЛЕНИЕ
+========================================================= */
+async function autoUpdate() {
+    try {
+        if (!db) await initDB();
+        setStatus("Загрузка свежих SYNOP...", true);
+
+        let recentSynops;
+        try { recentSynops = await loadSynopRecent(16); }
+        catch(e) {
+            setStatus("❌ Ошибка SYNOP: "+e);
+            await render(); await drawChart();
+            setTimeout(autoUpdate, 1800000); return;
+        }
+
+        setStatus("📋 Проверка "+recentSynops.length+" сводок...");
+        const existingInDB = await dbGetAll();
+        const existingKeys = new Set(existingInDB.map(function(d){ return d.synopTime; }));
+        const missing = recentSynops.filter(function(s){ return !existingKeys.has(s.telegramKey); });
+
+        if (!missing.length) {
+            const latest = recentSynops.reduce(function(a,b){ return a.telegramKey > b.telegramKey ? a : b; });
+            const lh = latest.telegramKey.slice(6,8)+"."+latest.telegramKey.slice(4,6)+" "+latest.telegramKey.slice(8,10)+":00 UTC";
+            setStatus("✅ "+new Date().toLocaleTimeString()+" — актуально · "+lh);
+            await render(); await drawChart();
+            setTimeout(autoUpdate, 1800000); return;
+        }
+
+        setStatus("🌐 Загрузка моделей для "+missing.length+" сводок...");
+        let forecasts = {};
+        try {
+            const results = await Promise.all(models.map(function(m){ return loadForecastPast(m,16); }));
+            models.forEach(function(m,i){ forecasts[m] = results[i]; });
+        } catch(e) {
+            setStatus("❌ Ошибка моделей: "+e);
+            await render(); await drawChart();
+            setTimeout(autoUpdate, 1800000); return;
+        }
+
+        let saved = 0;
+        const toSave = [];
+        const timeArr = forecasts[models[0]] ? forecasts[models[0]].time : null;
+        if (timeArr) {
+            for (const s of missing) {
+                const tk = s.telegramKey;
+                const targetTime = tk.slice(0,4)+"-"+tk.slice(4,6)+"-"+tk.slice(6,8)+"T"+tk.slice(8,10)+":00";
+                const hourIndex  = timeArr.findIndex(function(t){ return t.indexOf(targetTime) === 0; });
+                if (hourIndex === -1) continue;
+                const synopHour = parseInt(tk.slice(8, 10));
+                const modelsData = buildModelsData(forecasts, hourIndex, synopHour);
+                toSave.push({time:new Date().toISOString(), synopTime:tk, obs:s.parsed, models:modelsData, hourIndex, forecastHour:hourIndex});
+                saved++;
+            }
+        }
+        await saveDataBatch(toSave);
+
+        const latest2 = recentSynops.reduce(function(a,b){ return a.telegramKey > b.telegramKey ? a : b; });
+        const lh2 = latest2.telegramKey.slice(6,8)+"."+latest2.telegramKey.slice(4,6)+" "+latest2.telegramKey.slice(8,10)+":00 UTC";
+        setStatus("✅ "+new Date().toLocaleTimeString()+" — добавлено: "+saved+" · "+lh2);
+        await render(); await drawChart();
+    } catch(e) {
+        setStatus("❌ Ошибка: "+e);
+        try { await render(); await drawChart(); } catch(_) {}
+    }
+    setTimeout(autoUpdate, 1800000);
+}
+
+async function updateRecent() {
+    if (!db) await initDB();
+    setStatus("Загрузка SYNOP (16 дней)...", true);
+    let recentSynops;
+    try { recentSynops = await loadSynopRecent(16); }
+    catch(e) { setStatus("❌ Ошибка SYNOP: "+e); return; }
+
+    setStatus("📋 Проверка "+recentSynops.length+" сводок...");
+
+    // Все ключи что уже есть в базе
+    const allInDB = await dbGetAll();
+    const existingKeys = new Set(allInDB.map(function(d){ return d.synopTime; }));
+
+    const missing = recentSynops.filter(function(s){ return !existingKeys.has(s.telegramKey); });
+
+    if (!missing.length) { setStatus("✅ Все данные за 16 дней актуальны"); await render(); await drawChart(); return; }
+
+    setStatus("🌐 Загрузка моделей для "+missing.length+" недостающих сводок...", true);
+    let forecasts = {};
+    try {
+        const results = await Promise.all(models.map(function(m){ return loadForecastPast(m,16); }));
+        models.forEach(function(m,i){ forecasts[m] = results[i]; });
+    } catch(e) { setStatus("❌ Ошибка моделей: "+e); return; }
+
+    let saved = 0, skipped = 0;
+    const toSave = [];
+    const timeArr = forecasts[models[0]] ? forecasts[models[0]].time : null;
+    if (timeArr) {
+        for (const s of missing) {
+            const tk = s.telegramKey;
+            const targetTime = tk.slice(0,4)+"-"+tk.slice(4,6)+"-"+tk.slice(6,8)+"T"+tk.slice(8,10)+":00";
+            const hourIndex  = timeArr.findIndex(function(t){ return t.indexOf(targetTime) === 0; });
+            if (hourIndex === -1) { skipped++; continue; }
+            const synopHour = parseInt(tk.slice(8,10));
+            const modelsData = buildModelsData(forecasts, hourIndex, synopHour);
+            toSave.push({time:new Date().toISOString(), synopTime:tk, obs:s.parsed, models:modelsData, hourIndex, forecastHour:hourIndex});
+            saved++;
+        }
+    }
+    await saveDataBatch(toSave);
+    const skipMsg = skipped ? " · не найдено в модели: "+skipped : "";
+    setStatus("✅ Добавлено: "+saved+skipMsg);
+    await render(); await drawChart();
+}
+
+/* =========================================================
+   ГРАФИК
+========================================================= */
+async function drawChart() {
+    const chartEl = document.getElementById("chart");
+    const phEl    = document.getElementById("chartPlaceholder");
+    const noChart = ["month","season"].includes(currentPeriod);
+    chartEl.style.display = noChart ? "none" : "";
+    phEl.style.display    = noChart ? "block" : "none";
+    if (noChart) { if (chartInstance) { chartInstance.destroy(); chartInstance=null; } return; }
+
+    const stats = await loadStats();
+    if (!stats.length) return;
+    stats.sort(function(a,b){ return a.synopTime.localeCompare(b.synopTime); });
+
+    // Дедупликация по synopTime — оставляем запись с более поздним time
+    const dedupMap = new Map();
+    stats.forEach(function(d) {
+        const prev = dedupMap.get(d.synopTime);
+        if (!prev || (d.time || "") > (prev.time || "")) dedupMap.set(d.synopTime, d);
+    });
+    const statsClean = Array.from(dedupMap.values());
+    statsClean.sort(function(a,b){ return a.synopTime.localeCompare(b.synopTime); });
+
+    const labels = statsClean.map(function(d) {
+        const t = d.synopTime;
+        return t.slice(6,8)+"."+t.slice(4,6)+" "+t.slice(8,10)+":00";
+    });
+
+    const datasets = models.map(function(m) {
+        return {
+            label: modelLabel(m),
+            data: statsClean.map(function(d) {
+                const model = d.models[m]; if (!model) return null;
+                switch(currentParam) {
+                    case "temp":       if (model.temp==null||d.obs.temp==null) return null;
+                                       return chartMode==="error" ? Math.round((model.temp-d.obs.temp)*10)/10 : model.temp;
+                    case "pressure":   if (model.pressure==null||d.obs.pressure==null) return null;
+                                       return chartMode==="error" ? Math.round((model.pressure-d.obs.pressure)*10)/10 : model.pressure;
+                    case "wind":       if (model.wind==null||d.obs.wind==null) return null;
+                                       return chartMode==="error" ? Math.round((model.wind-d.obs.wind)*10)/10 : model.wind;
+                    case "windDir":    if (model.windDir==null||d.obs.windDir==null) return null;
+                                       return chartMode==="error" ? windDirError(model.windDir,d.obs.windDir) : model.windDir;
+                    case "cloudcover": if (model.cloudcover==null||d.obs.cloudcover==null) return null;
+                                       return chartMode==="error" ? Math.round(model.cloudcover-d.obs.cloudcover) : model.cloudcover;
+                    case "precip":     if (model.precip==null||d.obs.precip==null) return null;
+                                       return chartMode==="error" ? Math.round((model.precip-d.obs.precip)*10)/10 : model.precip;
+                }
+                return null;
+            }),
+            borderWidth:2, fill:false
+        };
+    });
+
+    if (chartMode === "value") datasets.push({
+        label: "SYNOP",
+        data: statsClean.map(function(d) {
+            switch(currentParam) {
+                case "temp":       return d.obs.temp;
+                case "pressure":   return d.obs.pressure;
+                case "wind":       return d.obs.wind;
+                case "windDir":    return d.obs.windDir;
+                case "cloudcover": return d.obs.cloudcover;
+                case "precip":     return d.obs.precip;
+            }
+            return null;
+        }),
+        borderWidth:2, fill:false, pointRadius:3, tension:0.1
+    });
+
+    if (chartInstance) chartInstance.destroy();
+
+    let yMin, yMax;
+    if (chartMode === "value" && currentParam === "pressure") {
+        const vals = [];
+        statsClean.forEach(function(d) {
+            if (d.obs.pressure) vals.push(d.obs.pressure);
+            for (const m of models) {
+                if (d.models[m] && d.models[m].pressure) vals.push(d.models[m].pressure);
+            }
+        });
+        yMin = Math.min.apply(null,vals) - 0.5;
+        yMax = Math.max.apply(null,vals) + 0.5;
+    }
+
+    const axisLabel = {
+        temp:       chartMode==="error" ? "Ошибка °C"   : "Температура °C",
+        pressure:   chartMode==="error" ? "Ошибка hPa"  : "Давление hPa",
+        wind:       chartMode==="error" ? "Ошибка м/с"  : "Ветер м/с",
+        windDir:    chartMode==="error" ? "Ошибка °"    : "Направление °",
+        cloudcover: chartMode==="error" ? "Ошибка %"    : "Облачность %",
+        precip:     chartMode==="error" ? "Ошибка мм"   : "Осадки мм"
+    }[currentParam];
+
+    chartInstance = new Chart(chartEl, {
+        type:"line", data:{labels, datasets},
+        options:{
+            responsive:true,
+            layout:{padding:{bottom:8}},
+            plugins:{legend:{position:"bottom",labels:{color:"#eee",boxWidth:12,padding:8}}},
+            scales:{
+                x:{ticks:{color:"#eee",maxRotation:45,minRotation:45,autoSkip:true,maxTicksLimit:8}},
+                y:{beginAtZero:false,min:yMin,max:yMax,ticks:{color:"#eee"},
+                   title:{display:true,text:axisLabel,color:"#eee"}}
+            }
+        }
+    });
+}
+
+/* =========================================================
+   ВЫЧИСЛЕНИЕ РЕЙТИНГА
+========================================================= */
+function cloudToGroup(pct) {
+    if (pct === null || pct === undefined) return null;
+    if (pct <= 12)  return "clear";
+    if (pct <= 25)  return "few";
+    if (pct <= 50)  return "scattered";
+    if (pct <= 75)  return "broken";
+    return "overcast";
+}
+
+function wwToGroup(ww) {
+    if (ww === null || ww === undefined) return null;
+    if (ww === 18) return "squall";
+    if (ww <= 3)   return null; // только облачность — не явление
+    if (ww <= 9)   return "none";
+    if (ww <= 12)  return "haze";
+    if (ww <= 19)  return "misc";
+    if (ww >= 27 && ww <= 29) return "thunder_no_precip";
+    if (ww >= 36 && ww <= 39) return "blizzard";
+    if (ww >= 40 && ww <= 49) return "fog";
+    if (ww >= 50 && ww <= 59) return "drizzle";
+    if (ww >= 60 && ww <= 67) return "rain";
+    if (ww >= 68 && ww <= 69) return "sleet";
+    if (ww >= 70 && ww <= 79) return "snow";
+    if (ww >= 80 && ww <= 84) return "shower";
+    if (ww >= 85 && ww <= 86) return "snow_shower";
+    if (ww >= 87 && ww <= 88) return "hail";
+    if (ww >= 89 && ww <= 90) return "shower";
+    if (ww >= 91 && ww <= 99) return "thunder";
+    return null;
+}
+
+function wmoToGroup(code, gusts) {
+    if (code === null || code === undefined) return null;
+    if (gusts !== null && gusts !== undefined && gusts >= 15) return "squall";
+    if (code <= 1)  return null; // только облачность
+    if (code === 2) return null;
+    if (code === 3) return null;
+    if (code === 45 || code === 48) return "fog";
+    if (code >= 51 && code <= 57)   return "drizzle";
+    if (code >= 61 && code <= 67)   return "rain";
+    if (code === 68 || code === 69) return "sleet";
+    if (code >= 71 && code <= 77)   return "snow";
+    if (code >= 80 && code <= 82)   return "shower";
+    if (code >= 85 && code <= 86)   return "snow_shower";
+    if (code >= 95 && code <= 99)   return "thunder";
+    return null;
+}
+
+function wmoCloudToGroup(pct) {
+    return cloudToGroup(pct);
+}
+
+function computeErrors(stats) {
+    const errors = {};
+    models.forEach(function(m) {
+        errors[m] = {
+            temp:[], pressure:[], wind:[], windDir:[], cloudcover:[], precip:[],
+            wx: {}, cloud: {}
+        };
+    });
+
+    const WX_GROUPS = ["haze","fog","drizzle","rain","sleet","snow",
+                       "shower","snow_shower","hail","thunder","thunder_no_precip",
+                       "blizzard","squall","misc"];
+    const CLOUD_GROUPS = ["clear","few","scattered","broken","overcast"];
+
+    stats.forEach(function(d) {
+        for (const m in d.models) {
+            if (!errors[m]) continue;
+            const model = d.models[m];
+            if (model.temp     != null && d.obs.temp     != null) errors[m].temp.push(Math.abs(model.temp-d.obs.temp));
+            if (model.pressure != null && d.obs.pressure != null) errors[m].pressure.push(Math.abs(model.pressure-d.obs.pressure));
+            if (model.wind     != null && d.obs.wind     != null) errors[m].wind.push(Math.abs(model.wind-d.obs.wind));
+            if (model.windDir  != null && d.obs.windDir  != null) errors[m].windDir.push(windDirError(model.windDir,d.obs.windDir));
+            if (model.cloudcover != null && d.obs.cloudcover != null) errors[m].cloudcover.push(Math.abs(model.cloudcover-d.obs.cloudcover));
+            if (model.precip   != null && d.obs.precip   != null) errors[m].precip.push(Math.abs(model.precip-d.obs.precip));
+
+            // Явления погоды
+            const obsWw    = d.obs.ww != null ? d.obs.ww : null;
+            const obsGroup = wwToGroup(obsWw);
+            const modGroup = wmoToGroup(model.weatherCode, model.gusts);
+
+            if (obsGroup !== null && modGroup !== null) {
+                WX_GROUPS.forEach(function(g) {
+                    if (!errors[m].wx[g]) errors[m].wx[g] = {hits:0, miss:0, false_alarm:0, obs_total:0, model_total:0};
+                    const obsIs = obsGroup === g;
+                    const modIs = modGroup === g;
+                    if (obsIs)          errors[m].wx[g].obs_total++;
+                    if (modIs)          errors[m].wx[g].model_total++;
+                    if (obsIs && modIs) errors[m].wx[g].hits++;
+                    if (obsIs && !modIs) errors[m].wx[g].miss++;
+                    if (!obsIs && modIs) errors[m].wx[g].false_alarm++;
+                });
+            }
+
+            // Облачность по категориям
+            const obsCloud = cloudToGroup(d.obs.cloudcover);
+            const modCloud = cloudToGroup(model.cloudcover);
+
+            if (obsCloud !== null && modCloud !== null) {
+                CLOUD_GROUPS.forEach(function(g) {
+                    if (!errors[m].cloud[g]) errors[m].cloud[g] = {hits:0, miss:0, false_alarm:0, obs_total:0, model_total:0};
+                    const obsIs = obsCloud === g;
+                    const modIs = modCloud === g;
+                    if (obsIs)          errors[m].cloud[g].obs_total++;
+                    if (modIs)          errors[m].cloud[g].model_total++;
+                    if (obsIs && modIs) errors[m].cloud[g].hits++;
+                    if (obsIs && !modIs) errors[m].cloud[g].miss++;
+                    if (!obsIs && modIs) errors[m].cloud[g].false_alarm++;
+                });
+            }
+        }
+    });
+    return errors;
+}
+
+function computeRating(errors) {
+    function getMax(p) {
+        let max = 0;
+        for (const m of models) if (errors[m][p].length) max = Math.max(max, errors[m][p].reduce(function(a,b){return Math.max(a,b);}));
+        return max || 1;
+    }
+    const maxT  = getMax("temp"),
+          maxP  = getMax("pressure"),
+          maxW  = getMax("wind"),
+          maxWd = getMax("windDir"),
+          maxC  = getMax("cloudcover"),
+          maxPr = getMax("precip");
+
+    function avgNorm(arr,max) { return arr.length ? arr.reduce(function(a,b){return a+b/max;},0)/arr.length : 1; }
+    function avg(arr)         { return arr.length ? arr.reduce(function(a,b){return a+b;},0)/arr.length : null; }
+
+    function buildRating(param, max) {
+        return models.map(function(m) {
+            return {model:m, avg:avg(errors[m][param]), norm:avgNorm(errors[m][param],max), n:errors[m][param].length};
+        }).sort(function(a,b){ return a.norm-b.norm; });
+    }
+
+    const tempR    = buildRating("temp",    maxT);
+    const pressR   = buildRating("pressure", maxP);
+    const windR    = buildRating("wind",    maxW);
+    const windDirR = buildRating("windDir", maxWd);
+    const cloudR   = buildRating("cloudcover", maxC);
+    const precipR  = buildRating("precip",  maxPr);
+
+    // Рейтинг по видам явлений
+    const WX_LABELS = {
+        "haze":              "Дымка",
+        "fog":               "Туман",
+        "drizzle":           "Морось",
+        "rain":              "Дождь",
+        "sleet":             "Дождь со снегом",
+        "snow":              "Снег",
+        "shower":            "Ливень",
+        "snow_shower":       "Снежный ливень",
+        "hail":              "Град",
+        "thunder":           "Гроза",
+        "thunder_no_precip": "Гроза без осадков",
+        "blizzard":          "Метель",
+        "squall":            "Шквал",
+        "misc":              "Прочее"
+    };
+
+    const CLOUD_LABELS = {
+        "clear":    "Ясно (0–12%)",
+        "few":      "Малооблачно (13–25%)",
+        "scattered":"Переменная (26–50%)",
+        "broken":   "Облачно (51–75%)",
+        "overcast": "Пасмурно (76–100%)"
+    };
+    
+     function buildPhenomRating(errorField, labels) {
+        const result = {};
+        Object.keys(labels).forEach(function(g) {
+            let obs_total = 0;
+            for (const m of models) {
+                if (errors[m][errorField][g]) {
+                    obs_total = errors[m][errorField][g].obs_total;
+                    break;
+                }
+            }
+            const ranked = models.map(function(m) {
+                const wx = errors[m][errorField][g] || {hits:0, miss:0, false_alarm:0, obs_total:0, model_total:0};
+                const pod = wx.obs_total   > 0 ? Math.round(wx.hits        / wx.obs_total   * 100) : null;
+                const far = wx.model_total > 0 ? Math.round(wx.false_alarm / wx.model_total * 100) : null;
+                const mis = wx.obs_total   > 0 ? Math.round(wx.miss        / wx.obs_total   * 100) : null;
+                return {model:m, pod, far, mis, obs_total: wx.obs_total, model_total: wx.model_total};
+            }).sort(function(a,b) {
+                if (a.pod === null && b.pod === null) return 0;
+                if (a.pod === null) return 1;
+                if (b.pod === null) return -1;
+                return b.pod - a.pod;
+            });
+
+            // Показываем только если obs_total > 0 или есть ложные тревоги
+            const hasFalseAlarm = models.some(function(m) {
+                return errors[m][errorField][g] && errors[m][errorField][g].false_alarm > 0;
+            });
+            if (obs_total > 0 || hasFalseAlarm) {
+                result[g] = {label: labels[g], obs_total, ranked};
+            }
+        });
+        return result;
+    }
+
+    const wxDetailR    = buildPhenomRating("wx",    WX_LABELS);
+    const cloudDetailR = buildPhenomRating("cloud", CLOUD_LABELS);
+
+    
+
+    const totalR = models.map(function(m) {
+        return {
+            model: m,
+            value: avgNorm(errors[m].temp,maxT)*2.0 +
+                   avgNorm(errors[m].pressure,maxP)*1.5 +
+                   avgNorm(errors[m].wind,maxW)*1.5 +
+                   avgNorm(errors[m].windDir,maxWd)*1.0 +
+                   avgNorm(errors[m].cloudcover,maxC)*1.0 +
+                   avgNorm(errors[m].precip,maxPr)*0.5
+        };
+    }).sort(function(a,b){ return a.value-b.value; });
+
+    return {tempR, pressR, windR, windDirR, cloudR, precipR, wxDetailR, cloudDetailR, totalR};
+}
+
+function makeCard(title, data, unit) {
+    let html = '<div class="rating-card"><h3>'+title+'</h3>';
+    data.forEach(function(r,i) {
+        const sanity = (unit==="hPa" && r.avg!=null && r.avg>10) ? ' ⚠️' : '';
+        const val    = r.avg != null ? r.avg.toFixed(2)+" "+unit+sanity : "—";
+        html += '<div class="row"><div>'+(i+1)+'. '+modelLabel(r.model)+'</div>'+
+                '<div>'+val+' <span style="color:#444;font-size:0.8em">n='+r.n+'</span></div></div>';
+    });
+    return html + '</div>';
+}
+
+
+function makePhenomCard(title, detailR) {
+    let html = '<div class="rating-card"><h3>' + title + '</h3>';
+    const keys = Object.keys(detailR);
+    if (!keys.length) { return html + '<div style="color:#555">Нет данных</div></div>'; }
+
+    // Легенда
+    html += '<div style="font-size:0.75em;color:#666;margin-bottom:8px;line-height:1.6">' +
+        '🎯 <b style="color:#4caf50">Угадал</b> = hits / obs_total &nbsp;|&nbsp; ' +
+        '🚫 <b style="color:#f44336">Ложный</b> = false_alarm / model_total &nbsp;|&nbsp; ' +
+        '👻 <b style="color:#ff9800">Пропустил</b> = miss / obs_total &nbsp;|&nbsp; ' +
+        '<b>—</b> = нет прогнозов этого типа' +
+        '</div>';
+
+    keys.forEach(function(g) {
+        const item = detailR[g];
+        html += '<div style="margin:12px 0 4px;color:#aaa;font-size:0.82em;border-bottom:1px solid #333;padding-bottom:3px">' +
+                item.label + ' · наблюдалось: ' + item.obs_total + ' раз</div>';
+
+        html += '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">' +
+                '<table style="width:100%;border-collapse:collapse;font-size:0.82em;">' +
+                '<thead><tr style="color:#777;text-align:right;">' +
+                '<th style="text-align:left;padding:3px 4px;font-weight:normal;">#&nbsp;Модель</th>' +
+                '<th style="padding:3px 6px;font-weight:normal;">🎯&nbsp;%</th>' +
+                '<th style="padding:3px 6px;font-weight:normal;">🚫&nbsp;%</th>' +
+                '<th style="padding:3px 6px;font-weight:normal;">👻&nbsp;%</th>' +
+                '<th style="padding:3px 6px;font-weight:normal;color:#555">n</th>' +
+                '</tr></thead><tbody>';
+
+        item.ranked.forEach(function(r, i) {
+            const pod = r.pod !== null ? '<b style="color:#4caf50">' + r.pod + '%</b>' : '<span style="color:#444">—</span>';
+            const far = r.far !== null ? '<b style="color:#f44336">' + r.far + '%</b>' : '<span style="color:#444">—</span>';
+            const mis = r.mis !== null ? '<b style="color:#ff9800">' + r.mis + '%</b>' : '<span style="color:#444">—</span>';
+            const rowColor = i % 2 === 0 ? 'background:#1e1e1e' : 'background:#181818';
+            html += '<tr style="' + rowColor + '">' +
+                '<td style="padding:4px 4px;">' + (i+1) + '.&nbsp;' + modelLabel(r.model) + '</td>' +
+                '<td style="padding:4px 6px;text-align:right;">' + pod + '</td>' +
+                '<td style="padding:4px 6px;text-align:right;">' + far + '</td>' +
+                '<td style="padding:4px 6px;text-align:right;">' + mis + '</td>' +
+                '<td style="padding:4px 6px;text-align:right;color:#444">' + r.obs_total + '</td>' +
+                '</tr>';
+        });
+        html += '</tbody></table></div>';
+    });
+    return html + '</div>';
+}
+
+function makeWxCard(data) {
+    let html = '<div class="rating-card"><h3>Явления погоды <span style="color:#555;font-size:0.8em">% совпадений</span></h3>';
+    data.forEach(function(r,i) {
+        const val = r.pct !== null ? r.pct.toFixed(1)+"%" : "—";
+        html += '<div class="row"><div>'+(i+1)+'. '+modelLabel(r.model)+'</div>'+
+                '<div>'+val+' <span style="color:#444;font-size:0.8em">n='+r.n+'</span></div></div>';
+    });
+    return html + '</div>';
+}
+
+function makeTotalCard(data) {
+    let html = '<div class="rating-card"><h3>Итоговый рейтинг</h3>';
+    data.forEach(function(r,i) {
+        html += '<div class="row"><div>'+(i+1)+'. '+modelLabel(r.model)+'</div><div>'+r.value.toFixed(3)+'</div></div>';
+    });
+    return html + '</div>';
+}
+
+/* =========================================================
+   РЕЙТИНГ ПО ЗАБЛАГОВРЕМЕННОСТИ
+========================================================= */
+function renderLeadTab(stats) {
+    const hasLead = stats.some(function(d){ return d.forecastHour != null; });
+    if (!hasLead) return '<div style="color:#666;padding:16px 0;font-size:0.9em">'+
+        'Данные о заблаговременности накапливаются с текущего момента.<br>'+
+        'Исторические JSON файлы этого поля не содержат.</div>';
+
+    let html = "";
+    for (const g of LEAD_GROUPS) {
+        const subset = stats.filter(function(d){ return d.forecastHour!=null&&d.forecastHour>=g.min&&d.forecastHour<g.max; });
+        html += '<div class="lead-section"><h4>'+g.label+' — '+subset.length+' зап.</h4>';
+        if (subset.length < 5) { html += '<div style="color:#555;font-size:0.85em">Мало данных</div></div>'; continue; }
+        const errors = computeErrors(subset);
+        const totalR = computeRating(errors).totalR;
+        totalR.forEach(function(r,i) {
+            html += '<div class="row"><div>'+(i+1)+'. '+modelLabel(r.model)+'</div><div>'+r.value.toFixed(3)+'</div></div>';
+        });
+        html += '</div>';
+    }
+    return html;
+}
+
+/* =========================================================
+   ГЛАВНЫЙ РЕНДЕР
+========================================================= */
+async function render() {
+    const el = document.getElementById("rating");
+    el.innerHTML = "Загрузка...";
+
+    const stats = await loadStats();
+
+    const periodTitle = {
+        "24h":"24 часа", "3d":"3 дня", "16d":"16 дней",
+        "month-cur":"Текущий месяц",
+        "month": MONTH_NAMES[currentMonth-1]+" — все годы",
+        "season": SEASON_LABELS[currentSeason]
+    }[currentPeriod] || "";
+
+    if (!stats.length) {
+        el.innerHTML = '<div style="color:#666;padding:16px 0">'+periodTitle+' — нет данных</div>';
+        return;
+    }
+
+    let html = '<div style="margin-bottom:12px"><b>'+periodTitle+'</b>'+
+               '<span style="color:#555;font-size:0.85em;margin-left:8px">записей: '+stats.length+'</span></div>';
+
+    if (currentTab === "main") {
+        const errors = computeErrors(stats);
+        const rating = computeRating(errors);
+        html += makeCard("Температура",        rating.tempR,    "°C");
+        html += makeCard("Давление",           rating.pressR,   "hPa");
+        html += makeCard("Ветер",              rating.windR,    "м/с");
+        html += makeCard("Направление ветра",  rating.windDirR, "°");
+        html += makeCard("Облачность",         rating.cloudR,   "%");
+        html += makeCard("Осадки",             rating.precipR,  "мм");
+        html += makePhenomCard("Явления погоды", rating.wxDetailR);
+        html += makePhenomCard("Облачность по категориям", rating.cloudDetailR);
+        html += makeTotalCard(rating.totalR);
+    } else {
+        html += renderLeadTab(stats);
+    }
+
+    el.innerHTML = html;
+}
+
+/* =========================================================
+   УПРАВЛЕНИЕ БАЗОЙ
+========================================================= */
+async function exportDB() {
+    if (!db) await initDB();
+    const req = db.transaction("stats","readonly").objectStore("stats").getAll();
+    req.onsuccess = function() {
+        const data = req.result;
+        if (!data.length) { alert("База пустая"); return; }
+        data.sort(function(a,b){ return Number(b.synopTime)-Number(a.synopTime); });
+        const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement("a");
+        a.href = url; a.download = "modelStats_backup.json"; a.click();
+        URL.revokeObjectURL(url);
+    };
+}
+
+async function cleanDB() {
+    if (!db) await initDB();
+    const tx = db.transaction("stats","readwrite"), store = tx.objectStore("stats");
+    const req = store.getAll();
+    req.onsuccess = async function() {
+        let removedBad = 0, removedDup = 0;
+
+        // Удаляем битые записи
+        req.result.forEach(function(d) {
+            if (!d.obs || !d.obs.synop || d.obs.synop.includes("NILL")) {
+                store.delete(d.synopTime);
+                removedBad++;
+            }
+        });
+
+        // Ищем дубликаты по synopTime (оставляем свежайшую по полю time)
+        const seen = new Map();
+        req.result.forEach(function(d) {
+            if (!d.synopTime) return;
+            if (!seen.has(d.synopTime)) {
+                seen.set(d.synopTime, d);
+            } else {
+                // Оставляем запись с более поздним time
+                const prev = seen.get(d.synopTime);
+                const prevT = prev.time || "";
+                const curT  = d.time   || "";
+                if (curT > prevT) {
+                    store.delete(prev.synopTime); // удаляем старую (но ключ один — IDB не даст дубль по keyPath)
+                    seen.set(d.synopTime, d);
+                } else {
+                    store.delete(d.synopTime);
+                }
+                removedDup++;
+            }
+        });
+
+        alert("Удалено битых: "+removedBad+" · дубликатов: "+removedDup);
+        await render(); await drawChart();
+    };
+}
+
+async function clearAllDB() {
+    if (!confirm("Удалить ВСЕ записи из IndexedDB?\nЭто действие необратимо.")) return;
+    if (!db) await initDB();
+    const tx = db.transaction("stats","readwrite");
+    tx.objectStore("stats").clear();
+    tx.oncomplete = async function() { alert("База очищена"); await render(); await drawChart(); };
+}
+
+async function showData() {
+    if (!db) await initDB();
+    const req = db.transaction("stats","readonly").objectStore("stats").getAll();
+    req.onsuccess = function() {
+        const data = req.result;
+        data.sort(function(a,b){ return Number(b.synopTime)-Number(a.synopTime); });
+        let html = "<h3>Записи IndexedDB: "+data.length+"</h3>";
+        if (!data.length) { document.getElementById("rating").innerHTML = html+"Нет записей"; return; }
+        data.forEach(function(d) {
+            if (!d.obs || !d.models) return;
+            const o = d.obs;
+            html += '<br><b>'+d.synopTime+'</b> fh='+(d.forecastHour != null ? d.forecastHour : "—")+'<br>';
+            html += 'T='+o.temp+' P='+o.pressure+' W='+o.wind+' Wd='+o.windDir+
+                    ' Cl='+(o.cloudcover !== null ? o.cloudcover+'%' : '<span style="color:#f44">null</span>')+
+                    ' Pr='+(o.precip    !== null ? o.precip+'мм'    : '<span style="color:#f44">null</span>')+
+                    ' ww='+(o.ww        !== null ? o.ww              : '<span style="color:#f44">null</span>')+'<br>';
+            html += '<small style="color:#555">'+o.synop+'</small><br>';
+            html += '<table style="font-size:0.78em;border-collapse:collapse;width:100%">';
+            html += '<tr style="color:#666"><td>Модель</td><td>T</td><td>P</td><td>W</td><td>Cl%</td><td>Pr</td><td>WMO</td></tr>';
+            for (const m in d.models) {
+                const v = d.models[m];
+                function c(val) { return val !== null && val !== undefined ? val : '<span style="color:#f44">—</span>'; }
+                html += '<tr><td>'+modelLabel(m)+'</td><td>'+c(v.temp)+'</td><td>'+c(v.pressure)+'</td>'+
+                        '<td>'+c(v.wind)+'</td><td>'+c(v.cloudcover)+'</td><td>'+c(v.precip)+'</td><td>'+c(v.weatherCode)+'</td></tr>';
+            }
+            html += '</table><hr>';
+        });
+        document.getElementById("rating").innerHTML = html;
+    };
+}
+
+async function checkDB() {
+    if (!db) await initDB();
+    const req = db.transaction("stats","readonly").objectStore("stats").count();
+    req.onsuccess = function() { alert("Записей в IndexedDB: "+req.result); };
+}
+
+/* =========================================================
+   УПРАВЛЕНИЕ КНОПКАМИ
+========================================================= */
+function setActivePeriod(p) {
+    ["24h","3d","16d","month-cur","month","season"].forEach(function(id) {
+        const btn = document.getElementById("btn-"+id);
+        if (btn) btn.classList.toggle("active", id === p);
+    });
+    document.getElementById("monthSelector").style.display  = p === "month"  ? "block" : "none";
+    document.getElementById("seasonSelector").style.display = p === "season" ? "block" : "none";
+}
+
+function setActiveParam(p) {
+    ["temp","pressure","wind","windDir","cloudcover","precip"].forEach(function(id) {
+        const btn = document.getElementById("btn-"+id);
+        if (btn) btn.classList.toggle("active", id === p);
+    });
+}
+
+function setActiveMode(mode) {
+    ["error","value"].forEach(function(id) {
+        const btn = document.getElementById("btn-"+id);
+        if (btn) btn.classList.toggle("active", id === mode);
+    });
+}
+
+function setPeriod(p) {
+    currentPeriod = p;
+    setActivePeriod(p);
+    render();
+    drawChart();
+}
+
+function setParam(p) {
+    currentParam = p;
+    setActiveParam(p);
+    drawChart();
+}
+
+function setMode(mode) {
+    chartMode = mode;
+    setActiveMode(mode);
+    drawChart();
+}
+
+function setSeason(s) {
+    currentSeason = s;
+    ["winter","spring","summer","autumn"].forEach(function(id) {
+        const btn = document.getElementById("btn-s-"+id);
+        if (btn) btn.classList.toggle("active", id === s);
+    });
+    render();
+    drawChart();
+}
+
+function switchTab(tab) {
+    currentTab = tab;
+    ["main","lead"].forEach(function(id) {
+        const btn = document.getElementById("tab-"+id+"-btn");
+        if (btn) btn.classList.toggle("active", id === tab);
+    });
+    render();
+}
+
+/* =========================================================
+   СТАРТ
+========================================================= */
+document.getElementById("importBtn").addEventListener("click", function() {
+    document.getElementById("importFile").click();
+});
+document.getElementById("importFile").addEventListener("change", async function(e) {
+    const file = e.target.files[0]; if (!file) return;
+    const data = JSON.parse(await file.text());
+    if (!db) await initDB();
+    const tx = db.transaction("stats","readwrite"), store = tx.objectStore("stats");
+    let imported = 0;
+    for (const record of data) { store.put(record); imported++; }
+    tx.oncomplete = async function() { alert("Импортировано: "+imported); await render(); await drawChart(); };
+});
+
+// Генерируем кнопки месяцев
+(function buildMonthButtons() {
+    const row = document.getElementById("monthBtnRow");
+    MONTH_NAMES.forEach(function(name, i) {
+        const btn = document.createElement("button");
+        btn.id = "btn-m-"+(i+1);
+        btn.textContent = name;
+        btn.onclick = function() { selectMonth(i+1); };
+        row.appendChild(btn);
+    });
+})();
+
+function selectMonth(m) {
+    currentMonth = m;
+    document.querySelectorAll("#monthBtnRow button").forEach(function(b){ b.classList.remove("active"); });
+    const btn = document.getElementById("btn-m-"+m);
+    if (btn) {
+        btn.classList.add("active");
+        btn.scrollIntoView({behavior:"smooth", block:"nearest", inline:"center"});
+    }
+    render(); drawChart();
+}
+
+selectMonth(currentMonth);
+setActiveParam("temp");
+setActiveMode("error");
+setActivePeriod("24h");
+
+function updateHeaderOffset() {
+    const h = document.querySelector(".header").offsetHeight;
+    document.documentElement.style.setProperty("--header-h", h+"px");
+    const t = document.getElementById("mainTabs").offsetHeight;
+    document.documentElement.style.setProperty("--tabs-h", t+"px");
+}
+updateHeaderOffset();
+window.addEventListener("resize", updateHeaderOffset);
+
+initDB().then(function() {
+    autoUpdate();
+});
+
+</script>
+
+<script src="modelHistory.js"></script>
+
+<script>
+(function() {
+    var v = Date.now();
+    var scripts = ["modelHistory.js"];
+    scripts.forEach(function(src) {
+        var old = document.querySelector('script[src^="'+src+'"]');
+        if (old) old.remove();
+        var s = document.createElement("script");
+        s.src = src + "?v=" + v;
+        document.body.appendChild(s);
+    });
+})();
+</script>
+
+</body>
+</html>

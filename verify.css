@@ -26,42 +26,49 @@ a{
 ========================= */
 .header{
     width: 100%;
-    position:sticky;
-    top:0;
-    z-index:50;
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    gap:12px;
-    padding:12px 16px;
-    background:rgba(30,30,30,0.96);
-    backdrop-filter:blur(8px);
-    border-bottom:1px solid #2b2b2b;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: rgba(30,30,30,0.96);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid #2b2b2b;
+    box-sizing: border-box;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .headerTitle{
-    font-size:18px;
-    font-weight:700;
+    font-size: 18px;
+    font-weight: 700;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .nav{
-    display:flex;
-    gap:12px;
-    flex-wrap:wrap;
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .nav a{
-    color:#aaa;
-    padding:6px 10px;
-    border-radius:8px;
-    transition:0.2s;
+    color: #aaa;
+    padding: 6px 10px;
+    border-radius: 8px;
+    transition: 0.2s;
+    white-space: nowrap;
 }
 
 .nav a:hover{
-    color:#fff;
-    background:#2a2a2a;
+    color: #fff;
+    background: #2a2a2a;
 }
-
 /* =========================
    КОНТЕЙНЕР
 ========================= */
@@ -95,3 +102,145 @@ border:none;
 border-radius:6px;
 cursor:pointer;
 }
+
+#lastUpdate {
+    white-space: nowrap;
+    overflow: hidden;
+    position: relative;
+    perspective: 300px;
+}
+
+#lastUpdate span {
+    display: inline-block;
+}
+
+#lastUpdate.running span {
+    animation: marquee 12s linear infinite;
+}
+
+@keyframes marquee {
+    0%   { transform: translateX(80%); }
+    100% { transform: translateX(-100%); }
+}
+
+.spin {
+    display: inline-block;
+    animation: flip 2s ease-in-out infinite;
+}
+
+@keyframes flip {
+    0%   { transform: rotateX(0deg); }
+    50%  { transform: rotateX(180deg); }
+    100% { transform: rotateX(360deg); }
+}
+
+
+.period-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+    margin-bottom: 8px;
+}
+.period-group button { margin-top: 0; }
+button.active { background: #444; outline: 2px solid #aaa; }
+
+.sub-controls {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    align-items: center;
+    margin: 6px 0 10px;
+    flex-wrap: wrap;
+}
+.sub-controls select {
+    background: #222;
+    color: #eee;
+    border: 1px solid #444;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 0.95em;
+}
+.sub-controls button { margin-top: 0; }
+
+.tabs {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    margin: 10px 0 14px;
+}
+.tabs button { margin-top: 0; }
+
+.rating-card {
+    background: #1a1a1a;
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 12px;
+}
+.rating-card h3 {
+    font-size: 0.88em;
+    color: #777;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #252525;
+    padding-bottom: 6px;
+}
+.lead-section { margin-bottom: 20px; }
+.lead-section h4 {
+    font-size: 0.85em;
+    color: #666;
+    margin-bottom: 6px;
+    padding: 4px 0;
+    border-bottom: 1px solid #222;
+}
+.chart-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 60px;
+    color: #444;
+    font-size: 0.85em;
+    border: 1px dashed #252525;
+    border-radius: 6px;
+    margin-bottom: 12px;
+}
+
+button.active {
+    background: #555;
+    outline: 2px solid #aaa;
+}
+
+.month-btn-row {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    padding: 4px 0 8px;
+    width: max-content;
+    min-width: 100%;
+}
+
+.month-btn-row button {
+    margin-top: 0;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+#stickyBar {
+    position: sticky;
+    top: var(--header-h, 53px);
+    z-index: 40;
+    background: rgba(18, 18, 18, 0.97);
+    backdrop-filter: blur(6px);
+    padding: 4px 0 6px;
+    margin-bottom: 8px;
+}
+
+#mainTabs {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    margin: 0 0 4px;
+}
+
+#mainTabs button { margin-top: 0; }
