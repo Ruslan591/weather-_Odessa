@@ -210,14 +210,25 @@ function initDB() {
     });
 }
 
+
 function saveDataBatch(records) {
     if (!db || !records.length) return Promise.resolve();
     return new Promise(function(resolve, reject) {
         const tx = db.transaction("stats","readwrite");
         const store = tx.objectStore("stats");
-        records.forEach(function(d) { store.put(d); });
         tx.oncomplete = resolve;
         tx.onerror = reject;
+        tx.onabort = function() { reject(new Error("Transaction aborted")); };
+
+        var i = 0;
+        function putNext() {
+            if (i >= records.length) return;
+            var req = store.put(records[i]);
+            i++;
+            req.onsuccess = putNext;
+            req.onerror = function(e) { console.error("put error", e); putNext(); };
+        }
+        putNext();
     });
 }
 
@@ -315,11 +326,11 @@ function formatOgimetDate(d) {
 function parseAllSynops(text) {
     const result = [];
     for (const line of text.split("\n").map(function(l){return l.trim();}).filter(Boolean)) {
-        const m = line.match(/^33837,(\d{4}),(\d{2}),(\d{2}),(\d{2}),\d{2},(AAXX\s.+)$/);
-        if (!m) continue;
-        const y=m[1], mo=m[2], dd=m[3], hh=m[4], synopLine=m[5];
-        if (synopLine.includes("NILL")) continue;
-        const telegramKey = y+mo+dd+hh;
+        const m = line.match(/^33837,(\d{4}),(\d{2}),(\d{2}),(\d{2}),(\d{2}),(AAXX\s.+)$/);
+if (!m) continue;
+const y=m[1], mo=m[2], dd=m[3], hh=m[4], mm=m[5], synopLine=m[6];
+if (synopLine.includes("NILL")) continue;
+const telegramKey = y+mo+dd+hh+mm;
         try {
             const parsed = parseSynop(synopLine, telegramKey);
             if (parsed && parsed.temp !== null) result.push({telegramKey, synopLine, parsed});
@@ -491,70 +502,7 @@ function buildModelsData(forecasts, hourIndex, synopHour) {
 /* =========================================================
    АВТООБНОВЛЕНИЕ
 ========================================================= */
-async function autoUpdate() {
-    try {
-        if (!db) await initDB();
-        setStatus("Загрузка свежих SYNOP...", true);
 
-        let recentSynops;
-        try { recentSynops = await loadSynopRecent(16); }
-        catch(e) {
-            setStatus("❌ Ошибка SYNOP: "+e);
-            await render(); await drawChart();
-            setTimeout(autoUpdate, 1800000); return;
-        }
-
-        setStatus("📋 Проверка "+recentSynops.length+" сводок...");
-        const existingInDB = await dbGetAll();
-        const existingKeys = new Set(existingInDB.map(function(d){ return d.synopTime; }));
-        const missing = recentSynops.filter(function(s){ return !existingKeys.has(s.telegramKey); });
-
-        if (!missing.length) {
-            const latest = recentSynops.reduce(function(a,b){ return a.telegramKey > b.telegramKey ? a : b; });
-            const lh = latest.telegramKey.slice(6,8)+"."+latest.telegramKey.slice(4,6)+" "+latest.telegramKey.slice(8,10)+":00 UTC";
-            setStatus("✅ "+new Date().toLocaleTimeString()+" — актуально · "+lh);
-            await render(); await drawChart();
-            setTimeout(autoUpdate, 1800000); return;
-        }
-
-        setStatus("🌐 Загрузка моделей для "+missing.length+" сводок...");
-        let forecasts = {};
-        try {
-            const results = await Promise.all(models.map(function(m){ return loadForecastPast(m,16); }));
-            models.forEach(function(m,i){ forecasts[m] = results[i]; });
-        } catch(e) {
-            setStatus("❌ Ошибка моделей: "+e);
-            await render(); await drawChart();
-            setTimeout(autoUpdate, 1800000); return;
-        }
-
-        let saved = 0;
-        const toSave = [];
-        const timeArr = forecasts[models[0]] ? forecasts[models[0]].time : null;
-        if (timeArr) {
-            for (const s of missing) {
-                const tk = s.telegramKey;
-                const targetTime = tk.slice(0,4)+"-"+tk.slice(4,6)+"-"+tk.slice(6,8)+"T"+tk.slice(8,10)+":00";
-                const hourIndex  = timeArr.findIndex(function(t){ return t.indexOf(targetTime) === 0; });
-                if (hourIndex === -1) continue;
-                const synopHour = parseInt(tk.slice(8, 10));
-                const modelsData = buildModelsData(forecasts, hourIndex, synopHour);
-                toSave.push({time:new Date().toISOString(), synopTime:tk, obs:s.parsed, models:modelsData, hourIndex, forecastHour:hourIndex});
-                saved++;
-            }
-        }
-        await saveDataBatch(toSave);
-
-        const latest2 = recentSynops.reduce(function(a,b){ return a.telegramKey > b.telegramKey ? a : b; });
-        const lh2 = latest2.telegramKey.slice(6,8)+"."+latest2.telegramKey.slice(4,6)+" "+latest2.telegramKey.slice(8,10)+":00 UTC";
-        setStatus("✅ "+new Date().toLocaleTimeString()+" — добавлено: "+saved+" · "+lh2);
-        await render(); await drawChart();
-    } catch(e) {
-        setStatus("❌ Ошибка: "+e);
-        try { await render(); await drawChart(); } catch(_) {}
-    }
-    setTimeout(autoUpdate, 1800000);
-}
 
 async function updateRecent() {
     if (!db) await initDB();
@@ -1303,12 +1251,11 @@ updateHeaderOffset();
 window.addEventListener("resize", updateHeaderOffset);
 
 initDB().then(function() {
-    autoUpdate();
+    updateRecent();
 });
 
 </script>
 
-<script src="modelHistory.js"></script>
 
 <script>
 (function() {

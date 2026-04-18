@@ -171,9 +171,7 @@ const MODELS = [
     "icon_global",
     "ukmo_global_deterministic_10km",
     "meteofrance_arpege_europe",
-    "jma_gsm",
     "gfs_global",
-    "gem_global",
     "cma_grapes_global"
 ];
 
@@ -219,13 +217,13 @@ function parseAllSynops(text) {
     const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
     const result = [];
     for (const line of lines) {
-        const m = line.match(/^33837,(\d{4}),(\d{2}),(\d{2}),(\d{2}),\d{2},(AAXX\s.+)$/);
-        if (!m) continue;
-        const [, y, mo, dd, hh, synopLine] = m;
-        if (synopLine.includes("NILL")) continue;
-        const hour = parseInt(hh);
-        if (!SYNOP_HOURS.includes(hour)) continue;
-        const telegramKey = `${y}${mo}${dd}${hh}`;
+        const m = line.match(/^33837,(\d{4}),(\d{2}),(\d{2}),(\d{2}),(\d{2}),(AAXX\s.+)$/);
+if (!m) continue;
+const [, y, mo, dd, hh, mm, synopLine] = m;
+if (synopLine.includes("NILL")) continue;
+const hour = parseInt(hh);
+if (!SYNOP_HOURS.includes(hour)) continue;
+const telegramKey = `${y}${mo}${dd}${hh}${mm}`;
         const parsed = parseSynop(synopLine, telegramKey);
         if (parsed && parsed.temp !== null) {
             result.push({ telegramKey, parsed });
