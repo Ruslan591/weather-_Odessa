@@ -1,4 +1,10 @@
-body/* =========================
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    font-size: 16px;
+}
+
+/* =========================
    БАЗА
 ========================= */
 *{
@@ -26,40 +32,60 @@ a{
 ========================= */
 .header{
     width: 100%;
-    position:sticky;
-    top:0;
-    z-index:50;
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    gap:12px;
-    padding:12px 16px;
-    background:rgba(30,30,30,0.96);
-    backdrop-filter:blur(8px);
-    border-bottom:1px solid #2b2b2b;
-}
-
-.headerTitle{
-    font-size:18px;
-    font-weight:700;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: rgba(30,30,30,0.96);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid #2b2b2b;
+    box-sizing: border-box;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .nav{
-    display:flex;
-    gap:12px;
-    flex-wrap:wrap;
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .nav a{
-    color:#aaa;
-    padding:6px 10px;
-    border-radius:8px;
-    transition:0.2s;
+    color: #aaa;
+    padding: 6px 10px;
+    border-radius: 8px;
+    transition: 0.2s;
+    white-space: nowrap;
 }
 
 .nav a:hover{
-    color:#fff;
-    background:#2a2a2a;
+    color: #fff;
+    background: #2a2a2a;
+}
+
+.headerTitle{
+    font-size: 18px;
+    font-weight: 700;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.subheader {
+    padding: 10px 14px;
+    background: #1e1e1e;
+    border: 1px solid #2e2e2e;
+    border-radius: 14px;
+    margin: 14px 14px 0;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: nowrap;
 }
 
 /* =========================
@@ -70,52 +96,77 @@ a{
     margin:0 auto;
     padding:16px;
 }
+.forecast-button,
 .model-button {
-    position: relative; /* точка отсчёта меню */
+    position: relative;
     cursor: pointer;
     display: inline-block;
+    padding: 4px 10px;
+    background: #1e1e1e;
+    border: 1px solid #333;
+    border-radius: 8px;
+    font-size: 0.65em;
+    color: #ccc;
+    letter-spacing: 0;
+    font-weight: 600;
+    text-transform: none;
+    user-select: none;
 }
 
+.forecast-menu,
 .model-menu {
     display: none;
     position: absolute;
-    top: 100%; /* под кнопкой */
-    left: 0;
-    background: #222;
-    border-radius: 6px;
+    top: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1e1e1e;
+    border: 1px solid #333;
+    border-radius: 10px;
     padding: 6px;
-    z-index: 10;
-    min-width: 80px;
+    z-index: 200;
+    min-width: 130px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+    white-space: nowrap;
 }
 
+.forecast-menu div,
 .model-menu div {
-    padding: 4px 8px;
+    padding: 7px 12px;
     cursor: pointer;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #ccc;
+    text-align: left;
+    letter-spacing: 0;
+    font-weight: 400;
+    text-transform: none;
 }
 
+.forecast-menu div:hover,
 .model-menu div:hover {
-    background: #333;
+    background: #2a2a2a;
+    color: #fff;
 }
+
 .main-title {
-    position: fixed;       /* фиксируем шапку */
-    top: 40;
+    position: sticky;
+    top: 48px;
     left: 0;
     width: 100%;
-    text-align: center;
-    color: #444;
-    font-size: 1.5em;
-    font-weight: bold;
-    letter-spacing: 3px;
-    margin: 10px 0;
-    text-transform: uppercase;
-    background: #121212;      /* чтобы контент под шапкой не просвечивал */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background: rgba(18,18,18,0.97);
+    backdrop-filter: blur(8px);
     z-index: 100;
-    padding: 10px 0;       /* немного пространства сверху и снизу */
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* лёгкая тень для отделения */
+    padding: 8px 16px;
+    border-bottom: 1px solid #222;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
 
 #content {
-    margin-top: 150px; /* сдвиг вниз, чтобы не перекрывалось шапкой */
     padding: 10px;
 }
 .day-header{
@@ -131,37 +182,41 @@ a{
     margin-bottom:10px;
     border:1.5px solid #2a2a2a;
     position:relative;
+    overflow:hidden;
 }
 .row.active{
     border-color:#4fc3f7;
 }
 .indicator-line{
-    position:absolute;
-    left:0;
-    top:15%;
-    height:70%;
-    width:3px;
-    border-radius:0 4px 4px 0;
+    width: 3px;
+    min-width: 3px;
+    align-self: stretch;
+    border-radius: 2px;
+    margin-right: 2px;
+    flex-shrink: 0;
 }
 .summary{
     display:flex;
     align-items:center;
-    padding:12px;
+    padding:10px 12px 10px 8px;
     cursor:pointer;
     gap:6px;
 }
-.details{
-    max-height:0;
-    opacity:0;
-    transition:.3s;
-    overflow:hidden;
-    padding:0 12px;
+.details-body {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.32s ease;
 }
-.row.active .details{
-    max-height:1200px;
-    opacity:1;
-    padding:10px 12px 15px;
-    border-top:1px solid #333;
+.details-body > div {
+    overflow: hidden;
+    padding: 0 12px;
+}
+.row.active .details-body {
+    grid-template-rows: 1fr;
+}
+.row.active .details-body > div {
+    padding: 10px 12px 15px;
+    border-top: 1px solid #2a2a2a;
 }
 .status-line{
     text-align:center;
@@ -188,3 +243,180 @@ svg{margin-bottom:15px;}
     margin:6px 0 20px 0;
 }
 .stats-table div{text-align:center;}
+
+
+
+
+.fc-param-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+.fc-param-btn {
+    padding: 5px 11px;
+    font-size: 12px;
+    border-radius: 20px;
+    background: #232323;
+    color: #888;
+    border: 1px solid #2e2e2e;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: 0.15s;
+}
+.fc-param-btn:hover { color: #ccc; background: #2a2a2a; }
+.fc-param-btn.active {
+    background: #1a1a1a;
+    color: var(--c, #fff);
+    border-color: var(--c, #555);
+    box-shadow: 0 0 0 1px var(--c, #555) inset;
+}
+.fc-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-top: 8px;
+}
+.fc-stat-card {
+    background: #191919;
+    border: 1px solid #272727;
+    border-radius: 10px;
+    padding: 10px;
+    text-align: center;
+}
+.fc-stat-label {
+    font-size: 11px;
+    color: #666;
+    margin-bottom: 4px;
+}
+.fc-stat-value {
+    font-size: 17px;
+    font-weight: 800;
+    line-height: 1.1;
+    margin-bottom: 3px;
+}
+.fc-stat-time {
+    font-size: 10px;
+    color: #555;
+}
+@media (max-width: 400px) {
+    .fc-stats { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* =========================
+   СТРУКТУРА ПО ДНЯМ
+========================= */
+.day-block {
+    background: #1e1e1e;
+    border: 1.5px solid #2a2a2a;
+    border-radius: 16px;
+    margin-bottom: 10px;
+    overflow: hidden;
+}
+
+.day-summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 14px 16px 8px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.2s;
+    border-bottom: 1px solid #2a2a2a;
+}
+.day-summary:active { background: rgba(255,255,255,0.03); }
+
+/* grid-trick — как в synop details */
+.day-body {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.55s cubic-bezier(0.4,0,0.2,1);
+}
+.day-body.open {
+    grid-template-rows: 1fr;
+}
+.day-body-inner {
+    overflow: hidden;
+}
+.day-body-inner-pad {
+    padding: 10px 10px 12px;
+    border-top: 1px solid #2a2a2a;
+}
+
+.periods-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.period-card {
+    border: 1px solid #2a2a2a;
+    border-radius: 12px;
+    padding: 10px 4px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    -webkit-tap-highlight-color: transparent;
+}
+.period-card:active { opacity: 0.7; }
+.period-card.period-active {
+    border-color: #4fc3f7;
+    background: rgba(79,195,247,0.07) !important;
+}
+
+/* period-body — тот же grid-trick */
+.period-body {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.5s cubic-bezier(0.4,0,0.2,1),
+                opacity 0.4s ease;
+    opacity: 0;
+}
+.period-body.open {
+    grid-template-rows: 1fr;
+    opacity: 1;
+}
+.period-body-inner {
+    overflow: hidden;
+}
+
+/* Часовые карточки — grid-trick */
+.hour-row {
+    background: #1e1e1e;
+    border-radius: 16px;
+    margin-bottom: 10px;
+    border: 1.5px solid #2a2a2a;
+    overflow: hidden;
+}
+.hour-summary {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px 10px 8px;
+    cursor: pointer;
+    gap: 6px;
+}
+.hour-details {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.45s cubic-bezier(0.4,0,0.2,1),
+                opacity 0.35s ease;
+    opacity: 0;
+}
+.hour-details.open {
+    grid-template-rows: 1fr;
+    opacity: 1;
+}
+.hour-details-inner {
+    overflow: hidden;
+    padding: 0 12px;
+}
+.hour-details.open .hour-details-inner {
+    padding: 10px 12px 15px;
+    border-top: 1px solid #2a2a2a;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
