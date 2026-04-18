@@ -75,14 +75,11 @@ async function loadOgimetMonth(year, month) {
     const result = [];
 
     for (const line of lines) {
-        const m = line.match(/^33837,(\d{4}),(\d{2}),(\d{2}),(\d{2}),\d{2},(AAXX\s.+)$/);
-        if (!m) continue;
-
-        const [, y, mo, dd, hh, synopLine] = m;
-        if (y !== String(year) || mo !== mm) continue;
-        if (synopLine.includes("NILL")) continue;
-
-        const telegramKey = `${y}${mo}${dd}${hh}`;
+        const m = line.match(/^33837,(\d{4}),(\d{2}),(\d{2}),(\d{2}),(\d{2}),(AAXX\s.+)$/);
+if (!m) continue;
+const [, y, mo, dd, hh, mm, synopLine] = m;
+// ...
+const telegramKey = `${y}${mo}${dd}${hh}${mm}`;
 
         try {
             const parsed = parseSynop(synopLine, telegramKey);
