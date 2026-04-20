@@ -96,57 +96,68 @@ a{
     margin:0 auto;
     padding:16px;
 }
-.forecast-button,
-.model-button {
-    position: relative;
-    cursor: pointer;
-    display: inline-block;
-    padding: 4px 10px;
+/* СТАЛО */
+.sel-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 8px 16px;
     background: #1e1e1e;
     border: 1px solid #333;
-    border-radius: 8px;
-    font-size: 0.65em;
-    color: #ccc;
-    letter-spacing: 0;
+    border-radius: 20px;
+    font-size: 15px;
     font-weight: 600;
-    text-transform: none;
-    user-select: none;
-}
-
-.forecast-menu,
-.model-menu {
-    display: none;
-    position: absolute;
-    top: calc(100% + 4px);
-    left: 50%;
-    transform: translateX(-50%);
-    background: #1e1e1e;
-    border: 1px solid #333;
-    border-radius: 10px;
-    padding: 6px;
-    z-index: 200;
-    min-width: 130px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.6);
-    white-space: nowrap;
-}
-
-.forecast-menu div,
-.model-menu div {
-    padding: 7px 12px;
+    color: #ddd;
     cursor: pointer;
-    border-radius: 6px;
-    font-size: 13px;
-    color: #ccc;
-    text-align: left;
-    letter-spacing: 0;
-    font-weight: 400;
-    text-transform: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.15s, border-color 0.15s;
 }
+.sel-btn:active { background: #2a2a2a; border-color: #4fc3f7; }
+.sel-arrow { font-size: 12px; color: #666; }
 
-.forecast-menu div:hover,
-.model-menu div:hover {
-    background: #2a2a2a;
-    color: #fff;
+/* Bottom sheet */
+.bottom-sheet {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    background: rgba(0,0,0,0.55);
+    align-items: flex-end;
+}
+.bottom-sheet.open {
+    display: flex;
+}
+.sheet-panel {
+    width: 100%;
+    background: #1c1c1e;
+    border-radius: 20px 20px 0 0;
+    padding: 8px 0 24px;
+    animation: slideUp 0.28s cubic-bezier(0.4,0,0.2,1);
+}
+.sheet-title {
+    text-align: center;
+    font-size: 13px;
+    color: #666;
+    padding: 8px 16px 14px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+.sheet-item {
+    padding: 16px 24px;
+    font-size: 17px;
+    color: #eee;
+    cursor: pointer;
+    border-top: 1px solid #2a2a2a;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.15s;
+}
+.sheet-item:active { background: #2a2a2a; }
+
+@keyframes slideUp {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
 }
 
 .main-title {
@@ -420,3 +431,4 @@ svg{margin-bottom:15px;}
     from { opacity: 0; transform: translateY(-4px); }
     to   { opacity: 1; transform: translateY(0); }
 }
+

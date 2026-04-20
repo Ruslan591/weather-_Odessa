@@ -39,8 +39,8 @@
     <div class="period-group">
         <button id="btn-24h"       onclick="setPeriod('24h')">24 часа</button>
         <button id="btn-3d"        onclick="setPeriod('3d')">3 дня</button>
-        <button id="btn-16d"       onclick="setPeriod('16d')">16 дней</button>
-        <button id="btn-month-cur" onclick="setPeriod('month-cur')">Этот месяц</button>
+        <button id="btn-7d"        onclick="setPeriod('7d')">7 дней</button>
+        <button id="btn-14d"       onclick="setPeriod('14d')">14 дней</button>
         <button id="btn-month"     onclick="setPeriod('month')">По месяцам</button>
         <button id="btn-season"    onclick="setPeriod('season')">Сезон</button>
     </div>
@@ -69,7 +69,6 @@
 <button onclick="exportDB()">Сохранить</button>
 <button onclick="checkDB()">Проверить базу</button>
 <button onclick="cleanDB()">Очистить мусор</button>
-<button onclick="rebuildHistory()" style="background:#4a3000;">🔄 Перестроить базу</button>
 <button onclick="clearAllDB()" style="background:#5a0000;">🗑 Сбросить базу</button>
 
 <br><br>
@@ -219,30 +218,9 @@ function saveDataBatch(records) {
         tx.oncomplete = resolve;
         tx.onerror = reject;
         tx.onabort = function() { reject(new Error("Transaction aborted")); };
-
-        var i = 0;
-        function putNext() {
-            if (i >= records.length) return;
-            var req = store.put(records[i]);
-            i++;
-            req.onsuccess = putNext;
-            req.onerror = function(e) { console.error("put error", e); putNext(); };
+        for (var i = 0; i < records.length; i++) {
+            store.put(records[i]);
         }
-        putNext();
-    });
-}
-
-function saveData(data) {
-    if (!db) return;
-    db.transaction("stats","readwrite").objectStore("stats").put(data);
-}
-
-async function synopExists(synopTime) {
-    if (!db) return false;
-    return new Promise(function(res) {
-        const req = db.transaction("stats","readonly").objectStore("stats").get(synopTime);
-        req.onsuccess = function() { res(req.result !== undefined); };
-        req.onerror   = function() { res(false); };
     });
 }
 
@@ -288,22 +266,14 @@ async function loadAllStats() {
 
 async function loadStats() {
     const now     = Date.now();
-    const cutoffs = {"24h":24*3600*1000, "3d":3*24*3600*1000, "16d":16*24*3600*1000};
+    const cutoffs = {"24h":24*3600*1000, "3d":3*24*3600*1000, "7d":7*24*3600*1000, "14d":14*24*3600*1000};
 
-    if (currentPeriod in cutoffs) {
-        const dbData = await dbGetAll();
-        return dbData.filter(function(d) { return now - synopTimeToMs(d.synopTime) <= cutoffs[currentPeriod]; });
-    }
+if (currentPeriod in cutoffs) {
+    const dbData = await dbGetAll();
+    return dbData.filter(function(d) { return now - synopTimeToMs(d.synopTime) <= cutoffs[currentPeriod]; });
+}
 
-    const all = await loadAllStats();
-
-    if (currentPeriod === "month-cur") {
-        const nowDate = new Date();
-        return all.filter(function(d) {
-            return synopMonth(d.synopTime) === nowDate.getUTCMonth()+1 &&
-                   parseInt(d.synopTime.slice(0,4)) === nowDate.getUTCFullYear();
-        });
-    }
+const all = await loadAllStats();
     if (currentPeriod === "month") {
         return all.filter(function(d) { return synopMonth(d.synopTime) === currentMonth; });
     }
@@ -500,51 +470,59 @@ function buildModelsData(forecasts, hourIndex, synopHour) {
 }
 
 /* =========================================================
-   АВТООБНОВЛЕНИЕ
+   ЗАГРУЗКА СВЕЖИХ ДАННЫХ (текущий месяц)
 ========================================================= */
-
-
 async function updateRecent() {
     if (!db) await initDB();
-    setStatus("Загрузка SYNOP (16 дней)...", true);
-    let recentSynops;
-    try { recentSynops = await loadSynopRecent(16); }
+
+    // Считаем сколько дней прошло с 1-го числа текущего месяца
+    var now = new Date();
+    var firstOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    var daysSince = Math.ceil((now - firstOfMonth) / (24*3600*1000)) + 1;
+    var monthLabel = (now.getUTCMonth()+1) + "." + now.getUTCFullYear();
+
+    setStatus("Загрузка SYNOP ("+monthLabel+")...", true);
+    var recentSynops;
+    try { recentSynops = await loadSynopRecent(daysSince); }
     catch(e) { setStatus("❌ Ошибка SYNOP: "+e); return; }
 
     setStatus("📋 Проверка "+recentSynops.length+" сводок...");
 
-    // Все ключи что уже есть в базе
-    const allInDB = await dbGetAll();
-    const existingKeys = new Set(allInDB.map(function(d){ return d.synopTime; }));
+    var allInDB = await dbGetAll();
+    var existingKeys = new Set(allInDB.map(function(d){ return d.synopTime; }));
+    var missing = recentSynops.filter(function(s){ return !existingKeys.has(s.telegramKey); });
 
-    const missing = recentSynops.filter(function(s){ return !existingKeys.has(s.telegramKey); });
+    if (!missing.length) {
+        setStatus("✅ Данные за "+monthLabel+" актуальны");
+        await render(); await drawChart(); return;
+    }
 
-    if (!missing.length) { setStatus("✅ Все данные за 16 дней актуальны"); await render(); await drawChart(); return; }
-
-    setStatus("🌐 Загрузка моделей для "+missing.length+" недостающих сводок...", true);
-    let forecasts = {};
+    setStatus("🌐 Загрузка моделей ("+missing.length+" сводок)...", true);
+    var forecasts = {};
     try {
-        const results = await Promise.all(models.map(function(m){ return loadForecastPast(m,16); }));
-        models.forEach(function(m,i){ forecasts[m] = results[i]; });
+        for (var mi = 0; mi < models.length; mi++) {
+            forecasts[models[mi]] = await loadForecastPast(models[mi], daysSince);
+        }
     } catch(e) { setStatus("❌ Ошибка моделей: "+e); return; }
 
-    let saved = 0, skipped = 0;
-    const toSave = [];
-    const timeArr = forecasts[models[0]] ? forecasts[models[0]].time : null;
+    var saved = 0, skipped = 0;
+    var toSave = [];
+    var timeArr = forecasts[models[0]] ? forecasts[models[0]].time : null;
     if (timeArr) {
-        for (const s of missing) {
-            const tk = s.telegramKey;
-            const targetTime = tk.slice(0,4)+"-"+tk.slice(4,6)+"-"+tk.slice(6,8)+"T"+tk.slice(8,10)+":00";
-            const hourIndex  = timeArr.findIndex(function(t){ return t.indexOf(targetTime) === 0; });
+        for (var si = 0; si < missing.length; si++) {
+            var s = missing[si];
+            var tk = s.telegramKey;
+            var targetTime = tk.slice(0,4)+"-"+tk.slice(4,6)+"-"+tk.slice(6,8)+"T"+tk.slice(8,10)+":00";
+            var hourIndex = timeArr.findIndex(function(t){ return t.indexOf(targetTime) === 0; });
             if (hourIndex === -1) { skipped++; continue; }
-            const synopHour = parseInt(tk.slice(8,10));
-            const modelsData = buildModelsData(forecasts, hourIndex, synopHour);
+            var synopHour = parseInt(tk.slice(8,10));
+            var modelsData = buildModelsData(forecasts, hourIndex, synopHour);
             toSave.push({time:new Date().toISOString(), synopTime:tk, obs:s.parsed, models:modelsData, hourIndex, forecastHour:hourIndex});
             saved++;
         }
     }
     await saveDataBatch(toSave);
-    const skipMsg = skipped ? " · не найдено в модели: "+skipped : "";
+    var skipMsg = skipped ? " · не найдено в модели: "+skipped : "";
     setStatus("✅ Добавлено: "+saved+skipMsg);
     await render(); await drawChart();
 }
@@ -709,17 +687,10 @@ function wmoToGroup(code, gusts) {
     return null;
 }
 
-function wmoCloudToGroup(pct) {
-    return cloudToGroup(pct);
-}
-
 function computeErrors(stats) {
     const errors = {};
     models.forEach(function(m) {
-        errors[m] = {
-            temp:[], pressure:[], wind:[], windDir:[], cloudcover:[], precip:[],
-            wx: {}, cloud: {}
-        };
+        errors[m] = { temp:[], tempRaw:[], pressure:[], pressureRaw:[], wind:[], windRaw:[], windDir:[], windDirRaw:[], cloudcover:[], cloudcoverRaw:[], precip:[], precipRaw:[], wx:{}, cloud:{} };
     });
 
     const WX_GROUPS = ["haze","fog","drizzle","rain","sleet","snow",
@@ -731,12 +702,21 @@ function computeErrors(stats) {
         for (const m in d.models) {
             if (!errors[m]) continue;
             const model = d.models[m];
-            if (model.temp     != null && d.obs.temp     != null) errors[m].temp.push(Math.abs(model.temp-d.obs.temp));
-            if (model.pressure != null && d.obs.pressure != null) errors[m].pressure.push(Math.abs(model.pressure-d.obs.pressure));
-            if (model.wind     != null && d.obs.wind     != null) errors[m].wind.push(Math.abs(model.wind-d.obs.wind));
-            if (model.windDir  != null && d.obs.windDir  != null) errors[m].windDir.push(windDirError(model.windDir,d.obs.windDir));
-            if (model.cloudcover != null && d.obs.cloudcover != null) errors[m].cloudcover.push(Math.abs(model.cloudcover-d.obs.cloudcover));
-            if (model.precip   != null && d.obs.precip   != null) errors[m].precip.push(Math.abs(model.precip-d.obs.precip));
+            if (model.temp != null && d.obs.temp != null) {
+    errors[m].temp.push(Math.abs(model.temp-d.obs.temp));
+    errors[m].tempRaw.push(model.temp - d.obs.temp);
+}
+            if (model.pressure != null && d.obs.pressure != null) { errors[m].pressure.push(Math.abs(model.pressure-d.obs.pressure)); errors[m].pressureRaw.push(model.pressure-d.obs.pressure); }
+            if (model.wind     != null && d.obs.wind     != null) { errors[m].wind.push(Math.abs(model.wind-d.obs.wind)); errors[m].windRaw.push(model.wind-d.obs.wind); }
+            if (model.windDir  != null && d.obs.windDir  != null) {
+                errors[m].windDir.push(windDirError(model.windDir,d.obs.windDir));
+                var wdRaw = model.windDir - d.obs.windDir;
+                if (wdRaw > 180) wdRaw -= 360;
+                if (wdRaw < -180) wdRaw += 360;
+                errors[m].windDirRaw.push(wdRaw);
+            }
+            if (model.cloudcover != null && d.obs.cloudcover != null) { errors[m].cloudcover.push(Math.abs(model.cloudcover-d.obs.cloudcover)); errors[m].cloudcoverRaw.push(model.cloudcover-d.obs.cloudcover); }
+            if (model.precip   != null && d.obs.precip   != null) { errors[m].precip.push(Math.abs(model.precip-d.obs.precip)); errors[m].precipRaw.push(model.precip-d.obs.precip); }
 
             // Явления погоды
             const obsWw    = d.obs.ww != null ? d.obs.ww : null;
@@ -793,13 +773,24 @@ function computeRating(errors) {
     function avgNorm(arr,max) { return arr.length ? arr.reduce(function(a,b){return a+b/max;},0)/arr.length : 1; }
     function avg(arr)         { return arr.length ? arr.reduce(function(a,b){return a+b;},0)/arr.length : null; }
 
+    function avgSigned(arr) { return arr.length ? arr.reduce(function(a,b){return a+b;},0)/arr.length : null; }
+
     function buildRating(param, max) {
+        var rawKey = param+'Raw';
         return models.map(function(m) {
-            return {model:m, avg:avg(errors[m][param]), norm:avgNorm(errors[m][param],max), n:errors[m][param].length};
+            return {model:m, avg:avg(errors[m][param]), bias: errors[m][rawKey] ? avgSigned(errors[m][rawKey]) : null, norm:avgNorm(errors[m][param],max), n:errors[m][param].length};
         }).sort(function(a,b){ return a.norm-b.norm; });
     }
 
-    const tempR    = buildRating("temp",    maxT);
+    const tempR = models.map(function(m) {
+        return {
+            model: m,
+            avg:   avg(errors[m].temp),
+            bias:  avgSigned(errors[m].tempRaw),
+            norm:  avgNorm(errors[m].temp, maxT),
+            n:     errors[m].temp.length
+        };
+    }).sort(function(a,b){ return a.norm-b.norm; });
     const pressR   = buildRating("pressure", maxP);
     const windR    = buildRating("wind",    maxW);
     const windDirR = buildRating("windDir", maxWd);
@@ -887,16 +878,36 @@ function computeRating(errors) {
 }
 
 function makeCard(title, data, unit) {
+    // Порог для подкраски зависит от единицы
+    var threshold = unit==="hPa" ? 0.3 : (unit==="м/с" ? 0.5 : (unit==="%" ? 5 : (unit==="мм" ? 0.2 : 0.3)));
     let html = '<div class="rating-card"><h3>'+title+'</h3>';
     data.forEach(function(r,i) {
+        var col = '#aaa';
+        if (r.bias != null) col = r.bias > threshold ? '#e57373' : (r.bias < -threshold ? '#64b5f6' : '#aaa');
         const sanity = (unit==="hPa" && r.avg!=null && r.avg>10) ? ' ⚠️' : '';
-        const val    = r.avg != null ? r.avg.toFixed(2)+" "+unit+sanity : "—";
+        const val = r.avg != null ? '<span style="color:'+col+'">'+r.avg.toFixed(2)+' '+unit+'</span>'+sanity : '—';
         html += '<div class="row"><div>'+(i+1)+'. '+modelLabel(r.model)+'</div>'+
                 '<div>'+val+' <span style="color:#444;font-size:0.8em">n='+r.n+'</span></div></div>';
     });
     return html + '</div>';
 }
 
+function makeTempCard(title, data) {
+    var html = '<div class="rating-card"><h3>'+title+'</h3>';
+    data.forEach(function(r, i) {
+        var val = '—';
+        if (r.avg != null) {
+            var col = '#aaa';
+            if (r.bias != null) {
+                col = r.bias > 0.3 ? '#e57373' : (r.bias < -0.3 ? '#64b5f6' : '#aaa');
+            }
+            val = '<span style="color:'+col+'">'+r.avg.toFixed(2)+'°C</span>';
+        }
+        html += '<div class="row"><div>'+(i+1)+'. '+modelLabel(r.model)+'</div>'+
+                '<div>'+val+' <span style="color:#444;font-size:0.8em">n='+r.n+'</span></div></div>';
+    });
+    return html + '</div>';
+}
 
 function makePhenomCard(title, detailR) {
     let html = '<div class="rating-card"><h3>' + title + '</h3>';
@@ -920,23 +931,24 @@ function makePhenomCard(title, detailR) {
                 '<table style="width:100%;border-collapse:collapse;font-size:0.82em;">' +
                 '<thead><tr style="color:#777;text-align:right;">' +
                 '<th style="text-align:left;padding:3px 4px;font-weight:normal;">#&nbsp;Модель</th>' +
-                '<th style="padding:3px 6px;font-weight:normal;">🎯&nbsp;%</th>' +
-                '<th style="padding:3px 6px;font-weight:normal;">🚫&nbsp;%</th>' +
-                '<th style="padding:3px 6px;font-weight:normal;">👻&nbsp;%</th>' +
-                '<th style="padding:3px 6px;font-weight:normal;color:#555">n</th>' +
+                '<th style="padding:3px 6px;font-weight:normal;">🎯</th>' +
+                '<th style="padding:3px 6px;font-weight:normal;">🚫</th>' +
+                '<th style="padding:3px 6px;font-weight:normal;">👻</th>' +
                 '</tr></thead><tbody>';
 
         item.ranked.forEach(function(r, i) {
-            const pod = r.pod !== null ? '<b style="color:#4caf50">' + r.pod + '%</b>' : '<span style="color:#444">—</span>';
-            const far = r.far !== null ? '<b style="color:#f44336">' + r.far + '%</b>' : '<span style="color:#444">—</span>';
-            const mis = r.mis !== null ? '<b style="color:#ff9800">' + r.mis + '%</b>' : '<span style="color:#444">—</span>';
+            var hits  = r.pod !== null ? Math.round(r.pod / 100 * r.obs_total)   : null;
+            var false_a = r.far !== null ? Math.round(r.far / 100 * r.model_total) : null;
+            var miss  = r.mis !== null ? Math.round(r.mis / 100 * r.obs_total)   : null;
+            var podStr = hits    !== null ? '<b style="color:#4caf50">'  + hits    + '/' + r.obs_total   + '</b>' : '<span style="color:#444">—</span>';
+            var farStr = false_a !== null ? '<b style="color:#f44336">'  + false_a + '/' + r.model_total + '</b>' : '<span style="color:#444">—</span>';
+            var misStr = miss    !== null ? '<b style="color:#ff9800">'  + miss    + '/' + r.obs_total   + '</b>' : '<span style="color:#444">—</span>';
             const rowColor = i % 2 === 0 ? 'background:#1e1e1e' : 'background:#181818';
             html += '<tr style="' + rowColor + '">' +
                 '<td style="padding:4px 4px;">' + (i+1) + '.&nbsp;' + modelLabel(r.model) + '</td>' +
-                '<td style="padding:4px 6px;text-align:right;">' + pod + '</td>' +
-                '<td style="padding:4px 6px;text-align:right;">' + far + '</td>' +
-                '<td style="padding:4px 6px;text-align:right;">' + mis + '</td>' +
-                '<td style="padding:4px 6px;text-align:right;color:#444">' + r.obs_total + '</td>' +
+                '<td style="padding:4px 6px;text-align:right;">' + podStr + '</td>' +
+                '<td style="padding:4px 6px;text-align:right;">' + farStr + '</td>' +
+                '<td style="padding:4px 6px;text-align:right;">' + misStr + '</td>' +
                 '</tr>';
         });
         html += '</tbody></table></div>';
@@ -996,8 +1008,7 @@ async function render() {
     const stats = await loadStats();
 
     const periodTitle = {
-        "24h":"24 часа", "3d":"3 дня", "16d":"16 дней",
-        "month-cur":"Текущий месяц",
+        "24h":"24 часа", "3d":"3 дня", "7d":"7 дней", "14d":"14 дней",
         "month": MONTH_NAMES[currentMonth-1]+" — все годы",
         "season": SEASON_LABELS[currentSeason]
     }[currentPeriod] || "";
@@ -1013,7 +1024,7 @@ async function render() {
     if (currentTab === "main") {
         const errors = computeErrors(stats);
         const rating = computeRating(errors);
-        html += makeCard("Температура",        rating.tempR,    "°C");
+        html += makeTempCard("Температура", rating.tempR);
         html += makeCard("Давление",           rating.pressR,   "hPa");
         html += makeCard("Ветер",              rating.windR,    "м/с");
         html += makeCard("Направление ветра",  rating.windDirR, "°");
@@ -1137,7 +1148,7 @@ async function checkDB() {
    УПРАВЛЕНИЕ КНОПКАМИ
 ========================================================= */
 function setActivePeriod(p) {
-    ["24h","3d","16d","month-cur","month","season"].forEach(function(id) {
+    ["24h","3d","7d","14d","month","season"].forEach(function(id) {
         const btn = document.getElementById("btn-"+id);
         if (btn) btn.classList.toggle("active", id === p);
     });
@@ -1251,7 +1262,23 @@ updateHeaderOffset();
 window.addEventListener("resize", updateHeaderOffset);
 
 initDB().then(function() {
-    updateRecent();
+    var req = db.transaction("stats","readonly").objectStore("stats").getAll();
+    req.onsuccess = function() {
+        var data = req.result;
+        if (data.length) {
+            var latest = data.reduce(function(a,b){
+                return (a.time || "") > (b.time || "") ? a : b;
+            });
+            var d = new Date(latest.time);
+            var fmt = d.toLocaleDateString("ru-RU") + " " +
+                      d.toLocaleTimeString("ru-RU", {hour:"2-digit", minute:"2-digit"});
+            setStatus("Последнее обновление: " + fmt + " · записей: " + data.length);
+        } else {
+            setStatus("База пустая — загрузи свежие данные");
+        }
+        render();
+        drawChart();
+    };
 });
 
 </script>
@@ -1269,6 +1296,59 @@ initDB().then(function() {
         document.body.appendChild(s);
     });
 })();
+
+/* =========================================================
+   АЛЕРТ: напоминание обновить JSON в начале месяца
+========================================================= */
+(function checkJsonUpdateAlert() {
+    var now = new Date();
+    var day = now.getUTCDate();
+    if (day > 7) return; // показываем только первые 7 дней месяца
+
+    // Предыдущий месяц
+    var prevMonth = now.getUTCMonth(); // 0-based, это и есть предыдущий (текущий - 1)
+    var prevYear  = now.getUTCFullYear();
+    if (prevMonth === 0) { prevMonth = 12; prevYear--; }
+
+    var alertKey = "jsonAlertDismissed_" + prevYear + "_" + String(prevMonth).padStart(2,"0");
+    if (localStorage.getItem(alertKey)) return; // уже скрыт
+
+    // Проверяем, есть ли данные за весь предыдущий месяц в JSON
+    var currentYear = now.getUTCFullYear();
+    var currentYearFile = "modelData_" + (prevMonth === 12 ? prevYear : currentYear) + ".json";
+
+    fetch(currentYearFile + "?_=" + Date.now())
+        .then(function(r) { return r.ok ? r.json() : []; })
+        .catch(function() { return []; })
+        .then(function(data) {
+            // Считаем кол-во дней предыдущего месяца в данных
+            var daysInPrevMonth = new Date(Date.UTC(prevYear, prevMonth, 0)).getUTCDate();
+            var daysFound = new Set();
+            data.forEach(function(d) {
+                if (!d.synopTime) return;
+                var y  = parseInt(d.synopTime.slice(0,4));
+                var mo = parseInt(d.synopTime.slice(4,6));
+                var dd = d.synopTime.slice(6,8);
+                if (y === prevYear && mo === prevMonth) daysFound.add(dd);
+            });
+
+            // Если данные полные — скрываем навсегда
+            if (daysFound.size >= daysInPrevMonth) {
+                localStorage.setItem(alertKey, "1");
+                return;
+            }
+
+            // Показываем алерт
+            var monthNames = ["января","февраля","марта","апреля","мая","июня",
+                              "июля","августа","сентября","октября","ноября","декабря"];
+            var msg = "📂 Напоминание: обновите JSON за " + prevYear + " год.\n" +
+                      "Данные за " + monthNames[prevMonth-1] + " " + prevYear + " неполные " +
+                      "(найдено дней: " + daysFound.size + " из " + daysInPrevMonth + ").\n\n" +
+                      "Сохраните файл в: Документы/weather/";
+            alert(msg);
+        });
+})();
+
 </script>
 
 </body>

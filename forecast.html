@@ -19,29 +19,39 @@
         <a href="verify.html">Рейтинг</a>
     </div>
 </div>
+<!-- СТАЛО -->
 <div class="main-title">
-<span class="forecast-button" onclick="toggleForecastMenu(event)">
-  <span id="forecastDays">1 день</span> ▼
-  <div id="forecastMenu" class="forecast-menu" style="display:none;">
-    <div onclick="setForecastDays(2, event)">24 часа</div>
-    <div onclick="setForecastDays(3, event)">2 дня</div>
-    <div onclick="setForecastDays(5, event)">4 дня</div>
-    <div onclick="setForecastDays(7, event)">6 дней</div>
-    <div onclick="setForecastDays(10, event)">9 дней</div>
-    <div onclick="setForecastDays(16, event)">15 дней</div>
+  <button class="sel-btn" onclick="toggleForecastMenu(event)">
+    <span id="forecastDays">24 часа</span> <span class="sel-arrow">▾</span>
+  </button>
+  <button class="sel-btn" onclick="toggleModelMenu(event)">
+    <span id="modelName">ECMWF</span> <span class="sel-arrow">▾</span>
+  </button>
+</div>
+
+<!-- Bottom sheet: период -->
+<div id="forecastSheet" class="bottom-sheet" onclick="closeSheet('forecastSheet')">
+  <div class="sheet-panel" onclick="event.stopPropagation()">
+    <div class="sheet-item" onclick="setForecastDays(2)">24 часа</div>
+    <div class="sheet-item" onclick="setForecastDays(3)">2 дня</div>
+    <div class="sheet-item" onclick="setForecastDays(5)">5 дней</div>
+    <div class="sheet-item" onclick="setForecastDays(7)">7 дней</div>
+    <div class="sheet-item" onclick="setForecastDays(10)">10 дней</div>
+    <div class="sheet-item" onclick="setForecastDays(16)">16 дней</div>
   </div>
-</span>
-  <span class="model-button" onclick="toggleModelMenu()">
-    <span id="modelName">ECMWF</span> ▼
-    <div id="modelMenu" class="model-menu">
-      <div onclick="setModel('ecmwf_ifs', event)">ECMWF IFS HRES</div>
-      <div onclick="setModel('icon_eu', event)">ICON EU</div>
-      <div onclick="setModel('ukmo_global_deterministic_10km', event)">UKMO Global</div>
-      <div onclick="setModel('meteofrance_arpege_europe', event)">ARPEGE Europe</div>
-      <div onclick="setModel('jma_gsm', event)">JMA GSM</div>
-      <div onclick="setModel('gfs_global', event)">GFS Global</div>
-    </div>
-</span>
+</div>
+
+<!-- Bottom sheet: модель -->
+<div id="modelSheet" class="bottom-sheet" onclick="closeSheet('modelSheet')">
+  <div class="sheet-panel" onclick="event.stopPropagation()">
+    <div class="sheet-title">Модель прогноза</div>
+    <div class="sheet-item" onclick="setModel('ecmwf_ifs')">ECMWF IFS HRES</div>
+    <div class="sheet-item" onclick="setModel('icon_eu')">ICON EU</div>
+    <div class="sheet-item" onclick="setModel('ukmo_global_deterministic_10km')">UKMO Global</div>
+    <div class="sheet-item" onclick="setModel('meteofrance_arpege_europe')">ARPEGE Europe</div>
+    <div class="sheet-item" onclick="setModel('jma_gsm')">JMA GSM</div>
+    <div class="sheet-item" onclick="setModel('gfs_global')">GFS Global</div>
+  </div>
 </div>
 <div id="content">
   <div id="fcChart" style="max-width:340px; margin:0 auto; padding: 0 8px;">
@@ -52,29 +62,28 @@
 <div id="forecast"></div>
 
 <script>
-let forecastDays = parseInt(localStorage.getItem("forecastDays")) || 1;
-document.getElementById("forecastDays").innerText = forecastDays + (forecastDays > 1 ? " дня" : " день");
-
-function toggleForecastMenu(e){
-    e.stopPropagation();
-    const menu = document.getElementById("forecastMenu");
-    menu.style.display = menu.style.display === "block" ? "none" : "block";
+// СТАЛО
+function daysLabel(d){
+    if(d === 1) return "24 часа";
+    if(d >= 5 && d <= 20) return d + " дней";
+    const r = d % 10;
+    if(r === 1) return d + " день";
+    if(r >= 2 && r <= 4) return d + " дня";
+    return d + " дней";
 }
 
-function setForecastDays(days, e){
-    e.stopPropagation();
+let forecastDays = parseInt(localStorage.getItem("forecastDays")) || 1;
+document.getElementById("forecastDays").innerText = daysLabel(forecastDays);
+
+function toggleForecastMenu(e){ if(e) e.stopPropagation(); openSheet('forecastSheet'); }
+
+function setForecastDays(days){
     forecastDays = days;
     localStorage.setItem("forecastDays", days);
-    document.getElementById("forecastDays").innerText = days + (days > 1 ? " дня" : " день");
-    document.getElementById("forecastMenu").style.display = "none";
+    document.getElementById("forecastDays").innerText = daysLabel(days);
+    closeSheet('forecastSheet');
     load();
 }
-
-document.addEventListener("click", (e) => {
-    const menu = document.getElementById("forecastMenu");
-    const button = document.querySelector(".forecast-button");
-    if (!button.contains(e.target)) menu.style.display = "none";
-});
 
 function modelLabel(model){
     switch(model){
@@ -91,25 +100,15 @@ function modelLabel(model){
 let weatherModel = localStorage.getItem("weatherModel") || "ecmwf_ifs";
 document.getElementById("modelName").innerText = modelLabel(weatherModel);
 
-function toggleModelMenu() {
-    const menu = document.getElementById("modelMenu");
-    menu.style.display = menu.style.display === "block" ? "none" : "block";
-}
+function toggleModelMenu(e){ if(e) e.stopPropagation(); openSheet('modelSheet'); }
 
-function setModel(model, e) {
-    e.stopPropagation();
+function setModel(model) {
     weatherModel = model;
     localStorage.setItem("weatherModel", model);
     document.getElementById("modelName").innerText = modelLabel(model);
-    document.getElementById("modelMenu").style.display = "none";
+    closeSheet('modelSheet');
     load();
 }
-
-document.addEventListener("click", (e) => {
-    const menu = document.getElementById("modelMenu");
-    const button = document.querySelector(".model-button");
-    if (!button.contains(e.target)) menu.style.display = "none";
-});
 
 function toggle(el){ el.parentElement.classList.toggle("active"); }
 
@@ -1377,6 +1376,15 @@ function _renderAndOpenPeriod(dayKey, pId, agg, pbCont){
     _openHourUid = null;
     const pb = document.getElementById("pb_" + dayKey + "_" + pId);
     if(pb) requestAnimationFrame(() => requestAnimationFrame(() => pb.classList.add("open")));
+}
+
+function openSheet(id){
+    const s = document.getElementById(id);
+    if(s){ s.classList.add("open"); }
+}
+function closeSheet(id){
+    const s = document.getElementById(id);
+    if(s){ s.classList.remove("open"); }
 }
 
 load();
