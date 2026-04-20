@@ -249,7 +249,7 @@ async function processMonth(year, month, rebuild = false) {
         return 0;
     }
 
-    let saved = 0;
+    const batch = [];
     for (const s of missing) {
         const tk = s.telegramKey;
         const targetTime = `${tk.slice(0,4)}-${tk.slice(4,6)}-${tk.slice(6,8)}T${tk.slice(8,10)}:00`;
@@ -263,20 +263,21 @@ async function processMonth(year, month, rebuild = false) {
         const modelsData = {};
         for (const m of models) {
             const synopHour = parseInt(tk.slice(8, 10));
-modelsData[m] = extractModelData(hourly, m, hourIndex, synopHour);
+            modelsData[m] = extractModelData(hourly, m, hourIndex, synopHour);
         }
 
-        // forecastHour для исторических данных недоступен — ставим null
-        saveData({
+        batch.push({
             time:        new Date().toISOString(),
             synopTime:   tk,
-            obs:         s.parsed,   // уже содержит cloudcover, precip, ww из parseSynop
+            obs:         s.parsed,
             models:      modelsData,
             hourIndex,
-            forecastHour: null        // для исторических API нет заблаговременности
+            forecastHour: null
         });
-        saved++;
     }
+
+    await saveDataBatch(batch);
+    var saved = batch.length;
 
     setStatus(`✅ ${label} — сохранено: ${saved}`);
     console.log(`${label}: сохранено ${saved} из ${missing.length}`);
