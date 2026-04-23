@@ -151,6 +151,19 @@
     color: var(--c, #aaa);
     background: #1e1e1e;
 }
+#stationBtns button {
+    font-size: 11px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1px solid #333;
+    background: #1e1e1e;
+    color: #666;
+    cursor: pointer;
+}
+#stationBtns button.active {
+    border-color: #ffd166;
+    color: #ffd166;
+}
 </style>
 
 <script>
@@ -162,7 +175,8 @@ var PARAMS = [
     { key:"pressure", label:"Давление",    unit:" гПа", color:"#4aa3ff" },
     { key:"wind",     label:"Ветер",       unit:" м/с", color:"#8bc34a" },
     { key:"windDir",  label:"Направление", unit:"°",    color:"#74b9ff" },
-    { key:"humidity", label:"Влажность",   unit:"%",    color:"#00bcd4" }
+    { key:"humidity", label:"Влажность",   unit:"%",    color:"#00bcd4" },
+    { key:"precip",   label:"Осадки",      unit:" мм",  color:"#448aff", isFact:true }
 ];
 
 var THRESHOLDS = {
@@ -176,7 +190,7 @@ var THRESHOLDS = {
 var _activeChartParam = "temp";
 var _chartInstance    = null;
 var _dayMetrics       = null;
-var _currentStation   = "all"; // "all" или stationId
+var _currentStation   = "all";
 
 /* =============================================
    IndexedDB (та же база что в verify_pws.html)
@@ -192,8 +206,9 @@ function initDB() {
 function dbGetAll() {
     if (!db) return Promise.resolve([]);
     return new Promise(function(res) {
-        var req = db.transaction("stats","readonly").objectStore("stats").getAll();
-        req.onsuccess = function() { res(req.result); };
+        var tx  = db.transaction("stats", "readonly");
+        var req = tx.objectStore("stats").getAll();
+        req.onsuccess = function() { res(req.result || []); };
         req.onerror   = function() { res([]); };
     });
 }
@@ -201,12 +216,15 @@ function dbGetAll() {
 /* =============================================
    ВСПОМОГАТЕЛЬНЫЕ
 ============================================= */
-function roundHour(timeStr) {
+
+// ИСПРАВЛЕНИЕ: не используем toISOString() — он даёт UTC.
+// hourKey в verify_pws хранится как локальное время "2026-04-22T14"
+// fh.time из open-meteo (timezone=auto) тоже локальное: "2026-04-22T14:00"
+// Просто берём первые 13 символов строки как есть.
+function snapTimeToHourKey(timeStr) {
     if (!timeStr) return null;
-    var d = new Date(timeStr);
-    if (isNaN(d)) return null;
-    d.setMinutes(0, 0, 0);
-    return d.toISOString().slice(0, 16); // "2026-04-22T14:00"
+    // "2026-04-22T14:00" -> "2026-04-22T14"
+    return timeStr.slice(0, 13);
 }
 
 function maeColor(key, mae) {
@@ -232,28 +250,26 @@ function windDirDiff(a, b) {
 
 /* =============================================
    СТРОИМ ИНДЕКС НАБЛЮДЕНИЙ PWS
-   Усредняем по станциям для каждого часа.
-   Если _currentStation !== "all" — только эта станция.
+   Ключ: "2026-04-22T14" (hourKey из verify_pws)
 ============================================= */
 async function buildObsIndex() {
     var all = await dbGetAll();
 
-    // Фильтр по станции
     if (_currentStation !== "all") {
         all = all.filter(function(d) { return d.stationId === _currentStation; });
     }
 
     // Группируем по hourKey
-    var byHour = {}; // hourKey -> [{obs, stationId}]
+    var byHour = {};
     all.forEach(function(rec) {
         if (!rec.hourKey || !rec.obs) return;
-        var key = rec.hourKey; // "2026-04-01T14"
+        var key = rec.hourKey; // "2026-04-22T14"
         if (!byHour[key]) byHour[key] = [];
         byHour[key].push(rec.obs);
     });
 
     // Усредняем по станциям
-    var obsIndex = {}; // roundedISO -> obs
+    var obsIndex = {}; // "2026-04-22T14" -> obs
     Object.keys(byHour).forEach(function(key) {
         var arr = byHour[key];
         function avgField(field) {
@@ -261,7 +277,6 @@ async function buildObsIndex() {
             if (!vals.length) return null;
             return vals.reduce(function(s,v){ return s+v; }, 0) / vals.length;
         }
-        // Направление ветра — векторное среднее
         function avgWindDir() {
             var dirs = arr.map(function(o){ return o.windDir; }).filter(function(v){ return v != null; });
             if (!dirs.length) return null;
@@ -270,16 +285,14 @@ async function buildObsIndex() {
             var deg = Math.atan2(sy, sx) * 180 / Math.PI;
             return (deg + 360) % 360;
         }
-
-        // Ключ для сопоставления со снимком: "2026-04-01T14:00"
-        var isoKey = key + ":00";
-        obsIndex[isoKey] = {
-            time:     isoKey,
+        obsIndex[key] = {
+            time:     key,
             temp:     avgField("temp"),
-            pressure: avgField("pressure"), // уже с offset из verify_pws
+            pressure: avgField("pressure"),
             wind:     avgField("wind"),
             windDir:  avgWindDir(),
-            humidity: avgField("humidity")
+            humidity: avgField("humidity"),
+            precip:   avgField("precip")
         };
     });
 
@@ -288,24 +301,24 @@ async function buildObsIndex() {
 
 /* =============================================
    РАСЧЁТ МЕТРИК
-   Аналог EV.calcMetrics но для PWS-полей
 ============================================= */
 function calcMetrics(obsIndex) {
     var snapData = [];
     try { snapData = JSON.parse(localStorage.getItem("ensembleSnapshots") || "[]"); } catch(e) {}
     if (!snapData.length) return null;
 
-    var errors = { temp:[], pressure:[], wind:[], windDir:[], humidity:[] };
-    var biases  = { temp:[], pressure:[], wind:[], windDir:[], humidity:[] };
+    var errors = { temp:[], pressure:[], wind:[], windDir:[], humidity:[], precip:[] };
+    var biases  = { temp:[], pressure:[], wind:[], windDir:[], humidity:[], precip:[] };
+    var matched = 0;
 
     snapData.forEach(function(snap) {
         if (!snap.hours) return;
         snap.hours.forEach(function(fh) {
-            var key = roundHour(fh.time);
+            var key = snapTimeToHourKey(fh.time); // "2026-04-22T14"
             if (!key) return;
-            var isoKey = key + ":00";
-            var ob = obsIndex[isoKey];
+            var ob = obsIndex[key];
             if (!ob) return;
+            matched++;
 
             function push(field, fVal, oVal) {
                 if (fVal == null || oVal == null) return;
@@ -321,15 +334,25 @@ function calcMetrics(obsIndex) {
             if (fh.windDir != null && ob.windDir != null) {
                 var d = windDirDiff(fh.windDir, ob.windDir);
                 errors.windDir.push(d);
-                biases.windDir.push(d); // направление — только абс.
+                biases.windDir.push(d);
+            }
+
+            // Осадки — факт/не факт (>0.1 мм)
+            if (fh.rain != null && ob.precip != null) {
+                var fHad = fh.rain   > 0.1 ? 1 : 0;
+                var oHad = ob.precip > 0.1 ? 1 : 0;
+                errors.precip.push(Math.abs(fHad - oHad)); // 0=верно, 1=ошибка
+                biases.precip.push(fHad - oHad);
             }
         });
     });
 
+    if (!matched) return null;
+
     var result = {};
     PARAMS.forEach(function(p) {
-        var k   = p.key;
-        var arr = errors[k];
+        var k    = p.key;
+        var arr  = errors[k];
         var bias = biases[k];
         if (!arr.length) { result[k] = null; return; }
         var mae  = arr.reduce(function(s,v){ return s+v; }, 0) / arr.length;
@@ -353,13 +376,12 @@ function calcMetricsByDay(obsIndex) {
     snapData.forEach(function(snap) {
         if (!snap.hours) return;
         snap.hours.forEach(function(fh) {
-            var key = roundHour(fh.time);
+            var key = snapTimeToHourKey(fh.time);
             if (!key) return;
-            var isoKey = key + ":00";
-            var ob = obsIndex[isoKey];
+            var ob = obsIndex[key];
             if (!ob) return;
             var day = key.slice(0, 10);
-            if (!byDay[day]) byDay[day] = { temp:[], pressure:[], wind:[], windDir:[], humidity:[] };
+            if (!byDay[day]) byDay[day] = { temp:[], pressure:[], wind:[], windDir:[], humidity:[], precip:[] };
 
             function push(field, fVal, oVal) {
                 if (fVal == null || oVal == null) return;
@@ -369,8 +391,12 @@ function calcMetricsByDay(obsIndex) {
             push("pressure", fh.pressure, ob.pressure);
             push("wind",     fh.wind,     ob.wind);
             push("humidity", fh.humidity, ob.humidity);
-            if (fh.windDir != null && ob.windDir != null)
-                byDay[day].windDir.push(windDirDiff(fh.windDir, ob.windDir));
+            byDay[day].windDir.push(windDirDiff(fh.windDir, ob.windDir));
+            if (fh.rain != null && ob.precip != null) {
+                var fHad = fh.rain   > 0.1 ? 1 : 0;
+                var oHad = ob.precip > 0.1 ? 1 : 0;
+                byDay[day].precip.push(Math.abs(fHad - oHad));
+            }
         });
     });
 
@@ -397,13 +423,28 @@ function renderMetrics(metrics) {
     if (!metrics) {
         grid.innerHTML = '<div style="grid-column:1/-1;color:#666;font-size:13px;padding:20px 0;">' +
             'Нет совпадений снимков с наблюдениями PWS.<br>' +
-            'Загрузите данные в <a href="verify_pws.html" style="color:#ffd166;">Рейтинг PWS</a>.</div>';
+            'Убедитесь, что в <a href="verify_pws.html" style="color:#ffd166;">Рейтинге PWS</a> ' +
+            'загружены данные за последние дни.</div>';
         return;
     }
     grid.innerHTML = PARAMS.map(function(p) {
         var s = metrics[p.key];
         if (!s) return '<div class="es-card"><div class="es-card-label">' + p.label +
                        '</div><div style="color:#444;font-size:13px;">нет данных</div></div>';
+
+        // Осадки — факт (% верных)
+        if (p.isFact) {
+            var correct = s.n - Math.round(s.mae * s.n);
+            var pct = Math.round(correct / s.n * 100);
+            var fc = pct >= 80 ? "#5fe08f" : pct >= 60 ? "#fdcb6e" : "#ff6b6b";
+            return '<div class="es-card">' +
+                '<div class="es-card-label">' + p.label + ' (факт)</div>' +
+                '<div class="es-card-mae" style="color:' + fc + ';">' + pct +
+                    '<span style="font-size:12px;font-weight:400;color:#666;">% верно</span></div>' +
+                '<div class="es-card-sub">верно ' + correct + ' из ' + s.n + '</div>' +
+            '</div>';
+        }
+
         var col   = maeColor(p.key, s.mae);
         var badge = biasBadge(s.bias, p.unit);
         return '<div class="es-card">' +
@@ -473,13 +514,7 @@ function renderChart(paramKey) {
                             return v != null ? v.toFixed(2) + p.unit + (n ? " (n="+n.n+")" : "") : "—";
                         }
                     }
-                },
-                annotation: t ? {
-                    annotations: {
-                        good: { type:"line", yMin:t.good, yMax:t.good, borderColor:"#5fe08f44", borderWidth:1, borderDash:[4,4] },
-                        bad:  { type:"line", yMin:t.bad,  yMax:t.bad,  borderColor:"#ff6b6b44", borderWidth:1, borderDash:[4,4] }
-                    }
-                } : {}
+                }
             },
             scales: {
                 x: { ticks:{ color:"#555", font:{size:10} }, grid:{ color:"#1e1e1e" } },
@@ -519,7 +554,7 @@ function renderCoverage(snapCount, obsCount, stationLabel) {
             '<div><span style="color:#555;">Снимков</span><br><b style="font-size:17px;">' + snapCount + '</b></div>' +
             '<div><span style="color:#555;">Часов прогноза</span><br><b style="font-size:17px;">' + totalHours + '</b></div>' +
             '<div><span style="color:#555;">Средний горизонт</span><br><b style="font-size:17px;">' + avgHorizon + ' ч</b></div>' +
-            '<div><span style="color:#555;">Наблюдений PWS</span><br><b style="font-size:17px;">' + obsCount + '</b></div>' +
+            '<div><span style="color:#555;">Записей PWS</span><br><b style="font-size:17px;">' + obsCount + '</b></div>' +
         '</div>' +
         '<div style="margin-top:10px;color:#555;font-size:12px;">' +
             'Станция: ' + stationLabel + '<br>' +
@@ -534,7 +569,8 @@ function renderSnapshots() {
     var list     = document.getElementById("snapshotList");
     var horizons = EV.getHorizonStats();
     if (!horizons.length) {
-        list.innerHTML = '<div style="color:#444;font-size:13px;">Нет снимков</div>';
+        list.innerHTML = '<div style="color:#444;font-size:13px;">Нет снимков. ' +
+            'Откройте <a href="forecast.html" style="color:#ffd166;">Прогноз → Ансамбль ⚡</a>.</div>';
         return;
     }
     var recent = horizons.slice().reverse().slice(0, 20);
@@ -558,9 +594,11 @@ function exportSnapshots() {
     if (!snaps.length) { alert("Нет снимков для сохранения"); return; }
     var dateStr  = new Date().toISOString().slice(0,10);
     var filename = "ensemble_pws_snapshots_" + dateStr + ".json";
-    var blob = new Blob([JSON.stringify({ _type:"ensemble_snapshots", _source:"PWS",
-        exported_at: new Date().toISOString(), count: snaps.length, snapshots: snaps }, null, 2)],
-        {type:"application/json"});
+    var blob = new Blob([JSON.stringify({
+        _type: "ensemble_snapshots", _source: "PWS",
+        exported_at: new Date().toISOString(),
+        count: snaps.length, snapshots: snaps
+    }, null, 2)], {type:"application/json"});
     var url = URL.createObjectURL(blob);
     var a   = document.createElement("a");
     a.href = url; a.download = filename; a.click();
@@ -572,22 +610,23 @@ function importSnapshots(file) {
     var reader = new FileReader();
     reader.onload = function(e) {
         try {
-            var obj = JSON.parse(e.target.result);
-            var incoming = Array.isArray(obj) ? obj
-                         : (obj.snapshots ? obj.snapshots : null);
+            var obj      = JSON.parse(e.target.result);
+            var incoming = Array.isArray(obj) ? obj : (obj.snapshots || null);
             if (!incoming) { setImportStatus("❌ Неверный формат", "#ff6b6b"); return; }
 
             var existing = [];
             try { existing = JSON.parse(localStorage.getItem("ensembleSnapshots") || "[]"); } catch(ex) {}
-            var existKeys = new Set(existing.map(function(s){
-                return s.hours && s.hours[0] ? s.hours[0].time : null;
-            }).filter(Boolean));
+            var existKeys = {};
+            existing.forEach(function(s) {
+                var k = s.savedAt ? s.savedAt.slice(0,13) : null;
+                if (k) existKeys[k] = true;
+            });
 
             var added = 0;
             incoming.forEach(function(snap) {
-                var key = snap.hours && snap.hours[0] ? snap.hours[0].time : null;
-                if (!key || existKeys.has(key)) return;
-                existing.push(snap); existKeys.add(key); added++;
+                var k = snap.savedAt ? snap.savedAt.slice(0,13) : null;
+                if (!k || existKeys[k]) return;
+                existing.push(snap); existKeys[k] = true; added++;
             });
             existing.sort(function(a,b){ return (a.savedAt||"") > (b.savedAt||"") ? 1 : -1; });
             if (existing.length > 200) existing = existing.slice(existing.length - 200);
@@ -615,7 +654,9 @@ function confirmClear() {
 ============================================= */
 function setStation(id) {
     _currentStation = id;
-    document.querySelectorAll("#stationBtns button").forEach(function(b){ b.classList.remove("active"); });
+    document.querySelectorAll("#stationBtns button").forEach(function(b){
+        b.classList.remove("active");
+    });
     var btn = document.getElementById("epws-st-" + id);
     if (btn) btn.classList.add("active");
     render();
@@ -631,13 +672,15 @@ function setStation(id) {
     allBtn.classList.add("active");
     row.appendChild(allBtn);
 
-    PWS_STATIONS.forEach(function(s) {
-        var btn = document.createElement("button");
-        btn.id = "epws-st-" + s.id;
-        btn.textContent = s.name;
-        btn.onclick = function() { setStation(s.id); };
-        row.appendChild(btn);
-    });
+    if (typeof PWS_STATIONS !== "undefined") {
+        PWS_STATIONS.forEach(function(s) {
+            var btn = document.createElement("button");
+            btn.id = "epws-st-" + s.id;
+            btn.textContent = s.name;
+            btn.onclick = function() { setStation(s.id); };
+            row.appendChild(btn);
+        });
+    }
 })();
 
 /* =============================================
@@ -657,19 +700,31 @@ async function render() {
     if (!snapCount) {
         document.getElementById("metricsGrid").innerHTML =
             '<div style="grid-column:1/-1;color:#666;font-size:13px;padding:20px 0;">' +
-            'Снимков нет. Откройте <a href="forecast.html" style="color:#ffd166;">Прогноз → Ансамбль ⚡</a> — данные запишутся автоматически.</div>';
+            'Снимков нет. Откройте <a href="forecast.html" style="color:#ffd166;">' +
+            'Прогноз → Ансамбль ⚡</a> — данные запишутся автоматически.</div>';
         renderSnapshots();
         return;
     }
 
-    await initDB();
-    var result = await buildObsIndex();
-    var obsIndex  = result.obsIndex;
-    var obsCount  = result.totalRecords;
+    try {
+        await initDB();
+    } catch(e) {
+        status.innerHTML += ' · <span style="color:#ff6b6b;">PWS база недоступна</span>';
+    }
+
+    var result   = await buildObsIndex();
+    var obsIndex = result.obsIndex;
+    var obsCount = result.totalRecords;
 
     var stationLabel = _currentStation === "all"
-        ? "Все (" + PWS_STATIONS.length + " станции)"
-        : (PWS_STATIONS.find(function(s){ return s.id === _currentStation; }) || {}).name || _currentStation;
+        ? "Все (" + (typeof PWS_STATIONS !== "undefined" ? PWS_STATIONS.length : "?") + " станции)"
+        : ((typeof PWS_STATIONS !== "undefined"
+            ? (PWS_STATIONS.find(function(s){ return s.id === _currentStation; }) || {}).name
+            : null) || _currentStation);
+
+    // Диагностика: показываем сколько ключей в obsIndex
+    var obsKeys = Object.keys(obsIndex).length;
+    status.innerHTML = "Снимков: <b>" + snapCount + "</b> · Часов PWS: <b>" + obsKeys + "</b>";
 
     var metrics = calcMetrics(obsIndex);
 
