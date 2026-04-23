@@ -657,17 +657,14 @@ function cloudFormText444(code){
 async function loadSynopUI(){
     const btn = document.getElementById("btnSynop");
     btn.disabled = true;
-    clearLog("synopLog");
-    showLogBox("synopLogBox");
+    setMainStatus("⏳ Загрузка SYNOP...", true);
 
     try {
-        logTo("synopLog","🚀 Старт загрузки SYNOP");
-        logTo("synopLog","🌐 Отправка запроса через прокси");
         const synop = await loadSynop();
-        logTo("synopLog","📥 Ответ получен, разбор групп и секций");
         renderSynop(synop);
-        logTo("synopLog","✅ SYNOP успешно обновлён");
-        // Сохраняем давление QNH и время для кнопки коррекции PWS
+        var now = new Date().toLocaleString("ru");
+        localStorage.setItem("lastSynopUpdate", now);
+        setMainStatus("✅ Обновлено: " + now);
         if(synop.seaPressure != null){
             localStorage.setItem("synopLastPressure", JSON.stringify({
                 pressure: synop.seaPressure,
@@ -675,17 +672,26 @@ async function loadSynopUI(){
                 yyggi:    synop.yyggi || null
             }));
         }
-        // Автокалибровка PWS по давлению SYNOP (только в часы наблюдений)
         if(typeof calibratePWSBySynop === "function"){
             calibratePWSBySynop(synop.seaPressure);
         }
-        hideLogBoxLater("synopLogBox", 3200);
     } catch(e){
-        logTo("synopLog","❌ Ошибка: " + (e instanceof Error ? e.message : e?.message || String(e)));
-        document.getElementById("main").innerHTML = `
-            <div class="cardTitle">SYNOP</div>
-            <div class="small">Ошибка загрузки: ${escapeHtml(e?.message || e)}</div>`;
+        setMainStatus("❌ Ошибка: " + (e instanceof Error ? e.message : String(e)));
+        document.getElementById("main").innerHTML =
+            '<div class="cardTitle">SYNOP</div>' +
+            '<div class="small">Ошибка загрузки: ' + escapeHtml(e && e.message ? e.message : String(e)) + '</div>';
     } finally {
         btn.disabled = false;
     }
+}
+
+function setMainStatus(msg, spinning) {
+    var el = document.getElementById("lastUpdate");
+    if (!el) return;
+    el.innerHTML = '<span>' + (spinning ? '<span class="spin">⏳</span> ' : '') + msg + '</span>';
+    el.classList.remove("running");
+    requestAnimationFrame(function(){ requestAnimationFrame(function(){
+        var s = el.querySelector("span");
+        if (s && s.scrollWidth > el.clientWidth) el.classList.add("running");
+    }); });
 }
