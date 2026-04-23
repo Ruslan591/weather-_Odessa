@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Почасовой прогноз Одесса 24ч</title>
 <link rel="stylesheet" href="forecast.css">
+<script src="models.js"></script>
+<script src="modelCheck.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<script src="ensembleVerify.js"></script>
 </head>
 <body>
 
@@ -17,6 +20,8 @@
     <div class="headerTitle">Прогноз</div>
     <div class="nav">
         <a href="verify.html">Рейтинг</a>
+        <a href="verify_pws.html">Рейтинг pws</a>
+        <a href="ensemble_pws.html">Ансамбль pws</a>
     </div>
 </div>
 <!-- СТАЛО -->
@@ -32,12 +37,12 @@
 <!-- Bottom sheet: период -->
 <div id="forecastSheet" class="bottom-sheet" onclick="closeSheet('forecastSheet')">
   <div class="sheet-panel" onclick="event.stopPropagation()">
-    <div class="sheet-item" onclick="setForecastDays(2)">24 часа</div>
-    <div class="sheet-item" onclick="setForecastDays(3)">2 дня</div>
-    <div class="sheet-item" onclick="setForecastDays(5)">5 дней</div>
-    <div class="sheet-item" onclick="setForecastDays(7)">7 дней</div>
-    <div class="sheet-item" onclick="setForecastDays(10)">10 дней</div>
-    <div class="sheet-item" onclick="setForecastDays(16)">16 дней</div>
+    <div class="sheet-item" onclick="setForecastDays(1)">24 часа</div>
+    <div class="sheet-item" onclick="setForecastDays(2)">2 суток</div>
+    <div class="sheet-item" onclick="setForecastDays(4)">4 суток</div>
+    <div class="sheet-item" onclick="setForecastDays(6)">6 суток</div>
+    <div class="sheet-item" onclick="setForecastDays(9)">9 суток</div>
+    <div class="sheet-item" onclick="setForecastDays(14)">14 суток</div>
   </div>
 </div>
 
@@ -45,12 +50,7 @@
 <div id="modelSheet" class="bottom-sheet" onclick="closeSheet('modelSheet')">
   <div class="sheet-panel" onclick="event.stopPropagation()">
     <div class="sheet-title">Модель прогноза</div>
-    <div class="sheet-item" onclick="setModel('ecmwf_ifs')">ECMWF IFS HRES</div>
-    <div class="sheet-item" onclick="setModel('icon_eu')">ICON EU</div>
-    <div class="sheet-item" onclick="setModel('ukmo_global_deterministic_10km')">UKMO Global</div>
-    <div class="sheet-item" onclick="setModel('meteofrance_arpege_europe')">ARPEGE Europe</div>
-    <div class="sheet-item" onclick="setModel('jma_gsm')">JMA GSM</div>
-    <div class="sheet-item" onclick="setModel('gfs_global')">GFS Global</div>
+    <div id="modelSheetItems"></div>
   </div>
 </div>
 <div id="content">
@@ -85,17 +85,7 @@ function setForecastDays(days){
     load();
 }
 
-function modelLabel(model){
-    switch(model){
-        case "ecmwf_ifs": return "ECMWF IFS";
-        case "icon_eu": return "ICON EU";
-        case "ukmo_global_deterministic_10km": return "UKMO Global";
-        case "meteofrance_arpege_europe": return "ARPEGE Europe";
-        case "jma_gsm": return "JMA GSM";
-        case "gfs_global": return "GFS Global";
-        default: return "ECMWF IFS";
-    }
-}
+function modelLabel(model){ return model === "ensemble" ? "Ансамбль ⚡" : (modelLong(model) || "ECMWF IFS"); }
 
 let weatherModel = localStorage.getItem("weatherModel") || "ecmwf_ifs";
 document.getElementById("modelName").innerText = modelLabel(weatherModel);
@@ -107,7 +97,8 @@ function setModel(model) {
     localStorage.setItem("weatherModel", model);
     document.getElementById("modelName").innerText = modelLabel(model);
     closeSheet('modelSheet');
-    load();
+    if (model === "ensemble") loadEnsemble();
+    else load();
 }
 
 function toggle(el){ el.parentElement.classList.toggle("active"); }
@@ -137,6 +128,7 @@ const FC_PARAMS = [
     { key:"wind",     label:"Ветер",       color:"#8bc34a", unit:" м/с", field: h => h.wind_speed_10m        },
     { key:"winddir",  label:"Направление", color:"#74b9ff", unit:"°",    field: h => h.wind_direction_10m    },
     { key:"rain",     label:"Осадки",      color:"#448aff", unit:" мм",  field: h => h.rain                  },
+    { key:"prob",     label:"Вер-ть осадков", color:"#5b8fc9", unit:"%", field: h => h.precip_prob ?? 0      },
     { key:"cloud",    label:"Облачность",  color:"#b0bec5", unit:"%",    field: h => h.cloud_cover           },
 ];
 
@@ -168,7 +160,7 @@ function fcSwitchParam(key){
 // =============================================
 // TOOLTIP
 // =============================================
-function fcShowTooltip(e, idx, data, times, cfg){
+function fcShowTooltip(e, idx, data, times, cfg, rangeData, gustData){
     let tip = document.getElementById("fcTooltip");
     if(!tip){
         tip = document.createElement("div");
@@ -186,10 +178,15 @@ function fcShowTooltip(e, idx, data, times, cfg){
     const timeStr = t && !isNaN(t)
         ? t.toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})
         : "";
+    const gustVal = gustData ? gustData[idx] : null;
+    const gustLine = (gustVal != null)
+        ? `<div style="color:#ff9f5c;font-size:11px;margin-top:4px;">⬆ порыв ${gustVal.toFixed(1)} м/с</div>`
+        : "";
     tip.innerHTML = `
         <div style="color:#888;margin-bottom:6px;font-size:11px;">${timeStr}</div>
         <div style="font-size:16px;font-weight:800;color:${cfg.color};">${val != null ? val.toFixed(1) + cfg.unit : "—"}</div>
         <div style="color:#aaa;font-size:11px;">${cfg.label}</div>
+        ${gustLine}
     `;
     tip.style.opacity = "1";
     const tipW = 160;
@@ -197,7 +194,6 @@ function fcShowTooltip(e, idx, data, times, cfg){
     tip.style.left = left + "px";
     tip.style.top  = (e.clientY - 40) + "px";
 }
-
 function fcHideTooltip(){
     const tip = document.getElementById("fcTooltip");
     if(tip) tip.style.opacity = "0";
@@ -206,7 +202,7 @@ function fcHideTooltip(){
 // =============================================
 // CROSSHAIR helper — добавляет перекрестие в SVG
 // =============================================
-function addCrosshair(svgEl, pts, pad, iW, iH, W, color, data, times, cfg, extraY){
+function addCrosshair(svgEl, pts, pad, iW, iH, W, color, data, times, cfg, extraY, rangeData, gustData){
     const ns = "http://www.w3.org/2000/svg";
 
     const crossV = document.createElementNS(ns, "line");
@@ -266,7 +262,7 @@ function addCrosshair(svgEl, pts, pad, iW, iH, W, color, data, times, cfg, extra
         const rect = svgEl.getBoundingClientRect();
         const mx = (e.clientX - rect.left) * W / rect.width;
         const best = move(mx);
-        fcShowTooltip(e, best, data, times, cfg);
+        fcShowTooltip(e, best, data, times, cfg, rangeData, gustData);
     });
     svgEl.addEventListener("mouseleave", hide);
     svgEl.addEventListener("touchmove", e => {
@@ -274,7 +270,7 @@ function addCrosshair(svgEl, pts, pad, iW, iH, W, color, data, times, cfg, extra
         const rect = svgEl.getBoundingClientRect();
         const mx = (touch.clientX - rect.left) * W / rect.width;
         const best = move(mx);
-        fcShowTooltip(touch, best, data, times, cfg);
+        fcShowTooltip(touch, best, data, times, cfg, rangeData, gustData);
         e.preventDefault();
     }, { passive: false });
     svgEl.addEventListener("touchend", hide);
@@ -286,6 +282,7 @@ function addCrosshair(svgEl, pts, pad, iW, iH, W, color, data, times, cfg, extra
 function renderForecastChart(hours, times){
     if(_fcParam === "winddir") return renderForecastWindDir(hours, times);
     if(_fcParam === "cloud")   return renderForecastCloud(hours, times);
+    if(_fcParam === "prob")    return renderForecastProb(hours, times);
 
     const wrap     = document.getElementById("fcChartWrap");
     const statsBox = document.getElementById("fcStats");
@@ -357,26 +354,96 @@ function renderForecastChart(hours, times){
     const gradY1 = Math.max(y0, yN) + iH * 0.4;
     const gradId = "fcGrad_" + cfg.key;
 
+    // Лента неопределённости ансамбля
+    const _rangeField = cfg.key === "temp"     ? "temperature_2m"      :
+                        cfg.key === "pressure" ? "pressure_msl"        :
+                        cfg.key === "humidity" ? "relative_humidity_2m":
+                        cfg.key === "wind"     ? "wind_speed_10m"      :
+                        cfg.key === "rain"     ? "rain"                :
+                        cfg.key === "prob"     ? "precip_prob" : null;
+    let bandPath = "";
+    if (_rangeField && weatherModel === "ensemble" &&
+        hours.length && hours[0]._range && hours[0]._range[_rangeField]) {
+        const clamp = v => Math.max(vMin, Math.min(vMax, v));
+        const hiPts = hours.map((h, i) => ({
+            x: px(times[i]),
+            y: py(clamp(h._range[_rangeField] ? h._range[_rangeField].max : data[i]))
+        }));
+        const loPts = hours.map((h, i) => ({
+            x: px(times[i]),
+            y: py(clamp(h._range[_rangeField] ? h._range[_rangeField].min : data[i]))
+        }));
+        const loRev = loPts.slice().reverse();
+        const bandD = "M " + hiPts.map(p => p.x + "," + p.y).join(" L ") +
+                      " L " + loRev.map(p => p.x + "," + p.y).join(" L ") + " Z";
+        bandPath = `<path d="${bandD}" fill="${cfg.color}" fill-opacity="0.13" stroke="none"/>`;
+    }
+
+    const trendLine = weatherModel !== "ensemble"
+        ? `<line x1="${x0}" y1="${y0}" x2="${xN}" y2="${yN}"
+                 stroke="${cfg.color}" stroke-opacity="0.22" stroke-width="1.5" stroke-dasharray="4 3"/>`
+        : "";
+
     wrap.innerHTML = `
     <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="display:block;">
         <defs>
             <linearGradient id="${gradId}" x1="0" y1="${gradY0}" x2="0" y2="${gradY1}"
                             gradientUnits="userSpaceOnUse">
-                <stop offset="0%"   stop-color="${cfg.color}" stop-opacity="0.32"/>
+                <stop offset="0%"   stop-color="${cfg.color}" stop-opacity="${weatherModel === 'ensemble' ? '0.15' : '0.32'}"/>
                 <stop offset="100%" stop-color="${cfg.color}" stop-opacity="0"/>
             </linearGradient>
         </defs>
         ${yGrid}${xGrid}${nowLine}
-        <path d="${areaPath}" fill="url(#${gradId})" stroke="none"/>
-        <line x1="${x0}" y1="${y0}" x2="${xN}" y2="${yN}"
-              stroke="${cfg.color}" stroke-opacity="0.22" stroke-width="1.5" stroke-dasharray="4 3"/>
+        ${bandPath}
+        ${weatherModel !== "ensemble" ? `<path d="${areaPath}" fill="url(#${gradId})" stroke="none"/>` : ""}
+        ${trendLine}
         <path d="${linePath}" fill="none" stroke="${cfg.color}" stroke-width="2.5"/>
         ${yLabels}${xLabels}
     </svg>`;
 
-    // Перекрестие
+    // Лента порывов для ветра
     const svgEl = wrap.querySelector("svg");
-    if(svgEl) addCrosshair(svgEl, pts, pad, iW, iH, W, cfg.color, data, times, cfg, true);
+    if(cfg.key === "wind" && svgEl){
+        const gustData = hours.map(h => h.wind_gusts_10m ?? null);
+        const gustValid = gustData.filter(v => v != null);
+        if(gustValid.length){
+            const ns = "http://www.w3.org/2000/svg";
+            const gustPts = times.map((t, i) => ({
+                x: px(t),
+                y: py(Math.min(vMax, gustData[i] ?? data[i]))
+            }));
+            const windPts = pts;
+            const revWind = windPts.slice().reverse();
+            const bandD = "M " + gustPts.map(p => p.x + "," + p.y).join(" L ") +
+                          " L " + revWind.map(p => p.x + "," + p.y).join(" L ") + " Z";
+            const band = document.createElementNS(ns, "path");
+            band.setAttribute("d", bandD);
+            band.setAttribute("fill", "#ff9f5c");
+            band.setAttribute("fill-opacity", "0.18");
+            band.setAttribute("stroke", "none");
+            // Вставить перед последним элементом (перекрестие ещё не добавлено)
+            svgEl.insertBefore(band, svgEl.lastChild);
+            // Пунктирная линия порывов
+            const gustLine = document.createElementNS(ns, "polyline");
+            gustLine.setAttribute("points", gustPts.map(p => p.x + "," + p.y).join(" "));
+            gustLine.setAttribute("fill", "none");
+            gustLine.setAttribute("stroke", "#ff9f5c");
+            gustLine.setAttribute("stroke-width", "1.2");
+            gustLine.setAttribute("stroke-dasharray", "3 3");
+            gustLine.setAttribute("stroke-opacity", "0.7");
+            svgEl.insertBefore(gustLine, svgEl.lastChild);
+        }
+    }
+    let _tooltipRange = null;
+    if(_rangeField && weatherModel === "ensemble" && hours.length && hours[0]._range && hours[0]._range[_rangeField]){
+        _tooltipRange = hours.map(h => {
+            const r = h._range && h._range[_rangeField];
+            return r ? { min: r.min, max: r.max } : null;
+        });
+    }
+    let _gustData = null;
+    if(cfg.key === "wind") _gustData = hours.map(h => h.wind_gusts_10m ?? null);
+    if(svgEl) addCrosshair(svgEl, pts, pad, iW, iH, W, cfg.color, data, times, cfg, true, _tooltipRange, _gustData);
 
     // Статистика
     const start = vAll[0], end = vAll[vAll.length-1];
@@ -425,7 +492,16 @@ function renderForecastChart(hours, times){
         } else if(cfg.key === "wind"){
             const calmCount  = data.filter(v => v != null && v < 1).length;
             const strongCount= data.filter(v => v != null && v >= 10).length;
-            if(strongCount > 0){
+            const gustVals   = hours.map(h => h.wind_gusts_10m).filter(v => v != null);
+            const maxGust    = gustVals.length ? Math.max(...gustVals) : null;
+            if(maxGust != null){
+                card4 = `
+                <div class="fc-stat-card">
+                    <div class="fc-stat-label">Макс. порыв</div>
+                    <div class="fc-stat-value" style="color:#ff9f5c;">${maxGust.toFixed(1)} м/с</div>
+                    <div class="fc-stat-time">&nbsp;</div>
+                </div>`;
+            } else if(strongCount > 0){
                 card4 = `
                 <div class="fc-stat-card">
                     <div class="fc-stat-label">Сильный (≥10)</div>
@@ -856,6 +932,246 @@ function renderForecastCloud(hours, times){
 }
 
 // =============================================
+// ENSEMBLE
+// =============================================
+
+// Глобальное хранилище срезов по моделям (для ленты неопределённости)
+let _ensembleRanges = null; // массив {min, max} по индексу часа для текущего параметра
+
+function getEnsembleModels() {
+    return MODEL_REGISTRY.filter(function(m) { return m.ensemble; }).map(function(m) { return m.id; });
+}
+
+function getModelWeights() {
+    var models = getEnsembleModels();
+    var raw = {};
+    try { raw = JSON.parse(localStorage.getItem("modelHistoryProgress") || "{}"); } catch(e) {}
+
+    var weights = {};
+    var anyData = false;
+
+    models.forEach(function(m) {
+        var mStats = raw[m];
+        var mae = null;
+        if (mStats && mStats.temp !== undefined && mStats.temp !== null) {
+            mae = mStats.temp; // общий MAE температуры
+        }
+        if (mae != null && mae > 0) {
+            weights[m] = 1 / mae;
+            anyData = true;
+        } else {
+            weights[m] = null;
+        }
+    });
+
+    if (!anyData) {
+        models.forEach(function(m) { weights[m] = 1; });
+    } else {
+        var valid = models.filter(function(m){ return weights[m] != null; });
+        var avgW = valid.reduce(function(s,m){ return s + weights[m]; }, 0) / valid.length;
+        models.forEach(function(m) { if (weights[m] == null) weights[m] = avgW; });
+    }
+
+    var total = models.reduce(function(s,m){ return s + weights[m]; }, 0);
+    models.forEach(function(m) { weights[m] = weights[m] / total; });
+    return weights;
+}
+
+function parseHourly(h) {
+    return h.time.map(function(t, i) {
+        return {
+            time:                  t,
+            temperature_2m:        h.temperature_2m[i],
+            apparent_temperature:  h.apparent_temperature[i],
+            pressure_msl:          h.pressure_msl[i],
+            relative_humidity_2m:  h.relative_humidity_2m[i],
+            weather_code:          h.weather_code[i],
+            visibility:            h.visibility[i],
+            wind_speed_10m:        h.wind_speed_10m[i],
+            wind_gusts_10m:        h.wind_gusts_10m[i],
+            wind_direction_10m:    h.wind_direction_10m[i],
+            rain:                  h.precipitation[i] || 0,
+            showers:               h.showers[i]       || 0,
+            precip_prob:           h.precipitation_probability ? h.precipitation_probability[i] : null,
+            snowfall:              h.snowfall[i],
+            snow_depth:            h.snow_depth[i],
+            shortwave_radiation:   h.shortwave_radiation[i],
+            direct_radiation:      h.direct_radiation ? h.direct_radiation[i] : null,
+            diffuse_radiation:     h.diffuse_radiation ? h.diffuse_radiation[i] : null,
+            dew_point_2m:          h.dew_point_2m[i],
+            runoff:                h.runoff ? h.runoff[i] : null,
+            cloud_cover:           h.cloud_cover[i],
+            cloud_cover_low:       h.cloud_cover_low[i],
+            cloud_cover_mid:       h.cloud_cover_mid[i],
+            cloud_cover_high:      h.cloud_cover_high[i],
+        };
+    });
+}
+
+function mergeEnsemble(allModelHours, weights, models) {
+    var numericFields = [
+        "temperature_2m","apparent_temperature","pressure_msl","relative_humidity_2m",
+        "wind_speed_10m","wind_gusts_10m","rain","showers","precip_prob","snowfall",
+        "snow_depth","cloud_cover","cloud_cover_low","cloud_cover_mid","cloud_cover_high",
+        "shortwave_radiation","dew_point_2m","visibility"
+    ];
+    var base = allModelHours[models[0]];
+    if (!base) return [];
+
+    return base.map(function(baseH, i) {
+        var merged = { time: baseH.time };
+
+        numericFields.forEach(function(f) {
+            var sum = 0, wSum = 0;
+            models.forEach(function(m) {
+                var mh = allModelHours[m];
+                if (!mh) return;
+                var v = mh[i] ? mh[i][f] : null;
+                if (v != null && !isNaN(v)) { sum += v * weights[m]; wSum += weights[m]; }
+            });
+            merged[f] = wSum > 0 ? sum / wSum : null;
+        });
+
+        // Направление ветра — векторное среднее
+        var sx = 0, sy = 0, wSum2 = 0;
+        models.forEach(function(m) {
+            var mh = allModelHours[m];
+            if (!mh || !mh[i]) return;
+            var d = mh[i].wind_direction_10m;
+            if (d != null) {
+                var rad = d * Math.PI / 180;
+                sx += Math.sin(rad) * weights[m];
+                sy += Math.cos(rad) * weights[m];
+                wSum2 += weights[m];
+            }
+        });
+        merged.wind_direction_10m = wSum2 > 0
+            ? ((Math.atan2(sx / wSum2, sy / wSum2) * 180 / Math.PI) + 360) % 360
+            : null;
+
+        // weather_code — взвешенный мажоритарный
+        var codeCounts = {};
+        models.forEach(function(m) {
+            var mh = allModelHours[m];
+            if (!mh || !mh[i]) return;
+            var c = mh[i].weather_code;
+            if (c != null) codeCounts[c] = (codeCounts[c] || 0) + weights[m];
+        });
+        var bestCode = 0, bestW = -1;
+        Object.keys(codeCounts).forEach(function(c) {
+            if (codeCounts[c] > bestW) { bestW = codeCounts[c]; bestCode = parseInt(c); }
+        });
+        merged.weather_code = bestCode;
+
+        // Диапазон по всем параметрам для ленты неопределённости
+        merged._range = {};
+        numericFields.forEach(function(f) {
+            var vals = models.map(function(m) {
+                var mh = allModelHours[m];
+                return (mh && mh[i] && mh[i][f] != null) ? mh[i][f] : null;
+            }).filter(function(v){ return v != null; });
+            if (vals.length > 1) {
+                merged._range[f] = { min: Math.min.apply(null, vals), max: Math.max.apply(null, vals) };
+            }
+        });
+        // Для ветра — диапазон скоростей
+        var wSpds = models.map(function(m) {
+            var mh = allModelHours[m];
+            return (mh && mh[i]) ? mh[i].wind_speed_10m : null;
+        }).filter(function(v){ return v != null; });
+        if (wSpds.length > 1) {
+            merged._range.wind_speed_10m = { min: Math.min.apply(null, wSpds), max: Math.max.apply(null, wSpds) };
+        }
+
+        return merged;
+    });
+}
+
+async function loadEnsemble() {
+    var models = getEnsembleModels();
+    if (!models.length) return;
+
+    var weights = getModelWeights();
+
+    // Показываем веса в заголовке
+    var infoStr = models.map(function(m) {
+        return modelShort(m) + " " + Math.round(weights[m] * 100) + "%";
+    }).join(" · ");
+    document.getElementById("modelName").innerText = "Ансамбль ⚡";
+
+    var HOURLY_PARAMS = "temperature_2m,apparent_temperature,pressure_msl,relative_humidity_2m," +
+        "weather_code,visibility,wind_speed_10m,wind_gusts_10m,wind_direction_10m," +
+        "precipitation,precipitation_probability,showers,snowfall,snow_depth," +
+        "shortwave_radiation,direct_radiation,diffuse_radiation,dew_point_2m,runoff," +
+        "cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high";
+
+    var fetches = models.map(function(m) {
+        var url = "https://api.open-meteo.com/v1/forecast?latitude=46.43&longitude=30.74" +
+            "&hourly=" + HOURLY_PARAMS +
+            "&models=" + m +
+            "&timezone=auto&forecast_days=" + forecastDays + "&wind_speed_unit=ms";
+        return fetch(url)
+            .then(function(r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+            .then(function(data) { return { model: m, data: data }; })
+            .catch(function(e) { return { model: m, error: e.message }; });
+    });
+
+    var results = await Promise.all(fetches);
+
+    var allModelHours = {};
+    var baseTimes = null;
+
+    results.forEach(function(res) {
+        if (res.error || !res.data || !res.data.hourly) return;
+        if (!baseTimes) baseTimes = res.data.hourly.time;
+        allModelHours[res.model] = parseHourly(res.data.hourly);
+    });
+
+    var succeededModels = models.filter(function(m) { return allModelHours[m] != null; });
+    if (!succeededModels.length || !baseTimes) {
+        document.getElementById("forecast").innerHTML =
+            '<div style="padding:20px;text-align:center;color:#ff8f43;">⚠️ Не удалось загрузить модели ансамбля</div>';
+        return;
+    }
+
+    // Пересчитываем веса только для успешных моделей
+    var succeededWeights = getModelWeights();
+    var wTotal = succeededModels.reduce(function(s,m){ return s + succeededWeights[m]; }, 0);
+    succeededModels.forEach(function(m){ succeededWeights[m] = succeededWeights[m] / wTotal; });
+
+    var ensembleHours = mergeEnsemble(allModelHours, succeededWeights, succeededModels);
+    EV.saveSnapshot(ensembleHours);
+
+    // Обрезаем по времени
+    var nowTime = Date.now();
+    var timesDates = baseTimes.map(function(t){ return new Date(t); });
+    var hoursToShow = 24 * (forecastDays - 1);
+    var startIndex = 0;
+    for (var si = 0; si < timesDates.length; si++) {
+        if (timesDates[si].getTime() >= nowTime) { startIndex = si; break; }
+    }
+    startIndex = Math.max(0, startIndex - 1);
+
+    var lastValid = ensembleHours.length - 1;
+    for (var li = ensembleHours.length - 1; li >= 0; li--) {
+        if (ensembleHours[li].temperature_2m != null) { lastValid = li; break; }
+    }
+    var endIndex = Math.min(startIndex + hoursToShow, lastValid + 1);
+
+    _fcHours = ensembleHours.slice(startIndex, endIndex);
+    _fcTimes = baseTimes.slice(startIndex, endIndex);
+    window._fcAllHours = ensembleHours;
+
+    buildFcParamRow();
+    renderForecastChart(_fcHours, _fcTimes);
+
+    renderForecastDays(ensembleHours, baseTimes);
+
+    // Рендерим часовые карточки (те же что для обычной модели)
+    renderForecastDays(ensembleHours, baseTimes);
+}
+
+// =============================================
 // WEATHER CODE & COMFORT
 // =============================================
 function weatherCode(code, hour, cloud, rain, snow){
@@ -908,6 +1224,7 @@ function comfortLevel(h){
 // LOAD
 // =============================================
 async function load(){
+    if (weatherModel === "ensemble") { loadEnsemble(); return; }
     const API = `https://api.open-meteo.com/v1/forecast?latitude=46.43&longitude=30.74&hourly=temperature_2m,apparent_temperature,pressure_msl,relative_humidity_2m,weather_code,visibility,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,precipitation_probability,showers,snowfall,snow_depth,shortwave_radiation,direct_radiation,diffuse_radiation,dew_point_2m,runoff,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high&models=${weatherModel}&timezone=auto&forecast_days=${forecastDays}&wind_speed_unit=ms`;
     let data;
     try {
@@ -981,6 +1298,10 @@ async function load(){
     buildFcParamRow();
     renderForecastChart(_fcHours, _fcTimes);
 
+    renderForecastDays(hours, h.time);
+}
+
+function renderForecastDays(hours, times) {
     const nowDate  = new Date();
     const nowHr    = nowDate.getHours();
     const todayKey = `${nowDate.getFullYear()}-${String(nowDate.getMonth()+1).padStart(2,'0')}-${String(nowDate.getDate()).padStart(2,'0')}`;
@@ -1080,8 +1401,7 @@ async function load(){
     });
 
     document.getElementById("forecast").innerHTML = html;
-}
-
+}  // конец renderForecastDays
 // =============================================
 // КОНСТАНТЫ
 // =============================================
@@ -1223,13 +1543,13 @@ function renderHourCard(h){
                 <div class="status-line" style="color:${c};font-size:14px;padding:8px 0;">${wx.text} · ${comfort}</div>
                 <div style="padding:8px 0;border-top:1px solid #222;display:flex;flex-direction:column;">
                     ${barRow("Осадки", precipPct, "#4a90d9", precip>0?precip.toFixed(1)+" мм":"0 мм", "#1e2a3a")}
-                    ${barRow("Вер-ть", probPct, "#5b8fc9", probPct+"%")}
-                    ${barRow("Облака", cloudPct, "#666", cloudPct+"%")}
+                    ${barRow("Вер-ть", probPct, "#5b8fc9", Math.round(probPct)+"%")}
+                    ${barRow("Облака", cloudPct, "#666", Math.round(cloudPct)+"%")}
                 </div>
                 <div style="padding:8px 0;border-top:1px solid #222;">
                     <div class="grid-container" style="gap:10px;">
                         <div><span class="label" style="font-size:12px;">Ощущается</span><div class="val" style="font-size:15px;">${h.apparent_temperature.toFixed(1)}°</div></div>
-                        <div><span class="label" style="font-size:12px;">Влажность</span><div class="val" style="font-size:15px;">${h.relative_humidity_2m}%</div></div>
+                        <div><span class="label" style="font-size:12px;">Влажность</span><div class="val" style="font-size:15px;">${Math.round(h.relative_humidity_2m)}%</div></div>
                         <div><span class="label" style="font-size:12px;">Ветер</span><div class="val" style="font-size:15px;">${windDir(windDeg)} ${Math.round(h.wind_speed_10m)} м/с</div></div>
                         <div><span class="label" style="font-size:12px;">Порывы</span><div class="val" style="font-size:15px;">${Math.round(h.wind_gusts_10m)} м/с</div></div>
                         <div><span class="label" style="font-size:12px;">Давление</span><div class="val" style="font-size:15px;">${h.pressure_msl.toFixed(1)} гПа</div></div>
@@ -1240,6 +1560,119 @@ function renderHourCard(h){
             </div>
         </div>
     </div>`;
+}
+
+// =============================================
+// ВЕРОЯТНОСТЬ ОСАДКОВ
+// =============================================
+function renderForecastProb(hours, times){
+    const wrap     = document.getElementById("fcChartWrap");
+    const statsBox = document.getElementById("fcStats");
+    if(!wrap) return;
+
+    const W = 320, H = 160;
+    const pad = { t:24, r:10, b:28, l:34 };
+    const iW  = W - pad.l - pad.r;
+    const iH  = H - pad.t - pad.b;
+
+    const data = hours.map(h => h.precip_prob ?? 0);
+    const tMin = new Date(times[0]).getTime();
+    const tMax = new Date(times[times.length - 1]).getTime();
+    const px = t => pad.l + (new Date(t).getTime() - tMin) / (tMax - tMin || 1) * iW;
+    const py = v => pad.t + (1 - Math.max(0, Math.min(100, v)) / 100) * iH;
+
+    let yGrid = "", yLabels = "";
+    [0, 25, 50, 75, 100].forEach(v => {
+        const y = py(v);
+        yGrid   += `<line x1="${pad.l}" y1="${y}" x2="${pad.l+iW}" y2="${y}" stroke="${v===50?'#2a3a4a':'#252525'}" stroke-width="${v===50?1.5:1}"/>`;
+        yLabels += `<text x="${pad.l-4}" y="${y+4}" text-anchor="end" font-size="9" fill="#555">${v}</text>`;
+    });
+
+    const PR_DAY_NAMES = ["Вс","Пн","Вт","Ср","Чт","Пт","Сб"];
+    let xGrid = "", xLabels = "";
+    times.forEach((t, i) => {
+        const d  = new Date(t);
+        const hr = d.getHours();
+        const x  = px(t);
+        if(hr === 0){
+            xGrid += `<line x1="${x}" y1="${pad.t}" x2="${x}" y2="${pad.t+iH}" stroke="#444" stroke-dasharray="2 4"/>`;
+            const nextMidnight = times.slice(i+1).find(t2 => new Date(t2).getHours() === 0);
+            const xEnd = nextMidnight ? px(nextMidnight) : pad.l + iW;
+            const xMid = (x + xEnd) / 2;
+            xLabels += `<text x="${xMid}" y="${pad.t - 6}" text-anchor="middle" font-size="8.5" fill="#777" font-weight="700">${PR_DAY_NAMES[d.getDay()]} ${d.getDate()}</text>`;
+        }
+        if(hr % 6 === 0)
+            xLabels += `<text x="${x}" y="${H-6}" text-anchor="middle" font-size="9" fill="#555">${hr}:00</text>`;
+    });
+
+    let nowLine = "";
+    const nowTs = Date.now();
+    if(nowTs >= tMin && nowTs <= tMax){
+        const xNow = pad.l + (nowTs - tMin) / (tMax - tMin) * iW;
+        nowLine = `<line x1="${xNow}" y1="${pad.t}" x2="${xNow}" y2="${pad.t+iH}"
+                         stroke="rgba(255,255,255,0.3)" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+    }
+
+    // Зоны риска: 30–60% желтая, >60% оранжевая
+    const bottom = pad.t + iH;
+    let zones = "";
+    const y30 = py(30), y60 = py(60);
+    zones += `<rect x="${pad.l}" y="${y60}" width="${iW}" height="${y30-y60}" fill="#ff9f5c" fill-opacity="0.06"/>`;
+    zones += `<rect x="${pad.l}" y="${pad.t}" width="${iW}" height="${y60-pad.t}" fill="#ff6b6b" fill-opacity="0.06"/>`;
+
+    const pts = times.map((t, i) => ({ x: px(t), y: py(data[i]) }));
+    const linePath = smooth(pts);
+    const x0 = pts[0].x, xN = pts[pts.length-1].x;
+    const areaPath = linePath + ` L${xN},${bottom} L${x0},${bottom} Z`;
+
+    wrap.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="display:block;">
+        <defs>
+            <linearGradient id="probGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stop-color="#5b8fc9" stop-opacity="0.45"/>
+                <stop offset="100%" stop-color="#5b8fc9" stop-opacity="0.04"/>
+            </linearGradient>
+        </defs>
+        ${yGrid}${xGrid}${nowLine}
+        ${zones}
+        <path d="${areaPath}" fill="url(#probGrad)" stroke="none"/>
+        <path d="${linePath}" fill="none" stroke="#5b8fc9" stroke-width="2.5"/>
+        ${yLabels}${xLabels}
+    </svg>`;
+
+    const svgEl = wrap.querySelector("svg");
+    const cfg = FC_PARAMS.find(p => p.key === "prob");
+    if(svgEl) addCrosshair(svgEl, pts, pad, iW, iH, W, cfg.color, data, times, cfg, true);
+
+    // Статистика
+    if(statsBox){
+        statsBox.style.display = "grid";
+        const high = data.filter(v => v >= 60).length;
+        const med  = data.filter(v => v >= 30 && v < 60).length;
+        const maxP = Math.round(Math.max(...data));
+        const avgP = Math.round(data.reduce((a,b)=>a+b,0) / data.length);
+        statsBox.innerHTML = `
+        <div class="fc-stat-card">
+            <div class="fc-stat-label">Макс. вер-ть</div>
+            <div class="fc-stat-value" style="color:#5b8fc9;">${maxP}%</div>
+            <div class="fc-stat-time">&nbsp;</div>
+        </div>
+        <div class="fc-stat-card">
+            <div class="fc-stat-label">Средняя</div>
+            <div class="fc-stat-value" style="color:#ccc;">${avgP}%</div>
+            <div class="fc-stat-time">&nbsp;</div>
+        </div>
+        <div class="fc-stat-card">
+            <div class="fc-stat-label">Высокий риск</div>
+            <div class="fc-stat-value" style="color:#ff6b6b;">${high} ч</div>
+            <div class="fc-stat-time">≥60%</div>
+        </div>
+        <div class="fc-stat-card">
+            <div class="fc-stat-label">Умеренный</div>
+            <div class="fc-stat-value" style="color:#ff9f5c;">${med} ч</div>
+            <div class="fc-stat-time">30–60%</div>
+        </div>`;
+    }
 }
 
 function renderPeriodCard(pId, agg, dayKey, isActive){
@@ -1386,6 +1819,19 @@ function closeSheet(id){
     const s = document.getElementById(id);
     if(s){ s.classList.remove("open"); }
 }
+
+// Генерация списка моделей из реестра
+(function(){
+    var cont = document.getElementById("modelSheetItems");
+    if(cont){
+        cont.innerHTML =
+            '<div class="sheet-item" onclick="setModel(\'ensemble\')" ' +
+            'style="color:#ffd166;font-weight:700;">⚡ Ансамбль (взвешенный)</div>' +
+            MODEL_REGISTRY.map(function(m){
+                return '<div class="sheet-item" onclick="setModel(\'' + m.id + '\')">' + m.long + '</div>';
+            }).join("");
+    }
+})();
 
 load();
 </script>

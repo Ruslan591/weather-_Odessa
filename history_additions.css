@@ -1,0 +1,119 @@
+/* =========================
+   ИСТОРИЯ / ГРАФИК
+========================= */
+
+/* uPlot переопределения */
+.hist-uplot {
+    background: transparent !important;
+}
+.hist-uplot .u-cursor-x {
+    border-left: 1px solid rgba(255,255,255,0.18) !important;
+}
+.hist-uplot .u-cursor-pt {
+    border-radius: 50% !important;
+}
+
+/* Кнопки параметра */
+.hist-param-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.hist-param-btn {
+    width: auto !important;
+    padding: 5px 11px !important;
+    font-size: 12px !important;
+    border-radius: 20px !important;
+    background: #232323 !important;
+    color: #888 !important;
+    border: 1px solid #2e2e2e !important;
+    transition: 0.15s !important;
+    white-space: nowrap;
+}
+
+.hist-param-btn:hover {
+    color: #ccc !important;
+    background: #2a2a2a !important;
+}
+
+.hist-param-btn.active {
+    background: #1a1a1a !important;
+    color: var(--c, #fff) !important;
+    border-color: var(--c, #555) !important;
+    box-shadow: 0 0 0 1px var(--c, #555) inset;
+}
+
+/* Кнопки периода */
+.hist-period-row {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 10px;
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 10px;
+    padding: 3px;
+}
+
+.hist-period-btn {
+    width: auto !important;
+    flex: 1;
+    padding: 6px 8px !important;
+    font-size: 12px !important;
+    border-radius: 8px !important;
+    background: transparent !important;
+    color: #666 !important;
+    border: none !important;
+    transition: 0.15s !important;
+    white-space: nowrap;
+}
+
+.hist-period-btn:hover {
+    color: #aaa !important;
+    background: #252525 !important;
+}
+
+.hist-period-btn.active {
+    background: #2e2e2e !important;
+    color: #eee !important;
+}
+
+/* Статистика */
+.hist-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+}
+
+@media (max-width: 520px) {
+    .hist-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.hist-stat-card {
+    background: #191919;
+    border: 1px solid #272727;
+    border-radius: 10px;
+    padding: 10px;
+    text-align: center;
+}
+
+.hist-stat-label {
+    font-size: 11px;
+    color: #666;
+    margin-bottom: 4px;
+}
+
+.hist-stat-value {
+    font-size: 17px;
+    font-weight: 800;
+    line-height: 1.1;
+    margin-bottom: 3px;
+}
+
+.hist-stat-time {
+    font-size: 10px;
+    color: #555;
+}

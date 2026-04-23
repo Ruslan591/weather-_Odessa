@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<link rel="stylesheet" href="verify.css">
+<meta name="theme-color" content="#121212">
+<title>Рейтинг PWS</title>
+<script src="models.js"></script>
+<script src="modelCheck.js"></script>
+<script src="pws_stations.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+<div class="header">
+    <div class="nav">
+        <a href="index.html">ГМЦ ЧАМ</a>
+        <a href="pws.html">PWS</a>
+        <a href="forecast.html">Прогноз</a>
+    </div>
+    <div class="headerTitle">Рейтинг PWS</div>
+    <div class="nav">
+        <a href="ensemble_pws.html">Ансамбль pws</a>
+    </div>
+</div>
+
+<div class="container">
+
+<div id="lastUpdate" style="color:#aaa;font-size:0.9em;">Обновление...</div>
+<br>
+
+<canvas id="chart" height="220"></canvas>
+<div id="chartPlaceholder" class="chart-placeholder" style="display:none">
+    График недоступен для этого периода
+</div>
+
+<div style="text-align:center; margin-top:10px;">
+
+    <!-- ПЕРИОДЫ -->
+    <div class="period-group">
+        <button id="btn-24h"    onclick="setPeriod('24h')">24 часа</button>
+        <button id="btn-3d"     onclick="setPeriod('3d')">3 дня</button>
+        <button id="btn-7d"     onclick="setPeriod('7d')">7 дней</button>
+        <button id="btn-month"  onclick="setPeriod('month')">По месяцам</button>
+        <button id="btn-season" onclick="setPeriod('season')">Сезон</button>
+    </div>
+
+    <!-- ПАРАМЕТРЫ -->
+    <div class="period-group" style="margin-top:6px">
+        <button id="btn-temp"       onclick="setParam('temp')">Температура</button>
+        <button id="btn-pressure"   onclick="setParam('pressure')">Давление</button>
+        <button id="btn-wind"       onclick="setParam('wind')">Ветер</button>
+        <button id="btn-windDir"    onclick="setParam('windDir')">Направление</button>
+        <button id="btn-humidity"   onclick="setParam('humidity')">Влажность</button>
+        <button id="btn-error"      onclick="setMode('error')">Ошибка</button>
+        <button id="btn-value"      onclick="setMode('value')">Значение</button>
+    </div>
+
+    <br>
+    <button onclick="loadPWSData()">⬇ Загрузить PWS</button>
+    <button id="stopBtn" onclick="stopLoading()" style="display:none;background:#8b0000;">⏹ Остановить</button>
+</div>
+
+<br>
+<!-- СТАНЦИИ -->
+<div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:6px;">СТАНЦИИ</div>
+<div id="stationBtns" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;"></div>
+
+<button onclick="exportDB()">Сохранить базу</button>
+<button onclick="checkDB()">Проверить базу</button>
+<button onclick="clearAllDB()" style="background:#5a0000;">🗑 Сбросить базу</button>
+
+<br><br>
+
+<div id="stickyBar">
+    <div class="tabs" id="mainTabs">
+        <button id="tab-main-btn" onclick="switchTab('main')">Рейтинг</button>
+        <button id="tab-lead-btn" onclick="switchTab('lead')">По заблаговременности</button>
+    </div>
+
+    <!-- Селектор месяца -->
+    <div id="monthSelector" style="display:none; overflow-x:auto; -webkit-overflow-scrolling:touch;">
+        <div class="month-btn-row" id="monthBtnRow"></div>
+    </div>
+
+    <!-- Селектор сезона -->
+    <div id="seasonSelector" style="display:none;">
+        <div class="period-group">
+            <button id="btn-s-winter" onclick="setSeason('winter')">Зима дек–фев</button>
+            <button id="btn-s-spring" onclick="setSeason('spring')">Весна мар–май</button>
+            <button id="btn-s-summer" onclick="setSeason('summer')">Лето июн–авг</button>
+            <button id="btn-s-autumn" onclick="setSeason('autumn')">Осень сен–ноя</button>
+        </div>
+    </div>
+</div>
+
+<div id="rating">Загрузка...</div>
+
+</div>
+
+<script>
+/* =========================================================
+   СОСТОЯНИЕ
+========================================================= */
+var currentPeriod  = "7d";
+var currentParam   = "temp";
+var chartMode      = "error";
+var currentMonth   = new Date().getMonth() + 1;
+var currentSeason  = getCurrentSeason();
+var currentTab     = "main";
+var currentStation = "all"; // "all" или конкретный id
+var chartInstance  = null;
+var db;
+var _stopRequested = false;
+
+var models = modelIds();
+
+var BIAS_THRESHOLDS = {
+    temp:     0.3,
+    pressure: 0.3,
+    wind:     0.5,
+    windDir:  10,
+    humidity: 3
+};
+
+var LEAD_GROUPS = [
+    { label: "0–24 ч",   min: 0,   max: 24  },
+    { label: "24–48 ч",  min: 24,  max: 48  },
+    { label: "48–72 ч",  min: 48,  max: 72  },
+    { label: "72–120 ч", min: 72,  max: 120 }
+];
+
+var SEASON_MONTHS = {
+    winter: [12,1,2], spring: [3,4,5], summer: [6,7,8], autumn: [9,10,11]
+};
+var SEASON_LABELS = {
+    winter: "Зима (дек–фев)", spring: "Весна (мар–май)",
+    summer: "Лето (июн–авг)", autumn: "Осень (сен–ноя)"
+};
+var MONTH_NAMES = ["Январь","Февраль","Март","Апрель","Май","Июнь",
+                   "Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+
+function getCurrentSeason() {
+    var m = new Date().getMonth() + 1;
+    if ([12,1,2].indexOf(m) >= 0) return "winter";
+    if ([3,4,5].indexOf(m)  >= 0) return "spring";
+    if ([6,7,8].indexOf(m)  >= 0) return "summer";
+    return "autumn";
+}
+
+/* =========================================================
+   ВСПОМОГАТЕЛЬНЫЕ
+========================================================= */
+function modelLabel(m) { return (typeof modelShort === "function" ? modelShort(m) : null) || m; }
+
+function setStatus(msg, spinning) {
+    var el = document.getElementById("lastUpdate");
+    el.innerHTML = '<span>' + (spinning ? '<span class="spin">⏳</span> ' : '') + msg + '</span>';
+    el.classList.remove("running");
+    requestAnimationFrame(function() { requestAnimationFrame(function() {
+        var s = el.querySelector("span");
+        if (s && s.scrollWidth > el.clientWidth) el.classList.add("running");
+    }); });
+}
+
+function windDirError(a, b) {
+    var d = Math.abs(a - b);
+    return d > 180 ? 360 - d : d;
+}
+
+function pwsTimeToMs(tk) {
+    // tk = "YYYYMMDDhh" (ключ записи)
+    return new Date(tk.slice(0,4)+"-"+tk.slice(4,6)+"-"+tk.slice(6,8)+"T"+tk.slice(8,10)+":00:00Z").getTime();
+}
+function pwsTimeMonth(tk) { return parseInt(tk.slice(4,6)); }
+
+/* =========================================================
+   INDEXEDDB  (хранилище: "pwsStats", keyPath: "pwsTime")
+   pwsTime = "YYYYMMDDhh" + stationId, напр. "202604221200IODESS44"
+   Для уникальности по часу+станции.
+========================================================= */
+function initDB() {
+    return new Promise(function(resolve, reject) {
+        var req = indexedDB.open("pwsModelStats", 1);
+        req.onupgradeneeded = function(e) {
+            db = e.target.result;
+            if (!db.objectStoreNames.contains("stats"))
+                db.createObjectStore("stats", { keyPath: "pwsTime" });
+        };
+        req.onsuccess = function(e) { db = e.target.result; resolve(); };
+        req.onerror   = reject;
+    });
+}
+
+function saveDataBatch(records) {
+    if (!db || !records.length) return Promise.resolve();
+    return new Promise(function(resolve, reject) {
+        var tx    = db.transaction("stats", "readwrite");
+        var store = tx.objectStore("stats");
+        tx.oncomplete = resolve;
+        tx.onerror    = reject;
+        tx.onabort    = function() { reject(new Error("Transaction aborted")); };
+        for (var i = 0; i < records.length; i++) store.put(records[i]);
+    });
+}
+
+function dbGetAll() {
+    if (!db) return Promise.resolve([]);
+    return new Promise(function(res) {
+        var req = db.transaction("stats","readonly").objectStore("stats").getAll();
+        req.onsuccess = function() { res(req.result); };
+        req.onerror   = function() { res([]); };
+    });
+}
+
+/* =========================================================
+   ЗАГРУЗКА PWS — history/all за один день
+   Возвращает массив наблюдений, ближайших к каждому часу
+========================================================= */
+function pwsFetchDay(stationId, dateYMD) {
+    // dateYMD = "20260401"
+    var key = pwsNextKey();
+    var url = "https://api.weather.com/v2/pws/history/all" +
+        "?stationId=" + encodeURIComponent(stationId) +
+        "&format=json&units=m&numericPrecision=decimal" +
+        "&date=" + dateYMD +
+        "&apiKey=" + key;
+    return fetch(url, { cache: "no-store" })
+        .then(function(r) {
+            if (r.status === 401 || r.status === 403) { pwsBumpKey(); }
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            return r.json();
+        })
+        .then(function(data) {
+            if (!data || !data.observations || !data.observations.length)
+                throw new Error("Нет данных");
+            return pwsPickHourly(data.observations);
+        });
+}
+
+/* Из 5-минутных наблюдений выбираем ближайшее к каждому часу */
+function pwsPickHourly(observations) {
+    // Группируем по часу UTC
+    var byHour = {};
+    observations.forEach(function(o) {
+        var t = new Date(o.obsTimeUtc);
+        if (isNaN(t)) return;
+        var h = t.getUTCFullYear() + "-" +
+            String(t.getUTCMonth()+1).padStart(2,"0") + "-" +
+            String(t.getUTCDate()).padStart(2,"0") + "T" +
+            String(t.getUTCHours()).padStart(2,"0");
+        var min = t.getUTCMinutes();
+        // Расстояние до круглого часа: минимум из мин и 60-мин
+        var dist = Math.min(min, 60 - min);
+        if (!byHour[h] || dist < byHour[h].dist) {
+            byHour[h] = { dist: dist, obs: o };
+        }
+    });
+
+    var result = [];
+    Object.keys(byHour).sort().forEach(function(h) {
+        var o = byHour[h].obs;
+        var m = o.metric || {};
+        var kmhToMs = function(v) { return v != null ? Math.round(v / 3.6 * 10) / 10 : null; };
+        // Давление: берём pressureMin (точечное значение, разброс за 5 мин минимален)
+        var pressure = m.pressureMin != null ? m.pressureMin : (m.pressureMax != null ? m.pressureMax : null);
+        result.push({
+            hourKey:     h,                          // "2026-04-01T14"
+            obsTimeUtc:  o.obsTimeUtc,
+            temp:        m.tempAvg     != null ? m.tempAvg     : null,
+            humidity:    o.humidityAvg != null ? o.humidityAvg : null,
+            windSpeed:   kmhToMs(m.windspeedAvg),
+            windDir:     o.winddirAvg  != null ? o.winddirAvg  : null,
+            pressure:    pressure,
+            precipRate:  m.precipRate  != null ? m.precipRate  : null
+        });
+    });
+    return result;
+}
+
+/* =========================================================
+   ЗАГРУЗКА МОДЕЛЕЙ (аналог verify.html)
+========================================================= */
+function fetchWithTimeout(url, ms) {
+    ms = ms || 15000;
+    return Promise.race([
+        fetch(url),
+        new Promise(function(_,r){ setTimeout(function(){r(new Error("Timeout"));}, ms); })
+    ]);
+}
+
+function loadForecastPast(model, pastDays) {
+    var url = "https://api.open-meteo.com/v1/forecast?latitude=46.4406&longitude=30.7703" +
+        "&hourly=temperature_2m,pressure_msl,wind_speed_10m,wind_direction_10m," +
+        "wind_gusts_10m,cloud_cover,precipitation,weather_code,relative_humidity_2m" +
+        "&models=" + model +
+        "&forecast_days=1&past_days=" + pastDays +
+        "&timezone=UTC&wind_speed_unit=ms";
+    return fetchWithTimeout(url, 15000)
+        .then(function(r) { return r.json(); })
+        .then(function(d) { return d.hourly || null; });
+}
+
+function buildModelsData(forecasts, hourIndex) {
+    var modelsData = {};
+    models.forEach(function(m) {
+        var h = forecasts[m];
+        if (!h) return;
+        function getVal(arr) {
+            if (!arr || hourIndex < 0 || hourIndex >= arr.length) return null;
+            var v = arr[hourIndex];
+            return (v === null || v === undefined || isNaN(v)) ? null : v;
+        }
+        modelsData[m] = {
+            temp:        getVal(h.temperature_2m),
+            pressure:    getVal(h.pressure_msl),
+            wind:        getVal(h.wind_speed_10m),
+            windDir:     getVal(h.wind_direction_10m) != null
+                             ? Math.round(getVal(h.wind_direction_10m) / 10) * 10 : null,
+            gusts:       getVal(h.wind_gusts_10m),
+            cloudcover:  getVal(h.cloud_cover),
+            precip:      getVal(h.precipitation),
+            humidity:    getVal(h.relative_humidity_2m),
+            weatherCode: getVal(h.weather_code)
+        };
+    });
+    return modelsData;
+}
+
+/* =========================================================
+   ОСНОВНАЯ ЗАГРУЗКА
+========================================================= */
+var _loadAbort = false;
+
+function stopLoading() {
+    _loadAbort = true;
+    document.getElementById("stopBtn").style.display = "none";
+    setStatus("⏹ Остановлено");
+}
+
+async function loadPWSData() {
+    if (!db) await initDB();
+    _loadAbort = false;
+    document.getElementById("stopBtn").style.display = "inline-block";
+
+    var now       = new Date();
+    var y         = now.getUTCFullYear();
+    var mo        = now.getUTCMonth() + 1;
+    var day1      = new Date(Date.UTC(y, mo - 1, 1));
+    var daysSince = Math.ceil((now - day1) / 86400000) + 1;
+
+    // Уже есть в БД
+    var existing = await dbGetAll();
+    var existKeys = new Set(existing.map(function(d) { return d.pwsTime; }));
+
+    // Диапазон дат с 1-го числа по сегодня
+    var dates = [];
+    for (var d = new Date(day1); d <= now; d.setUTCDate(d.getUTCDate() + 1)) {
+        dates.push(d.toISOString().slice(0,10).replace(/-/g,""));
+    }
+
+    // Загружаем модели один раз
+    setStatus("🌐 Загрузка моделей...", true);
+    var forecasts = {};
+    for (var mi = 0; mi < models.length; mi++) {
+        if (_loadAbort) { document.getElementById("stopBtn").style.display="none"; return; }
+        try { forecasts[models[mi]] = await loadForecastPast(models[mi], daysSince); }
+        catch(e) { console.warn("Модель", models[mi], e); }
+    }
+
+    var timeArr = null;
+    for (var mi2 = 0; mi2 < models.length; mi2++) {
+        if (forecasts[models[mi2]] && forecasts[models[mi2]].time) {
+            timeArr = forecasts[models[mi2]].time; break;
+        }
+    }
+    if (!timeArr) { setStatus("❌ Нет данных моделей"); document.getElementById("stopBtn").style.display="none"; return; }
+
+    var toSave = [];
+    var totalObs = 0, skipped = 0;
+
+    // По каждой станции
+    for (var si = 0; si < PWS_STATIONS.length; si++) {
+        if (_loadAbort) break;
+        var station = PWS_STATIONS[si];
+        setStatus("📡 " + station.name + " (" + (si+1) + "/" + PWS_STATIONS.length + ")...", true);
+
+        // По каждому дню
+        for (var di = 0; di < dates.length; di++) {
+            if (_loadAbort) break;
+            var ymd = dates[di];
+
+            // Проверяем — хоть один час этого дня+станции уже есть?
+            var dayPrefix = ymd + "00" + station.id; // первый час дня
+            var dayAlreadyLoaded = existing.some(function(r) {
+                return r.pwsTime && r.pwsTime.indexOf(ymd) === 0 &&
+                       r.stationId === station.id;
+            });
+
+            // Не перекачиваем уже загруженные дни (кроме сегодня)
+            var isToday = ymd === now.toISOString().slice(0,10).replace(/-/g,"");
+            if (dayAlreadyLoaded && !isToday) continue;
+
+            // Пауза между запросами
+            if (di > 0 || si > 0) await new Promise(function(r){ setTimeout(r, 400); });
+
+            var hourlyObs;
+            try {
+                hourlyObs = await pwsFetchDay(station.id, ymd);
+            } catch(e) {
+                console.warn("PWS", station.id, ymd, e);
+                continue;
+            }
+
+            // Сопоставляем с моделями
+            hourlyObs.forEach(function(obs) {
+                var hk = obs.hourKey; // "2026-04-01T14"
+                var pwsTime = hk.replace(/-/g,"").replace("T","") + station.id;
+                // "20260401" + "14" + stationId
+
+                if (existKeys.has(pwsTime) && !isToday) return;
+
+                // Находим индекс в массиве времён модели
+                var targetTime = hk + ":00"; // "2026-04-01T14:00"
+                var hourIndex = -1;
+                for (var ti = 0; ti < timeArr.length; ti++) {
+                    if (timeArr[ti].indexOf(targetTime) === 0) { hourIndex = ti; break; }
+                }
+                if (hourIndex === -1) { skipped++; return; }
+
+                var modelsData = buildModelsData(forecasts, hourIndex);
+
+                // Применяем поправку давления
+                var pressure = obs.pressure != null
+                    ? Math.round((obs.pressure + station.pressureOffset) * 100) / 100
+                    : null;
+
+                toSave.push({
+                    pwsTime:     pwsTime,
+                    stationId:   station.id,
+                    stationName: station.name,
+                    time:        new Date().toISOString(),
+                    hourKey:     hk,
+                    forecastHour: hourIndex,
+                    obs: {
+                        temp:     obs.temp,
+                        pressure: pressure,
+                        wind:     obs.windSpeed,
+                        windDir:  obs.windDir,
+                        humidity: obs.humidity,
+                        precipRate: obs.precipRate
+                    },
+                    models: modelsData
+                });
+                totalObs++;
+            });
+        }
+    }
+
+    document.getElementById("stopBtn").style.display = "none";
+
+    if (toSave.length) {
+        await saveDataBatch(toSave);
+        setStatus("✅ Добавлено: " + toSave.length + " записей · пропущено: " + skipped);
+    } else {
+        setStatus("✅ Данные актуальны · пропущено: " + skipped);
+    }
+
+    await render();
+    await drawChart();
+}
+
+/* =========================================================
+   ФИЛЬТРАЦИЯ ДАННЫХ
+========================================================= */
+async function loadStats() {
+    var all = await dbGetAll();
+
+    // Фильтр по станции
+    if (currentStation !== "all") {
+        all = all.filter(function(d) { return d.stationId === currentStation; });
+    }
+
+    var now     = Date.now();
+    var cutoffs = { "24h": 86400000, "3d": 3*86400000, "7d": 7*86400000 };
+
+    if (currentPeriod in cutoffs) {
+        return all.filter(function(d) {
+            return now - pwsTimeToMs(d.pwsTime) <= cutoffs[currentPeriod];
+        });
+    }
+    if (currentPeriod === "month") {
+        return all.filter(function(d) { return pwsTimeMonth(d.pwsTime) === currentMonth; });
+    }
+    if (currentPeriod === "season") {
+        return all.filter(function(d) {
+            return SEASON_MONTHS[currentSeason].indexOf(pwsTimeMonth(d.pwsTime)) >= 0;
+        });
+    }
+    return all;
+}
+
+/* =========================================================
+   ГРАФИК
+========================================================= */
+async function drawChart() {
+    var chartEl = document.getElementById("chart");
+    var phEl    = document.getElementById("chartPlaceholder");
+    var noChart = currentPeriod === "month" || currentPeriod === "season";
+    chartEl.style.display = noChart ? "none" : "";
+    phEl.style.display    = noChart ? "block" : "none";
+    if (noChart) { if (chartInstance) { chartInstance.destroy(); chartInstance = null; } return; }
+
+    var stats = await loadStats();
+    if (!stats.length) return;
+    stats.sort(function(a,b) { return a.pwsTime.localeCompare(b.pwsTime); });
+
+    var labels   = stats.map(function(d) {
+        var t = d.pwsTime;
+        return t.slice(6,8)+"."+t.slice(4,6)+" "+t.slice(8,10)+":00";
+    });
+
+    var datasets = models.map(function(m) {
+        return {
+            label: modelLabel(m),
+            data: stats.map(function(d) {
+                var mod = d.models[m]; if (!mod) return null;
+                var obs = d.obs;
+                switch(currentParam) {
+                    case "temp":     if (mod.temp==null||obs.temp==null) return null;
+                                     return chartMode==="error" ? Math.round((mod.temp-obs.temp)*10)/10 : mod.temp;
+                    case "pressure": if (mod.pressure==null||obs.pressure==null) return null;
+                                     return chartMode==="error" ? Math.round((mod.pressure-obs.pressure)*10)/10 : mod.pressure;
+                    case "wind":     if (mod.wind==null||obs.wind==null) return null;
+                                     return chartMode==="error" ? Math.round((mod.wind-obs.wind)*10)/10 : mod.wind;
+                    case "windDir":  if (mod.windDir==null||obs.windDir==null) return null;
+                                     return chartMode==="error" ? windDirError(mod.windDir,obs.windDir) : mod.windDir;
+                    case "humidity": if (mod.humidity==null||obs.humidity==null) return null;
+                                     return chartMode==="error" ? Math.round(mod.humidity-obs.humidity) : mod.humidity;
+                }
+                return null;
+            }),
+            borderWidth: 2, fill: false
+        };
+    });
+
+    if (chartMode === "value") {
+        datasets.push({
+            label: "PWS",
+            data: stats.map(function(d) {
+                switch(currentParam) {
+                    case "temp":     return d.obs.temp;
+                    case "pressure": return d.obs.pressure;
+                    case "wind":     return d.obs.wind;
+                    case "windDir":  return d.obs.windDir;
+                    case "humidity": return d.obs.humidity;
+                }
+                return null;
+            }),
+            borderWidth: 2, fill: false, pointRadius: 3, tension: 0.1
+        });
+    }
+
+    if (chartInstance) chartInstance.destroy();
+
+    var axisLabel = {
+        temp:     chartMode==="error" ? "Ошибка °C"  : "Температура °C",
+        pressure: chartMode==="error" ? "Ошибка hPa" : "Давление hPa",
+        wind:     chartMode==="error" ? "Ошибка м/с" : "Ветер м/с",
+        windDir:  chartMode==="error" ? "Ошибка °"   : "Направление °",
+        humidity: chartMode==="error" ? "Ошибка %"   : "Влажность %"
+    }[currentParam];
+
+    chartInstance = new Chart(chartEl, {
+        type: "line",
+        data: { labels: labels, datasets: datasets },
+        options: {
+            responsive: true,
+            layout: { padding: { bottom: 8 } },
+            plugins: { legend: { position:"bottom", labels:{ color:"#eee", boxWidth:12, padding:8 } } },
+            scales: {
+                x: { ticks:{ color:"#eee", maxRotation:45, minRotation:45, autoSkip:true, maxTicksLimit:8 } },
+                y: { beginAtZero:false, ticks:{ color:"#eee" },
+                     title:{ display:true, text:axisLabel, color:"#eee" } }
+            }
+        }
+    });
+}
+
+/* =========================================================
+   ВЫЧИСЛЕНИЕ ОШИБОК
+========================================================= */
+function computeErrors(stats) {
+    var errors = {};
+    models.forEach(function(m) {
+        errors[m] = {
+            temp: [], tempRaw: [],
+            pressure: [], pressureRaw: [],
+            wind: [], windRaw: [],
+            windDir: [], windDirRaw: [],
+            humidity: [], humidityRaw: []
+        };
+    });
+
+    stats.forEach(function(d) {
+        var obs = d.obs;
+        models.forEach(function(m) {
+            var mod = d.models[m]; if (!mod) return;
+            function push(key, rawKey, val, obsVal) {
+                if (val == null || obsVal == null) return;
+                var e = Math.abs(val - obsVal);
+                errors[m][key].push(e);
+                errors[m][rawKey].push(val - obsVal);
+            }
+            push("temp",     "tempRaw",     mod.temp,     obs.temp);
+            push("pressure", "pressureRaw", mod.pressure, obs.pressure);
+            push("wind",     "windRaw",     mod.wind,     obs.wind);
+            push("humidity", "humidityRaw", mod.humidity, obs.humidity);
+            if (mod.windDir != null && obs.windDir != null) {
+                var wd = windDirError(mod.windDir, obs.windDir);
+                errors[m].windDir.push(wd);
+                errors[m].windDirRaw.push(wd);
+            }
+        });
+    });
+    return errors;
+}
+
+function computeRating(errors) {
+    function getMax(p) {
+        var max = 0;
+        models.forEach(function(m) {
+            if (errors[m][p].length) max = Math.max(max, Math.max.apply(null, errors[m][p]));
+        });
+        return max || 1;
+    }
+    var maxT  = getMax("temp"),
+        maxP  = getMax("pressure"),
+        maxW  = getMax("wind"),
+        maxWd = getMax("windDir"),
+        maxH  = getMax("humidity");
+
+    function avg(arr)       { return arr.length ? arr.reduce(function(a,b){return a+b;},0)/arr.length : null; }
+    function avgNorm(arr,mx){ return arr.length ? arr.reduce(function(a,b){return a+b/mx;},0)/arr.length : 1; }
+
+    function buildRating(param, max) {
+        return models.map(function(m) {
+            return {
+                model: m,
+                avg:   avg(errors[m][param]),
+                bias:  avg(errors[m][param+"Raw"]),
+                norm:  avgNorm(errors[m][param], max),
+                n:     errors[m][param].length
+            };
+        }).sort(function(a,b){ return a.norm - b.norm; });
+    }
+
+    var tempR    = buildRating("temp",     maxT);
+    var pressR   = buildRating("pressure", maxP);
+    var windR    = buildRating("wind",     maxW);
+    var windDirR = buildRating("windDir",  maxWd);
+    var humR     = buildRating("humidity", maxH);
+
+    var totalR = models.map(function(m) {
+        return {
+            model: m,
+            value: avgNorm(errors[m].temp,     maxT)  * 2.0 +
+                   avgNorm(errors[m].pressure,  maxP)  * 1.5 +
+                   avgNorm(errors[m].wind,       maxW)  * 1.5 +
+                   avgNorm(errors[m].windDir,    maxWd) * 1.0 +
+                   avgNorm(errors[m].humidity,   maxH)  * 0.5
+        };
+    }).sort(function(a,b){ return a.value - b.value; });
+
+    return { tempR, pressR, windR, windDirR, humR, totalR };
+}
+
+/* =========================================================
+   РЕНДЕР КАРТОЧЕК
+========================================================= */
+function makeCard(title, data, unit, param) {
+    var thr  = (param && BIAS_THRESHOLDS[param] != null) ? BIAS_THRESHOLDS[param] : 0.3;
+    var html = '<div class="rating-card"><h3>' + title + '</h3>';
+    data.forEach(function(r, i) {
+        var col    = "#aaa";
+        if (r.bias != null) col = r.bias > thr ? "#e57373" : (r.bias < -thr ? "#64b5f6" : "#aaa");
+        var sanity = (unit === "hPa" && r.avg != null && r.avg > 10) ? " ⚠️" : "";
+        var val    = r.avg != null
+            ? '<span style="color:'+col+'">'+r.avg.toFixed(2)+" "+unit+"</span>"+sanity
+            : "—";
+        html += '<div class="row"><div>'+(i+1)+". "+modelLabel(r.model)+"</div>"+
+                "<div>"+val+' <span style="color:#444;font-size:0.8em">n='+r.n+"</span></div></div>";
+    });
+    return html + "</div>";
+}
+
+function makeTotalCard(data) {
+    var html = '<div class="rating-card"><h3>Итоговый рейтинг</h3>';
+    data.forEach(function(r,i) {
+        html += '<div class="row"><div>'+(i+1)+". "+modelLabel(r.model)+"</div><div>"+r.value.toFixed(3)+"</div></div>";
+    });
+    return html + "</div>";
+}
+
+/* =========================================================
+   РЕЙТИНГ ПО ЗАБЛАГОВРЕМЕННОСТИ
+========================================================= */
+function renderLeadTab(stats) {
+    var hasLead = stats.some(function(d){ return d.forecastHour != null; });
+    if (!hasLead) return '<div style="color:#666;padding:16px 0;font-size:0.9em">Данные накапливаются.</div>';
+
+    var html = "";
+    LEAD_GROUPS.forEach(function(g) {
+        var subset = stats.filter(function(d){
+            return d.forecastHour != null && d.forecastHour >= g.min && d.forecastHour < g.max;
+        });
+        html += '<div class="lead-section"><h4>' + g.label + " — " + subset.length + " зап.</h4>";
+        if (subset.length < 5) { html += '<div style="color:#555;font-size:0.85em">Мало данных</div></div>'; return; }
+        var errors = computeErrors(subset);
+        var totalR = computeRating(errors).totalR;
+        totalR.forEach(function(r,i) {
+            html += '<div class="row"><div>'+(i+1)+". "+modelLabel(r.model)+"</div><div>"+r.value.toFixed(3)+"</div></div>";
+        });
+        html += "</div>";
+    });
+    return html;
+}
+
+/* =========================================================
+   ГЛАВНЫЙ РЕНДЕР
+========================================================= */
+async function render() {
+    var el = document.getElementById("rating");
+    el.innerHTML = "Загрузка...";
+
+    var stats = await loadStats();
+
+    var periodTitle = {
+        "24h":   "24 часа",
+        "3d":    "3 дня",
+        "7d":    "7 дней",
+        "month": MONTH_NAMES[currentMonth-1] + " — все годы",
+        "season": SEASON_LABELS[currentSeason]
+    }[currentPeriod] || "";
+
+    var stLabel = currentStation === "all" ? "Все станции" :
+        (PWS_STATIONS.find(function(s){ return s.id === currentStation; }) || {}).name || currentStation;
+
+    if (!stats.length) {
+        el.innerHTML = '<div style="color:#666;padding:16px 0">' + periodTitle + " · " + stLabel + " — нет данных</div>";
+        return;
+    }
+
+    var html = '<div style="margin-bottom:12px"><b>' + periodTitle + "</b>" +
+               '<span style="color:#888;font-size:0.85em;margin-left:8px">' + stLabel + "</span>" +
+               '<span style="color:#555;font-size:0.85em;margin-left:8px">записей: ' + stats.length + "</span></div>";
+
+    if (currentTab === "main") {
+        var errors = computeErrors(stats);
+        var rating = computeRating(errors);
+        html += makeCard("Температура",       rating.tempR,    "°C",  "temp");
+        html += makeCard("Давление",          rating.pressR,   "hPa", "pressure");
+        html += makeCard("Ветер",             rating.windR,    "м/с", "wind");
+        html += makeCard("Направление ветра", rating.windDirR, "°",   "windDir");
+        html += makeCard("Влажность",         rating.humR,     "%",   "humidity");
+        html += makeTotalCard(rating.totalR);
+    } else {
+        html += renderLeadTab(stats);
+    }
+
+    el.innerHTML = html;
+}
+
+/* =========================================================
+   УПРАВЛЕНИЕ БАЗОЙ
+========================================================= */
+async function exportDB() {
+    if (!db) await initDB();
+    var req = db.transaction("stats","readonly").objectStore("stats").getAll();
+    req.onsuccess = function() {
+        var data = req.result;
+        if (!data.length) { alert("База пустая"); return; }
+        data.sort(function(a,b){ return a.pwsTime.localeCompare(b.pwsTime); });
+        var now  = new Date();
+        var name = "pwsStats_" + now.getUTCFullYear() +
+                   String(now.getUTCMonth()+1).padStart(2,"0") + ".json";
+        var blob = new Blob([JSON.stringify(data, null, 2)], { type:"application/json" });
+        var url  = URL.createObjectURL(blob);
+        var a    = document.createElement("a");
+        a.href = url; a.download = name; a.click();
+        URL.revokeObjectURL(url);
+    };
+}
+
+function checkDB() {
+    if (!db) { alert("БД не открыта"); return; }
+    var req = db.transaction("stats","readonly").objectStore("stats").count();
+    req.onsuccess = function() {
+        var n = req.result;
+        var lines = ["Записей в IndexedDB: " + n];
+        PWS_STATIONS.forEach(function(s) {
+            var cnt = 0;
+            // посчитаем через getAll — небольшая БД
+        });
+        alert(lines.join("\n"));
+    };
+}
+
+function clearAllDB() {
+    if (!confirm("Удалить ВСЕ записи?\nЭто действие необратимо.")) return;
+    if (!db) { alert("БД не открыта"); return; }
+    var tx = db.transaction("stats","readwrite");
+    tx.objectStore("stats").clear();
+    tx.oncomplete = async function() { alert("База очищена"); await render(); await drawChart(); };
+}
+
+/* =========================================================
+   КНОПКИ УПРАВЛЕНИЯ
+========================================================= */
+function setActivePeriod(p) {
+    ["24h","3d","7d","month","season"].forEach(function(id) {
+        var btn = document.getElementById("btn-"+id);
+        if (btn) btn.classList.toggle("active", id === p);
+    });
+    document.getElementById("monthSelector").style.display  = p === "month"  ? "block" : "none";
+    document.getElementById("seasonSelector").style.display = p === "season" ? "block" : "none";
+}
+
+function setActiveParam(p) {
+    ["temp","pressure","wind","windDir","humidity"].forEach(function(id) {
+        var btn = document.getElementById("btn-"+id);
+        if (btn) btn.classList.toggle("active", id === p);
+    });
+}
+
+function setActiveMode(mode) {
+    ["error","value"].forEach(function(id) {
+        var btn = document.getElementById("btn-"+id);
+        if (btn) btn.classList.toggle("active", id === mode);
+    });
+}
+
+function setPeriod(p) { currentPeriod = p; setActivePeriod(p); render(); drawChart(); }
+function setParam(p)  { currentParam  = p; setActiveParam(p);  drawChart(); }
+function setMode(mode){ chartMode = mode; setActiveMode(mode); drawChart(); }
+function setSeason(s) {
+    currentSeason = s;
+    ["winter","spring","summer","autumn"].forEach(function(id) {
+        var btn = document.getElementById("btn-s-"+id);
+        if (btn) btn.classList.toggle("active", id === s);
+    });
+    render(); drawChart();
+}
+
+function switchTab(tab) {
+    currentTab = tab;
+    ["main","lead"].forEach(function(id) {
+        var btn = document.getElementById("tab-"+id+"-btn");
+        if (btn) btn.classList.toggle("active", id === tab);
+    });
+    render();
+}
+
+function setStation(id) {
+    currentStation = id;
+    document.querySelectorAll("#stationBtns button").forEach(function(b){ b.classList.remove("active"); });
+    var btn = document.getElementById("stbtn-" + id);
+    if (btn) btn.classList.add("active");
+    render(); drawChart();
+}
+
+/* Строим кнопки станций */
+(function buildStationButtons() {
+    var row = document.getElementById("stationBtns");
+
+    var allBtn = document.createElement("button");
+    allBtn.id = "stbtn-all";
+    allBtn.textContent = "Все";
+    allBtn.onclick = function() { setStation("all"); };
+    allBtn.classList.add("active");
+    row.appendChild(allBtn);
+
+    PWS_STATIONS.forEach(function(s) {
+        var btn = document.createElement("button");
+        btn.id = "stbtn-" + s.id;
+        btn.textContent = s.name;
+        btn.onclick = function() { setStation(s.id); };
+        row.appendChild(btn);
+    });
+})();
+
+/* Строим кнопки месяцев */
+(function buildMonthButtons() {
+    var row = document.getElementById("monthBtnRow");
+    MONTH_NAMES.forEach(function(name, i) {
+        var btn = document.createElement("button");
+        btn.id = "btn-m-" + (i+1);
+        btn.textContent = name;
+        btn.onclick = function() { selectMonth(i+1); };
+        row.appendChild(btn);
+    });
+})();
+
+function selectMonth(m) {
+    currentMonth = m;
+    document.querySelectorAll("#monthBtnRow button").forEach(function(b){ b.classList.remove("active"); });
+    var btn = document.getElementById("btn-m-" + m);
+    if (btn) { btn.classList.add("active"); btn.scrollIntoView({behavior:"smooth",block:"nearest",inline:"center"}); }
+    render(); drawChart();
+}
+
+function updateHeaderOffset() {
+    var h = document.querySelector(".header").offsetHeight;
+    document.documentElement.style.setProperty("--header-h", h+"px");
+    var t = document.getElementById("mainTabs").offsetHeight;
+    document.documentElement.style.setProperty("--tabs-h", t+"px");
+}
+
+/* =========================================================
+   АЛЕРТ: напоминание сохранить данные (8–10 число месяца)
+   hourly/7day скользящее окно — данные с 1-го уйдут ~8-го
+========================================================= */
+(function checkSaveAlert() {
+    var now = new Date();
+    var day = now.getUTCDate();
+    if (day < 8 || day > 10) return;
+
+    var y  = now.getUTCFullYear();
+    var mo = String(now.getUTCMonth()+1).padStart(2,"0");
+    var alertKey = "pwsSaveAlert_" + y + "_" + mo;
+    if (localStorage.getItem(alertKey)) return;
+
+    var msg = "📡 Напоминание PWS\n\n" +
+        "Сегодня " + day + "-е число. Данные с 1-го числа\n" +
+        "скоро выйдут из окна hourly/7day.\n\n" +
+        "Нажмите «Сохранить базу» и сохраните файл\n" +
+        "pwsStats_" + y + mo + ".json";
+
+    if (confirm(msg + "\n\nПоказать это напоминание снова?")) {
+        // оставляем — пользователь хочет видеть снова
+    } else {
+        localStorage.setItem(alertKey, "1");
+    }
+})();
+
+/* =========================================================
+   СТАРТ
+========================================================= */
+selectMonth(currentMonth);
+setActiveParam("temp");
+setActiveMode("error");
+setActivePeriod("7d");
+
+updateHeaderOffset();
+window.addEventListener("resize", updateHeaderOffset);
+
+initDB().then(async function() {
+    var all = await dbGetAll();
+    if (all.length) {
+        var latest = all.reduce(function(a,b){ return a.pwsTime > b.pwsTime ? a : b; });
+        var d   = new Date(latest.hourKey + ":00:00Z");
+        var fmt = d.toLocaleDateString("ru-RU") + " " +
+                  d.toLocaleTimeString("ru-RU", {hour:"2-digit", minute:"2-digit"});
+        setStatus("Последнее обновление: " + fmt + " · записей: " + all.length);
+    } else {
+        setStatus("База пустая — нажмите «Загрузить PWS»");
+    }
+    await render();
+    await drawChart();
+});
+</script>
+
+</body>
+</html>

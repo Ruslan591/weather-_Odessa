@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#121212">
+<title>Точность ансамбля</title>
+<link rel="stylesheet" href="verify.css">
+<script src="models.js"></script>
+<script src="modelCheck.js"></script>
+<script src="ensembleVerify.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<div class="header">
+    <div class="nav">
+        <a href="index.html">ГМЦ ЧАМ</a>
+        <a href="pws.html">PWS</a>
+        <a href="forecast.html">Прогноз</a>
+    </div>
+    <div class="headerTitle">Ансамбль</div>
+    <div class="nav">
+        <a href="verify.html">Рейтинг</a>
+    </div>
+</div>
+
+<div class="container">
+
+<div id="statusLine" style="color:#aaa;font-size:0.85em;margin-bottom:12px;">Загрузка...</div>
+
+<!-- МЕТРИКИ -->
+<div id="metricsGrid" style="
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+    margin-bottom:16px;
+"></div>
+
+<!-- ГРАФИК ПО ДНЯМ -->
+<div id="chartSection" style="display:none;margin-bottom:16px;">
+    <div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:8px;">ТОЧНОСТЬ ПО ДНЯМ</div>
+    <div style="background:#161616;border-radius:10px;padding:10px 8px;">
+        <div id="chartParamRow" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;padding:0 4px;"></div>
+        <canvas id="dayChart" height="160"></canvas>
+    </div>
+</div>
+
+<!-- СРАВНЕНИЕ С ЛУЧШЕЙ МОДЕЛЬЮ -->
+<div id="compareSection" style="display:none;margin-bottom:16px;">
+    <div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:8px;">СРАВНЕНИЕ С ЛУЧШЕЙ МОДЕЛЬЮ</div>
+    <div id="compareGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"></div>
+</div>
+
+<!-- ПОКРЫТИЕ -->
+<div id="coverageSection" style="
+    background:#161616;border-radius:10px;padding:12px 14px;
+    margin-bottom:16px;font-size:13px;
+">
+    <div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:10px;">ПОКРЫТИЕ</div>
+    <div id="coverageInfo" style="color:#aaa;">—</div>
+</div>
+
+<!-- ПОСЛЕДНИЕ СНИМКИ -->
+<div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:8px;">ПОСЛЕДНИЕ СНИМКИ</div>
+<div id="snapshotList" style="margin-bottom:16px;"></div>
+
+<!-- ЭКСПОРТ / ИМПОРТ -->
+<div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:8px;">АРХИВ СНИМКОВ</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+    <button onclick="exportSnapshots()" style="background:#1a2a1a;color:#8bc34a;border:1px solid #2a3a2a;
+        border-radius:8px;padding:10px 12px;font-size:13px;">
+        💾 Сохранить в файл
+    </button>
+    <button onclick="document.getElementById('importSnapFile').click()"
+        style="background:#1a1a2a;color:#74b9ff;border:1px solid #2a2a3a;
+        border-radius:8px;padding:10px 12px;font-size:13px;">
+        📂 Загрузить из файла
+    </button>
+</div>
+<input type="file" id="importSnapFile" accept=".json" style="display:none">
+<div id="importStatus" style="font-size:12px;color:#555;margin-bottom:16px;min-height:16px;"></div>
+
+<!-- КНОПКА ОЧИСТКИ -->
+<button onclick="confirmClear()"
+    style="background:#3a0000;color:#ff6b6b;border:none;border-radius:8px;
+           padding:10px 18px;font-size:13px;width:100%;margin-top:4px;">
+    🗑 Очистить снимки ансамбля
+</button>
+
+<br><br>
+
+</div><!-- /container -->
+
+<style>
+.es-card {
+    background: #161616;
+    border-radius: 10px;
+    padding: 12px 14px;
+    position: relative;
+}
+.es-card-label {
+    font-size: 11px;
+    color: #555;
+    margin-bottom: 6px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+}
+.es-card-mae {
+    font-size: 22px;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 4px;
+}
+.es-card-sub {
+    font-size: 11px;
+    color: #666;
+    line-height: 1.6;
+}
+.es-badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 700;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+.snap-row {
+    background: #161616;
+    border-radius: 8px;
+    padding: 9px 12px;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+}
+.snap-time { color: #888; }
+.snap-hours { color: #555; font-size: 11px; }
+.cp-btn {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid #333;
+    background: #1e1e1e;
+    color: #666;
+    cursor: pointer;
+}
+.cp-btn.active {
+    border-color: var(--c, #aaa);
+    color: var(--c, #aaa);
+    background: #1e1e1e;
+}
+</style>
+
+<script>
+/* =============================================
+   МЕТРИКИ ПО ДНЯМ
+============================================= */
+var _dayMetrics = null; // { "2025-04-21": { temp:{mae,n}, ... }, ... }
+var _activeChartParam = "temp";
+var _chartInstance = null;
+
+function calcMetricsByDay(obs) {
+    var snaps = EV ? (typeof EV.getHorizonStats === "function" ? null : null) : null;
+    // Получаем снимки напрямую через EV внутренний load — используем calcMetrics с группировкой
+    // Реализуем сами: группируем ошибки по дате наблюдения
+    var snapData = [];
+    try { snapData = JSON.parse(localStorage.getItem("ensembleSnapshots") || "[]"); } catch(e) {}
+    if (!snapData.length || !obs.length) return null;
+
+    var obsIndex = {};
+    obs.forEach(function(o) {
+        var key = roundHour(o.time);
+        if (key) obsIndex[key] = o;
+    });
+
+    // day -> param -> errors[]
+    var byDay = {};
+
+    snapData.forEach(function(snap) {
+        if (!snap.hours) return;
+        snap.hours.forEach(function(fh) {
+            var key = roundHour(fh.time);
+            var ob  = obsIndex[key];
+            if (!ob) return;
+            var day = key ? key.slice(0, 10) : null;
+            if (!day) return;
+            if (!byDay[day]) byDay[day] = { temp:[], pressure:[], wind:[], windDir:[], humidity:[], rain:[], cloudcover:[] };
+
+            if (fh.temp     != null && ob.temp     != null) byDay[day].temp.push(Math.abs(fh.temp - ob.temp));
+            if (fh.pressure != null && ob.pressure != null) byDay[day].pressure.push(Math.abs(fh.pressure - ob.pressure));
+            if (fh.wind     != null && ob.wind     != null) byDay[day].wind.push(Math.abs(fh.wind - ob.wind));
+            if (fh.humidity != null && ob.humidity != null) byDay[day].humidity.push(Math.abs(fh.humidity - ob.humidity));
+            var obRain = ob.rain != null ? ob.rain : ob.precip;
+            if (fh.rain != null && obRain != null) byDay[day].rain.push(Math.abs(fh.rain - obRain));
+            if (fh.cloudcover != null && ob.cloudcover != null) byDay[day].cloudcover.push(Math.abs(fh.cloudcover - ob.cloudcover));
+            if (fh.windDir  != null && ob.windDir  != null) {
+                var d = Math.abs(fh.windDir - ob.windDir);
+                if (d > 180) d = 360 - d;
+                byDay[day].windDir.push(d);
+            }
+        });
+    });
+
+    // Считаем MAE по дням
+    var result = {};
+    Object.keys(byDay).sort().forEach(function(day) {
+        result[day] = {};
+        Object.keys(byDay[day]).forEach(function(k) {
+            var arr = byDay[day][k];
+            if (!arr.length) { result[day][k] = null; return; }
+            result[day][k] = { mae: arr.reduce(function(s,v){return s+v;},0) / arr.length, n: arr.length };
+        });
+    });
+    return result;
+}
+
+function roundHour(timeStr) {
+    if (!timeStr) return null;
+    var d = new Date(timeStr);
+    if (isNaN(d)) return null;
+    d.setMinutes(0, 0, 0);
+    return d.toISOString().slice(0, 16);
+}
+
+function renderChart(paramKey) {
+    _activeChartParam = paramKey;
+
+    // Подсветить активную кнопку
+    document.querySelectorAll(".cp-btn").forEach(function(b) {
+        b.classList.toggle("active", b.dataset.key === paramKey);
+    });
+
+    if (!_dayMetrics) return;
+    var days = Object.keys(_dayMetrics).sort();
+    if (!days.length) return;
+
+    var p = PARAMS.find(function(x){ return x.key === paramKey; });
+    if (!p) return;
+
+    var maes = days.map(function(d) {
+        var s = _dayMetrics[d][paramKey];
+        return s ? s.mae : null;
+    });
+
+    // Подписи — только число.месяц
+    var labels = days.map(function(d) {
+        var parts = d.split("-");
+        return parts[2] + "." + parts[1];
+    });
+
+    var ctx = document.getElementById("dayChart").getContext("2d");
+    if (_chartInstance) { _chartInstance.destroy(); _chartInstance = null; }
+
+    var t = THRESHOLDS[paramKey];
+    var goodLine = t ? t.good : null;
+    var badLine  = t ? t.bad  : null;
+
+    _chartInstance = new Chart(ctx, {
+        type: "line",
+        data: {
+            labels: labels,
+            datasets: [{
+                label: "MAE " + p.unit,
+                data: maes,
+                borderColor: p.color,
+                backgroundColor: p.color + "22",
+                borderWidth: 2,
+                pointRadius: 3,
+                pointBackgroundColor: p.color,
+                tension: 0.3,
+                fill: true,
+                spanGaps: true
+            }]
+        },
+        options: {
+            responsive: true,
+            animation: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(ctx) {
+                            var v = ctx.parsed.y;
+                            var n = _dayMetrics[days[ctx.dataIndex]] && _dayMetrics[days[ctx.dataIndex]][paramKey];
+                            return v != null ? v.toFixed(2) + p.unit + (n ? " (n=" + n.n + ")" : "") : "—";
+                        }
+                    }
+                },
+                annotation: goodLine ? {
+                    annotations: {
+                        good: { type:"line", yMin:goodLine, yMax:goodLine, borderColor:"#5fe08f44", borderWidth:1, borderDash:[4,4] },
+                        bad:  { type:"line", yMin:badLine,  yMax:badLine,  borderColor:"#ff6b6b44", borderWidth:1, borderDash:[4,4] }
+                    }
+                } : {}
+            },
+            scales: {
+                x: { ticks:{ color:"#555", font:{size:10} }, grid:{ color:"#1e1e1e" } },
+                y: { ticks:{ color:"#555", font:{size:10} }, grid:{ color:"#252525" }, beginAtZero:true }
+            }
+        }
+    });
+}
+
+function renderChartParamRow() {
+    var row = document.getElementById("chartParamRow");
+    row.innerHTML = PARAMS.map(function(p) {
+        return '<button class="cp-btn' + (p.key === _activeChartParam ? " active" : "") + '" ' +
+               'data-key="' + p.key + '" style="--c:' + p.color + '" ' +
+               'onclick="renderChart(\'' + p.key + '\')">' + p.label + '</button>';
+    }).join("");
+}
+
+/* =============================================
+   ПАРАМЕТРЫ
+============================================= */
+var PARAMS = [
+    { key:"temp",       label:"Температура", unit:"°C",  color:"#ff8f00" },
+    { key:"pressure",   label:"Давление",    unit:" гПа",color:"#4aa3ff" },
+    { key:"wind",       label:"Ветер",       unit:" м/с",color:"#8bc34a" },
+    { key:"windDir",    label:"Направление", unit:"°",   color:"#74b9ff" },
+    { key:"humidity",   label:"Влажность",   unit:"%",   color:"#00bcd4" },
+    { key:"rain",       label:"Осадки",      unit:"%",   color:"#448aff", isFact:true },
+    { key:"cloudcover", label:"Облачность",  unit:"%",   color:"#b0bec5" },
+];
+
+/* Пороги MAE — «хорошо» / «плохо» */
+var THRESHOLDS = {
+    temp:       { good: 1.5, bad: 3.0 },
+    pressure:   { good: 1.0, bad: 2.5 },
+    wind:       { good: 1.5, bad: 3.0 },
+    windDir:    { good: 30,  bad: 60  },
+    humidity:   { good: 8,   bad: 15  },
+    rain:       { good: 0.5, bad: 1.5 },
+    cloudcover: { good: 15,  bad: 30  },
+};
+
+function maeColor(key, mae) {
+    var t = THRESHOLDS[key];
+    if (!t) return "#aaa";
+    if (mae <= t.good) return "#5fe08f";
+    if (mae <= t.bad)  return "#fdcb6e";
+    return "#ff6b6b";
+}
+
+function biasBadge(bias, unit) {
+    if (Math.abs(bias) < 0.01) return "";
+    var sign = bias > 0 ? "▲ завыш" : "▼ занижает";
+    var col  = bias > 0 ? "#ff9f5c" : "#74b9ff";
+    return '<span class="es-badge" style="background:' + col + '22;color:' + col + '">'
+           + sign + ' ' + Math.abs(bias).toFixed(2) + unit + '</span>';
+}
+
+/* =============================================
+   IndexedDB (та же база что в verify.html)
+============================================= */
+var db;
+function initDB() {
+    return new Promise(function(resolve, reject) {
+        var req = indexedDB.open("modelStats", 2);
+        req.onsuccess = function(e) { db = e.target.result; resolve(); };
+        req.onerror   = reject;
+    });
+}
+function dbGetAll() {
+    if (!db) return Promise.resolve([]);
+    return new Promise(function(res) {
+        var req = db.transaction("stats","readonly").objectStore("stats").getAll();
+        req.onsuccess = function() { res(req.result); };
+        req.onerror   = function() { res([]); };
+    });
+}
+
+/* =============================================
+   ЛУЧШАЯ МОДЕЛЬ из modelHistoryProgress
+============================================= */
+function getBestModelMAE(paramKey) {
+    var raw = {};
+    try { raw = JSON.parse(localStorage.getItem("modelHistoryProgress") || "{}"); } catch(e) {}
+    // paramKey: "temp" -> поле "temp" в прогрессе
+    var best = null, bestModel = null;
+    Object.keys(raw).forEach(function(m) {
+        var v = raw[m] && raw[m][paramKey];
+        if (v != null && v > 0) {
+            if (best == null || v < best) { best = v; bestModel = m; }
+        }
+    });
+    return bestModel ? { model: bestModel, mae: best } : null;
+}
+
+/* =============================================
+   ЭКСПОРТ / ИМПОРТ СНИМКОВ
+============================================= */
+function buildEnsembleDescription() {
+    // Собираем список моделей ансамбля из MODEL_REGISTRY
+    var ensModes = [];
+    var weights  = {};
+    try {
+        var raw = JSON.parse(localStorage.getItem("modelHistoryProgress") || "{}");
+        if (typeof MODEL_REGISTRY !== "undefined") {
+            MODEL_REGISTRY.forEach(function(m) {
+                if (!m.ensemble) return;
+                ensModes.push(m);
+                var mae = raw[m.id] && raw[m.id].temp;
+                weights[m.id] = mae ? (1 / mae) : null;
+            });
+        }
+    } catch(e) {}
+
+    // Нормируем веса
+    var validW = ensModes.filter(function(m){ return weights[m.id] != null; });
+    var total  = validW.reduce(function(s,m){ return s + weights[m.id]; }, 0);
+    if (!total) ensModes.forEach(function(m){ weights[m.id] = 1 / ensModes.length; });
+    else        ensModes.forEach(function(m){
+        weights[m.id] = weights[m.id] != null ? weights[m.id] / total : null;
+    });
+
+    return {
+        station:     "Одесса (SYNOP 33837), 46.43°N 30.74°E",
+        description: "Взвешенный ансамблевый прогноз. Веса моделей обратно пропорциональны их MAE температуры " +
+                     "из исторической верификации (localStorage:modelHistoryProgress). " +
+                     "При отсутствии данных — равные веса. " +
+                     "Направление ветра усредняется векторно. " +
+                     "Код погоды — взвешенный мажоритарный голос моделей.",
+        method:      {
+            weighting:    "inverse MAE (температура)",
+            wind_dir:     "векторное среднее",
+            weather_code: "взвешенный мажоритарный",
+            numeric_fields: ["temperature_2m","apparent_temperature","pressure_msl",
+                             "relative_humidity_2m","wind_speed_10m","wind_gusts_10m",
+                             "rain","showers","precip_prob","snowfall","snow_depth",
+                             "cloud_cover","cloud_cover_low","cloud_cover_mid","cloud_cover_high",
+                             "shortwave_radiation","dew_point_2m","visibility"]
+        },
+        models: ensModes.map(function(m) {
+            var w = weights[m.id];
+            return {
+                id:     m.id,
+                name:   m.long || m.id,
+                short:  m.short || m.id,
+                weight: w != null ? Math.round(w * 1000) / 1000 : "равный",
+                weight_pct: w != null ? Math.round(w * 100) + "%" : "равный"
+            };
+        })
+    };
+}
+
+function exportSnapshots() {
+    var snaps = [];
+    try { snaps = JSON.parse(localStorage.getItem("ensembleSnapshots") || "[]"); } catch(e) {}
+    if (!snaps.length) { alert("Нет снимков для сохранения"); return; }
+
+    var desc = buildEnsembleDescription();
+    var exportObj = {
+        _type:       "ensemble_snapshots",
+        _version:    1,
+        exported_at: new Date().toISOString(),
+        ensemble:    desc,
+        count:       snaps.length,
+        snapshots:   snaps
+    };
+
+    var dateStr = new Date().toISOString().slice(0,10);
+    var filename = "ensemble_snapshots_" + dateStr + ".json";
+    var blob = new Blob([JSON.stringify(exportObj, null, 2)], {type:"application/json"});
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement("a");
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+
+    setImportStatus("✅ Сохранено: " + snaps.length + " снимков → " + filename, "#8bc34a");
+}
+
+function importSnapshots(file) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+        var status = document.getElementById("importStatus");
+        try {
+            var obj = JSON.parse(e.target.result);
+
+            // Поддерживаем оба формата: обёрнутый и голый массив
+            var incoming = Array.isArray(obj) ? obj
+                         : (obj._type === "ensemble_snapshots" && obj.snapshots) ? obj.snapshots
+                         : null;
+
+            if (!incoming) {
+                setImportStatus("❌ Неверный формат файла", "#ff6b6b");
+                return;
+            }
+
+            // Сливаем с существующими, без дублей по hours[0].time
+            var existing = [];
+            try { existing = JSON.parse(localStorage.getItem("ensembleSnapshots") || "[]"); } catch(ex) {}
+
+            var existingKeys = new Set(existing.map(function(s) {
+                return s.hours && s.hours[0] ? s.hours[0].time : null;
+            }).filter(Boolean));
+
+            var added = 0;
+            incoming.forEach(function(snap) {
+                var key = snap.hours && snap.hours[0] ? snap.hours[0].time : null;
+                if (!key || existingKeys.has(key)) return;
+                existing.push(snap);
+                existingKeys.add(key);
+                added++;
+            });
+
+            // Сортируем по savedAt, обрезаем до 200
+            existing.sort(function(a,b){ return (a.savedAt||"") > (b.savedAt||"") ? 1 : -1; });
+            if (existing.length > 200) existing = existing.slice(existing.length - 200);
+
+            localStorage.setItem("ensembleSnapshots", JSON.stringify(existing));
+
+            var info = obj.ensemble ? " (из файла: " + (obj.ensemble.models || []).length + " моделей)" : "";
+            setImportStatus("✅ Добавлено " + added + " снимков" + info + ". Всего: " + existing.length, "#8bc34a");
+            render();
+        } catch(ex) {
+            setImportStatus("❌ Ошибка чтения: " + ex.message, "#ff6b6b");
+        }
+    };
+    reader.readAsText(file);
+}
+
+function setImportStatus(msg, color) {
+    var el = document.getElementById("importStatus");
+    if (el) { el.textContent = msg; el.style.color = color || "#aaa"; }
+}
+
+/* =============================================
+   РЕНДЕР
+============================================= */
+async function render() {
+    var status = document.getElementById("statusLine");
+
+    if (typeof EV === "undefined") {
+        status.textContent = "❌ ensembleVerify.js не загружен";
+        return;
+    }
+
+    var snapCount = EV.getSnapshotCount();
+    status.innerHTML = "Снимков прогноза: <b>" + snapCount + "</b>";
+
+    if (!snapCount) {
+        document.getElementById("metricsGrid").innerHTML =
+            '<div style="grid-column:1/-1;color:#666;font-size:13px;padding:20px 0;">' +
+            'Снимков нет. Откройте <a href="forecast.html" style="color:#ffd166;">Прогноз → Ансамбль ⚡</a> — данные запишутся автоматически.</div>';
+        renderSnapshots();
+        return;
+    }
+
+    await initDB();
+    var all = await dbGetAll();
+
+    // Строим массив наблюдений
+    var obs = [];
+    all.forEach(function(rec) {
+        if (!rec.synopTime || !rec.obs) return;
+        var tk = rec.synopTime;
+        var iso = tk.slice(0,4)+"-"+tk.slice(4,6)+"-"+tk.slice(6,8)+"T"+tk.slice(8,10)+":00";
+        var rh = rec.obs.humidity != null ? rec.obs.humidity : null;
+        if (rh == null && rec.obs.temp != null && rec.obs.dew != null) {
+            var t = rec.obs.temp, td = rec.obs.dew;
+            rh = Math.round(100 * Math.exp((17.625 * td) / (243.04 + td)) / Math.exp((17.625 * t) / (243.04 + t)));
+        }
+        obs.push({ time: iso, temp: rec.obs.temp, pressure: rec.obs.pressure,
+                   wind: rec.obs.wind, windDir: rec.obs.windDir,
+                   humidity: rh, rain: rec.obs.precip, precip: rec.obs.precip,
+                   cloudcover: rec.obs.cloudcover, ww: rec.obs.ww });
+    });
+
+    var metrics = EV.calcMetrics(obs);
+
+    _dayMetrics = calcMetricsByDay(obs);
+    if (_dayMetrics && Object.keys(_dayMetrics).length) {
+        document.getElementById("chartSection").style.display = "";
+        renderChartParamRow();
+        renderChart(_activeChartParam);
+    }
+
+    renderMetrics(metrics);
+    renderCompare(metrics);
+    renderCoverage(snapCount, obs.length);
+    renderSnapshots();
+}
+
+function renderMetrics(metrics) {
+    var grid = document.getElementById("metricsGrid");
+    if (!metrics) {
+        grid.innerHTML = '<div style="grid-column:1/-1;color:#666;font-size:13px;padding:20px 0;">' +
+            'Нет совпадений снимков с наблюдениями.<br>Нужна база SYNOP — нажмите «Загрузить свежие» в Рейтинге.</div>';
+        return;
+    }
+
+    grid.innerHTML = PARAMS.map(function(p) {
+        var s = metrics[p.key];
+        if (!s) return '<div class="es-card"><div class="es-card-label">' + p.label +
+                       '</div><div style="color:#444;font-size:13px;">нет данных</div></div>';
+
+        var col = maeColor(p.key, s.mae);
+        var badge = biasBadge(s.bias, p.unit);
+
+        // Осадки — факт (% верных)
+        if (p.isFact) {
+            var correct = s.n - Math.round(s.mae * s.n);  // mae = доля ошибок
+            var pct = Math.round(correct / s.n * 100);
+            var fc = pct >= 80 ? "#5fe08f" : pct >= 60 ? "#fdcb6e" : "#ff6b6b";
+            return '<div class="es-card">' +
+                '<div class="es-card-label">' + p.label + ' (факт)</div>' +
+                '<div class="es-card-mae" style="color:' + fc + ';">' + pct +
+                    '<span style="font-size:12px;font-weight:400;color:#666;">% верно</span></div>' +
+                '<div class="es-card-sub">верно ' + correct + ' из ' + s.n + '</div>' +
+            '</div>';
+        }
+
+        return '<div class="es-card">' +
+            '<div class="es-card-label">' + p.label + '</div>' +
+            '<div class="es-card-mae" style="color:' + col + ';">' +
+                s.mae.toFixed(2) + '<span style="font-size:12px;font-weight:400;color:#666;"> MAE' + p.unit + '</span>' +
+            '</div>' +
+            '<div class="es-card-sub">' +
+                'RMSE ' + s.rmse.toFixed(2) + p.unit + '<br>' +
+                'уклон ' + (s.bias > 0 ? "+" : "") + s.bias.toFixed(2) + p.unit + badge + '<br>' +
+                '<span style="color:#444;">n=' + s.n + '</span>' +
+            '</div>' +
+        '</div>';
+    }).join("");
+
+    // Явления — отдельная карточка на всю ширину
+    if (metrics._wx) {
+        var wx = metrics._wx;
+        var col = wx.pct >= 70 ? "#5fe08f" : wx.pct >= 50 ? "#fdcb6e" : "#ff6b6b";
+        grid.innerHTML += '<div class="es-card" style="grid-column:1/-1;">' +
+            '<div class="es-card-label">ЯВЛЕНИЯ ПОГОДЫ</div>' +
+            '<div class="es-card-mae" style="color:' + col + ';">' + wx.pct +
+                '<span style="font-size:12px;font-weight:400;color:#666;">% совпадений</span></div>' +
+            '<div class="es-card-sub">совпало ' + wx.hits + ' из ' + wx.total + ' случаев<br>' +
+                '<span style="color:#444;font-size:10px;">группы: ясно · облачно · туман · дождь · снег · ливень · гроза</span></div>' +
+        '</div>';
+    }
+}
+
+function renderCompare(metrics) {
+    if (!metrics) return;
+    var section = document.getElementById("compareSection");
+    var grid    = document.getElementById("compareGrid");
+
+    // Сравниваем только temp и wind — там есть данные из modelHistoryProgress
+    var compareParams = [
+        { key:"temp",  label:"Температура", unit:"°C"  },
+        { key:"wind",  label:"Ветер",       unit:" м/с"},
+        { key:"pressure", label:"Давление", unit:" гПа"},
+    ];
+
+    var html = "";
+    var hasAny = false;
+    compareParams.forEach(function(p) {
+        var best = getBestModelMAE(p.key);
+        var ens  = metrics[p.key];
+        if (!best || !ens) return;
+        hasAny = true;
+        var diff = ens.mae - best.mae;
+        var better = diff < 0;
+        var diffStr = (diff > 0 ? "+" : "") + diff.toFixed(2);
+        var diffCol = better ? "#5fe08f" : "#ff6b6b";
+        var label   = better ? "лучше" : "хуже";
+        var bestShort = modelShort(best.model) || best.model;
+
+        html += '<div class="es-card">' +
+            '<div class="es-card-label">' + p.label + '</div>' +
+            '<div style="font-size:13px;color:#aaa;margin-bottom:4px;">Ансамбль: <b style="color:#fff;">' + ens.mae.toFixed(2) + p.unit + '</b></div>' +
+            '<div style="font-size:13px;color:#aaa;margin-bottom:6px;">' + bestShort + ': <b>' + best.mae.toFixed(2) + p.unit + '</b></div>' +
+            '<div style="font-size:13px;font-weight:800;color:' + diffCol + ';">' +
+                diffStr + p.unit + ' ' + label +
+            '</div>' +
+        '</div>';
+    });
+
+    if (hasAny) {
+        section.style.display = "";
+        grid.innerHTML = html;
+    }
+}
+
+function renderCoverage(snapCount, obsCount) {
+    var info = document.getElementById("coverageInfo");
+    var horizons = EV.getHorizonStats();
+    var totalHours = horizons.reduce(function(s, h) { return s + h.count; }, 0);
+    var avgHorizon = horizons.length
+        ? Math.round(horizons.reduce(function(s, h) { return s + h.horizonH; }, 0) / horizons.length)
+        : 0;
+
+    // Самый старый и новый снимок
+    var dates = horizons.map(function(h) { return new Date(h.savedAt); }).filter(function(d) { return !isNaN(d); });
+    var oldest = dates.length ? new Date(Math.min.apply(null, dates)) : null;
+    var newest = dates.length ? new Date(Math.max.apply(null, dates)) : null;
+    var fmt = function(d) {
+        return d ? d.toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}) : "—";
+    };
+
+    info.innerHTML =
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">' +
+            '<div><span style="color:#555;">Снимков</span><br><b style="font-size:17px;">' + snapCount + '</b></div>' +
+            '<div><span style="color:#555;">Часов прогноза</span><br><b style="font-size:17px;">' + totalHours + '</b></div>' +
+            '<div><span style="color:#555;">Средний горизонт</span><br><b style="font-size:17px;">' + avgHorizon + ' ч</b></div>' +
+            '<div><span style="color:#555;">Наблюдений в базе</span><br><b style="font-size:17px;">' + obsCount + '</b></div>' +
+        '</div>' +
+        '<div style="margin-top:10px;color:#555;font-size:12px;">' +
+            'Первый: ' + fmt(oldest) + '<br>Последний: ' + fmt(newest) +
+        '</div>';
+}
+
+function renderSnapshots() {
+    var list = document.getElementById("snapshotList");
+    var horizons = EV.getHorizonStats();
+    if (!horizons.length) {
+        list.innerHTML = '<div style="color:#444;font-size:13px;">Нет снимков</div>';
+        return;
+    }
+    // Показываем последние 20, от новых к старым
+    var recent = horizons.slice().reverse().slice(0, 20);
+    list.innerHTML = recent.map(function(h) {
+        var d = new Date(h.savedAt);
+        var timeStr = isNaN(d) ? "—"
+            : d.toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+        return '<div class="snap-row">' +
+            '<span class="snap-time">' + timeStr + '</span>' +
+            '<span class="snap-hours">' + h.count + ' ч · горизонт ' + h.horizonH + ' ч</span>' +
+        '</div>';
+    }).join("");
+}
+
+function confirmClear() {
+    if (!confirm("Удалить все снимки ансамбля?\nМетрики пересчитаются с нуля.")) return;
+    EV.clearSnapshots();
+    render();
+}
+
+/* =============================================
+   СТАРТ
+============================================= */
+document.getElementById("importSnapFile").addEventListener("change", function(e) {
+    var file = e.target.files[0];
+    if (file) { importSnapshots(file); e.target.value = ""; }
+});
+
+render();
+</script>
+
+</body>
+</html>
