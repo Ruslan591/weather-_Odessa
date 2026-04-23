@@ -898,3 +898,30 @@ details .details-body > div {
 .hist-stats-grid-3 {
     grid-template-columns: repeat(3, 1fr);
 }
+
+/* =========================
+   СТРОКА СТАТУСА
+========================= */
+#lastUpdate {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    position: relative;
+}
+#lastUpdate.running span {
+    display: inline-block;
+    animation: marquee 12s linear infinite;
+}
+@keyframes marquee {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+}
+
+.spin {
+    display: inline-block;
+    animation: spin-flip 1s steps(1) infinite;
+}
+@keyframes spin-flip {
+    0%  { content: "⏳"; }
+    50% { content: "⌛"; }
+}

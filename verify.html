@@ -9,6 +9,9 @@
 <link rel="stylesheet" href="verify.css">
 <meta name="theme-color" content="#121212">
 <title>Рейтинг моделей</title>
+<script src="models.js"></script>
+<script src="modelCheck.js"></script>
+<script src="ensembleVerify.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 </head>
@@ -68,6 +71,7 @@
 <input type="file" id="importFile" accept=".json" style="display:none">
 <button onclick="exportDB()">Сохранить</button>
 <button onclick="checkDB()">Проверить базу</button>
+<button onclick="location.href='ensemble_score.html'">⚡ Точность ансамбля</button>
 <button onclick="cleanDB()">Очистить мусор</button>
 <button onclick="clearAllDB()" style="background:#5a0000;">🗑 Сбросить базу</button>
 
@@ -113,15 +117,16 @@ let currentTab    = "main";
 let chartInstance = null;
 let db;
 
-const models = [
-    "ecmwf_ifs",
-    "icon_eu",
-    "icon_global",
-    "ukmo_global_deterministic_10km",
-    "meteofrance_arpege_europe",
-    "gfs_global",
-    "cma_grapes_global"
-];
+const models = modelIds();
+
+const BIAS_THRESHOLDS = {
+    temp:       0.3,   // °C
+    pressure:   0.3,   // hPa
+    wind:       0.5,   // м/с
+    windDir:    10,    // °
+    cloudcover: 5,     // %
+    precip:     0.2    // мм
+};
 
 const MODEL_DATA_FILES = [
     "modelData_2023.json",
@@ -161,18 +166,12 @@ function getCurrentSeason() {
    ВСПОМОГАТЕЛЬНЫЕ
 ========================================================= */
 function modelLabel(m) {
-    const map = {
-        "ecmwf_ifs":"ECMWF", "icon_eu":"ICON-EU", "icon_global":"ICON-G",
-        "ukmo_global_deterministic_10km":"UKMO", "meteofrance_arpege_europe":"ARPEGE",
-        "jma_gsm":"JMA", "gfs_global":"GFS", "gem_global":"GEM", "cma_grapes_global":"CMA"
-    };
-    return map[m] || m;
+    return modelShort(m) || m;
 }
 
 function fetchWithTimeout(url, ms=10000) {
     return Promise.race([fetch(url), new Promise((_,r)=>setTimeout(()=>r("Timeout"),ms))]);
 }
-
 function windDirError(a,b) {
     let d = Math.abs(a-b);
     return d > 180 ? 360-d : d;
@@ -517,7 +516,12 @@ async function updateRecent() {
             if (hourIndex === -1) { skipped++; continue; }
             var synopHour = parseInt(tk.slice(8,10));
             var modelsData = buildModelsData(forecasts, hourIndex, synopHour);
-            toSave.push({time:new Date().toISOString(), synopTime:tk, obs:s.parsed, models:modelsData, hourIndex, forecastHour:hourIndex});
+            var obsWithHumidity = Object.assign({}, s.parsed);
+            if (obsWithHumidity.temp != null && obsWithHumidity.dew != null) {
+                var t = obsWithHumidity.temp, td = obsWithHumidity.dew;
+                obsWithHumidity.humidity = Math.round(100 * Math.exp((17.625 * td) / (243.04 + td)) / Math.exp((17.625 * t) / (243.04 + t)));
+            }
+            toSave.push({time:new Date().toISOString(), synopTime:tk, obs:obsWithHumidity, models:modelsData, hourIndex, forecastHour:hourIndex});
             saved++;
         }
     }
@@ -877,15 +881,14 @@ function computeRating(errors) {
     return {tempR, pressR, windR, windDirR, cloudR, precipR, wxDetailR, cloudDetailR, totalR};
 }
 
-function makeCard(title, data, unit) {
-    // Порог для подкраски зависит от единицы
-    var threshold = unit==="hPa" ? 0.3 : (unit==="м/с" ? 0.5 : (unit==="%" ? 5 : (unit==="мм" ? 0.2 : 0.3)));
-    let html = '<div class="rating-card"><h3>'+title+'</h3>';
-    data.forEach(function(r,i) {
+function makeCard(title, data, unit, param) {
+    var thr = (param && BIAS_THRESHOLDS[param] != null) ? BIAS_THRESHOLDS[param] : 0.3;
+    var html = '<div class="rating-card"><h3>'+title+'</h3>';
+    data.forEach(function(r, i) {
         var col = '#aaa';
-        if (r.bias != null) col = r.bias > threshold ? '#e57373' : (r.bias < -threshold ? '#64b5f6' : '#aaa');
-        const sanity = (unit==="hPa" && r.avg!=null && r.avg>10) ? ' ⚠️' : '';
-        const val = r.avg != null ? '<span style="color:'+col+'">'+r.avg.toFixed(2)+' '+unit+'</span>'+sanity : '—';
+        if (r.bias != null) col = r.bias > thr ? '#e57373' : (r.bias < -thr ? '#64b5f6' : '#aaa');
+        var sanity = (unit === "hPa" && r.avg != null && r.avg > 10) ? ' ⚠️' : '';
+        var val = r.avg != null ? '<span style="color:'+col+'">'+r.avg.toFixed(2)+' '+unit+'</span>'+sanity : '—';
         html += '<div class="row"><div>'+(i+1)+'. '+modelLabel(r.model)+'</div>'+
                 '<div>'+val+' <span style="color:#444;font-size:0.8em">n='+r.n+'</span></div></div>';
     });
@@ -893,14 +896,13 @@ function makeCard(title, data, unit) {
 }
 
 function makeTempCard(title, data) {
+    var thr = BIAS_THRESHOLDS.temp;
     var html = '<div class="rating-card"><h3>'+title+'</h3>';
     data.forEach(function(r, i) {
         var val = '—';
         if (r.avg != null) {
             var col = '#aaa';
-            if (r.bias != null) {
-                col = r.bias > 0.3 ? '#e57373' : (r.bias < -0.3 ? '#64b5f6' : '#aaa');
-            }
+            if (r.bias != null) col = r.bias > thr ? '#e57373' : (r.bias < -thr ? '#64b5f6' : '#aaa');
             val = '<span style="color:'+col+'">'+r.avg.toFixed(2)+'°C</span>';
         }
         html += '<div class="row"><div>'+(i+1)+'. '+modelLabel(r.model)+'</div>'+
@@ -1025,11 +1027,11 @@ async function render() {
         const errors = computeErrors(stats);
         const rating = computeRating(errors);
         html += makeTempCard("Температура", rating.tempR);
-        html += makeCard("Давление",           rating.pressR,   "hPa");
-        html += makeCard("Ветер",              rating.windR,    "м/с");
-        html += makeCard("Направление ветра",  rating.windDirR, "°");
-        html += makeCard("Облачность",         rating.cloudR,   "%");
-        html += makeCard("Осадки",             rating.precipR,  "мм");
+        html += makeCard("Давление",           rating.pressR,   "hPa", "pressure");
+        html += makeCard("Ветер",              rating.windR,    "м/с", "wind");
+        html += makeCard("Направление ветра",  rating.windDirR, "°",   "windDir");
+        html += makeCard("Облачность",         rating.cloudR,   "%",   "cloudcover");
+        html += makeCard("Осадки",             rating.precipR,  "мм",  "precip");
         html += makePhenomCard("Явления погоды", rating.wxDetailR);
         html += makePhenomCard("Облачность по категориям", rating.cloudDetailR);
         html += makeTotalCard(rating.totalR);
@@ -1348,6 +1350,59 @@ initDB().then(function() {
             alert(msg);
         });
 })();
+
+// =============================================
+// ТОЧНОСТЬ АНСАМБЛЯ
+// =============================================
+async function showEnsembleScore() {
+    if (typeof EV === "undefined") { alert("ensembleVerify.js не загружен"); return; }
+    var snaps = EV.getSnapshotCount();
+    if (!snaps) {
+        alert("Снимков ансамбля нет.\nОткройте Прогноз → выберите Ансамбль ⚡");
+        return;
+    }
+
+    if (!db) await initDB();
+    var all = await dbGetAll();
+    if (!all.length) {
+        alert("База наблюдений пуста. Сначала загрузите данные.");
+        return;
+    }
+
+    // Индекс наблюдений по времени (ISO-час)
+    var obsIndex = {};
+    all.forEach(function(rec) {
+        if (!rec.synopTime || !rec.obs) return;
+        var tk = rec.synopTime; // "YYYYMMDDhhmm"
+        var iso = tk.slice(0,4)+"-"+tk.slice(4,6)+"-"+tk.slice(6,8)+"T"+tk.slice(8,10)+":00";
+        obsIndex[iso] = rec.obs;
+    });
+
+    var metrics = EV.calcMetrics(Object.keys(obsIndex).map(function(iso) {
+        var o = obsIndex[iso];
+        return { time: iso, temp: o.temp, pressure: o.pressure,
+                 wind: o.wind, windDir: o.windDir, humidity: o.humidity };
+    }));
+
+    if (!metrics) { alert("Нет совпадений снимков с наблюдениями."); return; }
+
+    var labels = { temp:"Температура", pressure:"Давление", wind:"Ветер", windDir:"Направление", humidity:"Влажность", rain:"Осадки", cloudcover:"Облачность" };
+    var units  = { temp:"°C",          pressure:"гПа",       wind:"м/с",  windDir:"°",            humidity:"%",         rain:"мм",     cloudcover:"%" };
+
+    var lines = ["⚡ Точность ансамбля", "Снимков прогноза: " + snaps, ""];
+    Object.keys(labels).forEach(function(k) {
+        var s = metrics[k];
+        if (!s) { lines.push(labels[k] + ": нет данных"); return; }
+        lines.push(
+            labels[k] + " (" + units[k] + "):\n" +
+            "  MAE=" + s.mae.toFixed(2) +
+            "  RMSE=" + s.rmse.toFixed(2) +
+            "  уклон=" + (s.bias > 0 ? "+" : "") + s.bias.toFixed(2) +
+            "  (n=" + s.n + ")"
+        );
+    });
+    alert(lines.join("\n"));
+}
 
 </script>
 

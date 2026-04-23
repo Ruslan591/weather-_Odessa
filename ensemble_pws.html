@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#121212">
+<title>Ансамбль × PWS</title>
+<link rel="stylesheet" href="verify.css">
+<script src="models.js"></script>
+<script src="modelCheck.js"></script>
+<script src="pws_stations.js"></script>
+<script src="ensembleVerify.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<div class="header">
+    <div class="nav">
+        <a href="index.html">ГМЦ ЧАМ</a>
+        <a href="pws.html">PWS</a>
+        <a href="forecast.html">Прогноз</a>
+    </div>
+    <div class="headerTitle">Ансамбль × PWS</div>
+    <div class="nav">
+        <a href="ensemble_score.html">× SYNOP</a>
+        <a href="verify_pws.html">Рейтинг PWS</a>
+    </div>
+</div>
+
+<div class="container">
+
+<div id="statusLine" style="color:#aaa;font-size:0.85em;margin-bottom:12px;">Загрузка...</div>
+
+<!-- ФИЛЬТР СТАНЦИЙ -->
+<div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:6px;">СТАНЦИЯ</div>
+<div id="stationBtns" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;"></div>
+
+<!-- МЕТРИКИ -->
+<div id="metricsGrid" style="
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+    margin-bottom:16px;
+"></div>
+
+<!-- ГРАФИК ПО ДНЯМ -->
+<div id="chartSection" style="display:none;margin-bottom:16px;">
+    <div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:8px;">ТОЧНОСТЬ ПО ДНЯМ</div>
+    <div style="background:#161616;border-radius:10px;padding:10px 8px;">
+        <div id="chartParamRow" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;padding:0 4px;"></div>
+        <canvas id="dayChart" height="160"></canvas>
+    </div>
+</div>
+
+<!-- ПОКРЫТИЕ -->
+<div id="coverageSection" style="
+    background:#161616;border-radius:10px;padding:12px 14px;
+    margin-bottom:16px;font-size:13px;
+">
+    <div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:10px;">ПОКРЫТИЕ</div>
+    <div id="coverageInfo" style="color:#aaa;">—</div>
+</div>
+
+<!-- ПОСЛЕДНИЕ СНИМКИ -->
+<div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:8px;">ПОСЛЕДНИЕ СНИМКИ</div>
+<div id="snapshotList" style="margin-bottom:16px;"></div>
+
+<!-- ЭКСПОРТ / ИМПОРТ -->
+<div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:8px;">АРХИВ СНИМКОВ</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+    <button onclick="exportSnapshots()" style="background:#1a2a1a;color:#8bc34a;border:1px solid #2a3a2a;
+        border-radius:8px;padding:10px 12px;font-size:13px;">
+        💾 Сохранить в файл
+    </button>
+    <button onclick="document.getElementById('importSnapFile').click()"
+        style="background:#1a1a2a;color:#74b9ff;border:1px solid #2a2a3a;
+        border-radius:8px;padding:10px 12px;font-size:13px;">
+        📂 Загрузить из файла
+    </button>
+</div>
+<input type="file" id="importSnapFile" accept=".json" style="display:none">
+<div id="importStatus" style="font-size:12px;color:#555;margin-bottom:16px;min-height:16px;"></div>
+
+<button onclick="confirmClear()"
+    style="background:#3a0000;color:#ff6b6b;border:none;border-radius:8px;
+           padding:10px 18px;font-size:13px;width:100%;margin-top:4px;">
+    🗑 Очистить снимки ансамбля
+</button>
+
+<br><br>
+
+</div><!-- /container -->
+
+<style>
+.es-card {
+    background: #161616;
+    border-radius: 10px;
+    padding: 12px 14px;
+    position: relative;
+}
+.es-card-label {
+    font-size: 11px;
+    color: #555;
+    margin-bottom: 6px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+}
+.es-card-mae {
+    font-size: 22px;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 4px;
+}
+.es-card-sub {
+    font-size: 11px;
+    color: #666;
+    line-height: 1.6;
+}
+.es-badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 700;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+.snap-row {
+    background: #161616;
+    border-radius: 8px;
+    padding: 9px 12px;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+}
+.snap-time  { color: #888; }
+.snap-hours { color: #555; font-size: 11px; }
+.cp-btn {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid #333;
+    background: #1e1e1e;
+    color: #666;
+    cursor: pointer;
+}
+.cp-btn.active {
+    border-color: var(--c, #aaa);
+    color: var(--c, #aaa);
+    background: #1e1e1e;
+}
+</style>
+
+<script>
+/* =============================================
+   ПАРАМЕТРЫ
+============================================= */
+var PARAMS = [
+    { key:"temp",     label:"Температура", unit:"°C",   color:"#ff8f00" },
+    { key:"pressure", label:"Давление",    unit:" гПа", color:"#4aa3ff" },
+    { key:"wind",     label:"Ветер",       unit:" м/с", color:"#8bc34a" },
+    { key:"windDir",  label:"Направление", unit:"°",    color:"#74b9ff" },
+    { key:"humidity", label:"Влажность",   unit:"%",    color:"#00bcd4" }
+];
+
+var THRESHOLDS = {
+    temp:     { good: 1.5, bad: 3.0 },
+    pressure: { good: 1.0, bad: 2.5 },
+    wind:     { good: 1.5, bad: 3.0 },
+    windDir:  { good: 30,  bad: 60  },
+    humidity: { good: 8,   bad: 15  }
+};
+
+var _activeChartParam = "temp";
+var _chartInstance    = null;
+var _dayMetrics       = null;
+var _currentStation   = "all"; // "all" или stationId
+
+/* =============================================
+   IndexedDB (та же база что в verify_pws.html)
+============================================= */
+var db;
+function initDB() {
+    return new Promise(function(resolve, reject) {
+        var req = indexedDB.open("pwsModelStats", 1);
+        req.onsuccess = function(e) { db = e.target.result; resolve(); };
+        req.onerror   = reject;
+    });
+}
+function dbGetAll() {
+    if (!db) return Promise.resolve([]);
+    return new Promise(function(res) {
+        var req = db.transaction("stats","readonly").objectStore("stats").getAll();
+        req.onsuccess = function() { res(req.result); };
+        req.onerror   = function() { res([]); };
+    });
+}
+
+/* =============================================
+   ВСПОМОГАТЕЛЬНЫЕ
+============================================= */
+function roundHour(timeStr) {
+    if (!timeStr) return null;
+    var d = new Date(timeStr);
+    if (isNaN(d)) return null;
+    d.setMinutes(0, 0, 0);
+    return d.toISOString().slice(0, 16); // "2026-04-22T14:00"
+}
+
+function maeColor(key, mae) {
+    var t = THRESHOLDS[key];
+    if (!t) return "#aaa";
+    if (mae <= t.good) return "#5fe08f";
+    if (mae <= t.bad)  return "#fdcb6e";
+    return "#ff6b6b";
+}
+
+function biasBadge(bias, unit) {
+    if (Math.abs(bias) < 0.01) return "";
+    var sign = bias > 0 ? "▲ завыш" : "▼ занижает";
+    var col  = bias > 0 ? "#ff9f5c" : "#74b9ff";
+    return '<span class="es-badge" style="background:' + col + '22;color:' + col + '">'
+           + sign + " " + Math.abs(bias).toFixed(2) + unit + "</span>";
+}
+
+function windDirDiff(a, b) {
+    var d = Math.abs(a - b);
+    return d > 180 ? 360 - d : d;
+}
+
+/* =============================================
+   СТРОИМ ИНДЕКС НАБЛЮДЕНИЙ PWS
+   Усредняем по станциям для каждого часа.
+   Если _currentStation !== "all" — только эта станция.
+============================================= */
+async function buildObsIndex() {
+    var all = await dbGetAll();
+
+    // Фильтр по станции
+    if (_currentStation !== "all") {
+        all = all.filter(function(d) { return d.stationId === _currentStation; });
+    }
+
+    // Группируем по hourKey
+    var byHour = {}; // hourKey -> [{obs, stationId}]
+    all.forEach(function(rec) {
+        if (!rec.hourKey || !rec.obs) return;
+        var key = rec.hourKey; // "2026-04-01T14"
+        if (!byHour[key]) byHour[key] = [];
+        byHour[key].push(rec.obs);
+    });
+
+    // Усредняем по станциям
+    var obsIndex = {}; // roundedISO -> obs
+    Object.keys(byHour).forEach(function(key) {
+        var arr = byHour[key];
+        function avgField(field) {
+            var vals = arr.map(function(o){ return o[field]; }).filter(function(v){ return v != null; });
+            if (!vals.length) return null;
+            return vals.reduce(function(s,v){ return s+v; }, 0) / vals.length;
+        }
+        // Направление ветра — векторное среднее
+        function avgWindDir() {
+            var dirs = arr.map(function(o){ return o.windDir; }).filter(function(v){ return v != null; });
+            if (!dirs.length) return null;
+            var sx = dirs.reduce(function(s,d){ return s + Math.cos(d * Math.PI / 180); }, 0);
+            var sy = dirs.reduce(function(s,d){ return s + Math.sin(d * Math.PI / 180); }, 0);
+            var deg = Math.atan2(sy, sx) * 180 / Math.PI;
+            return (deg + 360) % 360;
+        }
+
+        // Ключ для сопоставления со снимком: "2026-04-01T14:00"
+        var isoKey = key + ":00";
+        obsIndex[isoKey] = {
+            time:     isoKey,
+            temp:     avgField("temp"),
+            pressure: avgField("pressure"), // уже с offset из verify_pws
+            wind:     avgField("wind"),
+            windDir:  avgWindDir(),
+            humidity: avgField("humidity")
+        };
+    });
+
+    return { obsIndex: obsIndex, totalRecords: all.length };
+}
+
+/* =============================================
+   РАСЧЁТ МЕТРИК
+   Аналог EV.calcMetrics но для PWS-полей
+============================================= */
+function calcMetrics(obsIndex) {
+    var snapData = [];
+    try { snapData = JSON.parse(localStorage.getItem("ensembleSnapshots") || "[]"); } catch(e) {}
+    if (!snapData.length) return null;
+
+    var errors = { temp:[], pressure:[], wind:[], windDir:[], humidity:[] };
+    var biases  = { temp:[], pressure:[], wind:[], windDir:[], humidity:[] };
+
+    snapData.forEach(function(snap) {
+        if (!snap.hours) return;
+        snap.hours.forEach(function(fh) {
+            var key = roundHour(fh.time);
+            if (!key) return;
+            var isoKey = key + ":00";
+            var ob = obsIndex[isoKey];
+            if (!ob) return;
+
+            function push(field, fVal, oVal) {
+                if (fVal == null || oVal == null) return;
+                errors[field].push(Math.abs(fVal - oVal));
+                biases[field].push(fVal - oVal);
+            }
+
+            push("temp",     fh.temp,     ob.temp);
+            push("pressure", fh.pressure, ob.pressure);
+            push("wind",     fh.wind,     ob.wind);
+            push("humidity", fh.humidity, ob.humidity);
+
+            if (fh.windDir != null && ob.windDir != null) {
+                var d = windDirDiff(fh.windDir, ob.windDir);
+                errors.windDir.push(d);
+                biases.windDir.push(d); // направление — только абс.
+            }
+        });
+    });
+
+    var result = {};
+    PARAMS.forEach(function(p) {
+        var k   = p.key;
+        var arr = errors[k];
+        var bias = biases[k];
+        if (!arr.length) { result[k] = null; return; }
+        var mae  = arr.reduce(function(s,v){ return s+v; }, 0) / arr.length;
+        var rmse = Math.sqrt(arr.reduce(function(s,v){ return s+v*v; }, 0) / arr.length);
+        var b    = bias.reduce(function(s,v){ return s+v; }, 0) / bias.length;
+        result[k] = { mae: mae, rmse: rmse, bias: b, n: arr.length };
+    });
+    return result;
+}
+
+/* =============================================
+   МЕТРИКИ ПО ДНЯМ
+============================================= */
+function calcMetricsByDay(obsIndex) {
+    var snapData = [];
+    try { snapData = JSON.parse(localStorage.getItem("ensembleSnapshots") || "[]"); } catch(e) {}
+    if (!snapData.length) return null;
+
+    var byDay = {};
+
+    snapData.forEach(function(snap) {
+        if (!snap.hours) return;
+        snap.hours.forEach(function(fh) {
+            var key = roundHour(fh.time);
+            if (!key) return;
+            var isoKey = key + ":00";
+            var ob = obsIndex[isoKey];
+            if (!ob) return;
+            var day = key.slice(0, 10);
+            if (!byDay[day]) byDay[day] = { temp:[], pressure:[], wind:[], windDir:[], humidity:[] };
+
+            function push(field, fVal, oVal) {
+                if (fVal == null || oVal == null) return;
+                byDay[day][field].push(Math.abs(fVal - oVal));
+            }
+            push("temp",     fh.temp,     ob.temp);
+            push("pressure", fh.pressure, ob.pressure);
+            push("wind",     fh.wind,     ob.wind);
+            push("humidity", fh.humidity, ob.humidity);
+            if (fh.windDir != null && ob.windDir != null)
+                byDay[day].windDir.push(windDirDiff(fh.windDir, ob.windDir));
+        });
+    });
+
+    var result = {};
+    Object.keys(byDay).sort().forEach(function(day) {
+        result[day] = {};
+        PARAMS.forEach(function(p) {
+            var arr = byDay[day][p.key];
+            if (!arr || !arr.length) { result[day][p.key] = null; return; }
+            result[day][p.key] = {
+                mae: arr.reduce(function(s,v){ return s+v; }, 0) / arr.length,
+                n:   arr.length
+            };
+        });
+    });
+    return result;
+}
+
+/* =============================================
+   РЕНДЕР МЕТРИК
+============================================= */
+function renderMetrics(metrics) {
+    var grid = document.getElementById("metricsGrid");
+    if (!metrics) {
+        grid.innerHTML = '<div style="grid-column:1/-1;color:#666;font-size:13px;padding:20px 0;">' +
+            'Нет совпадений снимков с наблюдениями PWS.<br>' +
+            'Загрузите данные в <a href="verify_pws.html" style="color:#ffd166;">Рейтинг PWS</a>.</div>';
+        return;
+    }
+    grid.innerHTML = PARAMS.map(function(p) {
+        var s = metrics[p.key];
+        if (!s) return '<div class="es-card"><div class="es-card-label">' + p.label +
+                       '</div><div style="color:#444;font-size:13px;">нет данных</div></div>';
+        var col   = maeColor(p.key, s.mae);
+        var badge = biasBadge(s.bias, p.unit);
+        return '<div class="es-card">' +
+            '<div class="es-card-label">' + p.label + '</div>' +
+            '<div class="es-card-mae" style="color:' + col + ';">' +
+                s.mae.toFixed(2) +
+                '<span style="font-size:12px;font-weight:400;color:#666;"> MAE' + p.unit + '</span>' +
+            '</div>' +
+            '<div class="es-card-sub">' +
+                'RMSE ' + s.rmse.toFixed(2) + p.unit + '<br>' +
+                'уклон ' + (s.bias > 0 ? "+" : "") + s.bias.toFixed(2) + p.unit + badge + '<br>' +
+                '<span style="color:#444;">n=' + s.n + '</span>' +
+            '</div>' +
+        '</div>';
+    }).join("");
+}
+
+/* =============================================
+   РЕНДЕР ГРАФИКА
+============================================= */
+function renderChart(paramKey) {
+    _activeChartParam = paramKey;
+    document.querySelectorAll(".cp-btn").forEach(function(b) {
+        b.classList.toggle("active", b.dataset.key === paramKey);
+    });
+    if (!_dayMetrics) return;
+    var days = Object.keys(_dayMetrics).sort();
+    if (!days.length) return;
+
+    var p = PARAMS.find(function(x){ return x.key === paramKey; });
+    if (!p) return;
+
+    var maes   = days.map(function(d) { var s = _dayMetrics[d][paramKey]; return s ? s.mae : null; });
+    var labels = days.map(function(d) { var pts = d.split("-"); return pts[2]+"."+pts[1]; });
+
+    var ctx = document.getElementById("dayChart").getContext("2d");
+    if (_chartInstance) { _chartInstance.destroy(); _chartInstance = null; }
+
+    var t = THRESHOLDS[paramKey];
+    _chartInstance = new Chart(ctx, {
+        type: "line",
+        data: {
+            labels: labels,
+            datasets: [{
+                label: "MAE " + p.unit,
+                data: maes,
+                borderColor: p.color,
+                backgroundColor: p.color + "22",
+                borderWidth: 2,
+                pointRadius: 3,
+                pointBackgroundColor: p.color,
+                tension: 0.3,
+                fill: true,
+                spanGaps: true
+            }]
+        },
+        options: {
+            responsive: true,
+            animation: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(ctx) {
+                            var v = ctx.parsed.y;
+                            var n = _dayMetrics[days[ctx.dataIndex]] && _dayMetrics[days[ctx.dataIndex]][paramKey];
+                            return v != null ? v.toFixed(2) + p.unit + (n ? " (n="+n.n+")" : "") : "—";
+                        }
+                    }
+                },
+                annotation: t ? {
+                    annotations: {
+                        good: { type:"line", yMin:t.good, yMax:t.good, borderColor:"#5fe08f44", borderWidth:1, borderDash:[4,4] },
+                        bad:  { type:"line", yMin:t.bad,  yMax:t.bad,  borderColor:"#ff6b6b44", borderWidth:1, borderDash:[4,4] }
+                    }
+                } : {}
+            },
+            scales: {
+                x: { ticks:{ color:"#555", font:{size:10} }, grid:{ color:"#1e1e1e" } },
+                y: { ticks:{ color:"#555", font:{size:10} }, grid:{ color:"#252525" }, beginAtZero:true }
+            }
+        }
+    });
+}
+
+function renderChartParamRow() {
+    var row = document.getElementById("chartParamRow");
+    row.innerHTML = PARAMS.map(function(p) {
+        return '<button class="cp-btn' + (p.key === _activeChartParam ? " active" : "") + '" ' +
+               'data-key="' + p.key + '" style="--c:' + p.color + '" ' +
+               'onclick="renderChart(\'' + p.key + '\')">' + p.label + '</button>';
+    }).join("");
+}
+
+/* =============================================
+   ПОКРЫТИЕ
+============================================= */
+function renderCoverage(snapCount, obsCount, stationLabel) {
+    var horizons = EV.getHorizonStats();
+    var totalHours = horizons.reduce(function(s,h){ return s+h.count; }, 0);
+    var avgHorizon = horizons.length
+        ? Math.round(horizons.reduce(function(s,h){ return s+h.horizonH; }, 0) / horizons.length)
+        : 0;
+    var dates  = horizons.map(function(h){ return new Date(h.savedAt); }).filter(function(d){ return !isNaN(d); });
+    var oldest = dates.length ? new Date(Math.min.apply(null,dates)) : null;
+    var newest = dates.length ? new Date(Math.max.apply(null,dates)) : null;
+    var fmt = function(d) {
+        return d ? d.toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}) : "—";
+    };
+
+    document.getElementById("coverageInfo").innerHTML =
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">' +
+            '<div><span style="color:#555;">Снимков</span><br><b style="font-size:17px;">' + snapCount + '</b></div>' +
+            '<div><span style="color:#555;">Часов прогноза</span><br><b style="font-size:17px;">' + totalHours + '</b></div>' +
+            '<div><span style="color:#555;">Средний горизонт</span><br><b style="font-size:17px;">' + avgHorizon + ' ч</b></div>' +
+            '<div><span style="color:#555;">Наблюдений PWS</span><br><b style="font-size:17px;">' + obsCount + '</b></div>' +
+        '</div>' +
+        '<div style="margin-top:10px;color:#555;font-size:12px;">' +
+            'Станция: ' + stationLabel + '<br>' +
+            'Снимки: ' + fmt(oldest) + ' → ' + fmt(newest) +
+        '</div>';
+}
+
+/* =============================================
+   СПИСОК СНИМКОВ
+============================================= */
+function renderSnapshots() {
+    var list     = document.getElementById("snapshotList");
+    var horizons = EV.getHorizonStats();
+    if (!horizons.length) {
+        list.innerHTML = '<div style="color:#444;font-size:13px;">Нет снимков</div>';
+        return;
+    }
+    var recent = horizons.slice().reverse().slice(0, 20);
+    list.innerHTML = recent.map(function(h) {
+        var d = new Date(h.savedAt);
+        var timeStr = isNaN(d) ? "—"
+            : d.toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+        return '<div class="snap-row">' +
+            '<span class="snap-time">' + timeStr + '</span>' +
+            '<span class="snap-hours">' + h.count + ' ч · горизонт ' + h.horizonH + ' ч</span>' +
+        '</div>';
+    }).join("");
+}
+
+/* =============================================
+   ЭКСПОРТ / ИМПОРТ
+============================================= */
+function exportSnapshots() {
+    var snaps = [];
+    try { snaps = JSON.parse(localStorage.getItem("ensembleSnapshots") || "[]"); } catch(e) {}
+    if (!snaps.length) { alert("Нет снимков для сохранения"); return; }
+    var dateStr  = new Date().toISOString().slice(0,10);
+    var filename = "ensemble_pws_snapshots_" + dateStr + ".json";
+    var blob = new Blob([JSON.stringify({ _type:"ensemble_snapshots", _source:"PWS",
+        exported_at: new Date().toISOString(), count: snaps.length, snapshots: snaps }, null, 2)],
+        {type:"application/json"});
+    var url = URL.createObjectURL(blob);
+    var a   = document.createElement("a");
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+    setImportStatus("✅ Сохранено: " + snaps.length + " снимков → " + filename, "#8bc34a");
+}
+
+function importSnapshots(file) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            var obj = JSON.parse(e.target.result);
+            var incoming = Array.isArray(obj) ? obj
+                         : (obj.snapshots ? obj.snapshots : null);
+            if (!incoming) { setImportStatus("❌ Неверный формат", "#ff6b6b"); return; }
+
+            var existing = [];
+            try { existing = JSON.parse(localStorage.getItem("ensembleSnapshots") || "[]"); } catch(ex) {}
+            var existKeys = new Set(existing.map(function(s){
+                return s.hours && s.hours[0] ? s.hours[0].time : null;
+            }).filter(Boolean));
+
+            var added = 0;
+            incoming.forEach(function(snap) {
+                var key = snap.hours && snap.hours[0] ? snap.hours[0].time : null;
+                if (!key || existKeys.has(key)) return;
+                existing.push(snap); existKeys.add(key); added++;
+            });
+            existing.sort(function(a,b){ return (a.savedAt||"") > (b.savedAt||"") ? 1 : -1; });
+            if (existing.length > 200) existing = existing.slice(existing.length - 200);
+            localStorage.setItem("ensembleSnapshots", JSON.stringify(existing));
+            setImportStatus("✅ Добавлено " + added + ". Всего: " + existing.length, "#8bc34a");
+            render();
+        } catch(ex) { setImportStatus("❌ " + ex.message, "#ff6b6b"); }
+    };
+    reader.readAsText(file);
+}
+
+function setImportStatus(msg, color) {
+    var el = document.getElementById("importStatus");
+    if (el) { el.textContent = msg; el.style.color = color || "#aaa"; }
+}
+
+function confirmClear() {
+    if (!confirm("Удалить все снимки ансамбля?\nМетрики пересчитаются с нуля.")) return;
+    EV.clearSnapshots();
+    render();
+}
+
+/* =============================================
+   КНОПКИ СТАНЦИЙ
+============================================= */
+function setStation(id) {
+    _currentStation = id;
+    document.querySelectorAll("#stationBtns button").forEach(function(b){ b.classList.remove("active"); });
+    var btn = document.getElementById("epws-st-" + id);
+    if (btn) btn.classList.add("active");
+    render();
+}
+
+(function buildStationButtons() {
+    var row = document.getElementById("stationBtns");
+
+    var allBtn = document.createElement("button");
+    allBtn.id = "epws-st-all";
+    allBtn.textContent = "Все станции";
+    allBtn.onclick = function() { setStation("all"); };
+    allBtn.classList.add("active");
+    row.appendChild(allBtn);
+
+    PWS_STATIONS.forEach(function(s) {
+        var btn = document.createElement("button");
+        btn.id = "epws-st-" + s.id;
+        btn.textContent = s.name;
+        btn.onclick = function() { setStation(s.id); };
+        row.appendChild(btn);
+    });
+})();
+
+/* =============================================
+   ГЛАВНЫЙ РЕНДЕР
+============================================= */
+async function render() {
+    var status = document.getElementById("statusLine");
+
+    if (typeof EV === "undefined") {
+        status.textContent = "❌ ensembleVerify.js не загружен";
+        return;
+    }
+
+    var snapCount = EV.getSnapshotCount();
+    status.innerHTML = "Снимков прогноза: <b>" + snapCount + "</b>";
+
+    if (!snapCount) {
+        document.getElementById("metricsGrid").innerHTML =
+            '<div style="grid-column:1/-1;color:#666;font-size:13px;padding:20px 0;">' +
+            'Снимков нет. Откройте <a href="forecast.html" style="color:#ffd166;">Прогноз → Ансамбль ⚡</a> — данные запишутся автоматически.</div>';
+        renderSnapshots();
+        return;
+    }
+
+    await initDB();
+    var result = await buildObsIndex();
+    var obsIndex  = result.obsIndex;
+    var obsCount  = result.totalRecords;
+
+    var stationLabel = _currentStation === "all"
+        ? "Все (" + PWS_STATIONS.length + " станции)"
+        : (PWS_STATIONS.find(function(s){ return s.id === _currentStation; }) || {}).name || _currentStation;
+
+    var metrics = calcMetrics(obsIndex);
+
+    _dayMetrics = calcMetricsByDay(obsIndex);
+    if (_dayMetrics && Object.keys(_dayMetrics).length) {
+        document.getElementById("chartSection").style.display = "";
+        renderChartParamRow();
+        renderChart(_activeChartParam);
+    } else {
+        document.getElementById("chartSection").style.display = "none";
+    }
+
+    renderMetrics(metrics);
+    renderCoverage(snapCount, obsCount, stationLabel);
+    renderSnapshots();
+}
+
+/* =============================================
+   СТАРТ
+============================================= */
+document.getElementById("importSnapFile").addEventListener("change", function(e) {
+    var file = e.target.files[0];
+    if (file) { importSnapshots(file); e.target.value = ""; }
+});
+
+render();
+</script>
+
+</body>
+</html>
