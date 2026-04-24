@@ -954,13 +954,15 @@ function renderModelChart(byDay) {
     if (!days.length) return;
 
     _modelChartInst = new Chart(canvas, {
-        type: "bar",
+        type: "line",
         data: {
             labels: labels,
-            datasets: [{ label: "MAE " + p.unit, data: maes, backgroundColor: p.color + "99", borderColor: p.color, borderWidth: 1 }]
+            datasets: [{ label: "MAE " + p.unit, data: maes, backgroundColor: p.color + "22",
+                borderColor: p.color, borderWidth: 2, pointRadius: 3,
+                pointBackgroundColor: p.color, tension: 0.3, fill: true, spanGaps: true }]
         },
         options: {
-            responsive: true,
+            responsive: true, animation: false,
             plugins: { legend: { display: false } },
             scales: {
                 x: { ticks: { color: "#666", font: { size: 10 } }, grid: { color: "#222" } },
