@@ -441,7 +441,7 @@ function pwsPickHourly(observations) {
             if (byHour[h].ptMin == null || pt < byHour[h].ptMin) byHour[h].ptMin = pt;
             if (byHour[h].ptMax == null || pt > byHour[h].ptMax) byHour[h].ptMax = pt;
         }
-        var gust = m.windspeedMax != null ? Math.round(m.windspeedMax / 3.6 * 10) / 10 : null;
+        var gust = m.windgustHigh != null ? Math.round(m.windgustHigh / 3.6 * 10) / 10 : null;
         if (gust != null && (byHour[h].gustMax == null || gust > byHour[h].gustMax))
             byHour[h].gustMax = gust;
     });
