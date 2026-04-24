@@ -377,6 +377,25 @@ function pwsFetchDay(stationId, dateYMD) {
         });
 }
 
+function pwsFetchCurrent(stationId) {
+    var key = pwsNextKey();
+    var url = "https://api.weather.com/v2/pws/observations/current" +
+        "?stationId=" + encodeURIComponent(stationId) +
+        "&format=json&units=m&numericPrecision=decimal" +
+        "&apiKey=" + key;
+    return fetch(url, { cache: "no-store" })
+        .then(function(r) {
+            if (r.status === 401 || r.status === 403) { pwsBumpKey(); }
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            return r.json();
+        })
+        .then(function(data) {
+            if (!data || !data.observations || !data.observations.length)
+                throw new Error("Нет данных");
+            return pwsPickHourly(data.observations);
+        });
+}
+
 function pwsPickHourly(observations) {
     var byHour = {};
     observations.forEach(function(o) {
@@ -589,7 +608,17 @@ async function syncData() {
 
             var hourlyObs;
             try {
-                hourlyObs = await pwsFetchDay(station.id, ymd);
+                if (isToday) {
+    // Сначала пробуем current (содержит данные до текущего момента)
+    try {
+        hourlyObs = await pwsFetchCurrent(station.id);
+    } catch(e) {
+        console.warn("PWS current failed, fallback to history", station.id, e);
+        hourlyObs = await pwsFetchDay(station.id, ymd);
+    }
+} else {
+    hourlyObs = await pwsFetchDay(station.id, ymd);
+}
             } catch(e) {
                 console.warn("PWS", station.id, ymd, e);
                 continue;
