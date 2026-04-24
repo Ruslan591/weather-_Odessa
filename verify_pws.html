@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<link rel="stylesheet" href="verify.css">
+<meta name="theme-color" content="#121212">
+<title>Рейтинг PWS</title>
+<script src="models.js"></script>
+<script src="modelCheck.js"></script>
+<script src="pws_stations.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<style>
+.cp-btn {
+    font-size: 11px; padding: 4px 10px; border-radius: 20px;
+    border: 1px solid #333; background: #1e1e1e; color: #666; cursor: pointer;
+}
+.cp-btn.active { background: #1e1e1e; }
+.nav a.active { color: #fff; font-weight: 600; pointer-events: none; }
+
+/* Модальное окно токена */
+#tokenModal {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8);
+    z-index: 1000; align-items: center; justify-content: center;
+}
+#tokenModal.open { display: flex; }
+#tokenBox {
+    background: #1e1e1e; border-radius: 12px; padding: 24px;
+    width: 90%; max-width: 400px;
+}
+#tokenBox h3 { margin: 0 0 12px; color: #fff; font-size: 15px; }
+#tokenBox input {
+    width: 100%; box-sizing: border-box; padding: 10px;
+    background: #111; border: 1px solid #333; border-radius: 8px;
+    color: #fff; font-size: 13px; margin-bottom: 12px;
+}
+#tokenBox .btn-row { display: flex; gap: 8px; justify-content: flex-end; }
+#tokenBox button { padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px; }
+#tokenSaveBtn { background: #2d6a4f; color: #fff; }
+#tokenClearBtn { background: #5a0000; color: #fff; }
+#tokenCancelBtn { background: #333; color: #aaa; }
+
+/* Иконка шестерёнки */
+#gearBtn {
+    position: fixed; bottom: 20px; right: 16px;
+    background: #1e1e1e; border: 1px solid #333; border-radius: 50%;
+    width: 40px; height: 40px; font-size: 18px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: #555; z-index: 100;
+}
+#gearBtn.has-token { color: #2d6a4f; border-color: #2d6a4f; }
+</style>
+<body>
+<div class="header">
+    <div class="nav">
+        <a href="index.html">ГМЦ ЧАМ</a>
+        <a href="pws.html">PWS</a>
+        <a href="forecast.html">Прогноз</a>
+        <a href="verify.html">Рейтинг ГМЦ</a>
+        <a href="ensemble_score.html">Ансамбль ГМЦ</a>
+        <a href="verify_pws.html" class="active">Рейтинг PWS</a>
+        <a href="ensemble_pws.html">Ансамбль PWS</a>
+        <a href="buildHistory.html">История</a>
+    </div>
+</div>
+
+<div class="container">
+
+<div id="lastUpdate" style="color:#aaa;font-size:0.9em;">Загрузка...</div>
+<br>
+
+<div style="text-align:center;">
+    <div class="period-group">
+        <button id="btn-24h"    onclick="setPeriod('24h')">24 часа</button>
+        <button id="btn-3d"     onclick="setPeriod('3d')">3 дня</button>
+        <button id="btn-7d"     onclick="setPeriod('7d')">7 дней</button>
+        <button id="btn-month"  onclick="setPeriod('month')">По месяцам</button>
+        <button id="btn-season" onclick="setPeriod('season')">Сезон</button>
+    </div>
+    <br>
+    <button onclick="showData()">Показать данные</button>
+    <button id="stopBtn" onclick="stopLoading()" style="display:none;background:#8b0000;">⏹ Остановить</button>
+</div>
+
+<br>
+<!-- СТАНЦИИ -->
+<div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:6px;">СТАНЦИИ</div>
+<div id="stationBtns" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;"></div>
+
+<!-- МОДЕЛИ -->
+<div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:6px;">МОДЕЛЬ</div>
+<div id="modelBtns" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;"></div>
+
+<!-- График детальный -->
+<div id="modelDetail" style="display:none;margin-bottom:16px;">
+    <div style="background:#161616;border-radius:10px;padding:10px 8px;">
+        <div id="modelDetailParamRow" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;padding:0 4px;"></div>
+        <canvas id="modelDayChart" height="160"></canvas>
+    </div>
+</div>
+
+<br><br>
+
+<div id="stickyBar">
+    <div class="tabs" id="mainTabs">
+        <button id="tab-main-btn" onclick="switchTab('main')">Рейтинг</button>
+        <button id="tab-lead-btn" onclick="switchTab('lead')">По заблаговременности</button>
+    </div>
+    <div id="monthSelector" style="display:none; overflow-x:auto; -webkit-overflow-scrolling:touch;">
+        <div class="month-btn-row" id="monthBtnRow"></div>
+    </div>
+    <div id="seasonSelector" style="display:none;">
+        <div class="period-group">
+            <button id="btn-s-winter" onclick="setSeason('winter')">Зима дек–фев</button>
+            <button id="btn-s-spring" onclick="setSeason('spring')">Весна мар–май</button>
+            <button id="btn-s-summer" onclick="setSeason('summer')">Лето июн–авг</button>
+            <button id="btn-s-autumn" onclick="setSeason('autumn')">Осень сен–ноя</button>
+        </div>
+    </div>
+</div>
+
+<div id="rating">Загрузка...</div>
+
+</div>
+
+<!-- Кнопка шестерёнки -->
+<button id="gearBtn" onclick="openTokenModal()" title="Настройки токена GitHub">⚙</button>
+
+<!-- Модальное окно токена -->
+<div id="tokenModal">
+    <div id="tokenBox">
+        <h3>🔑 GitHub токен</h3>
+        <p style="color:#888;font-size:12px;margin:0 0 12px;">Нужен для записи данных на GitHub.<br>Хранится только в вашем браузере.</p>
+        <input type="password" id="tokenInput" placeholder="github_pat_...">
+        <div class="btn-row">
+            <button id="tokenClearBtn" onclick="clearToken()">Удалить</button>
+            <button id="tokenCancelBtn" onclick="closeTokenModal()">Отмена</button>
+            <button id="tokenSaveBtn" onclick="saveToken()">Сохранить</button>
+        </div>
+    </div>
+</div>
+
+<script>
+/* =========================================================
+   КОНФИГУРАЦИЯ GITHUB
+========================================================= */
+var GITHUB_OWNER = "ruslan591";
+var GITHUB_REPO  = "weather-_Odessa";
+var GITHUB_RAW_FILE    = "data/pws_raw.json";
+var GITHUB_ERRORS_FILE = "data/pws_errors.json";
+var RAW_MAX_BYTES = 900 * 1024; // 900 КБ — порог обрезки
+
+/* =========================================================
+   СОСТОЯНИЕ
+========================================================= */
+var currentPeriod  = "7d";
+var currentParam   = "temp";
+var currentTab     = "main";
+var currentStation = "all";
+var currentModel   = "all";
+var _modelChartParam = "temp";
+var _modelChartInst  = null;
+var currentMonth   = new Date().getMonth() + 1;
+var currentSeason  = getCurrentSeason();
+var _loadAbort     = false;
+
+// В памяти: массив сырых записей и ошибок
+var _rawData    = []; // pws_raw.json
+var _errorsData = []; // pws_errors.json
+// SHA файлов на GitHub (нужны для PUT)
+var _rawSha    = null;
+var _errorsSha = null;
+
+var models = modelIds();
+
+var BIAS_THRESHOLDS = {
+    temp: 0.3, pressure: 0.3, wind: 0.5, windDir: 10, humidity: 3
+};
+var LEAD_GROUPS = [
+    { label: "0–24 ч",   min: 0,   max: 24  },
+    { label: "24–48 ч",  min: 24,  max: 48  },
+    { label: "48–72 ч",  min: 48,  max: 72  },
+    { label: "72–120 ч", min: 72,  max: 120 }
+];
+var SEASON_MONTHS = {
+    winter: [12,1,2], spring: [3,4,5], summer: [6,7,8], autumn: [9,10,11]
+};
+var SEASON_LABELS = {
+    winter: "Зима (дек–фев)", spring: "Весна (мар–май)",
+    summer: "Лето (июн–авг)", autumn: "Осень (сен–ноя)"
+};
+var MONTH_NAMES = ["Январь","Февраль","Март","Апрель","Май","Июнь",
+                   "Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+
+function getCurrentSeason() {
+    var m = new Date().getMonth() + 1;
+    if ([12,1,2].indexOf(m) >= 0) return "winter";
+    if ([3,4,5].indexOf(m)  >= 0) return "spring";
+    if ([6,7,8].indexOf(m)  >= 0) return "summer";
+    return "autumn";
+}
+
+/* =========================================================
+   ВСПОМОГАТЕЛЬНЫЕ
+========================================================= */
+function modelLabel(m) { return (typeof modelShort === "function" ? modelShort(m) : null) || m; }
+
+function setStatus(msg, spinning) {
+    var el = document.getElementById("lastUpdate");
+    el.innerHTML = '<span>' + (spinning ? '<span class="spin">⏳</span> ' : '') + msg + '</span>';
+    el.classList.remove("running");
+    requestAnimationFrame(function() { requestAnimationFrame(function() {
+        var s = el.querySelector("span");
+        if (s && s.scrollWidth > el.clientWidth) el.classList.add("running");
+    }); });
+}
+
+function windDirError(a, b) {
+    var d = Math.abs(a - b);
+    return d > 180 ? 360 - d : d;
+}
+
+function pwsTimeMonth(hourKey) {
+    // hourKey = "2026-04-01T14"
+    return parseInt(hourKey.slice(5, 7));
+}
+
+function pwsTimeYear(hourKey) {
+    return parseInt(hourKey.slice(0, 4));
+}
+
+function subtractHours(hours) {
+    return new Date(Date.now() - hours * 3600000).toISOString().slice(0, 13);
+    // "2026-04-17T10"
+}
+
+/* =========================================================
+   ТОКЕН GITHUB
+========================================================= */
+function getToken() { return localStorage.getItem("ghToken") || ""; }
+
+function saveToken() {
+    var val = document.getElementById("tokenInput").value.trim();
+    if (!val) { alert("Введите токен"); return; }
+    localStorage.setItem("ghToken", val);
+    closeTokenModal();
+    updateGearBtn();
+    setStatus("🔑 Токен сохранён. Обновляем данные...", true);
+    syncData();
+}
+
+function clearToken() {
+    localStorage.removeItem("ghToken");
+    document.getElementById("tokenInput").value = "";
+    closeTokenModal();
+    updateGearBtn();
+}
+
+function openTokenModal() {
+    document.getElementById("tokenInput").value = getToken();
+    document.getElementById("tokenModal").classList.add("open");
+}
+
+function closeTokenModal() {
+    document.getElementById("tokenModal").classList.remove("open");
+}
+
+function updateGearBtn() {
+    var btn = document.getElementById("gearBtn");
+    btn.classList.toggle("has-token", !!getToken());
+}
+
+/* =========================================================
+   GITHUB API
+========================================================= */
+function githubGet(path) {
+    var url = "https://api.github.com/repos/" + GITHUB_OWNER + "/" + GITHUB_REPO + "/contents/" + path;
+    return fetch(url, {
+        headers: { "Accept": "application/vnd.github+json" },
+        cache: "no-store"
+    }).then(function(r) {
+        if (r.status === 404) return null;
+        if (!r.ok) throw new Error("GitHub GET " + r.status);
+        return r.json();
+    });
+}
+
+function githubPut(path, contentStr, sha, message) {
+    var token = getToken();
+    if (!token) return Promise.resolve(null); // нет токена — только чтение
+    var encoded = btoa(unescape(encodeURIComponent(contentStr)));
+    var body = { message: message || "update " + path, content: encoded };
+    if (sha) body.sha = sha;
+    return fetch("https://api.github.com/repos/" + GITHUB_OWNER + "/" + GITHUB_REPO + "/contents/" + path, {
+        method: "PUT",
+        headers: {
+            "Authorization": "Bearer " + token,
+            "Content-Type": "application/json",
+            "Accept": "application/vnd.github+json"
+        },
+        body: JSON.stringify(body)
+    }).then(function(r) {
+        if (!r.ok) return r.text().then(function(t) { throw new Error("GitHub PUT " + r.status + ": " + t); });
+        return r.json();
+    });
+}
+
+async function loadGithubFile(path) {
+    // Возвращает { data: Array, sha: string } или { data: [], sha: null }
+    var resp = await githubGet(path);
+    if (!resp) return { data: [], sha: null };
+    try {
+        var content = decodeURIComponent(escape(atob(resp.content.replace(/\n/g, ""))));
+        return { data: JSON.parse(content), sha: resp.sha };
+    } catch(e) {
+        console.warn("Ошибка парсинга", path, e);
+        return { data: [], sha: resp.sha };
+    }
+}
+
+async function saveRawToGithub() {
+    var token = getToken();
+    if (!token) return;
+    // Сортируем по hourKey
+    _rawData.sort(function(a, b) { return a.hourKey.localeCompare(b.hourKey); });
+    // Обрезаем если превышен лимит
+    var str = JSON.stringify(_rawData);
+    while (str.length > RAW_MAX_BYTES && _rawData.length > 100) {
+        _rawData.splice(0, Math.ceil(_rawData.length * 0.1)); // удаляем 10% старых
+        str = JSON.stringify(_rawData);
+    }
+    var resp = await githubPut(GITHUB_RAW_FILE, str, _rawSha, "pws raw update");
+    if (resp && resp.content) _rawSha = resp.content.sha;
+}
+
+async function saveErrorsToGithub() {
+    var token = getToken();
+    if (!token) return;
+    _errorsData.sort(function(a, b) { return a.hourKey.localeCompare(b.hourKey); });
+    var str = JSON.stringify(_errorsData);
+    var resp = await githubPut(GITHUB_ERRORS_FILE, str, _errorsSha, "pws errors update");
+    if (resp && resp.content) _errorsSha = resp.content.sha;
+}
+
+/* =========================================================
+   ЗАГРУЗКА PWS
+========================================================= */
+function fetchWithTimeout(url, ms) {
+    ms = ms || 15000;
+    return Promise.race([
+        fetch(url),
+        new Promise(function(_,r){ setTimeout(function(){r(new Error("Timeout"));}, ms); })
+    ]);
+}
+
+function pwsFetchDay(stationId, dateYMD) {
+    var key = pwsNextKey();
+    var url = "https://api.weather.com/v2/pws/history/all" +
+        "?stationId=" + encodeURIComponent(stationId) +
+        "&format=json&units=m&numericPrecision=decimal" +
+        "&date=" + dateYMD +
+        "&apiKey=" + key;
+    return fetch(url, { cache: "no-store" })
+        .then(function(r) {
+            if (r.status === 401 || r.status === 403) { pwsBumpKey(); }
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            return r.json();
+        })
+        .then(function(data) {
+            if (!data || !data.observations || !data.observations.length)
+                throw new Error("Нет данных");
+            return pwsPickHourly(data.observations);
+        });
+}
+
+function pwsPickHourly(observations) {
+    var byHour = {};
+    observations.forEach(function(o) {
+        var t = new Date(o.obsTimeUtc);
+        if (isNaN(t)) return;
+        var min  = t.getUTCMinutes();
+        var dist = Math.min(min, 60 - min);
+        var roundedHour = (min >= 30)
+            ? new Date(t.getTime() + (60 - min) * 60000)
+            : new Date(t.getTime() - min * 60000);
+        var h = roundedHour.getUTCFullYear() + "-" +
+            String(roundedHour.getUTCMonth()+1).padStart(2,"0") + "-" +
+            String(roundedHour.getUTCDate()).padStart(2,"0") + "T" +
+            String(roundedHour.getUTCHours()).padStart(2,"0");
+        var m  = o.metric || {};
+        var pt = m.precipTotal != null ? m.precipTotal : null;
+        if (!byHour[h]) {
+            byHour[h] = { dist: Infinity, obs: null, ptMin: pt, ptMax: pt, gustMax: null };
+        }
+        if (dist < byHour[h].dist) {
+            byHour[h].dist = dist;
+            byHour[h].obs  = o;
+        }
+        if (pt != null) {
+            if (byHour[h].ptMin == null || pt < byHour[h].ptMin) byHour[h].ptMin = pt;
+            if (byHour[h].ptMax == null || pt > byHour[h].ptMax) byHour[h].ptMax = pt;
+        }
+        // Максимальный порыв за час
+        var gust = m.windspeedMax != null ? Math.round(m.windspeedMax / 3.6 * 10) / 10 : null;
+        if (gust != null && (byHour[h].gustMax == null || gust > byHour[h].gustMax))
+            byHour[h].gustMax = gust;
+    });
+
+    var result = [];
+    var kmhToMs = function(v) { return v != null ? Math.round(v / 3.6 * 10) / 10 : null; };
+    Object.keys(byHour).sort().forEach(function(h) {
+        var entry = byHour[h];
+        if (!entry.obs) return;
+        var o = entry.obs;
+        var m = o.metric || {};
+        var pressure = m.pressureMin != null ? m.pressureMin : (m.pressureMax != null ? m.pressureMax : null);
+        var precip = null;
+        if (entry.ptMax != null && entry.ptMin != null) {
+            precip = Math.round((entry.ptMax - entry.ptMin) * 10) / 10;
+            if (precip < 0) precip = entry.ptMax;
+        }
+        result.push({
+            hourKey:    h,
+            obsTimeUtc: o.obsTimeUtc,
+            temp:       m.tempAvg      != null ? m.tempAvg      : null,
+            humidity:   o.humidityAvg  != null ? o.humidityAvg  : null,
+            windSpeed:  kmhToMs(m.windspeedAvg),
+            windGust:   entry.gustMax,
+            windDir:    o.winddirAvg   != null ? o.winddirAvg   : null,
+            pressure:   pressure,
+            precip:     precip
+        });
+    });
+    return result;
+}
+
+function loadForecastPast(model, pastDays) {
+    var url = "https://api.open-meteo.com/v1/forecast?latitude=46.4406&longitude=30.7703" +
+        "&hourly=temperature_2m,pressure_msl,wind_speed_10m,wind_direction_10m," +
+        "wind_gusts_10m,cloud_cover,precipitation,weather_code,relative_humidity_2m" +
+        "&models=" + model +
+        "&forecast_days=1&past_days=" + pastDays +
+        "&timezone=UTC&wind_speed_unit=ms";
+    return fetchWithTimeout(url, 15000)
+        .then(function(r) { return r.json(); })
+        .then(function(d) { return d.hourly || null; });
+}
+
+function buildModelsData(forecasts, hourIndex) {
+    var modelsData = {};
+    models.forEach(function(m) {
+        var h = forecasts[m];
+        if (!h) return;
+        function getVal(arr) {
+            if (!arr || hourIndex < 0 || hourIndex >= arr.length) return null;
+            var v = arr[hourIndex];
+            return (v === null || v === undefined || isNaN(v)) ? null : v;
+        }
+        modelsData[m] = {
+            temp:     getVal(h.temperature_2m),
+            pressure: getVal(h.pressure_msl),
+            wind:     getVal(h.wind_speed_10m),
+            windGust: getVal(h.wind_gusts_10m),
+            windDir:  getVal(h.wind_direction_10m) != null
+                          ? Math.round(getVal(h.wind_direction_10m) / 10) * 10 : null,
+            humidity: getVal(h.relative_humidity_2m)
+        };
+    });
+    return modelsData;
+}
+
+function stopLoading() {
+    _loadAbort = true;
+    document.getElementById("stopBtn").style.display = "none";
+    setStatus("⏹ Остановлено");
+}
+
+/* =========================================================
+   СИНХРОНИЗАЦИЯ — главная функция
+========================================================= */
+async function syncData() {
+    _loadAbort = false;
+    document.getElementById("stopBtn").style.display = "inline-block";
+
+    // 1. Загружаем файлы с GitHub
+    setStatus("☁️ Читаем данные с GitHub...", true);
+    try {
+        var rawResp    = await loadGithubFile(GITHUB_RAW_FILE);
+        var errorsResp = await loadGithubFile(GITHUB_ERRORS_FILE);
+        _rawData    = rawResp.data;
+        _rawSha     = rawResp.sha;
+        _errorsData = errorsResp.data;
+        _errorsSha  = errorsResp.sha;
+    } catch(e) {
+        setStatus("❌ Ошибка чтения GitHub: " + e.message);
+        document.getElementById("stopBtn").style.display = "none";
+        await render();
+        return;
+    }
+
+    if (_loadAbort) { document.getElementById("stopBtn").style.display = "none"; return; }
+
+    // 2. Показываем рейтинг сразу по имеющимся данным
+    await render();
+
+    // 3. Определяем с какого момента докачивать
+    var lastHourKey = null;
+    if (_rawData.length) {
+        // Берём максимальный hourKey по всем станциям
+        _rawData.forEach(function(r) {
+            if (!lastHourKey || r.hourKey > lastHourKey) lastHourKey = r.hourKey;
+        });
+    }
+
+    var now = new Date();
+    var todayYMD = now.toISOString().slice(0,10).replace(/-/g,"");
+
+    // Определяем диапазон дат для загрузки
+    var startDate;
+    if (lastHourKey) {
+        // От дня последней записи (перегружаем этот день т.к. он мог быть неполным)
+        startDate = new Date(lastHourKey.slice(0,10) + "T00:00:00Z");
+    } else {
+        // Нет данных — грузим с начала текущего месяца
+        startDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    }
+
+    var daysSince = Math.ceil((now - startDate) / 86400000) + 1;
+
+    // Строим список дат
+    var dates = [];
+    for (var d = new Date(startDate); d <= now; d.setUTCDate(d.getUTCDate() + 1)) {
+        dates.push(d.toISOString().slice(0,10).replace(/-/g,""));
+    }
+
+    // Строим Set существующих ключей (hourKey + stationId)
+    var existKeys = new Set(_rawData.map(function(r) { return r.hourKey + "|" + r.stationId; }));
+    // Для не-сегодняшних дней — Set по дате+станции
+    var existDays = new Set(_rawData.map(function(r) { return r.hourKey.slice(0,10).replace(/-/g,"") + r.stationId; }));
+
+    // 4. Загружаем модели
+    if (_loadAbort) { document.getElementById("stopBtn").style.display = "none"; return; }
+    setStatus("🌐 Загрузка моделей...", true);
+    var forecasts = {};
+    for (var mi = 0; mi < models.length; mi++) {
+        if (_loadAbort) { document.getElementById("stopBtn").style.display = "none"; return; }
+        try { forecasts[models[mi]] = await loadForecastPast(models[mi], daysSince); }
+        catch(e) { console.warn("Модель", models[mi], e); }
+    }
+
+    var timeArr = null;
+    for (var mi2 = 0; mi2 < models.length; mi2++) {
+        if (forecasts[models[mi2]] && forecasts[models[mi2]].time) {
+            timeArr = forecasts[models[mi2]].time; break;
+        }
+    }
+    if (!timeArr) {
+        setStatus("❌ Нет данных моделей");
+        document.getElementById("stopBtn").style.display = "none";
+        return;
+    }
+
+    var timeIndex = {};
+    timeArr.forEach(function(t, i) { timeIndex[t.slice(0,13)] = i; });
+
+    // 5. Загружаем PWS и формируем новые записи
+    var newRaw    = [];
+    var newErrors = [];
+    var added = 0, skipped = 0;
+
+    for (var si = 0; si < PWS_STATIONS.length; si++) {
+        if (_loadAbort) break;
+        var station = PWS_STATIONS[si];
+        setStatus("📡 " + station.name + " (" + (si+1) + "/" + PWS_STATIONS.length + ")...", true);
+
+        for (var di = 0; di < dates.length; di++) {
+            if (_loadAbort) break;
+            var ymd     = dates[di];
+            var isToday = ymd === todayYMD;
+            var dayKey  = ymd + station.id;
+
+            if (!isToday && existDays.has(dayKey)) continue;
+
+            if (di > 0 || si > 0) await new Promise(function(r){ setTimeout(r, 400); });
+
+            var hourlyObs;
+            try {
+                hourlyObs = await pwsFetchDay(station.id, ymd);
+            } catch(e) {
+                console.warn("PWS", station.id, ymd, e);
+                continue;
+            }
+
+            hourlyObs.forEach(function(obs) {
+                var hk  = obs.hourKey;
+                var key = hk + "|" + station.id;
+
+                // Для сегодня перезаписываем, для прошлых — пропускаем дубли
+                if (!isToday && existKeys.has(key)) return;
+
+                var hourIndex = timeIndex[hk];
+                if (hourIndex === undefined) { skipped++; return; }
+
+                var modelsSnap = buildModelsData(forecasts, hourIndex);
+
+                var pressure = obs.pressure != null
+                    ? Math.round((obs.pressure + station.pressureOffset) * 100) / 100
+                    : null;
+
+                // Запись в pws_raw.json
+                newRaw.push({
+                    hourKey:    hk,
+                    stationId:  station.id,
+                    obsTimeUtc: obs.obsTimeUtc,
+                    temp:       obs.temp,
+                    pressure:   pressure,
+                    wind:       obs.windSpeed,
+                    windGust:   obs.windGust,
+                    windDir:    obs.windDir,
+                    humidity:   obs.humidity,
+                    precip:     obs.precip
+                });
+
+                // Запись в pws_errors.json — ошибки (прогноз − факт)
+                var errEntry = {
+                    hourKey:   hk,
+                    stationId: station.id,
+                    fh:        hourIndex
+                };
+                models.forEach(function(m) {
+                    var mod = modelsSnap[m];
+                    if (!mod) return;
+                    function diff(modVal, obsVal) {
+                        if (modVal == null || obsVal == null) return null;
+                        return Math.round((modVal - obsVal) * 100) / 100;
+                    }
+                    function diffDir(modVal, obsVal) {
+                        if (modVal == null || obsVal == null) return null;
+                        var d = modVal - obsVal;
+                        if (d > 180) d -= 360;
+                        if (d < -180) d += 360;
+                        return Math.round(d);
+                    }
+                    errEntry[m] = {
+                        temp:     diff(mod.temp,     obs.temp),
+                        pressure: diff(mod.pressure, pressure),
+                        wind:     diff(mod.wind,     obs.windSpeed),
+                        windGust: diff(mod.windGust, obs.windGust),
+                        windDir:  diffDir(mod.windDir, obs.windDir),
+                        humidity: diff(mod.humidity, obs.humidity)
+                    };
+                });
+                newErrors.push(errEntry);
+                added++;
+            });
+        }
+    }
+
+    document.getElementById("stopBtn").style.display = "none";
+
+    if (!added && !skipped) {
+        setStatus("✅ Данные актуальны · записей: " + _rawData.length);
+        return;
+    }
+
+    if (!added) {
+        setStatus("⚠️ Пропущено: " + skipped + " (нет совпадения с сеткой модели)");
+        return;
+    }
+
+    // 6. Обновляем данные в памяти
+    // Для сегодняшнего дня — удаляем старые записи и заменяем новыми
+    var todayHourKeyPrefix = now.toISOString().slice(0,10); // "2026-04-24"
+    _rawData = _rawData.filter(function(r) {
+        return !(r.hourKey.startsWith(todayHourKeyPrefix) &&
+                 newRaw.some(function(n){ return n.hourKey === r.hourKey && n.stationId === r.stationId; }));
+    });
+    _errorsData = _errorsData.filter(function(r) {
+        return !(r.hourKey.startsWith(todayHourKeyPrefix) &&
+                 newErrors.some(function(n){ return n.hourKey === r.hourKey && n.stationId === r.stationId; }));
+    });
+    newRaw.forEach(function(r)    { _rawData.push(r); });
+    newErrors.forEach(function(r) { _errorsData.push(r); });
+
+    // 7. Сохраняем на GitHub (только если есть токен)
+    if (getToken()) {
+        setStatus("💾 Сохраняем на GitHub...", true);
+        try {
+            await saveRawToGithub();
+            await saveErrorsToGithub();
+            setStatus("✅ Добавлено: " + added + " · пропущено: " + skipped + " · всего: " + _rawData.length);
+        } catch(e) {
+            setStatus("⚠️ Добавлено: " + added + " · ошибка записи GitHub: " + e.message);
+        }
+    } else {
+        setStatus("✅ Добавлено: " + added + " (только чтение — токен не задан) · всего: " + _rawData.length);
+    }
+
+    await render();
+}
+
+/* =========================================================
+   ФИЛЬТРАЦИЯ
+========================================================= */
+function getObsIndex() {
+    // hourKey+stationId → rawRecord
+    var idx = {};
+    _rawData.forEach(function(r) { idx[r.hourKey + "|" + r.stationId] = r; });
+    return idx;
+}
+
+function filterErrors() {
+    var result = _errorsData;
+    if (currentStation !== "all")
+        result = result.filter(function(d){ return d.stationId === currentStation; });
+
+    if (currentPeriod === "24h" || currentPeriod === "3d" || currentPeriod === "7d") {
+        var hours  = { "24h": 24, "3d": 72, "7d": 168 }[currentPeriod];
+        var cutoff = subtractHours(hours);
+        result = result.filter(function(d){ return d.hourKey >= cutoff; });
+    } else if (currentPeriod === "month") {
+        result = result.filter(function(d){ return pwsTimeMonth(d.hourKey) === currentMonth; });
+    } else if (currentPeriod === "season") {
+        var months = SEASON_MONTHS[currentSeason];
+        result = result.filter(function(d){ return months.indexOf(pwsTimeMonth(d.hourKey)) >= 0; });
+    }
+    return result;
+}
+
+/* =========================================================
+   ВЫЧИСЛЕНИЕ РЕЙТИНГА из pws_errors.json
+========================================================= */
+var MODEL_PARAMS = [
+    { key:"temp",     label:"Температура",    unit:"°C",  color:"#ff8f00" },
+    { key:"pressure", label:"Давление",       unit:"гПа", color:"#4aa3ff" },
+    { key:"wind",     label:"Ветер",          unit:"м/с", color:"#8bc34a" },
+    { key:"windGust", label:"Порывы",         unit:"м/с", color:"#ff5722" },
+    { key:"windDir",  label:"Направление",    unit:"°",   color:"#74b9ff" },
+    { key:"humidity", label:"Влажность",      unit:"%",   color:"#00bcd4" }
+];
+
+function computeRatingFromErrors(errorsFiltered) {
+    // errors[model][param] = { abs:[], raw:[] }
+    var acc = {};
+    models.forEach(function(m) {
+        acc[m] = {};
+        MODEL_PARAMS.forEach(function(p) { acc[m][p.key] = { abs: [], raw: [] }; });
+    });
+
+    errorsFiltered.forEach(function(entry) {
+        models.forEach(function(m) {
+            var e = entry[m];
+            if (!e) return;
+            MODEL_PARAMS.forEach(function(p) {
+                var v = e[p.key];
+                if (v == null) return;
+                acc[m][p.key].abs.push(Math.abs(v));
+                acc[m][p.key].raw.push(v);
+            });
+        });
+    });
+
+    function avg(arr) { return arr.length ? arr.reduce(function(a,b){return a+b;},0)/arr.length : null; }
+
+    // Для каждого параметра — рейтинг моделей по MAE
+    var result = {};
+    MODEL_PARAMS.forEach(function(p) {
+        result[p.key] = models.map(function(m) {
+            var a = acc[m][p.key];
+            return {
+                model: m,
+                avg:   avg(a.abs),
+                bias:  avg(a.raw),
+                n:     a.abs.length
+            };
+        }).sort(function(a, b) {
+            if (a.avg == null) return 1;
+            if (b.avg == null) return -1;
+            return a.avg - b.avg;
+        });
+    });
+
+    // Итоговый — взвешенная сумма нормированных MAE
+    var maxes = {};
+    MODEL_PARAMS.forEach(function(p) {
+        var vals = models.map(function(m) { return avg(acc[m][p.key].abs); }).filter(function(v){ return v != null; });
+        maxes[p.key] = vals.length ? Math.max.apply(null, vals) : 1;
+    });
+    var weights = { temp: 2.0, pressure: 1.5, wind: 1.5, windGust: 1.0, windDir: 1.0, humidity: 0.5 };
+    var totalR = models.map(function(m) {
+        var score = 0;
+        MODEL_PARAMS.forEach(function(p) {
+            var a = avg(acc[m][p.key].abs);
+            if (a == null) return;
+            score += (a / (maxes[p.key] || 1)) * (weights[p.key] || 1);
+        });
+        return { model: m, value: score };
+    }).sort(function(a, b) { return a.value - b.value; });
+
+    result.total = totalR;
+    result.acc   = acc; // для детального графика
+    return result;
+}
+
+/* =========================================================
+   ДЕТАЛЬНЫЙ ВИД МОДЕЛИ
+========================================================= */
+function computeModelByDay(modelId, errorsFiltered) {
+    var byDay = {};
+    errorsFiltered.forEach(function(entry) {
+        var e = entry[modelId];
+        if (!e) return;
+        var day = entry.hourKey.slice(0, 10); // "2026-04-22"
+        if (!byDay[day]) {
+            byDay[day] = {};
+            MODEL_PARAMS.forEach(function(p) { byDay[day][p.key] = []; });
+        }
+        MODEL_PARAMS.forEach(function(p) {
+            var v = e[p.key];
+            if (v != null) byDay[day][p.key].push(v);
+        });
+    });
+    return byDay;
+}
+
+function calcModelStat(arr) {
+    if (!arr.length) return null;
+    var mae  = arr.reduce(function(s,v){ return s + Math.abs(v); }, 0) / arr.length;
+    var bias = arr.reduce(function(s,v){ return s + v; }, 0) / arr.length;
+    var rmse = Math.sqrt(arr.reduce(function(s,v){ return s + v*v; }, 0) / arr.length);
+    return { mae: mae, bias: bias, rmse: rmse, n: arr.length };
+}
+
+function renderModelDetail(errorsFiltered) {
+    var detail = document.getElementById("modelDetail");
+    if (currentModel === "all") { detail.style.display = "none"; return; }
+    detail.style.display = "";
+
+    var rating = computeRatingFromErrors(errorsFiltered);
+    var acc    = rating.acc[currentModel];
+    var byDay  = computeModelByDay(currentModel, errorsFiltered);
+
+    var cardsHtml = '<div class="model-detail-cards" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">';
+    MODEL_PARAMS.forEach(function(p) {
+        var st = calcModelStat(acc[p.key].raw);
+        var biasCol = "#aaa";
+        var thr = BIAS_THRESHOLDS[p.key] || 0.3;
+        if (st && st.bias >  thr) biasCol = "#e57373";
+        if (st && st.bias < -thr) biasCol = "#64b5f6";
+        cardsHtml += '<div style="background:#1a1a1a;border-radius:8px;padding:10px 12px;">' +
+            '<div style="font-size:11px;color:#555;margin-bottom:4px;">' + p.label + '</div>' +
+            (st
+                ? '<div style="font-size:18px;font-weight:800;color:' + p.color + ';">' + st.mae.toFixed(2) + ' ' + p.unit + '</div>' +
+                  '<div style="font-size:11px;color:#666;">bias <span style="color:' + biasCol + ';">' +
+                  (st.bias >= 0 ? "+" : "") + st.bias.toFixed(2) + '</span> · n=' + st.n + '</div>'
+                : '<div style="color:#444;">—</div>'
+            ) + '</div>';
+    });
+    cardsHtml += '</div>';
+
+    var paramRowHtml = MODEL_PARAMS.map(function(p) {
+        var isActive = p.key === _modelChartParam;
+        return '<button class="cp-btn' + (isActive ? ' active' : '') + '"' +
+            (isActive ? ' style="border-color:' + p.color + ';color:' + p.color + ';"' : '') +
+            ' onclick="setModelChartParam(\'' + p.key + '\')">' + p.label + '</button>';
+    }).join("");
+
+    var inner    = detail.firstElementChild;
+    var paramRow = document.getElementById("modelDetailParamRow");
+    var old = inner.querySelectorAll(".model-detail-cards");
+    for (var i = 0; i < old.length; i++) old[i].remove();
+    var tmpDiv = document.createElement("div");
+    tmpDiv.innerHTML = cardsHtml;
+    inner.insertBefore(tmpDiv.firstElementChild, paramRow);
+    paramRow.innerHTML = paramRowHtml;
+
+    renderModelChart(byDay);
+}
+
+function setModelChartParam(p) {
+    _modelChartParam = p;
+    document.querySelectorAll("#modelDetailParamRow .cp-btn").forEach(function(b, i) {
+        var mp = MODEL_PARAMS[i];
+        b.classList.toggle("active", mp.key === p);
+        b.style.borderColor = mp.key === p ? mp.color : "";
+        b.style.color       = mp.key === p ? mp.color : "";
+    });
+    var ef = filterErrors();
+    renderModelChart(computeModelByDay(currentModel, ef));
+}
+
+function renderModelChart(byDay) {
+    var p = MODEL_PARAMS.filter(function(x){ return x.key === _modelChartParam; })[0] || MODEL_PARAMS[0];
+    var days = Object.keys(byDay).sort();
+    var maes = days.map(function(day) {
+        var arr = byDay[day][p.key];
+        if (!arr.length) return null;
+        return arr.reduce(function(s,v){ return s + Math.abs(v); }, 0) / arr.length;
+    });
+    var labels = days.map(function(d) { return d.slice(8,10) + "." + d.slice(5,7); });
+
+    var canvas = document.getElementById("modelDayChart");
+    if (_modelChartInst) { _modelChartInst.destroy(); _modelChartInst = null; }
+    if (!days.length) return;
+
+    _modelChartInst = new Chart(canvas, {
+        type: "bar",
+        data: {
+            labels: labels,
+            datasets: [{ label: "MAE " + p.unit, data: maes, backgroundColor: p.color + "99", borderColor: p.color, borderWidth: 1 }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { ticks: { color: "#666", font: { size: 10 } }, grid: { color: "#222" } },
+                y: { ticks: { color: "#666", font: { size: 10 } }, grid: { color: "#222" }, beginAtZero: true }
+            }
+        }
+    });
+}
+
+/* =========================================================
+   РЕНДЕР
+========================================================= */
+function makeCard(title, data, unit, param) {
+    var thr  = (param && BIAS_THRESHOLDS[param] != null) ? BIAS_THRESHOLDS[param] : 0.3;
+    var html = '<div class="rating-card"><h3>' + title + '</h3>';
+    data.forEach(function(r, i) {
+        var col = "#aaa";
+        if (r.bias != null) col = r.bias > thr ? "#e57373" : (r.bias < -thr ? "#64b5f6" : "#aaa");
+        var val = r.avg != null
+            ? '<span style="color:'+col+'">'+r.avg.toFixed(2)+" "+unit+"</span>"
+            : "—";
+        html += '<div class="row"><div>'+(i+1)+". "+modelLabel(r.model)+"</div>"+
+                "<div>"+val+' <span style="color:#444;font-size:0.8em">n='+r.n+"</span></div></div>";
+    });
+    return html + "</div>";
+}
+
+function makeTotalCard(data) {
+    var html = '<div class="rating-card"><h3>Итоговый рейтинг</h3>';
+    data.forEach(function(r,i) {
+        html += '<div class="row"><div>'+(i+1)+". "+modelLabel(r.model)+"</div><div>"+r.value.toFixed(3)+"</div></div>";
+    });
+    return html + "</div>";
+}
+
+function renderLeadTab(errorsFiltered) {
+    if (!errorsFiltered.length) return '<div style="color:#666;padding:16px 0;font-size:0.9em">Данные накапливаются.</div>';
+    var hasLead = errorsFiltered.some(function(d){ return d.fh != null; });
+    if (!hasLead) return '<div style="color:#666;padding:16px 0;font-size:0.9em">Данные накапливаются.</div>';
+
+    var html = "";
+    LEAD_GROUPS.forEach(function(g) {
+        var subset = errorsFiltered.filter(function(d){
+            return d.fh != null && d.fh >= g.min && d.fh < g.max;
+        });
+        html += '<div class="lead-section"><h4>' + g.label + " — " + subset.length + " зап.</h4>";
+        if (subset.length < 5) { html += '<div style="color:#555;font-size:0.85em">Мало данных</div></div>'; return; }
+        var rating = computeRatingFromErrors(subset);
+        rating.total.forEach(function(r,i) {
+            html += '<div class="row"><div>'+(i+1)+". "+modelLabel(r.model)+"</div><div>"+r.value.toFixed(3)+"</div></div>';
+        });
+        html += "</div>";
+    });
+    return html;
+}
+
+async function render() {
+    var el = document.getElementById("rating");
+    var ef = filterErrors();
+
+    var periodTitle = {
+        "24h":    "24 часа",
+        "3d":     "3 дня",
+        "7d":     "7 дней",
+        "month":  MONTH_NAMES[currentMonth-1] + " — все годы",
+        "season": SEASON_LABELS[currentSeason]
+    }[currentPeriod] || "";
+
+    var stLabel = currentStation === "all" ? "Все станции" :
+        (PWS_STATIONS.find(function(s){ return s.id === currentStation; }) || {}).name || currentStation;
+
+    if (!ef.length) {
+        el.innerHTML = '<div style="color:#666;padding:16px 0">' + periodTitle + " · " + stLabel + " — нет данных</div>";
+        renderModelDetail(ef);
+        return;
+    }
+
+    var html = '<div style="margin-bottom:12px"><b>' + periodTitle + "</b>" +
+               '<span style="color:#888;font-size:0.85em;margin-left:8px">' + stLabel + "</span>" +
+               '<span style="color:#555;font-size:0.85em;margin-left:8px">записей: ' + ef.length + "</span></div>";
+
+    renderModelDetail(ef);
+
+    if (currentTab === "main") {
+        var rating = computeRatingFromErrors(ef);
+        html += makeCard("Температура",       rating.temp,     "°C",  "temp");
+        html += makeCard("Давление",          rating.pressure, "гПа", "pressure");
+        html += makeCard("Ветер",             rating.wind,     "м/с", "wind");
+        html += makeCard("Порывы",            rating.windGust, "м/с", "windGust");
+        html += makeCard("Направление ветра", rating.windDir,  "°",   "windDir");
+        html += makeCard("Влажность",         rating.humidity, "%",   "humidity");
+        html += makeTotalCard(rating.total);
+    } else {
+        html += renderLeadTab(ef);
+    }
+
+    el.innerHTML = html;
+}
+
+/* =========================================================
+   ПОКАЗАТЬ ДАННЫЕ
+========================================================= */
+async function showData() {
+    var sorted = _rawData.slice().sort(function(a,b){ return b.hourKey.localeCompare(a.hourKey); });
+    var html = "<h3>Записи pws_raw: " + sorted.length + "</h3>";
+    if (!sorted.length) { document.getElementById("rating").innerHTML = html + "Нет данных"; return; }
+
+    // Берём ошибки в индекс для быстрого поиска
+    var errIdx = {};
+    _errorsData.forEach(function(e) { errIdx[e.hourKey + "|" + e.stationId] = e; });
+
+    sorted.forEach(function(r) {
+        var pwsDisp   = r.obsTimeUtc || "—";
+        var modelDisp = r.hourKey + ":00 UTC";
+        var errEntry  = errIdx[r.hourKey + "|" + r.stationId];
+
+        html += '<br><b>PWS: ' + pwsDisp + '</b><br>';
+        html += 'Модель: ' + modelDisp;
+        html += ' &nbsp; fh=' + (errEntry ? errEntry.fh : "—");
+        html += ' &nbsp; <small style="color:#888">' + r.stationId + '</small><br>';
+        html += 'T=' + r.temp + ' P=' + r.pressure + ' W=' + r.wind +
+                ' Gust=' + (r.windGust != null ? r.windGust : '<span style="color:#f44">null</span>') +
+                ' Wd=' + r.windDir +
+                ' Hum=' + (r.humidity != null ? r.humidity + '%' : '<span style="color:#f44">null</span>') +
+                ' Pr=' + (r.precip != null ? r.precip + 'мм' : '<span style="color:#f44">null</span>') + '<br>';
+
+        if (errEntry) {
+            html += '<table style="font-size:0.78em;border-collapse:collapse;width:100%">';
+            html += '<tr style="color:#666"><td>Модель</td><td>ΔT</td><td>ΔP</td><td>ΔW</td><td>ΔGust</td><td>ΔWd</td><td>ΔHum</td></tr>';
+            models.forEach(function(m) {
+                var e = errEntry[m];
+                if (!e) return;
+                function fmt(v) { return v != null ? (v >= 0 ? "+" : "") + v : '<span style="color:#f44">—</span>'; }
+                html += '<tr><td>' + modelLabel(m) + '</td>' +
+                    '<td>' + fmt(e.temp) + '</td><td>' + fmt(e.pressure) + '</td>' +
+                    '<td>' + fmt(e.wind) + '</td><td>' + fmt(e.windGust) + '</td>' +
+                    '<td>' + fmt(e.windDir) + '</td><td>' + fmt(e.humidity) + '</td></tr>';
+            });
+            html += '</table>';
+        }
+        html += '<hr>';
+    });
+    document.getElementById("rating").innerHTML = html;
+}
+
+/* =========================================================
+   УПРАВЛЕНИЕ КНОПКАМИ
+========================================================= */
+function setActivePeriod(p) {
+    ["24h","3d","7d","month","season"].forEach(function(id) {
+        var btn = document.getElementById("btn-"+id);
+        if (btn) btn.classList.toggle("active", id === p);
+    });
+    document.getElementById("monthSelector").style.display  = p === "month"  ? "block" : "none";
+    document.getElementById("seasonSelector").style.display = p === "season" ? "block" : "none";
+}
+
+function setPeriod(p) { currentPeriod = p; setActivePeriod(p); render(); }
+
+function setSeason(s) {
+    currentSeason = s;
+    ["winter","spring","summer","autumn"].forEach(function(id) {
+        var btn = document.getElementById("btn-s-"+id);
+        if (btn) btn.classList.toggle("active", id === s);
+    });
+    render();
+}
+
+function switchTab(tab) {
+    currentTab = tab;
+    ["main","lead"].forEach(function(id) {
+        var btn = document.getElementById("tab-"+id+"-btn");
+        if (btn) btn.classList.toggle("active", id === tab);
+    });
+    render();
+}
+
+function setStation(id) {
+    currentStation = id;
+    document.querySelectorAll("#stationBtns button").forEach(function(b){ b.classList.remove("active"); });
+    var btn = document.getElementById("stbtn-" + id);
+    if (btn) btn.classList.add("active");
+    render();
+}
+
+function setModel(id) {
+    currentModel = id;
+    document.querySelectorAll("#modelBtns button").forEach(function(b){ b.classList.remove("active"); });
+    var btn = document.getElementById("mbtn-" + id);
+    if (btn) btn.classList.add("active");
+    if (id !== "all") currentTab = "main";
+    render();
+}
+
+(function buildStationButtons() {
+    var row = document.getElementById("stationBtns");
+    var allBtn = document.createElement("button");
+    allBtn.id = "stbtn-all"; allBtn.textContent = "Все";
+    allBtn.onclick = function() { setStation("all"); };
+    allBtn.classList.add("active");
+    row.appendChild(allBtn);
+    PWS_STATIONS.forEach(function(s) {
+        var btn = document.createElement("button");
+        btn.id = "stbtn-" + s.id; btn.textContent = s.name;
+        btn.onclick = function() { setStation(s.id); };
+        row.appendChild(btn);
+    });
+})();
+
+(function buildModelButtons() {
+    var row = document.getElementById("modelBtns");
+    var allBtn = document.createElement("button");
+    allBtn.id = "mbtn-all"; allBtn.textContent = "Все модели";
+    allBtn.onclick = function() { setModel("all"); };
+    allBtn.classList.add("active");
+    row.appendChild(allBtn);
+    models.forEach(function(m) {
+        var btn = document.createElement("button");
+        btn.id = "mbtn-" + m; btn.textContent = modelLabel(m);
+        btn.onclick = function() { setModel(m); };
+        row.appendChild(btn);
+    });
+})();
+
+(function buildMonthButtons() {
+    var row = document.getElementById("monthBtnRow");
+    MONTH_NAMES.forEach(function(name, i) {
+        var btn = document.createElement("button");
+        btn.id = "btn-m-" + (i+1); btn.textContent = name;
+        btn.onclick = function() { selectMonth(i+1); };
+        row.appendChild(btn);
+    });
+})();
+
+function selectMonth(m) {
+    currentMonth = m;
+    document.querySelectorAll("#monthBtnRow button").forEach(function(b){ b.classList.remove("active"); });
+    var btn = document.getElementById("btn-m-" + m);
+    if (btn) { btn.classList.add("active"); btn.scrollIntoView({behavior:"smooth",block:"nearest",inline:"center"}); }
+    render();
+}
+
+function updateHeaderOffset() {
+    var h = document.querySelector(".header").offsetHeight;
+    document.documentElement.style.setProperty("--header-h", h+"px");
+    var t = document.getElementById("mainTabs").offsetHeight;
+    document.documentElement.style.setProperty("--tabs-h", t+"px");
+}
+
+/* =========================================================
+   СТАРТ
+========================================================= */
+selectMonth(currentMonth);
+setActivePeriod("7d");
+updateHeaderOffset();
+window.addEventListener("resize", updateHeaderOffset);
+updateGearBtn();
+
+// Запускаем синхронизацию при загрузке страницы
+syncData();
+</script>
+</body>
+</html>
