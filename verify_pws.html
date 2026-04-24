@@ -379,17 +379,16 @@ function pwsFetchDay(stationId, dateYMD) {
 
 function pwsFetchCurrent(stationId) {
     var key = pwsNextKey();
-    var url =
-        `https://api.weather.com/v2/pws/observations/all/1day` +
-        `?stationId=${encodeURIComponent(stationId)}` +
-        `&format=json&units=m&numericPrecision=decimal` +
-        `&apiKey=${WU_KEYS[0]}`;
+    var url = "https://api.weather.com/v2/pws/observations/all/1day" +
+        "?stationId=" + encodeURIComponent(stationId) +
+        "&format=json&units=m&numericPrecision=decimal" +
+        "&apiKey=" + key;
     return fetch(url, { cache: "no-store" })
         .then(function(r) {
             if (r.status === 401 || r.status === 403) { pwsBumpKey(); }
             if (!r.ok) throw new Error("HTTP " + r.status);
             return r.json();
-        })
+        }) 
         .then(function(data) {
             if (!data || !data.observations || !data.observations.length)
                 throw new Error("Нет данных");
