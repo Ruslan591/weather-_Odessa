@@ -1047,45 +1047,77 @@ async function render() {
    ПОКАЗАТЬ ДАННЫЕ
 ========================================================= */
 async function showData() {
-    var sorted = _rawData.slice().sort(function(a,b){ return b.hourKey.localeCompare(a.hourKey); });
-    var html = "<h3>Записи pws_raw: " + sorted.length + "</h3>";
-    if (!sorted.length) { document.getElementById("rating").innerHTML = html + "Нет данных"; return; }
+    var html = "<h3>Записи pws_raw: " + _rawData.length + "</h3>";
+    if (!_rawData.length) { document.getElementById("rating").innerHTML = html + "Нет данных"; return; }
 
-    // Берём ошибки в индекс для быстрого поиска
+    // Индекс ошибок
     var errIdx = {};
     _errorsData.forEach(function(e) { errIdx[e.hourKey + "|" + e.stationId] = e; });
 
-    sorted.forEach(function(r) {
-        var pwsDisp   = r.obsTimeUtc || "—";
-        var modelDisp = r.hourKey + ":00 UTC";
-        var errEntry  = errIdx[r.hourKey + "|" + r.stationId];
-
-        html += '<br><b>PWS: ' + pwsDisp + '</b><br>';
-        html += 'Модель: ' + modelDisp;
-        html += ' &nbsp; fh=' + (errEntry ? errEntry.fh : "—");
-        html += ' &nbsp; <small style="color:#888">' + r.stationId + '</small><br>';
-        html += 'T=' + r.temp + ' P=' + r.pressure + ' W=' + r.wind +
-                ' Gust=' + (r.windGust != null ? r.windGust : '<span style="color:#f44">null</span>') +
-                ' Wd=' + r.windDir +
-                ' Hum=' + (r.humidity != null ? r.humidity + '%' : '<span style="color:#f44">null</span>') +
-                ' Pr=' + (r.precip != null ? r.precip + 'мм' : '<span style="color:#f44">null</span>') + '<br>';
-
-        if (errEntry) {
-            html += '<table style="font-size:0.78em;border-collapse:collapse;width:100%">';
-            html += '<tr style="color:#666"><td>Модель</td><td>ΔT</td><td>ΔP</td><td>ΔW</td><td>ΔGust</td><td>ΔWd</td><td>ΔHum</td></tr>';
-            models.forEach(function(m) {
-                var e = errEntry[m];
-                if (!e) return;
-                function fmt(v) { return v != null ? (v >= 0 ? "+" : "") + v : '<span style="color:#f44">—</span>'; }
-                html += '<tr><td>' + modelLabel(m) + '</td>' +
-                    '<td>' + fmt(e.temp) + '</td><td>' + fmt(e.pressure) + '</td>' +
-                    '<td>' + fmt(e.wind) + '</td><td>' + fmt(e.windGust) + '</td>' +
-                    '<td>' + fmt(e.windDir) + '</td><td>' + fmt(e.humidity) + '</td></tr>';
-            });
-            html += '</table>';
-        }
-        html += '<hr>';
+    // Группируем по hourKey
+    var byHour = {};
+    _rawData.forEach(function(r) {
+        if (!byHour[r.hourKey]) byHour[r.hourKey] = {};
+        byHour[r.hourKey][r.stationId] = r;
     });
+
+    var hours = Object.keys(byHour).sort().reverse();
+    var stations = PWS_STATIONS;
+
+    hours.forEach(function(hk) {
+        var stMap = byHour[hk];
+        var presentStations = stations.filter(function(s) { return stMap[s.id]; });
+        if (!presentStations.length) return;
+
+        // Берём fh из первой доступной станции
+        var anyErr = errIdx[hk + "|" + presentStations[0].id];
+        var fh = anyErr ? anyErr.fh : "—";
+
+        html += '<div style="margin:16px 0 4px"><b>' + hk + ':00 UTC</b>';
+        html += ' <span style="color:#888;font-size:0.85em">fh=' + fh + '</span></div>';
+
+        // Таблица: строки = станции, столбцы = параметры + ошибки моделей
+        html += '<table style="font-size:0.78em;border-collapse:collapse;width:100%">';
+        html += '<tr style="color:#555"><td>Станция</td><td>T</td><td>P</td><td>W</td><td>Wd</td><td>Hum</td></tr>';
+
+        presentStations.forEach(function(s) {
+            var r = stMap[s.id];
+            html += '<tr><td style="color:#888">' + s.name + '</td>' +
+                '<td>' + (r.temp != null ? r.temp : '—') + '</td>' +
+                '<td>' + (r.pressure != null ? r.pressure : '—') + '</td>' +
+                '<td>' + (r.wind != null ? r.wind : '—') + '</td>' +
+                '<td>' + (r.windDir != null ? r.windDir : '—') + '</td>' +
+                '<td>' + (r.humidity != null ? r.humidity : '—') + '</td></tr>';
+        });
+        html += '</table>';
+
+        // Ошибки моделей — усреднённые по станциям
+        html += '<table style="font-size:0.78em;border-collapse:collapse;width:100%;margin-top:4px">';
+        html += '<tr style="color:#555"><td>Модель</td><td>ΔT</td><td>ΔP</td><td>ΔW</td><td>ΔWd</td><td>ΔHum</td></tr>';
+        models.forEach(function(m) {
+            var vals = { temp:[], pressure:[], wind:[], windDir:[], humidity:[] };
+            presentStations.forEach(function(s) {
+                var e = errIdx[hk + "|" + s.id];
+                if (!e || !e[m]) return;
+                ['temp','pressure','wind','windDir','humidity'].forEach(function(p) {
+                    if (e[m][p] != null) vals[p].push(e[m][p]);
+                });
+            });
+            function avg(arr) {
+                if (!arr.length) return null;
+                return Math.round(arr.reduce(function(a,b){return a+b;},0) / arr.length * 10) / 10;
+            }
+            function fmt(v) { return v != null ? (v >= 0 ? "+" : "") + v : '—'; }
+            html += '<tr><td>' + modelLabel(m) + '</td>' +
+                '<td>' + fmt(avg(vals.temp)) + '</td>' +
+                '<td>' + fmt(avg(vals.pressure)) + '</td>' +
+                '<td>' + fmt(avg(vals.wind)) + '</td>' +
+                '<td>' + fmt(avg(vals.windDir)) + '</td>' +
+                '<td>' + fmt(avg(vals.humidity)) + '</td></tr>';
+        });
+        html += '</table><hr style="border-color:#222;margin:8px 0">';
+    });
+
     document.getElementById("rating").innerHTML = html;
 }
 
