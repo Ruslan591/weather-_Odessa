@@ -379,10 +379,11 @@ function pwsFetchDay(stationId, dateYMD) {
 
 function pwsFetchCurrent(stationId) {
     var key = pwsNextKey();
-    var url = "https://api.weather.com/v2/pws/observations/current" +
-        "?stationId=" + encodeURIComponent(stationId) +
-        "&format=json&units=m&numericPrecision=decimal" +
-        "&apiKey=" + key;
+    var url =
+        `https://api.weather.com/v2/pws/observations/all/1day` +
+        `?stationId=${encodeURIComponent(stationId)}` +
+        `&format=json&units=m&numericPrecision=decimal` +
+        `&apiKey=${WU_KEYS[0]}`;
     return fetch(url, { cache: "no-store" })
         .then(function(r) {
             if (r.status === 401 || r.status === 403) { pwsBumpKey(); }
