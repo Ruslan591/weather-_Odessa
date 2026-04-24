@@ -244,6 +244,7 @@ var PARAMS = [
     { key:"temp",     label:"Температура", unit:"°C",   color:"#ff8f00" },
     { key:"pressure", label:"Давление",    unit:" гПа", color:"#4aa3ff" },
     { key:"wind",     label:"Ветер",       unit:" м/с", color:"#8bc34a" },
+    { key:"windGust", label:"Порывы",      unit:" м/с", color:"#ff5722" },
     { key:"windDir",  label:"Направление", unit:"°",    color:"#74b9ff" },
     { key:"humidity", label:"Влажность",   unit:"%",    color:"#00bcd4" },
     { key:"precip",   label:"Осадки",      unit:" мм",  color:"#448aff", isFact:true }
@@ -253,6 +254,7 @@ var THRESHOLDS = {
     temp:     { good: 1.5, bad: 3.0 },
     pressure: { good: 1.0, bad: 2.5 },
     wind:     { good: 1.5, bad: 3.0 },
+    windGust: { good: 2.0, bad: 4.0 },
     windDir:  { good: 30,  bad: 60  },
     humidity: { good: 8,   bad: 15  }
 };
@@ -360,6 +362,7 @@ async function buildObsIndex() {
             temp:     avgField("temp"),
             pressure: avgField("pressure"),
             wind:     avgField("wind"),
+            windGust: avgField("windGust"),
             windDir:  avgWindDir(),
             humidity: avgField("humidity"),
             precip:   avgField("precip")
@@ -398,6 +401,7 @@ function calcMetrics(obsIndex) {
             push("temp",     fh.temp,     ob.temp);
             push("pressure", fh.pressure, ob.pressure);
             push("wind",     fh.wind,     ob.wind);
+            push("windGust", fh.windGust, ob.windGust);
             push("humidity", fh.humidity, ob.humidity);
 
             if (fh.windDir != null && ob.windDir != null) {
