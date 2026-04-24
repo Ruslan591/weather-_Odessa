@@ -167,6 +167,76 @@
 </style>
 
 <script>
+ /* =============================================
+   КОНФИГУРАЦИЯ GITHUB (снимки)
+============================================= */
+var GITHUB_OWNER   = "ruslan591";
+var GITHUB_REPO    = "weather-_Odessa";
+var GITHUB_SNAPS_FILE = "data/ensemble_snapshots.json";
+
+var _snapsData = []; // снимки в памяти
+var _snapsSha  = null;
+
+function getToken() { return localStorage.getItem("ghToken") || ""; }
+
+async function loadSnapsFromGithub() {
+    var url = "https://api.github.com/repos/" + GITHUB_OWNER + "/" + GITHUB_REPO +
+              "/contents/" + GITHUB_SNAPS_FILE;
+    var r = await fetch(url, { headers:{ "Accept":"application/vnd.github+json" }, cache:"no-store" });
+    if (r.status !== 404) {
+        if (!r.ok) throw new Error("GitHub GET " + r.status);
+        var resp = await r.json();
+        _snapsSha = resp.sha;
+        var content = decodeURIComponent(escape(atob(resp.content.replace(/\n/g,""))));
+        _snapsData = JSON.parse(content);
+    }
+
+    // Мержим с localStorage (новые снимки от forecast.html)
+    var local = [];
+    try { local = JSON.parse(localStorage.getItem("ensembleSnapshots") || "[]"); } catch(e) {}
+    if (!local.length) return;
+
+    var existKeys = {};
+    _snapsData.forEach(function(s) {
+        if (s.savedAt) existKeys[s.savedAt.slice(0,13)] = true;
+    });
+    var added = 0;
+    local.forEach(function(s) {
+        var k = s.savedAt ? s.savedAt.slice(0,13) : null;
+        if (!k || existKeys[k]) return;
+        _snapsData.push(s); existKeys[k] = true; added++;
+    });
+
+    if (added > 0) {
+        // Есть новые — сохраняем на GitHub и очищаем localStorage
+        await saveSnapsToGithub();
+        localStorage.removeItem("ensembleSnapshots");
+    }
+}
+
+async function saveSnapsToGithub() {
+    var token = getToken();
+    if (!token) return;
+    _snapsData.sort(function(a,b){ return (a.savedAt||"") > (b.savedAt||"") ? 1 : -1; });
+    if (_snapsData.length > 200) _snapsData = _snapsData.slice(_snapsData.length - 200);
+    var encoded = btoa(unescape(encodeURIComponent(JSON.stringify(_snapsData))));
+    var body = { message:"ensemble snapshots update", content:encoded };
+    if (_snapsSha) body.sha = _snapsSha;
+    var r = await fetch("https://api.github.com/repos/" + GITHUB_OWNER + "/" + GITHUB_REPO +
+                        "/contents/" + GITHUB_SNAPS_FILE, {
+        method: "PUT",
+        headers: {
+            "Authorization": "Bearer " + token,
+            "Content-Type": "application/json",
+            "Accept": "application/vnd.github+json"
+        },
+        body: JSON.stringify(body)
+    });
+    if (!r.ok) throw new Error("GitHub PUT " + r.status);
+    var resp = await r.json();
+    if (resp.content) _snapsSha = resp.content.sha;
+}   
+    
 /* =============================================
    ПАРАМЕТРЫ
 ============================================= */
@@ -303,8 +373,7 @@ async function buildObsIndex() {
    РАСЧЁТ МЕТРИК
 ============================================= */
 function calcMetrics(obsIndex) {
-    var snapData = [];
-    try { snapData = JSON.parse(localStorage.getItem("ensembleSnapshots") || "[]"); } catch(e) {}
+    var snapData = _snapsData;
     if (!snapData.length) return null;
 
     var errors = { temp:[], pressure:[], wind:[], windDir:[], humidity:[], precip:[] };
@@ -367,8 +436,7 @@ function calcMetrics(obsIndex) {
    МЕТРИКИ ПО ДНЯМ
 ============================================= */
 function calcMetricsByDay(obsIndex) {
-    var snapData = [];
-    try { snapData = JSON.parse(localStorage.getItem("ensembleSnapshots") || "[]"); } catch(e) {}
+    var snapData = _snapsData;
     if (!snapData.length) return null;
 
     var byDay = {};
@@ -537,23 +605,17 @@ function renderChartParamRow() {
    ПОКРЫТИЕ
 ============================================= */
 function renderCoverage(snapCount, obsCount, stationLabel) {
-    var horizons = EV.getHorizonStats();
-    var totalHours = horizons.reduce(function(s,h){ return s+h.count; }, 0);
-    var avgHorizon = horizons.length
-        ? Math.round(horizons.reduce(function(s,h){ return s+h.horizonH; }, 0) / horizons.length)
-        : 0;
-    var dates  = horizons.map(function(h){ return new Date(h.savedAt); }).filter(function(d){ return !isNaN(d); });
+    var totalHours = _snapsData.reduce(function(s,h){ return s + (h.hours ? h.hours.length : 0); }, 0);
+    var dates = _snapsData.map(function(h){ return new Date(h.savedAt); }).filter(function(d){ return !isNaN(d); });
     var oldest = dates.length ? new Date(Math.min.apply(null,dates)) : null;
     var newest = dates.length ? new Date(Math.max.apply(null,dates)) : null;
     var fmt = function(d) {
         return d ? d.toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}) : "—";
     };
-
     document.getElementById("coverageInfo").innerHTML =
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">' +
             '<div><span style="color:#555;">Снимков</span><br><b style="font-size:17px;">' + snapCount + '</b></div>' +
             '<div><span style="color:#555;">Часов прогноза</span><br><b style="font-size:17px;">' + totalHours + '</b></div>' +
-            '<div><span style="color:#555;">Средний горизонт</span><br><b style="font-size:17px;">' + avgHorizon + ' ч</b></div>' +
             '<div><span style="color:#555;">Записей PWS</span><br><b style="font-size:17px;">' + obsCount + '</b></div>' +
         '</div>' +
         '<div style="margin-top:10px;color:#555;font-size:12px;">' +
@@ -566,21 +628,24 @@ function renderCoverage(snapCount, obsCount, stationLabel) {
    СПИСОК СНИМКОВ
 ============================================= */
 function renderSnapshots() {
-    var list     = document.getElementById("snapshotList");
-    var horizons = EV.getHorizonStats();
-    if (!horizons.length) {
+    var list = document.getElementById("snapshotList");
+    if (!_snapsData.length) {
         list.innerHTML = '<div style="color:#444;font-size:13px;">Нет снимков. ' +
             'Откройте <a href="forecast.html" style="color:#ffd166;">Прогноз → Ансамбль ⚡</a>.</div>';
         return;
     }
-    var recent = horizons.slice().reverse().slice(0, 20);
+    var recent = _snapsData.slice().reverse().slice(0, 20);
     list.innerHTML = recent.map(function(h) {
         var d = new Date(h.savedAt);
         var timeStr = isNaN(d) ? "—"
             : d.toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+        var count = h.hours ? h.hours.length : 0;
+        var horizonH = h.hours && h.hours.length
+            ? Math.round((new Date(h.hours[h.hours.length-1].time) - new Date(h.hours[0].time)) / 3600000)
+            : 0;
         return '<div class="snap-row">' +
             '<span class="snap-time">' + timeStr + '</span>' +
-            '<span class="snap-hours">' + h.count + ' ч · горизонт ' + h.horizonH + ' ч</span>' +
+            '<span class="snap-hours">' + count + ' ч · горизонт ' + horizonH + ' ч</span>' +
         '</div>';
     }).join("");
 }
@@ -589,49 +654,41 @@ function renderSnapshots() {
    ЭКСПОРТ / ИМПОРТ
 ============================================= */
 function exportSnapshots() {
-    var snaps = [];
-    try { snaps = JSON.parse(localStorage.getItem("ensembleSnapshots") || "[]"); } catch(e) {}
-    if (!snaps.length) { alert("Нет снимков для сохранения"); return; }
+    if (!_snapsData.length) { alert("Нет снимков для сохранения"); return; }
     var dateStr  = new Date().toISOString().slice(0,10);
     var filename = "ensemble_pws_snapshots_" + dateStr + ".json";
     var blob = new Blob([JSON.stringify({
         _type: "ensemble_snapshots", _source: "PWS",
         exported_at: new Date().toISOString(),
-        count: snaps.length, snapshots: snaps
+        count: _snapsData.length, snapshots: _snapsData
     }, null, 2)], {type:"application/json"});
     var url = URL.createObjectURL(blob);
-    var a   = document.createElement("a");
-    a.href = url; a.download = filename; a.click();
+    var a = document.createElement("a"); a.href = url; a.download = filename; a.click();
     URL.revokeObjectURL(url);
-    setImportStatus("✅ Сохранено: " + snaps.length + " снимков → " + filename, "#8bc34a");
+    setImportStatus("✅ Сохранено: " + _snapsData.length + " снимков → " + filename, "#8bc34a");
 }
 
 function importSnapshots(file) {
     var reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = async function(e) {
         try {
             var obj      = JSON.parse(e.target.result);
             var incoming = Array.isArray(obj) ? obj : (obj.snapshots || null);
             if (!incoming) { setImportStatus("❌ Неверный формат", "#ff6b6b"); return; }
-
-            var existing = [];
-            try { existing = JSON.parse(localStorage.getItem("ensembleSnapshots") || "[]"); } catch(ex) {}
             var existKeys = {};
-            existing.forEach(function(s) {
+            _snapsData.forEach(function(s) {
                 var k = s.savedAt ? s.savedAt.slice(0,13) : null;
                 if (k) existKeys[k] = true;
             });
-
             var added = 0;
             incoming.forEach(function(snap) {
                 var k = snap.savedAt ? snap.savedAt.slice(0,13) : null;
                 if (!k || existKeys[k]) return;
-                existing.push(snap); existKeys[k] = true; added++;
+                _snapsData.push(snap); existKeys[k] = true; added++;
             });
-            existing.sort(function(a,b){ return (a.savedAt||"") > (b.savedAt||"") ? 1 : -1; });
-            if (existing.length > 200) existing = existing.slice(existing.length - 200);
-            localStorage.setItem("ensembleSnapshots", JSON.stringify(existing));
-            setImportStatus("✅ Добавлено " + added + ". Всего: " + existing.length, "#8bc34a");
+            setImportStatus("⏳ Сохраняем на GitHub...", "#aaa");
+            await saveSnapsToGithub();
+            setImportStatus("✅ Добавлено " + added + ". Всего: " + _snapsData.length, "#8bc34a");
             render();
         } catch(ex) { setImportStatus("❌ " + ex.message, "#ff6b6b"); }
     };
@@ -645,7 +702,8 @@ function setImportStatus(msg, color) {
 
 function confirmClear() {
     if (!confirm("Удалить все снимки ансамбля?\nМетрики пересчитаются с нуля.")) return;
-    EV.clearSnapshots();
+    _snapsData = [];
+    saveSnapsToGithub().catch(function(e){ console.warn("Ошибка очистки:", e); });
     render();
 }
 
@@ -694,7 +752,7 @@ async function render() {
         return;
     }
 
-    var snapCount = EV.getSnapshotCount();
+    var snapCount = _snapsData.length;
     status.innerHTML = "Снимков прогноза: <b>" + snapCount + "</b>";
 
     if (!snapCount) {
@@ -750,7 +808,15 @@ document.getElementById("importSnapFile").addEventListener("change", function(e)
     if (file) { importSnapshots(file); e.target.value = ""; }
 });
 
-render();
+(async function init() {
+    document.getElementById("statusLine").textContent = "☁️ Загрузка снимков с GitHub...";
+    try {
+        await loadSnapsFromGithub();
+    } catch(e) {
+        document.getElementById("statusLine").textContent = "⚠️ Ошибка загрузки снимков: " + e.message;
+    }
+    render();
+})();
 </script>
 
 </body>
