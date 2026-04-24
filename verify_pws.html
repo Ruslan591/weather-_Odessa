@@ -401,20 +401,38 @@ function pwsPickHourly(observations) {
     observations.forEach(function(o) {
         var t = new Date(o.obsTimeUtc);
         if (isNaN(t)) return;
-        var min  = t.getUTCMinutes();
-        var dist = Math.min(min, 60 - min);
-        var roundedHour = (min >= 30)
-            ? new Date(t.getTime() + (60 - min) * 60000)
-            : new Date(t.getTime() - min * 60000);
+        var min = t.getUTCMinutes();
+
+        // Берём только наблюдения около границы часа
+        // XX:49-XX:59 → следующий час
+        // XX:04-XX:09 → этот час
+        var roundedHour;
+        if (min >= 49) {
+            roundedHour = new Date(Date.UTC(
+                t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate(),
+                t.getUTCHours() + 1, 0, 0
+            ));
+        } else if (min <= 9 && min >= 4) {
+            roundedHour = new Date(Date.UTC(
+                t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate(),
+                t.getUTCHours(), 0, 0
+            ));
+        } else {
+            return; // не интересует
+        }
+
         var h = roundedHour.getUTCFullYear() + "-" +
             String(roundedHour.getUTCMonth()+1).padStart(2,"0") + "-" +
             String(roundedHour.getUTCDate()).padStart(2,"0") + "T" +
             String(roundedHour.getUTCHours()).padStart(2,"0");
+
         var m  = o.metric || {};
         var pt = m.precipTotal != null ? m.precipTotal : null;
         if (!byHour[h]) {
             byHour[h] = { dist: Infinity, obs: null, ptMin: pt, ptMax: pt, gustMax: null };
         }
+        // Среди подходящих — берём ближайшую к границе часа (минимальный dist)
+        var dist = min >= 49 ? 60 - min : min;
         if (dist < byHour[h].dist) {
             byHour[h].dist = dist;
             byHour[h].obs  = o;
@@ -423,7 +441,6 @@ function pwsPickHourly(observations) {
             if (byHour[h].ptMin == null || pt < byHour[h].ptMin) byHour[h].ptMin = pt;
             if (byHour[h].ptMax == null || pt > byHour[h].ptMax) byHour[h].ptMax = pt;
         }
-        // Максимальный порыв за час
         var gust = m.windspeedMax != null ? Math.round(m.windspeedMax / 3.6 * 10) / 10 : null;
         if (gust != null && (byHour[h].gustMax == null || gust > byHour[h].gustMax))
             byHour[h].gustMax = gust;
@@ -1082,12 +1099,12 @@ async function showData() {
 
         presentStations.forEach(function(s) {
             var r = stMap[s.id];
-            html += '<tr><td style="color:#888">' + s.name + '</td>' +
-                '<td>' + (r.temp != null ? r.temp : '—') + '</td>' +
-                '<td>' + (r.pressure != null ? r.pressure : '—') + '</td>' +
-                '<td>' + (r.wind != null ? r.wind : '—') + '</td>' +
-                '<td>' + (r.windDir != null ? r.windDir : '—') + '</td>' +
-                '<td>' + (r.humidity != null ? r.humidity : '—') + '</td></tr>';
+            html += '<tr><td style="color:#888">' + s.name + '<br><span style="color:#555;font-size:0.9em">' + (r.obsTimeUtc ? r.obsTimeUtc.slice(11,19) : '—') + '</span></td>' +
+    '<td>' + (r.temp != null ? r.temp : '—') + '</td>' +
+    '<td>' + (r.pressure != null ? r.pressure : '—') + '</td>' +
+    '<td>' + (r.wind != null ? r.wind : '—') + '</td>' +
+    '<td>' + (r.windDir != null ? r.windDir : '—') + '</td>' +
+    '<td>' + (r.humidity != null ? r.humidity : '—') + '</td></tr>';
         });
         html += '</table>';
 
