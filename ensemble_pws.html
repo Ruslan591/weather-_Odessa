@@ -379,8 +379,8 @@ function calcMetrics(obsIndex) {
     var snapData = _snapsData;
     if (!snapData.length) return null;
 
-    var errors = { temp:[], pressure:[], wind:[], windDir:[], humidity:[], precip:[] };
-    var biases  = { temp:[], pressure:[], wind:[], windDir:[], humidity:[], precip:[] };
+    var errors = { temp:[], pressure:[], wind:[], windGust:[], windDir:[], humidity:[], precip:[] };
+    var biases  = { temp:[], pressure:[], wind:[], windGust:[], windDir:[], humidity:[], precip:[] };
     var matched = 0;
 
     snapData.forEach(function(snap) {
@@ -453,7 +453,7 @@ function calcMetricsByDay(obsIndex) {
             var ob = obsIndex[key];
             if (!ob) return;
             var day = key.slice(0, 10);
-            if (!byDay[day]) byDay[day] = { temp:[], pressure:[], wind:[], windDir:[], humidity:[], precip:[] };
+            if (!byDay[day]) byDay[day] = { temp:[], pressure:[], wind:[], windGust:[], windDir:[], humidity:[], precip:[] };
 
             function push(field, fVal, oVal) {
                 if (fVal == null || oVal == null) return;
@@ -462,6 +462,7 @@ function calcMetricsByDay(obsIndex) {
             push("temp",     fh.temp,     ob.temp);
             push("pressure", fh.pressure, ob.pressure);
             push("wind",     fh.wind,     ob.wind);
+            push("windGust", fh.windGust, ob.windGust);
             push("humidity", fh.humidity, ob.humidity);
             byDay[day].windDir.push(windDirDiff(fh.windDir, ob.windDir));
             if (fh.rain != null && ob.precip != null) {
