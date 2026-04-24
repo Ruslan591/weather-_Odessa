@@ -964,7 +964,7 @@ function renderLeadTab(errorsFiltered) {
         if (subset.length < 5) { html += '<div style="color:#555;font-size:0.85em">Мало данных</div></div>'; return; }
         var rating = computeRatingFromErrors(subset);
         rating.total.forEach(function(r,i) {
-            html += '<div class="row"><div>'+(i+1)+". "+modelLabel(r.model)+"</div><div>"+r.value.toFixed(3)+"</div></div>';
+            html += '<div class="row"><div>'+(i+1)+". "+modelLabel(r.model)+"</div><div>"+r.value.toFixed(3)+"</div></div>";
         });
         html += "</div>";
     });
