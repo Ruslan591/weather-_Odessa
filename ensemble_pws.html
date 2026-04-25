@@ -557,6 +557,20 @@ function renderChart(paramKey) {
     if (_chartInstance) { _chartInstance.destroy(); _chartInstance = null; }
 
     var t = THRESHOLDS[paramKey];
+    var annotations = {};
+    if (t) {
+        annotations.goodLine = {
+            type: "line", yMin: t.good, yMax: t.good,
+            borderColor: "#5fe08f44", borderWidth: 1, borderDash: [4, 4],
+            label: { content: "хор", display: true, color: "#5fe08f", font: { size: 9 }, position: "end" }
+        };
+        annotations.badLine = {
+            type: "line", yMin: t.bad, yMax: t.bad,
+            borderColor: "#ff6b6b44", borderWidth: 1, borderDash: [4, 4],
+            label: { content: "пл", display: true, color: "#ff6b6b", font: { size: 9 }, position: "end" }
+        };
+    }
+
     _chartInstance = new Chart(ctx, {
         type: "line",
         data: {
@@ -567,7 +581,7 @@ function renderChart(paramKey) {
                 borderColor: p.color,
                 backgroundColor: p.color + "22",
                 borderWidth: 2,
-                pointRadius: 3,
+                pointRadius: maes.filter(function(v){ return v != null; }).length === 1 ? 5 : 3,
                 pointBackgroundColor: p.color,
                 tension: 0.3,
                 fill: true,
@@ -640,7 +654,7 @@ function renderSnapshots() {
         return;
     }
     var recent = _snapsData.slice().reverse().slice(0, 20);
-    list.innerHTML = recent.map(function(h) {
+    list.innerHTML = recent.map(function(h, idx) {
         var d = new Date(h.savedAt);
         var timeStr = isNaN(d) ? "—"
             : d.toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
@@ -648,11 +662,25 @@ function renderSnapshots() {
         var horizonH = h.hours && h.hours.length
             ? Math.round((new Date(h.hours[h.hours.length-1].time) - new Date(h.hours[0].time)) / 3600000)
             : 0;
+        var delBtn = idx === 0
+            ? '<button onclick="deleteLastSnapshot()" style="font-size:11px;padding:3px 8px;' +
+              'border-radius:6px;border:1px solid #5a1a1a;background:#2a0808;color:#ff6b6b;cursor:pointer;">✕</button>'
+            : '';
         return '<div class="snap-row">' +
             '<span class="snap-time">' + timeStr + '</span>' +
             '<span class="snap-hours">' + count + ' ч · горизонт ' + horizonH + ' ч</span>' +
+            delBtn +
         '</div>';
     }).join("");
+}
+
+async function deleteLastSnapshot() {
+    if (!_snapsData.length) return;
+    if (!confirm("Удалить последний снимок (" + _snapsData[_snapsData.length-1].savedAt.slice(0,16) + ")?")) return;
+    _snapsData.pop();
+    await saveSnapsToGithub();
+    localStorage.removeItem("ensembleSnapshots");
+    render();
 }
 
 /* =============================================
