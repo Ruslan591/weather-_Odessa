@@ -464,7 +464,8 @@ function calcMetricsByDay(obsIndex) {
             push("wind",     fh.wind,     ob.wind);
             push("windGust", fh.windGust, ob.windGust);
             push("humidity", fh.humidity, ob.humidity);
-            byDay[day].windDir.push(windDirDiff(fh.windDir, ob.windDir));
+            if (fh.windDir != null && ob.windDir != null)
+                byDay[day].windDir.push(windDirDiff(fh.windDir, ob.windDir));
             if (fh.rain != null && ob.precip != null) {
                 var fHad = fh.rain   > 0.1 ? 1 : 0;
                 var oHad = ob.precip > 0.1 ? 1 : 0;
@@ -640,7 +641,7 @@ function renderSnapshots() {
         return;
     }
     var recent = _snapsData.slice().reverse().slice(0, 20);
-    list.innerHTML = recent.map(function(h, idx) {
+    list.innerHTML = recent.map(function(h) {
         var d = new Date(h.savedAt);
         var timeStr = isNaN(d) ? "—"
             : d.toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
@@ -648,14 +649,9 @@ function renderSnapshots() {
         var horizonH = h.hours && h.hours.length
             ? Math.round((new Date(h.hours[h.hours.length-1].time) - new Date(h.hours[0].time)) / 3600000)
             : 0;
-        var delBtn = idx === 0
-            ? '<button onclick="deleteLastSnapshot()" style="font-size:11px;padding:3px 8px;' +
-              'border-radius:6px;border:1px solid #5a1a1a;background:#2a0808;color:#ff6b6b;cursor:pointer;">✕</button>'
-            : '';
         return '<div class="snap-row">' +
             '<span class="snap-time">' + timeStr + '</span>' +
             '<span class="snap-hours">' + count + ' ч · горизонт ' + horizonH + ' ч</span>' +
-            delBtn +
         '</div>';
     }).join("");
 }
