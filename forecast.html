@@ -1154,6 +1154,185 @@ async function loadEnsemble() {
 }));
 EV.saveSnapshot(roundedForSnapshot);
 
+// === АВТОСОХРАНЕНИЕ СНИМКОВ НА GITHUB ===
+(async function saveSnapshotsToGithub() {
+    const TOKEN = localStorage.getItem("ghToken") || "";
+    const OWNER = "ruslan591";
+    const REPO  = "weather-_Odessa";
+    const FILE_SYNOP = "data/ensemble_snapshots_synop.json";
+    const FILE_PWS   = "data/ensemble_snapshots_pws.json";
+    const MAX_SNAPS  = 200;
+
+    function toSynop(h) {
+        return {
+            time: h.time, temp: h.temp, pressure: h.pressure,
+            wind: h.wind, windGust: h.windGust, windDir: h.windDir,
+            humidity: h.humidity, rain: h.rain,
+            cloudcover: h.cloudcover, weatherCode: h.weatherCode
+        };
+    }
+    function toPws(h) {
+        return {
+            time: h.time, temp: h.temp, pressure: h.pressure,
+            wind: h.wind, windGust: h.windGust, windDir: h.windDir,
+            humidity: h.humidity, rain: h.rain
+        };
+    }
+
+    async function ghGet(path) {
+        const url = "https://api.github.com/repos/" + OWNER + "/" + REPO + "/contents/" + path;
+        const r = await fetch(url, { headers: { "Accept": "application/vnd.github+json" }, cache: "no-store" });
+        if (r.status === 404) return { data: [], sha: null };
+        if (!r.ok) throw new Error("GitHub GET " + r.status);
+        const resp = await r.json();
+        const content = decodeURIComponent(escape(atob(resp.content.replace(/\n/g, ""))));
+        return { data: JSON.parse(content), sha: resp.sha };
+    }
+
+    async function ghPut(path, data, sha, message) {
+        if (!TOKEN) return;
+        const arr = data.sort((a, b) => a.savedAt > b.savedAt ? 1 : -1);
+        const trimmed = arr.length > MAX_SNAPS ? arr.slice(arr.length - MAX_SNAPS) : arr;
+        const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(trimmed))));
+        const body = { message: message || "update " + path, content: encoded };
+        if (sha) body.sha = sha;
+        const r = await fetch("https://api.github.com/repos/" + OWNER + "/" + REPO + "/contents/" + path, {
+            method: "PUT",
+            headers: {
+                "Authorization": "Bearer " + TOKEN,
+                "Content-Type": "application/json",
+                "Accept": "application/vnd.github+json"
+            },
+            body: JSON.stringify(body)
+        });
+        if (!r.ok) {
+            const t = await r.text();
+            throw new Error("GitHub PUT " + r.status + ": " + t);
+        }
+        const resp = await r.json();
+        return resp.content ? resp.content.sha : sha;
+    }
+
+    // Строим список снимков: пропущенные + текущий
+    function buildSnapshots(allHours, lastSavedAt) {
+        const now = new Date();
+        const nowHour = now.getUTCHours();
+        const snapshots = [];
+
+        // Пропущенные часы
+        if (lastSavedAt) {
+            const last = new Date(lastSavedAt);
+            const lastHourTs = Date.UTC(
+                last.getUTCFullYear(), last.getUTCMonth(), last.getUTCDate(), last.getUTCHours()
+            );
+            const nowHourTs = Date.UTC(
+                now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours()
+            );
+            // Перебираем каждый пропущенный час (от last+1 до now-1)
+            for (let ts = lastHourTs + 3600000; ts < nowHourTs; ts += 3600000) {
+                const snapTime = new Date(ts);
+                const savedAt = new Date(ts + 15 * 60000).toISOString(); // :15:00.000Z
+                // Берём только часы прогноза начиная с этого момента
+                const snapTimeStr = snapTime.toISOString().slice(0, 13); // "2026-04-25T14"
+                const hoursFrom = allHours.filter(h => h.time >= snapTimeStr);
+                if (hoursFrom.length > 0) {
+                    snapshots.push({ savedAt, hours: hoursFrom });
+                }
+            }
+        }
+
+        // Текущий снимок
+        snapshots.push({ savedAt: now.toISOString(), hours: allHours });
+
+        return snapshots;
+    }
+
+function snapWord(n) {
+        if (n === 1) return "снимок";
+        if (n >= 2 && n <= 4) return "снимка";
+        return "снимков";
+    }
+
+    // Показываем toast только если есть токен
+    function showToast(msg, color) {
+        if (!TOKEN) return;
+        let t = document.getElementById("snapToast");
+        if (!t) {
+            t = document.createElement("div");
+            t.id = "snapToast";
+            t.style.cssText = "position:fixed;bottom:20px;left:50%;transform:translateX(-50%);" +
+                "background:#1e1e1e;border:1px solid #333;border-radius:10px;" +
+                "padding:10px 18px;font-size:13px;color:#eee;z-index:9999;" +
+                "box-shadow:0 4px 16px rgba(0,0,0,0.5);transition:opacity 0.4s;white-space:nowrap;";
+            document.body.appendChild(t);
+        }
+        t.style.color = color || "#eee";
+        t.style.opacity = "1";
+        t.textContent = msg;
+        clearTimeout(t._timer);
+        t._timer = setTimeout(() => { t.style.opacity = "0"; }, 4000);
+    }
+
+    try {
+        showToast("⏳ Загружаем снимки...", "#aaa");
+
+        const [synopFile, pwsFile] = await Promise.all([
+            ghGet(FILE_SYNOP),
+            ghGet(FILE_PWS)
+        ]);
+
+        const synopSnaps = synopFile.data;
+        const pwsSnaps   = pwsFile.data;
+        let synopSha = synopFile.sha;
+        let pwsSha   = pwsFile.sha;
+
+        const lastSavedAt = synopSnaps.length
+            ? synopSnaps[synopSnaps.length - 1].savedAt
+            : null;
+
+        const nowHourStr = new Date().toISOString().slice(0, 13);
+        const alreadySaved = synopSnaps.some(s => s.savedAt && s.savedAt.slice(0, 13) === nowHourStr);
+        if (alreadySaved) {
+            showToast("✓ Снимок за этот час уже есть", "#8bc34a");
+            return;
+        }
+
+        const newSnaps = buildSnapshots(roundedForSnapshot, lastSavedAt);
+        if (!newSnaps.length) return;
+
+        const existSynopKeys = new Set(synopSnaps.map(s => s.savedAt ? s.savedAt.slice(0, 13) : ""));
+        const existPwsKeys   = new Set(pwsSnaps.map(s => s.savedAt ? s.savedAt.slice(0, 13) : ""));
+
+        let synopAdded = false, pwsAdded = false;
+        for (const snap of newSnaps) {
+            const key = snap.savedAt.slice(0, 13);
+            if (!existSynopKeys.has(key)) {
+                synopSnaps.push({ savedAt: snap.savedAt, hours: snap.hours.map(toSynop) });
+                existSynopKeys.add(key);
+                synopAdded = true;
+            }
+            if (!existPwsKeys.has(key)) {
+                pwsSnaps.push({ savedAt: snap.savedAt, hours: snap.hours.map(toPws) });
+                existPwsKeys.add(key);
+                pwsAdded = true;
+            }
+        }
+
+        const addedCount = newSnaps.length;
+
+        if (TOKEN) {
+            showToast("⬆ Сохраняем " + addedCount + " " + snapWord(addedCount) + "...", "#aaa");
+            if (synopAdded) synopSha = await ghPut(FILE_SYNOP, synopSnaps, synopSha, "ensemble synop snapshots update");
+            if (pwsAdded)   pwsSha   = await ghPut(FILE_PWS,   pwsSnaps,   pwsSha,   "ensemble pws snapshots update");
+            showToast("✓ Сохранено " + addedCount + " " + snapWord(addedCount), "#8bc34a");
+        }
+    } catch(e) {
+        showToast("❌ Ошибка: " + e.message, "#ff6b6b");
+        console.warn("Snapshot save error:", e);
+    }
+})();
+// === КОНЕЦ АВТОСОХРАНЕНИЯ ===
+
     // Обрезаем по времени
     var nowTime = Date.now();
     var timesDates = baseTimes.map(function(t){ return new Date(t); });
