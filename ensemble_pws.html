@@ -557,20 +557,6 @@ function renderChart(paramKey) {
     if (_chartInstance) { _chartInstance.destroy(); _chartInstance = null; }
 
     var t = THRESHOLDS[paramKey];
-    var annotations = {};
-    if (t) {
-        annotations.goodLine = {
-            type: "line", yMin: t.good, yMax: t.good,
-            borderColor: "#5fe08f44", borderWidth: 1, borderDash: [4, 4],
-            label: { content: "хор", display: true, color: "#5fe08f", font: { size: 9 }, position: "end" }
-        };
-        annotations.badLine = {
-            type: "line", yMin: t.bad, yMax: t.bad,
-            borderColor: "#ff6b6b44", borderWidth: 1, borderDash: [4, 4],
-            label: { content: "пл", display: true, color: "#ff6b6b", font: { size: 9 }, position: "end" }
-        };
-    }
-
     _chartInstance = new Chart(ctx, {
         type: "line",
         data: {
@@ -581,7 +567,7 @@ function renderChart(paramKey) {
                 borderColor: p.color,
                 backgroundColor: p.color + "22",
                 borderWidth: 2,
-                pointRadius: maes.filter(function(v){ return v != null; }).length === 1 ? 5 : 3,
+                pointRadius: 3,
                 pointBackgroundColor: p.color,
                 tension: 0.3,
                 fill: true,
