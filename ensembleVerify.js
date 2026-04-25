@@ -34,18 +34,19 @@ for (var i = 0; i < snaps.length; i++) {
         var snapshot = {
             savedAt: new Date().toISOString(),
             hours: hours.map(function(h) {
-                return {
-                    time:     h.time,
-                    temp:     h.temperature_2m,
-                    pressure: h.pressure_msl,
-                    wind:     h.wind_speed_10m,
-                    windDir:  h.wind_direction_10m,
-                    humidity: h.relative_humidity_2m,
-                    rain:        h.rain,
-                    cloudcover:  h.cloud_cover,
-                    weatherCode: h.weather_code
-                };
-            })
+    return {
+        time:        h.time,
+        temp:        Math.round(h.temperature_2m * 10) / 10,
+        pressure:    Math.round(h.pressure_msl * 10) / 10,
+        wind:        Math.round(h.wind_speed_10m * 10) / 10,
+        windGust:    Math.round((h.wind_gusts_10m ?? h.wind_speed_10m) * 10) / 10,
+        windDir:     Math.round(h.wind_direction_10m),
+        humidity:    Math.round(h.relative_humidity_2m),
+        rain:        Math.round(h.rain * 10) / 10,
+        cloudcover:  Math.round(h.cloud_cover),
+        weatherCode: h.weather_code
+    };
+})
         };
 
         snaps.push(snapshot);
