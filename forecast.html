@@ -1140,7 +1140,19 @@ async function loadEnsemble() {
     succeededModels.forEach(function(m){ succeededWeights[m] = succeededWeights[m] / wTotal; });
 
     var ensembleHours = mergeEnsemble(allModelHours, succeededWeights, succeededModels);
-    EV.saveSnapshot(ensembleHours);
+    const roundedForSnapshot = ensembleHours.map(h => ({
+    time:        h.time,
+    temp:        Math.round(h.temperature_2m * 10) / 10,
+    pressure:    Math.round(h.pressure_msl * 10) / 10,
+    wind:        Math.round(h.wind_speed_10m * 10) / 10,
+    windGust:    Math.round((h.wind_gusts_10m ?? h.wind_speed_10m) * 10) / 10,
+    windDir:     Math.round(h.wind_direction_10m),
+    humidity:    Math.round(h.relative_humidity_2m),
+    rain:        Math.round(h.rain * 10) / 10,
+    cloudcover:  Math.round(h.cloud_cover),
+    weatherCode: h.weather_code,
+}));
+EV.saveSnapshot(roundedForSnapshot);
 
     // Обрезаем по времени
     var nowTime = Date.now();
