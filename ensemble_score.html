@@ -65,21 +65,25 @@
 <div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:8px;">ПОСЛЕДНИЕ СНИМКИ</div>
 <div id="snapshotList" style="margin-bottom:16px;"></div>
 
-<!-- ЭКСПОРТ / ИМПОРТ -->
-<div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:8px;">АРХИВ СНИМКОВ</div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
-    <button onclick="exportSnapshots()" style="background:#1a2a1a;color:#8bc34a;border:1px solid #2a3a2a;
-        border-radius:8px;padding:10px 12px;font-size:13px;">
-        💾 Сохранить в файл
-    </button>
-    <button onclick="document.getElementById('importSnapFile').click()"
-        style="background:#1a1a2a;color:#74b9ff;border:1px solid #2a2a3a;
-        border-radius:8px;padding:10px 12px;font-size:13px;">
-        📂 Загрузить из файла
-    </button>
+<!-- GITHUB -->
+<div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:8px;">GITHUB</div>
+<div style="background:#161616;border-radius:10px;padding:12px 14px;margin-bottom:16px;">
+    <input id="ghTokenInput" type="password" placeholder="GitHub токен…"
+        style="width:100%;background:#0e0e0e;border:1px solid #2a2a2a;border-radius:6px;
+               color:#aaa;padding:8px 10px;font-size:13px;box-sizing:border-box;margin-bottom:8px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <button onclick="saveToken()"
+            style="background:#1a2a1a;color:#8bc34a;border:1px solid #2a3a2a;
+                   border-radius:8px;padding:10px;font-size:13px;">
+            💾 Сохранить токен
+        </button>
+        <button onclick="saveSnapsToGithub().then(function(){setStatus('✅ Сохранено на GitHub');})"
+            style="background:#1a1a2a;color:#74b9ff;border:1px solid #2a2a3a;
+                   border-radius:8px;padding:10px;font-size:13px;">
+            ☁️ Сохранить снимки
+        </button>
+    </div>
 </div>
-<input type="file" id="importSnapFile" accept=".json" style="display:none">
-<div id="importStatus" style="font-size:12px;color:#555;margin-bottom:16px;min-height:16px;"></div>
 
 <!-- КНОПКА ОЧИСТКИ -->
 <button onclick="confirmClear()"
@@ -156,6 +160,52 @@
 
 <script>
 /* =============================================
+   GITHUB
+============================================= */
+var GITHUB_OWNER     = "ruslan591";
+var GITHUB_REPO      = "weather-_Odessa";
+var GITHUB_SNAPS_FILE = "data/ensemble_snapshots_synop.json";
+
+var _snapsSha = null;
+
+function getToken() { return localStorage.getItem("ghToken") || ""; }
+
+async function loadSnapsFromGithub() {
+    var url = "https://api.github.com/repos/" + GITHUB_OWNER + "/" + GITHUB_REPO +
+              "/contents/" + GITHUB_SNAPS_FILE;
+    var r = await fetch(url, { headers: { "Accept": "application/vnd.github+json" }, cache: "no-store" });
+    if (r.ok) {
+        var resp = await r.json();
+        _snapsSha = resp.sha;
+        var content = decodeURIComponent(escape(atob(resp.content.replace(/\n/g, ""))));
+        EV.setSnaps(JSON.parse(content));
+    }
+    // Если файл не существует — снимков нет, стартуем с пустым массивом
+}
+
+async function saveSnapsToGithub() {
+    var token = getToken();
+    if (!token) { setStatus("❌ Нет токена GitHub"); return; }
+    var encoded = btoa(unescape(encodeURIComponent(JSON.stringify(EV.getSnaps()))));
+    var body = { message: "ensemble synop snapshots update", content: encoded };
+    if (_snapsSha) body.sha = _snapsSha;
+    var r = await fetch("https://api.github.com/repos/" + GITHUB_OWNER + "/" + GITHUB_REPO +
+                        "/contents/" + GITHUB_SNAPS_FILE, {
+        method: "PUT",
+        headers: {
+            "Authorization": "token " + token,
+            "Content-Type": "application/json",
+            "Accept": "application/vnd.github+json"
+        },
+        body: JSON.stringify(body)
+    });
+    if (r.ok) {
+        var resp = await r.json();
+        if (resp.content) _snapsSha = resp.content.sha;
+    }
+} 
+    
+/* =============================================
    МЕТРИКИ ПО ДНЯМ
 ============================================= */
 var _dayMetrics = null; // { "2025-04-21": { temp:{mae,n}, ... }, ... }
@@ -163,11 +213,7 @@ var _activeChartParam = "temp";
 var _chartInstance = null;
 
 function calcMetricsByDay(obs) {
-    var snaps = EV ? (typeof EV.getHorizonStats === "function" ? null : null) : null;
-    // Получаем снимки напрямую через EV внутренний load — используем calcMetrics с группировкой
-    // Реализуем сами: группируем ошибки по дате наблюдения
-    var snapData = [];
-    try { snapData = JSON.parse(localStorage.getItem("ensembleSnapshots") || "[]"); } catch(e) {}
+    var snapData = EV.getSnaps();
     if (!snapData.length || !obs.length) return null;
 
     var obsIndex = {};
@@ -391,141 +437,18 @@ function getBestModelMAE(paramKey) {
 }
 
 /* =============================================
-   ЭКСПОРТ / ИМПОРТ СНИМКОВ
+   ТОКЕН / GITHUB
 ============================================= */
-function buildEnsembleDescription() {
-    // Собираем список моделей ансамбля из MODEL_REGISTRY
-    var ensModes = [];
-    var weights  = {};
-    try {
-        var raw = JSON.parse(localStorage.getItem("modelHistoryProgress") || "{}");
-        if (typeof MODEL_REGISTRY !== "undefined") {
-            MODEL_REGISTRY.forEach(function(m) {
-                if (!m.ensemble) return;
-                ensModes.push(m);
-                var mae = raw[m.id] && raw[m.id].temp;
-                weights[m.id] = mae ? (1 / mae) : null;
-            });
-        }
-    } catch(e) {}
-
-    // Нормируем веса
-    var validW = ensModes.filter(function(m){ return weights[m.id] != null; });
-    var total  = validW.reduce(function(s,m){ return s + weights[m.id]; }, 0);
-    if (!total) ensModes.forEach(function(m){ weights[m.id] = 1 / ensModes.length; });
-    else        ensModes.forEach(function(m){
-        weights[m.id] = weights[m.id] != null ? weights[m.id] / total : null;
-    });
-
-    return {
-        station:     "Одесса (SYNOP 33837), 46.43°N 30.74°E",
-        description: "Взвешенный ансамблевый прогноз. Веса моделей обратно пропорциональны их MAE температуры " +
-                     "из исторической верификации (localStorage:modelHistoryProgress). " +
-                     "При отсутствии данных — равные веса. " +
-                     "Направление ветра усредняется векторно. " +
-                     "Код погоды — взвешенный мажоритарный голос моделей.",
-        method:      {
-            weighting:    "inverse MAE (температура)",
-            wind_dir:     "векторное среднее",
-            weather_code: "взвешенный мажоритарный",
-            numeric_fields: ["temperature_2m","apparent_temperature","pressure_msl",
-                             "relative_humidity_2m","wind_speed_10m","wind_gusts_10m",
-                             "rain","showers","precip_prob","snowfall","snow_depth",
-                             "cloud_cover","cloud_cover_low","cloud_cover_mid","cloud_cover_high",
-                             "shortwave_radiation","dew_point_2m","visibility"]
-        },
-        models: ensModes.map(function(m) {
-            var w = weights[m.id];
-            return {
-                id:     m.id,
-                name:   m.long || m.id,
-                short:  m.short || m.id,
-                weight: w != null ? Math.round(w * 1000) / 1000 : "равный",
-                weight_pct: w != null ? Math.round(w * 100) + "%" : "равный"
-            };
-        })
-    };
+function saveToken() {
+    var val = document.getElementById("ghTokenInput").value.trim();
+    if (!val) return;
+    localStorage.setItem("ghToken", val);
+    document.getElementById("ghTokenInput").value = "";
+    setStatus("✅ Токен сохранён");
 }
 
-function exportSnapshots() {
-    var snaps = [];
-    try { snaps = JSON.parse(localStorage.getItem("ensembleSnapshots") || "[]"); } catch(e) {}
-    if (!snaps.length) { alert("Нет снимков для сохранения"); return; }
-
-    var desc = buildEnsembleDescription();
-    var exportObj = {
-        _type:       "ensemble_snapshots",
-        _version:    1,
-        exported_at: new Date().toISOString(),
-        ensemble:    desc,
-        count:       snaps.length,
-        snapshots:   snaps
-    };
-
-    var dateStr = new Date().toISOString().slice(0,10);
-    var filename = "ensemble_snapshots_" + dateStr + ".json";
-    var blob = new Blob([JSON.stringify(exportObj, null, 2)], {type:"application/json"});
-    var url  = URL.createObjectURL(blob);
-    var a    = document.createElement("a");
-    a.href = url; a.download = filename; a.click();
-    URL.revokeObjectURL(url);
-
-    setImportStatus("✅ Сохранено: " + snaps.length + " снимков → " + filename, "#8bc34a");
-}
-
-function importSnapshots(file) {
-    var reader = new FileReader();
-    reader.onload = function(e) {
-        var status = document.getElementById("importStatus");
-        try {
-            var obj = JSON.parse(e.target.result);
-
-            // Поддерживаем оба формата: обёрнутый и голый массив
-            var incoming = Array.isArray(obj) ? obj
-                         : (obj._type === "ensemble_snapshots" && obj.snapshots) ? obj.snapshots
-                         : null;
-
-            if (!incoming) {
-                setImportStatus("❌ Неверный формат файла", "#ff6b6b");
-                return;
-            }
-
-            // Сливаем с существующими, без дублей по hours[0].time
-            var existing = [];
-            try { existing = JSON.parse(localStorage.getItem("ensembleSnapshots") || "[]"); } catch(ex) {}
-
-            var existingKeys = new Set(existing.map(function(s) {
-                return s.hours && s.hours[0] ? s.hours[0].time : null;
-            }).filter(Boolean));
-
-            var added = 0;
-            incoming.forEach(function(snap) {
-                var key = snap.hours && snap.hours[0] ? snap.hours[0].time : null;
-                if (!key || existingKeys.has(key)) return;
-                existing.push(snap);
-                existingKeys.add(key);
-                added++;
-            });
-
-            // Сортируем по savedAt, обрезаем до 200
-            existing.sort(function(a,b){ return (a.savedAt||"") > (b.savedAt||"") ? 1 : -1; });
-            if (existing.length > 200) existing = existing.slice(existing.length - 200);
-
-            localStorage.setItem("ensembleSnapshots", JSON.stringify(existing));
-
-            var info = obj.ensemble ? " (из файла: " + (obj.ensemble.models || []).length + " моделей)" : "";
-            setImportStatus("✅ Добавлено " + added + " снимков" + info + ". Всего: " + existing.length, "#8bc34a");
-            render();
-        } catch(ex) {
-            setImportStatus("❌ Ошибка чтения: " + ex.message, "#ff6b6b");
-        }
-    };
-    reader.readAsText(file);
-}
-
-function setImportStatus(msg, color) {
-    var el = document.getElementById("importStatus");
-    if (el) { el.textContent = msg; el.style.color = color || "#aaa"; }
+function setStatus(msg) {
+    document.getElementById("statusLine").textContent = msg;
 }
 
 /* =============================================
@@ -731,21 +654,21 @@ function renderSnapshots() {
     }).join("");
 }
 
-function confirmClear() {
+async function confirmClear() {
     if (!confirm("Удалить все снимки ансамбля?\nМетрики пересчитаются с нуля.")) return;
     EV.clearSnapshots();
+    await saveSnapsToGithub();
     render();
 }
 
 /* =============================================
    СТАРТ
 ============================================= */
-document.getElementById("importSnapFile").addEventListener("change", function(e) {
-    var file = e.target.files[0];
-    if (file) { importSnapshots(file); e.target.value = ""; }
-});
-
-render();
+(async function() {
+    document.getElementById("statusLine").textContent = "Загрузка снимков с GitHub…";
+    await loadSnapsFromGithub();
+    render();
+})();
 </script>
 
 </body>
