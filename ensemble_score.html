@@ -384,23 +384,18 @@ function biasBadge(bias, unit) {
 }
 
 /* =============================================
-   IndexedDB (та же база что в verify.html)
+   SYNOP OBS — читаем из GitHub
 ============================================= */
-var db;
-function initDB() {
-    return new Promise(function(resolve, reject) {
-        var req = indexedDB.open("modelStats", 2);
-        req.onsuccess = function(e) { db = e.target.result; resolve(); };
-        req.onerror   = reject;
-    });
-}
-function dbGetAll() {
-    if (!db) return Promise.resolve([]);
-    return new Promise(function(res) {
-        var req = db.transaction("stats","readonly").objectStore("stats").getAll();
-        req.onsuccess = function() { res(req.result); };
-        req.onerror   = function() { res([]); };
-    });
+var GITHUB_OBS_FILE = "data/synop_obs.json";
+
+async function loadSynopObs() {
+    var url = "https://api.github.com/repos/" + GITHUB_OWNER + "/" + GITHUB_REPO +
+              "/contents/" + GITHUB_OBS_FILE;
+    var r = await fetch(url, { headers: { "Accept": "application/vnd.github+json" }, cache: "no-store" });
+    if (!r.ok) return [];
+    var resp = await r.json();
+    var content = decodeURIComponent(escape(atob(resp.content.replace(/\n/g, ""))));
+    return JSON.parse(content);
 }
 
 /* =============================================
@@ -446,23 +441,18 @@ async function render() {
         return;
     }
 
-    await initDB();
-    var all = await dbGetAll();
+    setStatus("Загрузка наблюдений...");
+    var synopObs = await loadSynopObs();
 
     // Строим массив наблюдений
     var obs = [];
-    all.forEach(function(rec) {
+    synopObs.forEach(function(rec) {
         if (!rec.synopTime || !rec.obs) return;
         var tk = rec.synopTime;
         var iso = tk.slice(0,4)+"-"+tk.slice(4,6)+"-"+tk.slice(6,8)+"T"+tk.slice(8,10)+":00";
-        var rh = rec.obs.humidity != null ? rec.obs.humidity : null;
-        if (rh == null && rec.obs.temp != null && rec.obs.dew != null) {
-            var t = rec.obs.temp, td = rec.obs.dew;
-            rh = Math.round(100 * Math.exp((17.625 * td) / (243.04 + td)) / Math.exp((17.625 * t) / (243.04 + t)));
-        }
         obs.push({ time: iso, temp: rec.obs.temp, pressure: rec.obs.pressure,
                    wind: rec.obs.wind, windDir: rec.obs.windDir,
-                   humidity: rh, rain: rec.obs.precip, precip: rec.obs.precip,
+                   humidity: rec.obs.humidity, rain: rec.obs.precip, precip: rec.obs.precip,
                    cloudcover: rec.obs.cloudcover, ww: rec.obs.ww });
     });
 
