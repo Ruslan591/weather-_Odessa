@@ -1216,10 +1216,8 @@ EV.saveSnapshot(roundedForSnapshot);
     // Строим список снимков: пропущенные + текущий
     function buildSnapshots(allHours, lastSavedAt) {
         const now = new Date();
-        const nowHour = now.getUTCHours();
         const snapshots = [];
 
-        // Пропущенные часы
         if (lastSavedAt) {
             const last = new Date(lastSavedAt);
             const lastHourTs = Date.UTC(
@@ -1228,21 +1226,21 @@ EV.saveSnapshot(roundedForSnapshot);
             const nowHourTs = Date.UTC(
                 now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours()
             );
-            // Перебираем каждый пропущенный час (от last+1 до now-1)
             for (let ts = lastHourTs + 3600000; ts < nowHourTs; ts += 3600000) {
                 const snapTime = new Date(ts);
-                const savedAt = new Date(ts + 15 * 60000).toISOString(); // :15:00.000Z
-                // Берём только часы прогноза начиная с этого момента
-                const snapTimeStr = snapTime.toISOString().slice(0, 13); // "2026-04-25T14"
+                const savedAt = new Date(ts + 15 * 60000).toISOString();
+                const snapTimeStr = snapTime.toISOString().slice(0, 13);
                 const hoursFrom = allHours.filter(h => h.time >= snapTimeStr);
                 if (hoursFrom.length > 0) {
-                    snapshots.push({ savedAt, hours: hoursFrom });
+                    const isSynopHour = snapTime.getUTCHours() % 3 === 0;
+                    snapshots.push({ savedAt, hours: hoursFrom, isSynopHour });
                 }
             }
         }
 
         // Текущий снимок
-        snapshots.push({ savedAt: now.toISOString(), hours: allHours });
+        const isSynopHour = now.getUTCHours() % 3 === 0;
+        snapshots.push({ savedAt: now.toISOString(), hours: allHours, isSynopHour });
 
         return snapshots;
     }
@@ -1291,9 +1289,12 @@ function snapWord(n) {
             : null;
 
         const nowHourStr = new Date().toISOString().slice(0, 13);
-        const alreadySaved = synopSnaps.some(s => s.savedAt && s.savedAt.slice(0, 13) === nowHourStr);
-        if (alreadySaved) {
-            showToast("✓ Снимок за этот час уже есть", "#8bc34a");
+        const nowHour = new Date().getUTCHours();
+        const synopAlreadySaved = nowHour % 3 === 0
+            && synopSnaps.some(s => s.savedAt && s.savedAt.slice(0, 13) === nowHourStr);
+        const pwsAlreadySaved = pwsSnaps.some(s => s.savedAt && s.savedAt.slice(0, 13) === nowHourStr);
+        if (synopAlreadySaved && pwsAlreadySaved) {
+            showToast("✓ Снимки за этот час уже есть", "#8bc34a");
             return;
         }
 
@@ -1306,7 +1307,7 @@ function snapWord(n) {
         let synopAdded = false, pwsAdded = false;
         for (const snap of newSnaps) {
             const key = snap.savedAt.slice(0, 13);
-            if (!existSynopKeys.has(key)) {
+            if (snap.isSynopHour && !existSynopKeys.has(key)) {
                 synopSnaps.push({ savedAt: snap.savedAt, hours: snap.hours.map(toSynop) });
                 existSynopKeys.add(key);
                 synopAdded = true;
