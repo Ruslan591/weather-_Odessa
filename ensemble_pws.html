@@ -172,8 +172,7 @@
 ============================================= */
 var GITHUB_OWNER   = "ruslan591";
 var GITHUB_REPO    = "weather-_Odessa";
-var GITHUB_SNAPS_FILE = "data/ensemble_snapshots.json";
-
+var GITHUB_SNAPS_FILE = "data/ensemble_snapshots_pws.json";
 var _snapsData = []; // снимки в памяти
 var _snapsSha  = null;
 
@@ -189,28 +188,6 @@ async function loadSnapsFromGithub() {
         _snapsSha = resp.sha;
         var content = decodeURIComponent(escape(atob(resp.content.replace(/\n/g,""))));
         _snapsData = JSON.parse(content);
-    }
-
-    // Мержим с localStorage (новые снимки от forecast.html)
-    var local = [];
-    try { local = JSON.parse(localStorage.getItem("ensembleSnapshots") || "[]"); } catch(e) {}
-    if (!local.length) return;
-
-    var existKeys = {};
-    _snapsData.forEach(function(s) {
-        if (s.savedAt) existKeys[s.savedAt.slice(0,13)] = true;
-    });
-    var added = 0;
-    local.forEach(function(s) {
-        var k = s.savedAt ? s.savedAt.slice(0,13) : null;
-        if (!k || existKeys[k]) return;
-        _snapsData.push(s); existKeys[k] = true; added++;
-    });
-
-    if (added > 0) {
-        // Есть новые — сохраняем на GitHub и очищаем localStorage
-        await saveSnapsToGithub();
-        localStorage.removeItem("ensembleSnapshots");
     }
 }
 
