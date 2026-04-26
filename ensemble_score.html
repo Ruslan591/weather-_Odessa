@@ -509,6 +509,8 @@ async function render() {
     renderCompare(metrics);
     renderCoverage(snapCount, obs.length);
     renderSnapshots();
+    document.getElementById("statusLine").innerHTML =
+        "Снимков: <b>" + snapCount + "</b> · наблюдений: <b>" + obs.length + "</b>";
 }
 
 function renderMetrics(metrics) {
