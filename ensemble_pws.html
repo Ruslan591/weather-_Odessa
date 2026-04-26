@@ -181,7 +181,8 @@ function getToken() { return localStorage.getItem("ghToken") || ""; }
 async function loadSnapsFromGithub() {
     var url = "https://api.github.com/repos/" + GITHUB_OWNER + "/" + GITHUB_REPO +
               "/contents/" + GITHUB_SNAPS_FILE;
-    var r = await fetch(url, { headers:{ "Accept":"application/vnd.github+json" }, cache:"no-store" });
+   var token = getToken();
+    var r = await fetch(url, { headers:{ "Accept":"application/vnd.github+json", ...(token ? {"Authorization":"Bearer "+token} : {}) }, cache:"no-store" });
     if (r.status !== 404) {
         if (!r.ok) throw new Error("GitHub GET " + r.status);
         var resp = await r.json();
@@ -251,7 +252,8 @@ var _pwsRawData = [];
 async function loadPwsRaw() {
     var url = "https://api.github.com/repos/" + GITHUB_OWNER + "/" + GITHUB_REPO +
               "/contents/" + GITHUB_PWS_RAW_FILE;
-    var r = await fetch(url, { headers: { "Accept": "application/vnd.github+json" }, cache: "no-store" });
+    var token = getToken();
+    var r = await fetch(url, { headers: { "Accept": "application/vnd.github+json", ...(token ? {"Authorization":"Bearer "+token} : {}) }, cache: "no-store" });
     if (!r.ok) return [];
     var resp = await r.json();
     var content = decodeURIComponent(escape(atob(resp.content.replace(/\n/g, ""))));

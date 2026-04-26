@@ -1181,7 +1181,7 @@ EV.saveSnapshot(roundedForSnapshot);
 
     async function ghGet(path) {
         const url = "https://api.github.com/repos/" + OWNER + "/" + REPO + "/contents/" + path;
-        const r = await fetch(url, { headers: { "Accept": "application/vnd.github+json" }, cache: "no-store" });
+        const r = await fetch(url, { headers: { "Accept": "application/vnd.github+json", ...(TOKEN ? {"Authorization":"Bearer "+TOKEN} : {}) }, cache: "no-store" });
         if (r.status === 404) return { data: [], sha: null };
         if (!r.ok) throw new Error("GitHub GET " + r.status);
         const resp = await r.json();
