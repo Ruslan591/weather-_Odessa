@@ -191,7 +191,7 @@ if (!r.ok) throw new Error("HTTP " + r.status);
         showToast("⏳ Проверяем PWS...", "#aaa");
 
         const { data: existing, sha } = await ghGet();
-        const existKeys = new Set(existing.map(r => r.hourKey + "|" + r.stationId));  // ← добавить
+        const existKeys = new Set(existing.map(r => r.hourKey + "|" + r.stationId));
 
         let lastHourKey = null;
         existing.forEach(function(r) {
@@ -201,7 +201,9 @@ if (!r.ok) throw new Error("HTTP " + r.status);
         const now = new Date();
         const nowHourKey = now.toISOString().slice(0, 13);
 
-        if (lastHourKey && lastHourKey >= nowHourKey) {
+        // Проверяем только завершённые часы (не текущий)
+        const prevHourKey = new Date(now - 3600000).toISOString().slice(0, 13);
+        if (lastHourKey && lastHourKey >= prevHourKey) {
             showToast("✓ PWS актуален", "#8bc34a");
             return;
         }
@@ -219,8 +221,7 @@ if (!r.ok) throw new Error("HTTP " + r.status);
         const todayYMD = now.toISOString().slice(0,10).replace(/-/g,"");
 
         const newRecs = [];
-        // ... остальной код без изменений
-        for (const station of PWS_STATIONS) {
+        for (const station of PWS_SYNC_STATIONS) {
             for (const dateYMD of dates) {
                 try {
                     const isCurrent = dateYMD === todayYMD;
@@ -246,13 +247,13 @@ if (!r.ok) throw new Error("HTTP " + r.status);
                         existKeys.add(key);
                     }
                 } catch(e) {
-                    console.warn("PWS", station.id, dateYMD, e.message);
+                    console.warn("[PWS]", station.id, dateYMD, e.message);
                 }
             }
         }
 
         if (!newRecs.length) {
-            showToast("✓ PWS актуален", "#8bc34a");
+            showToast("✓ PWS актуален (нет новых hourly)", "#8bc34a");
             return;
         }
 
