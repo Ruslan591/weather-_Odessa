@@ -1284,9 +1284,16 @@ function snapWord(n) {
         let synopSha = synopFile.sha;
         let pwsSha   = pwsFile.sha;
 
-        const lastSavedAt = synopSnaps.length
-            ? synopSnaps[synopSnaps.length - 1].savedAt
-            : null;
+        // lastSavedAt берём из pws (пишется каждый час, самый актуальный)
+        // Округляем до часа чтобы не генерировать лишних пропущенных
+        function toHourStart(isoStr) {
+            if (!isoStr) return null;
+            const d = new Date(isoStr);
+            return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours())).toISOString();
+        }
+
+        const lastSavedAtPws   = pwsSnaps.length   ? toHourStart(pwsSnaps[pwsSnaps.length - 1].savedAt)   : null;
+        const lastSavedAtSynop = synopSnaps.length  ? toHourStart(synopSnaps[synopSnaps.length - 1].savedAt) : null;
 
         const nowHourStr = new Date().toISOString().slice(0, 13);
         const nowHour = new Date().getUTCHours();
@@ -1298,20 +1305,26 @@ function snapWord(n) {
             return;
         }
 
-        const newSnaps = buildSnapshots(roundedForSnapshot, lastSavedAt);
-        if (!newSnaps.length) return;
+        // Для pws используем lastSavedAtPws, для synop — lastSavedAtSynop
+        const newSnapsPws  = buildSnapshots(roundedForSnapshot, lastSavedAtPws);
+        const newSnapsSynop = buildSnapshots(roundedForSnapshot, lastSavedAtSynop);
+        if (!newSnapsPws.length && !newSnapsSynop.length) return;
 
         const existSynopKeys = new Set(synopSnaps.map(s => s.savedAt ? s.savedAt.slice(0, 13) : ""));
         const existPwsKeys   = new Set(pwsSnaps.map(s => s.savedAt ? s.savedAt.slice(0, 13) : ""));
 
         let synopAdded = false, pwsAdded = false;
-        for (const snap of newSnaps) {
+
+        for (const snap of newSnapsSynop) {
             const key = snap.savedAt.slice(0, 13);
             if (snap.isSynopHour && !existSynopKeys.has(key)) {
                 synopSnaps.push({ savedAt: snap.savedAt, hours: snap.hours.map(toSynop) });
                 existSynopKeys.add(key);
                 synopAdded = true;
             }
+        }
+        for (const snap of newSnapsPws) {
+            const key = snap.savedAt.slice(0, 13);
             if (!existPwsKeys.has(key)) {
                 pwsSnaps.push({ savedAt: snap.savedAt, hours: snap.hours.map(toPws) });
                 existPwsKeys.add(key);
@@ -1319,7 +1332,8 @@ function snapWord(n) {
             }
         }
 
-        const addedCount = newSnaps.length;
+        const addedCount = (synopAdded ? newSnapsSynop.filter(s => s.isSynopHour).length : 0)
+                         + (pwsAdded   ? newSnapsPws.length : 0);
 
         if (TOKEN) {
             showToast("⬆ Сохраняем " + addedCount + " " + snapWord(addedCount) + "...", "#aaa");
