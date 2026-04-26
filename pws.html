@@ -198,6 +198,13 @@ if (!r.ok) throw new Error("HTTP " + r.status);
             if (!lastHourKey || r.hourKey > lastHourKey) lastHourKey = r.hourKey;
         });
 
+        // Текущий hourKey
+        const nowHourKey = now.toISOString().slice(0, 13);
+        if (lastHourKey && lastHourKey >= nowHourKey) {
+            showToast("✓ PWS актуален", "#8bc34a");
+            return;
+        }
+
         const existKeys = new Set(existing.map(r => r.hourKey + "|" + r.stationId));
 
         // Диапазон дат для загрузки
