@@ -262,14 +262,20 @@ async function loadPwsRaw() {
    ВСПОМОГАТЕЛЬНЫЕ
 ============================================= */
 
-// ИСПРАВЛЕНИЕ: не используем toISOString() — он даёт UTC.
-// hourKey в verify_pws хранится как локальное время "2026-04-22T14"
-// fh.time из open-meteo (timezone=auto) тоже локальное: "2026-04-22T14:00"
-// Просто берём первые 13 символов строки как есть.
+// fh.time из снимка — локальное время UTC+3: "2026-04-25T17:00"
+// hourKey в pws_raw — UTC: "2026-04-25T14"
+// Конвертируем: вычитаем 3 часа
+var PWS_UTC_OFFSET = 3; // UTC+3
+
 function snapTimeToHourKey(timeStr) {
     if (!timeStr) return null;
-    // "2026-04-22T14:00" -> "2026-04-22T14"
-    return timeStr.slice(0, 13);
+    // Парсим как локальное время и вычитаем смещение
+    var dt = new Date(timeStr + ":00Z"); // трактуем как UTC сначала
+    dt.setUTCHours(dt.getUTCHours() - PWS_UTC_OFFSET);
+    return dt.getUTCFullYear() + "-" +
+        String(dt.getUTCMonth()+1).padStart(2,"0") + "-" +
+        String(dt.getUTCDate()).padStart(2,"0") + "T" +
+        String(dt.getUTCHours()).padStart(2,"0");
 }
 
 function maeColor(key, mae) {
