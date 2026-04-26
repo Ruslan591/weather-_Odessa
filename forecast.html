@@ -1115,7 +1115,18 @@ async function loadEnsemble() {
             .catch(function(e) { return { model: m, error: e.message }; });
     });
 
-    var results = await Promise.all(fetches);
+    var fetchesMax = models.map(function(m) {
+        var url = "https://api.open-meteo.com/v1/forecast?latitude=46.43&longitude=30.74" +
+            "&hourly=" + HOURLY_PARAMS +
+            "&models=" + m +
+            "&timezone=auto&forecast_days=16&wind_speed_unit=ms";
+        return fetch(url)
+            .then(function(r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+            .then(function(data) { return { model: m, data: data }; })
+            .catch(function(e) { return { model: m, error: e.message }; });
+    });
+
+    var [results, resultsMax] = await Promise.all([Promise.all(fetches), Promise.all(fetchesMax)]);
 
     var allModelHours = {};
     var baseTimes = null;
@@ -1139,18 +1150,30 @@ async function loadEnsemble() {
     succeededModels.forEach(function(m){ succeededWeights[m] = succeededWeights[m] / wTotal; });
 
     var ensembleHours = mergeEnsemble(allModelHours, succeededWeights, succeededModels);
-    const roundedForSnapshot = ensembleHours.map(h => ({
-    time:        h.time,
-    temp:        Math.round(h.temperature_2m * 10) / 10,
-    pressure:    Math.round(h.pressure_msl * 10) / 10,
-    wind:        Math.round(h.wind_speed_10m * 10) / 10,
-    windGust:    Math.round((h.wind_gusts_10m ?? h.wind_speed_10m) * 10) / 10,
-    windDir:     Math.round(h.wind_direction_10m),
-    humidity:    Math.round(h.relative_humidity_2m),
-    rain:        Math.round(h.rain * 10) / 10,
-    cloudcover:  Math.round(h.cloud_cover),
-    weatherCode: h.weather_code,
-}));
+
+    // Отдельный мерж на максимальный горизонт для снимка
+    var allModelHoursMax = {};
+    resultsMax.forEach(function(res) {
+        if (res.error || !res.data || !res.data.hourly) return;
+        allModelHoursMax[res.model] = parseHourly(res.data.hourly);
+    });
+    var succeededMax = succeededModels.filter(function(m) { return allModelHoursMax[m] != null; });
+    var ensembleHoursMax = succeededMax.length
+        ? mergeEnsemble(allModelHoursMax, succeededWeights, succeededMax)
+        : ensembleHours;
+
+    const roundedForSnapshot = ensembleHoursMax.map(h => ({
+        time:        h.time,
+        temp:        Math.round(h.temperature_2m * 10) / 10,
+        pressure:    Math.round(h.pressure_msl * 10) / 10,
+        wind:        Math.round(h.wind_speed_10m * 10) / 10,
+        windGust:    Math.round((h.wind_gusts_10m ?? h.wind_speed_10m) * 10) / 10,
+        windDir:     Math.round(h.wind_direction_10m),
+        humidity:    Math.round(h.relative_humidity_2m),
+        rain:        Math.round(h.rain * 10) / 10,
+        cloudcover:  Math.round(h.cloud_cover),
+        weatherCode: h.weather_code,
+    }));
 
 // === АВТОСОХРАНЕНИЕ СНИМКОВ НА GITHUB ===
 (async function saveSnapshotsToGithub() {
