@@ -249,10 +249,9 @@ function calcMetricsByDay(obs) {
 
 function roundHour(timeStr) {
     if (!timeStr) return null;
-    var d = new Date(timeStr);
-    if (isNaN(d)) return null;
-    d.setMinutes(0, 0, 0);
-    return d.toISOString().slice(0, 16);
+    // Просто берём первые 13 символов: "2026-04-25T14"
+    // Работает и для "2026-04-25T14:00" и для "2026-04-25T14:00:00"
+    return timeStr.slice(0, 13);
 }
 
 function renderChart(paramKey) {
@@ -449,7 +448,7 @@ async function render() {
     synopObs.forEach(function(rec) {
         if (!rec.synopTime || !rec.obs) return;
         var tk = rec.synopTime;
-        var iso = tk.slice(0,4)+"-"+tk.slice(4,6)+"-"+tk.slice(6,8)+"T"+tk.slice(8,10)+":00";
+        var iso = tk.slice(0,4)+"-"+tk.slice(4,6)+"-"+tk.slice(6,8)+"T"+tk.slice(8,10);
         obs.push({ time: iso, temp: rec.obs.temp, pressure: rec.obs.pressure,
                    wind: rec.obs.wind, windDir: rec.obs.windDir,
                    humidity: rec.obs.humidity, rain: rec.obs.precip, precip: rec.obs.precip,
