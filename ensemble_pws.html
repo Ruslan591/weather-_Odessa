@@ -245,21 +245,17 @@ var _currentStation   = "all";
    IndexedDB (та же база что в verify_pws.html)
 ============================================= */
 var db;
-function initDB() {
-    return new Promise(function(resolve, reject) {
-        var req = indexedDB.open("pwsModelStats", 1);
-        req.onsuccess = function(e) { db = e.target.result; resolve(); };
-        req.onerror   = reject;
-    });
-}
-function dbGetAll() {
-    if (!db) return Promise.resolve([]);
-    return new Promise(function(res) {
-        var tx  = db.transaction("stats", "readonly");
-        var req = tx.objectStore("stats").getAll();
-        req.onsuccess = function() { res(req.result || []); };
-        req.onerror   = function() { res([]); };
-    });
+var GITHUB_PWS_RAW_FILE = "data/pws_raw.json";
+var _pwsRawData = [];
+
+async function loadPwsRaw() {
+    var url = "https://api.github.com/repos/" + GITHUB_OWNER + "/" + GITHUB_REPO +
+              "/contents/" + GITHUB_PWS_RAW_FILE;
+    var r = await fetch(url, { headers: { "Accept": "application/vnd.github+json" }, cache: "no-store" });
+    if (!r.ok) return [];
+    var resp = await r.json();
+    var content = decodeURIComponent(escape(atob(resp.content.replace(/\n/g, ""))));
+    return JSON.parse(content);
 }
 
 /* =============================================
@@ -302,7 +298,7 @@ function windDirDiff(a, b) {
    Ключ: "2026-04-22T14" (hourKey из verify_pws)
 ============================================= */
 async function buildObsIndex() {
-    var all = await dbGetAll();
+    var all = _pwsRawData;
 
     if (_currentStation !== "all") {
         all = all.filter(function(d) { return d.stationId === _currentStation; });
@@ -757,9 +753,9 @@ async function render() {
     }
 
     try {
-        await initDB();
+        _pwsRawData = await loadPwsRaw();
     } catch(e) {
-        status.innerHTML += ' · <span style="color:#ff6b6b;">PWS база недоступна</span>';
+        status.innerHTML += ' · <span style="color:#ff6b6b;">PWS данные недоступны</span>';
     }
 
     var result   = await buildObsIndex();
