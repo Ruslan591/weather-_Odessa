@@ -748,7 +748,7 @@ async function render() {
     var obsCount = result.totalRecords;
 
     var stationLabel = _currentStation === "all"
-        ? "Все (" + (typeof PWS_SYNC_STATIONS !== "undefined" ? PWS_STATIONS.length : "?") + " станции)"
+        ? "Все (" + (typeof PWS_SYNC_STATIONS !== "undefined" ? PWS_SYNC_STATIONS.length : "?") + " станции)"
         : ((typeof PWS_SYNC_STATIONS !== "undefined"
             ? (PWS_SYNC_STATIONS.find(function(s){ return s.id === _currentStation; }) || {}).name
             : null) || _currentStation);
