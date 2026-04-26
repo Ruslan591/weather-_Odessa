@@ -61,39 +61,204 @@
     waitForUplot(() => initHistorySection());
 </script>
 
-<!-- Фоновая подгрузка пропущенных сводок -->
+<!-- Фоновая запись PWS наблюдений на GitHub -->
+<script src="pws_stations.js"></script>
 <script>
-(async function() {
-    // Подключаем IndexedDB и функции из verify.html минимально
-    // Просто тихий фоновый запрос без UI
+(async function syncPwsObs() {
+    const TOKEN = localStorage.getItem("ghToken") || "";
+    if (!TOKEN) return;
+
+    const OWNER    = "ruslan591";
+    const REPO     = "weather-_Odessa";
+    const FILE     = "data/pws_raw.json";
+
+    function showToast(msg, color) {
+        let t = document.getElementById("pwsObsToast");
+        if (!t) {
+            t = document.createElement("div");
+            t.id = "pwsObsToast";
+            t.style.cssText = "position:fixed;bottom:20px;left:50%;transform:translateX(-50%);" +
+                "background:#1e1e1e;border:1px solid #333;border-radius:10px;" +
+                "padding:10px 18px;font-size:13px;color:#eee;z-index:9999;" +
+                "box-shadow:0 4px 16px rgba(0,0,0,0.5);transition:opacity 0.4s;white-space:nowrap;";
+            document.body.appendChild(t);
+        }
+        t.style.color = color || "#eee";
+        t.style.opacity = "1";
+        t.textContent = msg;
+        clearTimeout(t._timer);
+        t._timer = setTimeout(() => { t.style.opacity = "0"; }, 10000);
+    }
+
+    async function ghGet() {
+        const url = "https://api.github.com/repos/"+OWNER+"/"+REPO+"/contents/"+FILE;
+        const r = await fetch(url, { headers:{"Accept":"application/vnd.github+json"}, cache:"no-store" });
+        if (r.status === 404) return { data: [], sha: null };
+        if (!r.ok) throw new Error("GitHub GET " + r.status);
+        const resp = await r.json();
+        const content = decodeURIComponent(escape(atob(resp.content.replace(/\n/g,""))));
+        return { data: JSON.parse(content), sha: resp.sha };
+    }
+
+    async function ghPut(data, sha) {
+        const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+        const body = { message: "pws raw update", content: encoded };
+        if (sha) body.sha = sha;
+        const r = await fetch("https://api.github.com/repos/"+OWNER+"/"+REPO+"/contents/"+FILE, {
+            method: "PUT",
+            headers: {
+                "Authorization": "Bearer " + TOKEN,
+                "Content-Type": "application/json",
+                "Accept": "application/vnd.github+json"
+            },
+            body: JSON.stringify(body)
+        });
+        if (!r.ok) throw new Error("GitHub PUT " + r.status);
+    }
+
+    function pwsPickHourly(observations) {
+        var byHour = {};
+        observations.forEach(function(o) {
+            var t = new Date(o.obsTimeUtc);
+            if (isNaN(t)) return;
+            var min = t.getUTCMinutes();
+            var roundedHour;
+            if (min >= 49) {
+                roundedHour = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate(), t.getUTCHours()+1));
+            } else if (min >= 4 && min <= 9) {
+                roundedHour = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate(), t.getUTCHours()));
+            } else return;
+            var h = roundedHour.getUTCFullYear() + "-" +
+                String(roundedHour.getUTCMonth()+1).padStart(2,"0") + "-" +
+                String(roundedHour.getUTCDate()).padStart(2,"0") + "T" +
+                String(roundedHour.getUTCHours()).padStart(2,"0");
+            var m  = o.metric || {};
+            var pt = m.precipTotal != null ? m.precipTotal : null;
+            if (!byHour[h]) byHour[h] = { dist: Infinity, obs: null, ptMin: pt, ptMax: pt, gustMax: null };
+            var dist = min >= 49 ? 60 - min : min;
+            if (dist < byHour[h].dist) { byHour[h].dist = dist; byHour[h].obs = o; }
+            if (pt != null) {
+                if (byHour[h].ptMin == null || pt < byHour[h].ptMin) byHour[h].ptMin = pt;
+                if (byHour[h].ptMax == null || pt > byHour[h].ptMax) byHour[h].ptMax = pt;
+            }
+            var gust = m.windgustHigh != null ? Math.round(m.windgustHigh / 3.6 * 10) / 10 : null;
+            if (gust != null && (byHour[h].gustMax == null || gust > byHour[h].gustMax))
+                byHour[h].gustMax = gust;
+        });
+        var result = [];
+        var kmhToMs = function(v) { return v != null ? Math.round(v / 3.6 * 10) / 10 : null; };
+        Object.keys(byHour).sort().forEach(function(h) {
+            var entry = byHour[h];
+            if (!entry.obs) return;
+            var o = entry.obs;
+            var m = o.metric || {};
+            var pressure = m.pressureMin != null ? m.pressureMin : (m.pressureMax != null ? m.pressureMax : null);
+            var precip = null;
+            if (entry.ptMax != null && entry.ptMin != null) {
+                precip = Math.round((entry.ptMax - entry.ptMin) * 10) / 10;
+                if (precip < 0) precip = entry.ptMax;
+            }
+            result.push({
+                hourKey:    h,
+                obsTimeUtc: o.obsTimeUtc,
+                temp:       m.tempAvg     != null ? m.tempAvg     : null,
+                humidity:   o.humidityAvg != null ? o.humidityAvg : null,
+                windSpeed:  kmhToMs(m.windspeedAvg),
+                windGust:   entry.gustMax,
+                windDir:    o.winddirAvg  != null ? o.winddirAvg  : null,
+                pressure:   pressure,
+                precip:     precip
+            });
+        });
+        return result;
+    }
+
+    async function fetchStation(stationId, dateYMD, isCurrent) {
+        // Берём ключи из PWS_STATIONS (pws_stations.js)
+        var key = typeof pwsNextKey === "function" ? pwsNextKey() : PWS_STATIONS[0] && PWS_STATIONS[0].apiKey;
+        var url = isCurrent
+            ? "https://api.weather.com/v2/pws/observations/all/1day?stationId="+encodeURIComponent(stationId)+"&format=json&units=m&numericPrecision=decimal&apiKey="+key
+            : "https://api.weather.com/v2/pws/history/all?stationId="+encodeURIComponent(stationId)+"&format=json&units=m&numericPrecision=decimal&date="+dateYMD+"&apiKey="+key;
+        const r = await fetch(url, { cache: "no-store" });
+if (r.status === 401 || r.status === 403) pwsBumpKey();
+if (!r.ok) throw new Error("HTTP " + r.status);
+        const data = await r.json();
+        if (!data || !data.observations || !data.observations.length) throw new Error("Нет данных");
+        return pwsPickHourly(data.observations);
+    }
+
     try {
-        // Открываем ту же БД
-        const db = await new Promise((resolve, reject) => {
-            const req = indexedDB.open("modelStats", 1);
-            req.onupgradeneeded = e => {
-                e.target.result.createObjectStore("stats", { keyPath: "time" });
-            };
-            req.onsuccess = e => resolve(e.target.result);
-            req.onerror = reject;
+        showToast("⏳ Проверяем PWS...", "#aaa");
+
+        const { data: existing, sha } = await ghGet();
+
+        // Последний hourKey по всем станциям
+        let lastHourKey = null;
+        existing.forEach(function(r) {
+            if (!lastHourKey || r.hourKey > lastHourKey) lastHourKey = r.hourKey;
         });
 
-        // Последнее фоновое обновление
-        const lastBg = localStorage.getItem("lastBgUpdate");
-        const now = Date.now();
-        // Не чаще раза в 3 часа с других страниц
-        if (lastBg && now - Number(lastBg) < 3 * 3600 * 1000) return;
-        localStorage.setItem("lastBgUpdate", now);
+        const existKeys = new Set(existing.map(r => r.hourKey + "|" + r.stationId));
 
-        // Перенаправляем на verify.html в скрытом iframe
-        // (он сам запустит autoUpdate)
-        const iframe = document.createElement("iframe");
-        iframe.src = "verify.html";
-        iframe.style.cssText = "display:none;width:0;height:0;border:0";
-        document.body.appendChild(iframe);
-        // Убираем iframe через 60 сек
-        setTimeout(() => iframe.remove(), 60000);
+        // Диапазон дат для загрузки
+        const now = new Date();
+        let startDate;
+        if (lastHourKey) {
+            startDate = new Date(lastHourKey.slice(0,10) + "T00:00:00Z");
+        } else {
+            startDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+        }
+        const dates = [];
+        for (let d = new Date(startDate); d <= now; d.setUTCDate(d.getUTCDate()+1)) {
+            dates.push(d.toISOString().slice(0,10).replace(/-/g,""));
+        }
+        const todayYMD = now.toISOString().slice(0,10).replace(/-/g,"");
+
+        const newRecs = [];
+        for (const station of PWS_STATIONS) {
+            for (const dateYMD of dates) {
+                try {
+                    const isCurrent = dateYMD === todayYMD;
+                    const hourlyObs = await fetchStation(station.id, dateYMD, isCurrent);
+                    for (const obs of hourlyObs) {
+                        const key = obs.hourKey + "|" + station.id;
+                        if (existKeys.has(key)) continue;
+                        const pressure = obs.pressure != null
+                            ? Math.round((obs.pressure + (station.pressureOffset || 0)) * 100) / 100
+                            : null;
+                        newRecs.push({
+                            hourKey:    obs.hourKey,
+                            stationId:  station.id,
+                            obsTimeUtc: obs.obsTimeUtc,
+                            temp:       obs.temp,
+                            pressure:   pressure,
+                            wind:       obs.windSpeed,
+                            windGust:   obs.windGust,
+                            windDir:    obs.windDir,
+                            humidity:   obs.humidity,
+                            precip:     obs.precip
+                        });
+                        existKeys.add(key);
+                    }
+                } catch(e) {
+                    console.warn("PWS", station.id, dateYMD, e.message);
+                }
+            }
+        }
+
+        if (!newRecs.length) {
+            showToast("✓ PWS актуален", "#8bc34a");
+            return;
+        }
+
+        const merged = [...existing, ...newRecs]
+            .sort((a,b) => (a.hourKey+a.stationId) > (b.hourKey+b.stationId) ? 1 : -1);
+
+        showToast("⬆ Сохраняем " + newRecs.length + " записей PWS...", "#aaa");
+        await ghPut(merged, sha);
+        showToast("✓ PWS: добавлено " + newRecs.length + " записей", "#8bc34a");
     } catch(e) {
-        console.log("BG update error:", e);
+        showToast("❌ PWS: " + e.message, "#ff6b6b");
     }
 })();
 </script>
