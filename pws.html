@@ -191,18 +191,16 @@ if (!r.ok) throw new Error("HTTP " + r.status);
         showToast("⏳ Проверяем PWS...", "#aaa");
 
         const { data: existing, sha } = await ghGet();
+        const existKeys = new Set(existing.map(r => r.hourKey + "|" + r.stationId));  // ← добавить
 
-        // Последний hourKey по всем станциям
         let lastHourKey = null;
         existing.forEach(function(r) {
             if (!lastHourKey || r.hourKey > lastHourKey) lastHourKey = r.hourKey;
         });
 
-        // Диапазон дат для загрузки
         const now = new Date();
         const nowHourKey = now.toISOString().slice(0, 13);
 
-        // Если текущий час уже есть — выходим
         if (lastHourKey && lastHourKey >= nowHourKey) {
             showToast("✓ PWS актуален", "#8bc34a");
             return;
@@ -219,20 +217,9 @@ if (!r.ok) throw new Error("HTTP " + r.status);
             dates.push(d.toISOString().slice(0,10).replace(/-/g,""));
         }
         const todayYMD = now.toISOString().slice(0,10).replace(/-/g,"");
-        const now = new Date();
-        let startDate;
-        if (lastHourKey) {
-            startDate = new Date(lastHourKey.slice(0,10) + "T00:00:00Z");
-        } else {
-            startDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-        }
-        const dates = [];
-        for (let d = new Date(startDate); d <= now; d.setUTCDate(d.getUTCDate()+1)) {
-            dates.push(d.toISOString().slice(0,10).replace(/-/g,""));
-        }
-        const todayYMD = now.toISOString().slice(0,10).replace(/-/g,"");
 
         const newRecs = [];
+        // ... остальной код без изменений
         for (const station of PWS_STATIONS) {
             for (const dateYMD of dates) {
                 try {
