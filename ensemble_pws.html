@@ -307,10 +307,10 @@ async function buildObsIndex() {
     // Группируем по hourKey
     var byHour = {};
     all.forEach(function(rec) {
-        if (!rec.hourKey || !rec.obs) return;
-        var key = rec.hourKey; // "2026-04-22T14"
+        if (!rec.hourKey) return;
+        var key = rec.hourKey;
         if (!byHour[key]) byHour[key] = [];
-        byHour[key].push(rec.obs);
+        byHour[key].push(rec); // поля temp, wind и т.д. прямо в rec
     });
 
     // Усредняем по станциям
@@ -327,8 +327,7 @@ async function buildObsIndex() {
             if (!dirs.length) return null;
             var sx = dirs.reduce(function(s,d){ return s + Math.cos(d * Math.PI / 180); }, 0);
             var sy = dirs.reduce(function(s,d){ return s + Math.sin(d * Math.PI / 180); }, 0);
-            var deg = Math.atan2(sy, sx) * 180 / Math.PI;
-            return (deg + 360) % 360;
+            return (Math.atan2(sy, sx) * 180 / Math.PI + 360) % 360;
         }
         obsIndex[key] = {
             time:     key,
