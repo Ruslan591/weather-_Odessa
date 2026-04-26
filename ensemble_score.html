@@ -29,12 +29,7 @@
 <div id="statusLine" style="color:#aaa;font-size:0.85em;margin-bottom:12px;">Загрузка...</div>
 
 <!-- МЕТРИКИ -->
-<div id="metricsGrid" style="
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:8px;
-    margin-bottom:16px;
-"></div>
+<div id="metricsGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;"></div>
 
 <!-- ГРАФИК ПО ДНЯМ -->
 <div id="chartSection" style="display:none;margin-bottom:16px;">
@@ -45,6 +40,15 @@
     </div>
 </div>
 
+<!-- ГРАФИК ПО ГОРИЗОНТУ -->
+<div id="horizonSection" style="display:none;margin-bottom:16px;">
+    <div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:8px;">ТОЧНОСТЬ ПО ГОРИЗОНТУ</div>
+    <div style="background:#161616;border-radius:10px;padding:10px 8px;">
+        <div id="horizonParamRow" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;padding:0 4px;"></div>
+        <canvas id="horizonChart" height="160"></canvas>
+    </div>
+</div>
+
 <!-- СРАВНЕНИЕ С ЛУЧШЕЙ МОДЕЛЬЮ -->
 <div id="compareSection" style="display:none;margin-bottom:16px;">
     <div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:8px;">СРАВНЕНИЕ С ЛУЧШЕЙ МОДЕЛЬЮ</div>
@@ -52,10 +56,7 @@
 </div>
 
 <!-- ПОКРЫТИЕ -->
-<div id="coverageSection" style="
-    background:#161616;border-radius:10px;padding:12px 14px;
-    margin-bottom:16px;font-size:13px;
-">
+<div style="background:#161616;border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:13px;">
     <div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:10px;">ПОКРЫТИЕ</div>
     <div id="coverageInfo" style="color:#aaa;">—</div>
 </div>
@@ -64,84 +65,31 @@
 <div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:8px;">ПОСЛЕДНИЕ СНИМКИ</div>
 <div id="snapshotList" style="margin-bottom:16px;"></div>
 
-<!-- GITHUB -->
 <div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:8px;">GITHUB</div>
 
-</div><!-- /container -->
+</div>
 
 <style>
-.es-card {
-    background: #161616;
-    border-radius: 10px;
-    padding: 12px 14px;
-    position: relative;
-}
-.es-card-label {
-    font-size: 11px;
-    color: #555;
-    margin-bottom: 6px;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-}
-.es-card-mae {
-    font-size: 22px;
-    font-weight: 800;
-    line-height: 1;
-    margin-bottom: 4px;
-}
-.es-card-sub {
-    font-size: 11px;
-    color: #666;
-    line-height: 1.6;
-}
-.es-badge {
-    display: inline-block;
-    font-size: 10px;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-weight: 700;
-    margin-left: 6px;
-    vertical-align: middle;
-}
-.snap-row {
-    background: #161616;
-    border-radius: 8px;
-    padding: 9px 12px;
-    margin-bottom: 6px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 12px;
-}
-.snap-time { color: #888; }
-.snap-hours { color: #555; font-size: 11px; }
-.cp-btn {
-    font-size: 11px;
-    padding: 4px 10px;
-    border-radius: 20px;
-    border: 1px solid #333;
-    background: #1e1e1e;
-    color: #666;
-    cursor: pointer;
-}
-.cp-btn.active {
-    border-color: var(--c, #aaa);
-    color: var(--c, #aaa);
-    background: #1e1e1e;
-}
+.es-card { background:#161616; border-radius:10px; padding:12px 14px; }
+.es-card-label { font-size:11px; color:#555; margin-bottom:6px; font-weight:600; letter-spacing:0.04em; }
+.es-card-mae { font-size:22px; font-weight:800; line-height:1; margin-bottom:4px; }
+.es-card-sub { font-size:11px; color:#666; line-height:1.6; }
+.es-badge { display:inline-block; font-size:10px; padding:2px 6px; border-radius:4px; font-weight:700; margin-left:6px; vertical-align:middle; }
+.snap-row { background:#161616; border-radius:8px; padding:9px 12px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center; font-size:12px; }
+.snap-time { color:#888; }
+.snap-hours { color:#555; font-size:11px; }
+.cp-btn { font-size:11px; padding:4px 10px; border-radius:20px; border:1px solid #333; background:#1e1e1e; color:#666; cursor:pointer; }
+.cp-btn.active { border-color:var(--c,#aaa); color:var(--c,#aaa); }
 </style>
 
 <script>
-/* =============================================
-   GITHUB
-============================================= */
+/* === GITHUB === */
 var GITHUB_OWNER      = "ruslan591";
 var GITHUB_REPO       = "weather-_Odessa";
 var GITHUB_SNAPS_FILE = "data/ensemble_snapshots_synop.json";
 var GITHUB_OBS_FILE   = "data/synop_obs.json";
 
-var _snaps    = [];
-var _snapsSha = null;
+var _snaps = [];
 
 function getToken() { return localStorage.getItem("ghToken") || ""; }
 
@@ -149,64 +97,56 @@ async function ghGetJson(path) {
     var url = "https://api.github.com/repos/" + GITHUB_OWNER + "/" + GITHUB_REPO + "/contents/" + path;
     var token = getToken();
     var r = await fetch(url, {
-        headers: { "Accept": "application/vnd.github+json", ...(token ? {"Authorization":"Bearer "+token} : {}) },
+        headers: Object.assign({"Accept":"application/vnd.github+json"}, token ? {"Authorization":"Bearer "+token} : {}),
         cache: "no-store"
     });
     if (!r.ok) return { data: null, sha: null };
     var resp = await r.json();
     var raw = resp.content.replace(/\n/g, "");
-    var content = new TextDecoder().decode(Uint8Array.from(atob(raw), c => c.charCodeAt(0)));
+    var content = new TextDecoder().decode(Uint8Array.from(atob(raw), function(c){ return c.charCodeAt(0); }));
     return { data: JSON.parse(content), sha: resp.sha };
 }
 
 async function loadSnaps() {
     var result = await ghGetJson(GITHUB_SNAPS_FILE);
-    if (result.data) {
-        _snaps = Array.isArray(result.data) ? result.data : [];
-        _snapsSha = result.sha;
-    }
+    _snaps = (result.data && Array.isArray(result.data)) ? result.data : [];
 }
 
 async function loadSynopObs() {
     var result = await ghGetJson(GITHUB_OBS_FILE);
-    return Array.isArray(result.data) ? result.data : [];
+    return (result.data && Array.isArray(result.data)) ? result.data : [];
 }
 
-/* =============================================
-   ВСПОМОГАТЕЛЬНЫЕ
-============================================= */
-
-// "2026-04-25T14", "2026-04-25T14:00", "2026-04-25T14:00:00" → "2026-04-25T14"
-function roundHour(timeStr) {
-    if (!timeStr) return null;
-    return timeStr.slice(0, 13);
+/* === ВСПОМОГАТЕЛЬНЫЕ === */
+function roundHour(t) {
+    return t ? t.slice(0, 13) : null;
 }
 
 function buildObsIndex(obs) {
     var idx = {};
     obs.forEach(function(o) {
-        var key = roundHour(o.time);
-        if (key) idx[key] = o;
+        var k = roundHour(o.time);
+        if (k) idx[k] = o;
     });
     return idx;
 }
 
-function wmoGroupSimple(code) {
+function wmoGroup(code) {
     if (code == null) return null;
-    if (code <= 1)                  return "clear";
-    if (code <= 3)                  return "cloudy";
+    if (code <= 1)  return "clear";
+    if (code <= 3)  return "cloudy";
     if (code === 45 || code === 48) return "fog";
     if (code >= 51 && code <= 67)   return "rain";
     if (code >= 71 && code <= 77)   return "snow";
     if (code >= 80 && code <= 94)   return "shower";
-    if (code >= 95)                 return "thunder";
+    if (code >= 95) return "thunder";
     return "cloudy";
 }
 
-function synopGroupSimple(ww) {
+function synopGroup(ww) {
     if (ww == null) return null;
-    if (ww <= 1)              return "clear";
-    if (ww <= 39)             return "cloudy";
+    if (ww <= 1)  return "clear";
+    if (ww <= 39) return "cloudy";
     if (ww >= 40 && ww <= 49) return "fog";
     if (ww >= 50 && ww <= 69) return "rain";
     if (ww >= 70 && ww <= 79) return "snow";
@@ -218,18 +158,12 @@ function synopGroupSimple(ww) {
 function getHorizonStats() {
     return _snaps.map(function(s) {
         var h0 = s.hours && s.hours.length ? new Date(s.hours[0].time) : new Date(s.savedAt);
-        var hN = s.hours && s.hours.length ? new Date(s.hours[s.hours.length - 1].time) : h0;
-        return {
-            savedAt:  s.savedAt,
-            horizonH: Math.round((hN - h0) / 3600000),
-            count:    s.hours ? s.hours.length : 0
-        };
+        var hN = s.hours && s.hours.length ? new Date(s.hours[s.hours.length-1].time) : h0;
+        return { savedAt: s.savedAt, horizonH: Math.round((hN-h0)/3600000), count: s.hours ? s.hours.length : 0 };
     });
 }
 
-/* =============================================
-   ПАРАМЕТРЫ
-============================================= */
+/* === ПАРАМЕТРЫ === */
 var PARAMS = [
     { key:"temp",       label:"Температура", unit:"°C",  color:"#ff8f00" },
     { key:"pressure",   label:"Давление",    unit:" гПа",color:"#4aa3ff" },
@@ -241,23 +175,53 @@ var PARAMS = [
 ];
 
 var THRESHOLDS = {
-    temp:       { good: 1.5, bad: 3.0 },
-    pressure:   { good: 1.0, bad: 2.5 },
-    wind:       { good: 1.5, bad: 3.0 },
-    windDir:    { good: 30,  bad: 60  },
-    humidity:   { good: 8,   bad: 15  },
-    rain:       { good: 0.5, bad: 1.5 },
-    cloudcover: { good: 15,  bad: 30  },
+    temp:       { good:1.5, bad:3.0 },
+    pressure:   { good:1.0, bad:2.5 },
+    wind:       { good:1.5, bad:3.0 },
+    windDir:    { good:30,  bad:60  },
+    humidity:   { good:8,   bad:15  },
+    rain:       { good:0.5, bad:1.5 },
+    cloudcover: { good:15,  bad:30  },
 };
 
-/* =============================================
-   РАСЧЁТ МЕТРИК
-============================================= */
+/* === РАСЧЁТ МЕТРИК === */
+function pushErrors(errors, fh, ob) {
+    if (fh.temp      != null && ob.temp      != null) errors.temp.push(fh.temp - ob.temp);
+    if (fh.pressure  != null && ob.pressure  != null) errors.pressure.push(fh.pressure - ob.pressure);
+    if (fh.wind      != null && ob.wind      != null) errors.wind.push(fh.wind - ob.wind);
+    if (fh.humidity  != null && ob.humidity  != null) errors.humidity.push(fh.humidity - ob.humidity);
+    if (fh.cloudcover!= null && ob.cloudcover!= null) errors.cloudcover.push(fh.cloudcover - ob.cloudcover);
+    var obRain = ob.rain != null ? ob.rain : (ob.precip != null ? ob.precip : null);
+    if (fh.rain != null && obRain != null)
+        errors.rain.push((fh.rain > 0.1 ? 1 : 0) - (obRain > 0.1 ? 1 : 0));
+    if (fh.windDir != null && ob.windDir != null) {
+        var d = Math.abs(fh.windDir - ob.windDir);
+        if (d > 180) d = 360 - d;
+        errors.windDir.push(d);
+    }
+}
+
+function emptyErrors() {
+    return { temp:[], pressure:[], wind:[], windDir:[], humidity:[], rain:[], cloudcover:[] };
+}
+
+function summarize(errors) {
+    var result = {};
+    Object.keys(errors).forEach(function(k) {
+        var arr = errors[k];
+        if (!arr.length) { result[k] = null; return; }
+        var mae  = arr.reduce(function(s,v){ return s+Math.abs(v); },0) / arr.length;
+        var rmse = Math.sqrt(arr.reduce(function(s,v){ return s+v*v; },0) / arr.length);
+        var bias = arr.reduce(function(s,v){ return s+v; },0) / arr.length;
+        result[k] = { mae:mae, rmse:rmse, bias:bias, n:arr.length };
+    });
+    return result;
+}
+
 function calcMetrics(obs) {
     if (!_snaps.length || !obs.length) return null;
-
     var obsIndex = buildObsIndex(obs);
-    var errors = { temp:[], pressure:[], wind:[], windDir:[], humidity:[], rain:[], cloudcover:[] };
+    var errors = emptyErrors();
     var wxHits = 0, wxTotal = 0;
 
     _snaps.forEach(function(snap) {
@@ -265,43 +229,21 @@ function calcMetrics(obs) {
         snap.hours.forEach(function(fh) {
             var ob = obsIndex[roundHour(fh.time)];
             if (!ob) return;
-            if (fh.temp      != null && ob.temp      != null) errors.temp.push(fh.temp - ob.temp);
-            if (fh.pressure  != null && ob.pressure  != null) errors.pressure.push(fh.pressure - ob.pressure);
-            if (fh.wind      != null && ob.wind      != null) errors.wind.push(fh.wind - ob.wind);
-            if (fh.humidity  != null && ob.humidity  != null) errors.humidity.push(fh.humidity - ob.humidity);
-            if (fh.cloudcover!= null && ob.cloudcover!= null) errors.cloudcover.push(fh.cloudcover - ob.cloudcover);
-            var obRain = ob.rain != null ? ob.rain : (ob.precip != null ? ob.precip : null);
-            if (fh.rain != null && obRain != null)
-                errors.rain.push((fh.rain > 0.1 ? 1 : 0) - (obRain > 0.1 ? 1 : 0));
-            if (fh.windDir != null && ob.windDir != null) {
-                var d = Math.abs(fh.windDir - ob.windDir);
-                if (d > 180) d = 360 - d;
-                errors.windDir.push(d);
-            }
+            pushErrors(errors, fh, ob);
             if (fh.weatherCode != null && ob.ww != null) {
-                var fg = wmoGroupSimple(fh.weatherCode);
-                var og = synopGroupSimple(ob.ww);
+                var fg = wmoGroup(fh.weatherCode), og = synopGroup(ob.ww);
                 if (fg != null && og != null) { wxTotal++; if (fg === og) wxHits++; }
             }
         });
     });
 
-    var result = {};
-    Object.keys(errors).forEach(function(k) {
-        var arr = errors[k];
-        if (!arr.length) { result[k] = null; return; }
-        var mae  = arr.reduce(function(s,v){ return s + Math.abs(v); }, 0) / arr.length;
-        var rmse = Math.sqrt(arr.reduce(function(s,v){ return s + v*v; }, 0) / arr.length);
-        var bias = arr.reduce(function(s,v){ return s + v; }, 0) / arr.length;
-        result[k] = { mae: mae, rmse: rmse, bias: bias, n: arr.length };
-    });
-    result._wx = wxTotal > 0 ? { hits: wxHits, total: wxTotal, pct: Math.round(wxHits/wxTotal*100) } : null;
+    var result = summarize(errors);
+    result._wx = wxTotal > 0 ? { hits:wxHits, total:wxTotal, pct:Math.round(wxHits/wxTotal*100) } : null;
     return result;
 }
 
 function calcMetricsByDay(obs) {
     if (!_snaps.length || !obs.length) return null;
-
     var obsIndex = buildObsIndex(obs);
     var byDay = {};
 
@@ -312,81 +254,64 @@ function calcMetricsByDay(obs) {
             var ob  = obsIndex[key];
             if (!ob) return;
             var day = key.slice(0, 10);
-            if (!byDay[day]) byDay[day] = { temp:[], pressure:[], wind:[], windDir:[], humidity:[], rain:[], cloudcover:[] };
-
-            if (fh.temp      != null && ob.temp      != null) byDay[day].temp.push(Math.abs(fh.temp - ob.temp));
-            if (fh.pressure  != null && ob.pressure  != null) byDay[day].pressure.push(Math.abs(fh.pressure - ob.pressure));
-            if (fh.wind      != null && ob.wind      != null) byDay[day].wind.push(Math.abs(fh.wind - ob.wind));
-            if (fh.humidity  != null && ob.humidity  != null) byDay[day].humidity.push(Math.abs(fh.humidity - ob.humidity));
-            if (fh.cloudcover!= null && ob.cloudcover!= null) byDay[day].cloudcover.push(Math.abs(fh.cloudcover - ob.cloudcover));
-            var obRain = ob.rain != null ? ob.rain : ob.precip;
-            if (fh.rain != null && obRain != null) byDay[day].rain.push(Math.abs(fh.rain - obRain));
-            if (fh.windDir != null && ob.windDir != null) {
-                var d = Math.abs(fh.windDir - ob.windDir);
-                if (d > 180) d = 360 - d;
-                byDay[day].windDir.push(d);
-            }
+            if (!byDay[day]) byDay[day] = emptyErrors();
+            pushErrors(byDay[day], fh, ob);
         });
     });
 
     var result = {};
     Object.keys(byDay).sort().forEach(function(day) {
-        result[day] = {};
-        Object.keys(byDay[day]).forEach(function(k) {
-            var arr = byDay[day][k];
-            if (!arr.length) { result[day][k] = null; return; }
-            result[day][k] = { mae: arr.reduce(function(s,v){return s+v;},0) / arr.length, n: arr.length };
-        });
+        result[day] = summarize(byDay[day]);
     });
     return result;
 }
 
-/* =============================================
-   CHART
-============================================= */
-var _dayMetrics = null;
-var _activeChartParam = "temp";
-var _chartInstance = null;
+function calcMetricsByHorizon(obs) {
+    if (!_snaps.length || !obs.length) return null;
+    var obsIndex = buildObsIndex(obs);
+    var byH = {};
 
-function renderChart(paramKey) {
-    _activeChartParam = paramKey;
-    document.querySelectorAll(".cp-btn").forEach(function(b) {
-        b.classList.toggle("active", b.dataset.key === paramKey);
-    });
-    if (!_dayMetrics) return;
-    var days = Object.keys(_dayMetrics).sort();
-    if (!days.length) return;
-
-    var p = PARAMS.find(function(x){ return x.key === paramKey; });
-    if (!p) return;
-
-    var maes = days.map(function(d) {
-        var s = _dayMetrics[d][paramKey];
-        return s ? s.mae : null;
-    });
-    var labels = days.map(function(d) {
-        var parts = d.split("-");
-        return parts[2] + "." + parts[1];
+    _snaps.forEach(function(snap) {
+        if (!snap.hours) return;
+        var snapStart = new Date(snap.savedAt);
+        snap.hours.forEach(function(fh) {
+            var ob = obsIndex[roundHour(fh.time)];
+            if (!ob) return;
+            var horizonH = Math.round((new Date(fh.time) - snapStart) / 3600000);
+            var bucket = Math.round(horizonH / 6) * 6;
+            if (bucket < 0) return;
+            if (!byH[bucket]) byH[bucket] = emptyErrors();
+            pushErrors(byH[bucket], fh, ob);
+        });
     });
 
-    var ctx = document.getElementById("dayChart").getContext("2d");
-    if (_chartInstance) { _chartInstance.destroy(); _chartInstance = null; }
+    var result = {};
+    Object.keys(byH).sort(function(a,b){ return +a - +b; }).forEach(function(h) {
+        result[h] = summarize(byH[h]);
+    });
+    return result;
+}
 
-    var t = THRESHOLDS[paramKey];
-    var goodLine = t ? t.good : null;
-    var badLine  = t ? t.bad  : null;
+/* === ГРАФИКИ === */
+var _dayMetrics     = null;
+var _horizonMetrics = null;
+var _activeChartParam   = "temp";
+var _activeHorizonParam = "temp";
+var _chartInstance        = null;
+var _horizonChartInstance = null;
 
-    _chartInstance = new Chart(ctx, {
+function makeChartOptions(labels, maes, p, getN) {
+    var t = THRESHOLDS[p.key];
+    return {
         type: "line",
         data: {
             labels: labels,
             datasets: [{
-                label: "MAE " + p.unit,
                 data: maes,
                 borderColor: p.color,
                 backgroundColor: p.color + "22",
                 borderWidth: 2,
-                pointRadius: 3,
+                pointRadius: 2,
                 pointBackgroundColor: p.color,
                 tension: 0.3,
                 fill: true,
@@ -402,38 +327,82 @@ function renderChart(paramKey) {
                     callbacks: {
                         label: function(ctx) {
                             var v = ctx.parsed.y;
-                            var n = _dayMetrics[days[ctx.dataIndex]] && _dayMetrics[days[ctx.dataIndex]][paramKey];
-                            return v != null ? v.toFixed(2) + p.unit + (n ? " (n=" + n.n + ")" : "") : "—";
+                            var n = getN(ctx.dataIndex);
+                            return v != null ? v.toFixed(2) + p.unit + (n ? " (n="+n+")" : "") : "—";
                         }
                     }
-                },
-                annotation: goodLine ? {
-                    annotations: {
-                        good: { type:"line", yMin:goodLine, yMax:goodLine, borderColor:"#5fe08f44", borderWidth:1, borderDash:[4,4] },
-                        bad:  { type:"line", yMin:badLine,  yMax:badLine,  borderColor:"#ff6b6b44", borderWidth:1, borderDash:[4,4] }
-                    }
-                } : {}
+                }
             },
             scales: {
-                x: { ticks:{ color:"#555", font:{size:10} }, grid:{ color:"#1e1e1e" } },
+                x: { ticks:{ color:"#555", font:{size:9}, maxRotation:45 }, grid:{ color:"#1e1e1e" } },
                 y: { ticks:{ color:"#555", font:{size:10} }, grid:{ color:"#252525" }, beginAtZero:true }
             }
         }
+    };
+}
+
+function renderChart(paramKey) {
+    _activeChartParam = paramKey;
+    document.querySelectorAll(".dp-btn").forEach(function(b){
+        b.classList.toggle("active", b.dataset.key === paramKey);
     });
+    if (!_dayMetrics) return;
+    var days = Object.keys(_dayMetrics).sort();
+    if (!days.length) return;
+    var p = PARAMS.find(function(x){ return x.key === paramKey; });
+    if (!p) return;
+
+    var maes   = days.map(function(d){ var s=_dayMetrics[d][paramKey]; return s ? s.mae : null; });
+    var labels = days.map(function(d){ var pts=d.split("-"); return pts[2]+"."+pts[1]; });
+
+    var ctx = document.getElementById("dayChart").getContext("2d");
+    if (_chartInstance) { _chartInstance.destroy(); _chartInstance = null; }
+    _chartInstance = new Chart(ctx, makeChartOptions(labels, maes, p, function(i){
+        var s = _dayMetrics[days[i]] && _dayMetrics[days[i]][paramKey];
+        return s ? s.n : null;
+    }));
 }
 
 function renderChartParamRow() {
-    var row = document.getElementById("chartParamRow");
-    row.innerHTML = PARAMS.map(function(p) {
-        return '<button class="cp-btn' + (p.key === _activeChartParam ? " active" : "") + '" ' +
-               'data-key="' + p.key + '" style="--c:' + p.color + '" ' +
-               'onclick="renderChart(\'' + p.key + '\')">' + p.label + '</button>';
+    document.getElementById("chartParamRow").innerHTML = PARAMS.map(function(p) {
+        return '<button class="cp-btn dp-btn' + (p.key===_activeChartParam?" active":"") + '" ' +
+               'data-key="'+p.key+'" style="--c:'+p.color+'" ' +
+               'onclick="renderChart(\''+p.key+'\')">' + p.label + '</button>';
     }).join("");
 }
 
-/* =============================================
-   RENDER HELPERS
-============================================= */
+function renderHorizonChart(paramKey) {
+    _activeHorizonParam = paramKey;
+    document.querySelectorAll(".hp-btn").forEach(function(b){
+        b.classList.toggle("active", b.dataset.key === paramKey);
+    });
+    if (!_horizonMetrics) return;
+    var buckets = Object.keys(_horizonMetrics).map(Number).sort(function(a,b){ return a-b; });
+    if (!buckets.length) return;
+    var p = PARAMS.find(function(x){ return x.key === paramKey; });
+    if (!p) return;
+
+    var maes   = buckets.map(function(h){ var s=_horizonMetrics[h][paramKey]; return s ? s.mae : null; });
+    var labels = buckets.map(function(h){ return "+"+h+"ч"; });
+
+    var ctx = document.getElementById("horizonChart").getContext("2d");
+    if (_horizonChartInstance) { _horizonChartInstance.destroy(); _horizonChartInstance = null; }
+    _horizonChartInstance = new Chart(ctx, makeChartOptions(labels, maes, p, function(i){
+        var s = _horizonMetrics[buckets[i]] && _horizonMetrics[buckets[i]][paramKey];
+        return s ? s.n : null;
+    }));
+}
+
+function renderHorizonParamRow() {
+    var hParams = PARAMS.filter(function(p){ return !p.isFact && p.key !== "windDir"; });
+    document.getElementById("horizonParamRow").innerHTML = hParams.map(function(p) {
+        return '<button class="cp-btn hp-btn' + (p.key===_activeHorizonParam?" active":"") + '" ' +
+               'data-key="'+p.key+'" style="--c:'+p.color+'" ' +
+               'onclick="renderHorizonChart(\''+p.key+'\')">' + p.label + '</button>';
+    }).join("");
+}
+
+/* === RENDER HELPERS === */
 function maeColor(key, mae) {
     var t = THRESHOLDS[key];
     if (!t) return "#aaa";
@@ -446,8 +415,7 @@ function biasBadge(bias, unit) {
     if (Math.abs(bias) < 0.01) return "";
     var sign = bias > 0 ? "▲ завыш" : "▼ занижает";
     var col  = bias > 0 ? "#ff9f5c" : "#74b9ff";
-    return '<span class="es-badge" style="background:' + col + '22;color:' + col + '">'
-           + sign + ' ' + Math.abs(bias).toFixed(2) + unit + '</span>';
+    return '<span class="es-badge" style="background:'+col+'22;color:'+col+'">'+sign+' '+Math.abs(bias).toFixed(2)+unit+'</span>';
 }
 
 function getBestModelMAE(paramKey) {
@@ -456,20 +424,14 @@ function getBestModelMAE(paramKey) {
     var best = null, bestModel = null;
     Object.keys(raw).forEach(function(m) {
         var v = raw[m] && raw[m][paramKey];
-        if (v != null && v > 0) {
-            if (best == null || v < best) { best = v; bestModel = m; }
-        }
+        if (v != null && v > 0 && (best == null || v < best)) { best = v; bestModel = m; }
     });
-    return bestModel ? { model: bestModel, mae: best } : null;
+    return bestModel ? { model:bestModel, mae:best } : null;
 }
 
-function setStatus(msg) {
-    document.getElementById("statusLine").textContent = msg;
-}
+function setStatus(msg) { document.getElementById("statusLine").textContent = msg; }
 
-/* =============================================
-   РЕНДЕР
-============================================= */
+/* === РЕНДЕР === */
 async function render() {
     var snapCount = _snaps.length;
     document.getElementById("statusLine").innerHTML = "Снимков прогноза: <b>" + snapCount + "</b>";
@@ -490,10 +452,10 @@ async function render() {
         if (!rec.synopTime || !rec.obs) return;
         var tk = rec.synopTime;
         var iso = tk.slice(0,4)+"-"+tk.slice(4,6)+"-"+tk.slice(6,8)+"T"+tk.slice(8,10);
-        obs.push({ time: iso, temp: rec.obs.temp, pressure: rec.obs.pressure,
-                   wind: rec.obs.wind, windDir: rec.obs.windDir,
-                   humidity: rec.obs.humidity, rain: rec.obs.precip, precip: rec.obs.precip,
-                   cloudcover: rec.obs.cloudcover, ww: rec.obs.ww });
+        obs.push({ time:iso, temp:rec.obs.temp, pressure:rec.obs.pressure,
+                   wind:rec.obs.wind, windDir:rec.obs.windDir,
+                   humidity:rec.obs.humidity, rain:rec.obs.precip, precip:rec.obs.precip,
+                   cloudcover:rec.obs.cloudcover, ww:rec.obs.ww });
     });
 
     var metrics = calcMetrics(obs);
@@ -503,6 +465,13 @@ async function render() {
         document.getElementById("chartSection").style.display = "";
         renderChartParamRow();
         renderChart(_activeChartParam);
+    }
+
+    _horizonMetrics = calcMetricsByHorizon(obs);
+    if (_horizonMetrics && Object.keys(_horizonMetrics).length) {
+        document.getElementById("horizonSection").style.display = "";
+        renderHorizonParamRow();
+        renderHorizonChart(_activeHorizonParam);
     }
 
     renderMetrics(metrics);
@@ -517,41 +486,37 @@ function renderMetrics(metrics) {
     var grid = document.getElementById("metricsGrid");
     if (!metrics) {
         grid.innerHTML = '<div style="grid-column:1/-1;color:#666;font-size:13px;padding:20px 0;">' +
-            'Нет совпадений снимков с наблюдениями.<br>Нужна база SYNOP — нажмите «Загрузить свежие» в Рейтинге.</div>';
+            'Нет совпадений снимков с наблюдениями.</div>';
         return;
     }
 
     grid.innerHTML = PARAMS.map(function(p) {
         var s = metrics[p.key];
-        if (!s) return '<div class="es-card"><div class="es-card-label">' + p.label +
-                       '</div><div style="color:#444;font-size:13px;">нет данных</div></div>';
-
+        if (!s) return '<div class="es-card"><div class="es-card-label">'+p.label+'</div>' +
+                       '<div style="color:#444;font-size:13px;">нет данных</div></div>';
         var col = maeColor(p.key, s.mae);
-        var badge = biasBadge(s.bias, p.unit);
 
         if (p.isFact) {
             var correct = s.n - Math.round(s.mae * s.n);
             var pct = Math.round(correct / s.n * 100);
             var fc = pct >= 80 ? "#5fe08f" : pct >= 60 ? "#fdcb6e" : "#ff6b6b";
             return '<div class="es-card">' +
-                '<div class="es-card-label">' + p.label + ' (факт)</div>' +
-                '<div class="es-card-mae" style="color:' + fc + ';">' + pct +
+                '<div class="es-card-label">'+p.label+' (факт)</div>' +
+                '<div class="es-card-mae" style="color:'+fc+';">'+pct+
                     '<span style="font-size:12px;font-weight:400;color:#666;">% верно</span></div>' +
-                '<div class="es-card-sub">верно ' + correct + ' из ' + s.n + '</div>' +
-            '</div>';
+                '<div class="es-card-sub">верно '+correct+' из '+s.n+'</div></div>';
         }
 
         return '<div class="es-card">' +
-            '<div class="es-card-label">' + p.label + '</div>' +
-            '<div class="es-card-mae" style="color:' + col + ';">' +
-                s.mae.toFixed(2) + '<span style="font-size:12px;font-weight:400;color:#666;"> MAE' + p.unit + '</span>' +
+            '<div class="es-card-label">'+p.label+'</div>' +
+            '<div class="es-card-mae" style="color:'+col+';">' +
+                s.mae.toFixed(2)+'<span style="font-size:12px;font-weight:400;color:#666;"> MAE'+p.unit+'</span>' +
             '</div>' +
             '<div class="es-card-sub">' +
-                'RMSE ' + s.rmse.toFixed(2) + p.unit + '<br>' +
-                'уклон ' + (s.bias > 0 ? "+" : "") + s.bias.toFixed(2) + p.unit + badge + '<br>' +
-                '<span style="color:#444;">n=' + s.n + '</span>' +
-            '</div>' +
-        '</div>';
+                'RMSE '+s.rmse.toFixed(2)+p.unit+'<br>' +
+                'уклон '+(s.bias>0?"+":"")+s.bias.toFixed(2)+p.unit+biasBadge(s.bias,p.unit)+'<br>' +
+                '<span style="color:#444;">n='+s.n+'</span>' +
+            '</div></div>';
     }).join("");
 
     if (metrics._wx) {
@@ -559,10 +524,10 @@ function renderMetrics(metrics) {
         var col = wx.pct >= 70 ? "#5fe08f" : wx.pct >= 50 ? "#fdcb6e" : "#ff6b6b";
         grid.innerHTML += '<div class="es-card" style="grid-column:1/-1;">' +
             '<div class="es-card-label">ЯВЛЕНИЯ ПОГОДЫ</div>' +
-            '<div class="es-card-mae" style="color:' + col + ';">' + wx.pct +
+            '<div class="es-card-mae" style="color:'+col+';">'+wx.pct+
                 '<span style="font-size:12px;font-weight:400;color:#666;">% совпадений</span></div>' +
-            '<div class="es-card-sub">совпало ' + wx.hits + ' из ' + wx.total + ' случаев<br>' +
-                '<span style="color:#444;font-size:10px;">группы: ясно · облачно · туман · дождь · снег · ливень · гроза</span></div>' +
+            '<div class="es-card-sub">совпало '+wx.hits+' из '+wx.total+' случаев<br>' +
+                '<span style="color:#444;font-size:10px;">ясно · облачно · туман · дождь · снег · ливень · гроза</span></div>' +
         '</div>';
     }
 }
@@ -571,92 +536,63 @@ function renderCompare(metrics) {
     if (!metrics) return;
     var section = document.getElementById("compareSection");
     var grid    = document.getElementById("compareGrid");
-
-    var compareParams = [
+    var cParams = [
         { key:"temp",     label:"Температура", unit:"°C"   },
         { key:"wind",     label:"Ветер",       unit:" м/с" },
         { key:"pressure", label:"Давление",    unit:" гПа" },
     ];
-
-    var html = "";
-    var hasAny = false;
-    compareParams.forEach(function(p) {
+    var html = "", hasAny = false;
+    cParams.forEach(function(p) {
         var best = getBestModelMAE(p.key);
         var ens  = metrics[p.key];
         if (!best || !ens) return;
         hasAny = true;
         var diff = ens.mae - best.mae;
-        var better = diff < 0;
-        var diffStr = (diff > 0 ? "+" : "") + diff.toFixed(2);
-        var diffCol = better ? "#5fe08f" : "#ff6b6b";
-        var label   = better ? "лучше" : "хуже";
-        var bestShort = modelShort(best.model) || best.model;
-
+        var col  = diff < 0 ? "#5fe08f" : "#ff6b6b";
+        var lbl  = diff < 0 ? "лучше" : "хуже";
         html += '<div class="es-card">' +
-            '<div class="es-card-label">' + p.label + '</div>' +
-            '<div style="font-size:13px;color:#aaa;margin-bottom:4px;">Ансамбль: <b style="color:#fff;">' + ens.mae.toFixed(2) + p.unit + '</b></div>' +
-            '<div style="font-size:13px;color:#aaa;margin-bottom:6px;">' + bestShort + ': <b>' + best.mae.toFixed(2) + p.unit + '</b></div>' +
-            '<div style="font-size:13px;font-weight:800;color:' + diffCol + ';">' +
-                diffStr + p.unit + ' ' + label +
-            '</div>' +
+            '<div class="es-card-label">'+p.label+'</div>' +
+            '<div style="font-size:13px;color:#aaa;margin-bottom:4px;">Ансамбль: <b style="color:#fff;">'+ens.mae.toFixed(2)+p.unit+'</b></div>' +
+            '<div style="font-size:13px;color:#aaa;margin-bottom:6px;">'+(modelShort(best.model)||best.model)+': <b>'+best.mae.toFixed(2)+p.unit+'</b></div>' +
+            '<div style="font-size:13px;font-weight:800;color:'+col+';">'+(diff>0?"+":"")+diff.toFixed(2)+p.unit+' '+lbl+'</div>' +
         '</div>';
     });
-
-    if (hasAny) {
-        section.style.display = "";
-        grid.innerHTML = html;
-    }
+    if (hasAny) { section.style.display = ""; grid.innerHTML = html; }
 }
 
 function renderCoverage(snapCount, obsCount) {
-    var info = document.getElementById("coverageInfo");
-    var horizons = getHorizonStats();
-    var totalHours = horizons.reduce(function(s, h) { return s + h.count; }, 0);
+    var horizons   = getHorizonStats();
+    var totalHours = horizons.reduce(function(s,h){ return s+h.count; }, 0);
     var avgHorizon = horizons.length
-        ? Math.round(horizons.reduce(function(s, h) { return s + h.horizonH; }, 0) / horizons.length)
-        : 0;
+        ? Math.round(horizons.reduce(function(s,h){ return s+h.horizonH; },0) / horizons.length) : 0;
+    var dates  = horizons.map(function(h){ return new Date(h.savedAt); }).filter(function(d){ return !isNaN(d); });
+    var oldest = dates.length ? new Date(Math.min.apply(null,dates)) : null;
+    var newest = dates.length ? new Date(Math.max.apply(null,dates)) : null;
+    var fmt = function(d){ return d ? d.toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}) : "—"; };
 
-    var dates = horizons.map(function(h) { return new Date(h.savedAt); }).filter(function(d) { return !isNaN(d); });
-    var oldest = dates.length ? new Date(Math.min.apply(null, dates)) : null;
-    var newest = dates.length ? new Date(Math.max.apply(null, dates)) : null;
-    var fmt = function(d) {
-        return d ? d.toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}) : "—";
-    };
-
-    info.innerHTML =
+    document.getElementById("coverageInfo").innerHTML =
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">' +
-            '<div><span style="color:#555;">Снимков</span><br><b style="font-size:17px;">' + snapCount + '</b></div>' +
-            '<div><span style="color:#555;">Часов прогноза</span><br><b style="font-size:17px;">' + totalHours + '</b></div>' +
-            '<div><span style="color:#555;">Средний горизонт</span><br><b style="font-size:17px;">' + avgHorizon + ' ч</b></div>' +
-            '<div><span style="color:#555;">Наблюдений в базе</span><br><b style="font-size:17px;">' + obsCount + '</b></div>' +
+            '<div><span style="color:#555;">Снимков</span><br><b style="font-size:17px;">'+snapCount+'</b></div>' +
+            '<div><span style="color:#555;">Часов прогноза</span><br><b style="font-size:17px;">'+totalHours+'</b></div>' +
+            '<div><span style="color:#555;">Средний горизонт</span><br><b style="font-size:17px;">'+avgHorizon+' ч</b></div>' +
+            '<div><span style="color:#555;">Наблюдений в базе</span><br><b style="font-size:17px;">'+obsCount+'</b></div>' +
         '</div>' +
-        '<div style="margin-top:10px;color:#555;font-size:12px;">' +
-            'Первый: ' + fmt(oldest) + '<br>Последний: ' + fmt(newest) +
-        '</div>';
+        '<div style="margin-top:10px;color:#555;font-size:12px;">Первый: '+fmt(oldest)+'<br>Последний: '+fmt(newest)+'</div>';
 }
 
 function renderSnapshots() {
-    var list = document.getElementById("snapshotList");
+    var list     = document.getElementById("snapshotList");
     var horizons = getHorizonStats();
-    if (!horizons.length) {
-        list.innerHTML = '<div style="color:#444;font-size:13px;">Нет снимков</div>';
-        return;
-    }
-    var recent = horizons.slice().reverse().slice(0, 20);
-    list.innerHTML = recent.map(function(h) {
+    if (!horizons.length) { list.innerHTML = '<div style="color:#444;font-size:13px;">Нет снимков</div>'; return; }
+    list.innerHTML = horizons.slice().reverse().slice(0,20).map(function(h) {
         var d = new Date(h.savedAt);
-        var timeStr = isNaN(d) ? "—"
-            : d.toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
-        return '<div class="snap-row">' +
-            '<span class="snap-time">' + timeStr + '</span>' +
-            '<span class="snap-hours">' + h.count + ' ч · горизонт ' + h.horizonH + ' ч</span>' +
-        '</div>';
+        var t = isNaN(d) ? "—" : d.toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+        return '<div class="snap-row"><span class="snap-time">'+t+'</span>' +
+               '<span class="snap-hours">'+h.count+' ч · горизонт '+h.horizonH+' ч</span></div>';
     }).join("");
 }
 
-/* =============================================
-   СТАРТ
-============================================= */
+/* === СТАРТ === */
 (async function() {
     setStatus("Загрузка снимков с GitHub…");
     await loadSnaps();
