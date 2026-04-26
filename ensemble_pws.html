@@ -703,8 +703,8 @@ function setStation(id) {
     allBtn.classList.add("active");
     row.appendChild(allBtn);
 
-    if (typeof PWS_STATIONS !== "undefined") {
-        PWS_STATIONS.forEach(function(s) {
+    if (typeof PWS_SYNC_STATIONS !== "undefined") {
+        PWS_SYNC_STATIONS.forEach(function(s) {
             var btn = document.createElement("button");
             btn.id = "epws-st-" + s.id;
             btn.textContent = s.name;
@@ -748,9 +748,9 @@ async function render() {
     var obsCount = result.totalRecords;
 
     var stationLabel = _currentStation === "all"
-        ? "Все (" + (typeof PWS_STATIONS !== "undefined" ? PWS_STATIONS.length : "?") + " станции)"
-        : ((typeof PWS_STATIONS !== "undefined"
-            ? (PWS_STATIONS.find(function(s){ return s.id === _currentStation; }) || {}).name
+        ? "Все (" + (typeof PWS_SYNC_STATIONS !== "undefined" ? PWS_STATIONS.length : "?") + " станции)"
+        : ((typeof PWS_SYNC_STATIONS !== "undefined"
+            ? (PWS_SYNC_STATIONS.find(function(s){ return s.id === _currentStation; }) || {}).name
             : null) || _currentStation);
 
     // Диагностика: показываем сколько ключей в obsIndex
