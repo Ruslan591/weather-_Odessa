@@ -5,7 +5,7 @@ var TABS = [
     { label: "Прогноз",  icon: "📅", href: "forecast.html", match: ["forecast.html"] },
     { label: "По городу",icon: "🌆", href: "pws.html",      match: ["pws.html"] },
     { label: "Одесса",   icon: "🏙", href: "index.html",    match: ["index.html"] },
-    { label: "Точность", icon: "📊", href: "verify.html",   match: ["ensemble_pws.html", "ensemble_score.html", "verify.html", "verify_pws.html"] },
+    { label: "Точность", icon: "📊", href: "ensemble_pws.html",   match: ["ensemble_pws.html", "ensemble_score.html", "verify.html", "verify_pws.html"] },
 ];
 
 var page = location.pathname.split("/").pop() || "index.html";
