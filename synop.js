@@ -519,55 +519,45 @@ d.maxGust555     != null ? row("Максимальный порыв ветра",
             
         </div>
 
-        <div class="grid2" style="margin-top:16px;">
-            <div class="miniCard">
-                <div class="small">Давление QNH</div>
-                <div class="miniValue">${fmt1(d.seaPressure," гПа")}</div>
-                <div class="small">к уровню моря</div>
-            </div>
-            <div class="miniCard">
-                <div class="small">Видимость</div>
-                <div class="miniValue">${visibilityText(d.visibility)}</div>
-                <div class="small">по SYNOP</div>
-            </div>
+        <div class="card" style="margin-top:16px;">
+            <div class="cardTitle">Кратко</div>
+            ${row("Температура",       fmt1(d.temp,"°C"))}
+            ${row("Точка росы",        fmt1(d.dew,"°C"))}
+            ${row("Отн. влажность",    fmt0(humidity," %"))}
+            ${row("Ветер",
+                fmt0(d.windSpeed," м/с") + " " +
+                escapeHtml(degToText(d.windDir)) + " " +
+                windArrow(d.windDir))}
+            ${(d.maxGust333 ?? d.maxGust555) != null
+                ? row("Порыв ветра", fmt0(d.maxGust333 ?? d.maxGust555," м/с")) : ""}
+            ${row("Давление (станц.)", fmt1(d.stationPressure," гПа"))}
+            ${row("Давление QNH",      fmt1(d.seaPressure," гПа"))}
+            ${row("Барич. тенденция",
+                escapeHtml(tendencyText(d.tendencyCode)) +
+                (d.tendencyValue != null
+                    ? ` ${d.tendencyValue > 0 ? "+" : ""}${d.tendencyValue.toFixed(1)} гПа`
+                    : ""))}
+            ${precipLine}
+            ${row("Явления",           escapeHtml(wx) || "-")}
+            ${(d.weatherPast1 && d.weatherPast1 !== "0") ? row("Погода W1", escapeHtml(synopPastWeatherText(d.weatherPast1))) : ""}
+            ${(d.weatherPast2 && d.weatherPast2 !== "0") ? row("Погода W2", escapeHtml(synopPastWeatherText(d.weatherPast2))) : ""}
+            ${d.tempMax  != null ? row("Макс. температура", fmt1(d.tempMax,"°C"))  : ""}
+            ${d.tempMin  != null ? row("Мин. температура",  fmt1(d.tempMin,"°C"))  : ""}
+            ${d.sunHours != null ? row("Солнечное сияние",  fmt1(d.sunHours," ч")) : ""}
+            ${row("Видимость",         visibilityText(d.visibility))}
         </div>
 
-        <div class="grid2" style="margin-top:12px;">
-            <div class="card" style="margin:0;">
-                <div class="cardTitle">Кратко</div>
-                ${row("Температура",       fmt1(d.temp,"°C"))}
-                ${row("Точка росы",        fmt1(d.dew,"°C"))}
-                ${row("Отн. влажность",    fmt0(humidity," %"))}
-                ${row("Ветер",
-                    fmt0(d.windSpeed," м/с") + " " +
-                    escapeHtml(degToText(d.windDir)) + " " +
-                    windArrow(d.windDir))}
-                ${row("Давление (станц.)", fmt1(d.stationPressure," гПа"))}
-                ${row("Давление QNH",      fmt1(d.seaPressure," гПа"))}
-                ${row("Барич. тенденция",
-                    escapeHtml(tendencyText(d.tendencyCode)) +
-                    (d.tendencyValue != null
-                        ? ` ${d.tendencyValue > 0 ? "+" : ""}${d.tendencyValue.toFixed(1)} гПа`
-                        : ""))}
-                ${row("Явления",           escapeHtml(wx) || "-")}
-                ${(d.weatherPast1 && d.weatherPast1 !== "0") ? row("Погода за период от 2 до 1 часа до срока (W1)", escapeHtml(synopPastWeatherText(d.weatherPast1))) : ""}
-                ${(d.weatherPast2 && d.weatherPast2 !== "0") ? row("Погода в течение последнего часа до срока (W2)", escapeHtml(synopPastWeatherText(d.weatherPast2))) : ""}
-                ${precipLine}
-            </div>
-
-            <div class="card" style="margin:0;">
-                <div class="cardTitle">Облака</div>
-                ${row("Общая облачность",  escapeHtml(cloudAmountText(d.totalCloud)))}
-                ${row("Кол-во по Nh",
-                    d.cloudTotalOkta != null
-                        ? escapeHtml(cloudAmountText(d.cloudTotalOkta))
-                        : "-")}
-                ${cloudRow("Нижний ярус",  "low",  d.cloudLowCode,  cloudGenusLow(d.cloudLowCode))}
-                ${cloudRow("Средний ярус", "mid",  d.cloudMidCode,  cloudGenusMid(d.cloudMidCode))}
-                ${cloudRow("Верхний ярус", "high", d.cloudHighCode, cloudGenusHigh(d.cloudHighCode))}
-                ${row("Основание нижних",  lowCloudBaseText(d.lowCloudBase))}
-                ${row("Видимость",         visibilityText(d.visibility))}
-            </div>
+        <div class="card" style="margin-top:12px;">
+            <div class="cardTitle">Облака</div>
+            ${row("Общая облачность",  escapeHtml(cloudAmountText(d.totalCloud)))}
+            ${row("Кол-во по Nh",
+                d.cloudTotalOkta != null
+                    ? escapeHtml(cloudAmountText(d.cloudTotalOkta))
+                    : "-")}
+            ${cloudRow("Нижний ярус",  "low",  d.cloudLowCode,  cloudGenusLow(d.cloudLowCode))}
+            ${cloudRow("Средний ярус", "mid",  d.cloudMidCode,  cloudGenusMid(d.cloudMidCode))}
+            ${cloudRow("Верхний ярус", "high", d.cloudHighCode, cloudGenusHigh(d.cloudHighCode))}
+            ${row("Основание нижних",  lowCloudBaseText(d.lowCloudBase))}
         </div>
 
         ${sec333Html}
@@ -576,6 +566,7 @@ d.maxGust555     != null ? row("Максимальный порыв ветра",
 
         <details style="margin-top:12px;">
             <summary>Полная расшифровка</summary>
+            <div class="details-body"><div>
             ${row("YYGGi",               escapeHtml(d.yyggi || "-"))}
             ${row("Станция",             escapeHtml(d.station || "-"))}
             ${row("iRIXhVV",             escapeHtml(d.irixhvv || "-"))}
@@ -584,15 +575,18 @@ d.maxGust555     != null ? row("Максимальный порыв ветра",
             ${row("Давление QNH",        fmt1(d.seaPressure," гПа"))}
             ${row("Группа 8NhCLCMCH",   escapeHtml(d.cloudGroup || "-"))}
             ${row("Группа осадков",      escapeHtml(d.precipGroup || "-"))}
+            </div></div>
         </details>
 
         <details style="margin-top:8px;">
             <summary>Сырые данные телеграммы</summary>
+            <div class="details-body"><div>
             <div class="codeBlock">${escapeHtml(d.raw)}</div>
             ${row("Основные группы", escapeHtml(d.bodyGroups.join(" ")) || "-")}
             ${row("Секция 333",      escapeHtml(d.section333.join(" ")) || "-")}
             ${row("Секция 444",      escapeHtml(d.section444.join(" ")) || "-")}
             ${row("Секция 555",      escapeHtml(d.section555.join(" ")) || "-")}
+            </div></div>
         </details>
     `;
 }
