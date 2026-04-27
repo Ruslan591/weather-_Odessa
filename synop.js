@@ -10,7 +10,9 @@ function pressureFromGroup(group){
     if(!group) return null;
     const p = parseInt(group.slice(1), 10) / 10;
     if(Number.isNaN(p)) return null;
-    return p < 500 ? 1000 + p : 900 + p;
+    // < 500 → добавляем 1000 (диапазон 1000–1049.9 гПа)
+    // >= 500 → реальное значение (850–999.9 гПа)
+    return p < 500 ? p + 1000 : p;
 }
 
 function signedTenths(group){
