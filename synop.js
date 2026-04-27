@@ -662,6 +662,7 @@ async function loadSynopUI(){
     try {
         const synop = await loadSynop();
         renderSynop(synop);
+        try { localStorage.setItem("synopCachedHTML", document.getElementById("main").innerHTML); } catch(e){}
         var now = new Date().toLocaleString("ru");
         localStorage.setItem("lastSynopUpdate", now);
         setMainStatus("✅ Обновлено: " + now);

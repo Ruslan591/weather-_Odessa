@@ -8,6 +8,12 @@ const isDay = isDayNow(STATION_LAT, STATION_LON, new Date());
     var last = localStorage.getItem("lastSynopUpdate");
     var el = document.getElementById("lastUpdate");
     if (el) el.textContent = last ? ("✅ Обновлено: " + last) : "Обновить";
+
+    // Показываем кеш мгновенно
+    var cached = localStorage.getItem("synopCachedHTML");
+    if (cached) {
+        document.getElementById("main").innerHTML = cached;
+    }
 })();
 
 loadSynopUI();
