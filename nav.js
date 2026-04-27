@@ -28,7 +28,7 @@ style.textContent = [
     "  padding-bottom: env(safe-area-inset-bottom);",
     "}",
     "#app-nav a, #app-nav button.nav-btn {",
-    "  flex: 1; display: flex; flex-direction: column;",
+    "  flex: 1; display: flex !important; flex-direction: column;",
     "  align-items: center; justify-content: center;",
     "  align-self: stretch;",
     "  text-decoration: none; color: #555;",
