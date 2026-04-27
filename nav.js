@@ -30,7 +30,7 @@ style.textContent = [
     "#app-nav a, #app-nav button.nav-btn {",
     "  flex: 1; display: flex; flex-direction: column;",
     "  align-items: center; justify-content: center;",
-    "  height: 100%;",
+    "  align-self: stretch;",
     "  text-decoration: none; color: #555;",
     "  font-size: 10px; gap: 2px; transition: color 0.15s;",
     "  -webkit-tap-highlight-color: transparent;",
