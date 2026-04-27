@@ -779,7 +779,7 @@ details[open] summary::before{
 details .details-body {
     display: grid;
     grid-template-rows: 0fr;
-    transition: grid-template-rows 0.35s ease;
+    transition: grid-template-rows 0.45s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 details[open] .details-body {
@@ -788,6 +788,25 @@ details[open] .details-body {
 
 details .details-body > div {
     overflow: hidden;
+    min-height: 0;
+}
+
+details summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+details summary::after {
+    content: '▸';
+    display: inline-block;
+    color: #666;
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+}
+
+details[open] summary::after {
+    transform: rotate(90deg);
 }
 
 /* =========================
