@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#121212">
+<title>История ансамбля</title>
+<link rel="stylesheet" href="verify.css">
+<script src="models.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<div class="header">
+    <div class="nav">
+        <a href="index.html">ГМЦ ЧАМ</a>
+        <a href="pws.html">PWS</a>
+        <a href="forecast.html">Прогноз</a>
+    </div>
+    <div class="headerTitle">История моделей</div>
+    <div class="nav">
+        <a href="ensemble_score.html">Ансамбль</a>
+        <a href="verify.html">Рейтинг</a>
+    </div>
+</div>
+
+<div class="container">
+
+<div id="statusLine" style="color:#aaa;font-size:0.85em;margin-bottom:12px;">Загрузка...</div>
+
+<!-- ПЕРЕКЛЮЧАТЕЛЬ ПЕРИОДА -->
+<div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:8px;">ПЕРИОД</div>
+<div id="periodRow" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;"></div>
+
+<!-- ПЕРЕКЛЮЧАТЕЛЬ ПАРАМЕТРА -->
+<div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:8px;">ПАРАМЕТР</div>
+<div id="paramRow" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;"></div>
+
+<!-- ТАБЛИЦА МОДЕЛЕЙ -->
+<div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:8px;">MAE ПО МОДЕЛЯМ</div>
+<div id="modelGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;"></div>
+
+<!-- ГРАФИК ПО ДНЯМ -->
+<div id="chartSection" style="display:none;margin-bottom:16px;">
+    <div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:8px;">ДИНАМИКА MAE</div>
+    <div style="background:#161616;border-radius:10px;padding:10px 8px;">
+        <canvas id="trendChart" height="160"></canvas>
+    </div>
+</div>
+
+<!-- ПОКРЫТИЕ -->
+<div style="background:#161616;border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:13px;">
+    <div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:10px;">ПОКРЫТИЕ</div>
+    <div id="coverageInfo" style="color:#aaa;">—</div>
+</div>
+
+<!-- СОХРАНИТЬ ВЕСА -->
+<div style="margin-bottom:16px;">
+    <div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:8px;">ВЕСА МОДЕЛЕЙ</div>
+    <button id="saveBtn" onclick="saveWeights()" style="width:100%;padding:12px;border-radius:10px;border:1px solid #2a6;background:#0a1a0a;color:#2a6;font-size:14px;cursor:pointer;">
+        ⬆ Сохранить веса на GitHub
+    </button>
+    <div id="saveStatus" style="font-size:12px;color:#555;margin-top:6px;text-align:center;"></div>
+</div>
+
+</div>
+
+<style>
+.es-card { background:#161616; border-radius:10px; padding:12px 14px; }
+.es-card-label { font-size:11px; color:#555; margin-bottom:6px; font-weight:600; letter-spacing:0.04em; }
+.es-card-mae { font-size:22px; font-weight:800; line-height:1; margin-bottom:4px; }
+.es-card-sub { font-size:11px; color:#666; line-height:1.6; }
+.cp-btn { font-size:11px; padding:4px 10px; border-radius:20px; border:1px solid #333; background:#1e1e1e; color:#666; cursor:pointer; }
+.cp-btn.active { border-color:var(--c,#aaa); color:var(--c,#aaa); }
+.rank-1 { color:#ffd166; }
+.rank-2 { color:#b0bec5; }
+.rank-3 { color:#cd7f32; }
+</style>
+
+<script>
+/* === КОНФИГ === */
+var GITHUB_OWNER = "ruslan591";
+var GITHUB_REPO  = "weather-_Odessa";
+var WEIGHTS_FILE = "data/model_weights.json";
+var DATA_FILES   = [
+    "modelData_2023.json",
+    "modelData_2024.json",
+    "modelData_2025.json",
+    "modelData_2026.json"
+];
+
+var PARAMS = [
+    { key:"temp",        label:"Температура", btn:"Темп.",      unit:"°C",  color:"#ff8f00" },
+    { key:"pressure",    label:"Давление",    btn:"Давление",   unit:" гПа",color:"#4aa3ff" },
+    { key:"wind",        label:"Ветер",       btn:"Ветер",      unit:" м/с",color:"#8bc34a" },
+    { key:"windDir",     label:"Направление", btn:"Направл.",   unit:"°",   color:"#74b9ff" },
+    { key:"cloudcover",  label:"Облачность",  btn:"Облачн.",    unit:"%",   color:"#b0bec5" },
+    { key:"precip",      label:"Осадки",      btn:"Осадки",     unit:" мм", color:"#448aff", obsOnly:true },
+    { key:"visibility",  label:"Видимость",   btn:"Видимость",  unit:" м",  color:"#a29bfe", obsOnly:true },
+    { key:"phenomena",   label:"Явления",     btn:"Явления",    unit:"%",   color:"#ff6b6b", binary:true }
+];
+
+var SEASONS = {
+    DJF: { label:"Зима (ДЯФ)",  months:[12,1,2]  },
+    MAM: { label:"Весна (МАМ)", months:[3,4,5]   },
+    JJA: { label:"Лето (ИИА)",  months:[6,7,8]   },
+    SON: { label:"Осень (СОН)", months:[9,10,11] }
+};
+
+function getSeason(month) {
+    if ([12,1,2].includes(month))  return "DJF";
+    if ([3,4,5].includes(month))   return "MAM";
+    if ([6,7,8].includes(month))   return "JJA";
+    return "SON";
+}
+
+// Декабрь относится к зиме следующего года
+function getSeasonYear(year, month) {
+    return month === 12 ? year + 1 : year;
+}
+
+function windDirDiff(a, b) {
+    var d = Math.abs(a - b);
+    return d > 180 ? 360 - d : d;
+}
+
+function getToken() { return localStorage.getItem("ghToken") || ""; }
+
+/* === ДАННЫЕ === */
+var _allData    = [];   // все записи из всех файлов
+var _computed   = null; // { daily, monthly, seasonal }
+var _activePeriod = null;
+var _activeParam  = "temp";
+var _chartInstance = null;
+
+function setStatus(msg) { document.getElementById("statusLine").innerHTML = msg; }
+
+/* === ЗАГРУЗКА === */
+async function loadAllData() {
+    setStatus("⏳ Загружаем исторические данные...");
+    var loaded = 0;
+    for (var i = 0; i < DATA_FILES.length; i++) {
+        try {
+            var r = await fetch(DATA_FILES[i], { cache: "no-store" });
+            if (!r.ok) continue;
+            var data = await r.json();
+            _allData = _allData.concat(data);
+            loaded++;
+            setStatus("⏳ Загружено файлов: " + loaded + " (" + _allData.length + " записей)...");
+        } catch(e) {
+            console.warn("Не удалось загрузить", DATA_FILES[i], e.message);
+        }
+    }
+    return loaded > 0;
+}
+
+/* === РАСЧЁТ MAE === */
+function calcError(paramKey, modelVal, obsVal) {
+    if (paramKey === "windDir") {
+        if (modelVal == null || obsVal == null) return null;
+        return windDirDiff(modelVal, obsVal);
+    }
+    if (paramKey === "precip" || paramKey === "visibility") {
+        if (obsVal == null || modelVal == null) return null;
+        return Math.abs(modelVal - obsVal);
+    }
+    if (paramKey === "phenomena") {
+        if (obsVal == null || modelVal == null) return null;
+        var obsHas = obsVal >= 4 ? 1 : 0;
+        var modHas = modelVal >= 51 ? 1 : 0;
+        return obsHas === modHas ? 1 : 0; // 1=верно, 0=ошибка
+    }
+    if (modelVal == null || obsVal == null) return null;
+    return Math.abs(modelVal - obsVal);
+}
+
+function calcMAE(errors) {
+    var vals = errors.filter(function(v){ return v != null; });
+    if (!vals.length) return null;
+    return { mae: vals.reduce(function(s,v){ return s+v; },0) / vals.length, n: vals.length };
+}
+
+function computeAll() {
+    var daily    = {};  // "2026-04-28" → { modelId → { paramKey → [errors] } }
+    var monthly  = {};  // "2026-04"   → ...
+    var seasonal = {};  // "2026-MAM"  → ...
+
+    _allData.forEach(function(rec) {
+        if (!rec.synopTime || !rec.obs || !rec.models) return;
+        var tk = rec.synopTime; // "202601010000"
+        var year  = parseInt(tk.slice(0,4));
+        var month = parseInt(tk.slice(4,6));
+        var day   = parseInt(tk.slice(6,8));
+        var dayKey  = year+"-"+String(month).padStart(2,"0")+"-"+String(day).padStart(2,"0");
+        var monKey  = year+"-"+String(month).padStart(2,"0");
+        var season  = getSeason(month);
+        var sYear   = getSeasonYear(year, month);
+        var seasKey = sYear+"-"+season;
+
+        [daily, monthly, seasonal].forEach(function(store) {});
+
+        var keys = [dayKey, monKey, seasKey];
+        var stores = [daily, monthly, seasonal];
+
+        stores.forEach(function(store, si) {
+            var k = keys[si];
+            if (!store[k]) store[k] = {};
+            Object.keys(rec.models).forEach(function(modelId) {
+                if (!store[k][modelId]) store[k][modelId] = {};
+                var mv = rec.models[modelId];
+                PARAMS.forEach(function(p) {
+                    if (!store[k][modelId][p.key]) store[k][modelId][p.key] = [];
+                    var obsVal = p.key === "phenomena"
+                        ? rec.obs.ww
+                        : rec.obs[p.key === "visibility" ? "visibility" : p.key];
+                    var modVal = p.key === "phenomena"
+                        ? mv.weatherCode
+                        : mv[p.key];
+                    var err = calcError(p.key, modVal, obsVal);
+                    if (err != null) store[k][modelId][p.key].push(err);
+                });
+            });
+        });
+    });
+
+    // Суммируем в MAE
+    function summarize(store) {
+        var result = {};
+        Object.keys(store).forEach(function(k) {
+            result[k] = {};
+            Object.keys(store[k]).forEach(function(modelId) {
+                result[k][modelId] = {};
+                PARAMS.forEach(function(p) {
+                    result[k][modelId][p.key] = calcMAE(store[k][modelId][p.key] || []);
+                });
+            });
+        });
+        return result;
+    }
+
+    _computed = {
+        daily:    summarize(daily),
+        monthly:  summarize(monthly),
+        seasonal: summarize(seasonal)
+    };
+}
+
+/* === ПЕРИОДЫ === */
+function buildPeriodList() {
+    var periods = [];
+
+    // Все годы по типу сезона (все вёсны, все зимы...)
+    var seasNames = { DJF:"Все зимы", MAM:"Все вёсны", JJA:"Все лета", SON:"Все осени" };
+    Object.keys(seasNames).forEach(function(sk) {
+        var hasData = Object.keys(_computed.seasonal).some(function(k){ return k.endsWith("-"+sk); });
+        if (hasData) periods.push({ key: "all-"+sk, label: seasNames[sk], store: "allSeason", seasType: sk });
+    });
+
+    // Конкретные сезоны
+    var seasKeys = Object.keys(_computed.seasonal).sort();
+    seasKeys.forEach(function(k) {
+        var parts = k.split("-");
+        var s = SEASONS[parts[1]];
+        periods.push({ key: k, label: s ? s.label.split(" ")[0]+" "+parts[0] : k, store: "seasonal" });
+    });
+
+    // Месяцы (последние 12)
+    var monKeys = Object.keys(_computed.monthly).sort().reverse().slice(0, 12);
+    monKeys.reverse().forEach(function(k) {
+        var parts = k.split("-");
+        var months = ["","Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
+        periods.push({ key: k, label: months[parseInt(parts[1])]+" "+parts[0], store: "monthly" });
+    });
+
+    // Всё время
+    periods.unshift({ key: "all", label: "Всё время", store: "all" });
+
+    return periods;
+}
+
+/* === РЕНДЕР ПЕРИОДОВ === */
+function renderPeriodRow(periods) {
+    var row = document.getElementById("periodRow");
+    row.innerHTML = periods.map(function(p) {
+        var active = _activePeriod && _activePeriod.key === p.key ? " active" : "";
+        return '<button class="cp-btn' + active + '" style="--c:#ffd166" onclick="setPeriod(\'' + p.key + '\')">' + p.label + '</button>';
+    }).join("");
+}
+
+function setPeriod(key) {
+    var periods = buildPeriodList();
+    _activePeriod = periods.find(function(p){ return p.key === key; }) || periods[0];
+    document.querySelectorAll("#periodRow .cp-btn").forEach(function(b){
+        b.classList.toggle("active", b.textContent.trim() === _activePeriod.label);
+    });
+    renderModelGrid();
+    renderChart();
+}
+
+/* === ДАННЫЕ ЗА ПЕРИОД === */
+function aggregateFromStore(storeData) {
+    var all = {};
+    Object.keys(storeData).forEach(function(k) {
+        Object.keys(storeData[k]).forEach(function(modelId) {
+            if (!all[modelId]) all[modelId] = {};
+            PARAMS.forEach(function(p) {
+                if (!all[modelId][p.key]) all[modelId][p.key] = { sum: 0, n: 0 };
+                var s = storeData[k][modelId][p.key];
+                if (s && s.n) { all[modelId][p.key].sum += s.mae * s.n; all[modelId][p.key].n += s.n; }
+            });
+        });
+    });
+    var result = {};
+    Object.keys(all).forEach(function(modelId) {
+        result[modelId] = {};
+        PARAMS.forEach(function(p) {
+            var s = all[modelId][p.key];
+            result[modelId][p.key] = s && s.n ? { mae: s.sum / s.n, n: s.n } : null;
+        });
+    });
+    return result;
+}
+
+function getDataForPeriod() {
+    if (!_activePeriod || _activePeriod.key === "all") {
+        return aggregateFromStore(_computed.daily);
+    }
+    // Все вёсны / зимы / ...
+    if (_activePeriod.store === "allSeason") {
+        var st = _activePeriod.seasType;
+        var filtered = {};
+        Object.keys(_computed.seasonal).forEach(function(k) {
+            if (k.endsWith("-"+st)) filtered[k] = _computed.seasonal[k];
+        });
+        return aggregateFromStore(filtered);
+    }
+    var store = _computed[_activePeriod.store];
+    return store && store[_activePeriod.key] ? store[_activePeriod.key] : {};
+}
+
+/* === РЕНДЕР ПАРАМЕТРОВ === */
+function renderParamRow() {
+    var row = document.getElementById("paramRow");
+    row.innerHTML = PARAMS.map(function(p) {
+        var active = p.key === _activeParam ? " active" : "";
+        return '<button class="cp-btn'+active+'" style="--c:'+p.color+'" onclick="setParam(\''+p.key+'\')">' + p.label + '</button>';
+    }).join("");
+}
+
+function setParam(key) {
+    _activeParam = key;
+    document.querySelectorAll("#paramRow .cp-btn").forEach(function(b){
+        var p = PARAMS.find(function(x){ return x.label === b.textContent.trim(); });
+        b.classList.toggle("active", p && p.key === key);
+    });
+    renderModelGrid();
+    renderChart();
+}
+
+/* === РЕНДЕР ТАБЛИЦЫ МОДЕЛЕЙ === */
+function renderModelGrid() {
+    var data = getDataForPeriod();
+    var p = PARAMS.find(function(x){ return x.key === _activeParam; });
+    if (!p) return;
+
+    // Сортируем модели по MAE
+    var models = Object.keys(data).filter(function(m){ return data[m][p.key] && data[m][p.key].mae != null; });
+    models.sort(function(a,b){
+        if (p.binary) return data[b][p.key].mae - data[a][p.key].mae; // выше лучше
+        return data[a][p.key].mae - data[b][p.key].mae; // ниже лучше
+    });
+
+    var grid = document.getElementById("modelGrid");
+    grid.innerHTML = models.map(function(modelId, idx) {
+        var s = data[modelId][p.key];
+        var short = typeof modelShort === "function" ? modelShort(modelId) : modelId;
+        var rankClass = idx === 0 ? "rank-1" : idx === 1 ? "rank-2" : idx === 2 ? "rank-3" : "";
+        var medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : (idx+1)+".";
+        var maeColor = idx < 3 ? (idx === 0 ? "#ffd166" : idx === 1 ? "#b0bec5" : "#cd7f32") : "#666";
+        // Для явлений — чем выше тем лучше (% верных), для остальных — чем ниже тем лучше
+        var valStr, unitStr;
+        if (p.binary) {
+            valStr = (s.mae * 100).toFixed(1);
+            unitStr = "% верно";
+            maeColor = s.mae >= 0.8 ? "#5fe08f" : s.mae >= 0.6 ? "#fdcb6e" : "#ff6b6b";
+        } else {
+            valStr = s.mae.toFixed(2);
+            unitStr = "MAE" + p.unit;
+        }
+        return '<div class="es-card">' +
+            '<div class="es-card-label">' + medal + ' ' + short + '</div>' +
+            '<div class="es-card-mae" style="color:'+maeColor+';">' +
+                valStr +
+                '<span style="font-size:12px;font-weight:400;color:#666;"> '+unitStr+'</span>' +
+            '</div>' +
+            '<div style="font-size:11px;color:#555;">n=' + s.n + '</div>' +
+        '</div>';
+    }).join("");
+}
+
+/* === ГРАФИК ДИНАМИКИ === */
+function renderChart() {
+    var section = document.getElementById("chartSection");
+    var p = PARAMS.find(function(x){ return x.key === _activeParam; });
+    if (!p) return;
+
+    // Берём месячные данные для графика
+    var monKeys = Object.keys(_computed.monthly).sort();
+    var models  = MODEL_REGISTRY.map(function(m){ return m.id; });
+
+    // Только модели с данными
+    var activeModels = models.filter(function(m){
+        return monKeys.some(function(k){
+            return _computed.monthly[k][m] && _computed.monthly[k][m][p.key];
+        });
+    });
+
+    if (!monKeys.length || !activeModels.length) { section.style.display = "none"; return; }
+    section.style.display = "";
+
+    var months = ["","Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
+    var labels = monKeys.map(function(k){ var parts=k.split("-"); return months[parseInt(parts[1])]+" "+parts[0].slice(2); });
+
+    var colors = ["#ff8f00","#4aa3ff","#8bc34a","#74b9ff","#b0bec5","#ff6b6b","#ffd166","#00bcd4"];
+
+    var datasets = activeModels.map(function(m, i) {
+        var short = typeof modelShort === "function" ? modelShort(m) : m;
+        return {
+            label: short,
+            data: monKeys.map(function(k){
+                var s = _computed.monthly[k][m] && _computed.monthly[k][m][p.key];
+                return s ? s.mae : null;
+            }),
+            borderColor: colors[i % colors.length],
+            backgroundColor: "transparent",
+            borderWidth: 1.5,
+            pointRadius: 2,
+            tension: 0.3,
+            spanGaps: true
+        };
+    });
+
+    var ctx = document.getElementById("trendChart").getContext("2d");
+    if (_chartInstance) { _chartInstance.destroy(); _chartInstance = null; }
+    _chartInstance = new Chart(ctx, {
+        type: "line",
+        data: { labels: labels, datasets: datasets },
+        options: {
+            responsive: true,
+            animation: false,
+            plugins: {
+                legend: { display: true, labels: { color:"#666", font:{ size:10 }, boxWidth:12 } },
+                tooltip: { callbacks: { label: function(ctx){ return ctx.dataset.label+": "+ctx.parsed.y.toFixed(2)+p.unit; } } }
+            },
+            scales: {
+                x: { ticks:{ color:"#555", font:{size:9}, maxRotation:45 }, grid:{ color:"#1e1e1e" } },
+                y: { ticks:{ color:"#555", font:{size:10} }, grid:{ color:"#252525" }, beginAtZero:true }
+            }
+        }
+    });
+}
+
+/* === ПОКРЫТИЕ === */
+function renderCoverage() {
+    var days   = Object.keys(_computed.daily).sort();
+    var months = Object.keys(_computed.monthly).sort();
+    var seasons= Object.keys(_computed.seasonal).sort();
+    var total  = _allData.length;
+
+    document.getElementById("coverageInfo").innerHTML =
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">' +
+            '<div><span style="color:#555;">Записей</span><br><b style="font-size:17px;">'+total+'</b></div>' +
+            '<div><span style="color:#555;">Дней</span><br><b style="font-size:17px;">'+days.length+'</b></div>' +
+            '<div><span style="color:#555;">Месяцев</span><br><b style="font-size:17px;">'+months.length+'</b></div>' +
+        '</div>' +
+        '<div style="margin-top:8px;color:#555;font-size:12px;">' +
+            'Период: ' + (days[0]||"—") + ' → ' + (days[days.length-1]||"—") + '<br>' +
+            'Сезонов: ' + seasons.join(", ") +
+        '</div>';
+}
+
+/* === ПОСТРОИТЬ КОМПАКТНЫЕ ВЕСА === */
+function buildWeights() {
+    var TOP_N = 3;
+    var result = {
+        updated: new Date().toISOString(),
+        seasonal:   {},  // "2026-MAM" → { param → [{model, mae, n}] }
+        monthly:    {},  // "2026-04"  → { param → [{model, mae, n}] }
+        allSeasons: {},  // "MAM"      → { param → [{model, mae, n}] } — все вёсны вместе
+        allMonths:  {}   // "04"       → { param → [{model, mae, n}] } — все апрели вместе
+    };
+
+    // Функция сортировки топ-N для одного периода
+    function top3forPeriod(periodData) {
+        var out = {};
+        PARAMS.forEach(function(p) {
+            var models = Object.keys(periodData).filter(function(m){
+                return periodData[m][p.key] && periodData[m][p.key].n >= 20;
+            });
+            models.sort(function(a, b) {
+                if (p.binary) return periodData[b][p.key].mae - periodData[a][p.key].mae;
+                return periodData[a][p.key].mae - periodData[b][p.key].mae;
+            });
+            out[p.key] = models.slice(0, TOP_N).map(function(m) {
+                return { model: m, mae: +periodData[m][p.key].mae.toFixed(4), n: periodData[m][p.key].n };
+            });
+        });
+        return out;
+    }
+
+    // Сезонные веса
+    Object.keys(_computed.seasonal).forEach(function(k) {
+        result.seasonal[k] = top3forPeriod(_computed.seasonal[k]);
+    });
+
+    // Месячные веса
+    Object.keys(_computed.monthly).forEach(function(k) {
+        result.monthly[k] = top3forPeriod(_computed.monthly[k]);
+    });
+
+    // Вспомогательная функция агрегации по фильтру ключей
+    function aggregateKeys(store, filterFn) {
+        var combined = {};
+        Object.keys(store).filter(filterFn).forEach(function(k) {
+            var pd = store[k];
+            Object.keys(pd).forEach(function(modelId) {
+                if (!combined[modelId]) combined[modelId] = {};
+                PARAMS.forEach(function(p) {
+                    if (!combined[modelId][p.key]) combined[modelId][p.key] = { sum: 0, n: 0 };
+                    var s = pd[modelId][p.key];
+                    if (s && s.n) {
+                        combined[modelId][p.key].sum += s.mae * s.n;
+                        combined[modelId][p.key].n   += s.n;
+                    }
+                });
+            });
+        });
+        var averaged = {};
+        Object.keys(combined).forEach(function(modelId) {
+            averaged[modelId] = {};
+            PARAMS.forEach(function(p) {
+                var s = combined[modelId][p.key];
+                averaged[modelId][p.key] = s && s.n ? { mae: s.sum / s.n, n: s.n } : null;
+            });
+        });
+        return averaged;
+    }
+
+    // Агрегация по типу сезона (все MAM, все DJF, ...)
+    Object.keys(SEASONS).forEach(function(seasType) {
+        var averaged = aggregateKeys(_computed.seasonal, function(k){ return k.endsWith("-"+seasType); });
+        result.allSeasons[seasType] = top3forPeriod(averaged);
+    });
+
+    // Агрегация по номеру месяца за все годы (все январи, все февраля...)
+    for (var mo = 1; mo <= 12; mo++) {
+        var moStr = String(mo).padStart(2, "0");
+        var averaged = aggregateKeys(_computed.monthly, function(k){ return k.slice(5) === moStr; });
+        result.allMonths[moStr] = top3forPeriod(averaged);
+    }
+
+    return result;
+}
+
+/* === СОХРАНИТЬ ВЕСА === */
+async function saveWeights() {
+    var token = getToken();
+    if (!token) { document.getElementById("saveStatus").textContent = "❌ Нет токена GitHub"; return; }
+
+    var btn = document.getElementById("saveBtn");
+    btn.disabled = true;
+    document.getElementById("saveStatus").textContent = "⏳ Сохраняем...";
+
+    var weights = buildWeights();
+
+    try {
+        var url = "https://api.github.com/repos/"+GITHUB_OWNER+"/"+GITHUB_REPO+"/contents/"+WEIGHTS_FILE;
+        var headers = { "Accept":"application/vnd.github+json", "Authorization":"Bearer "+token };
+
+        var sha = null;
+        var rGet = await fetch(url, { headers: headers, cache:"no-store" });
+        if (rGet.ok) {
+            var respGet = await rGet.json();
+            sha = respGet.sha;
+        }
+                encoded = btoa(unescape(encodeURIComponent(JSON.stringify(weights, null, 2))));
+        var body = { message: "update model weights", content: encoded };
+        if (sha) body.sha = sha;
+
+        var rPut = await fetch(url, {
+            method: "PUT",
+            headers: Object.assign({}, headers, { "Content-Type":"application/json" }),
+            body: JSON.stringify(body)
+        });
+        if (!rPut.ok) throw new Error("PUT " + rPut.status);
+        document.getElementById("saveStatus").textContent = "✓ Сохранено · " + Object.keys(weights.seasonal).length + " сезонов · " + Object.keys(weights.monthly).length + " месяцев";
+    } catch(e) {
+        document.getElementById("saveStatus").textContent = "❌ Ошибка: " + e.message;
+    }
+    btn.disabled = false;
+}
+
+/* === СТАРТ === */
+(async function init() {
+    var ok = await loadAllData();
+    if (!ok || !_allData.length) {
+        setStatus("❌ Нет данных");
+        return;
+    }
+
+    setStatus("⚙️ Считаем MAE...");
+    computeAll();
+
+    var periods = buildPeriodList();
+    // По умолчанию — текущий сезон
+    var now = new Date();
+    var curSeason = getSeason(now.getMonth()+1);
+    var curSeasKey = getSeasonYear(now.getFullYear(), now.getMonth()+1)+"-"+curSeason;
+    _activePeriod = periods.find(function(p){ return p.key === curSeasKey; }) || periods[0];
+
+    renderPeriodRow(periods);
+    renderParamRow();
+    renderModelGrid();
+    renderChart();
+    renderCoverage();
+
+    setStatus("Записей: <b>" + _allData.length + "</b> · Дней: <b>" + Object.keys(_computed.daily).length + "</b>");
+})();
+</script>
+
+<script src="nav.js"></script>
+</body>
+</html>
