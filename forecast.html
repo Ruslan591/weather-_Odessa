@@ -1302,14 +1302,15 @@ async function loadEnsemble() {
                 const hoursFrom = allHours.filter(h => h.time >= snapTimeStr);
                 if (hoursFrom.length > 0) {
                     const isSynopHour = snapTime.getUTCHours() % 3 === 0;
-                    snapshots.push({ savedAt, hours: hoursFrom, isSynopHour });
+                    snapshots.push({ savedAt, runTime: snapTime.toISOString(), hours: hoursFrom, isSynopHour });
                 }
             }
         }
 
         // Текущий снимок
         const isSynopHour = now.getUTCHours() % 3 === 0;
-        snapshots.push({ savedAt: now.toISOString(), hours: allHours, isSynopHour });
+        const runTime = ensembleReadyTime ? ensembleReadyTime.toISOString() : null;
+        snapshots.push({ savedAt: now.toISOString(), runTime, hours: allHours, isSynopHour });
 
         return snapshots;
     }
