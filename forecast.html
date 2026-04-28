@@ -1435,13 +1435,18 @@ function snapWord(n) {
         const newSnapsSynop = buildSnapshots(roundedForSnapshot, lastSavedAtSynop, ensembleReadyTime);
         if (!newSnapsPws.length && !newSnapsSynop.length) return;
 
-        const existSynopKeys = new Set(synopSnaps.map(s => s.savedAt ? s.savedAt.slice(0, 13) : ""));
-        const existPwsKeys   = new Set(pwsSnaps.map(s => s.savedAt ? s.savedAt.slice(0, 13) : ""));
+        function runKey(savedAt) {
+            const d = new Date(savedAt);
+            const runH = Math.floor(d.getUTCHours() / 6) * 6;
+            return `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}-${runH}`;
+        }
+        const existSynopKeys = new Set(synopSnaps.map(s => s.savedAt ? runKey(s.savedAt) : ""));
+        const existPwsKeys   = new Set(pwsSnaps.map(s => s.savedAt ? runKey(s.savedAt) : ""));
 
         let synopAdded = false, pwsAdded = false;
 
         for (const snap of newSnapsSynop) {
-            const key = snap.savedAt.slice(0, 13);
+            const key = runKey(snap.savedAt);
             if (snap.isSynopHour && !existSynopKeys.has(key)) {
                 synopSnaps.push({ savedAt: snap.savedAt, hours: snap.hours.map(toSynop) });
                 existSynopKeys.add(key);
@@ -1449,7 +1454,7 @@ function snapWord(n) {
             }
         }
         for (const snap of newSnapsPws) {
-            const key = snap.savedAt.slice(0, 13);
+            const key = runKey(snap.savedAt);
             if (!existPwsKeys.has(key)) {
                 pwsSnaps.push({ savedAt: snap.savedAt, hours: snap.hours.map(toPws) });
                 existPwsKeys.add(key);
