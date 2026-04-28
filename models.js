@@ -2,14 +2,14 @@
 // Добавь/удали модель только здесь, всё остальное подхватится автоматически
 
 var MODEL_REGISTRY = [
-  { id: "ecmwf_ifs",                      short: "ECMWF",   long: "ECMWF IFS HRES", ensemble: true },
-  { id: "icon_eu",                        short: "ICON-EU", long: "ICON EU",         ensemble: true },
-  { id: "icon_global",                    short: "ICON-G",  long: "ICON Global",     ensemble: true },
-  { id: "ukmo_global_deterministic_10km", short: "UKMO",    long: "UKMO Global",     ensemble: true },
-  { id: "meteofrance_arpege_europe",      short: "ARPEGE",  long: "ARPEGE Europe",   ensemble: true },
-  { id: "gfs_global",                     short: "GFS",     long: "GFS Global",      ensemble: true },
-  { id: "gem_global",                     short: "GEM",     long: "GEM Global",      ensemble: true },
-  { id: "cma_grapes_global",              short: "CMA",     long: "CMA GRAPES",      ensemble: true }
+  { id: "ecmwf_ifs",                      short: "ECMWF",   long: "ECMWF IFS HRES",  ensemble: true,  metaId: "ecmwf_ifs025" },
+  { id: "icon_eu",                         short: "ICON-EU", long: "ICON EU",          ensemble: true,  metaId: "dwd_icon_eu" },
+  { id: "icon_global",                     short: "ICON-G",  long: "ICON Global",      ensemble: true,  metaId: null },
+  { id: "ukmo_global_deterministic_10km",  short: "UKMO",    long: "UKMO Global",      ensemble: true,  metaId: "ukmo_global_deterministic_10km" },
+  { id: "meteofrance_arpege_europe",       short: "ARPEGE",  long: "ARPEGE Europe",    ensemble: true,  metaId: "meteofrance_arpege_europe" },
+  { id: "gfs_global",                      short: "GFS",     long: "GFS Global",       ensemble: true,  metaId: "ncep_gfs013" },
+  { id: "gem_global",                      short: "GEM",     long: "GEM Global",       ensemble: true,  metaId: null },
+  { id: "cma_grapes_global",               short: "CMA",     long: "CMA GRAPES",       ensemble: true,  metaId: "cma_grapes_global" }
 ];
 
 function modelIds() {
