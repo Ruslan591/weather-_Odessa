@@ -1448,7 +1448,7 @@ function snapWord(n) {
         for (const snap of newSnapsSynop) {
             const key = runKey(snap.savedAt);
             if (snap.isSynopHour && !existSynopKeys.has(key)) {
-                synopSnaps.push({ savedAt: snap.savedAt, hours: snap.hours.map(toSynop) });
+                synopSnaps.push({ savedAt: snap.savedAt, runTime: snap.runTime || null, hours: snap.hours.map(toSynop) });
                 existSynopKeys.add(key);
                 synopAdded = true;
             }
@@ -1456,7 +1456,7 @@ function snapWord(n) {
         for (const snap of newSnapsPws) {
             const key = runKey(snap.savedAt);
             if (!existPwsKeys.has(key)) {
-                pwsSnaps.push({ savedAt: snap.savedAt, hours: snap.hours.map(toPws) });
+                pwsSnaps.push({ savedAt: snap.savedAt, runTime: snap.runTime || null, hours: snap.hours.map(toPws) });
                 existPwsKeys.add(key);
                 pwsAdded = true;
             }
