@@ -1206,15 +1206,25 @@ async function loadEnsemble() {
         if (r.status === 404) return { data: [], sha: null };
         if (!r.ok) throw new Error("GitHub GET " + r.status);
         const resp = await r.json();
-        const content = decodeURIComponent(escape(atob(resp.content.replace(/\n/g, ""))));
-        return { data: JSON.parse(content), sha: resp.sha };
+        let raw;
+        if (resp.content) {
+            raw = decodeURIComponent(escape(atob(resp.content.replace(/\n/g, ""))));
+        } else if (resp.download_url) {
+            const dr = await fetch(resp.download_url, { cache: "no-store" });
+            raw = await dr.text();
+        } else {
+            return { data: [], sha: resp.sha };
+        }
+        return { data: JSON.parse(raw), sha: resp.sha };
     }
 
     async function ghPut(path, data, sha, message) {
-        if (!TOKEN) return;
+        if (!TOKEN) return sha;
         const arr = data.sort((a, b) => a.savedAt > b.savedAt ? 1 : -1);
         const trimmed = arr.length > MAX_SNAPS ? arr.slice(arr.length - MAX_SNAPS) : arr;
-        const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(trimmed, null, 2))));
+        const encoded = btoa(unescape(encodeURIComponent(
+            "[\n" + trimmed.map(s => JSON.stringify(s)).join(",\n") + "\n]"
+        )));
         const body = { message: message || "update " + path, content: encoded };
         if (sha) body.sha = sha;
         const r = await fetch("https://api.github.com/repos/" + OWNER + "/" + REPO + "/contents/" + path, {
@@ -1232,6 +1242,22 @@ async function loadEnsemble() {
         }
         const resp = await r.json();
         return resp.content ? resp.content.sha : sha;
+    }
+
+    // Время готовности ансамбля по metadata API
+    async function getEnsembleReadyTime() {
+        const models = MODEL_REGISTRY.filter(m => m.ensemble && m.metaId);
+        const results = await Promise.all(models.map(m =>
+            fetch("https://api.open-meteo.com/data/" + m.metaId + "/static/meta.json", { cache: "no-store" })
+                .then(r => r.ok ? r.json() : null)
+                .catch(() => null)
+        ));
+        const times = results
+            .filter(r => r && r.last_run_availability_time)
+            .map(r => r.last_run_availability_time * 1000);
+        if (!times.length) return null;
+        // Берём максимум — когда последняя из моделей стала доступна, + 10 минут
+        return new Date(Math.max(...times) + 10 * 60 * 1000);
     }
 
     // Строим список снимков: пропущенные + текущий
@@ -1293,7 +1319,10 @@ function snapWord(n) {
     }
 
     try {
-        showToast("⏳ Загружаем снимки...", "#aaa");
+        showToast("⏳ Проверяем обновление моделей...", "#aaa");
+
+        // Проверяем время готовности ансамбля
+        const ensembleReadyTime = await getEnsembleReadyTime();
 
         const [synopFile, pwsFile] = await Promise.all([
             ghGet(FILE_SYNOP),
@@ -1305,25 +1334,23 @@ function snapWord(n) {
         let synopSha = synopFile.sha;
         let pwsSha   = pwsFile.sha;
 
-        // lastSavedAt берём из pws (пишется каждый час, самый актуальный)
-        // Округляем до часа чтобы не генерировать лишних пропущенных
         function toHourStart(isoStr) {
             if (!isoStr) return null;
             const d = new Date(isoStr);
             return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours())).toISOString();
         }
 
-        const lastSavedAtPws   = pwsSnaps.length   ? toHourStart(pwsSnaps[pwsSnaps.length - 1].savedAt)   : null;
-        const lastSavedAtSynop = synopSnaps.length  ? toHourStart(synopSnaps[synopSnaps.length - 1].savedAt) : null;
+        const lastSavedAtPws   = pwsSnaps.length  ? pwsSnaps[pwsSnaps.length - 1].savedAt : null;
+        const lastSavedAtSynop = synopSnaps.length ? synopSnaps[synopSnaps.length - 1].savedAt : null;
 
-        const nowHourStr = new Date().toISOString().slice(0, 13);
-        const nowHour = new Date().getUTCHours();
-        const synopAlreadySaved = nowHour % 3 === 0
-            && synopSnaps.some(s => s.savedAt && s.savedAt.slice(0, 13) === nowHourStr);
-        const pwsAlreadySaved = pwsSnaps.some(s => s.savedAt && s.savedAt.slice(0, 13) === nowHourStr);
-        if (synopAlreadySaved && pwsAlreadySaved) {
-            showToast("✓ Снимки за этот час уже есть", "#8bc34a");
-            return;
+        // Если знаем время готовности — проверяем нужен ли новый снимок
+        if (ensembleReadyTime) {
+            const pwsUpToDate   = lastSavedAtPws   && new Date(lastSavedAtPws)   >= ensembleReadyTime;
+            const synopUpToDate = lastSavedAtSynop && new Date(lastSavedAtSynop) >= ensembleReadyTime;
+            if (pwsUpToDate && synopUpToDate) {
+                showToast("✓ Снимки актуальны", "#8bc34a");
+                return;
+            }
         }
 
         // Для pws используем lastSavedAtPws, для synop — lastSavedAtSynop
