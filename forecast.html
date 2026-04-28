@@ -1214,7 +1214,7 @@ async function loadEnsemble() {
         if (!TOKEN) return;
         const arr = data.sort((a, b) => a.savedAt > b.savedAt ? 1 : -1);
         const trimmed = arr.length > MAX_SNAPS ? arr.slice(arr.length - MAX_SNAPS) : arr;
-        const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(trimmed))));
+        const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(trimmed, null, 2))));
         const body = { message: message || "update " + path, content: encoded };
         if (sha) body.sha = sha;
         const r = await fetch("https://api.github.com/repos/" + OWNER + "/" + REPO + "/contents/" + path, {

@@ -101,7 +101,7 @@
     }
 
     async function ghPut(data, sha) {
-        const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+        const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2))));
         const body = { message: "pws raw update", content: encoded };
         if (sha) body.sha = sha;
         const r = await fetch("https://api.github.com/repos/"+OWNER+"/"+REPO+"/contents/"+FILE, {
