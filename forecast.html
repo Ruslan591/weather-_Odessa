@@ -1244,8 +1244,17 @@ async function loadEnsemble() {
         return resp.content ? resp.content.sha : sha;
     }
 
-    // Время готовности ансамбля по metadata API
+    // Время готовности ансамбля по metadata API (кэш 1 час)
     async function getEnsembleReadyTime() {
+        const CACHE_KEY = "ensembleReadyTime";
+        const CACHE_TTL = 60 * 60 * 1000;
+        const cached = localStorage.getItem(CACHE_KEY);
+        if (cached) {
+            try {
+                const { time, ts } = JSON.parse(cached);
+                if (Date.now() - ts < CACHE_TTL) return new Date(time);
+            } catch(e) {}
+        }
         const models = MODEL_REGISTRY.filter(m => m.ensemble && m.metaId);
         const results = await Promise.all(models.map(m =>
             fetch("https://api.open-meteo.com/data/" + m.metaId + "/static/meta.json", { cache: "no-store" })
@@ -1256,26 +1265,39 @@ async function loadEnsemble() {
             .filter(r => r && r.last_run_availability_time)
             .map(r => r.last_run_availability_time * 1000);
         if (!times.length) return null;
-        // Берём максимум — когда последняя из моделей стала доступна, + 10 минут
-        return new Date(Math.max(...times) + 10 * 60 * 1000);
+        const ready = Math.max(...times) + 10 * 60 * 1000;
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ time: ready, ts: Date.now() }));
+        return new Date(ready);
     }
 
-    // Строим список снимков: пропущенные + текущий
-    function buildSnapshots(allHours, lastSavedAt) {
+    // Строим список снимков по прогонам моделей
+    function buildSnapshots(allHours, lastSavedAt, ensembleReadyTime) {
         const now = new Date();
         const snapshots = [];
 
-        if (lastSavedAt) {
-            const last = new Date(lastSavedAt);
-            const lastHourTs = Date.UTC(
-                last.getUTCFullYear(), last.getUTCMonth(), last.getUTCDate(), last.getUTCHours()
+        if (lastSavedAt && ensembleReadyTime) {
+            const lastTs = new Date(lastSavedAt).getTime();
+            // Перебираем прогоны с шагом 6 часов начиная от lastSavedAt
+            // Берём время инициализации текущего готового прогона
+            const readyTs = ensembleReadyTime.getTime();
+            // Шаг 6 часов — минимальный интервал обновления любой из моделей
+            const STEP = 6 * 3600 * 1000;
+            // Находим первый прогон после lastSavedAt
+            // Округляем readyTs вниз до кратного 6ч UTC
+            const readyUtcH = Math.floor(ensembleReadyTime.getUTCHours() / 6) * 6;
+            let runTs = Date.UTC(
+                ensembleReadyTime.getUTCFullYear(),
+                ensembleReadyTime.getUTCMonth(),
+                ensembleReadyTime.getUTCDate(),
+                readyUtcH
             );
-            const nowHourTs = Date.UTC(
-                now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours()
-            );
-            for (let ts = lastHourTs + 3600000; ts < nowHourTs; ts += 3600000) {
+            // Идём назад пока не найдём первый прогон после lastSavedAt
+            const candidates = [];
+            for (let ts = runTs; ts > lastTs; ts -= STEP) candidates.unshift(ts);
+            // Для каждого пропущенного прогона строим снимок
+            for (const ts of candidates) {
                 const snapTime = new Date(ts);
-                const savedAt = new Date(ts + 15 * 60000).toISOString();
+                const savedAt = new Date(ts + 10 * 60 * 1000).toISOString(); // +10 мин от старта прогона
                 const snapTimeStr = snapTime.toISOString().slice(0, 13);
                 const hoursFrom = allHours.filter(h => h.time >= snapTimeStr);
                 if (hoursFrom.length > 0) {
@@ -1334,12 +1356,6 @@ function snapWord(n) {
         let synopSha = synopFile.sha;
         let pwsSha   = pwsFile.sha;
 
-        function toHourStart(isoStr) {
-            if (!isoStr) return null;
-            const d = new Date(isoStr);
-            return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours())).toISOString();
-        }
-
         const lastSavedAtPws   = pwsSnaps.length  ? pwsSnaps[pwsSnaps.length - 1].savedAt : null;
         const lastSavedAtSynop = synopSnaps.length ? synopSnaps[synopSnaps.length - 1].savedAt : null;
 
@@ -1354,8 +1370,8 @@ function snapWord(n) {
         }
 
         // Для pws используем lastSavedAtPws, для synop — lastSavedAtSynop
-        const newSnapsPws  = buildSnapshots(roundedForSnapshot, lastSavedAtPws);
-        const newSnapsSynop = buildSnapshots(roundedForSnapshot, lastSavedAtSynop);
+        const newSnapsPws   = buildSnapshots(roundedForSnapshot, lastSavedAtPws,   ensembleReadyTime);
+        const newSnapsSynop = buildSnapshots(roundedForSnapshot, lastSavedAtSynop, ensembleReadyTime);
         if (!newSnapsPws.length && !newSnapsSynop.length) return;
 
         const existSynopKeys = new Set(synopSnaps.map(s => s.savedAt ? s.savedAt.slice(0, 13) : ""));
