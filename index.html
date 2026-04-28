@@ -134,7 +134,9 @@
 
     async function ghPut(data, sha) {
         const sorted = data.sort((a,b) => a.synopTime > b.synopTime ? 1 : -1);
-        const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(sorted, null, 2))));
+        const encoded = btoa(unescape(encodeURIComponent(
+    "[\n" + sorted.map(s => JSON.stringify(s)).join(",\n") + "\n]"
+)));
         const body = { message: "synop obs update", content: encoded };
         if (sha) body.sha = sha;
         const r = await fetch("https://api.github.com/repos/"+OWNER+"/"+REPO+"/contents/"+FILE, {
