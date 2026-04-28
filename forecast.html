@@ -941,39 +941,101 @@ function getEnsembleModels() {
     return MODEL_REGISTRY.filter(function(m) { return m.ensemble; }).map(function(m) { return m.id; });
 }
 
-function getModelWeights() {
-    var models = getEnsembleModels();
-    var raw = {};
-    try { raw = JSON.parse(localStorage.getItem("modelHistoryProgress") || "{}"); } catch(e) {}
+// Кэш весов загруженных с GitHub
+var _modelWeights = null;
 
-    var weights = {};
-    var anyData = false;
+async function loadModelWeights() {
+    if (_modelWeights) return _modelWeights;
+    try {
+        var r = await fetch("data/model_weights.json", { cache: "no-store" });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        _modelWeights = await r.json();
+    } catch(e) {
+        console.warn("model_weights.json не загружен:", e.message);
+        _modelWeights = null;
+    }
+    return _modelWeights;
+}
 
-    models.forEach(function(m) {
-        var mStats = raw[m];
-        var mae = null;
-        if (mStats && mStats.temp !== undefined && mStats.temp !== null) {
-            mae = mStats.temp; // общий MAE температуры
-        }
-        if (mae != null && mae > 0) {
-            weights[m] = 1 / mae;
-            anyData = true;
-        } else {
-            weights[m] = null;
-        }
+function getSeasonKey() {
+    var now = new Date();
+    var m = now.getMonth() + 1;
+    var y = now.getFullYear();
+    var s = m===12||m<=2 ? "DJF" : m<=5 ? "MAM" : m<=8 ? "JJA" : "SON";
+    var sy = m === 12 ? y + 1 : y;
+    return { season: s, seasonKey: sy+"-"+s, monthKey: y+"-"+String(m).padStart(2,"0") };
+}
+
+// Консенсусный топ-3 для параметра из 4 источников
+function getConsensusTop3(weights, paramKey, succeededModels) {
+    var keys = getSeasonKey();
+    var sources = [
+        weights.allSeasons  && weights.allSeasons[keys.season]             && weights.allSeasons[keys.season][paramKey],
+        weights.seasonal    && weights.seasonal[keys.seasonKey]            && weights.seasonal[keys.seasonKey][paramKey],
+        weights.allMonths   && weights.allMonths[String(new Date().getMonth()+1).padStart(2,"0")] && weights.allMonths[String(new Date().getMonth()+1).padStart(2,"0")][paramKey],
+        weights.monthly     && weights.monthly[keys.monthKey]              && weights.monthly[keys.monthKey][paramKey]
+    ].filter(Boolean);
+
+    if (!sources.length) return null;
+
+    // Считаем консенсусный score: позиция в каждом источнике → чем ниже позиция тем лучше
+    var scores = {};
+    succeededModels.forEach(function(m) { scores[m] = { score: 0, count: 0, mae: 0 }; });
+
+    sources.forEach(function(src) {
+        src.forEach(function(entry, idx) {
+            if (!succeededModels.includes(entry.model)) return;
+            if (!scores[entry.model]) scores[entry.model] = { score: 0, count: 0, mae: 0 };
+            // Позиция 0=лучший → score = (3 - idx) / 3
+            scores[entry.model].score += (src.length - idx) / src.length;
+            scores[entry.model].mae   += entry.mae;
+            scores[entry.model].count++;
+        });
     });
 
-    if (!anyData) {
-        models.forEach(function(m) { weights[m] = 1; });
-    } else {
-        var valid = models.filter(function(m){ return weights[m] != null; });
-        var avgW = valid.reduce(function(s,m){ return s + weights[m]; }, 0) / valid.length;
-        models.forEach(function(m) { if (weights[m] == null) weights[m] = avgW; });
-    }
+    // Топ-3 по консенсусному score
+    var ranked = succeededModels
+        .filter(function(m) { return scores[m] && scores[m].count > 0; })
+        .sort(function(a, b) { return scores[b].score - scores[a].score; })
+        .slice(0, 3);
 
-    var total = models.reduce(function(s,m){ return s + weights[m]; }, 0);
-    models.forEach(function(m) { weights[m] = weights[m] / total; });
-    return weights;
+    if (!ranked.length) return null;
+
+    // Веса обратно пропорционально среднему MAE
+    var avgMae = {};
+    ranked.forEach(function(m) { avgMae[m] = scores[m].count > 0 ? scores[m].mae / scores[m].count : 1; });
+    var wTotal = ranked.reduce(function(s, m) { return s + 1 / avgMae[m]; }, 0);
+    var result = {};
+    ranked.forEach(function(m) { result[m] = (1 / avgMae[m]) / wTotal; });
+    return result;
+}
+
+function getModelWeights(mw, succeededModels) {
+    // Fallback — равные веса
+    var equal = {};
+    succeededModels.forEach(function(m) { equal[m] = 1 / succeededModels.length; });
+    if (!mw) return { byParam: null, equal: equal };
+
+    var PARAM_FIELDS = {
+        temp:       ["temperature_2m","apparent_temperature","dew_point_2m"],
+        pressure:   ["pressure_msl"],
+        wind:       ["wind_speed_10m","wind_gusts_10m"],
+        windDir:    ["wind_direction_10m"],
+        cloudcover: ["cloud_cover","cloud_cover_low","cloud_cover_mid","cloud_cover_high",
+                     "shortwave_radiation","relative_humidity_2m"],
+        precip:     ["rain","showers","snowfall","snow_depth","precip_prob"],
+        phenomena:  ["weather_code"]
+    };
+
+    var byParam = {};
+    Object.keys(PARAM_FIELDS).forEach(function(paramKey) {
+        var top3 = getConsensusTop3(mw, paramKey, succeededModels);
+        PARAM_FIELDS[paramKey].forEach(function(field) {
+            byParam[field] = top3 || equal;
+        });
+    });
+
+    return { byParam: byParam, equal: equal };
 }
 
 function parseHourly(h) {
@@ -1021,27 +1083,29 @@ function mergeEnsemble(allModelHours, weights, models) {
         var merged = { time: baseH.time };
 
         numericFields.forEach(function(f) {
+            var fw = (weights.byParam && weights.byParam[f]) ? weights.byParam[f] : weights.equal;
             var sum = 0, wSum = 0;
-            models.forEach(function(m) {
+            Object.keys(fw).forEach(function(m) {
                 var mh = allModelHours[m];
                 if (!mh) return;
                 var v = mh[i] ? mh[i][f] : null;
-                if (v != null && !isNaN(v)) { sum += v * weights[m]; wSum += weights[m]; }
+                if (v != null && !isNaN(v)) { sum += v * fw[m]; wSum += fw[m]; }
             });
             merged[f] = wSum > 0 ? sum / wSum : null;
         });
 
         // Направление ветра — векторное среднее
         var sx = 0, sy = 0, wSum2 = 0;
-        models.forEach(function(m) {
+        var dfw = (weights.byParam && weights.byParam["wind_direction_10m"]) ? weights.byParam["wind_direction_10m"] : weights.equal;
+        Object.keys(dfw).forEach(function(m) {
             var mh = allModelHours[m];
             if (!mh || !mh[i]) return;
             var d = mh[i].wind_direction_10m;
             if (d != null) {
                 var rad = d * Math.PI / 180;
-                sx += Math.sin(rad) * weights[m];
-                sy += Math.cos(rad) * weights[m];
-                wSum2 += weights[m];
+                sx += Math.sin(rad) * dfw[m];
+                sy += Math.cos(rad) * dfw[m];
+                wSum2 += dfw[m];
             }
         });
         merged.wind_direction_10m = wSum2 > 0
@@ -1050,11 +1114,12 @@ function mergeEnsemble(allModelHours, weights, models) {
 
         // weather_code — взвешенный мажоритарный
         var codeCounts = {};
-        models.forEach(function(m) {
+        var cfw = (weights.byParam && weights.byParam["weather_code"]) ? weights.byParam["weather_code"] : weights.equal;
+        Object.keys(cfw).forEach(function(m) {
             var mh = allModelHours[m];
             if (!mh || !mh[i]) return;
             var c = mh[i].weather_code;
-            if (c != null) codeCounts[c] = (codeCounts[c] || 0) + weights[m];
+            if (c != null) codeCounts[c] = (codeCounts[c] || 0) + cfw[m];
         });
         var bestCode = 0, bestW = -1;
         Object.keys(codeCounts).forEach(function(c) {
@@ -1090,12 +1155,10 @@ async function loadEnsemble() {
     var models = getEnsembleModels();
     if (!models.length) return;
 
-    var weights = getModelWeights();
+    var mw = await loadModelWeights();
 
     // Показываем веса в заголовке
-    var infoStr = models.map(function(m) {
-        return modelShort(m) + " " + Math.round(weights[m] * 100) + "%";
-    }).join(" · ");
+    var infoStr = "";
     document.getElementById("modelName").innerText = "Ансамбль ⚡";
 
     var HOURLY_PARAMS = "temperature_2m,apparent_temperature,pressure_msl,relative_humidity_2m," +
@@ -1145,10 +1208,7 @@ async function loadEnsemble() {
     }
 
     // Пересчитываем веса только для успешных моделей
-    var succeededWeights = getModelWeights();
-    var wTotal = succeededModels.reduce(function(s,m){ return s + succeededWeights[m]; }, 0);
-    succeededModels.forEach(function(m){ succeededWeights[m] = succeededWeights[m] / wTotal; });
-
+    var succeededWeights = getModelWeights(mw, succeededModels);
     var ensembleHours = mergeEnsemble(allModelHours, succeededWeights, succeededModels);
 
     // Отдельный мерж на максимальный горизонт для снимка
@@ -1159,7 +1219,7 @@ async function loadEnsemble() {
     });
     var succeededMax = succeededModels.filter(function(m) { return allModelHoursMax[m] != null; });
     var ensembleHoursMax = succeededMax.length
-        ? mergeEnsemble(allModelHoursMax, succeededWeights, succeededMax)
+        ? mergeEnsemble(allModelHoursMax, getModelWeights(mw, succeededMax), succeededMax)
         : ensembleHours;
 
     const roundedForSnapshot = ensembleHoursMax.map(h => ({
