@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Обновление истории</title>
+<script src="models.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    background: #0d0d0d; color: #e0e0e0;
+    font-family: 'Courier New', monospace;
+    padding: 24px; min-height: 100vh;
+}
+h1 {
+    font-size: 1.1em; font-weight: normal; color: #888;
+    letter-spacing: 0.15em; text-transform: uppercase;
+    margin-bottom: 20px; border-bottom: 1px solid #222; padding-bottom: 12px;
+}
+.controls { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+button {
+    padding: 9px 20px; border: 1px solid #444; background: #1a1a1a;
+    color: #e0e0e0; font-family: 'Courier New', monospace;
+    font-size: 0.85em; cursor: pointer; letter-spacing: 0.08em;
+    text-transform: uppercase; transition: all 0.15s;
+}
+button:hover { background: #252525; border-color: #666; }
+button:disabled { opacity: 0.3; cursor: not-allowed; }
+#startBtn { border-color: #2a6; color: #2a6; }
+#startBtn:hover { background: #0a1f12; }
+#stopBtn  { border-color: #a33; color: #a33; }
+#stopBtn:hover { background: #1f0a0a; }
+.token-row { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }
+.token-row input {
+    flex: 1; background: #111; border: 1px solid #333; color: #ccc;
+    font-family: 'Courier New', monospace; font-size: 0.85em;
+    padding: 8px 10px; border-radius: 4px;
+}
+.stats-row { display: flex; gap: 24px; margin-bottom: 16px; flex-wrap: wrap; }
+.stat { display: flex; flex-direction: column; gap: 3px; }
+.stat-label { font-size: 0.68em; color: #555; letter-spacing: 0.1em; text-transform: uppercase; }
+.stat-value { font-size: 1.3em; color: #ccc; }
+.progress-wrap { background: #1a1a1a; border: 1px solid #222; height: 3px; margin-bottom: 16px; }
+.progress-fill { height: 100%; background: #2a6; width: 0%; transition: width 0.3s; }
+#log {
+    background: #111; border: 1px solid #1e1e1e;
+    padding: 14px; height: 400px; overflow-y: auto;
+    font-size: 0.8em; line-height: 1.75;
+}
+.ok   { color: #2a6; }
+.warn { color: #a83; }
+.err  { color: #a33; }
+.info { color: #557; }
+.dim  { color: #444; }
+</style>
+</head>
+<body>
+
+<h1>// обновление истории моделей</h1>
+
+<div class="token-row">
+    <input type="password" id="tokenInput" placeholder="GitHub token" oninput="saveToken()">
+    <button onclick="testGithub()" style="white-space:nowrap;">✓ Проверить</button>
+</div>
+
+<div class="controls">
+    <button id="startBtn" onclick="startUpdate()">▶ Обновить</button>
+    <button id="stopBtn"  onclick="stopUpdate()" disabled>■ Стоп</button>
+    <label style="font-size:0.8em;color:#666;display:flex;align-items:center;gap:6px;">
+        <input type="checkbox" id="dryRun"> только проверка (без записи)
+    </label>
+</div>
+
+<div class="stats-row">
+    <div class="stat">
+        <div class="stat-label">Период</div>
+        <div class="stat-value" id="statRange">—</div>
+    </div>
+    <div class="stat">
+        <div class="stat-label">Дней</div>
+        <div class="stat-value" id="statDays">—</div>
+    </div>
+    <div class="stat">
+        <div class="stat-label">Обработано</div>
+        <div class="stat-value" id="statDone">0</div>
+    </div>
+    <div class="stat">
+        <div class="stat-label">Добавлено</div>
+        <div class="stat-value" id="statAdded">0</div>
+    </div>
+    <div class="stat">
+        <div class="stat-label">Ошибок</div>
+        <div class="stat-value" id="statErr" style="color:#a33">0</div>
+    </div>
+</div>
+
+<div class="progress-wrap"><div class="progress-fill" id="progressFill"></div></div>
+<div id="log"></div>
+
+<script>
+/* ================================================================
+   КОНФИГ
+================================================================ */
+const GITHUB_OWNER = "ruslan591";
+const GITHUB_REPO  = "weather-_Odessa";
+const STATION      = "33837";
+const LAT          = 46.4406;
+const LON          = 30.7703;
+const SYNOP_HOURS  = [0, 3, 6, 9, 12, 15, 18, 21];
+const MAX_CHUNK    = 30; // начальный размер периода (дней)
+
+const PROXIES = [
+    "https://api.allorigins.win/raw?url=",
+    "https://corsproxy.io/?",
+    "https://proxy.cors.sh/",
+    "https://cors.x2u.in/"
+];
+
+const MODELS_LIST = typeof modelIds === "function" ? modelIds() : [
+    "ecmwf_ifs","icon_eu","icon_global",
+    "ukmo_global_deterministic_10km","meteofrance_arpege_europe",
+    "gfs_global","gem_global","cma_grapes_global"
+];
+
+/* ================================================================
+   STATE
+================================================================ */
+let stopped   = false;
+let totalDays = 0;
+let doneDays  = 0;
+let addedRecs = 0;
+let errCount  = 0;
+
+/* ================================================================
+   УТИЛИТЫ
+================================================================ */
+function pad2(n){ return String(n).padStart(2,"0"); }
+function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+
+function log(msg, cls=""){
+    const el = document.getElementById("log");
+    const d  = document.createElement("div");
+    if(cls) d.className = cls;
+    d.textContent = msg;
+    el.appendChild(d);
+    el.scrollTop = el.scrollHeight;
+}
+
+function saveToken(){
+    const t = document.getElementById("tokenInput").value.trim();
+    if(t) localStorage.setItem("ghToken", t);
+}
+function getToken(){
+    return document.getElementById("tokenInput").value.trim()
+        || localStorage.getItem("ghToken") || "";
+}
+
+function updateStats(){
+    document.getElementById("statDone").textContent  = doneDays;
+    document.getElementById("statAdded").textContent = addedRecs;
+    document.getElementById("statErr").textContent   = errCount;
+    const pct = totalDays ? Math.round(doneDays / totalDays * 100) : 0;
+    document.getElementById("progressFill").style.width = pct + "%";
+}
+
+/* ================================================================
+   GITHUB
+================================================================ */
+async function ghGet(path){
+    const token = getToken();
+    const url   = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}`;
+    const r = await fetch(url, {
+        headers: {
+            "Accept": "application/vnd.github+json",
+            ...(token ? { "Authorization": "Bearer " + token } : {})
+        },
+        cache: "no-store"
+    });
+    if(r.status === 404) return { text: null, json: null, sha: null };
+    if(!r.ok) throw new Error("GitHub GET " + r.status);
+    const resp = await r.json();
+    const sha  = resp.sha || null;
+    let text = null;
+    if(resp.content){
+        text = decodeURIComponent(escape(atob(resp.content.replace(/\n/g,""))));
+    } else if(resp.download_url){
+        const dr = await fetch(resp.download_url, { cache:"no-store" });
+        text = await dr.text();
+    }
+    let json = null;
+    try { json = JSON.parse(text); } catch(e){}
+    return { text, json, sha };
+}
+
+async function ghPut(path, content, sha, message){
+    const token = getToken();
+    if(!token) throw new Error("Нет GitHub токена");
+    const encoded = btoa(unescape(encodeURIComponent(content)));
+    const body = { message: message || "update " + path, content: encoded };
+    if(sha) body.sha = sha;
+    const r = await fetch(
+        `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}`,
+        {
+            method: "PUT",
+            headers: {
+                "Authorization": "Bearer " + token,
+                "Content-Type":  "application/json",
+                "Accept":        "application/vnd.github+json"
+            },
+            body: JSON.stringify(body)
+        }
+    );
+    if(!r.ok){
+        const t = await r.text();
+        throw new Error("GitHub PUT " + r.status + ": " + t.slice(0,200));
+    }
+    const resp = await r.json();
+    return resp.content ? resp.content.sha : sha;
+}
+
+async function testGithub(){
+    try {
+        log("Проверка GitHub...", "info");
+        const year = new Date().getUTCFullYear();
+        const { sha } = await ghGet(`modelData_${year}.json`);
+        log("✓ GitHub доступен. SHA: " + (sha || "файл не найден"), "ok");
+    } catch(e){
+        log("✗ " + e.message, "err");
+    }
+}
+
+/* ================================================================
+   SYNOP: загрузка чанка с ogimet
+================================================================ */
+async function fetchSynopChunk(dateFrom, dateTo){
+    // dateFrom, dateTo — объекты Date (UTC)
+    const fmt = d =>
+        `${d.getUTCFullYear()}${pad2(d.getUTCMonth()+1)}${pad2(d.getUTCDate())}0000`;
+    const begin = fmt(dateFrom);
+    const end   = `${dateTo.getUTCFullYear()}${pad2(dateTo.getUTCMonth()+1)}${pad2(dateTo.getUTCDate())}2359`;
+    const url   = `https://www.ogimet.com/cgi-bin/getsynop?block=${STATION}&begin=${begin}&end=${end}`;
+
+    for(const proxy of PROXIES){
+        if(stopped) return null;
+        try {
+            const ctrl  = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), 20000);
+            const r = await fetch(proxy + encodeURIComponent(url), {
+                signal: ctrl.signal, cache: "no-store"
+            });
+            clearTimeout(timer);
+            if(!r.ok) continue;
+            const text = await r.text();
+            if(!text || !text.includes(STATION)) continue;
+            return text;
+        } catch(e){ /* следующий прокси */ }
+    }
+    return null;
+}
+
+/* ================================================================
+   ПАРСИНГ SYNOP
+================================================================ */
+function parseSynopLine(line, telegramKey){
+    const parts = line.trim().split(/\s+/);
+    let temp=null, pressure=null, wind=null, windDir=null;
+    let cloudcover=null, precip=null, ww=null, visibility=null, dew=null;
+
+    const aaxi = parts.indexOf("AAXX");
+
+    // Nddff
+    if(aaxi >= 0 && parts[aaxi+4] && /^\d{5}$/.test(parts[aaxi+4])){
+        const wg = parts[aaxi+4];
+        const N  = parseInt(wg[0]);
+        cloudcover = N <= 8 ? Math.round(N / 8 * 100) : null;
+        windDir    = parseInt(wg.slice(1,3)) * 10;
+        wind       = parseInt(wg.slice(3,5));
+    }
+
+    // iRIXhVV — видимость
+    if(aaxi >= 0 && parts[aaxi+3] && parts[aaxi+3].length === 5){
+        const vvStr = parts[aaxi+3].slice(3,5);
+        if(!/\//.test(vvStr)){
+            const vv = parseInt(vvStr);
+            if(!isNaN(vv)){
+                if(vv <= 50)       visibility = vv * 100;
+                else if(vv <= 80)  visibility = (vv - 50) * 1000;
+                else if(vv === 89) visibility = 70000;
+            }
+        }
+    }
+
+    // Основное тело (до секции 333)
+    for(let i = (aaxi >= 0 ? aaxi + 5 : 0); i < parts.length; i++){
+        const g = parts[i].replace(/=+$/,"");
+        if(g === "333" || g === "444" || g === "555") break;
+        if(/^1[01]\d{3}$/.test(g))  temp     = (g[1]==="1"?-1:1) * parseInt(g.slice(2))/10;
+        if(/^2[01]\d{3}$/.test(g))  dew      = (g[1]==="1"?-1:1) * parseInt(g.slice(2))/10;
+        if(/^4\d{4}$/.test(g)){
+            const v = parseInt(g.slice(1));
+            pressure = v < 5000 ? 1000 + v/10 : 900 + v/10;
+        }
+        if(/^6\d{4}$/.test(g)){
+            const rrr = parseInt(g.slice(1,4));
+            precip = rrr >= 990 ? 0.1 : rrr === 0 ? 0 : rrr;
+        }
+        if(/^7\d{4}$/.test(g)) ww = parseInt(g.slice(1,3));
+    }
+
+    if(temp === null) return null;
+    return { synopTime: telegramKey, temp, pressure, wind, windDir,
+             cloudcover, precip, ww, visibility, dew, synop: line };
+}
+
+function parseSynopText(text){
+    const result = [];
+    for(const rawLine of text.split("\n").map(s=>s.trim()).filter(Boolean)){
+        const m = rawLine.match(/^(\d{5}),(\d{4}),(\d{2}),(\d{2}),(\d{2}),(\d{2}),(AAXX\s.+)$/);
+        if(!m) continue;
+        const [, st, y, mo, dd, hh, mm, synopLine] = m;
+        if(st !== STATION) continue;
+        if(synopLine.includes("NILL")) continue;
+        const hour = parseInt(hh);
+        if(!SYNOP_HOURS.includes(hour)) continue;
+        const telegramKey = `${y}${mo}${dd}${hh}${mm}`;
+        const parsed = parseSynopLine(synopLine, telegramKey);
+        if(parsed){
+            const txtLine = `${STATION},${y},${mo},${dd},${hh},${mm},${synopLine}`;
+            result.push({ telegramKey, parsed, txtLine });
+        }
+    }
+    return result;
+}
+
+/* ================================================================
+   OPEN-METEO: прогнозы за чанк
+================================================================ */
+async function fetchModelsChunk(dateFrom, dateTo){
+    // dateFrom, dateTo — строки "2026-04-01"
+    const fields = [
+        "temperature_2m","pressure_msl","wind_speed_10m","wind_direction_10m",
+        "wind_gusts_10m","cloud_cover","precipitation","weather_code",
+        "visibility","dew_point_2m"
+    ].join(",");
+
+    const hourlyByModel = {};
+    for(const model of MODELS_LIST){
+        if(stopped) return null;
+        let retries = 3;
+        while(retries > 0){
+            try {
+                const url = "https://historical-forecast-api.open-meteo.com/v1/forecast" +
+                    `?latitude=${LAT}&longitude=${LON}` +
+                    `&hourly=${fields}&models=${model}` +
+                    `&start_date=${dateFrom}&end_date=${dateTo}` +
+                    "&timezone=UTC&wind_speed_unit=ms";
+                const ctrl  = new AbortController();
+                const timer = setTimeout(() => ctrl.abort(), 30000);
+                const r = await fetch(url, { signal: ctrl.signal });
+                clearTimeout(timer);
+                if(r.status === 429) throw new Error("429");
+                const d = await r.json();
+                if(!d.hourly) throw new Error(d.reason || "no hourly");
+                hourlyByModel[model] = d.hourly;
+                break;
+            } catch(e){
+                retries--;
+                if(String(e).includes("429") && retries > 0){
+                    await sleep(10000);
+                } else if(retries === 0){
+                    hourlyByModel[model] = null;
+                    log(`    ✗ ${model}: ${e.message}`, "warn");
+                } else {
+                    await sleep(2000);
+                }
+            }
+        }
+        await sleep(300);
+    }
+    return hourlyByModel;
+}
+
+/* ================================================================
+   СБОРКА ЗАПИСИ modelData
+================================================================ */
+function buildModelRecord(synopEntry, hourlyByModel){
+    const tk = synopEntry.telegramKey;
+    const targetTime = `${tk.slice(0,4)}-${tk.slice(4,6)}-${tk.slice(6,8)}T${tk.slice(8,10)}:00`;
+
+    let timeArr = null;
+    for(const m of MODELS_LIST){
+        if(hourlyByModel[m]){ timeArr = hourlyByModel[m].time; break; }
+    }
+    if(!timeArr) return null;
+    const hi = timeArr.findIndex(t => t.startsWith(targetTime));
+    if(hi === -1) return null;
+
+    const modelsData = {};
+    for(const m of MODELS_LIST){
+        const h = hourlyByModel[m];
+        if(!h) continue;
+        modelsData[m] = {
+            temp:        h.temperature_2m        ? h.temperature_2m[hi]        : null,
+            pressure:    h.pressure_msl          ? h.pressure_msl[hi]          : null,
+            wind:        h.wind_speed_10m        ? h.wind_speed_10m[hi]        : null,
+            windDir:     h.wind_direction_10m && h.wind_direction_10m[hi] != null
+                             ? Math.round(h.wind_direction_10m[hi] / 10) * 10 : null,
+            gusts:       h.wind_gusts_10m        ? h.wind_gusts_10m[hi]        : null,
+            cloudcover:  h.cloud_cover           ? h.cloud_cover[hi]           : null,
+            precip:      h.precipitation         ? h.precipitation[hi]         : null,
+            weatherCode: h.weather_code          ? h.weather_code[hi]          : null,
+            visibility:  h.visibility            ? h.visibility[hi]            : null,
+            dewPoint:    h.dew_point_2m          ? h.dew_point_2m[hi]          : null,
+            temp850:     null
+        };
+    }
+
+    return {
+        synopTime:    tk,
+        forecastHour: null,
+        obs:          synopEntry.parsed,
+        models:       modelsData
+    };
+}
+
+/* ================================================================
+   ОПРЕДЕЛИТЬ ДАТУ ПОСЛЕДНЕЙ ЗАПИСИ
+================================================================ */
+async function getLastDate(){
+    const year = new Date().getUTCFullYear();
+    try {
+        const { json } = await ghGet(`modelData_${year}.json`);
+        if(json && json.length)
+            return { lastKey: json[json.length - 1].synopTime };
+    } catch(e){}
+    // Файла текущего года нет — берём прошлый
+    try {
+        const { json } = await ghGet(`modelData_${year - 1}.json`);
+        if(json && json.length)
+            return { lastKey: json[json.length - 1].synopTime };
+    } catch(e){}
+    return null;
+}
+
+/* ================================================================
+   ГЛАВНЫЙ ПРОЦЕСС
+================================================================ */
+async function startUpdate(){
+    stopped   = false;
+    doneDays  = 0;
+    addedRecs = 0;
+    errCount  = 0;
+    document.getElementById("log").innerHTML = "";
+    document.getElementById("startBtn").disabled = true;
+    document.getElementById("stopBtn").disabled  = false;
+    updateStats();
+
+    const dryRun = document.getElementById("dryRun").checked;
+    if(dryRun) log("⚠ Режим проверки — данные не записываются", "warn");
+
+    // 1. Последняя запись
+    log("Определяем последнюю запись...", "info");
+    let lastInfo;
+    try { lastInfo = await getLastDate(); } catch(e){
+        log("✗ Ошибка чтения GitHub: " + e.message, "err");
+        finish(); return;
+    }
+    if(!lastInfo){
+        log("✗ Не удалось определить последнюю дату", "err");
+        finish(); return;
+    }
+
+    const lastKey  = lastInfo.lastKey;
+    const lastDate = new Date(Date.UTC(
+        parseInt(lastKey.slice(0,4)),
+        parseInt(lastKey.slice(4,6)) - 1,
+        parseInt(lastKey.slice(6,8)),
+        parseInt(lastKey.slice(8,10))
+    ));
+    log(`Последняя запись: ${lastKey}`, "dim");
+
+    // Начинаем со следующего дня
+    const startDate = new Date(lastDate);
+    startDate.setUTCDate(startDate.getUTCDate() + 1);
+    startDate.setUTCHours(0,0,0,0);
+
+    // Заканчиваем вчера (архивный API open-meteo требует завершённых суток)
+    const yesterday = new Date();
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    yesterday.setUTCHours(0,0,0,0);
+
+    if(startDate > yesterday){
+        log("✓ Данные актуальны — нечего обновлять", "ok");
+        finish(); return;
+    }
+
+    // Список всех дней
+    const days = [];
+    const cur = new Date(startDate);
+    while(cur <= yesterday){
+        days.push(new Date(cur));
+        cur.setUTCDate(cur.getUTCDate() + 1);
+    }
+    totalDays = days.length;
+
+    const rangeStr = `${days[0].toISOString().slice(0,10)} → ${days[days.length-1].toISOString().slice(0,10)}`;
+    document.getElementById("statRange").textContent = rangeStr;
+    document.getElementById("statDays").textContent  = totalDays;
+    log(`Период: ${rangeStr} (${totalDays} дн.)`, "info");
+    log("─────────────────────────────────────", "dim");
+
+    // 2. Загружаем текущие файлы с GitHub
+    const yearsNeeded = [...new Set(days.map(d => d.getUTCFullYear()))];
+    const ghFiles = {};
+
+    for(const y of yearsNeeded){
+        log(`Загружаем modelData_${y}.json...`, "info");
+        try {
+            const md = await ghGet(`modelData_${y}.json`);
+            const st = await ghGet(`synop_${y}.txt`);
+            const existingKeys = new Set((md.json || []).map(r => r.synopTime));
+            const existingTxtKeys = new Set(
+                (st.text || "").split("\n").map(l => l.trim()).filter(Boolean)
+                .map(l => { const p = l.split(","); return p[1]+p[2]+p[3]+p[4]+p[5]; })
+            );
+            ghFiles[y] = {
+                json: md.json || [], sha: md.sha,
+                txtText: st.text || "", txtSha: st.sha,
+                existingKeys, existingTxtKeys,
+                newRecords: [], newTxtLines: []
+            };
+            log(`  ✓ ${y}: ${(md.json||[]).length} записей`, "ok");
+        } catch(e){
+            log(`  ✗ ${y}: ${e.message}`, "err");
+            ghFiles[y] = {
+                json: [], sha: null, txtText: "", txtSha: null,
+                existingKeys: new Set(), existingTxtKeys: new Set(),
+                newRecords: [], newTxtLines: []
+            };
+        }
+    }
+
+    // 3. Обрабатываем чанками — начинаем с MAX_CHUNK, при неудаче делим пополам
+    let chunkSize = MAX_CHUNK;
+    let i = 0;
+
+    while(i < days.length){
+        if(stopped){ log("⛔ Остановлено", "warn"); break; }
+
+        const chunk    = days.slice(i, i + chunkSize);
+        const dateFrom = chunk[0].toISOString().slice(0,10);
+        const dateTo   = chunk[chunk.length-1].toISOString().slice(0,10);
+        const label    = chunkSize > 1
+            ? `${dateFrom} → ${dateTo} (${chunk.length} дн.)`
+            : dateFrom;
+
+        log(`SYNOP: ${label}`, "info");
+
+        const synopText = await fetchSynopChunk(chunk[0], chunk[chunk.length-1]);
+
+        if(!synopText){
+            if(chunkSize === 1){
+                log(`  ✗ ${dateFrom}: SYNOP недоступен, пропускаем`, "err");
+                errCount++;
+                i++;
+                chunkSize = MAX_CHUNK;
+            } else {
+                chunkSize = Math.max(1, Math.floor(chunkSize / 2));
+                log(`  ⚠ Нет ответа — уменьшаем период до ${chunkSize} дн.`, "warn");
+            }
+            await sleep(2000);
+            continue;
+        }
+
+        const parsed = parseSynopText(synopText);
+        log(`  Получено: ${parsed.length} сводок`, parsed.length > 0 ? "ok" : "warn");
+
+        if(parsed.length === 0 && chunkSize > 1){
+            chunkSize = Math.max(1, Math.floor(chunkSize / 2));
+            log(`  ⚠ Пустой ответ — уменьшаем до ${chunkSize} дн.`, "warn");
+            await sleep(2000);
+            continue;
+        }
+
+        // Раскладываем по годам
+        for(const entry of parsed){
+            const y  = parseInt(entry.telegramKey.slice(0,4));
+            const gf = ghFiles[y];
+            if(!gf) continue;
+            if(!gf.existingTxtKeys.has(entry.telegramKey)){
+                gf.newTxtLines.push(entry.txtLine);
+                gf.existingTxtKeys.add(entry.telegramKey);
+            }
+        }
+
+        // Только записи которых нет в modelData
+        const newEntries = parsed.filter(e => {
+            const y  = parseInt(e.telegramKey.slice(0,4));
+            const gf = ghFiles[y];
+            return gf
+                && !gf.existingKeys.has(e.telegramKey)
+                && !gf.newRecords.some(r => r.synopTime === e.telegramKey);
+        });
+
+        if(newEntries.length > 0){
+            log(`  Загружаем модели (${dateFrom} → ${dateTo})...`, "dim");
+            const hourly = await fetchModelsChunk(dateFrom, dateTo);
+            if(!hourly){
+                log(`  ✗ Модели не загружены`, "err");
+                errCount++;
+            } else {
+                for(const entry of newEntries){
+                    const y  = parseInt(entry.telegramKey.slice(0,4));
+                    const gf = ghFiles[y];
+                    const rec = buildModelRecord(entry, hourly);
+                    if(rec){
+                        gf.newRecords.push(rec);
+                        gf.existingKeys.add(entry.telegramKey);
+                        addedRecs++;
+                    }
+                }
+                log(`  ✓ Добавлено записей: ${newEntries.length}`, "ok");
+            }
+        } else {
+            log(`  Новых записей нет`, "dim");
+        }
+
+        doneDays  += chunk.length;
+        i         += chunk.length;
+        chunkSize  = MAX_CHUNK;
+        updateStats();
+        if(!stopped) await sleep(3000);
+    }
+
+    // 4. Сохраняем на GitHub
+    log("─────────────────────────────────────", "dim");
+
+    if(!dryRun && !stopped){
+        log("Сохраняем на GitHub...", "info");
+        for(const y of yearsNeeded){
+            const gf = ghFiles[y];
+            if(gf.newRecords.length === 0 && gf.newTxtLines.length === 0){
+                log(`  ${y}: нечего сохранять`, "dim");
+                continue;
+            }
+
+            const mergedJson = [...gf.json, ...gf.newRecords]
+                .sort((a,b) => a.synopTime.localeCompare(b.synopTime));
+            const mergedTxt  = (gf.txtText.trimEnd() + "\n" + gf.newTxtLines.join("\n")).trim() + "\n";
+
+            try {
+                log(`  modelData_${y}.json (${mergedJson.length} записей)...`, "dim");
+                gf.sha = await ghPut(
+                    `modelData_${y}.json`,
+                    JSON.stringify(mergedJson, null, 2),
+                    gf.sha,
+                    `update modelData_${y}: +${gf.newRecords.length} records`
+                );
+                log(`  ✓ modelData_${y}.json сохранён`, "ok");
+
+                await sleep(1000);
+
+                log(`  synop_${y}.txt (+${gf.newTxtLines.length} строк)...`, "dim");
+                gf.txtSha = await ghPut(
+                    `synop_${y}.txt`,
+                    mergedTxt,
+                    gf.txtSha,
+                    `update synop_${y}: +${gf.newTxtLines.length} lines`
+                );
+                log(`  ✓ synop_${y}.txt сохранён`, "ok");
+            } catch(e){
+                log(`  ✗ Ошибка записи ${y}: ${e.message}`, "err");
+                errCount++;
+            }
+        }
+    } else if(dryRun){
+        log("Режим проверки — итог:", "warn");
+        for(const y of yearsNeeded){
+            const gf = ghFiles[y];
+            log(`  ${y}: +${gf.newRecords.length} записей, +${gf.newTxtLines.length} строк synop`, "warn");
+        }
+    }
+
+    log(`Готово. Добавлено: ${addedRecs} записей. Ошибок: ${errCount}.`,
+        addedRecs > 0 ? "ok" : "dim");
+    finish();
+}
+
+function stopUpdate(){
+    stopped = true;
+    document.getElementById("stopBtn").disabled = true;
+}
+
+function finish(){
+    document.getElementById("startBtn").disabled = false;
+    document.getElementById("stopBtn").disabled  = true;
+    updateStats();
+}
+
+/* ================================================================
+   ИНИЦИАЛИЗАЦИЯ
+================================================================ */
+(function init(){
+    const saved = localStorage.getItem("ghToken");
+    if(saved) document.getElementById("tokenInput").value = saved;
+})();
+</script>
+</body>
+</html>
