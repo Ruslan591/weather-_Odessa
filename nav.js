@@ -10,6 +10,7 @@ var TABS = [
           { label: "Ensemble vs PWS",   href: "ensemble_pws.html" },
           { label: "Ensemble vs SYNOP", href: "ensemble_score.html" },
           { label: "Ensemble history", href: "ensemble_history.html" },
+          { label: "Update history", href: "updateHistory.html" },
           { label: "Verify PWS",        href: "verify_pws.html" },
           { label: "Verify SYNOP",      href: "verify.html" },
       ]
