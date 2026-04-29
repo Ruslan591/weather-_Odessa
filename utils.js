@@ -376,6 +376,47 @@ function synopWeatherIcon(code, isDay){
     return day ? "⛅" : "🌙☁️";
 }
 
+/**
+ * Расширенная иконка: учитывает ww (явления) и N (общая облачность).
+ * Вызывается из renderSynop вместо synopWeatherIcon.
+ * @param {string|null} wwCode  — код ww (weatherNow)
+ * @param {number|null} cloudN  — общая облачность в октантах (0–8)
+ * @param {boolean|null} isDay  — день/ночь
+ */
+function synopWeatherIconFull(wwCode, cloudN, isDay){
+    const day = isDay === true;
+
+    // 1. Если есть явление — оно приоритетно
+    if(wwCode != null){
+        const c = String(wwCode).padStart(2,"0");
+        if(c === "00") return day ? "☀️" : "🌙";
+        if(["01","02","03"].includes(c)) {
+            if(cloudN != null && cloudN <= 2) return day ? "🌤️" : "🌙";
+            return day ? "⛅" : "🌙☁️";
+        }
+        if(["06","07","08","09"].includes(c)) return "🌪️";
+        if(["04","05","10"].includes(c))      return "🌫️";
+        if(["11","12","28","40","41","42","43","44","45","46","47","48"].includes(c)) return "🌫️";
+        if(["13"].includes(c))                return "🌩️";
+        if(["17","29","91","92","93","94","95","96","97","98","99"].includes(c)) return "⛈️";
+        if(["18"].includes(c))                return "💨";
+        if(["31","32","33","34","35","36","37","38","39"].includes(c)) return "🌬️";
+        if(["27","79","87","88","89","90"].includes(c)) return "🧊";
+        if(["22","26","70","71","72","73","74","75","76","77","78","83","84","85","86"].includes(c)) return "🌨️";
+        if(["20","21","24","25","50","51","52","53","54","55","56","57","58","59",
+            "60","61","62","63","64","65","66","67","68","69","80","81","82"].includes(c)) return "🌧️";
+        if(["23"].includes(c)) return "🌧️"; // дождь со снегом
+    }
+
+    // 2. Явления нет — определяем по облачности
+    if(cloudN == null) return day ? "☀️" : "🌙";
+    if(cloudN === 0)              return day ? "☀️"  : "🌙";
+    if(cloudN <= 2)               return day ? "🌤️" : "🌙";
+    if(cloudN <= 4)               return day ? "⛅"  : "🌙☁️";
+    if(cloudN <= 6)               return "🌥️";
+    return "☁️";
+}
+
 function openMeteoWeatherText(code){
     const map = {
         0:"Ясно", 1:"Преимущественно ясно", 2:"Переменная облачность", 3:"Пасмурно",
