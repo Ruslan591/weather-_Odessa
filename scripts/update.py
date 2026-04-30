@@ -541,7 +541,47 @@ def build_snapshot(ensemble_hours, saved_at, run_time, mode="synop"):
 # 4. Выжимка снимков → ensemble_accuracy.json
 # ════════════════════════════════════════════════════════════════════════════
 
-ACCURACY_PARAMS = ["temp", "pressure", "wind", "windDir", "humidity", "rain", "cloudcover"]
+# Числовые параметры: (поле в снимке, поле в наблюдении)
+PARAM_MAP = {
+    "temp":       ("temp",       "temp"),
+    "pressure":   ("pressure",   "pressure"),
+    "wind":       ("wind",       "wind"),
+    "windDir":    ("windDir",    "windDir"),
+    "humidity":   ("humidity",   "humidity"),
+    "cloudcover": ("cloudcover", "cloudcover"),
+    "precip":     ("rain",       "precip"),       # прогноз: rain, набл: precip
+    "visibility": ("visibility", "visibility"),
+}
+
+# Для совместимости с update_accuracy (список числовых параметров)
+ACCURACY_PARAMS = list(PARAM_MAP.keys())
+
+
+def wmo_group(code):
+    """Группа явлений по WMO weather_code (Open-Meteo)."""
+    if code is None: return None
+    if code <= 1:           return "clear"
+    if code <= 3:           return "cloudy"
+    if code in (45, 48):    return "fog"
+    if 51 <= code <= 67:    return "rain"
+    if 71 <= code <= 77:    return "snow"
+    if 80 <= code <= 94:    return "shower"
+    if code >= 95:          return "thunder"
+    return "cloudy"
+
+
+def synop_group(ww):
+    """Группа явлений по SYNOP ww."""
+    if ww is None: return None
+    if ww <= 1:           return "clear"
+    if ww <= 39:          return "cloudy"
+    if 40 <= ww <= 49:    return "fog"
+    if 50 <= ww <= 69:    return "rain"
+    if 70 <= ww <= 79:    return "snow"
+    if 80 <= ww <= 90:    return "shower"
+    if 91 <= ww <= 99:    return "thunder"
+    return None
+
 
 def angle_diff(a, b):
     """Минимальная разница углов в градусах."""
@@ -603,12 +643,21 @@ def squeeze_snapshots(snaps, obs_by_time, mode="synop"):
                 "dayKey":   day_key,
                 "horizonH": horizon_h,
             }
-            for param in ACCURACY_PARAMS:
-                obs_val = obs.get(param)
-                fc_val  = h.get(param)
+            # Числовые параметры через маппинг прогнозного поля → наблюдательного
+            for param, (fc_field, obs_field) in PARAM_MAP.items():
+                obs_val = obs.get(obs_field)
+                fc_val  = h.get(fc_field)
                 err = calc_errors(fc_val, obs_val, param)
                 if err is not None:
                     rec[param] = {"err": round(err[0], 2), "ae": round(err[1], 2)}
+            # Явления погоды — категориальные (hits/total)
+            fc_wmo = h.get("weatherCode")
+            obs_ww = obs.get("ww")
+            if fc_wmo is not None and obs_ww is not None:
+                fg = wmo_group(fc_wmo)
+                og = synop_group(obs_ww)
+                if fg is not None and og is not None:
+                    rec["wx"] = {"hit": 1 if fg == og else 0}
             accuracy_records.append(rec)
 
         if not expired:
@@ -632,7 +681,7 @@ def update_accuracy(existing_acc, new_records, mode="synop"):
     """
     # Собираем все записи: существующие raw + новые
     # Для экономии места храним агрегированные данные, не сырые записи
-    acc = existing_acc or {"updated": None, "overall": {}, "byDay": {}, "byHorizon": {}}
+    acc = existing_acc or {"updated": None, "overall": {}, "byDay": {}, "byHorizon": {}, "wx": {"hits": 0, "total": 0}, "wxByDay": {}}
 
     def add_to_bucket(bucket, key, param, ae, err):
         if key not in bucket:
@@ -674,6 +723,9 @@ def update_accuracy(existing_acc, new_records, mode="synop"):
     by_day     = acc.setdefault("byDay", {})
     by_horizon = acc.setdefault("byHorizon", {})
 
+    wx_overall = acc.setdefault("wx", {"hits": 0, "total": 0})
+    wx_by_day  = acc.setdefault("wxByDay", {})
+
     for rec in new_records:
         day_key   = rec["dayKey"]
         horizon_h = str(rec["horizonH"])
@@ -685,6 +737,14 @@ def update_accuracy(existing_acc, new_records, mode="synop"):
             add_to_overall(overall, param, ae, err)
             add_to_bucket(by_day,     day_key,   param, ae, err)
             add_to_bucket(by_horizon, horizon_h, param, ae, err)
+        # Явления погоды
+        if "wx" in rec:
+            wx_overall["hits"]  += rec["wx"]["hit"]
+            wx_overall["total"] += 1
+            if day_key not in wx_by_day:
+                wx_by_day[day_key] = {"hits": 0, "total": 0}
+            wx_by_day[day_key]["hits"]  += rec["wx"]["hit"]
+            wx_by_day[day_key]["total"] += 1
 
     # Финализируем — вычисляем MAE/RMSE/bias из накопленных сумм
     def finalize(bucket_dict):
@@ -723,11 +783,28 @@ def update_accuracy(existing_acc, new_records, mode="synop"):
             "sum_err": round(s["sum_err"], 4),
         }
 
+    # Финализируем wx: добавляем pct
+    wx_final = {
+        "hits":  wx_overall.get("hits", 0),
+        "total": wx_overall.get("total", 0),
+    }
+    if wx_final["total"] > 0:
+        wx_final["pct"] = round(wx_final["hits"] / wx_final["total"] * 100)
+
+    wx_by_day_final = {}
+    for dk, w in wx_by_day.items():
+        wx_by_day_final[dk] = {
+            "hits": w["hits"], "total": w["total"],
+            "pct": round(w["hits"] / w["total"] * 100) if w["total"] > 0 else 0,
+        }
+
     return {
         "updated":   utcnow().isoformat(),
         "overall":   overall_final,
         "byDay":     finalize(by_day),
         "byHorizon": finalize(by_horizon),
+        "wx":        wx_final,
+        "wxByDay":   wx_by_day_final,
     }
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -1024,7 +1101,7 @@ def main():
 
             # SYNOP-снимок (только в синоптические часы UTC: 0,3,6,9,12,15,18,21)
             synop_hour = (now.hour // 3) * 3  # ближайший прошедший синоптический час
-if need_synop and (now.hour - synop_hour) <= 2:
+            if need_synop and (now.hour - synop_hour) <= 2:
                 snap = build_snapshot(ensemble_hours, saved_at, run_time, mode="synop")
                 snaps_synop.append(snap)
                 snaps_synop_sha = gh_save_json(
