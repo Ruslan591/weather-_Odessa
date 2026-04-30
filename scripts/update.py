@@ -107,7 +107,7 @@ def gh_get(path):
     # Большой файл — через download_url
     dl_url = resp.get("download_url")
     if dl_url:
-        text = http_get(dl_url)
+        text = http_get(dl_url, timeout=60)
         return text, sha
     return None, sha
 
