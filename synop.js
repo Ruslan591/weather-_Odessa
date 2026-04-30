@@ -416,44 +416,67 @@ async function loadSynop(){
 function renderSynop(d){
     const main      = document.getElementById("main");
     const localTime = localTimeFromSynopYYGGi(d.yyggi);
-    const wx        = synopWeatherText(d.weatherNow);
-    const wxIco     = synopWeatherIcon(d.weatherNow, d.synopIsDay);
-    const feelsLike = calcFeelsLike(d.temp, d.windSpeed, d.dew);
     const humidity  = calcRelativeHumidity(d.temp, d.dew);
+    const feelsLike = calcFeelsLike(d.temp, d.windSpeed, d.dew);
 
-    /* ---------- осадки основного тела ---------- */
-    const precipLine = d.precipGroup
-        ? row("Осадки", precipitationText(d.yyggi?.[4], d.precipGroup))
-        : "";
+    /* ---------- иконка и текст погоды ----------
+       Приоритет: явления ww → облачность → "ясно"
+    ------------------------------------------------ */
+    const wx    = synopWeatherText(d.weatherNow);
+    const wxIco = synopWeatherIconFull(d.weatherNow, d.totalCloud, d.synopIsDay);
+
+    /* ---------- метка мин/макс температуры из сек. 333 ---------- */
+    const obsHour  = d.yyggi ? parseInt(d.yyggi.slice(2,4), 10) : null;
+    const isObs06  = obsHour === 6;
+    const isObs18  = obsHour === 18;
+    const tempMinLabel = isObs06 ? "Минимальная температура за ночь"  : "Минимальная температура";
+    const tempMaxLabel = isObs18 ? "Максимальная температура за день" : "Максимальная температура";
+
+    /* ---------- солнечный свет без облаков ---------- */
+    function sunText(h){
+        if(h == null) return null;
+        const hh  = Math.floor(h);
+        const min = Math.round((h - hh) * 60);
+        if(min === 0) return `${hh} ч`;
+        return `${hh} ч ${min} мин`;
+    }
+
+    /* ---------- блок осадков (только если есть данные) ---------- */
+    let precipBlockHtml = "";
+    const hasPrecip = d.precipGroup || d.dailyPrecip != null;
+    if(hasPrecip){
+        const precipRows = [
+            d.precipGroup  ? row("Осадки за период",  precipitationText(null, d.precipGroup)) : "",
+            d.dailyPrecip != null ? row("Суточная сумма",    fmt0(d.dailyPrecip," мм"))          : "",
+        ].filter(Boolean).join("");
+        precipBlockHtml = `
+        <div class="card" style="margin-top:12px;">
+            <div class="cardTitle">🌧️ Осадки</div>
+            ${precipRows}
+        </div>`;
+    }
 
     /* ---------- СЕКЦИЯ 333 ---------- */
     const rows333 = [
-        d.tempMax    != null ? row("Максимальная температура", fmt1(d.tempMax,"°C")) : "",
-        d.cloud333Group != null ? row("Облачность (уточнение)",
-            (d.cloud333N != null ? cloudAmountText(d.cloud333N) + " · " : "") +
-            [cloudGenusLow(d.cloud333Low), cloudGenusMid(d.cloud333Mid), cloudGenusHigh(d.cloud333High)]
-            .filter(v => v && v !== "-").join(" / ") || "-"
-        ) : "",
-        d.tempMin    != null ? row("Минимальная температура",  fmt1(d.tempMin,"°C")) : "",
-        d.groundTemp != null ? row("Температура почвы",
+        d.tempMax    != null ? row(tempMaxLabel,              fmt1(d.tempMax,"°C"))  : "",
+        d.tempMin    != null ? row(tempMinLabel,              fmt1(d.tempMin,"°C"))  : "",
+        d.sunHours   != null ? row("Солнечный свет без облаков", sunText(d.sunHours) + " за прошедший день") : "",
+        d.groundTemp != null ? row("Температура почвы (трава)",
             fmt1(d.groundTemp,"°C") + groundStateLabel(d.groundStateCode)) : "",
         d.snowDepth  != null ? row("Снежный покров",
             snowDepthLabel(d.snowDepthCode, d.snowDepth)) : "",
         d.snowDepth === 0    ? row("Снежный покров", "снега нет") : "",
         d.evapValue  != null ? row("Испарение",
             fmt1(d.evapValue," мм") + evapTypeLabel(d.evapCode)) : "",
-        d.sunHours   != null ? row("Солнечное сияние",          fmt1(d.sunHours," ч")) : "",
-        d.maxGust333 != null ? row("Максимальный порыв ветра",  fmt0(d.maxGust333," м/с")) : "",
+        d.maxGust333 != null ? row("Максимальный порыв ветра", fmt0(d.maxGust333," м/с")) : "",
+        d.cloud333Group != null ? row("Облачность (уточнение)",
+            (d.cloud333N != null ? cloudAmountText(d.cloud333N) + " · " : "") +
+            [cloudGenusLow(d.cloud333Low), cloudGenusMid(d.cloud333Mid), cloudGenusHigh(d.cloud333High)]
+            .filter(v => v && v !== "-").join(" / ") || "-"
+        ) : "",
         ...(d.weatherChange || []).filter(Boolean).map((wc, i) =>
             row(`Погода (изменение ${i+1})`, escapeHtml(synopWeatherText(wc)))),
     ].filter(Boolean).join("");
-
-    const sec333Html = rows333
-        ? `<div class="card" style="margin-top:12px;">
-               <div class="cardTitle">Дополнительные данные (сек. 333)</div>
-               ${rows333}
-           </div>`
-        : "";
 
     /* ---------- СЕКЦИЯ 444 ---------- */
     let sec444Html = "";
@@ -471,28 +494,84 @@ function renderSynop(d){
     }
 
     /* ---------- СЕКЦИЯ 555 ---------- */
+    // Температура поверхности почвы/травы: два варианта из сек. 555
+    // 1EsnT'gT'g — текущая или с нагревом Солнцем (группа 1xxxxx)
+    // 3EsnTgTg   — то же но в виде группы 3
+    const surfTempRow = d.tempMinSurface != null ? row(
+        "Т° поверхности почвы (с нагревом Солнцем)",
+        fmt0(d.tempMinSurface,"°C") + groundStateLabel(d.surfStateCode555)
+    ) : "";
+    const groundTempRow = d.groundTemp != null && d.tempMinSurface == null ? row(
+        "Т° поверхности почвы (трава)",
+        fmt0(d.groundTemp,"°C") + groundStateLabel(d.groundStateCode)
+    ) : "";
+
     const rows555 = [
-        // 1EsnT'gT'g — мин. т° поверхности почвы/травы (целые °C)
-        d.tempMinSurface != null ? row(
-    "Т° поверхности почвы (травы)",
-    fmt0(d.tempMinSurface,"°C") + groundStateLabel(d.surfStateCode555)
-) : "",
-d.sec555TempMin  != null ? row("Мин. т° воздуха за ночь",  fmt1(d.sec555TempMin,"°C")) : "",
-d.sec555Temp2m   != null ? row("Т° воздуха на 2 м (доп.)", fmt1(d.sec555Temp2m,"°C")) : "",
-// 907ff — порыв ветра
-d.maxGust555     != null ? row("Максимальный порыв ветра",  fmt0(d.maxGust555," м/с"))  : "",
-        // 6RRRtR — суточные осадки
-        d.dailyPrecip    != null ? row("Суточные осадки",           fmt0(d.dailyPrecip," мм"))   : "",
+        surfTempRow,
+        groundTempRow,
+        d.sec555TempMin  != null ? row("Минимальная т° почвы за ночь (заморозок?)", fmt1(d.sec555TempMin,"°C")) : "",
+        d.sec555Temp2m   != null ? row("Т° воздуха на 2 м (доп.)",  fmt1(d.sec555Temp2m,"°C"))  : "",
+        d.maxGust555     != null ? row("Максимальный порыв ветра",   fmt0(d.maxGust555," м/с"))   : "",
         ...(d.phenomCodes || []).filter(Boolean).map((pc, i) =>
             row(`Явление за период ${i+1}`, escapeHtml(synopWeatherText(pc)))),
     ].filter(Boolean).join("");
 
-    const sec555Html = rows555
+    /* ---------- объединённый блок доп. данных ---------- */
+    const allExtraRows = [rows333, rows555].filter(Boolean).join("");
+    const extraBlockHtml = allExtraRows
         ? `<div class="card" style="margin-top:12px;">
-               <div class="cardTitle">Региональные данные (сек. 555)</div>
-               ${rows555}
+               ${allExtraRows}
            </div>`
         : "";
+
+    /* ---------- блок явлений ---------- */
+    const hasWx = d.weatherNow && d.weatherNow !== "00";
+    const hasPastWx = (d.weatherPast1 && d.weatherPast1 !== "0") ||
+                      (d.weatherPast2 && d.weatherPast2 !== "0");
+    let wxBlockHtml = "";
+    if(hasWx || hasPastWx){
+        const wxRows = [
+            hasWx ? row("Текущее явление", escapeHtml(wx)) : "",
+            (d.weatherPast1 && d.weatherPast1 !== "0")
+                ? row("Погода за прошлый период (W1)", escapeHtml(synopPastWeatherText(d.weatherPast1))) : "",
+            (d.weatherPast2 && d.weatherPast2 !== "0")
+                ? row("Погода за последний час (W2)", escapeHtml(synopPastWeatherText(d.weatherPast2))) : "",
+        ].filter(Boolean).join("");
+        wxBlockHtml = `
+        <div class="card" style="margin-top:12px;">
+            <div class="cardTitle">⚡ Явления погоды</div>
+            ${wxRows}
+        </div>`;
+    } else {
+        wxBlockHtml = `
+        <div class="card" style="margin-top:12px;">
+            <div class="cardTitle">Явления погоды</div>
+            <div class="row"><div class="value" style="color:#888;">Нет существенных явлений</div></div>
+        </div>`;
+    }
+
+    /* ---------- блок облаков ---------- */
+    function cloudValueOrNone(code, textFn){
+        if(code == null) return "облаков нет";
+        if(code === "0") return "облаков нет";
+        return escapeHtml(textFn(code));
+    }
+
+    const cloudTotalN = d.totalCloud;
+    const cloudTotalText = cloudTotalN != null
+        ? escapeHtml(cloudAmountText(cloudTotalN))
+        : "-";
+    // Выразительная подпись общей облачности
+    const cloudTotalLabel = cloudTotalN === 0 ? "☀️ Ясно (0/8)" :
+                            cloudTotalN === 1 ? "🌤 Малооблачно (1/8)" :
+                            cloudTotalN === 2 ? "🌤 Малооблачно (2/8)" :
+                            cloudTotalN === 3 ? "⛅ Переменная облачность (3/8)" :
+                            cloudTotalN === 4 ? "⛅ Переменная облачность (4/8)" :
+                            cloudTotalN === 5 ? "🌥 Значительная облачность (5/8)" :
+                            cloudTotalN === 6 ? "🌥 Значительная облачность (6/8)" :
+                            cloudTotalN === 7 ? "☁️ Почти пасмурно (7/8)" :
+                            cloudTotalN === 8 ? "☁️ Сплошная облачность (8/8)" :
+                            cloudTotalText;
 
     /* ---------- итоговый HTML ---------- */
     main.innerHTML = `
@@ -507,22 +586,20 @@ d.maxGust555     != null ? row("Максимальный порыв ветра",
             </div>
             <div class="heroWeather" style="display:flex;align-items:center;gap:10px;">
                 <span class="wxIcon" style="font-size:56px;line-height:1;">${wxIco}</span>
-                <span style="font-size:16px;">${escapeHtml(wx)}</span>
+                <span style="font-size:16px;">${cloudTotalN === 0 ? "Ясно" : escapeHtml(wx) || cloudTotalLabel}</span>
             </div>
         </div>
 
-        <!-- Индикаторы 2×2: температура | давление / ветер | влажность -->
+        <!-- Индикаторы 2×2 -->
         <div class="ind-grid-2x2" style="margin-top:16px;">
             ${tempIndicatorSvg(d.temp, feelsLike)}
             ${humidityIndicatorSvg(humidity)}
             ${windIndicatorSvg(d)}
             ${pressureIndicatorSvg(d)}
-            
-            
         </div>
 
+        <!-- Кратко: основные параметры -->
         <div class="card" style="margin-top:16px;">
-            <div class="cardTitle">Кратко</div>
             ${row("Температура",       fmt1(d.temp,"°C"))}
             ${row("Точка росы",        fmt1(d.dew,"°C"))}
             ${row("Отн. влажность",    fmt0(humidity," %"))}
@@ -539,46 +616,27 @@ d.maxGust555     != null ? row("Максимальный порыв ветра",
                 (d.tendencyValue != null
                     ? ` ${d.tendencyValue > 0 ? "+" : ""}${d.tendencyValue.toFixed(1)} гПа`
                     : ""))}
-            ${precipLine}
-            ${row("Явления",           escapeHtml(wx) || "-")}
-            ${(d.weatherPast1 && d.weatherPast1 !== "0") ? row("Погода W1", escapeHtml(synopPastWeatherText(d.weatherPast1))) : ""}
-            ${(d.weatherPast2 && d.weatherPast2 !== "0") ? row("Погода W2", escapeHtml(synopPastWeatherText(d.weatherPast2))) : ""}
-            ${d.tempMax  != null ? row("Макс. температура", fmt1(d.tempMax,"°C"))  : ""}
-            ${d.tempMin  != null ? row("Мин. температура",  fmt1(d.tempMin,"°C"))  : ""}
-            ${d.sunHours != null ? row("Солнечное сияние",  fmt1(d.sunHours," ч")) : ""}
             ${row("Видимость",         visibilityText(d.visibility))}
         </div>
 
+        <!-- Облака -->
         <div class="card" style="margin-top:12px;">
             <div class="cardTitle">Облака</div>
-            ${row("Общая облачность",  escapeHtml(cloudAmountText(d.totalCloud)))}
-            ${row("Кол-во по Nh",
-                d.cloudTotalOkta != null
-                    ? escapeHtml(cloudAmountText(d.cloudTotalOkta))
-                    : "-")}
-            ${cloudRow("Нижний ярус",  "low",  d.cloudLowCode,  cloudGenusLow(d.cloudLowCode))}
-            ${cloudRow("Средний ярус", "mid",  d.cloudMidCode,  cloudGenusMid(d.cloudMidCode))}
-            ${cloudRow("Верхний ярус", "high", d.cloudHighCode, cloudGenusHigh(d.cloudHighCode))}
+            <div class="row">
+                <div class="label">Общая облачность</div>
+                <div class="value">${cloudTotalLabel}</div>
+            </div>
+            ${d.cloudTotalOkta != null ? row("Кол-во по Nh", escapeHtml(cloudAmountText(d.cloudTotalOkta))) : ""}
+            ${cloudRow("Нижний ярус",  "low",  d.cloudLowCode,  cloudValueOrNone(d.cloudLowCode,  cloudGenusLow))}
+            ${cloudRow("Средний ярус", "mid",  d.cloudMidCode,  cloudValueOrNone(d.cloudMidCode,  cloudGenusMid))}
+            ${cloudRow("Верхний ярус", "high", d.cloudHighCode, cloudValueOrNone(d.cloudHighCode, cloudGenusHigh))}
             ${row("Основание нижних",  lowCloudBaseText(d.lowCloudBase))}
         </div>
 
-        ${sec333Html}
+        ${wxBlockHtml}
+        ${precipBlockHtml}
+        ${extraBlockHtml}
         ${sec444Html}
-        ${sec555Html}
-
-        <details style="margin-top:12px;">
-            <summary>Полная расшифровка</summary>
-            <div class="details-body"><div>
-            ${row("YYGGi",               escapeHtml(d.yyggi || "-"))}
-            ${row("Станция",             escapeHtml(d.station || "-"))}
-            ${row("iRIXhVV",             escapeHtml(d.irixhvv || "-"))}
-            ${row("Nddff",               escapeHtml(d.windGroup || "-"))}
-            ${row("Давление на станции", fmt1(d.stationPressure," гПа"))}
-            ${row("Давление QNH",        fmt1(d.seaPressure," гПа"))}
-            ${row("Группа 8NhCLCMCH",   escapeHtml(d.cloudGroup || "-"))}
-            ${row("Группа осадков",      escapeHtml(d.precipGroup || "-"))}
-            </div></div>
-        </details>
 
         <details style="margin-top:8px;">
             <summary>Сырые данные телеграммы</summary>
