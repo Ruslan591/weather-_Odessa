@@ -1,0 +1,261 @@
+/* ensemble_score.css */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+    --bg:        #0e0e0e;
+    --bg2:       #161616;
+    --bg3:       #1c1c1c;
+    --border:    #242424;
+    --text:      #e0e0e0;
+    --muted:     #555;
+    --muted2:    #3a3a3a;
+    --label:     #666;
+    --good:      #5fe08f;
+    --warn:      #fdcb6e;
+    --bad:       #ff6b6b;
+    --accent:    #ffd166;
+    --blue:      #74b9ff;
+    --radius:    10px;
+    --radius-sm: 6px;
+}
+
+html { font-size: 14px; }
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "SF Pro Text", -apple-system, "Helvetica Neue", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+}
+
+/* ── Контейнер ── */
+.container {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 16px 14px 80px;
+}
+
+/* ── Шапка ── */
+.header { display: none !important; }
+
+/* ── Строка статуса ── */
+.status-line {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 14px;
+    min-height: 18px;
+}
+.status-line b { color: var(--text); font-weight: 600; }
+
+/* ── Секция-заголовок ── */
+.section-label {
+    font-size: 10px;
+    color: var(--muted);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+}
+
+/* ── Карточки метрик ── */
+.metrics-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.es-card {
+    background: var(--bg2);
+    border-radius: var(--radius);
+    padding: 12px 13px;
+    border: 1px solid transparent;
+    transition: border-color 0.15s;
+}
+.es-card:active { border-color: var(--border); }
+
+.es-card-label {
+    font-size: 10px;
+    color: var(--label);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+}
+
+.es-card-mae {
+    font-size: 22px;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 4px;
+    letter-spacing: -0.5px;
+}
+.es-card-mae span {
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--muted);
+}
+
+.es-card-sub {
+    font-size: 11px;
+    color: var(--label);
+    line-height: 1.7;
+}
+.es-card-sub .n { color: var(--muted2); }
+
+.es-card--wide {
+    grid-column: 1 / -1;
+}
+
+/* ── Бейдж уклона ── */
+.bias-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 700;
+    margin-left: 4px;
+    vertical-align: middle;
+}
+
+/* ── График ── */
+.chart-section {
+    background: var(--bg2);
+    border-radius: var(--radius);
+    padding: 12px 10px;
+    margin-bottom: 16px;
+}
+
+.param-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.cp-btn {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: var(--bg3);
+    color: var(--muted);
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+    -webkit-tap-highlight-color: transparent;
+}
+.cp-btn.active {
+    border-color: var(--c, #aaa);
+    color: var(--c, #aaa);
+    background: color-mix(in srgb, var(--c, #aaa) 10%, transparent);
+}
+
+/* ── Покрытие ── */
+.coverage-card {
+    background: var(--bg2);
+    border-radius: var(--radius);
+    padding: 13px 14px;
+    margin-bottom: 16px;
+}
+
+.coverage-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 6px;
+    margin-bottom: 10px;
+}
+
+.coverage-item span {
+    font-size: 11px;
+    color: var(--label);
+    display: block;
+    margin-bottom: 2px;
+}
+.coverage-item b {
+    font-size: 19px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+}
+
+.coverage-dates {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.7;
+    border-top: 1px solid var(--border);
+    padding-top: 8px;
+}
+
+/* ── Сравнение с лучшей моделью ── */
+.compare-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.cmp-card {
+    background: var(--bg2);
+    border-radius: var(--radius);
+    padding: 11px 13px;
+}
+.cmp-label {
+    font-size: 10px;
+    color: var(--label);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 7px;
+}
+.cmp-row {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 3px;
+}
+.cmp-row b { color: var(--text); font-weight: 600; }
+.cmp-diff {
+    font-size: 14px;
+    font-weight: 800;
+    margin-top: 6px;
+    letter-spacing: -0.3px;
+}
+
+/* ── Снимки ── */
+.snap-list { margin-bottom: 16px; }
+
+.snap-row {
+    background: var(--bg2);
+    border-radius: var(--radius-sm);
+    padding: 9px 12px;
+    margin-bottom: 5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+}
+.snap-time { color: #999; }
+.snap-meta { color: var(--muted); font-size: 11px; }
+
+/* ── Пустые состояния ── */
+.empty {
+    color: var(--muted);
+    font-size: 13px;
+    padding: 20px 0;
+    text-align: center;
+}
+.empty a { color: var(--accent); text-decoration: none; }
+
+/* ── Блок wx ── */
+.wx-bar {
+    display: flex;
+    gap: 3px;
+    margin-top: 6px;
+    height: 4px;
+    border-radius: 2px;
+    overflow: hidden;
+}
+.wx-bar-hit  { background: var(--good); }
+.wx-bar-miss { background: var(--muted2); }
