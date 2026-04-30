@@ -145,7 +145,7 @@ var PWS_UTC_OFFSET = 3;
 function snapTimeToHourKey(timeStr) {
     if (!timeStr) return null;
     var dt = new Date(timeStr + ":00Z");
-    dt.setUTCHours(dt.getUTCHours() - PWS_UTC_OFFSET);
+dt.setUTCHours(dt.getUTCHours() + PWS_UTC_OFFSET);
     return dt.getUTCFullYear() + "-" +
         String(dt.getUTCMonth()+1).padStart(2,"0") + "-" +
         String(dt.getUTCDate()).padStart(2,"0") + "T" +
