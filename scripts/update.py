@@ -1023,7 +1023,8 @@ def main():
             run_time  = ensemble_ready_time.isoformat() if ensemble_ready_time else None
 
             # SYNOP-снимок (только в синоптические часы UTC: 0,3,6,9,12,15,18,21)
-            if need_synop and now.hour % 3 == 0:
+            synop_hour = (now.hour // 3) * 3  # ближайший прошедший синоптический час
+if need_synop and (now.hour - synop_hour) <= 2:
                 snap = build_snapshot(ensemble_hours, saved_at, run_time, mode="synop")
                 snaps_synop.append(snap)
                 snaps_synop_sha = gh_save_json(
