@@ -76,6 +76,7 @@ var _acc   = null;
 
 function getToken() { return localStorage.getItem("ghToken") || ""; }
 
+// строки 79–96 — заменить
 async function ghGetJson(path) {
     var url = "https://api.github.com/repos/" + GITHUB_OWNER + "/" + GITHUB_REPO + "/contents/" + path;
     var token = getToken();
@@ -88,11 +89,24 @@ async function ghGetJson(path) {
     });
     if (!r.ok) return { data: null, sha: null };
     var resp = await r.json();
-    var raw  = resp.content.replace(/\n/g, "");
-    var text = new TextDecoder().decode(
-        Uint8Array.from(atob(raw), function(c) { return c.charCodeAt(0); })
-    );
-    return { data: JSON.parse(text), sha: resp.sha };
+    if (!resp || !resp.content) return { data: null, sha: null };  // ← добавлено
+    var raw  = resp.content.replace(/[\r\n\s]/g, "");              // ← \r\n и пробелы
+    if (!raw) return { data: null, sha: null };                    // ← пустой контент
+    var text;
+    try {
+        text = new TextDecoder().decode(
+            Uint8Array.from(atob(raw), function(c) { return c.charCodeAt(0); })
+        );
+    } catch(e) {
+        console.error("ghGetJson: base64 decode failed", path, e);
+        return { data: null, sha: null };
+    }
+    try {
+        return { data: JSON.parse(text), sha: resp.sha };
+    } catch(e) {
+        console.error("ghGetJson: JSON.parse failed", path, e, text.slice(0, 200));
+        return { data: null, sha: null };
+    }
 }
 
 /* ── ПАРАМЕТРЫ ── */
