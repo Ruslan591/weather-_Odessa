@@ -1092,11 +1092,11 @@ def main():
     snaps_pws,   snaps_pws_sha   = gh_load_json(snap_pws_path,   default=[])
 
     # Проверяем нужен ли новый снимок
-    last_synop_at = parse_iso(snaps_synop[-1]["savedAt"]) if snaps_synop else None
-    last_pws_at   = parse_iso(snaps_pws[-1]["savedAt"])   if snaps_pws   else None
+    last_synop_run = parse_iso(snaps_synop[-1]["runTime"]) if snaps_synop and snaps_synop[-1].get("runTime") else None
+    last_pws_run   = parse_iso(snaps_pws[-1]["runTime"])   if snaps_pws   and snaps_pws[-1].get("runTime")   else None
 
-    need_synop = not ensemble_ready_time or not last_synop_at or last_synop_at < ensemble_ready_time
-    need_pws   = not ensemble_ready_time or not last_pws_at   or last_pws_at   < ensemble_ready_time
+    need_synop = ensemble_ready_time is not None and (not last_synop_run or last_synop_run < ensemble_ready_time)
+    need_pws   = ensemble_ready_time is not None and (not last_pws_run   or last_pws_run   < ensemble_ready_time)
 
     if need_synop or need_pws:
         log.info("  Загружаем прогнозы моделей...")
