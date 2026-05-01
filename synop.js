@@ -624,16 +624,21 @@ function renderSynop(d){
 
         <!-- Облака -->
         <div class="card" style="margin-top:12px;">
-            <div class="cardTitle">Облака</div>
+            <div class="cardTitle" style="display:flex;justify-content:space-between;align-items:center;">
+                <span>Облачность</span>
+                <span style="font-size:56px;line-height:1;">${cloudTotalIcon}</span>
+            </div>
             <div class="row">
                 <div class="label">Общая облачность</div>
                 <div class="value">${cloudTotalLabel}</div>
             </div>
-            ${d.cloudTotalOkta != null ? row("Кол-во по Nh", escapeHtml(cloudAmountText(d.cloudTotalOkta))) : ""}
-            ${cloudRow("Нижний ярус",  "low",  d.cloudLowCode,  cloudValueOrNone(d.cloudLowCode,  cloudGenusLow))}
-            ${cloudRow("Средний ярус", "mid",  d.cloudMidCode,  cloudValueOrNone(d.cloudMidCode,  cloudGenusMid))}
+            ${d.cloudTotalOkta != null ? row("Средний/нижний ярус (Nh)", escapeHtml(cloudAmountText(d.cloudTotalOkta))) : ""}
             ${cloudRow("Верхний ярус", "high", d.cloudHighCode, cloudValueOrNone(d.cloudHighCode, cloudGenusHigh))}
-            ${row("Основание нижних",  lowCloudBaseText(d.lowCloudBase))}
+            ${cloudRow("Средний ярус", "mid",  d.cloudMidCode,  cloudValueOrNone(d.cloudMidCode,  cloudGenusMid))}
+            ${cloudRow("Нижний ярус",  "low",  d.cloudLowCode,  cloudValueOrNone(d.cloudLowCode,  cloudGenusLow))}
+            ${(d.cloudLowCode != null && d.cloudLowCode !== "0") || (d.cloudMidCode != null && d.cloudMidCode !== "0")
+                ? row("Нижняя граница облаков", lowCloudBaseText(d.lowCloudBase))
+                : ""}
         </div>
 
         ${wxBlockHtml}
@@ -691,7 +696,7 @@ function lowCloudBaseText(code){
         "0":"< 50 м", "1":"50–100 м", "2":"100–200 м",
         "3":"200–300 м", "4":"300–600 м", "5":"600–1000 м",
         "6":"1000–1500 м", "7":"1500–2000 м", "8":"2000–2500 м",
-        "9":"≥ 2500 м или облаков нет"
+        "9":"≥ 2500 м"
     };
     return map[String(code)] || `код ${code}`;
 }
