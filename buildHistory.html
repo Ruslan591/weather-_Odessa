@@ -169,6 +169,7 @@ button:disabled { opacity: 0.3; cursor: not-allowed; }
 
 <script>
 const SYNOP_HOURS = [0, 3, 6, 9, 12, 15, 18, 21];
+const GH_RAW_BASE = "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data";
 const SYNOP_FILES = ["synop_2023.txt", "synop_2024.txt", "synop_2025.txt", "synop_2026.txt"];
 const MODELS = modelIds();
 
@@ -435,8 +436,8 @@ async function startBuild() {
     log("Загрузка локальных synop файлов...", "log-info");
     let allSynops = [];
     for (const file of SYNOP_FILES) {
-        try {
-            const r = await fetch(file);
+        trytry {
+            const r = await fetch(`${GH_RAW_BASE}/${file}`);
             if (!r.ok) { log(`  ✗ ${file} — HTTP ${r.status}`, "log-warn"); continue; }
             const text = await r.text();
             const parsed = parseAllSynops(text);
