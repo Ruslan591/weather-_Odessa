@@ -1076,8 +1076,7 @@ def main():
             if new_md_records:
                 merged = sorted(month_data + new_md_records, key=lambda r: r["synopTime"])
                 md_sha = gh_save_json(md_path, merged, md_sha,
-                                      f"modelData {mk}: +{len(new_md_records)} records",
-                                      compact=True)
+                                      f"modelData {mk}: +{len(new_md_records)} records")
                 log.info("  ✓ %s.json сохранён (+%d записей)", mk, len(new_md_records))
 
     # ── 3. Свежий ансамблевый прогноз → снимки ──────────────────────────────
