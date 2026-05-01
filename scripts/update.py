@@ -1028,51 +1028,57 @@ def main():
     else:
         log.info("  synop_%d.txt актуален", year)
 
-    # ── 2. Дописываем modelData_YYYY.json ───────────────────────────────────
+    # ── 2. Дописываем modelData в месячные файлы ────────────────────────────
     log.info("--- 2. modelData ---")
-    md_path = f"data/modelData_{year}.json"
-    model_data, md_sha = gh_load_json(md_path, default=[])
 
-    existing_md_keys = {r["synopTime"] for r in model_data}
-    to_add = [r for r in new_synop_parsed if r["synopTime"] not in existing_md_keys]
+    # Группируем новые сводки по месяцам
+    by_month = {}
+    for rec in new_synop_parsed:
+        mk = f"{rec['synopTime'][:4]}_{rec['synopTime'][4:6]}"  # 2026_05
+        by_month.setdefault(mk, []).append(rec)
 
-    if to_add:
-        log.info("  Загружаем прогнозы для %d сводок...", len(to_add))
-        # Группируем по дате чтобы минимизировать запросы
-        by_date = {}
-        for rec in to_add:
-            dk = f"{rec['synopTime'][:4]}-{rec['synopTime'][4:6]}-{rec['synopTime'][6:8]}"
-            by_date.setdefault(dk, []).append(rec)
-
-        new_md_records = []
-        for date_str, recs in by_date.items():
-            log.info("  Модели за %s ...", date_str)
-            hourly_by_model = {}
-            all_model_ids   = [m["id"] for m in ENSEMBLE_MODELS]
-            for mid in all_model_ids:
-                try:
-                    h = fetch_historical_model(mid, date_str)
-                    hourly_by_model[mid] = h
-                    time.sleep(0.5)
-                except Exception as e:
-                    log.warning("    ✗ %s: %s", mid, e)
-                    hourly_by_model[mid] = None
-
-            for rec in recs:
-                md_rec = build_model_record(rec, hourly_by_model)
-                if md_rec:
-                    new_md_records.append(md_rec)
-
-        if new_md_records:
-            merged_md = sorted(model_data + new_md_records, key=lambda r: r["synopTime"])
-            md_sha = gh_save_json(md_path, merged_md, md_sha,
-                                  f"modelData {year}: +{len(new_md_records)} records")
-            log.info("  ✓ modelData_%d.json сохранён (+%d записей)", year, len(new_md_records))
-            model_data = merged_md
-        else:
-            log.info("  modelData_%d.json: нечего добавить", year)
+    if not by_month:
+        log.info("  modelData актуален")
     else:
-        log.info("  modelData_%d.json актуален", year)
+        for mk, recs in sorted(by_month.items()):
+            md_path = f"data/modeldata/{mk}.json"
+            month_data, md_sha = gh_load_json(md_path, default=[])
+            existing_md_keys = {r["synopTime"] for r in month_data}
+            to_add = [r for r in recs if r["synopTime"] not in existing_md_keys]
+
+            if not to_add:
+                log.info("  %s.json актуален", mk)
+                continue
+
+            log.info("  %s.json: загружаем прогнозы для %d сводок...", mk, len(to_add))
+            by_date = {}
+            for rec in to_add:
+                dk = f"{rec['synopTime'][:4]}-{rec['synopTime'][4:6]}-{rec['synopTime'][6:8]}"
+                by_date.setdefault(dk, []).append(rec)
+
+            new_md_records = []
+            for date_str, date_recs in by_date.items():
+                log.info("  Модели за %s ...", date_str)
+                hourly_by_model = {}
+                for mid in [m["id"] for m in ENSEMBLE_MODELS]:
+                    try:
+                        h = fetch_historical_model(mid, date_str)
+                        hourly_by_model[mid] = h
+                        time.sleep(0.5)
+                    except Exception as e:
+                        log.warning("    ✗ %s: %s", mid, e)
+                        hourly_by_model[mid] = None
+                for rec in date_recs:
+                    md_rec = build_model_record(rec, hourly_by_model)
+                    if md_rec:
+                        new_md_records.append(md_rec)
+
+            if new_md_records:
+                merged = sorted(month_data + new_md_records, key=lambda r: r["synopTime"])
+                md_sha = gh_save_json(md_path, merged, md_sha,
+                                      f"modelData {mk}: +{len(new_md_records)} records",
+                                      compact=True)
+                log.info("  ✓ %s.json сохранён (+%d записей)", mk, len(new_md_records))
 
     # ── 3. Свежий ансамблевый прогноз → снимки ──────────────────────────────
     log.info("--- 3. Ансамблевый прогноз ---")
@@ -1210,33 +1216,9 @@ def main():
     else:
         log.info("  pws_raw.json актуален (%d записей)", len(pws_raw))
 
-    # ── 6. Пересчёт model_weights.json ──────────────────────────────────────
+    # ── 6. model_weights.json ───────────────────────────────────────────────
     log.info("--- 6. model_weights.json ---")
-
-    # Загружаем только текущий год — новые записи
-    new_recs, _ = gh_load_json(f"data/modelData_{year}.json", default=[])
-    log.info("  modelData_%d: %d записей", year, len(new_recs))
-
-    if new_recs:
-        # Загружаем существующие веса чтобы взять coverage.from
-        weights_old, mw_sha = gh_load_json("data/model_weights.json", default=None)
-
-        # Пересчитываем веса по записям текущего года
-        weights_new = build_weights_from_modeldata(new_recs)
-
-        # Сохраняем дату начала из старых весов
-        if weights_old and isinstance(weights_old, dict):
-            old_from = weights_old.get("coverage", {}).get("from")
-            if old_from:
-                weights_new["coverage"]["from"] = old_from
-
-        mw_sha = gh_save_json("data/model_weights.json", weights_new,
-                              mw_sha, "update model_weights.json")
-        log.info("  ✓ model_weights.json обновлён (coverage: %s → %s, %d дней)",
-                 weights_new["coverage"]["from"], weights_new["coverage"]["to"],
-                 weights_new["coverage"]["days"])
-    else:
-        log.warning("  Нет новых данных для пересчёта весов")
+    log.info("  Пересчёт весов выполняется через calc_weights.yml (ежедневно)")
 
     log.info("=== Готово ===")
 
