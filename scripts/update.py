@@ -408,7 +408,7 @@ def fetch_ensemble_ready_time():
             pass
     if not times:
         return None
-    ready_ts = max(times) + 10 * 60   # +10 мин
+    ready_ts = max(times)
     return datetime.fromtimestamp(ready_ts, tz=timezone.utc)
 
 
@@ -1120,7 +1120,9 @@ def main():
 
             # SYNOP-снимок (только в синоптические часы UTC: 0,3,6,9,12,15,18,21)
             synop_hour = (now.hour // 3) * 3  # ближайший прошедший синоптический час
-            if need_synop and (now.hour - synop_hour) <= 2:
+            last_run = snaps_synop[-1].get("runTime") if snaps_synop else None
+            same_run = last_run and run_time and parse_iso(last_run) == parse_iso(run_time)
+            if need_synop and (now.hour - synop_hour) <= 2 and not same_run:
                 snap = build_snapshot(ensemble_hours, saved_at, run_time, mode="synop")
                 snaps_synop.append(snap)
                 snaps_synop_sha = gh_save_json(
@@ -1130,7 +1132,9 @@ def main():
             elif need_synop:
                 log.info("  SYNOP-снимок пропущен (не синоптический час: %dh UTC)", now.hour)
 
-            if need_pws:
+            last_run_pws = snaps_pws[-1].get("runTime") if snaps_pws else None
+            same_run_pws = last_run_pws and run_time and parse_iso(last_run_pws) == parse_iso(run_time)
+            if need_pws and not same_run_pws:
                 snap = build_snapshot(ensemble_hours, saved_at, run_time, mode="pws")
                 snaps_pws.append(snap)
                 snaps_pws_sha = gh_save_json(
