@@ -990,8 +990,9 @@ def main():
     if existing_synop_keys:
         last_key = max(existing_synop_keys)
         last_dt  = datetime(int(last_key[:4]), int(last_key[4:6]), int(last_key[6:8]),
-                        tzinfo=timezone.utc)
-    start_dt = last_dt  # перезапрашиваем день последней записи — вдруг появились новые часы
+                        tzinfo=timezone.utc
+                        )
+                    start_dt = last_dt  # перезапрашиваем день последней записи — вдруг появились новые часы
     else:
         start_dt = datetime(year, 1, 1, tzinfo=timezone.utc)
 
