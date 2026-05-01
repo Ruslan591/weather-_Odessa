@@ -506,8 +506,19 @@ def merge_ensemble(all_model_hours, succeeded):
 def build_snapshot(ensemble_hours, saved_at, run_time, mode="synop"):
     """Формирует снимок в формате совместимом с forecast.html."""
     hours_out = []
+    snap_dt = parse_iso(saved_at)
+
     for h in ensemble_hours:
+        t_str = h["time"] if "T" in h["time"] else h["time"].replace(" ", "T") + ":00"
+        t_dt  = parse_iso(t_str)
+        horizon_h = (t_dt - snap_dt).total_seconds() / 3600
+
         if mode == "synop":
+            # Только синоптические часы и первые 4 дня
+            if int(t_str[11:13]) not in {0, 3, 6, 9, 12, 15, 18, 21}:
+                continue
+            if horizon_h > 96:
+                break
             hours_out.append({
                 "time":        h["time"],
                 "temp":        round(h["temperature_2m"] * 10) / 10 if h["temperature_2m"] is not None else None,
@@ -520,7 +531,9 @@ def build_snapshot(ensemble_hours, saved_at, run_time, mode="synop"):
                 "cloudcover":  round(h["cloud_cover"]) if h["cloud_cover"] is not None else None,
                 "weatherCode": h["weather_code"],
             })
-        else:  # pws
+        else:  # pws — каждый час, первые 4 дня
+            if horizon_h > 96:
+                break
             hours_out.append({
                 "time":     h["time"],
                 "temp":     round(h["temperature_2m"] * 10) / 10 if h["temperature_2m"] is not None else None,
@@ -531,10 +544,11 @@ def build_snapshot(ensemble_hours, saved_at, run_time, mode="synop"):
                 "humidity": round(h["relative_humidity_2m"]) if h["relative_humidity_2m"] is not None else None,
                 "rain":     round(h["rain"] * 10) / 10 if h["rain"] is not None else None,
             })
+
     return {
-        "savedAt":  saved_at,
-        "runTime":  run_time,
-        "hours":    hours_out,
+        "savedAt": saved_at,
+        "runTime": run_time,
+        "hours":   hours_out,
     }
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -620,7 +634,7 @@ def squeeze_snapshots(snaps, obs_by_time, mode="synop"):
         # Проверяем истёк ли снимок
         last_hour_str = hours[-1]["time"]
         last_hour_dt  = parse_iso(last_hour_str.replace(" ", "T") + ":00" if "T" not in last_hour_str else last_hour_str)
-        expired = last_hour_dt < now
+        expired = (now - saved_at).total_seconds() > 96 * 3600
 
         # Выжимаем часы у которых есть наблюдения
         for h in hours:
@@ -1105,9 +1119,9 @@ def main():
                 snap = build_snapshot(ensemble_hours, saved_at, run_time, mode="synop")
                 snaps_synop.append(snap)
                 snaps_synop_sha = gh_save_json(
-                    snap_synop_path, snaps_synop, snaps_synop_sha,
-                    f"ensemble synop snapshot {saved_at[:16]}", compact=False)
-                log.info("  ✓ SYNOP-снимок сохранён (%d часов)", len(ensemble_hours))
+    snap_synop_path, snaps_synop, snaps_synop_sha,
+    f"ensemble synop snapshot {saved_at[:16]}", compact=True)
+                log.info("  ✓ SYNOP-снимок сохранён (%d точек)", len(snap["hours"]))
             elif need_synop:
                 log.info("  SYNOP-снимок пропущен (не синоптический час: %dh UTC)", now.hour)
 
@@ -1116,7 +1130,7 @@ def main():
                 snaps_pws.append(snap)
                 snaps_pws_sha = gh_save_json(
                     snap_pws_path, snaps_pws, snaps_pws_sha,
-                    f"ensemble pws snapshot {saved_at[:16]}", compact=False)
+                    f"ensemble pws snapshot {saved_at[:16]}", compact=True)
                 log.info("  ✓ PWS-снимок сохранён (%d часов)", len(ensemble_hours))
         else:
             log.warning("  Ни одна модель не ответила")
@@ -1144,7 +1158,8 @@ def main():
 
     if len(remaining_synop) < len(snaps_synop):
         snaps_synop_sha = gh_save_json(snap_synop_path, remaining_synop, snaps_synop_sha,
-                                       f"cleanup synop snapshots: {len(snaps_synop)-len(remaining_synop)} removed")
+                               f"cleanup synop snapshots: {len(snaps_synop)-len(remaining_synop)} removed",
+                               compact=True)
         log.info("  ✓ ensemble_snapshots_synop.json очищен")
 
     # PWS наблюдения для верификации — из pws_raw.json
@@ -1197,24 +1212,31 @@ def main():
 
     # ── 6. Пересчёт model_weights.json ──────────────────────────────────────
     log.info("--- 6. model_weights.json ---")
-    # Загружаем все годы modelData
-    all_records = []
-    for y in range(2023, year + 1):
-        recs, _ = gh_load_json(f"data/modelData_{y}.json", default=[])
-        all_records.extend(recs)
-        log.info("  modelData_%d: %d записей", y, len(recs))
 
-    if all_records:
-        weights = build_weights_from_modeldata(all_records)
-        mw_text, mw_sha = gh_get("data/model_weights.json")
-        mw_sha = gh_put("data/model_weights.json",
-                        json.dumps(weights, ensure_ascii=False, indent=2),
-                        mw_sha, "update model_weights.json")
+    # Загружаем только текущий год — новые записи
+    new_recs, _ = gh_load_json(f"data/modelData_{year}.json", default=[])
+    log.info("  modelData_%d: %d записей", year, len(new_recs))
+
+    if new_recs:
+        # Загружаем существующие веса чтобы взять coverage.from
+        weights_old, mw_sha = gh_load_json("data/model_weights.json", default=None)
+
+        # Пересчитываем веса по записям текущего года
+        weights_new = build_weights_from_modeldata(new_recs)
+
+        # Сохраняем дату начала из старых весов
+        if weights_old and isinstance(weights_old, dict):
+            old_from = weights_old.get("coverage", {}).get("from")
+            if old_from:
+                weights_new["coverage"]["from"] = old_from
+
+        mw_sha = gh_save_json("data/model_weights.json", weights_new,
+                              mw_sha, "update model_weights.json")
         log.info("  ✓ model_weights.json обновлён (coverage: %s → %s, %d дней)",
-                 weights["coverage"]["from"], weights["coverage"]["to"],
-                 weights["coverage"]["days"])
+                 weights_new["coverage"]["from"], weights_new["coverage"]["to"],
+                 weights_new["coverage"]["days"])
     else:
-        log.warning("  Нет данных для пересчёта весов")
+        log.warning("  Нет новых данных для пересчёта весов")
 
     log.info("=== Готово ===")
 
