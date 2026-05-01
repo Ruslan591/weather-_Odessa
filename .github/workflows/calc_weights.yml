@@ -1,0 +1,26 @@
+name: Пересчёт весов моделей
+
+on:
+  schedule:
+    # Каждый день в 03:00 UTC
+    - cron: "0 3 * * *"
+  workflow_dispatch:   # ручной запуск через GitHub UI
+
+jobs:
+  calc_weights:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run calc_weights script
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/calc_weights.py
