@@ -498,7 +498,7 @@ function renderSynop(d){
     // 1EsnT'gT'g — текущая или с нагревом Солнцем (группа 1xxxxx)
     // 3EsnTgTg   — то же но в виде группы 3
     const surfTempRow = d.tempMinSurface != null ? row(
-        "Т° поверхности почвы (с нагревом Солнцем)",
+        isDay ? "Т° поверхности почвы (с нагревом Солнцем)" : "Т° поверхности почвы",
         fmt0(d.tempMinSurface,"°C") + groundStateLabel(d.surfStateCode555)
     ) : "";
     const groundTempRow = d.groundTemp != null && d.tempMinSurface == null ? row(
@@ -651,7 +651,8 @@ function renderSynop(d){
             ${cloudRow("Верхний ярус", "high", d.cloudHighCode, cloudValueOrNone(d.cloudHighCode, cloudGenusHigh))}
             ${cloudRow("Средний ярус", "mid",  d.cloudMidCode,  cloudValueOrNone(d.cloudMidCode,  cloudGenusMid))}
             ${cloudRow("Нижний ярус",  "low",  d.cloudLowCode,  cloudValueOrNone(d.cloudLowCode,  cloudGenusLow))}
-            ${(d.cloudLowCode != null && d.cloudLowCode !== "0") || (d.cloudMidCode != null && d.cloudMidCode !== "0")
+            ${((d.cloudLowCode != null && d.cloudLowCode !== "0") || (d.cloudMidCode != null && d.cloudMidCode !== "0"))
+                && d.lowCloudBase != null && d.lowCloudBase !== "9"
                 ? row("Нижняя граница облаков", lowCloudBaseText(d.lowCloudBase))
                 : ""}
         </div>
