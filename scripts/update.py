@@ -987,7 +987,7 @@ def main():
             synop_obs_by_time[rec["synopTime"]] = rec["obs"]
 
     # Определяем дату последней записи
-    ifif existing_synop_keys:
+    if existing_synop_keys:
         last_key = max(existing_synop_keys)
         last_dt  = datetime(int(last_key[:4]), int(last_key[4:6]), int(last_key[6:8]),
                             tzinfo=timezone.utc)
