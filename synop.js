@@ -561,16 +561,31 @@ function renderSynop(d){
     const cloudTotalText = cloudTotalN != null
         ? escapeHtml(cloudAmountText(cloudTotalN))
         : "-";
-    // Выразительная подпись общей облачности
-    const cloudTotalLabel = cloudTotalN === 0 ? "☀️ Ясно (0/8)" :
-                            cloudTotalN === 1 ? "🌤 Малооблачно (1/8)" :
-                            cloudTotalN === 2 ? "🌤 Малооблачно (2/8)" :
-                            cloudTotalN === 3 ? "⛅ Переменная облачность (3/8)" :
-                            cloudTotalN === 4 ? "⛅ Переменная облачность (4/8)" :
-                            cloudTotalN === 5 ? "🌥 Значительная облачность (5/8)" :
-                            cloudTotalN === 6 ? "🌥 Значительная облачность (6/8)" :
-                            cloudTotalN === 7 ? "☁️ Почти пасмурно (7/8)" :
-                            cloudTotalN === 8 ? "☁️ Сплошная облачность (8/8)" :
+
+    // Определяем день/ночь по реальному восходу для Одессы
+    const obsHourUTC = d.yyggi ? parseInt(d.yyggi.slice(2,4), 10) : null;
+    const obsDate = obsHourUTC != null ? new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate(), obsHourUTC)) : new Date();
+    const isDay = isDayNow(46.48, 30.74, obsDate);
+
+    const cloudTotalIcon = cloudTotalN === 0 ? (isDay ? "☀️" : "🌙") :
+                           cloudTotalN === 1 ? (isDay ? "🌤" : "🌑") :
+                           cloudTotalN === 2 ? (isDay ? "🌤" : "🌑") :
+                           cloudTotalN === 3 ? (isDay ? "⛅" : "☁️") :
+                           cloudTotalN === 4 ? (isDay ? "⛅" : "☁️") :
+                           cloudTotalN === 5 ? "🌥" :
+                           cloudTotalN === 6 ? "🌥" :
+                           cloudTotalN === 7 ? "☁️" :
+                           cloudTotalN === 8 ? "☁️" : "";
+
+    const cloudTotalLabel = cloudTotalN === 0 ? "Ясно (0/8)" :
+                            cloudTotalN === 1 ? "Малооблачно (1/8)" :
+                            cloudTotalN === 2 ? "Малооблачно (2/8)" :
+                            cloudTotalN === 3 ? "Переменная облачность (3/8)" :
+                            cloudTotalN === 4 ? "Переменная облачность (4/8)" :
+                            cloudTotalN === 5 ? "Значительная облачность (5/8)" :
+                            cloudTotalN === 6 ? "Значительная облачность (6/8)" :
+                            cloudTotalN === 7 ? "Почти пасмурно (7/8)" :
+                            cloudTotalN === 8 ? "Сплошная облачность (8/8)" :
                             cloudTotalText;
 
     /* ---------- итоговый HTML ---------- */
@@ -579,7 +594,7 @@ function renderSynop(d){
             ОДЕССА
             <span class="cardSubOrg">Гидрометцентр Чёрного и Азовского морей</span>
         </div>
-        `        <div class="subTitle">Наблюдение: ${escapeHtml(localTime)} местное время</div>`
+                <div class="subTitle">Наблюдение: ${escapeHtml(localTime)} местное время</div>
 
         <div class="heroTempRow" style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
             <div class="heroTempLeft">
