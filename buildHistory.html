@@ -436,7 +436,7 @@ async function startBuild() {
     log("Загрузка локальных synop файлов...", "log-info");
     let allSynops = [];
     for (const file of SYNOP_FILES) {
-        trytry {
+        try {
             const r = await fetch(`${GH_RAW_BASE}/${file}`);
             if (!r.ok) { log(`  ✗ ${file} — HTTP ${r.status}`, "log-warn"); continue; }
             const text = await r.text();
