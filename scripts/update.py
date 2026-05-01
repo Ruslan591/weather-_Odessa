@@ -1034,7 +1034,7 @@ def main():
     # Группируем новые сводки по месяцам
     by_month = {}
     for rec in new_synop_parsed:
-        mk = f"modelData_{rec['synopTime'][:4]}_{rec['synopTime'][4:6]}"  # modelData_2026_05
+        mk = f"modelData_{rec['synopTime'][:4]}_{rec['synopTime'][4:6]}"  # modelData_2026_05   
         by_month.setdefault(mk, []).append(rec)
 
     if not by_month:
