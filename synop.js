@@ -579,7 +579,7 @@ function renderSynop(d){
             ОДЕССА
             <span class="cardSubOrg">Гидрометцентр Чёрного и Азовского морей</span>
         </div>
-        <div class="subTitle">Наблюдение: ${escapeHtml(localTime)}</div>
+        `        <div class="subTitle">Наблюдение: ${escapeHtml(localTime)} местное время</div>`
 
         <div class="heroTempRow" style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
             <div class="heroTempLeft">
