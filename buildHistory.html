@@ -131,6 +131,10 @@ button:disabled { opacity: 0.3; cursor: not-allowed; }
     <button id="stopBtn" onclick="stopBuild()" disabled>■ Стоп</button>
     <button onclick="retryErrors()" id="retryBtn" disabled>↻ Догрузить ошибки</button>
     <button onclick="downloadAll()" id="dlBtn" disabled>↓ Скачать все файлы</button>
+    <button onclick="uploadToGitHub()" id="ghBtn" disabled>↑ Залить на GitHub</button>
+    <input id="ghToken" type="password" placeholder="GitHub token (ghp_...)"
+        style="padding:10px 12px; background:#1a1a1a; border:1px solid #444; color:#ccc;
+               font-family:'Courier New',monospace; font-size:0.85em; width:240px;">
 </div>
 
 <div class="stats-row">
@@ -169,8 +173,8 @@ const SYNOP_FILES = ["synop_2023.txt", "synop_2024.txt", "synop_2025.txt", "syno
 const MODELS = modelIds();
 
 let stopped = false;
-// { "2023": [ {synopTime, obs, models}, ... ], ... }
-let outputByYear = {};
+// { "2026_05": [ {synopTime, obs, models}, ... ], ... }
+let outputByMonth = {};
 let totalMonths = 0;
 let doneMonths = 0;
 let totalRecords = 0;
@@ -179,7 +183,7 @@ let totalErrors = 0;
 let failedModels = [];
 
 function pad2(n) { return String(n).padStart(2, "0"); }
-
+function monthKey(year, month) { return `${year}_${pad2(month)}`; }
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function log(msg, cls = "") {
@@ -195,7 +199,7 @@ function setStatus(msg) {
     document.getElementById("currentStatus").textContent = msg;
 }
 
-function updateStats(month, records) {
+function updateStats(month) {
     document.getElementById("statMonth").textContent = month || "—";
     document.getElementById("statProgress").textContent = `${doneMonths} / ${totalMonths}`;
     document.getElementById("statRecords").textContent = totalRecords;
@@ -211,12 +215,12 @@ function parseAllSynops(text) {
     const result = [];
     for (const line of lines) {
         const m = line.match(/^33837,(\d{4}),(\d{2}),(\d{2}),(\d{2}),(\d{2}),(AAXX\s.+)$/);
-if (!m) continue;
-const [, y, mo, dd, hh, mm, synopLine] = m;
-if (synopLine.includes("NILL")) continue;
-const hour = parseInt(hh);
-if (!SYNOP_HOURS.includes(hour)) continue;
-const telegramKey = `${y}${mo}${dd}${hh}${mm}`;
+        if (!m) continue;
+        const [, y, mo, dd, hh, mm, synopLine] = m;
+        if (synopLine.includes("NILL")) continue;
+        const hour = parseInt(hh);
+        if (!SYNOP_HOURS.includes(hour)) continue;
+        const telegramKey = `${y}${mo}${dd}${hh}${mm}`;
         const parsed = parseSynop(synopLine, telegramKey);
         if (parsed && parsed.temp !== null) {
             result.push({ telegramKey, parsed });
@@ -260,29 +264,30 @@ function parseSynop(line, telegramKey) {
             wind    = parseInt(wg.slice(3, 5));
         }
     }
-    // visibility из irixhvv (3-й токен после AAXX)
-let visibility = null, dew = null;
-const aaxxi2 = parts.indexOf("AAXX");
-if (aaxxi2 >= 0 && parts.length > aaxxi2 + 3) {
-    const irixhvv = parts[aaxxi2 + 3];
-    if (irixhvv && irixhvv.length === 5 && !irixhvv.slice(3,5).includes("/")) {
-        const vv = parseInt(irixhvv.slice(3,5));
-        if (!isNaN(vv)) {
-            if (vv <= 50) visibility = vv * 100;
-            else if (vv <= 80) visibility = (vv - 50) * 1000;
-            else if (vv === 89) visibility = 70000;
-            else visibility = null;
+
+    let visibility = null, dew = null;
+    const aaxxi2 = parts.indexOf("AAXX");
+    if (aaxxi2 >= 0 && parts.length > aaxxi2 + 3) {
+        const irixhvv = parts[aaxxi2 + 3];
+        if (irixhvv && irixhvv.length === 5 && !irixhvv.slice(3,5).includes("/")) {
+            const vv = parseInt(irixhvv.slice(3,5));
+            if (!isNaN(vv)) {
+                if (vv <= 50) visibility = vv * 100;
+                else if (vv <= 80) visibility = (vv - 50) * 1000;
+                else if (vv === 89) visibility = 70000;
+                else visibility = null;
+            }
         }
     }
-}
-// dew из группы 2sTTT
-parts.forEach(g => {
-    if (/^2[01]\d{3}$/.test(g)) {
-        const sign = g[1] === "1" ? -1 : 1;
-        dew = sign * parseInt(g.slice(2)) / 10;
-    }
-});
-return { synopTime: telegramKey, temp, pressure, wind, windDir, cloudcover, precip, ww, visibility, dew, synop: line };
+
+    parts.forEach(g => {
+        if (/^2[01]\d{3}$/.test(g)) {
+            const sign = g[1] === "1" ? -1 : 1;
+            dew = sign * parseInt(g.slice(2)) / 10;
+        }
+    });
+
+    return { synopTime: telegramKey, temp, pressure, wind, windDir, cloudcover, precip, ww, visibility, dew, synop: line };
 }
 
 /* ---- Загрузка моделей за месяц ---- */
@@ -314,13 +319,12 @@ async function fetchModelMonth(model, startDate, endDate) {
 /* ---- Обработка одного месяца ---- */
 async function processMonth(year, month, synops) {
     const label = `${pad2(month)}.${year}`;
+    const key   = monthKey(year, month);
     const startDate = `${year}-${pad2(month)}-01`;
     const lastDay = new Date(year, month, 0).getDate();
     const endDate = `${year}-${pad2(month)}-${pad2(lastDay)}`;
 
-    // фильтруем нужные сводки за этот месяц
-    const mm = pad2(month);
-    const prefix = `${year}${mm}`;
+    const prefix = `${year}${pad2(month)}`;
     const monthSynops = synops.filter(s => s.telegramKey.startsWith(prefix));
 
     if (!monthSynops.length) {
@@ -331,7 +335,6 @@ async function processMonth(year, month, synops) {
     log(`${label}: ${monthSynops.length} сводок — загрузка моделей...`, "log-info");
     setStatus(`${label} — запрос моделей...`);
 
-    // Загружаем каждую модель последовательно
     const hourlyByModel = {};
     for (const model of MODELS) {
         if (stopped) return 0;
@@ -353,7 +356,7 @@ async function processMonth(year, month, synops) {
                     hourlyByModel[model] = null;
                     failedModels.push({ year, month, model });
                     totalErrors++;
-                    updateStats(null, 0);
+                    updateStats(null);
                 } else {
                     await sleep(2000);
                 }
@@ -362,15 +365,14 @@ async function processMonth(year, month, synops) {
         await sleep(500);
     }
 
-    // Собираем записи
+    // Собираем записи — сохраняем по ключу месяца
     let saved = 0;
-    const year4 = String(year);
+    if (!outputByMonth[key]) outputByMonth[key] = [];
 
     for (const s of monthSynops) {
         const tk = s.telegramKey;
         const targetTime = `${tk.slice(0,4)}-${tk.slice(4,6)}-${tk.slice(6,8)}T${tk.slice(8,10)}:00`;
 
-        // берём time из любой доступной модели
         let timeArr = null;
         for (const m of MODELS) {
             if (hourlyByModel[m]) { timeArr = hourlyByModel[m].time; break; }
@@ -385,28 +387,27 @@ async function processMonth(year, month, synops) {
             const h = hourlyByModel[m];
             if (!h) continue;
             modelsData[m] = {
-    temp:        h.temperature_2m        ? h.temperature_2m[hourIndex]        : null,
-    pressure:    h.pressure_msl          ? h.pressure_msl[hourIndex]          : null,
-    wind:        h.wind_speed_10m        ? h.wind_speed_10m[hourIndex]        : null,
-    windDir:     h.wind_direction_10m && h.wind_direction_10m[hourIndex] != null
-        ? Math.round(h.wind_direction_10m[hourIndex] / 10) * 10 : null,
-    gusts:       h.wind_gusts_10m        ? h.wind_gusts_10m[hourIndex]        : null,
-    cloudcover:  h.cloud_cover           ? h.cloud_cover[hourIndex]           : null,
-    precip:      h.precipitation         ? h.precipitation[hourIndex]         : null,
-    weatherCode: h.weather_code          ? h.weather_code[hourIndex]          : null,
-    visibility:  h.visibility            ? h.visibility[hourIndex]            : null,
-    dewPoint:    h.dew_point_2m          ? h.dew_point_2m[hourIndex]          : null,
-    temp850:     h.temperature_850hPa    ? h.temperature_850hPa[hourIndex]    : null
-};
+                temp:        h.temperature_2m        ? h.temperature_2m[hourIndex]        : null,
+                pressure:    h.pressure_msl          ? h.pressure_msl[hourIndex]          : null,
+                wind:        h.wind_speed_10m        ? h.wind_speed_10m[hourIndex]        : null,
+                windDir:     h.wind_direction_10m && h.wind_direction_10m[hourIndex] != null
+                    ? Math.round(h.wind_direction_10m[hourIndex] / 10) * 10 : null,
+                gusts:       h.wind_gusts_10m        ? h.wind_gusts_10m[hourIndex]        : null,
+                cloudcover:  h.cloud_cover           ? h.cloud_cover[hourIndex]           : null,
+                precip:      h.precipitation         ? h.precipitation[hourIndex]         : null,
+                weatherCode: h.weather_code          ? h.weather_code[hourIndex]          : null,
+                visibility:  h.visibility            ? h.visibility[hourIndex]            : null,
+                dewPoint:    h.dew_point_2m          ? h.dew_point_2m[hourIndex]          : null,
+                temp850:     h.temperature_850hPa    ? h.temperature_850hPa[hourIndex]    : null,
+            };
         }
 
-        if (!outputByYear[year4]) outputByYear[year4] = [];
-outputByYear[year4].push({
-    synopTime:    tk,
-    forecastHour: null,
-    obs:          s.parsed,
-    models:       modelsData
-});
+        outputByMonth[key].push({
+            synopTime:    tk,
+            forecastHour: null,
+            obs:          s.parsed,
+            models:       modelsData,
+        });
 
         saved++;
         totalRecords++;
@@ -419,7 +420,7 @@ outputByYear[year4].push({
 /* ---- Главный процесс ---- */
 async function startBuild() {
     stopped = false;
-    outputByYear = {};
+    outputByMonth = {};
     totalRecords = 0;
     doneMonths = 0;
     totalErrors = 0;
@@ -431,7 +432,6 @@ async function startBuild() {
     document.getElementById("progressWrap").style.display = "block";
     document.getElementById("log").innerHTML = "";
 
-    // Загружаем все synop файлы
     log("Загрузка локальных synop файлов...", "log-info");
     let allSynops = [];
     for (const file of SYNOP_FILES) {
@@ -449,18 +449,16 @@ async function startBuild() {
 
     log(`Всего сводок: ${allSynops.length}`, "log-info");
 
-    // Формируем список месяцев
     const months = [];
     const now = new Date();
-    const startYear = 2023;
-    for (let y = startYear; y <= now.getFullYear(); y++) {
+    for (let y = 2023; y <= now.getFullYear(); y++) {
         const maxM = (y === now.getFullYear()) ? now.getMonth() : 12;
         for (let m = 1; m <= maxM; m++) {
             months.push({ year: y, month: m });
         }
     }
     totalMonths = months.length;
-    updateStats("—", 0);
+    updateStats("—");
 
     log(`Месяцев для обработки: ${totalMonths}`, "log-info");
     log("─────────────────────────────────────", "log-dim");
@@ -469,15 +467,14 @@ async function startBuild() {
         if (stopped) { log("⛔ Остановлено", "log-warn"); break; }
 
         const label = `${pad2(month)}.${year}`;
-        document.getElementById("statMonth").textContent = label;
-        updateStats(label, totalRecords);
+        updateStats(label);
 
         await processMonth(year, month, allSynops);
 
         doneMonths++;
-        updateStats(label, totalRecords);
+        updateStats(label);
 
-        await sleep(2000); // пауза между месяцами
+        await sleep(2000);
     }
 
     log("─────────────────────────────────────", "log-dim");
@@ -487,6 +484,7 @@ async function startBuild() {
     document.getElementById("startBtn").disabled = false;
     document.getElementById("stopBtn").disabled = true;
     document.getElementById("dlBtn").disabled = false;
+    document.getElementById("ghBtn").disabled = false;
     if (failedModels.length > 0) {
         document.getElementById("retryBtn").disabled = false;
         log(`⚠️ Ошибок: ${totalErrors} — нажми «Догрузить ошибки»`, "log-warn");
@@ -511,30 +509,26 @@ async function retryErrors() {
     log("─────────────────────────────────────", "log-dim");
     log(`Догрузка ошибок: ${failedModels.length} моделей...`, "log-info");
 
-    // Группируем по месяцу
     const byMonth = {};
     for (const f of failedModels) {
-        const key = `${f.year}-${pad2(f.month)}`;
-        if (!byMonth[key]) byMonth[key] = { year: f.year, month: f.month, models: [] };
-        byMonth[key].models.push(f.model);
+        const k = monthKey(f.year, f.month);
+        if (!byMonth[k]) byMonth[k] = { year: f.year, month: f.month, models: [] };
+        byMonth[k].models.push(f.model);
     }
 
     const retryFailed = [];
 
-    for (const key of Object.keys(byMonth).sort()) {
+    for (const k of Object.keys(byMonth).sort()) {
         if (stopped) break;
-        const { year, month, models: failedList } = byMonth[key];
+        const { year, month, models: failedList } = byMonth[k];
         const label = `${pad2(month)}.${year}`;
         const startDate = `${year}-${pad2(month)}-01`;
         const lastDay = new Date(year, month, 0).getDate();
         const endDate = `${year}-${pad2(month)}-${pad2(lastDay)}`;
+        const prefix = `${year}${pad2(month)}`;
+        const key = monthKey(year, month);
 
         log(`${label}: повтор ${failedList.join(", ")}`, "log-info");
-
-        // Получаем существующие записи за этот месяц
-        const mm = pad2(month);
-        const prefix = `${String(year)}${mm}`;
-        const year4 = String(year);
 
         for (const model of failedList) {
             if (stopped) break;
@@ -545,9 +539,8 @@ async function retryErrors() {
                     setStatus(`${label} — повтор ${model}...`);
                     const h = await fetchModelMonth(model, startDate, endDate);
 
-                    // Обновляем данные модели в существующих записях
-                    if (outputByYear[year4]) {
-                        for (const rec of outputByYear[year4]) {
+                    if (outputByMonth[key]) {
+                        for (const rec of outputByMonth[key]) {
                             if (!rec.synopTime.startsWith(prefix)) continue;
                             const tk = rec.synopTime;
                             const targetTime = `${tk.slice(0,4)}-${tk.slice(4,6)}-${tk.slice(6,8)}T${tk.slice(8,10)}:00`;
@@ -559,16 +552,20 @@ async function retryErrors() {
                                 wind:        h.wind_speed_10m        ? h.wind_speed_10m[hourIndex]        : null,
                                 windDir:     h.wind_direction_10m && h.wind_direction_10m[hourIndex] != null
                                     ? Math.round(h.wind_direction_10m[hourIndex] / 10) * 10 : null,
+                                gusts:       h.wind_gusts_10m        ? h.wind_gusts_10m[hourIndex]        : null,
                                 cloudcover:  h.cloud_cover           ? h.cloud_cover[hourIndex]           : null,
                                 precip:      h.precipitation         ? h.precipitation[hourIndex]         : null,
-                                weatherCode: h.weather_code          ? h.weather_code[hourIndex]          : null
+                                weatherCode: h.weather_code          ? h.weather_code[hourIndex]          : null,
+                                visibility:  h.visibility            ? h.visibility[hourIndex]            : null,
+                                dewPoint:    h.dew_point_2m          ? h.dew_point_2m[hourIndex]          : null,
+                                temp850:     h.temperature_850hPa    ? h.temperature_850hPa[hourIndex]    : null,
                             };
                         }
                     }
 
                     log(`  ✓ ${model}`, "log-ok");
                     totalErrors--;
-                    updateStats(label, 0);
+                    updateStats(label);
                     success = true;
                     break;
                 } catch(e) {
@@ -601,22 +598,99 @@ async function retryErrors() {
     }
 }
 
-/* ---- Скачивание по годам ---- */
-function downloadYear(year, data) {
+/* ---- Скачивание по месяцам ---- */
+function downloadMonth(key, data) {
     const json = JSON.stringify(data, null, 2);
     const blob = new Blob([json], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `modelData_${year}.json`;
+    a.download = `modelData_${key}.json`;  // например modelData_2026_05.json
     a.click();
     URL.revokeObjectURL(url);
 }
 
 function downloadAll() {
-    for (const year of Object.keys(outputByYear).sort()) {
-        setTimeout(() => downloadYear(year, outputByYear[year]), 300 * (parseInt(year) - 2022));
+    const keys = Object.keys(outputByMonth).sort();
+    keys.forEach((key, i) => {
+        setTimeout(() => downloadMonth(key, outputByMonth[key]), 400 * i);
+    });
+    log(`Скачивание: ${keys.length} файлов`, "log-info");
+}
+
+/* ---- Загрузка на GitHub ---- */
+async function uploadToGitHub() {
+    const token = document.getElementById("ghToken").value.trim();
+    const repo  = "ruslan591/weather-_Odessa";
+    const dir   = "data/modeldata";
+
+    if (!token) { log("⚠️ Укажи GitHub token", "log-warn"); return; }
+
+    const keys = Object.keys(outputByMonth).sort();
+    if (!keys.length) { log("⚠️ Нет данных для загрузки", "log-warn"); return; }
+
+    document.getElementById("ghBtn").disabled = true;
+    log(`─────────────────────────────────────`, "log-dim");
+    log(`GitHub: загружаю ${keys.length} файлов → ${repo}/${dir}`, "log-info");
+
+    let ok = 0, fail = 0;
+
+    for (const key of keys) {
+        const filename = `modelData_${key}.json`;
+        const filePath = dir ? `${dir}/${filename}` : filename;
+        const apiUrl   = `https://api.github.com/repos/${repo}/contents/${filePath}`;
+        const content  = btoa(unescape(encodeURIComponent(
+            JSON.stringify(outputByMonth[key], null, 2)
+        )));
+
+        setStatus(`GitHub: ${filename}...`);
+
+        try {
+            // Проверяем, существует ли файл (нужен sha для обновления)
+            let sha = null;
+            const check = await fetch(apiUrl, {
+                headers: { Authorization: `token ${token}`, Accept: "application/vnd.github+json" }
+            });
+            if (check.ok) {
+                const meta = await check.json();
+                sha = meta.sha;
+            }
+
+            const body = {
+                message: `update ${filename}`,
+                content,
+                ...(sha ? { sha } : {})
+            };
+
+            const res = await fetch(apiUrl, {
+                method: "PUT",
+                headers: {
+                    Authorization: `token ${token}`,
+                    Accept: "application/vnd.github+json",
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(body)
+            });
+
+            if (res.ok) {
+                log(`  ✓ ${filename}`, "log-ok");
+                ok++;
+            } else {
+                const err = await res.json();
+                log(`  ✗ ${filename} — ${err.message}`, "log-err");
+                fail++;
+            }
+        } catch(e) {
+            log(`  ✗ ${filename} — ${e}`, "log-err");
+            fail++;
+        }
+
+        await sleep(300); // небольшая пауза между запросами
     }
+
+    document.getElementById("ghBtn").disabled = false;
+    log(`GitHub: готово — ${ok} ОК, ${fail} ошибок`, fail ? "log-warn" : "log-ok");
+    setStatus(`GitHub: загружено ${ok} из ${keys.length}`);
 }
 </script>
 </body>
