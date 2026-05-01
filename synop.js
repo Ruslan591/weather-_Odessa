@@ -575,7 +575,7 @@ function renderSynop(d){
 
     /* ---------- итоговый HTML ---------- */
     main.innerHTML = `
-        <div class="cardTitle">SYNOP · станция ${escapeHtml(d.station || "-")}</div>
+        <div class="cardTitle">ОДЕССА · Гидрометцентр Чёрного и Азовского морей</div>
         <div class="subTitle">Наблюдение: ${escapeHtml(localTime)}</div>
 
         <div class="heroTempRow" style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
