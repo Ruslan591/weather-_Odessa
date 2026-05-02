@@ -494,6 +494,11 @@ function renderSynop(d){
     }
 
     /* ---------- СЕКЦИЯ 555 ---------- */
+    // Определяем день/ночь по реальному восходу для Одессы
+    const obsHourUTC = d.yyggi ? parseInt(d.yyggi.slice(2,4), 10) : null;
+    const obsDate = obsHourUTC != null ? new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate(), obsHourUTC)) : new Date();
+    const isDay = isDayNow(46.48, 30.74, obsDate);
+    
     // Температура поверхности почвы/травы: два варианта из сек. 555
     // 1EsnT'gT'g — текущая или с нагревом Солнцем (группа 1xxxxx)
     // 3EsnTgTg   — то же но в виде группы 3
@@ -562,10 +567,7 @@ function renderSynop(d){
         ? escapeHtml(cloudAmountText(cloudTotalN))
         : "-";
 
-    // Определяем день/ночь по реальному восходу для Одессы
-    const obsHourUTC = d.yyggi ? parseInt(d.yyggi.slice(2,4), 10) : null;
-    const obsDate = obsHourUTC != null ? new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate(), obsHourUTC)) : new Date();
-    const isDay = isDayNow(46.48, 30.74, obsDate);
+    
 
     const cloudTotalIcon = cloudTotalN === 0 ? (isDay ? "☀️" : "🌙") :
                            cloudTotalN === 1 ? (isDay ? "🌤" : "🌑") :
