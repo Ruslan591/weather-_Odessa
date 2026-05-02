@@ -94,9 +94,11 @@ var GITHUB_OWNER      = "ruslan591";
 var GITHUB_REPO       = "weather-_Odessa";
 var GITHUB_SNAPS_FILE = "data/ensemble_snapshots_pws.json";
 var GITHUB_PWS_FILE   = "data/pws_raw.json";
+var GITHUB_ACC_FILE   = "data/ensemble_accuracy_pws.json";
 
 var _snaps      = [];
 var _pwsRawData = [];
+var _acc        = null;
 var _currentStation = "all";
 
 function getToken() { return localStorage.getItem("ghToken") || ""; }
@@ -556,7 +558,14 @@ async function render() {
             ? (PWS_SYNC_STATIONS.find(function(s){ return s.id===_currentStation; })||{}).name
             : null) || _currentStation);
 
-    setStatus("Снимков: <b>"+snapCount+"</b> · Часов PWS: <b>"+obsKeys+"</b>");
+    var updated = (_acc && _acc.updated)
+        ? new Date(_acc.updated).toLocaleString("ru-RU", {day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit"})
+        : null;
+    setStatus(
+        "Снимков: <b>" + snapCount + "</b>" +
+        " · наблюдений: <b>" + obsCount + "</b>" +
+        (updated ? " · обновлено " + updated : "")
+    );
 
     var metrics = calcMetrics(obsIndex);
 
@@ -586,6 +595,8 @@ async function render() {
 /* === СТАРТ === */
 (async function init() {
     setStatus("☁️ Загрузка снимков с GitHub...");
+    var accResult = await ghGetJson(GITHUB_ACC_FILE);
+    _acc = accResult.data;
     await Promise.all([loadSnaps(), loadPwsRaw()]);
     render();
 })();
