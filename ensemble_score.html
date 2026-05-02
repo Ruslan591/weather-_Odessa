@@ -142,7 +142,7 @@ function maeColor(key, mae) {
 
 function biasBadge(bias, unit) {
     if (Math.abs(bias) < 0.01) return "";
-    var sign = bias > 0 ? "▲" : "▼";
+    var sign = bias > 0 ? "▲ завыш" : "▼ занижает";
     var col  = bias > 0 ? "#ff9f5c" : "#74b9ff";
     return '<span class="bias-badge" style="background:' + col + '22;color:' + col + '">' +
            sign + ' ' + Math.abs(bias).toFixed(2) + unit + '</span>';
