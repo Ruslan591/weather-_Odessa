@@ -36,12 +36,12 @@
 <!-- Bottom sheet: период -->
 <div id="forecastSheet" class="bottom-sheet" onclick="closeSheet('forecastSheet')">
   <div class="sheet-panel" onclick="event.stopPropagation()">
-    <div class="sheet-item" onclick="setForecastDays(1)">24 часа</div>
-    <div class="sheet-item" onclick="setForecastDays(2)">2 суток</div>
-    <div class="sheet-item" onclick="setForecastDays(4)">4 суток</div>
-    <div class="sheet-item" onclick="setForecastDays(6)">6 суток</div>
-    <div class="sheet-item" onclick="setForecastDays(9)">9 суток</div>
-    <div class="sheet-item" onclick="setForecastDays(14)">14 суток</div>
+    <div class="sheet-item" onclick="setForecastHours(24)">24 часа</div>
+<div class="sheet-item" onclick="setForecastHours(48)">48 часов</div>
+<div class="sheet-item" onclick="setForecastHours(72)">72 часа</div>
+<div class="sheet-item" onclick="setForecastHours(120)">120 часов</div>
+<div class="sheet-item" onclick="setForecastHours(168)">168 часов</div>
+<div class="sheet-item" onclick="setForecastHours(240)">240 часов</div>
   </div>
 </div>
 
@@ -62,24 +62,17 @@
 
 <script>
 // СТАЛО
-function daysLabel(d){
-    if(d === 1) return "24 часа";
-    if(d >= 5 && d <= 20) return d + " дней";
-    const r = d % 10;
-    if(r === 1) return d + " день";
-    if(r >= 2 && r <= 4) return d + " дня";
-    return d + " дней";
+function hoursLabel(h){
+    if(h % 24 === 0) return h + " часов";
+    return h + " ч";
 }
-
-let forecastDays = parseInt(localStorage.getItem("forecastDays")) || 1;
-document.getElementById("forecastDays").innerText = daysLabel(forecastDays);
-
+let forecastHours = parseInt(localStorage.getItem("forecastHours")) || 24;
+document.getElementById("forecastDays").innerText = hoursLabel(forecastHours);
 function toggleForecastMenu(e){ if(e) e.stopPropagation(); openSheet('forecastSheet'); }
-
-function setForecastDays(days){
-    forecastDays = days;
-    localStorage.setItem("forecastDays", days);
-    document.getElementById("forecastDays").innerText = daysLabel(days);
+function setForecastHours(hours){
+    forecastHours = hours;
+    localStorage.setItem("forecastHours", hours);
+    document.getElementById("forecastDays").innerText = hoursLabel(hours);
     closeSheet('forecastSheet');
     load();
 }
@@ -1187,7 +1180,7 @@ async function loadEnsemble() {
         var url = "https://api.open-meteo.com/v1/forecast?latitude=46.43&longitude=30.74" +
             "&hourly=" + HOURLY_PARAMS +
             "&models=" + m +
-            "&timezone=auto&forecast_days=" + forecastDays + "&wind_speed_unit=ms";
+            "&forecast_days=" + (Math.ceil(forecastHours / 24) + 1) + "&wind_speed_unit=ms"
         return fetch(url)
             .then(function(r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
             .then(function(data) { return { model: m, data: data }; })
@@ -1497,7 +1490,7 @@ function snapWord(n) {
     // Обрезаем по времени
     var nowTime = Date.now();
     var timesDates = baseTimes.map(function(t){ return new Date(t); });
-    var hoursToShow = 24 * (forecastDays - 1);
+    var hoursToShow = forecastHours;
     var startIndex = 0;
     for (var si = 0; si < timesDates.length; si++) {
         if (timesDates[si].getTime() >= nowTime) { startIndex = si; break; }
@@ -1577,6 +1570,7 @@ function comfortLevel(h){
 // =============================================
 async function load(){
     if (weatherModel === "ensemble") { loadEnsemble(); return; }
+    const apiForecastDays = Math.ceil(forecastHours / 24) + 1; // +1 для запаса
     const API = `https://api.open-meteo.com/v1/forecast?latitude=46.43&longitude=30.74&hourly=temperature_2m,apparent_temperature,pressure_msl,relative_humidity_2m,weather_code,visibility,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,precipitation_probability,showers,snowfall,snow_depth,shortwave_radiation,direct_radiation,diffuse_radiation,dew_point_2m,runoff,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high&models=${weatherModel}&timezone=auto&forecast_days=${forecastDays}&wind_speed_unit=ms`;
     let data;
     try {
@@ -1631,7 +1625,7 @@ async function load(){
 
     const nowTime    = Date.now();
     const timesDates = h.time.map(t => new Date(t));
-    const hoursToShow = 24 * (forecastDays - 1);
+    const hoursToShow = forecastHours;
 
     let startIndex = timesDates.findIndex(t => t.getTime() >= nowTime);
     if(startIndex === -1) startIndex = 0;
