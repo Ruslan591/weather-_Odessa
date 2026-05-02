@@ -63,8 +63,12 @@
 <script>
 // СТАЛО
 function hoursLabel(h){
-    if(h % 24 === 0) return h + " часов";
-    return h + " ч";
+    if(h === 24) return "24 часа";
+    if(h === 48) return "48 часов";
+    const r = h % 10;
+    if(r === 1 && h % 100 !== 11) return h + " час";
+    if(r >= 2 && r <= 4 && !(h % 100 >= 12 && h % 100 <= 14)) return h + " часа";
+    return h + " часов";
 }
 let forecastHours = parseInt(localStorage.getItem("forecastHours")) || 24;
 document.getElementById("forecastDays").innerText = hoursLabel(forecastHours);
@@ -1510,10 +1514,8 @@ function snapWord(n) {
     buildFcParamRow();
     renderForecastChart(_fcHours, _fcTimes);
 
-    renderForecastDays(ensembleHours, baseTimes);
-
     // Рендерим часовые карточки (те же что для обычной модели)
-    renderForecastDays(ensembleHours, baseTimes);
+    renderForecastDays(ensembleHours.slice(0, endIndex), baseTimes.slice(0, endIndex));
 }
 
 // =============================================
@@ -1571,7 +1573,7 @@ function comfortLevel(h){
 async function load(){
     if (weatherModel === "ensemble") { loadEnsemble(); return; }
     const apiForecastDays = Math.ceil(forecastHours / 24) + 1; // +1 для запаса
-    const API = `https://api.open-meteo.com/v1/forecast?latitude=46.43&longitude=30.74&hourly=temperature_2m,apparent_temperature,pressure_msl,relative_humidity_2m,weather_code,visibility,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,precipitation_probability,showers,snowfall,snow_depth,shortwave_radiation,direct_radiation,diffuse_radiation,dew_point_2m,runoff,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high&models=${weatherModel}&timezone=auto&forecast_days=${forecastDays}&wind_speed_unit=ms`;
+    const API = `https://api.open-meteo.com/v1/forecast?latitude=46.43&longitude=30.74&hourly=temperature_2m,apparent_temperature,pressure_msl,relative_humidity_2m,weather_code,visibility,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,precipitation_probability,showers,snowfall,snow_depth,shortwave_radiation,direct_radiation,diffuse_radiation,dew_point_2m,runoff,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high&models=${weatherModel}&timezone=auto&forecast_days=${apiForecastDays}&wind_speed_unit=ms`;
     let data;
     try {
         const r = await fetch(API);
@@ -1644,7 +1646,7 @@ async function load(){
     buildFcParamRow();
     renderForecastChart(_fcHours, _fcTimes);
 
-    renderForecastDays(hours, h.time);
+    renderForecastDays(hours.slice(0, endIndex2), h.time.slice(0, endIndex2));
 }
 
 function renderForecastDays(hours, times) {
