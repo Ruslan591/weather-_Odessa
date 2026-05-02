@@ -196,9 +196,9 @@ def main():
 
     # Определяем последний час в файле
     last_hk = max((r["hourKey"] for r in existing), default=None)
-    prev_hk = (now - timedelta(hours=1)).strftime("%Y-%m-%dT%H")
+    cur_hk = now.strftime("%Y-%m-%dT%H")
 
-    if last_hk and last_hk >= prev_hk:
+    if last_hk and last_hk >= cur_hk:
         log.info("  Данные актуальны (последний час: %s)", last_hk)
         return
 
