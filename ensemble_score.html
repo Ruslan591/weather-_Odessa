@@ -61,7 +61,12 @@
 <!-- СНИМКИ -->
 <div class="section-label" style="margin-top:16px;">Последние снимки</div>
 <div id="snapshotList" class="snap-list"></div>
-
+<div style="text-align:center;margin-top:8px;">
+    <button id="deleteSnapBtn" onclick="openDeleteSnap()"
+        style="background:none;border:none;color:#333;font-size:11px;cursor:pointer;padding:6px 12px;">
+        удалить снимок
+    </button>
+</div>
 </div><!-- /container -->
 
 <script>
@@ -461,6 +466,47 @@ async function render() {
     _snaps = (snapResult.data && Array.isArray(snapResult.data)) ? snapResult.data : [];
     await render();
 })();
+
+/* ── УДАЛЕНИЕ СНИМКА ── */
+var _snapsSha = null;
+
+async function ghPutJson(path, sha, data) {
+    var token = getToken();
+    if (!token) { alert("Токен GitHub не задан"); return false; }
+    var content = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+    var r = await fetch("https://api.github.com/repos/" + GITHUB_OWNER + "/" + GITHUB_REPO + "/contents/" + path, {
+        method: "PUT",
+        headers: Object.assign({"Content-Type":"application/json","Accept":"application/vnd.github+json"},
+            {"Authorization":"Bearer "+token}),
+        body: JSON.stringify({ message: "delete snapshot", sha: sha, content: content })
+    });
+    return r.ok;
+}
+
+function snapLabel(s) {
+    var d = new Date(s.savedAt);
+    return isNaN(d) ? null : d.toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+}
+
+function openDeleteSnap() {
+    var input = prompt("Введите дату снимка (как в таблице, например: 02.05, 21:10)");
+    if (!input) return;
+    input = input.trim();
+    var idx = _snaps.findIndex(function(s){ return snapLabel(s) === input; });
+    if (idx === -1) { alert("Снимок не найден: " + input); return; }
+    if (!confirm("Удалить снимок " + input + "?")) return;
+    deleteSnap(idx);
+}
+
+async function deleteSnap(idx) {
+    _snaps.splice(idx, 1);
+    var result = await ghGetJson(GITHUB_SNAPS_FILE);
+    _snapsSha = result.sha;
+    var ok = await ghPutJson(GITHUB_SNAPS_FILE, _snapsSha, _snaps);
+    if (ok) { alert("Снимок удалён"); await render(); }
+    else { alert("Ошибка сохранения"); }
+}
+
 </script>
 
 <script src="nav.js"></script>
