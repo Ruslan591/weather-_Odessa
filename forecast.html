@@ -797,25 +797,41 @@ function renderForecastCloud(hours, times){
             <stop offset="0%"   stop-color="${layer.color}" stop-opacity="0.55"/>
             <stop offset="100%" stop-color="${layer.color}" stop-opacity="0.08"/>
         </linearGradient>`;
-        areas += `<path d="${area}" fill="url(#${gid})" stroke="none"/>`;
-        lines += `<path d="${line}" fill="none" stroke="${layer.color}" stroke-width="1.5" stroke-opacity="0.8"/>`;
+        areas += `<path id="cloudArea_${i}" d="${area}" fill="url(#${gid})" stroke="none"/>`;
+        lines += `<path id="cloudLine_${i}" d="${line}" fill="none" stroke="${layer.color}" stroke-width="1.5" stroke-opacity="0.8"/>`;
     });
-
-    const legendItems = layers.map((l, i) =>
-        `<g transform="translate(${pad.l + i * 72}, ${H - 4})">
-            <rect x="0" y="-6" width="10" height="6" rx="2" fill="${l.color}" fill-opacity="0.7"/>
-            <text x="13" y="0" font-size="8" fill="${l.color}" fill-opacity="0.9">${l.label}</text>
-        </g>`
-    ).join("");
 
     wrap.innerHTML = `
     <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="display:block;">
         <defs>${defs}</defs>
         ${yGrid}${xGrid}${nowLine}
         ${areas}${lines}
-        ${legendItems}
         ${yLabels}${xLabels}
-    </svg>`;
+    </svg>
+    <div style="display:flex;gap:10px;justify-content:center;padding:0;margin-top:-8px;flex-wrap:wrap;">
+        ${layers.map((l, i) => `
+        <button id="cloudLegBtn_${i}" onclick="toggleCloudLayer(${i})"
+            style="display:flex;align-items:center;gap:5px;background:none;border:none;
+                   padding:3px 8px;border-radius:20px;cursor:pointer;
+                   outline:1px solid ${l.color}44;transition:opacity 0.2s;">
+            <span style="display:inline-block;width:10px;height:6px;border-radius:2px;
+                         background:${l.color};opacity:0.8;flex-shrink:0;"></span>
+            <span style="font-size:11px;color:${l.color};">${l.label}</span>
+        </button>`).join("")}
+    </div>`;
+
+// Переключение видимости ярусов
+    const _cloudVisible = [true, true, true];
+    window.toggleCloudLayer = function(i){
+        _cloudVisible[i] = !_cloudVisible[i];
+        const vis = _cloudVisible[i] ? "" : "none";
+        const area = document.getElementById(`cloudArea_${i}`);
+        const line = document.getElementById(`cloudLine_${i}`);
+        const btn  = document.getElementById(`cloudLegBtn_${i}`);
+        if(area) area.style.display = vis;
+        if(line) line.style.display = vis;
+        if(btn)  btn.style.opacity  = _cloudVisible[i] ? "1" : "0.35";
+    };
 
     // Перекрестие для облачности — используем total cloud cover pts
     const totalData = hours.map(h => h.cloud_cover ?? 0);
