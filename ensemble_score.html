@@ -62,9 +62,13 @@
 <div class="section-label" style="margin-top:16px;">Последние снимки</div>
 <div id="snapshotList" class="snap-list"></div>
 <div style="text-align:center;margin-top:8px;">
-    <button id="deleteSnapBtn" onclick="openDeleteSnap()"
+    <button onclick="openDeleteSnap()"
         style="background:none;border:none;color:#333;font-size:11px;cursor:pointer;padding:6px 12px;">
         удалить снимок
+    </button>
+    <button onclick="openTokenDialog()"
+        style="background:none;border:none;color:#333;font-size:11px;cursor:pointer;padding:6px 12px;">
+        токен
     </button>
 </div>
 </div><!-- /container -->
@@ -505,6 +509,20 @@ async function deleteSnap(idx) {
     var ok = await ghPutJson(GITHUB_SNAPS_FILE, _snapsSha, _snaps);
     if (ok) { alert("Снимок удалён"); await render(); }
     else { alert("Ошибка сохранения"); }
+}
+
+/* ── ТОКЕН ── */
+function openTokenDialog() {
+    var current = localStorage.getItem("ghToken") || "";
+    var val = prompt("GitHub токен" + (current ? " (задан)" : " (не задан)"), current);
+    if (val === null) return;
+    if (val.trim() === "") {
+        localStorage.removeItem("ghToken");
+        alert("Токен удалён");
+    } else {
+        localStorage.setItem("ghToken", val.trim());
+        alert("Токен сохранён");
+    }
 }
 
 </script>
