@@ -172,10 +172,14 @@ function maeColor(key, mae) {
 }
 
 function biasBadge(bias, unit) {
-    if (Math.abs(bias) < 0.01) return "";
+    var absBias = Math.abs(bias);
+    var t = 0.05;
+    if (absBias < t) {
+        return '<span class="es-badge" style="background:#5fe08f22;color:#5fe08f">✓ точно ' + absBias.toFixed(2) + unit + '</span>';
+    }
     var sign = bias > 0 ? "▲ завыш" : "▼ занижает";
     var col  = bias > 0 ? "#ff9f5c" : "#74b9ff";
-    return '<span class="es-badge" style="background:'+col+'22;color:'+col+'">'+sign+' '+Math.abs(bias).toFixed(2)+unit+'</span>';
+    return '<span class="es-badge" style="background:'+col+'22;color:'+col+'">'+sign+' '+absBias.toFixed(2)+unit+'</span>';
 }
 
 function setStatus(msg) { document.getElementById("statusLine").innerHTML = msg; }
