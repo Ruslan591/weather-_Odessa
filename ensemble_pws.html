@@ -309,7 +309,7 @@ function calcMetricsByHorizon(obsIndex) {
             var ob  = obsIndex[key];
             if (!ob) return;
             var horizonH = Math.round((new Date(fh.time) - snapStart) / 3600000);
-            var bucket = Math.round(horizonH / 6) * 6;
+            var bucket = Math.round(horizonH / _activeHorizonBucket) * _activeHorizonBucket;
             if (bucket < 0) return;
             if (!byH[bucket]) byH[bucket] = emptyErrors();
             pushPwsErrors(byH[bucket], fh, ob);
@@ -328,6 +328,8 @@ var _dayMetrics       = null;
 var _horizonMetrics   = null;
 var _activeChartParam   = "temp";
 var _activeHorizonParam = "temp";
+var _activeHorizonMode  = "mae";   // "mae" или "bias"
+var _activeHorizonBucket = 6;      // 1, 3, 6, 12
 var _chartInstance        = null;
 var _horizonChartInstance = null;
 
@@ -401,34 +403,65 @@ function renderChartParamRow() {
     }).join("");
 }
 
-function renderHorizonChart(paramKey) {
-    _activeHorizonParam = paramKey;
+function renderHorizonChart(paramKey, mode, bucket) {
+    if (paramKey !== undefined) _activeHorizonParam = paramKey;
+    if (mode    !== undefined) _activeHorizonMode   = mode;
+    if (bucket  !== undefined) _activeHorizonBucket = bucket;
+
     document.querySelectorAll(".hp-btn").forEach(function(b){
-        b.classList.toggle("active", b.dataset.key === paramKey);
+        b.classList.toggle("active", b.dataset.key === _activeHorizonParam);
     });
-    if (!_horizonMetrics) return;
+    document.querySelectorAll(".hm-btn").forEach(function(b){
+        b.classList.toggle("active", b.dataset.mode === _activeHorizonMode);
+    });
+    document.querySelectorAll(".hb-btn").forEach(function(b){
+        b.classList.toggle("active", b.dataset.bucket === String(_activeHorizonBucket));
+    });
+
+    var obsIndex = buildObsIndex().obsIndex;
+    _horizonMetrics = calcMetricsByHorizon(obsIndex);
+
     var buckets = Object.keys(_horizonMetrics).map(Number).sort(function(a,b){ return a-b; });
     if (!buckets.length) return;
-    var p = PARAMS.find(function(x){ return x.key === paramKey; });
+    var p = PARAMS.find(function(x){ return x.key === _activeHorizonParam; });
     if (!p) return;
 
-    var maes   = buckets.map(function(h){ var s=_horizonMetrics[h][paramKey]; return s ? s.mae : null; });
+    var isBias = _activeHorizonMode === "bias";
+    var vals   = buckets.map(function(h){
+        var s = _horizonMetrics[h][_activeHorizonParam];
+        return s ? (isBias ? s.bias : s.mae) : null;
+    });
     var labels = buckets.map(function(h){ return "+"+h+"ч"; });
 
     if (_horizonChartInstance) { _horizonChartInstance.destroy(); _horizonChartInstance = null; }
-    _horizonChartInstance = makeChart("horizonChart", labels, maes, p, function(i){
-        var s = _horizonMetrics[buckets[i]] && _horizonMetrics[buckets[i]][paramKey];
+    _horizonChartInstance = makeChart("horizonChart", labels, vals, p, function(i){
+        var s = _horizonMetrics[buckets[i]] && _horizonMetrics[buckets[i]][_activeHorizonParam];
         return s ? s.n : null;
     });
 }
 
 function renderHorizonParamRow() {
     var hParams = PARAMS.filter(function(p){ return !p.isFact && p.key !== "windDir"; });
-    document.getElementById("horizonParamRow").innerHTML = hParams.map(function(p) {
-        return '<button class="cp-btn hp-btn'+(p.key===_activeHorizonParam?" active":"")+'" ' +
-               'data-key="'+p.key+'" style="--c:'+p.color+'" ' +
-               'onclick="renderHorizonChart(\''+p.key+'\')">' + p.label + '</button>';
-    }).join("");
+    document.getElementById("horizonParamRow").innerHTML =
+        hParams.map(function(p) {
+            return '<button class="cp-btn hp-btn'+(p.key===_activeHorizonParam?" active":"")+'" ' +
+                   'data-key="'+p.key+'" style="--c:'+p.color+'" ' +
+                   'onclick="renderHorizonChart(\''+p.key+'\')">' + p.label + '</button>';
+        }).join("") +
+        '<div style="display:flex;gap:4px;margin-top:6px;">' +
+            ['mae','bias'].map(function(m){
+                return '<button class="cp-btn hm-btn'+(m===_activeHorizonMode?" active":"")+'" ' +
+                       'data-mode="'+m+'" style="--c:#aaa" ' +
+                       'onclick="renderHorizonChart(undefined,\''+m+'\')">' +
+                       (m==='mae'?'MAE':'Уклон') + '</button>';
+            }).join("") +
+            [1,3,6,12].map(function(b){
+                return '<button class="cp-btn hb-btn'+(b===_activeHorizonBucket?" active":"")+'" ' +
+                       'data-bucket="'+b+'" style="--c:#aaa" ' +
+                       'onclick="renderHorizonChart(undefined,undefined,'+b+')">' +
+                       b+'ч</button>';
+            }).join("") +
+        '</div>';
 }
 
 /* === РЕНДЕР МЕТРИК === */
