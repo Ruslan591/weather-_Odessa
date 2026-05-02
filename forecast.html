@@ -869,7 +869,7 @@ function renderForecastCloud(hours, times){
                 : "";
             tip.innerHTML = `
                 <div style="color:#888;margin-bottom:6px;font-size:11px;">${timeStr}</div>
-                <div style="font-size:15px;font-weight:800;color:#b0bec5;margin-bottom:6px;">${h.cloud_cover ?? "-"}% <span style="font-size:11px;color:#666;">общая</span></div>
+                <div style="font-size:15px;font-weight:800;color:#b0bec5;margin-bottom:6px;">${h.cloud_cover != null ? Math.round(h.cloud_cover) : "-"}% <span style="font-size:11px;color:#666;">общая</span></div>
                 ${layers.map(l => `<div style="color:${l.color};font-size:12px;">${l.label}: ${l.field(h).toFixed(0)}%</div>`).join("")}
             `;
             tip.style.opacity = "1";
