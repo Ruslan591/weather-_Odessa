@@ -57,6 +57,7 @@
     <div class="fc-param-row" id="fcParamRow"></div>
     <div id="fcChartWrap" style="background:#161616;border-radius:10px;overflow:hidden;padding:4px 0 0;"></div>
     <div id="fcStats" class="fc-stats" style="display:none;margin-top:4px;"></div>
+    <div id="fcAlertsBlock" style="margin-top:8px;"></div>
 </div>
 <div id="forecast"></div>
 
@@ -1145,6 +1146,8 @@ function parseHourly(h) {
             cloud_cover_low:       h.cloud_cover_low[i],
             cloud_cover_mid:       h.cloud_cover_mid[i],
             cloud_cover_high:      h.cloud_cover_high[i],
+            cape:                  h.cape ? h.cape[i] : null,
+            uv_index:              h.uv_index ? h.uv_index[i] : null,
         };
     });
 }
@@ -1154,7 +1157,7 @@ function mergeEnsemble(allModelHours, weights, models) {
         "temperature_2m","apparent_temperature","pressure_msl","relative_humidity_2m",
         "wind_speed_10m","wind_gusts_10m","rain","showers","precip_prob","snowfall",
         "snow_depth","cloud_cover","cloud_cover_low","cloud_cover_mid","cloud_cover_high",
-        "shortwave_radiation","dew_point_2m","visibility"
+        "shortwave_radiation","dew_point_2m","visibility","cape","uv_index"
     ];
     var base = allModelHours[models[0]];
     if (!base) return [];
@@ -1245,7 +1248,7 @@ async function loadEnsemble() {
         "weather_code,visibility,wind_speed_10m,wind_gusts_10m,wind_direction_10m," +
         "precipitation,precipitation_probability,showers,snowfall,snow_depth," +
         "shortwave_radiation,direct_radiation,diffuse_radiation,dew_point_2m,runoff," +
-        "cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high";
+        "cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,cape,uv_index";
 
     var fetches = models.map(function(m) {
         var url = "https://api.open-meteo.com/v1/forecast?latitude=46.43&longitude=30.74" +
@@ -1580,6 +1583,7 @@ function snapWord(n) {
 
     buildFcParamRow();
     renderForecastChart(_fcHours, _fcTimes);
+    renderAlertsBlock(_fcHours);
 
     // Рендерим часовые карточки (те же что для обычной модели)
     const lastDayKeyE = baseTimes[endIndex - 1].slice(0, 10);
@@ -1588,6 +1592,228 @@ const fullDayEndE = Math.min(
     ensembleHours.length
 );
 renderForecastDays(ensembleHours.slice(0, fullDayEndE), baseTimes.slice(0, fullDayEndE));
+}
+
+// =============================================
+// ПРЕДУПРЕЖДЕНИЯ И ОКНО ХОРОШЕЙ ПОГОДЫ
+// =============================================
+function weatherAlerts(hours) {
+    const alerts = [];
+
+    hours.forEach((h, i) => {
+        const t       = h.temperature_2m ?? 0;
+        const feel    = h.apparent_temperature ?? t;
+        const wind    = h.wind_speed_10m ?? 0;
+        const gust    = h.wind_gusts_10m ?? wind;
+        const vis     = h.visibility ?? 10000;
+        const code    = h.weather_code ?? 0;
+        const rain    = (h.rain ?? 0) + (h.showers ?? 0);
+        const rh      = h.relative_humidity_2m ?? 50;
+        const dew     = h.dew_point_2m ?? null;
+        const cloud   = h.cloud_cover ?? 0;
+        const cape    = h.cape ?? 0;
+        const snow    = h.snowfall ?? 0;
+        const time    = new Date(h.time);
+        const hr      = time.getHours();
+        const night   = hr < 7 || hr >= 22;
+        const pKey    = h.time;
+
+        // Гроза (weather_code + CAPE)
+        if (code >= 95) {
+            const severe = cape > 1500 || gust > 20;
+            alerts.push({
+                time: pKey, icon: "⛈️",
+                title: severe ? "Сильная гроза" : "Гроза",
+                sub: cape > 0 ? `CAPE ${Math.round(cape)} Дж/кг · порывы ${gust.toFixed(0)} м/с` : `порывы ${gust.toFixed(0)} м/с`,
+                level: severe ? "red" : "orange"
+            });
+        }
+
+        // Торнадо / смерч — очень высокий CAPE + сильный сдвиг ветра
+        if (cape > 2500 && gust > 25 && rain > 0) {
+            alerts.push({
+                time: pKey, icon: "🌪️",
+                title: "Риск смерча/торнадо",
+                sub: `CAPE ${Math.round(cape)} Дж/кг · порывы ${gust.toFixed(0)} м/с`,
+                level: "red"
+            });
+        }
+
+        // Ураган (ветер ≥ 33 м/с = шкала Бофора 12)
+        if (gust >= 33) {
+            alerts.push({
+                time: pKey, icon: "🌀",
+                title: "Ураган",
+                sub: `порывы ${gust.toFixed(0)} м/с`,
+                level: "red"
+            });
+        }
+
+        // Шторм (ветер 20–32 м/с)
+        if (gust >= 20 && gust < 33 && code < 95) {
+            alerts.push({
+                time: pKey, icon: "💨",
+                title: gust >= 28 ? "Жестокий шторм" : "Шквалы",
+                sub: `порывы ${gust.toFixed(0)} м/с`,
+                level: gust >= 28 ? "red" : "orange"
+            });
+        }
+
+        // Туман: видимость < 1 км ИЛИ dew_point близко к температуре
+        const dewGap = dew != null ? t - dew : 99;
+        if (vis < 1000 || (dewGap <= 2 && rh > 90 && wind < 3)) {
+            alerts.push({
+                time: pKey, icon: "🌫️",
+                title: vis < 200 ? "Густой туман" : "Туман",
+                sub: `видимость ${(vis / 1000).toFixed(1)} км · влажность ${Math.round(rh)}%`,
+                level: vis < 200 ? "orange" : "yellow"
+            });
+        }
+
+        // Заморозок: ночью/утром, t < 4°, ясно, тихо
+        if (t < 4 && (night || hr < 10) && cloud < 30 && wind < 3) {
+            const ground = t - 2; // температура поверхности ~на 2° ниже воздуха
+            alerts.push({
+                time: pKey, icon: "🧊",
+                title: t < 0 ? "Мороз" : "Заморозок",
+                sub: `${t.toFixed(1)}°C · на почве ≈ ${ground.toFixed(0)}°C`,
+                level: t < 0 ? "orange" : "yellow"
+            });
+        }
+
+        // Сильный снег
+        if (snow > 2) {
+            alerts.push({
+                time: pKey, icon: "❄️",
+                title: snow > 5 ? "Сильный снегопад" : "Снегопад",
+                sub: `${snow.toFixed(1)} мм/ч`,
+                level: snow > 5 ? "orange" : "yellow"
+            });
+        }
+
+        // Ливень
+        if (rain > 10 && code < 95) {
+            alerts.push({
+                time: pKey, icon: "🌧️",
+                title: "Сильный ливень",
+                sub: `${rain.toFixed(1)} мм/ч`,
+                level: "orange"
+            });
+        }
+
+        // Жара
+        if (feel > 38) {
+            alerts.push({
+                time: pKey, icon: "🌡️",
+                title: feel > 42 ? "Опасная жара" : "Сильная жара",
+                sub: `ощущается ${feel.toFixed(0)}°C`,
+                level: feel > 42 ? "red" : "orange"
+            });
+        }
+    });
+
+    // Убираем дубли одного типа в соседних часах — оставляем первый
+    const seen = new Set();
+    const deduped = alerts.filter(a => {
+        const key = a.title;
+        const d   = new Date(a.time);
+        const bucket = `${key}_${d.toISOString().slice(0,13)}`; // уникально по часу+типу
+        if (seen.has(bucket)) return false;
+        seen.add(bucket);
+        return true;
+    });
+
+    return deduped;
+}
+
+function goodWeatherWindows(hours, minHours = 3) {
+    const windows = [];
+    let start = null, count = 0;
+
+    hours.forEach((h, i) => {
+        const wind  = h.wind_speed_10m ?? 0;
+        const gust  = h.wind_gusts_10m ?? wind;
+        const cloud = h.cloud_cover ?? 100;
+        const rain  = (h.rain ?? 0) + (h.showers ?? 0);
+        const code  = h.weather_code ?? 0;
+        const t     = h.temperature_2m ?? 0;
+        const vis   = h.visibility ?? 0;
+
+        const good = wind < 6 && gust < 10 && cloud < 50 && rain < 0.1
+                  && code < 45 && t > 8 && vis > 5000;
+
+        if (good) {
+            if (start === null) start = i;
+            count++;
+        } else {
+            if (count >= minHours) {
+                windows.push({ from: hours[start].time, to: hours[i - 1].time, len: count });
+            }
+            start = null; count = 0;
+        }
+    });
+    if (count >= minHours) {
+        windows.push({ from: hours[start].time, to: hours[hours.length - 1].time, len: count });
+    }
+    return windows;
+}
+
+function renderAlertsBlock(hours) {
+    const container = document.getElementById("fcAlertsBlock");
+    if (!container) return;
+
+    const alerts  = weatherAlerts(hours);
+    const windows = goodWeatherWindows(hours);
+
+    const LEVEL_COLOR = { red: "#ff4d4d", orange: "#ff9f5c", yellow: "#ffd166" };
+    const LEVEL_BG    = { red: "rgba(255,77,77,0.08)", orange: "rgba(255,159,92,0.08)", yellow: "rgba(255,209,102,0.08)" };
+
+    let html = "";
+
+    if (alerts.length === 0 && windows.length === 0) {
+        container.innerHTML = "";
+        return;
+    }
+
+    if (alerts.length) {
+        html += `<div style="font-size:11px;color:#555;font-weight:700;letter-spacing:0.06em;margin-bottom:6px;padding:0 2px;">ПРЕДУПРЕЖДЕНИЯ</div>`;
+        html += alerts.map(a => {
+            const d = new Date(a.time);
+            const timeStr = d.toLocaleString("ru-RU", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" });
+            const c  = LEVEL_COLOR[a.level] || "#aaa";
+            const bg = LEVEL_BG[a.level]    || "rgba(100,100,100,0.08)";
+            return `<div style="display:flex;align-items:center;gap:10px;
+                         background:${bg};border:1px solid ${c}44;
+                         border-radius:10px;padding:8px 12px;margin-bottom:6px;">
+                <span style="font-size:20px;flex-shrink:0;">${a.icon}</span>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:13px;font-weight:700;color:${c};">${a.title}</div>
+                    <div style="font-size:11px;color:#666;margin-top:1px;">${a.sub}</div>
+                </div>
+                <div style="font-size:11px;color:#555;flex-shrink:0;text-align:right;">${timeStr}</div>
+            </div>`;
+        }).join("");
+    }
+
+    if (windows.length) {
+        html += `<div style="font-size:11px;color:#555;font-weight:700;letter-spacing:0.06em;margin:${alerts.length ? "10px" : "0"} 0 6px;padding:0 2px;">ОКНО ХОРОШЕЙ ПОГОДЫ</div>`;
+        html += windows.map(w => {
+            const f  = new Date(w.from);
+            const t2 = new Date(w.to);
+            const fmt = d => d.toLocaleString("ru-RU", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" });
+            return `<div style="display:flex;align-items:center;gap:10px;
+                         background:rgba(95,224,143,0.08);border:1px solid rgba(95,224,143,0.3);
+                         border-radius:10px;padding:8px 12px;margin-bottom:6px;">
+                <span style="font-size:20px;flex-shrink:0;">🌤️</span>
+                <div>
+                    <div style="font-size:13px;font-weight:700;color:#5fe08f;">Хорошая погода · ${w.len} ч</div>
+                    <div style="font-size:11px;color:#666;margin-top:1px;">${fmt(f)} — ${fmt(t2)}</div>
+                </div>
+            </div>`;
+        }).join("");
+    }
+
+    container.innerHTML = html;
 }
 
 // =============================================
@@ -1645,7 +1871,7 @@ function comfortLevel(h){
 async function load(){
     if (weatherModel === "ensemble") { loadEnsemble(); return; }
     const apiForecastDays = Math.ceil(forecastHours / 24) + 1; // +1 для запаса
-    const API = `https://api.open-meteo.com/v1/forecast?latitude=46.43&longitude=30.74&hourly=temperature_2m,apparent_temperature,pressure_msl,relative_humidity_2m,weather_code,visibility,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,precipitation_probability,showers,snowfall,snow_depth,shortwave_radiation,direct_radiation,diffuse_radiation,dew_point_2m,runoff,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high&models=${weatherModel}&timezone=auto&forecast_days=${apiForecastDays}&wind_speed_unit=ms`;
+    const API = `https://api.open-meteo.com/v1/forecast?latitude=46.43&longitude=30.74&hourly=temperature_2m,apparent_temperature,pressure_msl,relative_humidity_2m,weather_code,visibility,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,precipitation_probability,showers,snowfall,snow_depth,shortwave_radiation,direct_radiation,diffuse_radiation,dew_point_2m,runoff,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,cape,uv_index&models=${weatherModel}&timezone=auto&forecast_days=${apiForecastDays}&wind_speed_unit=ms`;
     let data;
     try {
         const r = await fetch(API);
@@ -1693,6 +1919,8 @@ async function load(){
         cloud_cover_low:       h.cloud_cover_low[i],
         cloud_cover_mid:       h.cloud_cover_mid[i],
         cloud_cover_high:      h.cloud_cover_high[i],
+        cape:                  h.cape?.[i] ?? null,
+        uv_index:              h.uv_index?.[i] ?? null,
     }));
 
     window._fcAllHours = hours;
@@ -1717,6 +1945,7 @@ async function load(){
 
     buildFcParamRow();
     renderForecastChart(_fcHours, _fcTimes);
+    renderAlertsBlock(_fcHours);
 
     const lastDayKey = h.time[endIndex2 - 1].slice(0, 10);
 const fullDayEnd = h.time.findLastIndex(t => t.slice(0, 10) === lastDayKey) + 1;
