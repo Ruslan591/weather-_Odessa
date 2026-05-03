@@ -2014,6 +2014,9 @@ function renderForecastDays(hours, times) {
 
         const periodsHtml = visiblePeriods.map(p => {
             const periodHrs = dayHours.filter(h => p.hours.includes(new Date(h.time).getHours()));
+            if (!periodHrs.length) return "";
+            const hasData = periodHrs.some(h => h.temperature_2m != null);
+            if (!hasData) return "";
             const agg = aggregatePeriod(periodHrs);
             return renderPeriodCard(p.id, agg, dayKey, p.id === defaultPeriod);
         }).join("");
