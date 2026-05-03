@@ -1661,7 +1661,7 @@ function weatherAlerts(hours) {
 
         // Туман: видимость < 1 км ИЛИ dew_point близко к температуре
         const dewGap = dew != null ? t - dew : 99;
-        if (vis < 1000 || (dewGap <= 2 && rh > 90 && wind < 3)) {
+        if (vis < 1000 || (dewGap <= 2 && rh > 90 && wind < 3 && vis < 8000)) {
             alerts.push({
                 time: pKey, icon: "🌫️",
                 title: vis < 200 ? "Густой туман" : "Туман",
@@ -1717,7 +1717,7 @@ function weatherAlerts(hours) {
     const deduped = alerts.filter(a => {
         const key = a.title;
         const d   = new Date(a.time);
-        const bucket = `${key}_${d.toISOString().slice(0,13)}`; // уникально по часу+типу
+        const bucket = `${key}_${d.toISOString().slice(0,10)}`; // уникально по дню+типу
         if (seen.has(bucket)) return false;
         seen.add(bucket);
         return true;
