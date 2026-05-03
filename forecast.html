@@ -476,6 +476,21 @@ function renderForecastChart(hours, times){
                 <div class="fc-stat-value" style="color:${trendC};">${delta>0?"+":""}${delta.toFixed(1)} гПа</div>
                 <div class="fc-stat-time">${trendWord}</div>
             </div>`;
+            // Синоптический диагноз
+            const _diag = synopticDiagnosis(hours);
+            if (_diag.length) {
+                card4 += `<div id="fcSynopDiag" style="grid-column:1/-1;margin-top:2px;display:flex;flex-direction:column;gap:6px;">` +
+                    _diag.map(d => `
+                    <div style="display:flex;align-items:center;gap:10px;background:#191919;
+                                border:1px solid ${d.color}44;border-radius:10px;padding:8px 12px;">
+                        <span style="font-size:18px;flex-shrink:0;">${d.icon}</span>
+                        <div>
+                            <div style="font-size:13px;font-weight:700;color:${d.color};">${d.label}</div>
+                            <div style="font-size:11px;color:#666;margin-top:1px;">${d.sub}</div>
+                        </div>
+                    </div>`).join("") +
+                `</div>`;
+            }
         } else if(cfg.key === "humidity"){
             const highCount = data.filter(v => v != null && v > 80).length;
             const highPct   = Math.round(highCount / data.filter(v => v != null).length * 100);
@@ -560,6 +575,58 @@ function renderForecastChart(hours, times){
         </div>
         ${card4}`;
     }
+}
+
+// =============================================
+// СИНОПТИЧЕСКИЙ ДИАГНОЗ
+// =============================================
+function synopticDiagnosis(hours) {
+    if (hours.length < 4) return [];
+
+    const pVals = hours.map(h => h.pressure_msl).filter(v => v != null);
+    if (pVals.length < 4) return [];
+
+    // Барическая тенденция: Δp за первые 3 часа
+    const dp3 = pVals[Math.min(3, pVals.length - 1)] - pVals[0];
+    // Тренд за весь период
+    const dpTotal = pVals[pVals.length - 1] - pVals[0];
+    const pAvg = pVals.reduce((a, b) => a + b, 0) / pVals.length;
+
+    // Векторный суммарный поворот ветра
+    const wDir = hours.map(h => h.wind_direction_10m);
+    let windShift = 0;
+    for (let i = 1; i < wDir.length; i++) {
+        if (wDir[i] == null || wDir[i - 1] == null) continue;
+        let d = wDir[i] - wDir[i - 1];
+        if (d > 180)  d -= 360;
+        if (d < -180) d += 360;
+        windShift += d;
+    }
+
+    const cloudVals = hours.map(h => h.cloud_cover).filter(v => v != null);
+    const rhVals    = hours.map(h => h.relative_humidity_2m).filter(v => v != null);
+    const avgCloud  = cloudVals.length ? cloudVals.reduce((a, b) => a + b, 0) / cloudVals.length : 0;
+    const avgRH     = rhVals.length    ? rhVals.reduce((a, b) => a + b, 0)    / rhVals.length    : 0;
+
+    const result = [];
+
+    // --- Циклон / антициклон ---
+    if (dp3 < -3 || dpTotal < -8) {
+        result.push({ icon: "🌀", label: "Приближение циклона", sub: `${dpTotal > 0 ? "+" : ""}${dpTotal.toFixed(1)} гПа`, color: "#74b9ff" });
+    } else if (dp3 > 3 || dpTotal > 8) {
+        result.push({ icon: "⬆", label: "Рост давления / антициклон", sub: `+${dpTotal.toFixed(1)} гПа`, color: "#ff9f5c" });
+    } else if (pAvg >= 1018 && avgCloud < 40) {
+        result.push({ icon: "☀", label: "Антициклональный тип", sub: `${Math.round(pAvg)} гПа, облачность ${Math.round(avgCloud)}%`, color: "#fdcb6e" });
+    }
+
+    // --- Фронты ---
+    if (dpTotal < -3 && windShift > 40 && avgCloud > 65 && avgRH > 78) {
+        result.push({ icon: "〰", label: "Признаки тёплого фронта", sub: "пасмурно, влажно, давление падает", color: "#ff8f00" });
+    } else if (dpTotal > 1 && windShift < -30 && avgCloud > 55) {
+        result.push({ icon: "❄", label: "Признаки холодного фронта", sub: "поворот ветра, давление растёт", color: "#00e5ff" });
+    }
+
+    return result;
 }
 
 // =============================================
