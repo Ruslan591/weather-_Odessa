@@ -1318,6 +1318,34 @@ async function loadEnsemble() {
         weatherCode: h.weather_code,
     }));
 
+    // Загружаем bias из ensemble_accuracy_pws.json и применяем к PWS-снимку
+    var _pwsBias = {};
+    try {
+        var _accResp = await fetch("data/ensemble_accuracy_pws.json", { cache: "no-store" });
+        if (_accResp.ok) {
+            var _accData = await _accResp.json();
+            _pwsBias = (_accData && _accData.overall) ? _accData.overall : {};
+        }
+    } catch(e) { /* нет файла — работаем без коррекции */ }
+
+    function applyBias(value, key) {
+        if (value == null || key === "windDir" || key === "rain" || key === "cloudcover" || key === "weatherCode") return value;
+        var b = _pwsBias[key] && _pwsBias[key].bias != null ? _pwsBias[key].bias : 0;
+        if (b === 0) return value;
+        return Math.round((value - b) * 10) / 10;
+    }
+
+    const roundedForSnapshotPws = roundedForSnapshot.map(h => ({
+        time:        h.time,
+        temp:        applyBias(h.temp,     "temp"),
+        pressure:    applyBias(h.pressure, "pressure"),
+        wind:        applyBias(h.wind,     "wind"),
+        windGust:    applyBias(h.windGust, "windGust"),
+        windDir:     h.windDir,
+        humidity:    applyBias(h.humidity, "humidity"),
+        rain:        h.rain,
+    }));
+
 // === АВТОСОХРАНЕНИЕ СНИМКОВ НА GITHUB ===
 (async function saveSnapshotsToGithub() {
     const TOKEN = localStorage.getItem("ghToken") || "";
@@ -1514,8 +1542,8 @@ function snapWord(n) {
         }
 
         // Для pws используем lastSavedAtPws, для synop — lastSavedAtSynop
-        const newSnapsPws   = buildSnapshots(roundedForSnapshot, lastSavedAtPws,   ensembleReadyTime);
-        const newSnapsSynop = buildSnapshots(roundedForSnapshot, lastSavedAtSynop, ensembleReadyTime);
+        const newSnapsPws   = buildSnapshots(roundedForSnapshotPws,  lastSavedAtPws,   ensembleReadyTime);
+        const newSnapsSynop = buildSnapshots(roundedForSnapshot,      lastSavedAtSynop, ensembleReadyTime);
         if (!newSnapsPws.length && !newSnapsSynop.length) return;
 
         function runKey(savedAt) {
@@ -1983,6 +2011,7 @@ function renderForecastDays(hours, times) {
 
     let html = "";
     Object.keys(byDay).sort().forEach((dayKey, di) => {
+        if(dayKey < todayKey) return;
         const dayHoursCheck = byDay[dayKey];
         const hasData = dayHoursCheck.some(h => h.temperature_2m != null);
         if(!hasData) return;
