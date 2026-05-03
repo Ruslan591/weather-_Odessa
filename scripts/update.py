@@ -503,7 +503,17 @@ def merge_ensemble(all_model_hours, succeeded):
     return result
 
 
-def build_snapshot(ensemble_hours, saved_at, run_time, mode="synop"):
+def apply_bias(value, key, bias_dict):
+    """Вычитает bias из значения прогноза. windDir не корректируем."""
+    if value is None or key == "windDir":
+        return value
+    b = (bias_dict.get(key) or {}).get("bias")
+    if b is None:
+        return value
+    return round((value - b) * 10) / 10
+
+
+def build_snapshot(ensemble_hours, saved_at, run_time, mode="synop", bias=None):
     """Формирует снимок в формате совместимом с forecast.html."""
     hours_out = []
     snap_dt = parse_iso(saved_at)
@@ -534,14 +544,15 @@ def build_snapshot(ensemble_hours, saved_at, run_time, mode="synop"):
         else:  # pws — каждый час, первые 4 дня
             if horizon_h > 96:
                 break
+            b = bias or {}
             hours_out.append({
                 "time":     h["time"],
-                "temp":     round(h["temperature_2m"] * 10) / 10 if h["temperature_2m"] is not None else None,
-                "pressure": round(h["pressure_msl"] * 10) / 10 if h["pressure_msl"] is not None else None,
-                "wind":     round(h["wind_speed_10m"] * 10) / 10 if h["wind_speed_10m"] is not None else None,
-                "windGust": round((h["wind_gusts_10m"] or h["wind_speed_10m"] or 0) * 10) / 10,
+                "temp":     apply_bias(round(h["temperature_2m"] * 10) / 10 if h["temperature_2m"] is not None else None, "temp", b),
+                "pressure": apply_bias(round(h["pressure_msl"] * 10) / 10 if h["pressure_msl"] is not None else None, "pressure", b),
+                "wind":     apply_bias(round(h["wind_speed_10m"] * 10) / 10 if h["wind_speed_10m"] is not None else None, "wind", b),
+                "windGust": apply_bias(round((h["wind_gusts_10m"] or h["wind_speed_10m"] or 0) * 10) / 10, "windGust", b),
                 "windDir":  round(h["wind_direction_10m"]) if h["wind_direction_10m"] is not None else None,
-                "humidity": round(h["relative_humidity_2m"]) if h["relative_humidity_2m"] is not None else None,
+                "humidity": apply_bias(round(h["relative_humidity_2m"]) if h["relative_humidity_2m"] is not None else None, "humidity", b),
                 "rain":     round(h["rain"] * 10) / 10 if h["rain"] is not None else None,
             })
 
@@ -1090,6 +1101,8 @@ def main():
     snap_pws_path   = "data/ensemble_snapshots_pws.json"
     snaps_synop, snaps_synop_sha = gh_load_json(snap_synop_path, default=[])
     snaps_pws,   snaps_pws_sha   = gh_load_json(snap_pws_path,   default=[])
+    acc_pws_for_bias, _ = gh_load_json("data/ensemble_accuracy_pws.json", default=None)
+    pws_bias = (acc_pws_for_bias or {}).get("overall", {})
 
     # Проверяем нужен ли новый снимок
     last_synop_run = parse_iso(snaps_synop[-1]["runTime"]) if snaps_synop and snaps_synop[-1].get("runTime") else None
@@ -1135,7 +1148,7 @@ def main():
             last_run_pws = snaps_pws[-1].get("runTime") if snaps_pws else None
             same_run_pws = last_run_pws and run_time and parse_iso(last_run_pws) == parse_iso(run_time)
             if need_pws and not same_run_pws:
-                snap = build_snapshot(ensemble_hours, saved_at, run_time, mode="pws")
+                snap = build_snapshot(ensemble_hours, saved_at, run_time, mode="pws", bias=pws_bias)
                 snaps_pws.append(snap)
                 snaps_pws_sha = gh_save_json(
                     snap_pws_path, snaps_pws, snaps_pws_sha,
