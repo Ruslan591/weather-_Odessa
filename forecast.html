@@ -1515,7 +1515,9 @@ function snapWord(n) {
     renderForecastChart(_fcHours, _fcTimes);
 
     // Рендерим часовые карточки (те же что для обычной модели)
-    renderForecastDays(ensembleHours.slice(0, endIndex), baseTimes.slice(0, endIndex));
+    const lastDayKeyE = baseTimes[endIndex - 1].slice(0, 10);
+const fullDayEndE = baseTimes.findLastIndex(t => t.slice(0, 10) === lastDayKeyE) + 1;
+renderForecastDays(ensembleHours.slice(0, fullDayEndE), baseTimes.slice(0, fullDayEndE));
 }
 
 // =============================================
@@ -1646,7 +1648,9 @@ async function load(){
     buildFcParamRow();
     renderForecastChart(_fcHours, _fcTimes);
 
-    renderForecastDays(hours.slice(0, endIndex2), h.time.slice(0, endIndex2));
+    const lastDayKey = h.time[endIndex2 - 1].slice(0, 10);
+const fullDayEnd = h.time.findLastIndex(t => t.slice(0, 10) === lastDayKey) + 1;
+renderForecastDays(hours.slice(0, fullDayEnd), h.time.slice(0, fullDayEnd));
 }
 
 function renderForecastDays(hours, times) {
