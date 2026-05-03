@@ -1661,12 +1661,19 @@ function weatherAlerts(hours) {
 
         // Туман: видимость < 1 км ИЛИ dew_point близко к температуре
         const dewGap = dew != null ? t - dew : 99;
-        if (vis < 1000 || (dewGap <= 2 && rh > 90 && wind < 3 && vis < 8000)) {
+        if (vis < 1000) {
             alerts.push({
                 time: pKey, icon: "🌫️",
                 title: vis < 200 ? "Густой туман" : "Туман",
                 sub: `видимость ${(vis / 1000).toFixed(1)} км · влажность ${Math.round(rh)}%`,
                 level: vis < 200 ? "orange" : "yellow"
+            });
+        } else if (vis < 10000 && rh > 80) {
+            alerts.push({
+                time: pKey, icon: "🌁",
+                title: rh > 90 ? "Дымка" : "Мгла",
+                sub: `видимость ${(vis / 1000).toFixed(1)} км · влажность ${Math.round(rh)}%`,
+                level: "yellow"
             });
         }
 
@@ -1678,6 +1685,16 @@ function weatherAlerts(hours) {
                 title: t < 0 ? "Мороз" : "Заморозок",
                 sub: `${t.toFixed(1)}°C · на почве ≈ ${ground.toFixed(0)}°C`,
                 level: t < 0 ? "orange" : "yellow"
+            });
+        }
+
+        // Роса: dewGap мал, умеренная температура, тихо, утро
+        if (dewGap <= 3 && t >= 4 && t < 18 && wind < 4 && (hr >= 3 && hr <= 10)) {
+            alerts.push({
+                time: pKey, icon: "💧",
+                title: "Роса",
+                sub: `точка росы ${dew != null ? dew.toFixed(1) : "?"}°C · разница ${dewGap.toFixed(1)}°`,
+                level: "yellow"
             });
         }
 
