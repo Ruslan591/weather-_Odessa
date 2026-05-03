@@ -1516,7 +1516,10 @@ function snapWord(n) {
 
     // Рендерим часовые карточки (те же что для обычной модели)
     const lastDayKeyE = baseTimes[endIndex - 1].slice(0, 10);
-const fullDayEndE = baseTimes.findLastIndex(t => t.slice(0, 10) === lastDayKeyE) + 1;
+const fullDayEndE = Math.min(
+    baseTimes.findLastIndex(t => t.slice(0, 10) === lastDayKeyE) + 1,
+    ensembleHours.length
+);
 renderForecastDays(ensembleHours.slice(0, fullDayEndE), baseTimes.slice(0, fullDayEndE));
 }
 
