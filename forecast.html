@@ -1986,13 +1986,13 @@ function renderForecastDays(hours, times) {
         const dayHoursCheck = byDay[dayKey];
         const hasData = dayHoursCheck.some(h => h.temperature_2m != null);
         if(!hasData) return;
+        const dayHours  = byDay[dayKey];
+        const dayDate   = new Date(dayKey + "T12:00:00");
+        const isToday   = dayKey === todayKey;
         const hasPeriodsWithData = PERIODS.filter(p =>
             dayHoursCheck.some(h => p.hours.includes(new Date(h.time).getHours()) && h.temperature_2m != null)
         );
         if(!isToday && hasPeriodsWithData.length < 3) return;
-        const dayHours  = byDay[dayKey];
-        const dayDate   = new Date(dayKey + "T12:00:00");
-        const isToday   = dayKey === todayKey;
         const dayLabel  = isToday
             ? `Сегодня, ${dayDate.getDate()} ${MON_NAMES[dayDate.getMonth()]}`
             : `${DAY_NAMES[dayDate.getDay()]}, ${dayDate.getDate()} ${MON_NAMES[dayDate.getMonth()]}`;
