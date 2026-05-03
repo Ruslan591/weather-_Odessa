@@ -1986,6 +1986,10 @@ function renderForecastDays(hours, times) {
         const dayHoursCheck = byDay[dayKey];
         const hasData = dayHoursCheck.some(h => h.temperature_2m != null);
         if(!hasData) return;
+        const hasPeriodsWithData = PERIODS.filter(p =>
+            dayHoursCheck.some(h => p.hours.includes(new Date(h.time).getHours()) && h.temperature_2m != null)
+        );
+        if(!isToday && hasPeriodsWithData.length < 3) return;
         const dayHours  = byDay[dayKey];
         const dayDate   = new Date(dayKey + "T12:00:00");
         const isToday   = dayKey === todayKey;
