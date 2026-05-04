@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Обновление данных</title>
+<link rel="stylesheet" href="verify.css">
+</head>
+<body>
+
+<div class="header">
+    <div class="nav"><a href="forecast.html">← Прогноз</a></div>
+    <div class="headerTitle">Обновление</div>
+    <div class="nav"></div>
+</div>
+
+<div class="container">
+
+<div id="statusCard" style="background:#161616;border-radius:10px;padding:16px;margin-bottom:12px;text-align:center;">
+    <div id="statusIcon" style="font-size:36px;margin-bottom:8px;">·</div>
+    <div id="statusText" style="font-size:15px;color:#ccc;font-weight:700;">Загрузка...</div>
+    <div id="statusSub" style="font-size:11px;color:#555;margin-top:4px;"></div>
+    <button id="runBtn" onclick="startRun()"
+        style="display:none;margin-top:14px;background:none;border:1px solid #444;color:#888;
+               font-size:12px;padding:7px 20px;border-radius:20px;cursor:pointer;">
+        ▶ Запустить обновление
+    </button>
+</div>
+
+<div style="background:#161616;border-radius:10px;padding:14px;margin-bottom:16px;">
+    <div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:10px;">ХОД ВЫПОЛНЕНИЯ</div>
+    <div id="logLines" style="font-family:monospace;font-size:12px;line-height:2;max-height:420px;overflow-y:auto;"></div>
+</div>
+
+<div style="text-align:center;">
+    <a href="forecast.html"
+        style="display:inline-block;border:1px solid #333;color:#666;font-size:12px;
+               padding:8px 24px;border-radius:20px;text-decoration:none;">
+        ← Вернуться к прогнозу
+    </a>
+</div>
+
+</div>
+
+<script>
+var OWNER      = "ruslan591";
+var REPO       = "weather-_Odessa";
+var WF_UPDATE  = "update.yml";
+var WF_WEIGHTS = "calc_weights.yml";
+var TOKEN      = localStorage.getItem("ghToken") || "";
+
+var _logEl  = document.getElementById("logLines");
+var _iconEl = document.getElementById("statusIcon");
+var _textEl = document.getElementById("statusText");
+var _subEl  = document.getElementById("statusSub");
+var _btnEl  = document.getElementById("runBtn");
+
+var _running = false;
+
+function setStatus(icon, text, sub) {
+    _iconEl.textContent = icon;
+    _textEl.textContent = text;
+    _subEl.textContent  = sub || "";
+}
+
+function log(msg, color) {
+    var line = document.createElement("div");
+    line.style.color = color || "#5fe08f";
+    line.textContent = msg;
+    _logEl.appendChild(line);
+    _logEl.scrollTop = _logEl.scrollHeight;
+}
+
+function clearLog() {
+    _logEl.innerHTML = "";
+}
+
+function ghFetch(path, opts) {
+    return fetch("https://api.github.com/repos/" + OWNER + "/" + REPO + path,
+        Object.assign({}, opts, {
+            headers: Object.assign({
+                "Accept": "application/vnd.github+json",
+                "Authorization": "Bearer " + TOKEN
+            }, (opts && opts.headers) || {})
+        })
+    );
+}
+
+function sleep(ms) {
+    return new Promise(function(res) { setTimeout(res, ms); });
+}
+
+async function dispatch(workflowFile) {
+    var r = await ghFetch("/actions/workflows/" + workflowFile + "/dispatches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ref: "main" })
+    });
+    return r.status === 204;
+}
+
+async function waitForRun(workflowFile, dispatchedAt) {
+    for (var attempt = 0; attempt < 20; attempt++) {
+        await sleep(6000);
+        var r = await ghFetch("/actions/workflows/" + workflowFile + "/runs?per_page=5");
+        if (!r.ok) continue;
+        var data = await r.json();
+        var run = (data.workflow_runs || []).find(function(w) {
+            return new Date(w.created_at).getTime() >= dispatchedAt - 5000 &&
+                   (w.status === "queued" || w.status === "in_progress" || w.status === "completed");
+        });
+        if (run) return run.id;
+    }
+    return null;
+}
+
+async function pollRun(runId, label) {
+    var startTs = Date.now();
+    for (;;) {
+        await sleep(10000);
+
+        var r = await ghFetch("/actions/runs/" + runId);
+        if (!r.ok) continue;
+        var run = await r.json();
+
+        var jr = await ghFetch("/actions/runs/" + runId + "/jobs");
+        if (jr.ok) {
+            var jdata = await jr.json();
+            var job = (jdata.jobs || [])[0];
+            if (job) renderSteps(job.steps || [], label);
+        }
+
+        var elapsed = Math.round((Date.now() - startTs) / 1000);
+        _subEl.textContent = label + " · " + elapsed + "с";
+
+        if (run.status === "completed") return run.conclusion;
+    }
+}
+
+function renderSteps(steps, label) {
+    _logEl.innerHTML = "";
+    var header = document.createElement("div");
+    header.style.color = "#555";
+    header.textContent = "── " + label + " ──";
+    _logEl.appendChild(header);
+
+    steps.forEach(function(step) {
+        var icon = step.conclusion === "success"    ? "✓"
+                 : step.conclusion === "failure"    ? "✗"
+                 : step.status    === "in_progress" ? "▶"
+                 : "·";
+        var col  = step.conclusion === "success"    ? "#5fe08f"
+                 : step.conclusion === "failure"    ? "#ff6b6b"
+                 : step.status    === "in_progress" ? "#ffd166"
+                 : "#444";
+        var dur  = (step.completed_at && step.started_at)
+            ? " — " + Math.round((new Date(step.completed_at) - new Date(step.started_at)) / 1000) + "с"
+            : "";
+        var line = document.createElement("div");
+        line.style.color = col;
+        line.textContent = icon + "  " + step.name + dur;
+        _logEl.appendChild(line);
+    });
+    _logEl.scrollTop = _logEl.scrollHeight;
+}
+
+async function runWorkflow(workflowFile, label) {
+    log("→  dispatch: " + workflowFile, "#aaa");
+    var t0 = Date.now();
+    var ok = await dispatch(workflowFile);
+    if (!ok) {
+        log("✗  Ошибка запуска. Проверьте токен и права.", "#ff6b6b");
+        return false;
+    }
+    log("✓  Запущен, ожидаю run...", "#ffd166");
+    setStatus("⏳", label + " запускается...", "");
+
+    var runId = await waitForRun(workflowFile, t0);
+    if (!runId) {
+        log("✗  Run не появился за 2 минуты", "#ff6b6b");
+        setStatus("❌", "Run не найден", "Проверьте GitHub Actions вручную");
+        return false;
+    }
+    log("✓  Run ID: " + runId, "#aaa");
+    setStatus("⏳", label + " выполняется...", "");
+
+    var conclusion = await pollRun(runId, label);
+    if (conclusion !== "success") {
+        log("✗  Завершено: " + conclusion, "#ff6b6b");
+        setStatus("❌", label + " завершился с ошибкой", conclusion);
+        return false;
+    }
+    log("✓  " + label + " — успешно", "#5fe08f");
+    return true;
+}
+
+async function startRun() {
+    if (_running) return;
+    _running = true;
+    _btnEl.style.display = "none";
+    clearLog();
+
+    // update.yml
+    setStatus("⏳", "Запуск update.py...", "");
+    log("══ update.py ══", "#555");
+    var ok1 = await runWorkflow(WF_UPDATE, "update.py");
+    if (!ok1) { _running = false; _btnEl.style.display = ""; return; }
+
+    // calc_weights.yml
+    log("", "#555");
+    log("══ calc_weights.py ══", "#555");
+    setStatus("⏳", "Запуск calc_weights.py...", "");
+    var ok2 = await runWorkflow(WF_WEIGHTS, "calc_weights.py");
+    if (!ok2) { _running = false; _btnEl.style.display = ""; return; }
+
+    setStatus("✅", "Всё обновлено!", "");
+    _running = false;
+    _btnEl.style.display = "";
+}
+
+async function showLastRun() {
+    if (TOKEN) {
+        _btnEl.style.display = "";
+    }
+
+    // Показываем статус последнего запуска update.yml
+    try {
+        var r = await ghFetch("/actions/workflows/" + WF_UPDATE + "/runs?per_page=1");
+        if (!r.ok) { setStatus("·", "Нет данных", ""); return; }
+        var data = await r.json();
+        var last = (data.workflow_runs || [])[0];
+        if (!last) { setStatus("·", "Запусков не было", ""); return; }
+
+        var d = new Date(last.updated_at).toLocaleString("ru-RU", {
+            day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"
+        });
+        var icon = last.conclusion === "success" ? "✅"
+                 : last.conclusion === "failure" ? "❌"
+                 : last.status === "in_progress" ? "⏳"
+                 : "·";
+        var text = last.conclusion === "success"  ? "Последнее обновление успешно"
+                 : last.status === "in_progress"  ? "Выполняется сейчас..."
+                 : last.status === "queued"        ? "В очереди..."
+                 : "Статус: " + (last.conclusion || last.status);
+
+        setStatus(icon, text, d);
+
+        // Если сейчас выполняется — сразу начинаем следить
+        if (last.status === "in_progress" || last.status === "queued") {
+            if (TOKEN) {
+                _btnEl.style.display = "none";
+                _running = true;
+                log("· Обнаружен активный run, подключаюсь...", "#aaa");
+                var conclusion = await pollRun(last.id, "update.py");
+                if (conclusion === "success") {
+                    setStatus("✅", "update.py завершён", "");
+                    log("✓  update.py — успешно", "#5fe08f");
+                } else {
+                    setStatus("❌", "Завершено с ошибкой", conclusion);
+                }
+                _running = false;
+                _btnEl.style.display = "";
+            }
+        }
+    } catch(e) {
+        setStatus("·", "Ошибка загрузки статуса", "");
+    }
+}
+
+showLastRun();
+</script>
+
+<script src="nav.js"></script>
+</body>
+</html>
