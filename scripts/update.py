@@ -142,14 +142,15 @@ def gh_save_json(path, data, sha, message, compact=False):
     return gh_put(path, content, sha, message)
 
 # ── Gist live-лог ────────────────────────────────────────────────────────────
-GIST_ID = os.environ.get("GIST_ID", "")   # секрет из GitHub Actions
+GIST_ID    = os.environ.get("GIST_ID", "")
+GIST_TOKEN = os.environ.get("GIST_TOKEN", "")
 
 _gist_lines = []
 
 def gist_log(msg):
     """Логирует строку и пушит весь лог в Gist для live-отображения."""
     log.info(msg)
-    if not GIST_ID:
+    if not GIST_ID or not GIST_TOKEN:
         return
     _gist_lines.append(msg)
     content = "\n".join(_gist_lines)
@@ -158,13 +159,17 @@ def gist_log(msg):
     req = urllib.request.Request(
         f"https://api.github.com/gists/{GIST_ID}",
         data=data,
-        headers={**GH_HEADERS, "Content-Type": "application/json"},
+        headers={
+            "Authorization": f"Bearer {GIST_TOKEN}",
+            "Accept": "application/vnd.github+json",
+            "Content-Type": "application/json"
+        },
         method="PATCH"
     )
     try:
-        with urlopen(req, timeout=10): pass
+        with urllib.request.urlopen(req, timeout=10): pass
     except Exception as e:
-        log.debug("gist_log error: %s", e)
+        log.warning("gist_log error: %s", e)
 
 # ── Время ────────────────────────────────────────────────────────────────────
 def utcnow():
