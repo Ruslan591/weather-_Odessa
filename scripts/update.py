@@ -1057,7 +1057,7 @@ def main():
     day = start_dt
     while day <= yesterday:
         date_str = day.strftime("%Y-%m-%d")
-        log.info("  SYNOP %s ...", date_str)
+        gist_log(f"  SYNOP {date_str} ...")
         text = fetch_synop_ogimet(day)
         if text:
             parsed = parse_synop_text(text)
@@ -1067,10 +1067,9 @@ def main():
                     new_synop_parsed.append(rec)
                     existing_synop_keys.add(rec["synopTime"])
                     synop_obs_by_time[rec["synopTime"]] = rec["obs"]
-            log.info("    → %d новых сводок", len([r for r in parsed
-                                                    if r["synopTime"] in existing_synop_keys]))
+            gist_log(f"    → {len([r for r in parsed if r['synopTime'] in existing_synop_keys])} новых сводок")
         else:
-            log.warning("    → SYNOP недоступен")
+            gist_log("    ✗ SYNOP недоступен")
         time.sleep(2)
         day += timedelta(days=1)
 
@@ -1078,9 +1077,9 @@ def main():
         merged_txt = synop_text.rstrip() + "\n" + "\n".join(new_synop_lines) + "\n"
         synop_sha  = gh_put(synop_path, merged_txt, synop_sha,
                             f"synop {year}: +{len(new_synop_lines)} lines")
-        log.info("  ✓ synop_%d.txt сохранён (+%d строк)", year, len(new_synop_lines))
+        gist_log(f"  ✓ synop_{year}.txt сохранён (+{len(new_synop_lines)} строк)")
     else:
-        log.info("  synop_%d.txt актуален", year)
+        gist_log(f"  synop_{year}.txt актуален")
 
     # ── 2. Дописываем modelData в месячные файлы ────────────────────────────
     gist_log("--- 2. modelData ---")
@@ -1092,7 +1091,7 @@ def main():
         by_month.setdefault(mk, []).append(rec)
 
     if not by_month:
-        log.info("  modelData актуален")
+        gist_log("  modelData актуален")
     else:
         for mk, recs in sorted(by_month.items()):
             md_path = f"data/modeldata/{mk}.json"
@@ -1112,7 +1111,7 @@ def main():
 
             new_md_records = []
             for date_str, date_recs in by_date.items():
-                log.info("  Модели за %s ...", date_str)
+                gist_log(f"  Модели за {date_str} ...")
                 hourly_by_model = {}
                 for mid in [m["id"] for m in ENSEMBLE_MODELS]:
                     try:
@@ -1131,7 +1130,7 @@ def main():
                 merged = sorted(month_data + new_md_records, key=lambda r: r["synopTime"])
                 md_sha = gh_save_json(md_path, merged, md_sha,
                                       f"modelData {mk}: +{len(new_md_records)} records")
-                log.info("  ✓ %s.json сохранён (+%d записей)", mk, len(new_md_records))
+                gist_log(f"  ✓ {mk}.json сохранён (+{len(new_md_records)} записей)")
 
     # ── 3. Свежий ансамблевый прогноз → снимки ──────────────────────────────
     gist_log("--- 3. Ансамблевый прогноз ---")
@@ -1163,9 +1162,9 @@ def main():
                 if h:
                     all_model_hours[m["id"]] = parse_hourly(h)
                     succeeded.append(m["id"])
-                    log.info("    ✓ %s", m["id"])
+                    gist_log(f"    ✓ {m['id']}")
             except Exception as e:
-                log.warning("    ✗ %s: %s", m["id"], e)
+                gist_log(f"    ✗ {m['id']}: {e}")
             time.sleep(0.5)
 
         if succeeded:
@@ -1183,9 +1182,9 @@ def main():
                 snaps_synop_sha = gh_save_json(
     snap_synop_path, snaps_synop, snaps_synop_sha,
     f"ensemble synop snapshot {saved_at[:16]}", compact=True)
-                log.info("  ✓ SYNOP-снимок сохранён (%d точек)", len(snap["hours"]))
+                gist_log(f"  ✓ SYNOP-снимок сохранён ({len(snap['hours'])} точек)")
             elif need_synop:
-                log.info("  SYNOP-снимок пропущен (не синоптический час: %dh UTC)", now.hour)
+                gist_log(f"  SYNOP-снимок пропущен (не синоптический час: {now.hour}h UTC)")
 
             last_run_pws = snaps_pws[-1].get("runTime") if snaps_pws else None
             same_run_pws = last_run_pws and run_time and parse_iso(last_run_pws) == parse_iso(run_time)
@@ -1195,9 +1194,9 @@ def main():
                 snaps_pws_sha = gh_save_json(
                     snap_pws_path, snaps_pws, snaps_pws_sha,
                     f"ensemble pws snapshot {saved_at[:16]}", compact=True)
-                log.info("  ✓ PWS-снимок сохранён (%d часов)", len(ensemble_hours))
+                gist_log(f"  ✓ PWS-снимок сохранён ({len(ensemble_hours)} часов)")
         else:
-            log.warning("  Ни одна модель не ответила")
+            gist_log("  ✗ Ни одна модель не ответила")
     else:
         gist_log("  Снимки актуальны")
 
@@ -1217,13 +1216,13 @@ def main():
         acc_synop = update_accuracy(acc_synop, new_recs_synop, mode="synop")
         acc_synop_sha = gh_save_json(acc_synop_path, acc_synop, acc_synop_sha,
                                      "ensemble accuracy synop update")
-        log.info("  ✓ ensemble_accuracy_synop.json обновлён")
+        gist_log("  ✓ ensemble_accuracy_synop.json обновлён")
 
     if len(remaining_synop) < len(snaps_synop):
         snaps_synop_sha = gh_save_json(snap_synop_path, remaining_synop, snaps_synop_sha,
                                f"cleanup synop snapshots: {len(snaps_synop)-len(remaining_synop)} removed",
                                compact=True)
-        log.info("  ✓ ensemble_snapshots_synop.json очищен")
+        gist_log("  ✓ ensemble_snapshots_synop.json очищен")
 
     # PWS наблюдения для верификации — из pws_raw.json
     pws_raw, pws_raw_sha = gh_load_json("data/pws_raw.json", default=[])
@@ -1252,12 +1251,12 @@ def main():
         acc_pws = update_accuracy(acc_pws, new_recs_pws, mode="pws")
         acc_pws_sha = gh_save_json(acc_pws_path, acc_pws, acc_pws_sha,
                                    "ensemble accuracy pws update")
-        log.info("  ✓ ensemble_accuracy_pws.json обновлён")
+        gist_log("  ✓ ensemble_accuracy_pws.json обновлён")
 
     if len(remaining_pws) < len(snaps_pws):
         snaps_pws_sha = gh_save_json(snap_pws_path, remaining_pws, snaps_pws_sha,
                                      f"cleanup pws snapshots: {len(snaps_pws)-len(remaining_pws)} removed")
-        log.info("  ✓ ensemble_snapshots_pws.json очищен")
+        gist_log("  ✓ ensemble_snapshots_pws.json очищен")
 
     # ── 5. Чистка pws_raw.json ──────────────────────────────────────────────
     gist_log("--- 5. Чистка pws_raw.json ---")
@@ -1268,16 +1267,14 @@ def main():
     if len(pws_raw) < pws_before:
         pws_raw_sha = gh_save_json("data/pws_raw.json", pws_raw, pws_raw_sha,
                                    f"pws_raw cleanup: removed {pws_before-len(pws_raw)} old records")
-        log.info("  ✓ Удалено %d старых записей PWS", pws_before - len(pws_raw))
+        gist_log(f"  ✓ Удалено {pws_before - len(pws_raw)} старых записей PWS")
     else:
-        log.info("  pws_raw.json актуален (%d записей)", len(pws_raw))
+        gist_log(f"  pws_raw.json актуален ({len(pws_raw)} записей)")
 
     # ── 6. model_weights.json ───────────────────────────────────────────────
     gist_log("--- 6. model_weights.json ---")
     gist_log("  Пересчёт весов выполняется через calc_weights.yml (ежедневно)")
 
     gist_log("=== Готово ===")
-
-
-if __name__ == "__main__":
+    _gist_queue.join()  # ждём отправки последнего сообщения
     main()
