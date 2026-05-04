@@ -1008,6 +1008,7 @@ def main():
     now  = utcnow()
     year = now.year
     _gist_lines.clear()
+    log.info("GIST_ID=%s GIST_TOKEN_present=%s", GIST_ID, bool(GIST_TOKEN))
     gist_log(f"=== update.py запущен {now.strftime('%H:%M:%S')} UTC ===")
 
     # ── 1. Загружаем synop_YYYY.txt с GitHub ────────────────────────────────
