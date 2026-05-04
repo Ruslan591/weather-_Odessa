@@ -48,6 +48,7 @@ var REPO       = "weather-_Odessa";
 var WF_UPDATE  = "update.yml";
 var WF_WEIGHTS = "calc_weights.yml";
 var TOKEN      = localStorage.getItem("ghToken") || "";
+var GIST_ID    = localStorage.getItem("gistId") || "";
 
 var _logEl  = document.getElementById("logLines");
 var _iconEl = document.getElementById("statusIcon");
@@ -56,6 +57,39 @@ var _subEl  = document.getElementById("statusSub");
 var _btnEl  = document.getElementById("runBtn");
 
 var _running = false;
+var _gistPollTimer = null;
+var _gistSeenLines = 0;
+
+function startGistPolling() {
+    _gistSeenLines = 0;
+    _gistPollTimer = setInterval(async function() {
+        if (!GIST_ID) return;
+        try {
+            var r = await fetch("https://api.github.com/gists/" + GIST_ID, {
+                headers: {
+                    "Accept": "application/vnd.github+json",
+                    "Authorization": "Bearer " + TOKEN
+                }
+            });
+            if (!r.ok) return;
+            var data = await r.json();
+            var content = ((data.files || {})["update_live.log"] || {}).content || "";
+            var lines = content.split("\n").filter(Boolean);
+            lines.slice(_gistSeenLines).forEach(function(line) {
+                var col = (line.startsWith("✗") || line.toLowerCase().includes("ошибка")) ? "#ff6b6b"
+                        : (line.startsWith("✓") || line.includes("Готово")) ? "#5fe08f"
+                        : line.startsWith("---") ? "#ffd166"
+                        : "#aaa";
+                log(line, col);
+            });
+            _gistSeenLines = lines.length;
+        } catch(e) {}
+    }, 3000);
+}
+
+function stopGistPolling() {
+    if (_gistPollTimer) { clearInterval(_gistPollTimer); _gistPollTimer = null; }
+}
 
 function setStatus(icon, text, sub) {
     _iconEl.textContent = icon;
@@ -226,7 +260,9 @@ async function runWorkflow(workflowFile, label) {
     log("✓  Run ID: " + runId, "#aaa");
     setStatus("⏳", label + " выполняется...", "");
 
+    startGistPolling();
     var conclusion = await pollRun(runId, label);
+    stopGistPolling();
     if (conclusion !== "success") {
         log("✗  Завершено: " + conclusion, "#ff6b6b");
         setStatus("❌", label + " завершился с ошибкой", conclusion);
