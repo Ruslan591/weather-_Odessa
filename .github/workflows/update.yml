@@ -24,5 +24,6 @@ jobs:
       - name: Run update script
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GIST_TOKEN: ${{ secrets.GH_PAT }}
           GIST_ID: ${{ secrets.GIST_ID }}
         run: python scripts/update.py
