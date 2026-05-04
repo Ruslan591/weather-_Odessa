@@ -116,20 +116,17 @@ async function waitForRun(workflowFile, dispatchedAt) {
 
 async function pollRun(runId, label) {
     var startTs = Date.now();
+    await sleep(4000);
     for (;;) {
-        // Статус run
         var r = await ghFetch("/actions/runs/" + runId);
         if (!r.ok) { await sleep(5000); continue; }
         var run = await r.json();
 
-        // Шаги + логи активного шага
         var jr = await ghFetch("/actions/runs/" + runId + "/jobs");
         if (jr.ok) {
             var jdata = await jr.json();
             var job = (jdata.jobs || [])[0];
-            if (job) {
-                await renderStepsWithLogs(job);
-            }
+            if (job) await renderStepsWithLogs(job);
         }
 
         var elapsed = Math.round((Date.now() - startTs) / 1000);
@@ -137,18 +134,9 @@ async function pollRun(runId, label) {
 
         if (run.status === "completed") return run.conclusion;
 
-        // Быстрее если идёт активный шаг
-        var hasActive = false;
-        try {
-            var jd2 = await ghFetch("/actions/runs/" + runId + "/jobs");
-            if (jd2.ok) {
-                var jj = await jd2.json();
-                var j0 = (jj.jobs || [])[0];
-                hasActive = j0 && (j0.steps || []).some(function(s) {
-                    return s.status === "in_progress";
-                });
-            }
-        } catch(e) {}
+        var hasActive = (jdata && (jdata.jobs || [])[0])
+            ? (jdata.jobs[0].steps || []).some(function(s) { return s.status === "in_progress"; })
+            : false;
 
         await sleep(hasActive ? 4000 : 10000);
     }
@@ -157,23 +145,35 @@ async function pollRun(runId, label) {
 async function renderStepsWithLogs(job) {
     _logEl.innerHTML = "";
 
-    // Пытаемся получить логи завершённых шагов
     var logsText = null;
     try {
-        var lr = await ghFetch("/actions/jobs/" + job.id + "/logs");
+        // Логи отдаются через redirect — получаем URL напрямую
+        var lr = await fetch(
+            "https://api.github.com/repos/" + OWNER + "/" + REPO +
+            "/actions/jobs/" + job.id + "/logs",
+            {
+                headers: {
+                    "Accept": "application/vnd.github+json",
+                    "Authorization": "Bearer " + TOKEN
+                },
+                redirect: "follow"
+            }
+        );
         if (lr.ok) logsText = await lr.text();
     } catch(e) {}
 
-    // Парсим логи по шагам (GitHub форматирует как "##[group]StepName")
     var logsByStep = {};
     if (logsText) {
         var currentStep = null;
         logsText.split("\n").forEach(function(line) {
             var groupMatch = line.match(/##\[group\](.+)/);
-            if (groupMatch) { currentStep = groupMatch[1].trim(); logsByStep[currentStep] = []; return; }
+            if (groupMatch) {
+                currentStep = groupMatch[1].trim();
+                logsByStep[currentStep] = [];
+                return;
+            }
             if (line.match(/##\[endgroup\]/)) { currentStep = null; return; }
             if (currentStep && line.trim()) {
-                // Убираем timestamp prefix "2026-05-04T12:00:00.0000000Z "
                 var clean = line.replace(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z\s/, "");
                 logsByStep[currentStep].push(clean);
             }
@@ -181,13 +181,15 @@ async function renderStepsWithLogs(job) {
     }
 
     (job.steps || []).forEach(function(step) {
-        var icon = step.conclusion === "success"    ? "✓"
-                 : step.conclusion === "failure"    ? "✗"
-                 : step.status    === "in_progress" ? "▶"
+        if (step.status === "pending") return; // не показываем ещё не начатые
+
+        var icon = step.conclusion === "success"      ? "✓"
+                 : step.conclusion === "failure"      ? "✗"
+                 : step.status    === "in_progress"   ? "▶"
                  : "·";
-        var col  = step.conclusion === "success"    ? "#5fe08f"
-                 : step.conclusion === "failure"    ? "#ff6b6b"
-                 : step.status    === "in_progress" ? "#ffd166"
+        var col  = step.conclusion === "success"      ? "#5fe08f"
+                 : step.conclusion === "failure"      ? "#ff6b6b"
+                 : step.status    === "in_progress"   ? "#ffd166"
                  : "#444";
         var dur  = (step.completed_at && step.started_at)
             ? " — " + Math.round((new Date(step.completed_at) - new Date(step.started_at)) / 1000) + "с"
@@ -199,7 +201,6 @@ async function renderStepsWithLogs(job) {
         line.textContent = icon + "  " + step.name + dur;
         _logEl.appendChild(line);
 
-        // Логи только для "Run update script" / "Run calc_weights script"
         var stepLogs = logsByStep[step.name];
         if (stepLogs && stepLogs.length &&
             (step.name.startsWith("Run ") || step.conclusion === "failure")) {
