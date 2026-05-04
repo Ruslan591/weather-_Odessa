@@ -23,4 +23,6 @@ jobs:
       - name: Run calc_weights script
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GIST_TOKEN: ${{ secrets.GH_PAT }}
+          GIST_ID: ${{ secrets.GIST_ID }}
         run: python scripts/calc_weights.py
