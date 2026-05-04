@@ -227,15 +227,15 @@ def build_weights(all_records):
             groups["monthly"].setdefault(month_key, []).append(rec)
 
     all_models = sorted({mid for rec in all_records for mid in rec.get("models", {})})
-    log.info("  Моделей: %d: %s", len(all_models), ", ".join(all_models))
+    gist_log(f"  Моделей: {len(all_models)}: {', '.join(all_models)}")
 
-    log.info("  Считаю allSeasons...")
+    gist_log("  Считаю allSeasons...")
     sec_all_seasons = make_section(groups["allSeasons"], all_models)
-    log.info("  Считаю allMonths...")
+    gist_log("  Считаю allMonths...")
     sec_all_months  = make_section(groups["allMonths"],  all_models)
-    log.info("  Считаю seasonal (3 года)...")
+    gist_log("  Считаю seasonal (3 года)...")
     sec_seasonal    = make_section(groups["seasonal"],   all_models)
-    log.info("  Считаю monthly (3 года)...")
+    gist_log("  Считаю monthly (3 года)...")
     sec_monthly     = make_section(groups["monthly"],    all_models)
 
     days_sorted = sorted(days_set)
@@ -271,20 +271,20 @@ def load_records_local():
 def load_records_github():
     all_records = []
     files = sorted(gh_list_dir(MODELDATA_DIR))
-    log.info("  Файлов в репозитории: %d", len(files))
+    gist_log(f"  Файлов в репозитории: {len(files)}")
     for fname in files:
         if not fname.endswith(".json"):
             continue
         text, _ = gh_get(f"{MODELDATA_DIR}/{fname}")
         if not text:
-            log.warning("  %s — не загружен", fname)
+            gist_log(f"  ✗ {fname} — не загружен")
             continue
         try:
             recs = json.loads(text)
-            log.info("  %s: %d записей", fname, len(recs))
+            gist_log(f"  {fname}: {len(recs)} записей")
             all_records.extend(recs)
         except Exception as e:
-            log.warning("  %s — ошибка парсинга: %s", fname, e)
+            gist_log(f"  ✗ {fname} — ошибка парсинга: {e}")
     return all_records
 
 # ── Запуск ────────────────────────────────────────────────────────────────────
