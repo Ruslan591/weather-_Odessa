@@ -144,42 +144,6 @@ async function pollRun(runId, label) {
 
 // строки 157-222, заменить целиком:
 async function renderStepsWithLogs(job) {
-
-    var logsText = null;
-    try {
-        var lr = await fetch(
-            "https://api.github.com/repos/" + OWNER + "/" + REPO +
-            "/actions/jobs/" + job.id + "/logs",
-            {
-                headers: {
-                    "Accept": "application/vnd.github+json",
-                    "Authorization": "Bearer " + TOKEN
-                },
-                redirect: "follow"
-            }
-        );
-        if (lr.ok) logsText = await lr.text();
-    } catch(e) {}
-
-    var logsByStep = {};
-    if (logsText) {
-        var currentStep = null;
-        logsText.split("\n").forEach(function(line) {
-            var groupMatch = line.match(/##\[group\](.+)/);
-            if (groupMatch) {
-                currentStep = groupMatch[1].trim();
-                logsByStep[currentStep] = [];
-                return;
-            }
-            if (line.match(/##\[endgroup\]/)) { currentStep = null; return; }
-            if (currentStep && line.trim()) {
-                var clean = line.replace(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z\s/, "");
-                logsByStep[currentStep].push(clean);
-            }
-        });
-    }
-
-    // Обновляем DOM точечно, без полной перерисовки
     var existingIds = new Set();
     _logEl.querySelectorAll("[data-step]").forEach(function(el) {
         existingIds.add(el.dataset.step);
@@ -210,34 +174,6 @@ async function renderStepsWithLogs(job) {
         stepEl.style.color = col;
         stepEl.style.fontWeight = "600";
         stepEl.textContent = icon + "  " + step.name + dur;
-
-        // Логи под шагом
-        var logsId = "logs-" + stepId;
-        var stepLogs = logsByStep[step.name];
-        if (stepLogs && stepLogs.length &&
-            (step.name.startsWith("Run ") || step.conclusion === "failure")) {
-
-            var logsEl = document.querySelector("[data-logs='" + logsId + "']");
-            if (!logsEl) {
-                logsEl = document.createElement("div");
-                logsEl.dataset.logs = logsId;
-                _logEl.appendChild(logsEl);
-            }
-            // Добавляем только новые строки
-            var existing = logsEl.children.length;
-            stepLogs.slice(existing).forEach(function(logLine) {
-                if (!logLine.trim()) return;
-                var ll = document.createElement("div");
-                ll.style.color = logLine.includes("ERROR") || logLine.includes("✗") ? "#ff6b6b"
-                               : logLine.includes("WARNING") ? "#fdcb6e"
-                               : logLine.includes("✓") ? "#5fe08f"
-                               : "#555";
-                ll.style.paddingLeft = "18px";
-                ll.style.fontSize = "11px";
-                ll.textContent = logLine;
-                logsEl.appendChild(ll);
-            });
-        }
     });
 
     _logEl.scrollTop = _logEl.scrollHeight;
