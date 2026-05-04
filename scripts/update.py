@@ -1277,4 +1277,6 @@ def main():
 
     gist_log("=== Готово ===")
     _gist_queue.join()  # ждём отправки последнего сообщения
+
+if __name__ == "__main__":
     main()
