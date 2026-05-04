@@ -59,37 +59,52 @@ var _btnEl  = document.getElementById("runBtn");
 var _running = false;
 var _gistPollTimer = null;
 var _gistSeenLines = 0;
+// Метка времени dispatch — игнорируем строки Gist до неё
+var _dispatchedAt = 0;
 
-function startGistPolling() {
-    _gistSeenLines = 0;
-    _gistPollTimer = setInterval(async function() {
-        if (!GIST_ID) return;
-        try {
-            var r = await fetch("https://api.github.com/gists/" + GIST_ID, {
-                headers: {
-                    "Accept": "application/vnd.github+json",
-                    "Authorization": "Bearer " + TOKEN
-                }
-            });
-            if (!r.ok) return;
-            var data = await r.json();
-            var content = ((data.files || {})["update_live.log"] || {}).content || "";
-            var lines = content.split("\n").filter(Boolean);
-            lines.slice(_gistSeenLines).forEach(function(line) {
-                var col = (line.startsWith("✗") || line.toLowerCase().includes("ошибка")) ? "#ff6b6b"
-                        : (line.startsWith("✓") || line.includes("Готово")) ? "#5fe08f"
-                        : line.startsWith("---") ? "#ffd166"
-                        : "#aaa";
-                log(line, col);
-            });
-            _gistSeenLines = lines.length;
-        } catch(e) {}
-    }, 3000);
+// ── Gist-поллинг ──────────────────────────────────────────────────────────
+
+function startGistPolling(resetLines) {
+    if (resetLines) _gistSeenLines = 0;
+    if (_gistPollTimer) return;  // уже запущен
+    _gistPollTimer = setInterval(pollGist, 1500);
 }
 
 function stopGistPolling() {
     if (_gistPollTimer) { clearInterval(_gistPollTimer); _gistPollTimer = null; }
 }
+
+async function pollGist() {
+    if (!GIST_ID) return;
+    try {
+        var r = await fetch("https://api.github.com/gists/" + GIST_ID, {
+            headers: {
+                "Accept": "application/vnd.github+json",
+                "Authorization": "Bearer " + TOKEN
+            }
+        });
+        if (!r.ok) return;
+        var data = await r.json();
+
+        // Проверяем что Gist обновлялся после нашего dispatch
+        var gistUpdated = new Date(data.updated_at).getTime();
+        if (_dispatchedAt > 0 && gistUpdated < _dispatchedAt - 5000) return;
+
+        var content = ((data.files || {})["update_live.log"] || {}).content || "";
+        var lines = content.split("\n").filter(Boolean);
+        lines.slice(_gistSeenLines).forEach(function(line) {
+            var col = (line.startsWith("✗") || line.toLowerCase().includes("ошибка")) ? "#ff6b6b"
+                    : (line.startsWith("✓") || line.includes("Готово")) ? "#5fe08f"
+                    : line.startsWith("---") ? "#ffd166"
+                    : line.startsWith("===") ? "#ffd166"
+                    : "#aaa";
+            appendLog(line, col);
+        });
+        _gistSeenLines = lines.length;
+    } catch(e) {}
+}
+
+// ── Вспомогательные ───────────────────────────────────────────────────────
 
 function setStatus(icon, text, sub) {
     _iconEl.textContent = icon;
@@ -97,7 +112,7 @@ function setStatus(icon, text, sub) {
     _subEl.textContent  = sub || "";
 }
 
-function log(msg, color) {
+function appendLog(msg, color) {
     var line = document.createElement("div");
     line.style.color = color || "#5fe08f";
     line.textContent = msg;
@@ -124,6 +139,8 @@ function sleep(ms) {
     return new Promise(function(res) { setTimeout(res, ms); });
 }
 
+// ── Dispatch + ожидание run ───────────────────────────────────────────────
+
 async function dispatch(workflowFile) {
     var r = await ghFetch("/actions/workflows/" + workflowFile + "/dispatches", {
         method: "POST",
@@ -133,9 +150,10 @@ async function dispatch(workflowFile) {
     return r.status === 204;
 }
 
+// Быстрый поиск run: пробуем каждые 3с, максимум 90с
 async function waitForRun(workflowFile, dispatchedAt) {
-    for (var attempt = 0; attempt < 20; attempt++) {
-        await sleep(6000);
+    for (var attempt = 0; attempt < 30; attempt++) {
+        await sleep(3000);
         var r = await ghFetch("/actions/workflows/" + workflowFile + "/runs?per_page=5");
         if (!r.ok) continue;
         var data = await r.json();
@@ -148,19 +166,22 @@ async function waitForRun(workflowFile, dispatchedAt) {
     return null;
 }
 
+// ── Ожидание завершения run ───────────────────────────────────────────────
+
 async function pollRun(runId, label) {
     var startTs = Date.now();
-    await sleep(4000);
     for (;;) {
         var r = await ghFetch("/actions/runs/" + runId);
         if (!r.ok) { await sleep(5000); continue; }
         var run = await r.json();
 
+        // Обновляем шаги (GitHub steps — только пока нет Gist)
+        var jdata = null;
         var jr = await ghFetch("/actions/runs/" + runId + "/jobs");
         if (jr.ok) {
-            var jdata = await jr.json();
+            jdata = await jr.json();
             var job = (jdata.jobs || [])[0];
-            if (job) await renderStepsWithLogs(job);
+            if (job) renderStepsWithLogs(job);
         }
 
         var elapsed = Math.round((Date.now() - startTs) / 1000);
@@ -172,16 +193,14 @@ async function pollRun(runId, label) {
             ? (jdata.jobs[0].steps || []).some(function(s) { return s.status === "in_progress"; })
             : false;
 
-        await sleep(hasActive ? 4000 : 10000);
+        await sleep(hasActive ? 4000 : 8000);
     }
 }
 
-// строки 157-222, заменить целиком:
-async function renderStepsWithLogs(job) {
-    var existingIds = new Set();
-    _logEl.querySelectorAll("[data-step]").forEach(function(el) {
-        existingIds.add(el.dataset.step);
-    });
+// Рендерит шаги workflow (пока Gist ещё пустой)
+function renderStepsWithLogs(job) {
+    // Если уже есть Gist-строки — шаги workflow не показываем (не нужны)
+    if (_gistSeenLines > 0) return;
 
     (job.steps || []).forEach(function(step) {
         if (step.status === "pending") return;
@@ -213,64 +232,49 @@ async function renderStepsWithLogs(job) {
     _logEl.scrollTop = _logEl.scrollHeight;
 }
 
-function renderSteps(steps, label) {
-    _logEl.innerHTML = "";
-    var header = document.createElement("div");
-    header.style.color = "#555";
-    header.textContent = "── " + label + " ──";
-    _logEl.appendChild(header);
-
-    steps.forEach(function(step) {
-        var icon = step.conclusion === "success"    ? "✓"
-                 : step.conclusion === "failure"    ? "✗"
-                 : step.status    === "in_progress" ? "▶"
-                 : "·";
-        var col  = step.conclusion === "success"    ? "#5fe08f"
-                 : step.conclusion === "failure"    ? "#ff6b6b"
-                 : step.status    === "in_progress" ? "#ffd166"
-                 : "#444";
-        var dur  = (step.completed_at && step.started_at)
-            ? " — " + Math.round((new Date(step.completed_at) - new Date(step.started_at)) / 1000) + "с"
-            : "";
-        var line = document.createElement("div");
-        line.style.color = col;
-        line.textContent = icon + "  " + step.name + dur;
-        _logEl.appendChild(line);
-    });
-    _logEl.scrollTop = _logEl.scrollHeight;
-}
+// ── Запуск одного workflow ────────────────────────────────────────────────
 
 async function runWorkflow(workflowFile, label) {
-    log("→  dispatch: " + workflowFile, "#aaa");
-    var t0 = Date.now();
+    appendLog("→  dispatch: " + workflowFile, "#aaa");
+    _dispatchedAt = Date.now();
+
     var ok = await dispatch(workflowFile);
     if (!ok) {
-        log("✗  Ошибка запуска. Проверьте токен и права.", "#ff6b6b");
+        appendLog("✗  Ошибка запуска. Проверьте токен и права.", "#ff6b6b");
         return false;
     }
-    log("✓  Запущен, ожидаю run...", "#ffd166");
+    appendLog("✓  Запущен, ожидаю run...", "#ffd166");
     setStatus("⏳", label + " запускается...", "");
 
-    var runId = await waitForRun(workflowFile, t0);
+    // Сразу начинаем опрашивать Gist (он может появиться раньше чем найдём runId)
+    startGistPolling(true);
+
+    var runId = await waitForRun(workflowFile, _dispatchedAt);
     if (!runId) {
-        log("✗  Run не появился за 2 минуты", "#ff6b6b");
+        appendLog("✗  Run не появился за 90 секунд", "#ff6b6b");
         setStatus("❌", "Run не найден", "Проверьте GitHub Actions вручную");
+        stopGistPolling();
         return false;
     }
-    log("✓  Run ID: " + runId, "#aaa");
+    appendLog("✓  Run ID: " + runId, "#aaa");
     setStatus("⏳", label + " выполняется...", "");
 
-    startGistPolling();
     var conclusion = await pollRun(runId, label);
     stopGistPolling();
+    // Финальный poll Gist чтобы не пропустить последние строки
+    await sleep(2000);
+    await pollGist();
+
     if (conclusion !== "success") {
-        log("✗  Завершено: " + conclusion, "#ff6b6b");
+        appendLog("✗  Завершено: " + conclusion, "#ff6b6b");
         setStatus("❌", label + " завершился с ошибкой", conclusion);
         return false;
     }
-    log("✓  " + label + " — успешно", "#5fe08f");
+    appendLog("✓  " + label + " — успешно", "#5fe08f");
     return true;
 }
+
+// ── Главный запуск ────────────────────────────────────────────────────────
 
 async function startRun() {
     if (_running) return;
@@ -280,13 +284,13 @@ async function startRun() {
 
     // update.yml
     setStatus("⏳", "Запуск update.py...", "");
-    log("══ update.py ══", "#555");
+    appendLog("══ update.py ══", "#555");
     var ok1 = await runWorkflow(WF_UPDATE, "update.py");
     if (!ok1) { _running = false; _btnEl.style.display = ""; return; }
 
     // calc_weights.yml
-    log("", "#555");
-    log("══ calc_weights.py ══", "#555");
+    appendLog("", "#555");
+    appendLog("══ calc_weights.py ══", "#555");
     setStatus("⏳", "Запуск calc_weights.py...", "");
     var ok2 = await runWorkflow(WF_WEIGHTS, "calc_weights.py");
     if (!ok2) { _running = false; _btnEl.style.display = ""; return; }
@@ -296,12 +300,13 @@ async function startRun() {
     _btnEl.style.display = "";
 }
 
+// ── Начальная загрузка статуса ────────────────────────────────────────────
+
 async function showLastRun() {
     if (TOKEN) {
         _btnEl.style.display = "";
     }
 
-    // Показываем статус последнего запуска update.yml
     try {
         var r = await ghFetch("/actions/workflows/" + WF_UPDATE + "/runs?per_page=1");
         if (!r.ok) { setStatus("·", "Нет данных", ""); return; }
@@ -323,16 +328,21 @@ async function showLastRun() {
 
         setStatus(icon, text, d);
 
-        // Если сейчас выполняется — сразу начинаем следить
+        // Если сейчас выполняется — подключаемся к Gist и ждём завершения
         if (last.status === "in_progress" || last.status === "queued") {
             if (TOKEN) {
                 _btnEl.style.display = "none";
                 _running = true;
-                log("· Обнаружен активный run, подключаюсь...", "#aaa");
+                appendLog("· Обнаружен активный run, подключаюсь...", "#aaa");
+                _dispatchedAt = 0;  // не фильтруем по времени
+                startGistPolling(true);
                 var conclusion = await pollRun(last.id, "update.py");
+                stopGistPolling();
+                await sleep(2000);
+                await pollGist();
                 if (conclusion === "success") {
                     setStatus("✅", "update.py завершён", "");
-                    log("✓  update.py — успешно", "#5fe08f");
+                    appendLog("✓  update.py — успешно", "#5fe08f");
                 } else {
                     setStatus("❌", "Завершено с ошибкой", conclusion);
                 }
