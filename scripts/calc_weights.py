@@ -15,6 +15,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from urllib.request import urlopen, Request
 from urllib.error import HTTPError
+import threading, queue as _queue
 
 # ── Логирование ───────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -23,6 +24,43 @@ logging.basicConfig(
     datefmt="%H:%M:%S"
 )
 log = logging.getLogger(__name__)
+
+# ── Gist live-лог ─────────────────────────────────────────────────────────────
+GIST_ID    = os.environ.get("GIST_ID", "")
+GIST_TOKEN = os.environ.get("GIST_TOKEN", "")
+
+_gist_lines = []
+_gist_queue = _queue.Queue()
+
+def _gist_worker():
+    while True:
+        content = _gist_queue.get()
+        if GIST_ID and GIST_TOKEN:
+            data = json.dumps({"files": {"update_live.log": {"content": content}}}).encode()
+            req = Request(
+                f"https://api.github.com/gists/{GIST_ID}",
+                data=data,
+                headers={
+                    "Authorization": f"Bearer {GIST_TOKEN}",
+                    "Accept": "application/vnd.github+json",
+                    "Content-Type": "application/json"
+                },
+                method="PATCH"
+            )
+            try:
+                with urlopen(req, timeout=15): pass
+            except Exception as e:
+                log.warning("gist_log error: %s", e)
+        _gist_queue.task_done()
+
+threading.Thread(target=_gist_worker, daemon=True).start()
+
+def gist_log(msg):
+    log.info(msg)
+    if not GIST_ID or not GIST_TOKEN:
+        return
+    _gist_lines.append(msg)
+    _gist_queue.put("\n".join(_gist_lines))
 
 # ── Конфиг ───────────────────────────────────────────────────────────────────
 GITHUB_OWNER   = "ruslan591"
@@ -251,38 +289,33 @@ def load_records_github():
 
 # ── Запуск ────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    log.info("=== calc_weights.py ===")
+    gist_log("=== calc_weights.py запущен ===")
 
     if LOCAL_MODE:
-        log.info("Режим: локальный")
-        log.info("Загрузка из %s...", LOCAL_DATA_DIR)
+        gist_log("Режим: локальный")
         all_records = load_records_local()
     else:
-        log.info("Режим: GitHub Actions")
-        log.info("Загрузка из %s/%s/%s...", GITHUB_OWNER, GITHUB_REPO, MODELDATA_DIR)
+        gist_log("Режим: GitHub Actions")
         all_records = load_records_github()
 
     if not all_records:
         log.error("Нет данных. Завершение.")
         exit(1)
 
-    log.info("Всего записей: %d", len(all_records))
-    log.info("Расчёт весов...")
+    gist_log(f"  Всего записей: {len(all_records)}, расчёт весов...")
     weights = build_weights(all_records)
 
     if LOCAL_MODE:
-        log.info("Сохранение в %s...", LOCAL_OUT)
         with open(LOCAL_OUT, "w", encoding="utf-8") as f:
             json.dump(weights, f, ensure_ascii=False, indent=2)
-        log.info("✓ Готово. Размер: %.1f KB", LOCAL_OUT.stat().st_size / 1024)
+        gist_log(f"✓ Готово локально. {LOCAL_OUT}")
     else:
-        log.info("Сохранение в репозиторий...")
         _, mw_sha = gh_get(WEIGHTS_PATH)
         gh_put(WEIGHTS_PATH,
                json.dumps(weights, ensure_ascii=False, indent=2),
                mw_sha, "update model_weights.json")
-        log.info("✓ model_weights.json обновлён")
+        gist_log("✓ model_weights.json обновлён")
 
-    log.info("Период: %s → %s", weights["coverage"]["from"], weights["coverage"]["to"])
-    log.info("Дней: %d, записей: %d", weights["coverage"]["days"], weights["coverage"]["records"])
-    log.info("=== Готово ===")
+    gist_log(f"  Период: {weights['coverage']['from']} → {weights['coverage']['to']}, дней: {weights['coverage']['days']}")
+    gist_log("=== calc_weights.py готово ===")
+    _gist_queue.join()  # ждём отправки последнего сообщения перед выходом
