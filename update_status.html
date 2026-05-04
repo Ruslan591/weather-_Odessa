@@ -142,12 +142,11 @@ async function pollRun(runId, label) {
     }
 }
 
+// строки 157-222, заменить целиком:
 async function renderStepsWithLogs(job) {
-    _logEl.innerHTML = "";
 
     var logsText = null;
     try {
-        // Логи отдаются через redirect — получаем URL напрямую
         var lr = await fetch(
             "https://api.github.com/repos/" + OWNER + "/" + REPO +
             "/actions/jobs/" + job.id + "/logs",
@@ -180,31 +179,53 @@ async function renderStepsWithLogs(job) {
         });
     }
 
-    (job.steps || []).forEach(function(step) {
-        if (step.status === "pending") return; // не показываем ещё не начатые
+    // Обновляем DOM точечно, без полной перерисовки
+    var existingIds = new Set();
+    _logEl.querySelectorAll("[data-step]").forEach(function(el) {
+        existingIds.add(el.dataset.step);
+    });
 
-        var icon = step.conclusion === "success"      ? "✓"
-                 : step.conclusion === "failure"      ? "✗"
-                 : step.status    === "in_progress"   ? "▶"
+    (job.steps || []).forEach(function(step) {
+        if (step.status === "pending") return;
+
+        var icon = step.conclusion === "success"    ? "✓"
+                 : step.conclusion === "failure"    ? "✗"
+                 : step.status    === "in_progress" ? "▶"
                  : "·";
-        var col  = step.conclusion === "success"      ? "#5fe08f"
-                 : step.conclusion === "failure"      ? "#ff6b6b"
-                 : step.status    === "in_progress"   ? "#ffd166"
+        var col  = step.conclusion === "success"    ? "#5fe08f"
+                 : step.conclusion === "failure"    ? "#ff6b6b"
+                 : step.status    === "in_progress" ? "#ffd166"
                  : "#444";
         var dur  = (step.completed_at && step.started_at)
             ? " — " + Math.round((new Date(step.completed_at) - new Date(step.started_at)) / 1000) + "с"
             : "";
+        var stepId = "step-" + step.number;
 
-        var line = document.createElement("div");
-        line.style.color = col;
-        line.style.fontWeight = "600";
-        line.textContent = icon + "  " + step.name + dur;
-        _logEl.appendChild(line);
+        var stepEl = document.querySelector("[data-step='" + stepId + "']");
+        if (!stepEl) {
+            stepEl = document.createElement("div");
+            stepEl.dataset.step = stepId;
+            _logEl.appendChild(stepEl);
+        }
+        stepEl.style.color = col;
+        stepEl.style.fontWeight = "600";
+        stepEl.textContent = icon + "  " + step.name + dur;
 
+        // Логи под шагом
+        var logsId = "logs-" + stepId;
         var stepLogs = logsByStep[step.name];
         if (stepLogs && stepLogs.length &&
             (step.name.startsWith("Run ") || step.conclusion === "failure")) {
-            stepLogs.forEach(function(logLine) {
+
+            var logsEl = document.querySelector("[data-logs='" + logsId + "']");
+            if (!logsEl) {
+                logsEl = document.createElement("div");
+                logsEl.dataset.logs = logsId;
+                _logEl.appendChild(logsEl);
+            }
+            // Добавляем только новые строки
+            var existing = logsEl.children.length;
+            stepLogs.slice(existing).forEach(function(logLine) {
                 if (!logLine.trim()) return;
                 var ll = document.createElement("div");
                 ll.style.color = logLine.includes("ERROR") || logLine.includes("✗") ? "#ff6b6b"
@@ -214,7 +235,7 @@ async function renderStepsWithLogs(job) {
                 ll.style.paddingLeft = "18px";
                 ll.style.fontSize = "11px";
                 ll.textContent = logLine;
-                _logEl.appendChild(ll);
+                logsEl.appendChild(ll);
             });
         }
     });
