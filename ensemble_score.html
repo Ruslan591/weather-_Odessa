@@ -70,6 +70,10 @@
         style="background:none;border:none;color:#333;font-size:11px;cursor:pointer;padding:6px 12px;">
         токен
     </button>
+    <button onclick="openGistDialog()"
+        style="background:none;border:none;color:#333;font-size:11px;cursor:pointer;padding:6px 12px;">
+        gist id
+    </button>
 </div>
 </div><!-- /container -->
 
@@ -547,6 +551,20 @@ function openTokenDialog() {
     } else {
         localStorage.setItem("ghToken", val.trim());
         alert("Токен сохранён");
+    }
+}
+
+/* ── GIST ID ── */
+function openGistDialog() {
+    var current = localStorage.getItem("gistId") || "";
+    var val = prompt("Gist ID для live-лога" + (current ? " (задан)" : " (не задан)"), current);
+    if (val === null) return;
+    if (val.trim() === "") {
+        localStorage.removeItem("gistId");
+        alert("Gist ID удалён");
+    } else {
+        localStorage.setItem("gistId", val.trim());
+        alert("Gist ID сохранён");
     }
 }
 
