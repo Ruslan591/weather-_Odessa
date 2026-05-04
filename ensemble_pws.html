@@ -71,6 +71,11 @@
     </button>
 </div>
 
+<!-- ПРОГОНЫ МОДЕЛЕЙ -->
+<div id="modelRunsSection" style="background:#161616;border-radius:10px;padding:12px 14px;margin-bottom:16px;">
+    <div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:10px;">ПОСЛЕДНИЕ ПРОГОНЫ</div>
+    <div id="modelRunsList" style="color:#555;font-size:12px;">Загрузка...</div>
+</div>
 </div>
 
 <style>
@@ -95,6 +100,14 @@ var GITHUB_REPO       = "weather-_Odessa";
 var GITHUB_SNAPS_FILE = "data/ensemble_snapshots_pws.json";
 var GITHUB_PWS_FILE   = "data/pws_raw.json";
 var GITHUB_ACC_FILE   = "data/ensemble_accuracy_pws.json";
+var MODEL_META = [
+    { id: "ecmwf_ifs",                     metaId: "ecmwf_ifs025",                      label: "ECMWF IFS" },
+    { id: "icon_eu",                        metaId: "dwd_icon_eu",                       label: "ICON EU" },
+    { id: "ukmo_global_deterministic_10km", metaId: "ukmo_global_deterministic_10km",    label: "UKMO" },
+    { id: "meteofrance_arpege_europe",      metaId: "meteofrance_arpege_europe",         label: "Arpège" },
+    { id: "gfs_global",                     metaId: "ncep_gfs013",                       label: "GFS" },
+    { id: "cma_grapes_global",              metaId: "cma_grapes_global",                 label: "GRAPES" },
+];
 
 var _snaps      = [];
 var _pwsRawData = [];
@@ -625,12 +638,48 @@ async function render() {
     renderSnapshots();
 }
 
+async function loadModelRuns() {
+    var list = document.getElementById("modelRunsList");
+    var results = await Promise.all(MODEL_META.map(async function(m) {
+        try {
+            var r = await fetch("https://api.open-meteo.com/data/" + m.metaId + "/static/meta.json", { cache: "no-store" });
+            if (!r.ok) return { label: m.label, time: null };
+            var data = await r.json();
+            var ts = data.last_run_availability_time;
+            return { label: m.label, time: ts ? new Date(ts * 1000) : null };
+        } catch(e) {
+            return { label: m.label, time: null };
+        }
+    }));
+
+    results.sort(function(a, b) {
+        if (!a.time && !b.time) return 0;
+        if (!a.time) return 1;
+        if (!b.time) return -1;
+        return b.time - a.time;
+    });
+
+    list.innerHTML = results.map(function(m) {
+        var timeStr = m.time
+            ? m.time.toLocaleString("ru-RU", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" })
+            : "—";
+        var age = m.time ? Math.round((Date.now() - m.time) / 3600000) : null;
+        var ageStr = age !== null ? '<span style="color:#444;"> ·&nbsp;' + age + 'ч назад</span>' : "";
+        var col = age !== null && age <= 6 ? "#5fe08f" : age !== null && age <= 12 ? "#fdcb6e" : "#ff6b6b";
+        if (age === null) col = "#555";
+        return '<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #1e1e1e;">' +
+            '<span style="color:#888;">' + m.label + '</span>' +
+            '<span style="color:' + col + ';">' + timeStr + ageStr + '</span>' +
+            '</div>';
+    }).join("");
+}
+
 /* === СТАРТ === */
 (async function init() {
     setStatus("☁️ Загрузка снимков с GitHub...");
     var accResult = await ghGetJson(GITHUB_ACC_FILE);
     _acc = accResult.data;
-    await Promise.all([loadSnaps(), loadPwsRaw()]);
+    await Promise.all([loadSnaps(), loadPwsRaw(), loadModelRuns()]);
     render();
 })();
 
