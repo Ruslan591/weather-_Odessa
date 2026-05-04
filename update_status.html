@@ -117,24 +117,108 @@ async function waitForRun(workflowFile, dispatchedAt) {
 async function pollRun(runId, label) {
     var startTs = Date.now();
     for (;;) {
-        await sleep(10000);
-
+        // Статус run
         var r = await ghFetch("/actions/runs/" + runId);
-        if (!r.ok) continue;
+        if (!r.ok) { await sleep(5000); continue; }
         var run = await r.json();
 
+        // Шаги + логи активного шага
         var jr = await ghFetch("/actions/runs/" + runId + "/jobs");
         if (jr.ok) {
             var jdata = await jr.json();
             var job = (jdata.jobs || [])[0];
-            if (job) renderSteps(job.steps || [], label);
+            if (job) {
+                await renderStepsWithLogs(job);
+            }
         }
 
         var elapsed = Math.round((Date.now() - startTs) / 1000);
         _subEl.textContent = label + " · " + elapsed + "с";
 
         if (run.status === "completed") return run.conclusion;
+
+        // Быстрее если идёт активный шаг
+        var hasActive = false;
+        try {
+            var jd2 = await ghFetch("/actions/runs/" + runId + "/jobs");
+            if (jd2.ok) {
+                var jj = await jd2.json();
+                var j0 = (jj.jobs || [])[0];
+                hasActive = j0 && (j0.steps || []).some(function(s) {
+                    return s.status === "in_progress";
+                });
+            }
+        } catch(e) {}
+
+        await sleep(hasActive ? 4000 : 10000);
     }
+}
+
+async function renderStepsWithLogs(job) {
+    _logEl.innerHTML = "";
+
+    // Пытаемся получить логи завершённых шагов
+    var logsText = null;
+    try {
+        var lr = await ghFetch("/actions/jobs/" + job.id + "/logs");
+        if (lr.ok) logsText = await lr.text();
+    } catch(e) {}
+
+    // Парсим логи по шагам (GitHub форматирует как "##[group]StepName")
+    var logsByStep = {};
+    if (logsText) {
+        var currentStep = null;
+        logsText.split("\n").forEach(function(line) {
+            var groupMatch = line.match(/##\[group\](.+)/);
+            if (groupMatch) { currentStep = groupMatch[1].trim(); logsByStep[currentStep] = []; return; }
+            if (line.match(/##\[endgroup\]/)) { currentStep = null; return; }
+            if (currentStep && line.trim()) {
+                // Убираем timestamp prefix "2026-05-04T12:00:00.0000000Z "
+                var clean = line.replace(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z\s/, "");
+                logsByStep[currentStep].push(clean);
+            }
+        });
+    }
+
+    (job.steps || []).forEach(function(step) {
+        var icon = step.conclusion === "success"    ? "✓"
+                 : step.conclusion === "failure"    ? "✗"
+                 : step.status    === "in_progress" ? "▶"
+                 : "·";
+        var col  = step.conclusion === "success"    ? "#5fe08f"
+                 : step.conclusion === "failure"    ? "#ff6b6b"
+                 : step.status    === "in_progress" ? "#ffd166"
+                 : "#444";
+        var dur  = (step.completed_at && step.started_at)
+            ? " — " + Math.round((new Date(step.completed_at) - new Date(step.started_at)) / 1000) + "с"
+            : "";
+
+        var line = document.createElement("div");
+        line.style.color = col;
+        line.style.fontWeight = "600";
+        line.textContent = icon + "  " + step.name + dur;
+        _logEl.appendChild(line);
+
+        // Логи только для "Run update script" / "Run calc_weights script"
+        var stepLogs = logsByStep[step.name];
+        if (stepLogs && stepLogs.length &&
+            (step.name.startsWith("Run ") || step.conclusion === "failure")) {
+            stepLogs.forEach(function(logLine) {
+                if (!logLine.trim()) return;
+                var ll = document.createElement("div");
+                ll.style.color = logLine.includes("ERROR") || logLine.includes("✗") ? "#ff6b6b"
+                               : logLine.includes("WARNING") ? "#fdcb6e"
+                               : logLine.includes("✓") ? "#5fe08f"
+                               : "#555";
+                ll.style.paddingLeft = "18px";
+                ll.style.fontSize = "11px";
+                ll.textContent = logLine;
+                _logEl.appendChild(ll);
+            });
+        }
+    });
+
+    _logEl.scrollTop = _logEl.scrollHeight;
 }
 
 function renderSteps(steps, label) {
