@@ -141,6 +141,31 @@ def gh_save_json(path, data, sha, message, compact=False):
         content = json.dumps(data, ensure_ascii=False, indent=2)
     return gh_put(path, content, sha, message)
 
+# ── Gist live-лог ────────────────────────────────────────────────────────────
+GIST_ID = os.environ.get("GIST_ID", "")   # секрет из GitHub Actions
+
+_gist_lines = []
+
+def gist_log(msg):
+    """Логирует строку и пушит весь лог в Gist для live-отображения."""
+    log.info(msg)
+    if not GIST_ID:
+        return
+    _gist_lines.append(msg)
+    content = "\n".join(_gist_lines)
+    import urllib.request
+    data = json.dumps({"files": {"update_live.log": {"content": content}}}).encode()
+    req = urllib.request.Request(
+        f"https://api.github.com/gists/{GIST_ID}",
+        data=data,
+        headers={**GH_HEADERS, "Content-Type": "application/json"},
+        method="PATCH"
+    )
+    try:
+        with urlopen(req, timeout=10): pass
+    except Exception as e:
+        log.debug("gist_log error: %s", e)
+
 # ── Время ────────────────────────────────────────────────────────────────────
 def utcnow():
     return datetime.now(timezone.utc)
@@ -977,10 +1002,11 @@ def build_weights_from_modeldata(all_records):
 def main():
     now  = utcnow()
     year = now.year
-    log.info("=== update.py запущен %s ===", now.isoformat())
+    _gist_lines.clear()
+    gist_log(f"=== update.py запущен {now.strftime('%H:%M:%S')} UTC ===")
 
     # ── 1. Загружаем synop_YYYY.txt с GitHub ────────────────────────────────
-    log.info("--- 1. SYNOP ---")
+    gist_log("--- 1. SYNOP ---")
     synop_path = f"data/synop_{year}.txt"
     synop_text, synop_sha = gh_get(synop_path)
     synop_text = synop_text or ""
@@ -1040,7 +1066,7 @@ def main():
         log.info("  synop_%d.txt актуален", year)
 
     # ── 2. Дописываем modelData в месячные файлы ────────────────────────────
-    log.info("--- 2. modelData ---")
+    gist_log("--- 2. modelData ---")
 
     # Группируем новые сводки по месяцам
     by_month = {}
@@ -1091,11 +1117,10 @@ def main():
                 log.info("  ✓ %s.json сохранён (+%d записей)", mk, len(new_md_records))
 
     # ── 3. Свежий ансамблевый прогноз → снимки ──────────────────────────────
-    log.info("--- 3. Ансамблевый прогноз ---")
+    gist_log("--- 3. Ансамблевый прогноз ---")
 
     ensemble_ready_time = fetch_ensemble_ready_time()
-    log.info("  Время готовности ансамбля: %s",
-             ensemble_ready_time.isoformat() if ensemble_ready_time else "неизвестно")
+    gist_log(f"  Время готовности ансамбля: {ensemble_ready_time.isoformat() if ensemble_ready_time else 'неизвестно'}")
 
     snap_synop_path = "data/ensemble_snapshots_synop.json"
     snap_pws_path   = "data/ensemble_snapshots_pws.json"
@@ -1157,10 +1182,10 @@ def main():
         else:
             log.warning("  Ни одна модель не ответила")
     else:
-        log.info("  Снимки актуальны")
+        gist_log("  Снимки актуальны")
 
     # ── 4. Выжимка снимков → ensemble_accuracy.json ─────────────────────────
-    log.info("--- 4. Выжимка снимков ---")
+    gist_log("--- 4. Выжимка снимков ---")
 
     acc_synop_path = "data/ensemble_accuracy_synop.json"
     acc_pws_path   = "data/ensemble_accuracy_pws.json"
@@ -1169,8 +1194,7 @@ def main():
 
     # Наблюдения SYNOP для верификации
     new_recs_synop, remaining_synop = squeeze_snapshots(snaps_synop, synop_obs_by_time, mode="synop")
-    log.info("  SYNOP: выжато %d записей, осталось %d снимков",
-             len(new_recs_synop), len(remaining_synop))
+    gist_log(f"  SYNOP: выжато {len(new_recs_synop)} записей, осталось {len(remaining_synop)} снимков")
 
     if new_recs_synop:
         acc_synop = update_accuracy(acc_synop, new_recs_synop, mode="synop")
@@ -1205,8 +1229,7 @@ def main():
                 pass
 
     new_recs_pws, remaining_pws = squeeze_snapshots(snaps_pws, pws_obs_by_time, mode="pws")
-    log.info("  PWS: выжато %d записей, осталось %d снимков",
-             len(new_recs_pws), len(remaining_pws))
+    gist_log(f"  PWS: выжато {len(new_recs_pws)} записей, осталось {len(remaining_pws)} снимков")
 
     if new_recs_pws:
         acc_pws = update_accuracy(acc_pws, new_recs_pws, mode="pws")
@@ -1220,7 +1243,7 @@ def main():
         log.info("  ✓ ensemble_snapshots_pws.json очищен")
 
     # ── 5. Чистка pws_raw.json ──────────────────────────────────────────────
-    log.info("--- 5. Чистка pws_raw.json ---")
+    gist_log("--- 5. Чистка pws_raw.json ---")
     cutoff_pws = now - timedelta(days=PWS_KEEP_DAYS)
     pws_before = len(pws_raw)
     pws_raw = [r for r in pws_raw
@@ -1233,10 +1256,10 @@ def main():
         log.info("  pws_raw.json актуален (%d записей)", len(pws_raw))
 
     # ── 6. model_weights.json ───────────────────────────────────────────────
-    log.info("--- 6. model_weights.json ---")
-    log.info("  Пересчёт весов выполняется через calc_weights.yml (ежедневно)")
+    gist_log("--- 6. model_weights.json ---")
+    gist_log("  Пересчёт весов выполняется через calc_weights.yml (ежедневно)")
 
-    log.info("=== Готово ===")
+    gist_log("=== Готово ===")
 
 
 if __name__ == "__main__":
