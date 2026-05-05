@@ -262,9 +262,11 @@ def load_records_local():
     files = sorted(LOCAL_DATA_DIR.glob("*.json"))
     log.info("  Файлов локально: %d", len(files))
     for path in files:
+        ts = datetime.now(timezone.utc).strftime("%H:%M")
         with open(path, encoding="utf-8") as f:
             recs = json.load(f)
-        log.info("  %s: %d записей", path.name, len(recs))
+        size_kb = path.stat().st_size / 1024
+        log.info("  [%s] %s: %d записей · %.1f КБ", ts, path.name, len(recs), size_kb)
         all_records.extend(recs)
     return all_records
 
@@ -275,16 +277,18 @@ def load_records_github():
     for fname in files:
         if not fname.endswith(".json"):
             continue
+        ts = datetime.now(timezone.utc).strftime("%H:%M")
         text, _ = gh_get(f"{MODELDATA_DIR}/{fname}")
         if not text:
-            gist_log(f"  ✗ {fname} — не загружен")
+            gist_log(f"  [{ts}] ✗ {fname} — не загружен")
             continue
         try:
             recs = json.loads(text)
-            gist_log(f"  {fname}: {len(recs)} записей")
+            size_kb = len(text.encode("utf-8")) / 1024
+            gist_log(f"  [{ts}] {fname}: {len(recs)} записей · {size_kb:.1f} КБ")
             all_records.extend(recs)
         except Exception as e:
-            gist_log(f"  ✗ {fname} — ошибка парсинга: {e}")
+            gist_log(f"  [{ts}] ✗ {fname} — ошибка парсинга: {e}")
     return all_records
 
 # ── Запуск ────────────────────────────────────────────────────────────────────
@@ -311,10 +315,11 @@ if __name__ == "__main__":
         gist_log(f"✓ Готово локально. {LOCAL_OUT}")
     else:
         _, mw_sha = gh_get(WEIGHTS_PATH)
-        gh_put(WEIGHTS_PATH,
-               json.dumps(weights, ensure_ascii=False, indent=2),
-               mw_sha, "update model_weights.json")
-        gist_log("✓ model_weights.json обновлён")
+        content = json.dumps(weights, ensure_ascii=False, indent=2)
+        gh_put(WEIGHTS_PATH, content, mw_sha, "update model_weights.json")
+        ts = datetime.now(timezone.utc).strftime("%H:%M")
+        size_kb = len(content.encode("utf-8")) / 1024
+        gist_log(f"  [{ts}] ✓ model_weights.json обновлён · {size_kb:.1f} КБ")
 
     gist_log(f"  Период: {weights['coverage']['from']} → {weights['coverage']['to']}, дней: {weights['coverage']['days']}")
     gist_log("=== calc_weights.py готово ===")
