@@ -112,12 +112,17 @@ function setStatus(icon, text, sub) {
     _subEl.textContent  = sub || "";
 }
 
+function isAtBottom() {
+    return _logEl.scrollHeight - _logEl.scrollTop - _logEl.clientHeight < 40;
+}
+
 function appendLog(msg, color) {
+    var atBottom = isAtBottom();
     var line = document.createElement("div");
     line.style.color = color || "#5fe08f";
     line.textContent = msg;
     _logEl.appendChild(line);
-    _logEl.scrollTop = _logEl.scrollHeight;
+    if (atBottom) _logEl.scrollTop = _logEl.scrollHeight;
 }
 
 function clearLog() {
@@ -229,7 +234,7 @@ function renderStepsWithLogs(job) {
         stepEl.textContent = icon + "  " + step.name + dur;
     });
 
-    _logEl.scrollTop = _logEl.scrollHeight;
+    if (isAtBottom()) _logEl.scrollTop = _logEl.scrollHeight;
 }
 
 // ── Запуск одного workflow ────────────────────────────────────────────────
