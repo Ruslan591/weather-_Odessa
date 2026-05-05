@@ -447,18 +447,20 @@ function setHorizonZoom(maxH) {
 
 function applyHorizonZoom() {
     if (!_horizonChartInstance) return;
-    var sc = _horizonChartInstance.options.scales.x;
+    var sc     = _horizonChartInstance.options.scales.x;
+    var labels = _horizonChartInstance.data.labels;
     if (_horizonZoom === null) {
         delete sc.min; delete sc.max;
     } else {
-        var labels = _horizonChartInstance.data.labels;
-        var target = ((_horizonZoom >= 0) ? "+" : "") + _horizonZoom + "ч";
-        var idx    = labels.reduce(function(best, l, i) {
-            var h = parseInt(l.replace("+",""));
-            return (!isNaN(h) && h <= _horizonZoom) ? i : best;
-        }, 0);
-        delete sc.min;
-        sc.max = labels[idx];
+        var minLabel = null, maxLabel = null;
+        labels.forEach(function(l) {
+            var h = parseInt(l.replace("+", ""));
+            if (isNaN(h)) return;
+            if (h >= 0 && minLabel === null) minLabel = l;
+            if (h <= _horizonZoom) maxLabel = l;
+        });
+        sc.min = minLabel || labels[0];
+        sc.max = maxLabel || labels[labels.length - 1];
     }
     _horizonChartInstance.update();
 }
