@@ -544,12 +544,13 @@ def merge_ensemble(all_model_hours, succeeded):
 
 
 def apply_bias(value, key, bias_dict):
-    """Вычитает bias из значения прогноза. windDir не корректируем."""
-    if value is None or key == "windDir":
+    if value is None:
         return value
     b = (bias_dict.get(key) or {}).get("bias")
     if b is None:
         return value
+    if key == "windDir":
+        return round((value - b) % 360)
     return round((value - b) * 10) / 10
 
 
@@ -591,7 +592,7 @@ def build_snapshot(ensemble_hours, saved_at, run_time, mode="synop", bias=None):
                 "pressure": apply_bias(round(h["pressure_msl"] * 10) / 10 if h["pressure_msl"] is not None else None, "pressure", b),
                 "wind":     apply_bias(round(h["wind_speed_10m"] * 10) / 10 if h["wind_speed_10m"] is not None else None, "wind", b),
                 "windGust": apply_bias(round((h["wind_gusts_10m"] or h["wind_speed_10m"] or 0) * 10) / 10, "windGust", b),
-                "windDir":  round(h["wind_direction_10m"]) if h["wind_direction_10m"] is not None else None,
+                "windDir":  apply_bias(round(h["wind_direction_10m"]) if h["wind_direction_10m"] is not None else None, "windDir", b),
                 "humidity": apply_bias(round(h["relative_humidity_2m"]) if h["relative_humidity_2m"] is not None else None, "humidity", b),
                 "rain":     round(h["rain"] * 10) / 10 if h["rain"] is not None else None,
             })
