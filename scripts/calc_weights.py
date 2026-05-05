@@ -35,6 +35,10 @@ _gist_queue = _queue.Queue()
 def _gist_worker():
     while True:
         content = _gist_queue.get()
+        # Дренируем очередь — берём только последнее накопившееся значение
+        while not _gist_queue.empty():
+            _gist_queue.task_done()
+            content = _gist_queue.get()
         if GIST_ID and GIST_TOKEN:
             data = json.dumps({"files": {"update_live.log": {"content": content}}}).encode()
             req = Request(
@@ -60,6 +64,9 @@ def gist_log(msg):
     if not GIST_ID or not GIST_TOKEN:
         return
     _gist_lines.append(msg)
+    # Gist ограничен ~1 МБ — держим только последние 200 строк
+    if len(_gist_lines) > 200:
+        del _gist_lines[:-200]
     _gist_queue.put("\n".join(_gist_lines))
 
 # ── Конфиг ───────────────────────────────────────────────────────────────────
