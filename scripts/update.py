@@ -1350,10 +1350,13 @@ def main():
             [sys.executable, script],
             capture_output=True, text=True, timeout=120
         )
-        if result.returncode == 0:
-            gist_log("  ✓ calc_weights.py выполнен успешно")
-        else:
-            gist_log(f"  ✗ calc_weights.py завершился с ошибкой: {result.stderr[:200]}")
+        for line in result.stdout.splitlines():
+            if line.strip():
+                gist_log(f"  [cw] {line.strip()}")
+        if result.returncode != 0:
+            for line in result.stderr.splitlines():
+                if line.strip():
+                    gist_log(f"  [cw:err] {line.strip()}")
     except Exception as e:
         gist_log(f"  ✗ calc_weights.py не запущен: {e}")
 
