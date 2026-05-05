@@ -1074,7 +1074,9 @@ function applyBias(value, key, biasOverall, byHorizon, horizonH) {
     if (b == null) b = (biasOverall[key] || {}).bias;
     if (b == null) return value;
     if (key === "windDir") return ((value - b) % 360 + 360) % 360;
-    return Math.round((value - b) * 10) / 10;
+    var result = Math.round((value - b) * 10) / 10;
+    if (key === "wind" || key === "windGust") result = Math.max(0, result);
+    return result;
 }
 
 function getSeasonKey() {
