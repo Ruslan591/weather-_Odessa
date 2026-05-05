@@ -577,7 +577,10 @@ def apply_bias(value, key, bias_overall, bias_by_horizon=None, horizon_h=None):
         return value
     if key == "windDir":
         return round((value - b) % 360)
-    return round((value - b) * 10) / 10
+    result = round((value - b) * 10) / 10
+    if key in ("wind", "windGust"):
+        result = max(0, result)
+    return result
 
 
 def build_snapshot(ensemble_hours, saved_at, run_time, mode="synop", bias=None, bias_by_horizon=None):
