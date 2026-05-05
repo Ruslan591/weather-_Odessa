@@ -42,6 +42,7 @@
     <div class="section-label">Точность по горизонту</div>
     <div class="chart-section">
         <div id="horizonParamRow" class="param-row"></div>
+        <div id="horizonZoomRow" style="display:flex;gap:6px;margin-top:4px;margin-bottom:4px;"></div>
         <canvas id="horizonChart" height="160"></canvas>
     </div>
 </div>
@@ -319,6 +320,7 @@ var _horizonMetrics = null;
 var _activeChartParam   = "temp";
 var _activeHorizonParam = "temp";
 var _activeHorizonMode = "mae";
+var _horizonZoom = 48;
 var _chartInstance        = null;
 var _horizonChartInstance = null;
 
@@ -420,6 +422,45 @@ function renderHorizonChart(paramKey, mode) {
         var s = _horizonMetrics[buckets[i]] && _horizonMetrics[buckets[i]][_activeHorizonParam];
         return s ? s.n : null;
     }));
+    renderHorizonZoomRow(labels);
+    applyHorizonZoom();
+}
+
+function renderHorizonZoomRow(labels) {
+    var zoomLevels = [24, 48, 96, null];
+    var zoomLabels = ["24ч", "48ч", "96ч", "Всё"];
+    document.getElementById("horizonZoomRow").innerHTML = zoomLevels.map(function(z, i) {
+        return '<button class="cp-btn' + (z === _horizonZoom ? " active" : "") + '" ' +
+               'onclick="setHorizonZoom(' + (z === null ? "null" : z) + ')">' + zoomLabels[i] + '</button>';
+    }).join("");
+}
+
+function setHorizonZoom(maxH) {
+    _horizonZoom = maxH;
+    applyHorizonZoom();
+    document.querySelectorAll("#horizonZoomRow .cp-btn").forEach(function(b) {
+        var labels = ["24ч","48ч","96ч","Всё"];
+        var vals   = [24, 48, 96, null];
+        b.classList.toggle("active", vals[labels.indexOf(b.textContent)] === maxH);
+    });
+}
+
+function applyHorizonZoom() {
+    if (!_horizonChartInstance) return;
+    var sc = _horizonChartInstance.options.scales.x;
+    if (_horizonZoom === null) {
+        delete sc.min; delete sc.max;
+    } else {
+        var labels = _horizonChartInstance.data.labels;
+        var target = ((_horizonZoom >= 0) ? "+" : "") + _horizonZoom + "ч";
+        var idx    = labels.reduce(function(best, l, i) {
+            var h = parseInt(l.replace("+",""));
+            return (!isNaN(h) && h <= _horizonZoom) ? i : best;
+        }, 0);
+        delete sc.min;
+        sc.max = labels[idx];
+    }
+    _horizonChartInstance.update();
 }
 
 function renderHorizonParamRow() {
