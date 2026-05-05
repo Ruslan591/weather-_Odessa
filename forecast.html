@@ -1045,6 +1045,30 @@ async function loadModelWeights() {
     return _modelWeights;
 }
 
+var _pwsBias = null;
+
+async function loadPwsBias() {
+    if (_pwsBias) return _pwsBias;
+    try {
+        var r = await fetch("data/ensemble_accuracy_pws.json", { cache: "no-store" });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        var acc = await r.json();
+        _pwsBias = (acc && acc.overall) ? acc.overall : {};
+    } catch(e) {
+        console.warn("ensemble_accuracy_pws.json не загружен:", e.message);
+        _pwsBias = {};
+    }
+    return _pwsBias;
+}
+
+function applyBias(value, key, biasDict) {
+    if (value == null) return value;
+    var b = (biasDict[key] || {}).bias;
+    if (b == null) return value;
+    if (key === "windDir") return ((value - b) % 360 + 360) % 360;
+    return Math.round((value - b) * 10) / 10;
+}
+
 function getSeasonKey() {
     var now = new Date();
     var m = now.getMonth() + 1;
@@ -1246,6 +1270,7 @@ async function loadEnsemble() {
     if (!models.length) return;
 
     var mw = await loadModelWeights();
+    var bias = await loadPwsBias();
 
     // Показываем веса в заголовке
     var infoStr = "";
@@ -1289,6 +1314,16 @@ async function loadEnsemble() {
     // Пересчитываем веса только для успешных моделей
     var succeededWeights = getModelWeights(mw, succeededModels);
     var ensembleHours = mergeEnsemble(allModelHours, succeededWeights, succeededModels);
+    ensembleHours = ensembleHours.map(function(h) {
+        return Object.assign({}, h, {
+            temperature_2m:       applyBias(h.temperature_2m,       "temp",     bias),
+            pressure_msl:         applyBias(h.pressure_msl,         "pressure", bias),
+            wind_speed_10m:       applyBias(h.wind_speed_10m,       "wind",     bias),
+            wind_gusts_10m:       applyBias(h.wind_gusts_10m,       "windGust", bias),
+            wind_direction_10m:   applyBias(h.wind_direction_10m,   "windDir",  bias),
+            relative_humidity_2m: applyBias(h.relative_humidity_2m, "humidity", bias),
+        });
+    });
 
 
 
