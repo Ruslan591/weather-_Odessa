@@ -543,10 +543,16 @@ def merge_ensemble(all_model_hours, succeeded):
     return result
 
 
-def apply_bias(value, key, bias_dict):
+def apply_bias(value, key, bias_overall, bias_by_horizon=None, horizon_h=None):
     if value is None:
         return value
-    b = (bias_dict.get(key) or {}).get("bias")
+    # Ищем bias по горизонту, fallback на overall
+    b = None
+    if bias_by_horizon is not None and horizon_h is not None:
+        h_key = str(max(0, round(horizon_h)))
+        b = (bias_by_horizon.get(h_key, {}).get(key) or {}).get("bias")
+    if b is None:
+        b = (bias_overall.get(key) or {}).get("bias")
     if b is None:
         return value
     if key == "windDir":
@@ -554,7 +560,7 @@ def apply_bias(value, key, bias_dict):
     return round((value - b) * 10) / 10
 
 
-def build_snapshot(ensemble_hours, saved_at, run_time, mode="synop", bias=None):
+def build_snapshot(ensemble_hours, saved_at, run_time, mode="synop", bias=None, bias_by_horizon=None):
     """Формирует снимок в формате совместимом с forecast.html."""
     hours_out = []
     snap_dt = parse_iso(saved_at)
@@ -588,12 +594,12 @@ def build_snapshot(ensemble_hours, saved_at, run_time, mode="synop", bias=None):
             b = bias or {}
             hours_out.append({
                 "time":     h["time"],
-                "temp":     apply_bias(round(h["temperature_2m"] * 10) / 10 if h["temperature_2m"] is not None else None, "temp", b),
-                "pressure": apply_bias(round(h["pressure_msl"] * 10) / 10 if h["pressure_msl"] is not None else None, "pressure", b),
-                "wind":     apply_bias(round(h["wind_speed_10m"] * 10) / 10 if h["wind_speed_10m"] is not None else None, "wind", b),
-                "windGust": apply_bias(round((h["wind_gusts_10m"] or h["wind_speed_10m"] or 0) * 10) / 10, "windGust", b),
-                "windDir":  apply_bias(round(h["wind_direction_10m"]) if h["wind_direction_10m"] is not None else None, "windDir", b),
-                "humidity": apply_bias(round(h["relative_humidity_2m"]) if h["relative_humidity_2m"] is not None else None, "humidity", b),
+                "temp":     apply_bias(..., "temp", b, bias_by_horizon, horizon_h),
+                "pressure": apply_bias(..., "pressure", b, bias_by_horizon, horizon_h),
+                "wind":     apply_bias(..., "wind", b, bias_by_horizon, horizon_h),
+                "windGust": apply_bias(..., "windGust", b, bias_by_horizon, horizon_h),
+                "windDir":  apply_bias(..., "windDir", b, bias_by_horizon, horizon_h),
+                "humidity": apply_bias(..., "humidity", b, bias_by_horizon, horizon_h),
                 "rain":     round(h["rain"] * 10) / 10 if h["rain"] is not None else None,
             })
 
@@ -1145,7 +1151,8 @@ def main():
     snaps_synop, snaps_synop_sha = gh_load_json(snap_synop_path, default=[])
     snaps_pws,   snaps_pws_sha   = gh_load_json(snap_pws_path,   default=[])
     acc_pws_for_bias, _ = gh_load_json("data/ensemble_accuracy_pws.json", default=None)
-    pws_bias = (acc_pws_for_bias or {}).get("overall", {})
+    pws_bias_overall    = (acc_pws_for_bias or {}).get("overall", {})
+    pws_bias_by_horizon = (acc_pws_for_bias or {}).get("byHorizon", {})
 
     # Проверяем нужен ли новый снимок
     last_synop_run = parse_iso(snaps_synop[-1]["runTime"]) if snaps_synop and snaps_synop[-1].get("runTime") else None
@@ -1191,7 +1198,8 @@ def main():
             last_run_pws = snaps_pws[-1].get("runTime") if snaps_pws else None
             same_run_pws = last_run_pws and run_time and parse_iso(last_run_pws) == parse_iso(run_time)
             if need_pws and not same_run_pws:
-                snap = build_snapshot(ensemble_hours, saved_at, run_time, mode="pws", bias=pws_bias)
+                snap = build_snapshot(ensemble_hours, saved_at, run_time, mode="pws",
+                                      bias=pws_bias_overall, bias_by_horizon=pws_bias_by_horizon)
                 snaps_pws.append(snap)
                 snaps_pws_sha = gh_save_json(
                     snap_pws_path, snaps_pws, snaps_pws_sha,
