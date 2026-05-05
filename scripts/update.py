@@ -612,10 +612,11 @@ PARAM_MAP = {
     "temp":       ("temp",       "temp"),
     "pressure":   ("pressure",   "pressure"),
     "wind":       ("wind",       "wind"),
+    "windGust":   ("windGust",   "windGust"),
     "windDir":    ("windDir",    "windDir"),
     "humidity":   ("humidity",   "humidity"),
     "cloudcover": ("cloudcover", "cloudcover"),
-    "precip":     ("rain",       "precip"),       # прогноз: rain, набл: precip
+    "precip":     ("rain",       "precip"),
     "visibility": ("visibility", "visibility"),
 }
 
@@ -1238,6 +1239,7 @@ def main():
                     "temp":     rec.get("temp"),
                     "pressure": rec.get("pressure"),
                     "wind":     rec.get("wind"),
+                    "windGust": rec.get("windGust"),
                     "windDir":  rec.get("windDir"),
                     "humidity": rec.get("humidity"),
                     "rain":     rec.get("precip"),
