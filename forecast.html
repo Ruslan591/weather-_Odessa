@@ -1053,17 +1053,25 @@ async function loadPwsBias() {
         var r = await fetch("data/ensemble_accuracy_pws.json", { cache: "no-store" });
         if (!r.ok) throw new Error("HTTP " + r.status);
         var acc = await r.json();
-        _pwsBias = (acc && acc.overall) ? acc.overall : {};
+        _pwsBias = {
+            overall:    (acc && acc.overall)    ? acc.overall    : {},
+            byHorizon:  (acc && acc.byHorizon)  ? acc.byHorizon  : {},
+        };
     } catch(e) {
         console.warn("ensemble_accuracy_pws.json не загружен:", e.message);
-        _pwsBias = {};
+        _pwsBias = { overall: {}, byHorizon: {} };
     }
     return _pwsBias;
 }
 
-function applyBias(value, key, biasDict) {
+function applyBias(value, key, biasOverall, byHorizon, horizonH) {
     if (value == null) return value;
-    var b = (biasDict[key] || {}).bias;
+    var b = null;
+    if (byHorizon != null && horizonH != null) {
+        var hKey = String(Math.max(0, Math.round(horizonH)));
+        b = ((byHorizon[hKey] || {})[key] || {}).bias;
+    }
+    if (b == null) b = (biasOverall[key] || {}).bias;
     if (b == null) return value;
     if (key === "windDir") return ((value - b) % 360 + 360) % 360;
     return Math.round((value - b) * 10) / 10;
@@ -1314,14 +1322,16 @@ async function loadEnsemble() {
     // Пересчитываем веса только для успешных моделей
     var succeededWeights = getModelWeights(mw, succeededModels);
     var ensembleHours = mergeEnsemble(allModelHours, succeededWeights, succeededModels);
-    ensembleHours = ensembleHours.map(function(h) {
+    var snapTime = new Date(baseTimes[0]).getTime();
+    ensembleHours = ensembleHours.map(function(h, idx) {
+        var horizonH = (new Date(baseTimes[idx]).getTime() - snapTime) / 3600000;
         return Object.assign({}, h, {
-            temperature_2m:       applyBias(h.temperature_2m,       "temp",     bias),
-            pressure_msl:         applyBias(h.pressure_msl,         "pressure", bias),
-            wind_speed_10m:       applyBias(h.wind_speed_10m,       "wind",     bias),
-            wind_gusts_10m:       applyBias(h.wind_gusts_10m,       "windGust", bias),
-            wind_direction_10m:   applyBias(h.wind_direction_10m,   "windDir",  bias),
-            relative_humidity_2m: applyBias(h.relative_humidity_2m, "humidity", bias),
+            temperature_2m:       applyBias(h.temperature_2m,       "temp",     bias.overall, bias.byHorizon, horizonH),
+            pressure_msl:         applyBias(h.pressure_msl,         "pressure", bias.overall, bias.byHorizon, horizonH),
+            wind_speed_10m:       applyBias(h.wind_speed_10m,       "wind",     bias.overall, bias.byHorizon, horizonH),
+            wind_gusts_10m:       applyBias(h.wind_gusts_10m,       "windGust", bias.overall, bias.byHorizon, horizonH),
+            wind_direction_10m:   applyBias(h.wind_direction_10m,   "windDir",  bias.overall, bias.byHorizon, horizonH),
+            relative_humidity_2m: applyBias(h.relative_humidity_2m, "humidity", bias.overall, bias.byHorizon, horizonH),
         });
     });
 
