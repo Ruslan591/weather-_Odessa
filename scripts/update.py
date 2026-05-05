@@ -185,15 +185,20 @@ def gist_log(msg):
     _gist_lines.append(msg)
     _gist_queue.put("\n".join(_gist_lines))
 
-import time as _time
-
-def gist_log_save(label, fn, size_bytes=None):
-    """Вызывает fn(), логирует время выполнения и размер файла."""
-    t0 = _time.monotonic()
+def gist_log_save(label, fn, gh_path=None):
+    """Вызывает fn(), логирует текущее время и размер файла на GitHub."""
     result = fn()
-    elapsed = _time.monotonic() - t0
-    size_str = f" · {size_bytes / 1024:.1f} КБ" if size_bytes else ""
-    gist_log(f"    ⏱ {label}: {elapsed:.1f}с{size_str}")
+    ts = datetime.now(timezone.utc).strftime("%H:%M")
+    if gh_path:
+        try:
+            url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{gh_path}"
+            info = http_get_json(url, GH_HEADERS, timeout=10)
+            size_str = f" · {info.get('size', 0) / 1024:.1f} КБ"
+        except Exception:
+            size_str = ""
+    else:
+        size_str = ""
+    gist_log(f"    [{ts}] {label}{size_str}")
     return result
 
 # ── Время ────────────────────────────────────────────────────────────────────
@@ -609,12 +614,12 @@ def build_snapshot(ensemble_hours, saved_at, run_time, mode="synop", bias=None, 
             b = bias or {}
             hours_out.append({
                 "time":     h["time"],
-                "temp":     apply_bias(..., "temp", b, bias_by_horizon, horizon_h),
-                "pressure": apply_bias(..., "pressure", b, bias_by_horizon, horizon_h),
-                "wind":     apply_bias(..., "wind", b, bias_by_horizon, horizon_h),
-                "windGust": apply_bias(..., "windGust", b, bias_by_horizon, horizon_h),
-                "windDir":  apply_bias(..., "windDir", b, bias_by_horizon, horizon_h),
-                "humidity": apply_bias(..., "humidity", b, bias_by_horizon, horizon_h),
+                "temp":     apply_bias(round(h["temperature_2m"] * 10) / 10 if h["temperature_2m"] is not None else None, "temp", b, bias_by_horizon, horizon_h),
+                "pressure": apply_bias(round(h["pressure_msl"] * 10) / 10 if h["pressure_msl"] is not None else None, "pressure", b, bias_by_horizon, horizon_h),
+                "wind":     apply_bias(round(h["wind_speed_10m"] * 10) / 10 if h["wind_speed_10m"] is not None else None, "wind", b, bias_by_horizon, horizon_h),
+                "windGust": apply_bias(round((h["wind_gusts_10m"] or h["wind_speed_10m"] or 0) * 10) / 10, "windGust", b, bias_by_horizon, horizon_h),
+                "windDir":  apply_bias(round(h["wind_direction_10m"]) if h["wind_direction_10m"] is not None else None, "windDir", b, bias_by_horizon, horizon_h),
+                "humidity": apply_bias(round(h["relative_humidity_2m"]) if h["relative_humidity_2m"] is not None else None, "humidity", b, bias_by_horizon, horizon_h),
                 "rain":     round(h["rain"] * 10) / 10 if h["rain"] is not None else None,
             })
 
@@ -1098,14 +1103,12 @@ def main():
 
     if new_synop_lines:
         merged_txt = synop_text.rstrip() + "\n" + "\n".join(new_synop_lines) + "\n"
-        _sz = len(merged_txt.encode())
-        _merged_txt = merged_txt  # захват для lambda
+        _merged_txt = merged_txt
         synop_sha = gist_log_save(
-            f"synop_{year}.txt +{len(new_synop_lines)} строк",
+            f"synop_{year}.txt сохранён (+{len(new_synop_lines)} строк)",
             lambda: gh_put(synop_path, _merged_txt, synop_sha,
                            f"synop {year}: +{len(new_synop_lines)} lines"),
-            size_bytes=_sz)
-        gist_log(f"  ✓ synop_{year}.txt сохранён")
+            gh_path=synop_path)
     else:
         gist_log(f"  synop_{year}.txt актуален")
 
@@ -1156,16 +1159,14 @@ def main():
 
             if new_md_records:
                 merged = sorted(month_data + new_md_records, key=lambda r: r["synopTime"])
-                _content = json.dumps(merged, ensure_ascii=False, indent=2)
-                _sz = len(_content.encode())
-                _merged = merged  # захват для lambda
+                _merged = merged
                 _md_sha = md_sha
+                _md_path = md_path
                 md_sha = gist_log_save(
-                    f"{mk}.json +{len(new_md_records)} записей",
-                    lambda: gh_save_json(md_path, _merged, _md_sha,
+                    f"{mk}.json сохранён (+{len(new_md_records)} записей)",
+                    lambda: gh_save_json(_md_path, _merged, _md_sha,
                                          f"modelData {mk}: +{len(new_md_records)} records"),
-                    size_bytes=_sz)
-                gist_log(f"  ✓ {mk}.json сохранён")
+                    gh_path=md_path)
 
     # ── 3. Свежий ансамблевый прогноз → снимки ──────────────────────────────
     gist_log("--- 3. Ансамблевый прогноз ---")
@@ -1215,16 +1216,13 @@ def main():
             if need_synop and (now.hour - synop_hour) <= 2 and not same_run:
                 snap = build_snapshot(ensemble_hours, saved_at, run_time, mode="synop")
                 snaps_synop.append(snap)
-                _content = json.dumps(snaps_synop, ensure_ascii=False, separators=(",",":"))
-                _sz = len(_content.encode())
                 _snaps_synop = snaps_synop
                 _snaps_synop_sha = snaps_synop_sha
                 snaps_synop_sha = gist_log_save(
-                    f"SYNOP-снимок {len(snap['hours'])} точек",
+                    f"SYNOP-снимок сохранён ({len(snap['hours'])} точек)",
                     lambda: gh_save_json(snap_synop_path, _snaps_synop, _snaps_synop_sha,
                                          f"ensemble synop snapshot {saved_at[:16]}", compact=True),
-                    size_bytes=_sz)
-                gist_log(f"  ✓ SYNOP-снимок сохранён")
+                    gh_path=snap_synop_path)
             elif need_synop:
                 gist_log(f"  SYNOP-снимок пропущен (не синоптический час: {now.hour}h UTC)")
 
@@ -1234,16 +1232,13 @@ def main():
                 snap = build_snapshot(ensemble_hours, saved_at, run_time, mode="pws",
                                       bias=pws_bias_overall, bias_by_horizon=pws_bias_by_horizon)
                 snaps_pws.append(snap)
-                _content = json.dumps(snaps_pws, ensure_ascii=False, separators=(",",":"))
-                _sz = len(_content.encode())
                 _snaps_pws = snaps_pws
                 _snaps_pws_sha = snaps_pws_sha
                 snaps_pws_sha = gist_log_save(
-                    f"PWS-снимок {len(ensemble_hours)} часов",
+                    f"PWS-снимок сохранён ({len(ensemble_hours)} часов)",
                     lambda: gh_save_json(snap_pws_path, _snaps_pws, _snaps_pws_sha,
                                          f"ensemble pws snapshot {saved_at[:16]}", compact=True),
-                    size_bytes=_sz)
-                gist_log(f"  ✓ PWS-снимок сохранён")
+                    gh_path=snap_pws_path)
         else:
             gist_log("  ✗ Ни одна модель не ответила")
     else:
@@ -1263,29 +1258,24 @@ def main():
 
     if new_recs_synop:
         acc_synop = update_accuracy(acc_synop, new_recs_synop, mode="synop")
-        _content = json.dumps(acc_synop, ensure_ascii=False, indent=2)
-        _sz = len(_content.encode())
         _acc_synop = acc_synop
         _acc_synop_sha = acc_synop_sha
         acc_synop_sha = gist_log_save(
-            "ensemble_accuracy_synop.json",
+            "ensemble_accuracy_synop.json обновлён",
             lambda: gh_save_json(acc_synop_path, _acc_synop, _acc_synop_sha,
                                   "ensemble accuracy synop update"),
-            size_bytes=_sz)
-        gist_log("  ✓ ensemble_accuracy_synop.json обновлён")
+            gh_path=acc_synop_path)
 
     if len(remaining_synop) < len(snaps_synop):
-        _content = json.dumps(remaining_synop, ensure_ascii=False, separators=(",",":"))
-        _sz = len(_content.encode())
         _remaining_synop = remaining_synop
         _snaps_synop_sha2 = snaps_synop_sha
+        _removed_s = len(snaps_synop) - len(remaining_synop)
         snaps_synop_sha = gist_log_save(
-            f"очистка SYNOP-снимков -{len(snaps_synop)-len(remaining_synop)}",
+            f"ensemble_snapshots_synop.json очищен (-{_removed_s} снимков)",
             lambda: gh_save_json(snap_synop_path, _remaining_synop, _snaps_synop_sha2,
-                                  f"cleanup synop snapshots: {len(snaps_synop)-len(remaining_synop)} removed",
+                                  f"cleanup synop snapshots: {_removed_s} removed",
                                   compact=True),
-            size_bytes=_sz)
-        gist_log("  ✓ ensemble_snapshots_synop.json очищен")
+            gh_path=snap_synop_path)
 
     # PWS наблюдения для верификации — из pws_raw.json
     pws_raw, pws_raw_sha = gh_load_json("data/pws_raw.json", default=[])
@@ -1313,28 +1303,23 @@ def main():
 
     if new_recs_pws:
         acc_pws = update_accuracy(acc_pws, new_recs_pws, mode="pws")
-        _content = json.dumps(acc_pws, ensure_ascii=False, indent=2)
-        _sz = len(_content.encode())
         _acc_pws = acc_pws
         _acc_pws_sha = acc_pws_sha
         acc_pws_sha = gist_log_save(
-            "ensemble_accuracy_pws.json",
+            "ensemble_accuracy_pws.json обновлён",
             lambda: gh_save_json(acc_pws_path, _acc_pws, _acc_pws_sha,
                                   "ensemble accuracy pws update"),
-            size_bytes=_sz)
-        gist_log("  ✓ ensemble_accuracy_pws.json обновлён")
+            gh_path=acc_pws_path)
 
     if len(remaining_pws) < len(snaps_pws):
-        _content = json.dumps(remaining_pws, ensure_ascii=False, indent=2)
-        _sz = len(_content.encode())
         _remaining_pws = remaining_pws
         _snaps_pws_sha2 = snaps_pws_sha
+        _removed_p = len(snaps_pws) - len(remaining_pws)
         snaps_pws_sha = gist_log_save(
-            f"очистка PWS-снимков -{len(snaps_pws)-len(remaining_pws)}",
+            f"ensemble_snapshots_pws.json очищен (-{_removed_p} снимков)",
             lambda: gh_save_json(snap_pws_path, _remaining_pws, _snaps_pws_sha2,
-                                  f"cleanup pws snapshots: {len(snaps_pws)-len(remaining_pws)} removed"),
-            size_bytes=_sz)
-        gist_log("  ✓ ensemble_snapshots_pws.json очищен")
+                                  f"cleanup pws snapshots: {_removed_p} removed"),
+            gh_path=snap_pws_path)
 
     # ── 5. Чистка pws_raw.json ──────────────────────────────────────────────
     gist_log("--- 5. Чистка pws_raw.json ---")
@@ -1343,17 +1328,14 @@ def main():
     pws_raw = [r for r in pws_raw
                if datetime.strptime(r["hourKey"], "%Y-%m-%dT%H").replace(tzinfo=timezone.utc) >= cutoff_pws]
     if len(pws_raw) < pws_before:
-        _content = json.dumps(pws_raw, ensure_ascii=False, indent=2)
-        _sz = len(_content.encode())
         _pws_raw = pws_raw
         _pws_raw_sha = pws_raw_sha
-        _removed = pws_before - len(pws_raw)
+        _removed_r = pws_before - len(pws_raw)
         pws_raw_sha = gist_log_save(
-            f"pws_raw.json -{_removed} записей",
+            f"pws_raw.json очищен (-{_removed_r} записей)",
             lambda: gh_save_json("data/pws_raw.json", _pws_raw, _pws_raw_sha,
-                                  f"pws_raw cleanup: removed {_removed} old records"),
-            size_bytes=_sz)
-        gist_log(f"  ✓ Удалено {_removed} старых записей PWS")
+                                  f"pws_raw cleanup: removed {_removed_r} old records"),
+            gh_path="data/pws_raw.json")
     else:
         gist_log(f"  pws_raw.json актуален ({len(pws_raw)} записей)")
 
