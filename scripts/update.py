@@ -690,8 +690,8 @@ def calc_errors(forecast_val, obs_val, param):
     if forecast_val is None or obs_val is None:
         return None
     if param == "windDir":
-        err = angle_diff(forecast_val, obs_val)
-        return err, err
+        err = ((forecast_val - obs_val + 180) % 360) - 180
+        return err, abs(err)
     err = forecast_val - obs_val
     return err, abs(err)
 
