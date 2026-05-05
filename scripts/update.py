@@ -1344,10 +1344,10 @@ def main():
 
   # ── 6. model_weights.json ───────────────────────────────────────────────
     gist_log("--- 6. model_weights.json ---")
-    import subprocess, sys
     try:
+        script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calc_weights.py")
         result = subprocess.run(
-            [sys.executable, "calc_weights.py"],
+            [sys.executable, script],
             capture_output=True, text=True, timeout=120
         )
         if result.returncode == 0:
