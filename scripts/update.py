@@ -1296,7 +1296,7 @@ def main():
                     "windGust": rec.get("windGust"),
                     "windDir":  rec.get("windDir"),
                     "humidity": rec.get("humidity"),
-                    "rain":     rec.get("precip"),
+                    "precip":   rec.get("precip"),
                 }
             except Exception:
                 pass
