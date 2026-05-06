@@ -611,18 +611,18 @@ def build_snapshot(ensemble_hours, saved_at, run_time, mode="synop", bias=None, 
                 "cloudcover":  round(h["cloud_cover"]) if h["cloud_cover"] is not None else None,
                 "weatherCode": h["weather_code"],
             })
-        else:  # pws — каждый час, первые 4 дня
+        else:  # pws — каждый час, первые 4 дня, без коррекции (применяется на клиенте)
             if horizon_h > 96:
                 break
-            b = bias or {}
             hours_out.append({
                 "time":     h["time"],
-                "temp":     apply_bias(round(h["temperature_2m"] * 10) / 10 if h["temperature_2m"] is not None else None, "temp", b, bias_by_horizon, horizon_h),
-                "pressure": apply_bias(round(h["pressure_msl"] * 10) / 10 if h["pressure_msl"] is not None else None, "pressure", b, bias_by_horizon, horizon_h),
-                "wind":     apply_bias(round(h["wind_speed_10m"] * 10) / 10 if h["wind_speed_10m"] is not None else None, "wind", b, bias_by_horizon, horizon_h),
-                "windGust": apply_bias(round((h["wind_gusts_10m"] or h["wind_speed_10m"] or 0) * 10) / 10, "windGust", b, bias_by_horizon, horizon_h),
-                "windDir":  apply_bias(round(h["wind_direction_10m"]) if h["wind_direction_10m"] is not None else None, "windDir", b, bias_by_horizon, horizon_h),
-                "humidity": apply_bias(round(h["relative_humidity_2m"]) if h["relative_humidity_2m"] is not None else None, "humidity", b, bias_by_horizon, horizon_h),
+                "horizonH": round(horizon_h),
+                "temp":     round(h["temperature_2m"] * 10) / 10 if h["temperature_2m"] is not None else None,
+                "pressure": round(h["pressure_msl"] * 10) / 10 if h["pressure_msl"] is not None else None,
+                "wind":     round(h["wind_speed_10m"] * 10) / 10 if h["wind_speed_10m"] is not None else None,
+                "windGust": round((h["wind_gusts_10m"] or h["wind_speed_10m"] or 0) * 10) / 10,
+                "windDir":  round(h["wind_direction_10m"]) if h["wind_direction_10m"] is not None else None,
+                "humidity": round(h["relative_humidity_2m"]) if h["relative_humidity_2m"] is not None else None,
                 "rain":     round(h["rain"] * 10) / 10 if h["rain"] is not None else None,
             })
 
@@ -1232,8 +1232,7 @@ def main():
             last_run_pws = snaps_pws[-1].get("runTime") if snaps_pws else None
             same_run_pws = last_run_pws and run_time and parse_iso(last_run_pws) == parse_iso(run_time)
             if need_pws and not same_run_pws:
-                snap = build_snapshot(ensemble_hours, saved_at, run_time, mode="pws",
-                                      bias=pws_bias_overall, bias_by_horizon=pws_bias_by_horizon)
+                snap = build_snapshot(ensemble_hours, saved_at, run_time, mode="pws")
                 snaps_pws.append(snap)
                 _snaps_pws = snaps_pws
                 _snaps_pws_sha = snaps_pws_sha
