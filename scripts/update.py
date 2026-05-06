@@ -588,7 +588,8 @@ def apply_bias(value, key, bias_overall, bias_by_horizon=None, horizon_h=None):
 def build_snapshot(ensemble_hours, saved_at, run_time, mode="synop", bias=None, bias_by_horizon=None):
     """Формирует снимок в формате совместимом с forecast.html."""
     hours_out = []
-    snap_dt = parse_iso(saved_at)
+    saved_dt = parse_iso(saved_at)
+    snap_dt  = saved_dt.replace(hour=0, minute=0, second=0, microsecond=0)
 
     for h in ensemble_hours:
         t_str = h["time"] if "T" in h["time"] else h["time"].replace(" ", "T") + ":00"
@@ -710,7 +711,9 @@ def squeeze_snapshots(snaps, obs_by_time, mode="synop"):
     remaining = []
 
     for snap in snaps:
+        # горизонт от начала суток снимка (00:00 UTC)
         saved_at = parse_iso(snap["savedAt"])
+        snap_day = saved_at.replace(hour=0, minute=0, second=0, microsecond=0)
         hours    = snap.get("hours", [])
         if not hours:
             continue
@@ -733,7 +736,7 @@ def squeeze_snapshots(snaps, obs_by_time, mode="synop"):
             if obs is None:
                 continue
 
-            horizon_h = round((t_dt - saved_at).total_seconds() / 3600)
+            horizon_h = round((t_dt - snap_day).total_seconds() / 3600)
             day_key   = t_dt.strftime("%Y-%m-%d")
 
             rec = {
