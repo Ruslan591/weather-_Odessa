@@ -1076,6 +1076,7 @@ function applyBias(value, key, biasOverall, byHorizon, horizonH) {
     if (key === "windDir") return ((value - b) % 360 + 360) % 360;
     var result = Math.round((value - b) * 10) / 10;
     if (key === "wind" || key === "windGust") result = Math.max(0, result);
+    if (key === "humidity") result = Math.min(100, Math.max(0, result));
     return result;
 }
 
