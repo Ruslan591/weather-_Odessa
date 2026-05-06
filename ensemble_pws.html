@@ -235,18 +235,39 @@ function buildObsIndex() {
 }
 
 /* === РАСЧЁТ МЕТРИК === */
+function applyBiasClient(value, key, horizonH) {
+    if (value == null || !_acc) return value;
+    var overall   = (_acc.overall   || {})[key] || {};
+    var byHorizon = _acc.byHorizon  || {};
+    var b = null;
+    if (horizonH != null) {
+        var hKey = String(Math.max(0, Math.round(horizonH)));
+        b = ((byHorizon[hKey] || {})[key] || {}).bias;
+    }
+    if (b == null) b = overall.bias;
+    if (b == null) return value;
+    if (key === "windDir") return ((value - b) % 360 + 360) % 360;
+    var result = Math.round((value - b) * 10) / 10;
+    if (key === "wind" || key === "windGust") result = Math.max(0, result);
+    return result;
+}
+
 function pushPwsErrors(errors, fh, ob) {
+    var h = fh.horizonH != null ? fh.horizonH : null;
     function push(k, fv, ov) {
         if (fv == null || ov == null) return;
-        errors[k].push(fv - ov);
+        var corrected = applyBiasClient(fv, k, h);
+        errors[k].push(corrected - ov);
     }
     push("temp",     fh.temp,     ob.temp);
     push("pressure", fh.pressure, ob.pressure);
     push("wind",     fh.wind,     ob.wind);
     push("windGust", fh.windGust, ob.windGust);
     push("humidity", fh.humidity, ob.humidity);
-    if (fh.windDir != null && ob.windDir != null)
-        errors.windDir.push(windDirDiff(fh.windDir, ob.windDir));
+    if (fh.windDir != null && ob.windDir != null) {
+        var corrDir = applyBiasClient(fh.windDir, "windDir", h);
+        errors.windDir.push(windDirDiff(corrDir, ob.windDir));
+    }
     if (fh.rain != null && ob.precip != null)
         errors.precip.push((fh.rain>0.1?1:0) - (ob.precip>0.1?1:0));
 }
