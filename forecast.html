@@ -307,6 +307,7 @@ function renderForecastChart(hours, times){
     const spread = vMax - vMin || 1;
     vMin -= spread * 0.3;
     vMax += spread * 0.3;
+    if (cfg.key === "wind" || cfg.key === "rain") vMin = Math.max(0, vMin);
 
     const tMin = new Date(times[0]).getTime();
     const tMax = new Date(times[times.length - 1]).getTime();
