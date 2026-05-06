@@ -66,12 +66,12 @@ PWS_KEEP_DAYS = 30        # сколько дней хранить pws_raw.json
 SNAP_EXPIRE_HOURS = 400   # снимок удаляем когда все его часы прошли (чуть больше 16 суток)
 
 # ── HTTP-утилиты ─────────────────────────────────────────────────────────────
-def http_get(url, headers=None, timeout=20):
+def http_get(url, headers=None, timeout=40):
     req = Request(url, headers=headers or {})
     with urlopen(req, timeout=timeout) as r:
         return r.read().decode("utf-8", errors="replace")
 
-def http_get_json(url, headers=None, timeout=20):
+def http_get_json(url, headers=None, timeout=40):
     return json.loads(http_get(url, headers, timeout))
 
 def retry(fn, attempts=3, delay=5):
