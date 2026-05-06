@@ -588,8 +588,7 @@ def apply_bias(value, key, bias_overall, bias_by_horizon=None, horizon_h=None):
 def build_snapshot(ensemble_hours, saved_at, run_time, mode="synop", bias=None, bias_by_horizon=None):
     """Формирует снимок в формате совместимом с forecast.html."""
     hours_out = []
-    ref_str = run_time if run_time else saved_at
-    snap_dt = parse_iso(ref_str)
+    snap_dt = parse_iso(saved_at)
 
     for h in ensemble_hours:
         t_str = h["time"] if "T" in h["time"] else h["time"].replace(" ", "T") + ":00"
