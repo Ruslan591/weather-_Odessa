@@ -580,6 +580,8 @@ def apply_bias(value, key, bias_overall, bias_by_horizon=None, horizon_h=None):
     result = round((value - b) * 10) / 10
     if key in ("wind", "windGust"):
         result = max(0, result)
+    if key == "humidity":
+        result = max(0, min(100, result))
     return result
 
 
