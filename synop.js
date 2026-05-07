@@ -77,7 +77,8 @@ function parseSynop(line){
     const specialClouds = [];
 
     // 555
-    let tempMinSurface = null, dailyPrecip = null;
+    let globeTemp = null;
+    let dailyPrecip = null;
     let maxGust555 = null, sunHours555 = null;
     let phenomCodes = [];
     let sec555TempMax = null, sec555TempMin = null, sec555Temp2m = null;
@@ -116,7 +117,7 @@ function parseSynop(line){
             weatherNow   = g.slice(1,3);
             weatherPast1 = g[3];   // W1: погода за период от 2 до 1 часа до срока
             weatherPast2 = g[4];   // W2: погода за последний час до срока
-}
+        }
         else if(/^8[\d/]{4}$/.test(g)){
             cloudGroup     = g;
             cloudTotalOkta = g[1] === "/" ? null : safeNum(g[1]);
@@ -203,18 +204,18 @@ function parseSynop(line){
         const c = g.replace(/=+$/, "");
         if(!c || c.length < 4) continue;
 
-        // 1EsnTgTg — состояние поверхности + температура почвы (целые °C)
-if(/^1[0-9][01]\d{2}$/.test(c)){
-    surfStateCode555 = safeNum(c[1]);
-    const sn  = c[2] === "1" ? -1 : 1;
-    const val = parseInt(c.slice(3, 5), 10);
-    if(Number.isFinite(val)) tempMinSurface = sn * val;
-}
-// 1/TgTgTg — только температура почвы, состояние не наблюдалось
-else if(/^1\/\d{3}$/.test(c)){
-    const val = parseInt(c.slice(2), 10);
-    if(Number.isFinite(val)) tempMinSurface = val;
-}
+        // 1EsnTgTg — температура шара (globe thermometer), E — состояние поверхности
+        if(/^1[0-9][01]\d{2}$/.test(c)){
+            surfStateCode555 = safeNum(c[1]);
+            const sn  = c[2] === "1" ? -1 : 1;
+            const val = parseInt(c.slice(3, 5), 10);
+            if(Number.isFinite(val)) globeTemp = sn * val;
+        }
+        // 1/TTT — температура шара без состояния поверхности
+        else if(/^1\/\d{3}$/.test(c)){
+            const val = parseInt(c.slice(2), 10);
+            if(Number.isFinite(val)) globeTemp = val;
+        }
 
         // 2snTnTnTn — минимальная температура воздуха за ночь (десятые °C)
         else if(/^2[01]\d{3}$/.test(c)){
@@ -231,6 +232,7 @@ else if(/^1\/\d{3}$/.test(c)){
             const val = parseInt(c.slice(3, 5), 10);
             groundTemp = Number.isFinite(val) ? sn * val : null;
         }
+
         // 4Esss — высота снежного покрова
         else if(/^4\d{4}$/.test(c) && snowDepth === null){
             snowDepthCode = safeNum(c[1]);
@@ -291,7 +293,7 @@ else if(/^1\/\d{3}$/.test(c)){
         specialClouds,
 
         // 555
-        tempMinSurface,
+        globeTemp,
         surfStateCode555,
         sec555TempMax,
         sec555TempMin,
@@ -411,7 +413,28 @@ async function loadSynop(){
 }
 
 /* =========================================================
-   4. РЕНДЕР SYNOP
+   4. РАСЧЁТ WBGT
+========================================================= */
+function calcWBGT(ta, tg, tdew){
+    if(ta == null || tg == null || tdew == null) return null;
+    const rh = calcRelativeHumidity(ta, tdew); // из utils.js
+    if(rh == null) return null;
+    // Wet-bulb по формуле Стулла (2011)
+    const tw = ta * Math.atan(0.151977 * Math.pow(rh + 8.313659, 0.5))
+             + Math.atan(ta + rh)
+             - Math.atan(rh - 1.676331)
+             + 0.00391838 * Math.pow(rh, 1.5) * Math.atan(0.023101 * rh)
+             - 4.686035;
+    const wbgt = 0.7 * tw + 0.2 * tg + 0.1 * ta;
+    return {
+        wbgt: Math.round(wbgt * 10) / 10,
+        tw:   Math.round(tw   * 10) / 10,
+        rh:   Math.round(rh),
+    };
+}
+
+/* =========================================================
+   5. РЕНДЕР SYNOP
 ========================================================= */
 function renderSynop(d){
     const main      = document.getElementById("main");
@@ -441,13 +464,20 @@ function renderSynop(d){
         return `${hh} ч ${min} мин`;
     }
 
+    /* ---------- день/ночь по восходу для Одессы ---------- */
+    const obsHourUTC = d.yyggi ? parseInt(d.yyggi.slice(2,4), 10) : null;
+    const obsDate = obsHourUTC != null
+        ? new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate(), obsHourUTC))
+        : new Date();
+    const isDay = isDayNow(46.48, 30.74, obsDate);
+
     /* ---------- блок осадков (только если есть данные) ---------- */
     let precipBlockHtml = "";
     const hasPrecip = d.precipGroup || d.dailyPrecip != null;
     if(hasPrecip){
         const precipRows = [
-            d.precipGroup  ? row("Осадки за период",  precipitationText(null, d.precipGroup)) : "",
-            d.dailyPrecip != null ? row("Суточная сумма",    fmt0(d.dailyPrecip," мм"))          : "",
+            d.precipGroup     ? row("Осадки за период", precipitationText(null, d.precipGroup)) : "",
+            d.dailyPrecip != null ? row("Суточная сумма",  fmt0(d.dailyPrecip," мм"))            : "",
         ].filter(Boolean).join("");
         precipBlockHtml = `
         <div class="card" style="margin-top:12px;">
@@ -494,25 +524,17 @@ function renderSynop(d){
     }
 
     /* ---------- СЕКЦИЯ 555 ---------- */
-    // Определяем день/ночь по реальному восходу для Одессы
-    const obsHourUTC = d.yyggi ? parseInt(d.yyggi.slice(2,4), 10) : null;
-    const obsDate = obsHourUTC != null ? new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate(), obsHourUTC)) : new Date();
-    const isDay = isDayNow(46.48, 30.74, obsDate);
-    
-    // Температура поверхности почвы/травы: два варианта из сек. 555
-    // 1EsnT'gT'g — текущая или с нагревом Солнцем (группа 1xxxxx)
-    // 3EsnTgTg   — то же но в виде группы 3
-    const surfTempRow = d.tempMinSurface != null ? row(
-        isDay ? "Т° поверхности почвы (с нагревом Солнцем)" : "Т° поверхности почвы",
-        fmt0(d.tempMinSurface,"°C") + groundStateLabel(d.surfStateCode555)
+    const globeTempRow = d.globeTemp != null ? row(
+        "Температура шара (Tg)",
+        fmt0(d.globeTemp,"°C") + groundStateLabel(d.surfStateCode555)
     ) : "";
-    const groundTempRow = d.groundTemp != null && d.tempMinSurface == null ? row(
+    const groundTempRow = d.groundTemp != null && d.globeTemp == null ? row(
         "Т° поверхности почвы (трава)",
         fmt0(d.groundTemp,"°C") + groundStateLabel(d.groundStateCode)
     ) : "";
 
     const rows555 = [
-        surfTempRow,
+        globeTempRow,
         groundTempRow,
         d.sec555TempMin  != null ? row("Минимальная т° почвы за ночь (заморозок?)", fmt1(d.sec555TempMin,"°C")) : "",
         d.sec555Temp2m   != null ? row("Т° воздуха на 2 м (доп.)",  fmt1(d.sec555Temp2m,"°C"))  : "",
@@ -555,6 +577,48 @@ function renderSynop(d){
         </div>`;
     }
 
+    /* ---------- WBGT (только если есть температура шара) ---------- */
+    let wbgtBlockHtml = "";
+    if(d.globeTemp != null){
+        const wbgtResult = calcWBGT(d.temp, d.globeTemp, d.dew);
+        if(wbgtResult){
+            const { wbgt, tw, rh } = wbgtResult;
+
+            // Шкала ISO 7243
+            const isoLevel = wbgt < 28 ? { label:"Комфортно",    color:"#4caf50" }
+                           : wbgt < 32 ? { label:"Осторожно",    color:"#ff9800" }
+                           : wbgt < 35 ? { label:"Опасно",       color:"#f44336" }
+                           :             { label:"Очень опасно", color:"#9c27b0" };
+
+            // Шкала NIOSH
+            const nioshLevel = wbgt < 25 ? { label:"Норма",          color:"#4caf50" }
+                             : wbgt < 28 ? { label:"Умеренный риск", color:"#8bc34a" }
+                             : wbgt < 30 ? { label:"Осторожно",      color:"#ff9800" }
+                             : wbgt < 32 ? { label:"Высокий риск",   color:"#ff5722" }
+                             :             { label:"Опасно",         color:"#f44336" };
+
+            wbgtBlockHtml = `
+        <div class="card" style="margin-top:12px;">
+            <div class="cardTitle">🌡️ Тепловой стресс (WBGT)</div>
+            ${row("Температура шара (Tg)",                    fmt0(d.globeTemp,"°C"))}
+            ${row("Температура влажного термометра (Tw)",     fmt1(tw,"°C"))}
+            ${row("Относительная влажность",                  fmt0(rh," %"))}
+            <div class="row" style="margin-top:8px;">
+                <div class="label" style="font-weight:600;">WBGT</div>
+                <div class="value" style="font-size:1.3em;font-weight:700;">${wbgt.toFixed(1)}°C</div>
+            </div>
+            <div class="row">
+                <div class="label">ISO 7243</div>
+                <div class="value" style="color:${isoLevel.color};font-weight:600;">${isoLevel.label}</div>
+            </div>
+            <div class="row">
+                <div class="label">NIOSH</div>
+                <div class="value" style="color:${nioshLevel.color};font-weight:600;">${nioshLevel.label}</div>
+            </div>
+        </div>`;
+        }
+    }
+
     /* ---------- блок облаков ---------- */
     function cloudValueOrNone(code, textFn){
         if(code == null) return "облаков нет";
@@ -566,8 +630,6 @@ function renderSynop(d){
     const cloudTotalText = cloudTotalN != null
         ? escapeHtml(cloudAmountText(cloudTotalN))
         : "-";
-
-    
 
     const cloudTotalIcon = cloudTotalN === 0 ? (isDay ? "☀️" : "🌙") :
                            cloudTotalN === 1 ? (isDay ? "🌤" : "🌑") :
@@ -596,7 +658,7 @@ function renderSynop(d){
             ОДЕССА
             <span class="cardSubOrg">Гидрометцентр Чёрного и Азовского морей</span>
         </div>
-                <div class="subTitle">Наблюдение: ${escapeHtml(localTime)} время</div>
+        <div class="subTitle">Наблюдение: ${escapeHtml(localTime)} время</div>
 
         <div class="heroTempRow" style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
             <div class="heroTempLeft">
@@ -660,6 +722,7 @@ function renderSynop(d){
         </div>
 
         ${wxBlockHtml}
+        ${wbgtBlockHtml}
         ${precipBlockHtml}
         ${extraBlockHtml}
         ${sec444Html}
@@ -678,7 +741,7 @@ function renderSynop(d){
 }
 
 /* =========================================================
-   5. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ РЕНДЕРА
+   6. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ РЕНДЕРА
 ========================================================= */
 function row(label, value){
     return `<div class="row">
@@ -732,7 +795,7 @@ function cloudFormText444(code){
 }
 
 /* =========================================================
-   6. UI-ОБЁРТКИ
+   7. UI-ОБЁРТКИ
 ========================================================= */
 async function loadSynopUI(){
     const btn = document.getElementById("btnSynop");
