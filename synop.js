@@ -534,7 +534,6 @@ function renderSynop(d){
     ) : "";
 
     const rows555 = [
-        globeTempRow,
         groundTempRow,
         d.sec555TempMin  != null ? row("Минимальная т° почвы за ночь (заморозок?)", fmt1(d.sec555TempMin,"°C")) : "",
         d.sec555Temp2m   != null ? row("Т° воздуха на 2 м (доп.)",  fmt1(d.sec555Temp2m,"°C"))  : "",
