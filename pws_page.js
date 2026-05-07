@@ -260,6 +260,7 @@ function renderPWSStation(p){
         <!-- Дополнительные данные -->
         ${rows.length ? `<div class="pws-fields">${rows.map(([k,v])=>`<div class="districtLine"><span>${k}</span><span>${v}</span></div>`).join("")}</div>` : ""}
 
+        ${makeSolarWbgtBlock(p)}
         <!-- О станции (шторка) -->
         ${rowsAbout.length ? `<details style="margin-top:8px;">
             <summary onclick="toggleDetails(event)">О станции</summary>
@@ -285,6 +286,76 @@ function renderPWSStation(p){
         <div id="calibMsg" style="font-size:11px;margin-top:4px;min-height:14px;padding:0 2px;">
             ${off !== 0 ? `<span style="color:#72c8ff;">поправка: ${off>0?"+":""}${off} гПа</span>` : ""}
         </div>
+    </div>`;
+}
+
+function makeSolarWbgtBlock(p){
+    if(p.solarRad == null && p.uv == null) return "";
+
+    // УФ категория
+    const uvLevel = p.uv == null ? null
+        : p.uv < 3  ? { label:"Низкий",        color:"#4caf50" }
+        : p.uv < 6  ? { label:"Умеренный",     color:"#ffd166" }
+        : p.uv < 8  ? { label:"Высокий",       color:"#ff9800" }
+        : p.uv < 11 ? { label:"Очень высокий", color:"#f44336" }
+        :              { label:"Экстремальный", color:"#9c27b0" };
+
+    // Время до ожога (тип I кожи, самый чувствительный — показываем минимум)
+    // Формула ВОЗ: t = 200 / (UV × 0.012) в минутах, округлённо
+    const burnMin = p.uv > 0
+        ? Math.round(200 / (p.uv * 3.5))
+        : null;
+
+    // WBGT из PWS (если есть temp и dewpt)
+    let wbgtHtml = "";
+    if(p.temp != null && p.dewpt != null && p.solarRad != null){
+        // Аппроксимация Tg через SR и ветер (упрощённая формула)
+        const wind = p.windSpeedMs ?? 1;
+        const tg = p.temp + 0.04 * Math.pow(p.solarRad, 0.5) * (1 - 0.0034 * wind);
+        const wbgtResult = calcWBGT(p.temp, tg, p.dewpt);
+        if(wbgtResult){
+            const { wbgt, tw } = wbgtResult;
+            const isoLevel = wbgt < 28 ? { label:"Комфортно",    color:"#4caf50" }
+                           : wbgt < 32 ? { label:"Осторожно",    color:"#ff9800" }
+                           : wbgt < 35 ? { label:"Опасно",       color:"#f44336" }
+                           :             { label:"Очень опасно", color:"#9c27b0" };
+            wbgtHtml = `
+            <div class="districtLine" style="margin-top:6px;">
+                <span>Tw (влажный термометр)</span><span>${fmt1(tw,"°C")}</span>
+            </div>
+            <div class="districtLine">
+                <span>Tg (шар, расчётный)</span><span>${fmt1(tg,"°C")}</span>
+            </div>
+            <div class="districtLine">
+                <span style="font-weight:600;">WBGT</span>
+                <span style="font-weight:700;">${wbgt.toFixed(1)}°C</span>
+            </div>
+            <div class="districtLine">
+                <span>ISO 7243</span>
+                <span style="color:${isoLevel.color};font-weight:600;">${isoLevel.label}</span>
+            </div>`;
+        }
+    }
+
+    const uvHtml = uvLevel ? `
+        <div class="districtLine">
+            <span>УФ-индекс</span>
+            <span style="color:${uvLevel.color};font-weight:600;">${p.uv} · ${uvLevel.label}</span>
+        </div>
+        ${burnMin != null ? `<div class="districtLine"><span>Время до ожога (I тип кожи)</span><span>~${burnMin} мин</span></div>` : ""}
+    ` : "";
+
+    const srHtml = p.solarRad != null ? `
+        <div class="districtLine">
+            <span>Солнечная радиация</span><span>${fmt0(p.solarRad," Вт/м²")}</span>
+        </div>` : "";
+
+    return `
+    <div class="pws-fields" style="margin-top:10px;border-top:1px solid #2a2a2a;padding-top:8px;">
+        <div style="font-size:11px;color:#888;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px;">☀️ Солнце и тепловой стресс</div>
+        ${srHtml}
+        ${uvHtml}
+        ${wbgtHtml}
     </div>`;
 }
 
