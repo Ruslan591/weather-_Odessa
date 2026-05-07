@@ -136,6 +136,27 @@ function calcFeelsLike(tempC, windMs, dewC){
 }
 
 /* -------------------------
+   WBGT
+------------------------- */
+function calcWBGT(ta, tg, tdew){
+    if(ta == null || tg == null || tdew == null) return null;
+    const rh = calcRelativeHumidity(ta, tdew);
+    if(rh == null) return null;
+    // Wet-bulb по формуле Стулла (2011)
+    const tw = ta * Math.atan(0.151977 * Math.pow(rh + 8.313659, 0.5))
+             + Math.atan(ta + rh)
+             - Math.atan(rh - 1.676331)
+             + 0.00391838 * Math.pow(rh, 1.5) * Math.atan(0.023101 * rh)
+             - 4.686035;
+    const wbgt = 0.7 * tw + 0.2 * tg + 0.1 * ta;
+    return {
+        wbgt: Math.round(wbgt * 10) / 10,
+        tw:   Math.round(tw   * 10) / 10,
+        rh:   Math.round(rh),
+    };
+}
+
+/* -------------------------
    Форматирование времени
 ------------------------- */
 function localTimeFromSynopYYGGi(yyggi){
