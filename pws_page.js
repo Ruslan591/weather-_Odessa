@@ -223,37 +223,59 @@ function lunarPosition(lat, lon, date){
 }
 
 /* =========================================================
+   ТЕОРЕТИЧЕСКАЯ ИНСОЛЯЦИЯ ЯСНОГО НЕБА
+   Модель Kasten & Young (1989)
+========================================================= */
+function clearskyIrradiance(elevDeg){
+    if(elevDeg <= 0) return 0;
+    const sinElev = Math.sin(elevDeg * Math.PI / 180);
+    const AM = 1 / (sinElev + 0.50572 * Math.pow(elevDeg + 6.07995, -1.6364));
+    return Math.max(0, 1361 * Math.pow(0.7, Math.pow(AM, 0.678)) * sinElev);
+}
+
+/* =========================================================
    ТЕМПЕРАТУРА ШАРОВОГО ТЕРМОМЕТРА
-   Liljegren et al. (2008), для уличных условий
+   Liljegren et al. (2008) + kt-коррекция прямой/рассеянной радиации
 ========================================================= */
 function calcGlobeTemp(ta, sr, wind, elev, rh){
     if(ta == null) return null;
-    const v       = Math.max(wind ?? 0.5, 0.1);
+    const v       = Math.max(wind ?? 0.5, 0.5);          // минимум 0.5 м/с
     const elevDeg = elev != null ? elev * 180/Math.PI : -1;
+    const dryness = rh  != null ? Math.max(0, 1 - rh/100) : 0.3;
+    const tgNight = ta - 4.0 * Math.pow(dryness, 0.5);
 
     // Ночь / солнце под горизонтом
-    if(elevDeg <= 0 || sr == null || sr < 1){
-        const dryness = rh != null ? Math.max(0, 1 - rh/100) : 0.3;
-        return Math.round((ta - 4.0 * Math.pow(dryness, 0.5)) * 10) / 10;
-    }
+    if(elevDeg <= 0 || sr == null || sr < 1)
+        return Math.round(tgNight * 10) / 10;
 
-    // Пасмурный день (SR < 50 Вт/м²) — смешиваем ночную и дневную формулы
-    if(sr < 50){
-        const dryness  = rh != null ? Math.max(0, 1 - rh/100) : 0.3;
-        const tgNight  = ta - 4.0 * Math.pow(dryness, 0.5);
-        const sinElev  = Math.sin(elev);
-        const srSphere = Math.min(sr * 0.5 / Math.max(sinElev, 0.087), sr * 2.5);
-        const hc       = 6.3 * Math.pow(v, 0.6);
-        const tgDay    = ta + (0.95 * srSphere) / hc;
-        const w        = sr / 50;
+    // Clearness index: 1.0 = ясно, 0 = сплошная облачность
+    const clearsky = clearskyIrradiance(elevDeg);
+    const kt = clearsky > 10 ? Math.min(1, sr / clearsky) : 0;
+
+    // Доля рассеянного излучения (Orgill & Hollands, упрощённо)
+    // kt=0 → 100% рассеянное, kt≥0.8 → 15% рассеянное
+    const diffuseFrac = kt >= 0.8 ? 0.15 : Math.max(0.15, 1.0 - 1.0625 * kt);
+    const srDiffuse   = sr * diffuseFrac;
+    const srDirect    = sr - srDiffuse;
+
+    // Поглощение сферой:
+    // прямое — усиливается при низком солнце (1/sinElev)
+    // рассеянное — изотропное, без усиления угла
+    const sinElev         = Math.sin(elev);
+    const srSphereDirect  = srDirect  * 0.5 / Math.max(sinElev, 0.087);
+    const srSphereDiffuse = srDiffuse * 0.5;
+    const srSphere        = Math.min(srSphereDirect + srSphereDiffuse, sr * 2.0);
+
+    const hc    = 6.3 * Math.pow(v, 0.6);
+    const tgDay = ta + (0.95 * srSphere) / hc;
+
+    // Плавный переход при очень слабой радиации
+    if(sr < 20){
+        const w = sr / 20;
         return Math.round((tgNight*(1-w) + tgDay*w) * 10) / 10;
     }
 
-    // Солнечный день
-    const sinElev  = Math.sin(elev);
-    const srSphere = Math.min(sr * 0.5 / Math.max(sinElev, 0.087), sr * 2.5);
-    const hc       = 6.3 * Math.pow(v, 0.6);
-    return Math.round((ta + (0.95 * srSphere) / hc) * 10) / 10;
+    return Math.round(tgDay * 10) / 10;
 }
 
 /* =========================================================
@@ -361,6 +383,12 @@ function makeSolarWbgtBlock(p){
 
     const dialHtml = (sun && moon) ? makeSkyDial(sun, moon, riseSet, lat, lon, obsDate) : "";
 
+    // Clearness index (новая строка после dialHtml)
+    const kt = (sun && sun.elevDeg > 0 && p.solarRad != null)
+        ? (() => { const cs = clearskyIrradiance(sun.elevDeg); return cs > 10 ? Math.min(1, p.solarRad / cs) : 0; })()
+        : null;
+    const cloudPct = kt != null ? Math.round((1 - kt) * 100) : null;
+
     // Солнце
     let sunInfoHtml = "";
     if(sun){
@@ -392,7 +420,7 @@ function makeSolarWbgtBlock(p){
 
     // SR и UV
     const srHtml = p.solarRad != null
-        ? `<div class="districtLine"><span>Солнечная радиация</span><span>${fmt0(p.solarRad," Вт/м²")}</span></div>`
+        ? `<div class="districtLine"><span>Солнечная радиация</span><span>${fmt0(p.solarRad," Вт/м²")}${cloudPct != null ? ` · облачность ~${cloudPct}%` : ""}</span></div>`
         : "";
     const uvLevel = p.uv == null ? null
         : p.uv < 3  ? { label:"Низкий",        color:"#4caf50" }
@@ -400,7 +428,7 @@ function makeSolarWbgtBlock(p){
         : p.uv < 8  ? { label:"Высокий",       color:"#ff9800" }
         : p.uv < 11 ? { label:"Очень высокий", color:"#f44336" }
         :              { label:"Экстремальный", color:"#9c27b0" };
-    const burnMin = (p.uv > 0) ? Math.round(200 / (p.uv * 3.5)) : null;
+    const burnMin = (p.uv >= 3) ? Math.round(200 / (p.uv * 3.5)) : null;
     const uvHtml  = uvLevel ? `
         <div class="districtLine">
             <span>УФ-индекс</span>
@@ -412,7 +440,7 @@ function makeSolarWbgtBlock(p){
     let wbgtHtml = "";
     if(p.temp != null && p.dewpt != null && sun != null){
         const rh   = calcRelativeHumidity(p.temp, p.dewpt);
-        const wind = Math.max(p.windSpeedMs ?? 0.5, 0.1);
+        const wind = p.windSpeedMs ?? 0.5;
         const tg   = calcGlobeTemp(p.temp, p.solarRad, wind, sun.elev, rh);
         if(tg != null){
             const res = calcWBGT(p.temp, tg, p.dewpt);
