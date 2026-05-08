@@ -269,7 +269,7 @@ function calcGlobeTemp(ta, sr, wind, elev, rh){
     const srSphere        = Math.min(srSphereDirect + srSphereDiffuse, sr * 2.0);
 
     const v_eff = Math.sqrt(v * v + 0.25);   // естественная конвекция ≈ 0.5 м/с в квадратуре
-    const hc    = 17.0 * Math.pow(v_eff, 0.6) + 5.5;
+const hc    = 17.0 * Math.pow(v_eff, 0.6) + 5.5;
     const tgDay = ta + (0.95 * srSphere) / hc;
 
     // Плавный переход при очень слабой радиации
@@ -279,39 +279,6 @@ function calcGlobeTemp(ta, sr, wind, elev, rh){
     }
 
     return Math.round(tgDay * 10) / 10;
-}
-
-/* =========================================================
-   ЦВЕТ НЕБА ПО ВЫСОТЕ СОЛНЦА
-   Интерполяция по реальным тонам от ночи до полудня
-========================================================= */
-function skyColorByElev(elevDeg){
-    // [высота°, [R, G, B]]
-    const stops = [
-        [-90, [  0,  3,  8]],   // глубокая ночь
-        [-18, [  1,  8, 22]],   // астрономические сумерки
-        [-12, [  3, 14, 45]],   // навигационные сумерки
-        [ -6, [  8, 20, 72]],   // гражданские сумерки
-        [ -2, [ 22, 38,105]],   // предрассветный/послезакатный синий час
-        [  0, [ 38, 72,155]],   // горизонт, момент восхода/заката
-        [  5, [ 28, 95,185]],   // солнце чуть выше горизонта
-        [ 15, [ 20,112,205]],   // утро/вечер
-        [ 30, [ 16,118,215]],   // день
-        [ 60, [ 14,122,220]],   // высокое солнце
-        [ 90, [ 13,118,212]],   // зенит
-    ];
-    const e = Math.max(-90, Math.min(90, elevDeg ?? -90));
-    if(e <= stops[0][0]) return `rgb(${stops[0][1]})`;
-    const last = stops[stops.length - 1];
-    if(e >= last[0]) return `rgb(${last[1]})`;
-    for(let i = 1; i < stops.length; i++){
-        if(e <= stops[i][0]){
-            const t  = (e - stops[i-1][0]) / (stops[i][0] - stops[i-1][0]);
-            const c  = stops[i-1][1].map((v,j) => Math.round(v + t*(stops[i][1][j] - v)));
-            return `rgb(${c[0]},${c[1]},${c[2]})`;
-        }
-    }
-    return `rgb(${last[1]})`;
 }
 
 /* =========================================================
@@ -391,16 +358,15 @@ function makeSkyDial(sun, moon, riseSet, lat, lon, date, kt){
             <text x="${(cx).toFixed(1)}" y="${(cy+R+28).toFixed(1)}" text-anchor="middle" font-size="9" fill="#ff9f4388" font-family="sans-serif">↓закат ${fmtLocal(riseSet.setUTC)}</text>`;
     }
 
-// --- Цвет неба по высоте солнца ---
-    const skyColor = skyColorByElev(sun.elevDeg);
+// --- Цвет неба ---
+    const skyColor = sunAbove
+        ? (kt != null && kt > 0.7 ? '#1a3a60'
+         : kt != null && kt > 0.4 ? '#1a2535'
+                                   : '#1e1e1e')
+        : '#080808';
 
     return `<svg width="${S}" height="${S+20}" viewBox="0 0 ${S} ${S+20}" style="display:block;margin:0 auto;">
-        <circle cx="${cx}" cy="${cy}" r="${R}" fill="#080808" stroke="#1e1e1e" stroke-width="1.5"/>
-        <circle cx="${cx}" cy="${cy}" r="${(R*Math.cos(30*Math.PI/180)).toFixed(1)}" fill="none" stroke="#151515" stroke-width="1"/>
-        <circle cx="${cx}" cy="${cy}" r="${(R*Math.cos(60*Math.PI/180)).toFixed(1)}" fill="none" stroke="#151515" stroke-width="1"/>
-        <line x1="${cx}" y1="${cy-R}" x2="${cx}" y2="${cy+R}" stroke="#181818" stroke-width="1"/>
-        <line x1="${cx-R}" y1="${cy}" x2="${cx+R}" y2="${cy}" stroke="#181818" stroke-width="1"/>
-        <circle cx="${cx}" cy="${cy}" r="2.5" fill="#222"/>
+        <circle cx="${cx}" cy="${cy}" r="${R}" fill="${skyColor}" stroke="#1e1e1e" stroke-width="1.5"/>
         ${arcPath}
         ${rsMarks}
         ${moonSvg}
