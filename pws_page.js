@@ -426,13 +426,12 @@ function makeSolarWbgtBlock(p){
     const moon    = lat != null ? lunarPosition(lat, lon, obsDate)  : null;
     const riseSet = lat != null ? solarRiseSet(lat, lon, obsDate)   : null;
 
-    const dialHtml = (sun && moon) ? makeSkyDial(sun, moon, riseSet, lat, lon, obsDate, kt) : "";
-
-    // Clearness index (новая строка после dialHtml)
     const kt = (sun && sun.elevDeg > 0 && p.solarRad != null)
         ? (() => { const cs = clearskyIrradiance(sun.elevDeg); return cs > 10 ? Math.min(1, p.solarRad / cs) : 0; })()
         : null;
     const cloudPct = kt != null ? Math.round((1 - kt) * 100) : null;
+
+    const dialHtml = (sun && moon) ? makeSkyDial(sun, moon, riseSet, lat, lon, obsDate, kt) : "";
 
     // Солнце
     let sunInfoHtml = "";
