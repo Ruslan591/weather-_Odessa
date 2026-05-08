@@ -366,7 +366,12 @@ function makeSkyDial(sun, moon, riseSet, lat, lon, date, kt){
         : '#87CEEB';
 
     return `<svg width="${S}" height="${S+20}" viewBox="0 0 ${S} ${S+20}" style="display:block;margin:0 auto;">
-        <circle cx="${cx}" cy="${cy}" r="${R}" fill="${skyColor}" stroke="#1e1e1e" stroke-width="1.5"/>
+        <circle cx="${cx}" cy="${cy}" r="${R}" fill="#080808" stroke="#1e1e1e" stroke-width="1.5"/>
+        <circle cx="${cx}" cy="${cy}" r="${(R*Math.cos(30*Math.PI/180)).toFixed(1)}" fill="none" stroke="#151515" stroke-width="1"/>
+        <circle cx="${cx}" cy="${cy}" r="${(R*Math.cos(60*Math.PI/180)).toFixed(1)}" fill="none" stroke="#151515" stroke-width="1"/>
+        <line x1="${cx}" y1="${cy-R}" x2="${cx}" y2="${cy+R}" stroke="#181818" stroke-width="1"/>
+        <line x1="${cx-R}" y1="${cy}" x2="${cx+R}" y2="${cy}" stroke="#181818" stroke-width="1"/>
+        <circle cx="${cx}" cy="${cy}" r="2.5" fill="#222"/>
         ${arcPath}
         ${rsMarks}
         ${moonSvg}
