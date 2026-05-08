@@ -669,6 +669,13 @@ function histRenderChart_ECharts(data, paramKey){
         values[i] != null ? [t * 1000, values[i]] : null
     ).filter(Boolean);
 
+    const gustSeriesData = paramKey === "wind"
+        ? times.map((t, i) => {
+            const g = data.obs[i]?.windGustMs;
+            return g != null ? [t * 1000, g] : null;
+        }).filter(Boolean)
+        : null;
+
     chart.setOption({
         backgroundColor: "transparent",
         animation: false,
@@ -733,24 +740,44 @@ function histRenderChart_ECharts(data, paramKey){
             },
             splitLine: { lineStyle: { color: "#252525" } },
         },
-        series: [{
-            type: "line",
-            data: seriesData,
-            smooth: 0.6,
-            smoothMonotone: "x",
-            symbol: "none",
-            symbolSize: 4,
-            lineStyle: { color: cfg.stroke, width: 2 },
-            itemStyle: { color: cfg.stroke },
-            areaStyle: {
-                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                    { offset: 0,   color: `rgba(${rgb}, 0.25)` },
-                    { offset: 0.7, color: `rgba(${rgb}, 0.05)` },
-                    { offset: 1,   color: `rgba(${rgb}, 0)`    },
-                ]),
+        series: [
+            {
+                type: "line",
+                data: seriesData,
+                smooth: 0.6,
+                smoothMonotone: "x",
+                symbol: "none",
+                symbolSize: 4,
+                lineStyle: { color: cfg.stroke, width: 2 },
+                itemStyle: { color: cfg.stroke },
+                areaStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0,   color: `rgba(${rgb}, 0.25)` },
+                        { offset: 0.7, color: `rgba(${rgb}, 0.05)` },
+                        { offset: 1,   color: `rgba(${rgb}, 0)`    },
+                    ]),
+                },
+                connectNulls: false,
+                z: 2,
             },
-            connectNulls: false,
-        }],
+            ...(gustSeriesData ? [{
+                type: "line",
+                data: gustSeriesData,
+                smooth: 0.4,
+                smoothMonotone: "x",
+                symbol: "none",
+                lineStyle: { color: "#ff9f5c", width: 1.5, type: "dashed", opacity: 0.8 },
+                itemStyle: { color: "#ff9f5c" },
+                areaStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0,   color: "rgba(255,159,92,0.12)" },
+                        { offset: 1,   color: "rgba(255,159,92,0)"    },
+                    ]),
+                },
+                connectNulls: false,
+                z: 1,
+            }] : []),
+        ],
     });
 
     // Тултип через наш histShowTooltip — без дублирования
@@ -1006,6 +1033,56 @@ function histRenderStats(data, paramKey){
     };
 
     const u1 = cfg.unit;
+
+    // Специальная статистика для ветра
+    if(paramKey === "wind"){
+        const gustVals    = data.obs.map(o => o.windGustMs).filter(v => v != null);
+        const maxGust     = gustVals.length ? Math.max(...gustVals) : null;
+        const calmCount   = vals.filter(v => v < 1).length;
+        const strongCount = vals.filter(v => v >= 10).length;
+
+        let card4 = "";
+        if(maxGust != null){
+            card4 = `<div class="hist-stat-card">
+                <div class="hist-stat-label">Макс. порыв</div>
+                <div class="hist-stat-value" style="color:#ff9f5c;">${maxGust.toFixed(1)} м/с</div>
+                <div class="hist-stat-time">&nbsp;</div>
+            </div>`;
+        } else if(strongCount > 0){
+            card4 = `<div class="hist-stat-card">
+                <div class="hist-stat-label">Сильный (≥10)</div>
+                <div class="hist-stat-value" style="color:#ff9f5c;">${strongCount}</div>
+                <div class="hist-stat-time">замеров</div>
+            </div>`;
+        } else {
+            card4 = `<div class="hist-stat-card">
+                <div class="hist-stat-label">Штиль (&lt;1 м/с)</div>
+                <div class="hist-stat-value" style="color:#74b9ff;">${calmCount}</div>
+                <div class="hist-stat-time">из ${vals.length} замеров</div>
+            </div>`;
+        }
+
+        box.innerHTML = `
+        <div class="hist-stats-grid">
+            <div class="hist-stat-card">
+                <div class="hist-stat-label">Минимум</div>
+                <div class="hist-stat-value" style="color:${cfg.color};">${fmt1(vMin,u1)}</div>
+                <div class="hist-stat-time">${tFmt(iMin)}</div>
+            </div>
+            <div class="hist-stat-card">
+                <div class="hist-stat-label">Максимум</div>
+                <div class="hist-stat-value" style="color:${cfg.color};">${fmt1(vMax,u1)}</div>
+                <div class="hist-stat-time">${tFmt(iMax)}</div>
+            </div>
+            <div class="hist-stat-card">
+                <div class="hist-stat-label">Среднее</div>
+                <div class="hist-stat-value" style="color:#ccc;">${fmt1(vAvg,u1)}</div>
+                <div class="hist-stat-time">${vals.length} значений</div>
+            </div>
+            ${card4}
+        </div>`;
+        return;
+    }
 
     const engine = (typeof HIST_ENGINE !== "undefined") ? HIST_ENGINE : "uplot";
     const engineLabel = { uplot: "uPlot", svg: "SVG", chartjs: "Chart.js", echarts: "ECharts" }[engine] || engine;
