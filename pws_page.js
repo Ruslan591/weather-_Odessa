@@ -564,14 +564,7 @@ function renderPWSStation(p){
         p.temp!=null&&p.temp>=27&&p.heatIndex!=null ? p.heatIndex :
         p.temp!=null&&p.temp<=10&&p.windChill!=null  ? p.windChill : p.temp;
 
-    const rows = [
-        p.dewpt       != null                          ? ["Точка росы",           fmt1(p.dewpt,"°C")]          : null,
-        p.windGustMs  != null && p.windGustMs  > 0     ? ["Порывы",               fmt1(p.windGustMs," м/с")]   : null,
-        p.precipRate  != null && p.precipRate  > 0     ? ["Интенсивность осадков", fmt1(p.precipRate," мм/ч")]  : null,
-        p.precipTotal != null && p.precipTotal > 0     ? ["Осадки",               fmt1(p.precipTotal," мм")]   : null,
-        p.solarRad    != null                          ? ["Солнечная радиация",    fmt0(p.solarRad," Вт/м²")]  : null,
-        p.uv          != null                          ? ["УФ-индекс",             String(p.uv)]               : null,
-    ].filter(Boolean);
+    const rows = [];
 
     const rowsAbout = [
         p.elev         != null ? ["Высота над уровнем моря", fmt0(p.elev," м")]                               : null,
@@ -601,8 +594,6 @@ function renderPWSStation(p){
             ${humidityIndicatorSvg(p.humidity)}
             ${windIndicatorSvg({windSpeed:p.windSpeedMs, windGustMs:p.windGustMs, windDir:p.windDir})}
             ${pressureIndicatorSvg({seaPressure:pCorr, tendencyCode:null, tendencyValue:null})}
-            ${p.solarRad != null || p.uv != null ? solarIndicatorSvg(p.solarRad) : ""}
-            ${p.uv       != null || p.solarRad != null ? uvIndicatorSvg(p.uv)    : ""}
             ${p.precipRate  != null ? precipRateIndicatorSvg(p.precipRate)        : ""}
             ${p.precipTotal != null ? precipTotalIndicatorSvg(p.precipTotal)      : ""}
         </div>
