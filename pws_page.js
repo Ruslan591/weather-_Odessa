@@ -284,7 +284,7 @@ function calcGlobeTemp(ta, sr, wind, elev, rh){
    SVG-ЦИФЕРБЛАТ НЕБОСВОДА
    Вид сверху, север вверху. Объекты ближе к краю = ниже над горизонтом.
 ========================================================= */
-function makeSkyDial(sun, moon, riseSet, lat, lon, date){
+function makeSkyDial(sun, moon, riseSet, lat, lon, date, kt){
     const S = 200, cx = 100, cy = 100, R = 80;
 
     function toXY(az, elevDeg){
@@ -316,9 +316,12 @@ function makeSkyDial(sun, moon, riseSet, lat, lon, date){
     const sunAbove = sun.elevDeg > 0;
     const sXY  = toXY(sun.az, Math.max(sun.elevDeg, 0));
     const sR   = sunAbove ? Math.max(6, Math.min(12, 6 + sun.elevDeg/9)) : 0;
+    const ktVal       = kt ?? 1;
+    const haloOpacity = Math.round(ktVal * 0x30).toString(16).padStart(2,"0");
+    const diskColor   = ktVal > 0.5 ? "#ffd84d" : `rgba(255,216,77,${(0.3 + ktVal*0.7).toFixed(2)})`;
     const sunSvg = sunAbove ? `
-        <circle cx="${sXY.x.toFixed(1)}" cy="${sXY.y.toFixed(1)}" r="${(sR+5).toFixed(1)}" fill="#ffd84d20"/>
-        <circle cx="${sXY.x.toFixed(1)}" cy="${sXY.y.toFixed(1)}" r="${sR.toFixed(1)}" fill="#ffd84d"/>` : "";
+        <circle cx="${sXY.x.toFixed(1)}" cy="${sXY.y.toFixed(1)}" r="${(sR+5).toFixed(1)}" fill="#ffd84d${haloOpacity}"/>
+        <circle cx="${sXY.x.toFixed(1)}" cy="${sXY.y.toFixed(1)}" r="${sR.toFixed(1)}" fill="${diskColor}"/>` : "";
 
     // Луна
     const moonAbove = moon.elevDeg > 0;
@@ -355,7 +358,7 @@ function makeSkyDial(sun, moon, riseSet, lat, lon, date){
     }
 
     return `<svg width="${S}" height="${S+20}" viewBox="0 0 ${S} ${S+20}" style="display:block;margin:0 auto;">
-        <circle cx="${cx}" cy="${cy}" r="${R}" fill="#080808" stroke="#1e1e1e" stroke-width="1.5"/>
+        <circle cx="${cx}" cy="${cy}" r="${R}" fill="${kt != null && kt > 0.7 ? '#0a1520' : kt != null && kt > 0.4 ? '#090d0f' : '#080808'}" stroke="#1e1e1e" stroke-width="1.5"/>
         <circle cx="${cx}" cy="${cy}" r="${(R*Math.cos(30*Math.PI/180)).toFixed(1)}" fill="none" stroke="#151515" stroke-width="1"/>
         <circle cx="${cx}" cy="${cy}" r="${(R*Math.cos(60*Math.PI/180)).toFixed(1)}" fill="none" stroke="#151515" stroke-width="1"/>
         <line x1="${cx}" y1="${cy-R}" x2="${cx}" y2="${cy+R}" stroke="#181818" stroke-width="1"/>
@@ -423,7 +426,7 @@ function makeSolarWbgtBlock(p){
     const moon    = lat != null ? lunarPosition(lat, lon, obsDate)  : null;
     const riseSet = lat != null ? solarRiseSet(lat, lon, obsDate)   : null;
 
-    const dialHtml = (sun && moon) ? makeSkyDial(sun, moon, riseSet, lat, lon, obsDate) : "";
+    const dialHtml = (sun && moon) ? makeSkyDial(sun, moon, riseSet, lat, lon, obsDate, kt) : "";
 
     // Clearness index (новая строка после dialHtml)
     const kt = (sun && sun.elevDeg > 0 && p.solarRad != null)
