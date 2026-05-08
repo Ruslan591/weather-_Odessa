@@ -1094,20 +1094,6 @@ function histRenderStats(data, paramKey){
         </div>`;
         return;
     }
-        } else if(strongCount > 0){
-            card4 = `<div class="hist-stat-card">
-                <div class="hist-stat-label">Сильный (≥10)</div>
-                <div class="hist-stat-value" style="color:#ff9f5c;">${strongCount}</div>
-                <div class="hist-stat-time">замеров</div>
-            </div>`;
-        } else {
-            card4 = `<div class="hist-stat-card">
-                <div class="hist-stat-label">Штиль (&lt;1 м/с)</div>
-                <div class="hist-stat-value" style="color:#74b9ff;">${calmCount}</div>
-                <div class="hist-stat-time">из ${vals.length} замеров</div>
-            </div>`;
-        }
-
         box.innerHTML = `
         <div class="hist-stats-grid">
             <div class="hist-stat-card">
