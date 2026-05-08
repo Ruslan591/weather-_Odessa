@@ -262,7 +262,9 @@ function calcGlobeTemp(ta, sr, wind, elev, rh){
     // прямое — усиливается при низком солнце (1/sinElev)
     // рассеянное — изотропное, без усиления угла
     const sinElev         = Math.sin(elev);
-    const srSphereDirect  = srDirect  * 0.5 / Math.max(sinElev, 0.087);
+    // При kt<0.4 (сплошная облачность) прямого луча физически нет — усиление угла не применяем
+    const directBoost     = kt > 0.4 ? 0.5 / Math.max(sinElev, 0.087) : 0.5;
+    const srSphereDirect  = srDirect  * directBoost;
     const srSphereDiffuse = srDiffuse * 0.5;
     const srSphere        = Math.min(srSphereDirect + srSphereDiffuse, sr * 2.0);
 
