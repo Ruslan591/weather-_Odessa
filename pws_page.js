@@ -401,7 +401,7 @@ function detectCloudType(kt, elevDeg){
     // Сплошная: различаем ярус по абсолютному SR
     if(kt > 0.15){
         // При низком kt, но заметном SR — высокий/средний ярус
-        if(srStd != null && srStd > 30) return { label: "Кучевая сплошная", icon: "☁️"" };
+        if(srStd != null && srStd > 30) return { label: "Кучевая сплошная", icon: "☁️" };
         return { label: "Средний/высокий ярус (As/Cs)", icon: "☁️" };
     }
 
