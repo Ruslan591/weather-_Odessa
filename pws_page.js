@@ -268,7 +268,7 @@ function calcGlobeTemp(ta, sr, wind, elev, rh){
     const srSphereDiffuse = srDiffuse * 0.5;
     const srSphere        = Math.min(srSphereDirect + srSphereDiffuse, sr * 2.0);
 
-    const hc    = 6.3 * Math.pow(v, 0.6);
+    const hc = 17.0 * Math.pow(v, 0.6) + 5.5;  // конвекция + длинноволновое охлаждение
     const tgDay = ta + (0.95 * srSphere) / hc;
 
     // Плавный переход при очень слабой радиации
@@ -377,21 +377,14 @@ function makeSkyDial(sun, moon, riseSet, lat, lon, date, kt){
     }
 
 // --- Цвет неба ---
-    const _lc = (a,b,t) => a.map((v,i) => Math.round(v+(b[i]-v)*t));
-    const _hex = ([r,g,b]) => `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
-    const elevT = sunAbove ? Math.min(1, sun.elevDeg / 45) : 0;
-    const ktT   = kt != null ? Math.max(0, Math.min(1, kt)) : 0.5;
-    const skyInner = _hex(_lc(_lc([8,8,12],[35,35,40],ktT*0.4), _lc([8,8,12],[15,60,120],ktT), elevT));
-    const skyOuter = _hex(_lc([5,5,8], _lc([8,20,35],[5,15,50],ktT), elevT));
+    const skyColor = sunAbove
+        ? (kt != null && kt > 0.7 ? '#1a3a60'
+         : kt != null && kt > 0.4 ? '#1a2535'
+                                   : '#1e1e1e')
+        : '#080808';
 
     return `<svg width="${S}" height="${S+20}" viewBox="0 0 ${S} ${S+20}" style="display:block;margin:0 auto;">
-        <defs>
-            <radialGradient id="skyBg" cx="50%" cy="50%" r="50%">
-                <stop offset="0%"   stop-color="${skyInner}"/>
-                <stop offset="100%" stop-color="${skyOuter}"/>
-            </radialGradient>
-        </defs>
-        <circle cx="${cx}" cy="${cy}" r="${R}" fill="url(#skyBg)" stroke="#1e1e1e" stroke-width="1.5"/>
+        <circle cx="${cx}" cy="${cy}" r="${R}" fill="${skyColor}" stroke="#1e1e1e" stroke-width="1.5"/>
         ${shadowSvg}
         ${arcPath}
         ${rsMarks}
