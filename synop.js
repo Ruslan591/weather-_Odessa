@@ -583,36 +583,45 @@ function renderSynop(d){
         if(wbgtResult){
             const { wbgt, tw, rh } = wbgtResult;
 
-            // Шкала ISO 7243
             const isoLevel = wbgt < 28 ? { label:"Комфортно",    color:"#4caf50" }
                            : wbgt < 32 ? { label:"Осторожно",    color:"#ff9800" }
                            : wbgt < 35 ? { label:"Опасно",       color:"#f44336" }
                            :             { label:"Очень опасно", color:"#9c27b0" };
 
-            // Шкала NIOSH
-            const nioshLevel = wbgt < 25 ? { label:"Норма",          color:"#4caf50" }
-                             : wbgt < 28 ? { label:"Умеренный риск", color:"#8bc34a" }
-                             : wbgt < 30 ? { label:"Осторожно",      color:"#ff9800" }
-                             : wbgt < 32 ? { label:"Высокий риск",   color:"#ff5722" }
-                             :             { label:"Опасно",         color:"#f44336" };
+            const zones = [[0,0],[28,25],[32,50],[35,75],[40,100]];
+            const pct = (() => {
+                if(wbgt <= 0)  return 0;
+                if(wbgt >= 40) return 100;
+                for(let i = 1; i < zones.length; i++){
+                    const [v0,p0] = zones[i-1], [v1,p1] = zones[i];
+                    if(wbgt <= v1) return p0 + (wbgt-v0)/(v1-v0)*(p1-p0);
+                }
+                return 100;
+            })();
 
             wbgtBlockHtml = `
         <div class="card" style="margin-top:12px;">
             <div class="cardTitle">🌡️ Тепловой стресс (WBGT)</div>
-            ${row("Температура шара (Tg)",                    fmt0(d.globeTemp,"°C"))}
-            ${row("Температура влажного термометра (Tw)",     fmt1(tw,"°C"))}
-            ${row("Относительная влажность",                  fmt0(rh," %"))}
+            ${row("Tg (шар, измеренный)",       fmt0(d.globeTemp,"°C"))}
+            ${row("Tw (влажный термометр)",      fmt1(tw,"°C"))}
+            ${row("Относительная влажность",     fmt0(rh," %"))}
             <div class="row" style="margin-top:8px;">
                 <div class="label" style="font-weight:600;">WBGT</div>
-                <div class="value" style="font-size:1.3em;font-weight:700;">${wbgt.toFixed(1)}°C</div>
+                <div class="value" style="font-size:1.3em;font-weight:700;color:${isoLevel.color};">${wbgt.toFixed(1)}°C</div>
             </div>
-            <div class="row">
-                <div class="label">ISO 7243</div>
-                <div class="value" style="color:${isoLevel.color};font-weight:600;">${isoLevel.label}</div>
+            <div style="position:relative;height:8px;border-radius:4px;
+                        background:linear-gradient(to right,#4caf50,#ffd166,#ff9800,#f44336,#9c27b0);
+                        margin:8px 0 4px;">
+                <div style="position:absolute;top:-3px;left:calc(${pct.toFixed(1)}% - 7px);
+                            width:14px;height:14px;border-radius:50%;
+                            background:${isoLevel.color};border:2px solid #111;"></div>
             </div>
-            <div class="row">
-                <div class="label">NIOSH</div>
-                <div class="value" style="color:${nioshLevel.color};font-weight:600;">${nioshLevel.label}</div>
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:#444;margin-bottom:8px;">
+                <span>0°</span><span>28°</span><span>32°</span><span>35°</span><span>40°+</span>
+            </div>
+            <div style="text-align:center;padding:6px 10px;border-radius:8px;
+                        background:${isoLevel.color}22;border:1px solid ${isoLevel.color}55;">
+                <span style="color:${isoLevel.color};font-weight:700;font-size:14px;">ISO 7243 · ${isoLevel.label}</span>
             </div>
         </div>`;
         }
