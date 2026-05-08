@@ -363,7 +363,7 @@ function makeSkyDial(sun, moon, riseSet, lat, lon, date, kt){
         ? (kt != null && kt > 0.7 ? '#1a3a60'
          : kt != null && kt > 0.4 ? '#1a2535'
                                    : '#1e1e1e')
-        : '#87CEEB';
+        : '#080808';
 
     return `<svg width="${S}" height="${S+20}" viewBox="0 0 ${S} ${S+20}" style="display:block;margin:0 auto;">
         <circle cx="${cx}" cy="${cy}" r="${R}" fill="${skyColor}" stroke="#1e1e1e" stroke-width="1.5"/>
