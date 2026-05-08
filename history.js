@@ -41,8 +41,9 @@ function histParseObs(o){
         tempLow:      m.tempLow     ?? null,
         pressure:     rawP != null ? Math.round((rawP + off) * 10) / 10 : null,
         humidity:     o.humidityAvg ?? o.humidity ?? null,
-        windSpeedMs:  km(m.windspeedAvg ?? m.windSpeed ?? null),
-        windGustMs:   km(m.windgustHigh ?? m.windGust  ?? null),
+        windSpeedMs:     km(m.windspeedAvg  ?? m.windSpeed ?? null),
+        windSpeedHighMs: km(m.windspeedHigh ?? null),
+        windGustMs:      km(m.windgustHigh  ?? m.windGust  ?? null),
         windDir:      o.winddirAvg  ?? o.winddir  ?? null,
         precip:       m.precipTotal ?? m.precipRate ?? null,
         precipRate:   m.precipRate ?? null,
@@ -110,8 +111,9 @@ if(period === "7day"){
             tempLow:      o.metric?.tempLow    ?? null,
             pressure:     o.metric?.pressureMax?? null,
             humidity:     o.humidityAvg        ?? null,
-            windSpeedMs:  o.metric?.windspeedAvg != null ? Math.round(o.metric.windspeedAvg/3.6*10)/10 : null,
-            windGustMs:   o.metric?.windgustHigh != null ? Math.round(o.metric.windgustHigh/3.6*10)/10 : null,
+            windSpeedMs:     o.metric?.windspeedAvg  != null ? Math.round(o.metric.windspeedAvg /3.6*10)/10 : null,
+            windSpeedHighMs: o.metric?.windspeedHigh != null ? Math.round(o.metric.windspeedHigh/3.6*10)/10 : null,
+            windGustMs:      o.metric?.windgustHigh  != null ? Math.round(o.metric.windgustHigh /3.6*10)/10 : null,
             solarRad:     o.solarRadiationHigh ?? null,
             uv:           o.uvHigh             ?? null,
             _daily:       true,
@@ -1036,8 +1038,17 @@ function histRenderStats(data, paramKey){
 
     // Специальная статистика для ветра
     if(paramKey === "wind"){
+        // Для максимума скорости используем windSpeedHighMs (пик за интервал),
+        // т.к. windspeedAvg занижает относительно страницы WU
+        const highVals = data.obs.map(o => o.windSpeedHighMs ?? o.windSpeedMs).filter(v => v != null);
+        const maxHigh  = highVals.length ? Math.max(...highVals) : vMax;
+        const iMaxHigh = data.obs.findIndex(o => (o.windSpeedHighMs ?? o.windSpeedMs) === maxHigh);
+
         const gustVals    = data.obs.map(o => o.windGustMs).filter(v => v != null);
         const maxGust     = gustVals.length ? Math.max(...gustVals) : null;
+        const iMaxGust    = maxGust != null ? data.obs.findIndex(o => o.windGustMs === maxGust) : -1;
+        const gustTimeStr = iMaxGust >= 0 ? tFmt(iMaxGust) : "";
+
         const calmCount   = vals.filter(v => v < 1).length;
         const strongCount = vals.filter(v => v >= 10).length;
 
@@ -1046,8 +1057,43 @@ function histRenderStats(data, paramKey){
             card4 = `<div class="hist-stat-card">
                 <div class="hist-stat-label">Макс. порыв</div>
                 <div class="hist-stat-value" style="color:#ff9f5c;">${maxGust.toFixed(1)} м/с</div>
-                <div class="hist-stat-time">&nbsp;</div>
+                <div class="hist-stat-time">${gustTimeStr || "&nbsp;"}</div>
             </div>`;
+        } else if(strongCount > 0){
+            card4 = `<div class="hist-stat-card">
+                <div class="hist-stat-label">Сильный (≥10)</div>
+                <div class="hist-stat-value" style="color:#ff9f5c;">${strongCount}</div>
+                <div class="hist-stat-time">замеров</div>
+            </div>`;
+        } else {
+            card4 = `<div class="hist-stat-card">
+                <div class="hist-stat-label">Штиль (&lt;1 м/с)</div>
+                <div class="hist-stat-value" style="color:#74b9ff;">${calmCount}</div>
+                <div class="hist-stat-time">из ${vals.length} замеров</div>
+            </div>`;
+        }
+
+        box.innerHTML = `
+        <div class="hist-stats-grid">
+            <div class="hist-stat-card">
+                <div class="hist-stat-label">Минимум</div>
+                <div class="hist-stat-value" style="color:${cfg.color};">${fmt1(vMin,u1)}</div>
+                <div class="hist-stat-time">${tFmt(iMin)}</div>
+            </div>
+            <div class="hist-stat-card">
+                <div class="hist-stat-label">Максимум</div>
+                <div class="hist-stat-value" style="color:${cfg.color};">${fmt1(maxHigh,u1)}</div>
+                <div class="hist-stat-time">${tFmt(iMaxHigh)}</div>
+            </div>
+            <div class="hist-stat-card">
+                <div class="hist-stat-label">Среднее</div>
+                <div class="hist-stat-value" style="color:#ccc;">${fmt1(vAvg,u1)}</div>
+                <div class="hist-stat-time">${vals.length} значений</div>
+            </div>
+            ${card4}
+        </div>`;
+        return;
+    }
         } else if(strongCount > 0){
             card4 = `<div class="hist-stat-card">
                 <div class="hist-stat-label">Сильный (≥10)</div>
