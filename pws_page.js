@@ -239,7 +239,7 @@ function clearskyIrradiance(elevDeg){
 ========================================================= */
 function calcGlobeTemp(ta, sr, wind, elev, rh){
     if(ta == null) return null;
-    const v       = Math.max(wind ?? 0.5, 2.5);          // минимум 0.5 м/с
+    const v       = Math.max(wind ?? 0.5, 2.3);          // минимум 0.5 м/с
     const elevDeg = elev != null ? elev * 180/Math.PI : -1;
     const dryness = rh  != null ? Math.max(0, 1 - rh/100) : 0.3;
     const tgNight = ta - 4.0 * Math.pow(dryness, 0.5);
