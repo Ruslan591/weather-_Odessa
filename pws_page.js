@@ -370,6 +370,46 @@ function makeSkyDial(sun, moon, riseSet, lat, lon, date){
 }
 
 /* =========================================================
+   ОПРЕДЕЛЕНИЕ ТИПА ОБЛАЧНОСТИ по kt и динамике SR
+========================================================= */
+function detectCloudType(kt, elevDeg){
+    // Берём последние 6 наблюдений SR из истории (≈30 мин)
+    let srStd = null;
+    if(typeof _histData !== "undefined" && _histData?.obs?.length >= 3){
+        const recent = _histData.obs.slice(-6).map(o => o.solarRad).filter(v => v != null);
+        if(recent.length >= 3){
+            const mean = recent.reduce((a,b) => a+b, 0) / recent.length;
+            const variance = recent.reduce((a,b) => a + (b-mean)**2, 0) / recent.length;
+            srStd = Math.sqrt(variance);
+        }
+    }
+
+    if(kt == null) return null;
+
+    // Ночь или солнце у горизонта — анализ ненадёжен
+    if(elevDeg != null && elevDeg < 5) return null;
+
+    if(kt > 0.85) return { label: "Ясно", icon: "☀️" };
+    if(kt > 0.65) return { label: "Малооблачно", icon: "🌤️" };
+
+    // Переменная облачность: высокое std — кучевая
+    if(kt > 0.40){
+        if(srStd != null && srStd > 40) return { label: "Кучевая (переменная)", icon: "⛅" };
+        return { label: "Переменная облачность", icon: "🌥️" };
+    }
+
+    // Сплошная: различаем ярус по абсолютному SR
+    if(kt > 0.15){
+        // При низком kt, но заметном SR — высокий/средний ярус
+        if(srStd != null && srStd > 30) return { label: "Кучевая сплошная", icon: "🌧️" };
+        return { label: "Средний/высокий ярус (As/Cs)", icon: "☁️" };
+    }
+
+    // kt < 0.15 — очень плотная, низкий ярус
+    return { label: "Низкий ярус (St/Ns)", icon: "🌫️" };
+}
+
+/* =========================================================
    БЛОК: НЕБОСВОД, СОЛНЦЕ, ЛУНА И ТЕПЛОВОЙ СТРЕСС
 ========================================================= */
 function makeSolarWbgtBlock(p){
@@ -421,9 +461,13 @@ function makeSolarWbgtBlock(p){
     }
 
     // SR и UV
-    const srHtml = p.solarRad != null
-        ? `<div class="districtLine"><span>Солнечная радиация</span><span>${fmt0(p.solarRad," Вт/м²")}${cloudPct != null ? ` · облачность ~${cloudPct}%` : ""}</span></div>`
-        : "";
+    const cloudType = detectCloudType(kt, sun?.elevDeg);
+    const srHtml = p.solarRad != null ? `
+        <div class="districtLine">
+            <span>Солнечная радиация</span>
+            <span>${fmt0(p.solarRad," Вт/м²")}${cloudPct != null ? ` · ~${cloudPct}%` : ""}</span>
+        </div>
+        ${cloudType ? `<div class="districtLine"><span>Облачность (оценочно)</span><span>${cloudType.icon} ${cloudType.label}</span></div>` : ""}` : "";
     const uvLevel = p.uv == null ? null
         : p.uv < 3  ? { label:"Низкий",        color:"#4caf50" }
         : p.uv < 6  ? { label:"Умеренный",     color:"#ffd166" }
