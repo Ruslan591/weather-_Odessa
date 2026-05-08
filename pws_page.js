@@ -450,7 +450,16 @@ function makeSolarWbgtBlock(p){
                           : wbgt < 32 ? { label:"Осторожно",    color:"#ff9800" }
                           : wbgt < 35 ? { label:"Опасно",       color:"#f44336" }
                           :             { label:"Очень опасно", color:"#9c27b0" };
-                const pct = Math.round(Math.min(1, Math.max(0, wbgt/40)) * 100);
+                const zones = [[0,0],[28,25],[32,50],[35,75],[40,100]];
+const pct = (() => {
+    if(wbgt <= 0)  return 0;
+    if(wbgt >= 40) return 100;
+    for(let i = 1; i < zones.length; i++){
+        const [v0,p0] = zones[i-1], [v1,p1] = zones[i];
+        if(wbgt <= v1) return p0 + (wbgt-v0)/(v1-v0)*(p1-p0);
+    }
+    return 100;
+})();
                 wbgtHtml = `
                 <div style="margin-top:8px;border-top:1px solid #1e1e1e;padding-top:8px;">
                     <div class="districtLine"><span>Tw (влажный термометр)</span><span>${fmt1(tw,"°C")}</span></div>
