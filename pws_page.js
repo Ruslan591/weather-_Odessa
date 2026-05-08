@@ -401,7 +401,7 @@ function detectCloudType(kt, elevDeg){
     // Сплошная: различаем ярус по абсолютному SR
     if(kt > 0.15){
         // При низком kt, но заметном SR — высокий/средний ярус
-        if(srStd != null && srStd > 30) return { label: "Кучевая сплошная", icon: "🌧️" };
+        if(srStd != null && srStd > 30) return { label: "Кучевая сплошная", icon: "☁️"" };
         return { label: "Средний/высокий ярус (As/Cs)", icon: "☁️" };
     }
 
@@ -463,11 +463,9 @@ function makeSolarWbgtBlock(p){
     // SR и UV
     const cloudType = detectCloudType(kt, sun?.elevDeg);
     const srHtml = p.solarRad != null ? `
-        <div class="districtLine">
-            <span>Солнечная радиация</span>
-            <span>${fmt0(p.solarRad," Вт/м²")}${cloudPct != null ? ` · ~${cloudPct}%` : ""}</span>
-        </div>
-        ${cloudType ? `<div class="districtLine"><span>Облачность (оценочно)</span><span>${cloudType.icon} ${cloudType.label}</span></div>` : ""}` : "";
+    <div class="districtLine"><span>Солнечная радиация</span><span>${fmt0(p.solarRad," Вт/м²")}</span></div>
+    ${cloudPct != null ? `<div class="districtLine"><span>Покрытие неба (оценочно)</span><span>~${cloudPct}%</span></div>` : ""}
+    ${cloudType ? `<div class="districtLine"><span>Облачность (оценочно)</span><span>${cloudType.icon} ${cloudType.label}</span></div>` : ""}` : "";
     const uvLevel = p.uv == null ? null
         : p.uv < 3  ? { label:"Низкий",        color:"#4caf50" }
         : p.uv < 6  ? { label:"Умеренный",     color:"#ffd166" }
