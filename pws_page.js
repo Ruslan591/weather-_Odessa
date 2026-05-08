@@ -376,13 +376,22 @@ function makeSkyDial(sun, moon, riseSet, lat, lon, date, kt){
             <text x="${(cx).toFixed(1)}" y="${(cy+R+28).toFixed(1)}" text-anchor="middle" font-size="9" fill="#ff9f4388" font-family="sans-serif">↓закат ${fmtLocal(riseSet.setUTC)}</text>`;
     }
 
+// --- Цвет неба ---
+    const _lc = (a,b,t) => a.map((v,i) => Math.round(v+(b[i]-v)*t));
+    const _hex = ([r,g,b]) => `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+    const elevT = sunAbove ? Math.min(1, sun.elevDeg / 45) : 0;
+    const ktT   = kt != null ? Math.max(0, Math.min(1, kt)) : 0.5;
+    const skyInner = _hex(_lc(_lc([8,8,12],[35,35,40],ktT*0.4), _lc([8,8,12],[15,60,120],ktT), elevT));
+    const skyOuter = _hex(_lc([5,5,8], _lc([8,20,35],[5,15,50],ktT), elevT));
+
     return `<svg width="${S}" height="${S+20}" viewBox="0 0 ${S} ${S+20}" style="display:block;margin:0 auto;">
-        <circle cx="${cx}" cy="${cy}" r="${R}" fill="${kt != null && kt > 0.7 ? '#0a1520' : kt != null && kt > 0.4 ? '#090d0f' : '#080808'}" stroke="#1e1e1e" stroke-width="1.5"/>
-        <circle cx="${cx}" cy="${cy}" r="${(R*Math.cos(30*Math.PI/180)).toFixed(1)}" fill="none" stroke="#151515" stroke-width="1"/>
-        <circle cx="${cx}" cy="${cy}" r="${(R*Math.cos(60*Math.PI/180)).toFixed(1)}" fill="none" stroke="#151515" stroke-width="1"/>
-        <line x1="${cx}" y1="${cy-R}" x2="${cx}" y2="${cy+R}" stroke="#181818" stroke-width="1"/>
-        <line x1="${cx-R}" y1="${cy}" x2="${cx+R}" y2="${cy}" stroke="#181818" stroke-width="1"/>
-        <circle cx="${cx}" cy="${cy}" r="2.5" fill="#222"/>
+        <defs>
+            <radialGradient id="skyBg" cx="50%" cy="50%" r="50%">
+                <stop offset="0%"   stop-color="${skyInner}"/>
+                <stop offset="100%" stop-color="${skyOuter}"/>
+            </radialGradient>
+        </defs>
+        <circle cx="${cx}" cy="${cy}" r="${R}" fill="url(#skyBg)" stroke="#1e1e1e" stroke-width="1.5"/>
         ${shadowSvg}
         ${arcPath}
         ${rsMarks}
