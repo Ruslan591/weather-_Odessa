@@ -401,8 +401,8 @@ function makeSkyDial(sun, moon, riseSet, lat, lon, date, kt){
     const grid = `
         <line x1="${cx}" y1="${cy-R}" x2="${cx}" y2="${cy+R}" stroke="${axisColor}" stroke-width="1"/>
         <line x1="${cx-R}" y1="${cy}" x2="${cx+R}" y2="${cy}" stroke="${axisColor}" stroke-width="1"/>
-        <circle cx="${cx}" cy="${cy}" r="${r30}" fill="none" stroke="${gridColor}" stroke-width="1" stroke-dasharray="3,4"/>
-        <circle cx="${cx}" cy="${cy}" r="${r60}" fill="none" stroke="${gridColor}" stroke-width="1" stroke-dasharray="3,4"/>
+        <circle cx="${cx}" cy="${cy}" r="${r30}" fill="none" stroke="${gridColor}" stroke-width="1"/>
+        <circle cx="${cx}" cy="${cy}" r="${r60}" fill="none" stroke="${gridColor}" stroke-width="1"/>
         <circle cx="${cx}" cy="${cy}" r="3" fill="#ffffff22"/>
         <circle cx="${cx}" cy="${cy}" r="1.5" fill="#ffffff55"/>`;
 
