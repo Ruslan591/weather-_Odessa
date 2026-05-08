@@ -1089,11 +1089,15 @@ function smoothByHorizon(byHorizon) {
         result[String(h)] = {};
         var src = byHorizon[String(h)];
         Object.keys(src).forEach(function(key) {
-            var prev = i > 0 ? (byHorizon[String(hNums[i-1])][key] || {}).bias : null;
-            var curr = (src[key] || {}).bias;
-            var next = i < hNums.length-1 ? (byHorizon[String(hNums[i+1])][key] || {}).bias : null;
-            var vals = [prev, curr, next].filter(function(v){ return v != null; });
-            result[String(h)][key] = { bias: vals.reduce(function(a,b){return a+b;},0) / vals.length };
+            var vals = [];
+            for (var di = -2; di <= 2; di++) {
+                var ni = i + di;
+                if (ni >= 0 && ni < hNums.length) {
+                    var v = (byHorizon[String(hNums[ni])][key] || {}).bias;
+                    if (v != null) vals.push(v);
+                }
+            }
+            result[String(h)][key] = { bias: vals.length ? vals.reduce(function(a,b){return a+b;},0) / vals.length : null };
         });
     });
     return result;
