@@ -239,7 +239,7 @@ function clearskyIrradiance(elevDeg){
 ========================================================= */
 function calcGlobeTemp(ta, sr, wind, elev, rh){
     if(ta == null) return null;
-    const v       = Math.max(wind ?? 0.5, 2.3);          // минимум 0.5 м/с
+    const v = Math.max(wind ?? 0, 0);
     const elevDeg = elev != null ? elev * 180/Math.PI : -1;
     const dryness = rh  != null ? Math.max(0, 1 - rh/100) : 0.3;
     const tgNight = ta - 4.0 * Math.pow(dryness, 0.5);
@@ -268,7 +268,8 @@ function calcGlobeTemp(ta, sr, wind, elev, rh){
     const srSphereDiffuse = srDiffuse * 0.5;
     const srSphere        = Math.min(srSphereDirect + srSphereDiffuse, sr * 2.0);
 
-    const hc = 17.0 * Math.pow(v, 0.6) + 5.5;  // конвекция + длинноволновое охлаждение
+    const v_eff = Math.sqrt(v * v + 0.25);   // естественная конвекция ≈ 0.5 м/с в квадратуре
+const hc    = 17.0 * Math.pow(v_eff, 0.6) + 5.5;
     const tgDay = ta + (0.95 * srSphere) / hc;
 
     // Плавный переход при очень слабой радиации
@@ -323,25 +324,6 @@ function makeSkyDial(sun, moon, riseSet, lat, lon, date, kt){
         <circle cx="${sXY.x.toFixed(1)}" cy="${sXY.y.toFixed(1)}" r="${(sR+5).toFixed(1)}" fill="#ffd84d${haloOpacity}"/>
         <circle cx="${sXY.x.toFixed(1)}" cy="${sXY.y.toFixed(1)}" r="${sR.toFixed(1)}" fill="${diskColor}"/>` : "";
 
-// Вектор тени (от центра в сторону, противоположную солнцу)
-    let shadowSvg = "";
-    if(sunAbove && sun.elev > 0.01){
-        const shadowAz  = (sun.az + 180) % 360;
-        const shadowAzR = shadowAz * Math.PI / 180;
-        // Длина: чем ниже солнце, тем длиннее тень, макс = R*0.88
-        const tanElev   = Math.tan(sun.elev);
-        const shadowLen = Math.min(R * 0.88, R * 0.3 / tanElev);
-        const sx2 = cx + shadowLen * Math.sin(shadowAzR);
-        const sy2 = cy - shadowLen * Math.cos(shadowAzR);
-        // Цвет: жёлтый при ясном, серый при пасмурном
-        const shadowColor = ktVal > 0.65 ? "#ffd84d" : ktVal > 0.3 ? "#888866" : "#555555";
-        const shadowOpacity = (0.3 + ktVal * 0.5).toFixed(2);
-        shadowSvg = `
-        <line x1="${cx}" y1="${cy}" x2="${sx2.toFixed(1)}" y2="${sy2.toFixed(1)}"
-              stroke="${shadowColor}" stroke-width="1.5" stroke-linecap="round" opacity="${shadowOpacity}"
-              stroke-dasharray="3,2"/>`;
-    }
-
     // Луна
     const moonAbove = moon.elevDeg > 0;
     const mXY = toXY(moon.az, Math.max(moon.elevDeg, 0));
@@ -385,7 +367,6 @@ function makeSkyDial(sun, moon, riseSet, lat, lon, date, kt){
 
     return `<svg width="${S}" height="${S+20}" viewBox="0 0 ${S} ${S+20}" style="display:block;margin:0 auto;">
         <circle cx="${cx}" cy="${cy}" r="${R}" fill="${skyColor}" stroke="#1e1e1e" stroke-width="1.5"/>
-        ${shadowSvg}
         ${arcPath}
         ${rsMarks}
         ${moonSvg}
