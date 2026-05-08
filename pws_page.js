@@ -362,7 +362,7 @@ function makeSkyDial(sun, moon, riseSet, lat, lon, date, kt){
     const skyColor = sunAbove
         ? (kt != null && kt > 0.7 ? '#1a3a60'
          : kt != null && kt > 0.4 ? '#1a2535'
-                                   : '#87CEEB')
+                                   : '#1e1e1e')
         : '#080808';
 
     return `<svg width="${S}" height="${S+20}" viewBox="0 0 ${S} ${S+20}" style="display:block;margin:0 auto;">
