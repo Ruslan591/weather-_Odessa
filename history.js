@@ -1094,27 +1094,7 @@ function histRenderStats(data, paramKey){
         </div>`;
         return;
     }
-        box.innerHTML = `
-        <div class="hist-stats-grid">
-            <div class="hist-stat-card">
-                <div class="hist-stat-label">Минимум</div>
-                <div class="hist-stat-value" style="color:${cfg.color};">${fmt1(vMin,u1)}</div>
-                <div class="hist-stat-time">${tFmt(iMin)}</div>
-            </div>
-            <div class="hist-stat-card">
-                <div class="hist-stat-label">Максимум</div>
-                <div class="hist-stat-value" style="color:${cfg.color};">${fmt1(vMax,u1)}</div>
-                <div class="hist-stat-time">${tFmt(iMax)}</div>
-            </div>
-            <div class="hist-stat-card">
-                <div class="hist-stat-label">Среднее</div>
-                <div class="hist-stat-value" style="color:#ccc;">${fmt1(vAvg,u1)}</div>
-                <div class="hist-stat-time">${vals.length} значений</div>
-            </div>
-            ${card4}
-        </div>`;
-        return;
-    }
+
 
     const engine = (typeof HIST_ENGINE !== "undefined") ? HIST_ENGINE : "uplot";
     const engineLabel = { uplot: "uPlot", svg: "SVG", chartjs: "Chart.js", echarts: "ECharts" }[engine] || engine;
