@@ -323,6 +323,25 @@ function makeSkyDial(sun, moon, riseSet, lat, lon, date, kt){
         <circle cx="${sXY.x.toFixed(1)}" cy="${sXY.y.toFixed(1)}" r="${(sR+5).toFixed(1)}" fill="#ffd84d${haloOpacity}"/>
         <circle cx="${sXY.x.toFixed(1)}" cy="${sXY.y.toFixed(1)}" r="${sR.toFixed(1)}" fill="${diskColor}"/>` : "";
 
+// Вектор тени (от центра в сторону, противоположную солнцу)
+    let shadowSvg = "";
+    if(sunAbove && sun.elev > 0.01){
+        const shadowAz  = (sun.az + 180) % 360;
+        const shadowAzR = shadowAz * Math.PI / 180;
+        // Длина: чем ниже солнце, тем длиннее тень, макс = R*0.88
+        const tanElev   = Math.tan(sun.elev);
+        const shadowLen = Math.min(R * 0.88, R * 0.3 / tanElev);
+        const sx2 = cx + shadowLen * Math.sin(shadowAzR);
+        const sy2 = cy - shadowLen * Math.cos(shadowAzR);
+        // Цвет: жёлтый при ясном, серый при пасмурном
+        const shadowColor = ktVal > 0.65 ? "#ffd84d" : ktVal > 0.3 ? "#888866" : "#555555";
+        const shadowOpacity = (0.3 + ktVal * 0.5).toFixed(2);
+        shadowSvg = `
+        <line x1="${cx}" y1="${cy}" x2="${sx2.toFixed(1)}" y2="${sy2.toFixed(1)}"
+              stroke="${shadowColor}" stroke-width="1.5" stroke-linecap="round" opacity="${shadowOpacity}"
+              stroke-dasharray="3,2"/>`;
+    }
+
     // Луна
     const moonAbove = moon.elevDeg > 0;
     const mXY = toXY(moon.az, Math.max(moon.elevDeg, 0));
@@ -364,6 +383,7 @@ function makeSkyDial(sun, moon, riseSet, lat, lon, date, kt){
         <line x1="${cx}" y1="${cy-R}" x2="${cx}" y2="${cy+R}" stroke="#181818" stroke-width="1"/>
         <line x1="${cx-R}" y1="${cy}" x2="${cx+R}" y2="${cy}" stroke="#181818" stroke-width="1"/>
         <circle cx="${cx}" cy="${cy}" r="2.5" fill="#222"/>
+        ${shadowSvg}
         ${arcPath}
         ${rsMarks}
         ${moonSvg}
