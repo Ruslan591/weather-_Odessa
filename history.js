@@ -192,6 +192,8 @@ function histRenderChart_uPlot(data, paramKey){
     wrap.innerHTML = "";
 
     const { times, values } = data;
+    const isWind   = paramKey === "wind";
+    const gustVals = isWind ? data.obs.map(o => o.windGustMs ?? null) : null;
     if(!times.length){
         wrap.innerHTML = `<div style="color:#666;text-align:center;padding:30px;">Нет данных для отображения</div>`;
         return;
@@ -233,14 +235,14 @@ function histRenderChart_uPlot(data, paramKey){
         series: [
             {},
             {
-                label:        cfg.label,
-                stroke:       cfg.stroke,
-                fill:         cfg.fill,
-                width:        2,
-                spanGaps:     false,
-                points: { show: false },
+                label:    cfg.label,
+                stroke:   cfg.stroke,
+                fill:     cfg.fill,
+                width:    2,
+                spanGaps: false,
+                points:   { show: false },
             },
-            (gustVals ? [{
+            ...(gustVals ? [{
                 label:    "Порыв",
                 stroke:   "#ff9f5c",
                 fill:     "rgba(255,159,92,0.07)",
@@ -249,6 +251,7 @@ function histRenderChart_uPlot(data, paramKey){
                 spanGaps: false,
                 points:   { show: false },
             }] : []),
+        ],
         hooks: {
             setCursor: [
                 u => {
