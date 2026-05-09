@@ -80,17 +80,15 @@
 
 <script>
 /* ── CONFIG ── */
-var GITHUB_OWNER        = "ruslan591";
-var GITHUB_REPO         = "weather-_Odessa";
-var GITHUB_ACCURACY_FILE = "data/ensemble_accuracy_synop.json";
-var GITHUB_SNAPS_FILE    = "data/ensemble_snapshots_synop.json";
+var GITHUB_OWNER      = "ruslan591";
+var GITHUB_REPO       = "weather-_Odessa";
+var GITHUB_SNAPS_FILE = "data/ensemble_snapshots_synop.json";
 
-var _snaps = [];
-var _acc   = null;
+var _snaps    = [];
+var _obsIndex = null;
 
 function getToken() { return localStorage.getItem("ghToken") || ""; }
 
-// строки 79–96 — заменить
 async function ghGetJson(path) {
     var url = "https://api.github.com/repos/" + GITHUB_OWNER + "/" + GITHUB_REPO + "/contents/" + path;
     var token = getToken();
@@ -103,24 +101,40 @@ async function ghGetJson(path) {
     });
     if (!r.ok) return { data: null, sha: null };
     var resp = await r.json();
-    if (!resp || !resp.content) return { data: null, sha: null };  // ← добавлено
-    var raw  = resp.content.replace(/[\r\n\s]/g, "");              // ← \r\n и пробелы
-    if (!raw) return { data: null, sha: null };                    // ← пустой контент
+    if (!resp || !resp.content) return { data: null, sha: null };
+    var raw = resp.content.replace(/[\r\n\s]/g, "");
+    if (!raw) return { data: null, sha: null };
     var text;
     try {
         text = new TextDecoder().decode(
             Uint8Array.from(atob(raw), function(c) { return c.charCodeAt(0); })
         );
-    } catch(e) {
-        console.error("ghGetJson: base64 decode failed", path, e);
-        return { data: null, sha: null };
-    }
+    } catch(e) { return { data: null, sha: null }; }
     try {
         return { data: JSON.parse(text), sha: resp.sha };
-    } catch(e) {
-        console.error("ghGetJson: JSON.parse failed", path, e, text.slice(0, 200));
-        return { data: null, sha: null };
-    }
+    } catch(e) { return { data: null, sha: null }; }
+}
+
+async function ghGetText(path) {
+    var url = "https://api.github.com/repos/" + GITHUB_OWNER + "/" + GITHUB_REPO + "/contents/" + path;
+    var token = getToken();
+    var r = await fetch(url, {
+        headers: Object.assign(
+            { "Accept": "application/vnd.github+json" },
+            token ? { "Authorization": "Bearer " + token } : {}
+        ),
+        cache: "no-store"
+    });
+    if (!r.ok) return null;
+    var resp = await r.json();
+    if (!resp || !resp.content) return null;
+    var raw = resp.content.replace(/[\r\n\s]/g, "");
+    if (!raw) return null;
+    try {
+        return new TextDecoder().decode(
+            Uint8Array.from(atob(raw), function(c) { return c.charCodeAt(0); })
+        );
+    } catch(e) { return null; }
 }
 
 /* ── ПАРАМЕТРЫ ── */
@@ -131,7 +145,7 @@ var PARAMS = [
     { key: "windDir",    label: "Направление", unit: "°",    color: "#74b9ff" },
     { key: "humidity",   label: "Влажность",   unit: "%",    color: "#00bcd4" },
     { key: "cloudcover", label: "Облачность",  unit: "%",    color: "#b0bec5" },
-    { key: "precip",     label: "Осадки",      unit: " мм",  color: "#448aff" },
+    { key: "precip",     label: "Осадки",      unit: " мм",  color: "#448aff", isFact: true },
     { key: "visibility", label: "Видимость",   unit: " м",   color: "#ce93d8" },
 ];
 
@@ -142,10 +156,288 @@ var THRESHOLDS = {
     windDir:    { good: 30,  bad: 60  },
     humidity:   { good: 8,   bad: 15  },
     cloudcover: { good: 15,  bad: 30  },
-    precip:     { good: 0.5, bad: 1.5 },
     visibility: { good: 500, bad: 2000 },
 };
 
+/* ── ПАРСИНГ SYNOP ── */
+function safeNum(v) { var n = Number(v); return Number.isFinite(n) ? n : null; }
+
+function pressureFromGroup(g) {
+    if (!g) return null;
+    var p = parseInt(g.slice(1), 10) / 10;
+    return Number.isNaN(p) ? null : (p < 500 ? p + 1000 : p);
+}
+
+function signedTenths(g) {
+    if (!g || g.length !== 5) return null;
+    var sign = g[1] === "1" ? -1 : 1;
+    var val  = parseInt(g.slice(2), 10);
+    return Number.isNaN(val) ? null : sign * val / 10;
+}
+
+function calcRelativeHumidity(tempC, dewC) {
+    var t = Number(tempC), td = Number(dewC);
+    if (!Number.isFinite(t) || !Number.isFinite(td)) return null;
+    var es = 6.112 * Math.exp((17.62 * t)  / (243.12 + t));
+    var e  = 6.112 * Math.exp((17.62 * td) / (243.12 + td));
+    var rh = (e / es) * 100;
+    return Number.isFinite(rh) ? Math.max(0, Math.min(100, Math.round(rh))) : null;
+}
+
+function vvToMeters(vv) {
+    if (!vv || vv.includes("/")) return null;
+    var v = parseInt(vv, 10);
+    if (isNaN(v)) return null;
+    if (v <= 50)                  return v * 100;
+    if (v >= 56 && v <= 80)       return (v - 50) * 1000;
+    if (v >= 81 && v <= 88)       return 35000 + (v - 81) * 5000;
+    if (v === 89)                  return 70000;
+    return null;
+}
+
+function parseSynopMinimal(line) {
+    var parts = line.trim().split(/\s+/);
+    var ai = parts.indexOf("AAXX");
+    if (ai === -1) return null;
+
+    var irixhvv = parts[ai + 3] || "";
+    var windGrp = parts[ai + 4] || "";
+    var iR = irixhvv[0] || "/";
+
+    var totalCloud = null, windDir = null, windSpeed = null;
+    if (/^\d{5}$/.test(windGrp)) {
+        totalCloud = parseInt(windGrp[0]);
+        var dd = parseInt(windGrp.slice(1, 3));
+        windDir   = (dd === 0 || isNaN(dd)) ? null : dd * 10;
+        var ff    = parseInt(windGrp.slice(3, 5));
+        windSpeed = isNaN(ff) ? null : ff;
+    }
+    var cloudcover = (totalCloud != null && totalCloud !== 9)
+        ? Math.round(totalCloud / 8 * 100) : null;
+
+    var vvStr = irixhvv.length >= 5 ? irixhvv.slice(3, 5) : null;
+
+    var temp = null, dew = null, seaP = null, precipGroup = null, weatherNow = null;
+    for (var i = ai + 5; i < parts.length; i++) {
+        var g = parts[i].replace(/=+$/, "");
+        if (g === "333" || g === "444" || g === "555") break;
+        if      (/^1[01/]\d{3}$/.test(g))                            temp        = signedTenths(g);
+        else if (/^2[01/]\d{3}$/.test(g))                            dew         = signedTenths(g);
+        else if (/^4\d{4}$/.test(g))                                  seaP        = pressureFromGroup(g);
+        else if (/^6\d{4}$/.test(g) && iR !== "3" && iR !== "4")     precipGroup = g;
+        else if (/^7\d{4}$/.test(g))                                  weatherNow  = g.slice(1, 3);
+    }
+
+    var precip = null;
+    if (iR === "3") {
+        precip = 0;
+    } else if (precipGroup) {
+        var rrr = parseInt(precipGroup.slice(1, 4), 10);
+        precip = rrr <= 988 ? rrr : (rrr === 989 ? 0.1 : null);
+    }
+
+    return {
+        temp:       temp,
+        seaPressure: seaP,
+        wind:       windSpeed,
+        windDir:    windDir,
+        humidity:   calcRelativeHumidity(temp, dew),
+        cloudcover: cloudcover,
+        precip:     precip,
+        visibility: vvToMeters(vvStr),
+        weatherNow: weatherNow,
+    };
+}
+
+function parseSynopCsvLine(csvLine) {
+    var comma = 0, pos = 0;
+    while (comma < 6 && pos < csvLine.length) {
+        if (csvLine[pos++] === ",") comma++;
+    }
+    var meta     = csvLine.slice(0, pos - 1).split(",");
+    var telegram = csvLine.slice(pos);
+    var hourKey  = meta[1] + "-" + meta[2] + "-" + meta[3] + "T" + meta[4];
+    var d = parseSynopMinimal(telegram);
+    if (!d) return null;
+    return {
+        hourKey:    hourKey,
+        temp:       d.temp,
+        pressure:   d.seaPressure,
+        wind:       d.wind,
+        windDir:    d.windDir,
+        humidity:   d.humidity,
+        cloudcover: d.cloudcover,
+        precip:     d.precip,
+        visibility: d.visibility,
+        weatherNow: d.weatherNow,
+    };
+}
+
+function buildSynopObsIndex(texts) {
+    var obsIndex = {};
+    texts.forEach(function(text) {
+        if (!text) return;
+        text.split("\n").forEach(function(line) {
+            line = line.trim();
+            if (!line) return;
+            var rec = parseSynopCsvLine(line);
+            if (!rec) return;
+            obsIndex[rec.hourKey] = rec;
+        });
+    });
+    return obsIndex;
+}
+
+/* ── РАСЧЁТ МЕТРИК ── */
+function snapTimeToHourKey(timeStr) {
+    return timeStr ? timeStr.slice(0, 13) : null;
+}
+
+function windDirDiff(a, b) {
+    var d = Math.abs(a - b);
+    return d > 180 ? 360 - d : d;
+}
+
+function emptyErrors() {
+    return { temp:[], pressure:[], wind:[], windDir:[], humidity:[], cloudcover:[], precip:[], visibility:[] };
+}
+
+function pushErrors(errors, fh, ob) {
+    function push(k, fv, ov) {
+        if (fv == null || ov == null) return;
+        errors[k].push(fv - ov);
+    }
+    push("temp",       fh.temp,       ob.temp);
+    push("pressure",   fh.pressure,   ob.pressure);
+    push("wind",       fh.wind,       ob.wind);
+    push("humidity",   fh.humidity,   ob.humidity);
+    push("cloudcover", fh.cloudcover, ob.cloudcover);
+    push("visibility", fh.visibility, ob.visibility);
+    if (fh.windDir != null && ob.windDir != null)
+        errors.windDir.push(windDirDiff(fh.windDir, ob.windDir));
+    if (fh.rain != null && ob.precip != null)
+        errors.precip.push((fh.rain > 0.1 ? 1 : 0) - (ob.precip > 0.1 ? 1 : 0));
+}
+
+function summarize(errors) {
+    var result = {};
+    Object.keys(errors).forEach(function(k) {
+        var arr = errors[k];
+        if (!arr.length) { result[k] = null; return; }
+        var mae  = arr.reduce(function(s,v){ return s + Math.abs(v); }, 0) / arr.length;
+        var rmse = Math.sqrt(arr.reduce(function(s,v){ return s + v*v; }, 0) / arr.length);
+        var bias = arr.reduce(function(s,v){ return s + v; }, 0) / arr.length;
+        result[k] = { mae: mae, rmse: rmse, bias: bias, n: arr.length };
+    });
+    return result;
+}
+
+function calcMetrics(obsIndex) {
+    if (!_snaps.length) return null;
+    var errors = emptyErrors(), matched = 0;
+    _snaps.forEach(function(snap) {
+        if (!snap.hours) return;
+        snap.hours.forEach(function(fh) {
+            var ob = obsIndex[snapTimeToHourKey(fh.time)];
+            if (!ob) return;
+            matched++;
+            pushErrors(errors, fh, ob);
+        });
+    });
+    return matched ? summarize(errors) : null;
+}
+
+function calcMetricsByDay(obsIndex) {
+    if (!_snaps.length) return null;
+    var byDay = {};
+    _snaps.forEach(function(snap) {
+        if (!snap.hours) return;
+        snap.hours.forEach(function(fh) {
+            var key = snapTimeToHourKey(fh.time);
+            var ob  = obsIndex[key];
+            if (!ob) return;
+            var day = key.slice(0, 10);
+            if (!byDay[day]) byDay[day] = emptyErrors();
+            pushErrors(byDay[day], fh, ob);
+        });
+    });
+    var result = {};
+    Object.keys(byDay).sort().forEach(function(day) { result[day] = summarize(byDay[day]); });
+    return result;
+}
+
+var _activeHorizonBucket = 3;
+
+function calcMetricsByHorizon(obsIndex) {
+    if (!_snaps.length) return null;
+    var byH = {};
+    _snaps.forEach(function(snap) {
+        if (!snap.hours) return;
+        var snapStart = new Date(snap.savedAt);
+        snap.hours.forEach(function(fh) {
+            var key = snapTimeToHourKey(fh.time);
+            var ob  = obsIndex[key];
+            if (!ob) return;
+            var horizonH = Math.round((new Date(fh.time + ":00Z") - snapStart) / 3600000);
+            var bucket   = Math.round(horizonH / _activeHorizonBucket) * _activeHorizonBucket;
+            if (bucket < 0) return;
+            if (!byH[bucket]) byH[bucket] = emptyErrors();
+            pushErrors(byH[bucket], fh, ob);
+        });
+    });
+    var result = {};
+    Object.keys(byH).sort(function(a,b){ return +a - +b; }).forEach(function(h) {
+        result[h] = summarize(byH[h]);
+    });
+    return result;
+}
+
+/* ── ЯВЛЕНИЯ ПОГОДЫ ── */
+function wmoToCategory(code) {
+    if (code == null) return null;
+    if (code <= 1)  return 0; // ясно
+    if (code <= 3)  return 1; // облачно
+    if (code === 45 || code === 48) return 2; // туман
+    if (code >= 51 && code <= 67)   return 3; // дождь/морось
+    if (code >= 71 && code <= 77)   return 4; // снег
+    if (code >= 80 && code <= 82)   return 5; // ливень
+    if (code >= 95)                  return 6; // гроза
+    return 1;
+}
+
+function synopWwToCategory(ww) {
+    if (ww == null) return null;
+    var w = parseInt(ww, 10);
+    if (isNaN(w)) return null;
+    if (w <= 3)  return 0; // ясно
+    if (w <= 19) return 1; // облачно/прочее
+    if (w <= 29) return null; // прошедшая погода — пропускаем
+    if (w <= 39) return 1;
+    if (w <= 49) return 2; // туман
+    if (w <= 69) return 3; // дождь/морось
+    if (w <= 79) return 4; // снег
+    if (w <= 89) return 5; // ливень
+    return 6;   // гроза
+}
+
+function calcWx(obsIndex) {
+    var total = 0, hits = 0;
+    _snaps.forEach(function(snap) {
+        if (!snap.hours) return;
+        snap.hours.forEach(function(fh) {
+            var ob = obsIndex[snapTimeToHourKey(fh.time)];
+            if (!ob || ob.weatherNow == null || fh.weatherCode == null) return;
+            var obCat = synopWwToCategory(ob.weatherNow);
+            var fcCat = wmoToCategory(fh.weatherCode);
+            if (obCat == null || fcCat == null) return;
+            total++;
+            if (obCat === fcCat) hits++;
+        });
+    });
+    return total > 0 ? { total: total, hits: hits, pct: Math.round(hits / total * 100) } : null;
+}
+
+/* ── РЕНДЕР МЕТРИК ── */
 function maeColor(key, mae) {
     var t = THRESHOLDS[key];
     if (!t) return "#aaa";
@@ -156,27 +448,34 @@ function maeColor(key, mae) {
 
 function biasBadge(bias, unit) {
     var absBias = Math.abs(bias);
-    var t = 0.05; // порог "точно"
-    if (absBias < t) {
+    if (absBias < 0.05)
         return '<span class="bias-badge" style="background:#5fe08f22;color:#5fe08f">✓ точно ' + absBias.toFixed(2) + unit + '</span>';
-    }
     var sign = bias > 0 ? "▲ завыш" : "▼ занижает";
     var col  = bias > 0 ? "#ff9f5c" : "#74b9ff";
     return '<span class="bias-badge" style="background:' + col + '22;color:' + col + '">' +
            sign + ' ' + absBias.toFixed(2) + unit + '</span>';
 }
 
-/* ── РЕНДЕР МЕТРИК ── */
-function renderMetrics(overall) {
+function renderMetrics(metrics) {
     var grid = document.getElementById("metricsGrid");
-    if (!overall) {
-        grid.innerHTML = '<div class="empty" style="grid-column:1/-1;">Нет данных о точности</div>';
+    if (!metrics) {
+        grid.innerHTML = '<div class="empty" style="grid-column:1/-1;">Нет совпадений снимков с наблюдениями SYNOP</div>';
         return;
     }
     grid.innerHTML = PARAMS.map(function(p) {
-        var s = overall[p.key];
+        var s = metrics[p.key];
         if (!s) return '<div class="es-card"><div class="es-card-label">' + p.label + '</div>' +
                        '<div style="color:var(--muted2);font-size:12px;margin-top:4px;">нет данных</div></div>';
+        if (p.isFact) {
+            var correct = s.n - Math.round(s.mae * s.n);
+            var pct = Math.round(correct / s.n * 100);
+            var fc  = pct >= 80 ? "var(--good)" : pct >= 60 ? "var(--warn)" : "var(--bad)";
+            return '<div class="es-card">' +
+                '<div class="es-card-label">' + p.label + ' (факт)</div>' +
+                '<div class="es-card-mae" style="color:' + fc + ';">' + pct +
+                    '<span> % верно</span></div>' +
+                '<div class="es-card-sub">верно ' + correct + ' из ' + s.n + '</div></div>';
+        }
         var col = maeColor(p.key, s.mae);
         return '<div class="es-card">' +
             '<div class="es-card-label">' + p.label + '</div>' +
@@ -188,12 +487,11 @@ function renderMetrics(overall) {
                 'уклон ' + (s.bias > 0 ? "+" : "") + s.bias.toFixed(2) + p.unit +
                 biasBadge(s.bias, p.unit) + '<br>' +
                 '<span class="n">n=' + s.n + '</span>' +
-            '</div>' +
-        '</div>';
+            '</div></div>';
     }).join("");
 }
 
-/* ── ЯВЛЕНИЯ ПОГОДЫ ── */
+/* ── ЯВЛЕНИЯ (рендер) ── */
 function renderWx(wx) {
     if (!wx || !wx.total) return;
     var section = document.getElementById("wxSection");
@@ -232,8 +530,8 @@ function getBestModelMAE(paramKey) {
     return bestModel ? { model: bestModel, mae: best } : null;
 }
 
-function renderCompare(overall) {
-    if (!overall) return;
+function renderCompare(metrics) {
+    if (!metrics) return;
     var cParams = [
         { key: "temp",     label: "Температура", unit: "°C"   },
         { key: "wind",     label: "Ветер",       unit: " м/с" },
@@ -242,7 +540,7 @@ function renderCompare(overall) {
     var html = "", hasAny = false;
     cParams.forEach(function(p) {
         var best = getBestModelMAE(p.key);
-        var ens  = overall[p.key];
+        var ens  = metrics[p.key];
         if (!best || !ens) return;
         hasAny = true;
         var diff = ens.mae - best.mae;
@@ -265,7 +563,7 @@ function renderCompare(overall) {
 }
 
 /* ── ПОКРЫТИЕ ── */
-function renderCoverage(snapCount, obsN) {
+function renderCoverage(snapCount, obsCount) {
     var horizons   = getHorizonStats();
     var totalHours = horizons.reduce(function(s, h) { return s + h.count; }, 0);
     var avgHorizon = horizons.length
@@ -281,7 +579,7 @@ function renderCoverage(snapCount, obsN) {
             '<div class="coverage-item"><span>Снимков</span><b>' + snapCount + '</b></div>' +
             '<div class="coverage-item"><span>Часов прогноза</span><b>' + totalHours + '</b></div>' +
             '<div class="coverage-item"><span>Средний горизонт</span><b>' + avgHorizon + ' ч</b></div>' +
-            '<div class="coverage-item"><span>Наблюдений</span><b>' + (obsN || "—") + '</b></div>' +
+            '<div class="coverage-item"><span>Наблюдений</span><b>' + (obsCount || "—") + '</b></div>' +
         '</div>' +
         '<div class="coverage-dates">' +
             'Первый: ' + fmt(oldest) + '<br>Последний: ' + fmt(newest) +
@@ -319,18 +617,18 @@ var _dayMetrics     = null;
 var _horizonMetrics = null;
 var _activeChartParam   = "temp";
 var _activeHorizonParam = "temp";
-var _activeHorizonMode = "mae";
-var _horizonZoom = 48;
+var _activeHorizonMode  = "mae";
+var _horizonZoom        = 48;
 var _chartInstance        = null;
 var _horizonChartInstance = null;
 
-function makeChartOptions(labels, maes, p, getN) {
+function makeChartOptions(labels, vals, p, getN) {
     return {
         type: "line",
         data: {
             labels: labels,
             datasets: [{
-                data: maes,
+                data: vals,
                 borderColor: p.color,
                 backgroundColor: p.color + "22",
                 borderWidth: 2,
@@ -385,7 +683,7 @@ function renderChart(paramKey) {
 }
 
 function renderChartParamRow() {
-    var chartParams = PARAMS.filter(function(p) { return p.key !== "windDir"; });
+    var chartParams = PARAMS.filter(function(p) { return p.key !== "windDir" && !p.isFact; });
     document.getElementById("chartParamRow").innerHTML = chartParams.map(function(p) {
         return '<button class="cp-btn dp-btn' + (p.key === _activeChartParam ? " active" : "") + '" ' +
                'data-key="' + p.key + '" style="--c:' + p.color + '" ' +
@@ -396,20 +694,17 @@ function renderChartParamRow() {
 function renderHorizonChart(paramKey, mode) {
     if (paramKey !== undefined) _activeHorizonParam = paramKey;
     if (mode     !== undefined) _activeHorizonMode  = mode;
-
     document.querySelectorAll(".hp-btn").forEach(function(b) {
         b.classList.toggle("active", b.dataset.key === _activeHorizonParam);
     });
     document.querySelectorAll(".hm-btn").forEach(function(b) {
         b.classList.toggle("active", b.dataset.mode === _activeHorizonMode);
     });
-
     if (!_horizonMetrics) return;
     var buckets = Object.keys(_horizonMetrics).map(Number).sort(function(a, b) { return a - b; });
     if (!buckets.length) return;
     var p = PARAMS.find(function(x) { return x.key === _activeHorizonParam; });
     if (!p) return;
-
     var isBias = _activeHorizonMode === "bias";
     var vals   = buckets.map(function(h) {
         var s = _horizonMetrics[h][_activeHorizonParam];
@@ -466,7 +761,7 @@ function applyHorizonZoom() {
 }
 
 function renderHorizonParamRow() {
-    var hParams = PARAMS.filter(function(p) { return p.key !== "windDir"; });
+    var hParams = PARAMS.filter(function(p) { return p.key !== "windDir" && !p.isFact; });
     document.getElementById("horizonParamRow").innerHTML =
         hParams.map(function(p) {
             return '<button class="cp-btn hp-btn' + (p.key === _activeHorizonParam ? " active" : "") + '" ' +
@@ -488,50 +783,67 @@ function setStatus(msg) { document.getElementById("statusLine").innerHTML = msg;
 
 /* ── ГЛАВНЫЙ РЕНДЕР ── */
 async function render() {
-    setStatus("Загрузка метрик…");
-    var accResult = await ghGetJson(GITHUB_ACCURACY_FILE);
-    _acc = accResult.data;
-
     var snapCount = _snaps.length;
-
-    if (!_acc || !_acc.overall) {
+    if (!snapCount) {
         document.getElementById("metricsGrid").innerHTML =
-            '<div class="empty" style="grid-column:1/-1;">' +
-            'Нет данных точности. Убедитесь, что <b>ensemble_accuracy_synop.json</b> обновлён.</div>';
+            '<div class="empty" style="grid-column:1/-1;">Нет снимков.</div>';
         renderSnapshots();
-        setStatus("Снимков: <b>" + snapCount + "</b>");
+        setStatus("Снимков: <b>0</b>");
         return;
     }
 
-    renderMetrics(_acc.overall);
-    renderWx(_acc.wx || null);
+    setStatus("Загрузка наблюдений SYNOP…");
 
-    if (_acc.byDay && Object.keys(_acc.byDay).length) {
-        _dayMetrics = _acc.byDay;
+    var years = {};
+    _snaps.forEach(function(s) {
+        if (!s.hours) return;
+        s.hours.forEach(function(fh) { years[fh.time.slice(0, 4)] = true; });
+    });
+
+    var texts = await Promise.all(Object.keys(years).map(function(y) {
+        return ghGetText("data/synop_" + y + ".txt");
+    }));
+
+    _obsIndex = buildSynopObsIndex(texts);
+    var obsCount = Object.keys(_obsIndex).length;
+
+    if (!obsCount) {
+        setStatus("❌ SYNOP-наблюдения не загружены. Проверьте токен.");
+        return;
+    }
+
+    setStatus("Расчёт метрик…");
+
+    var metrics = calcMetrics(_obsIndex);
+
+    renderWx(calcWx(_obsIndex));
+
+    _dayMetrics = calcMetricsByDay(_obsIndex);
+    if (_dayMetrics && Object.keys(_dayMetrics).length) {
         document.getElementById("chartSection").style.display = "";
         renderChartParamRow();
         renderChart(_activeChartParam);
+    } else {
+        document.getElementById("chartSection").style.display = "none";
     }
 
-    if (_acc.byHorizon && Object.keys(_acc.byHorizon).length) {
-        _horizonMetrics = _acc.byHorizon;
+    _horizonMetrics = calcMetricsByHorizon(_obsIndex);
+    if (_horizonMetrics && Object.keys(_horizonMetrics).length) {
         document.getElementById("horizonSection").style.display = "";
         renderHorizonParamRow();
         renderHorizonChart(_activeHorizonParam);
+    } else {
+        document.getElementById("horizonSection").style.display = "none";
     }
 
-    renderCompare(_acc.overall);
-    renderCoverage(snapCount, _acc.overall.temp ? _acc.overall.temp.n : 0);
+    renderMetrics(metrics);
+    renderCompare(metrics);
+    renderCoverage(snapCount, obsCount);
     renderSnapshots();
-
-    var updated = _acc.updated ? new Date(_acc.updated).toLocaleString("ru-RU", {
-        day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"
-    }) : null;
 
     setStatus(
         "Снимков: <b>" + snapCount + "</b>" +
-        (_acc.overall.temp ? " · наблюдений: <b>" + _acc.overall.temp.n + "</b>" : "") +
-        (updated ? " · обновлено " + updated : "")
+        " · наблюдений SYNOP: <b>" + obsCount + "</b>"
     );
 }
 
@@ -588,13 +900,8 @@ function openTokenDialog() {
     var current = localStorage.getItem("ghToken") || "";
     var val = prompt("GitHub токен" + (current ? " (задан)" : " (не задан)"), current);
     if (val === null) return;
-    if (val.trim() === "") {
-        localStorage.removeItem("ghToken");
-        alert("Токен удалён");
-    } else {
-        localStorage.setItem("ghToken", val.trim());
-        alert("Токен сохранён");
-    }
+    if (val.trim() === "") { localStorage.removeItem("ghToken"); alert("Токен удалён"); }
+    else { localStorage.setItem("ghToken", val.trim()); alert("Токен сохранён"); }
 }
 
 /* ── GIST ID ── */
@@ -602,13 +909,8 @@ function openGistDialog() {
     var current = localStorage.getItem("gistId") || "";
     var val = prompt("Gist ID для live-лога" + (current ? " (задан)" : " (не задан)"), current);
     if (val === null) return;
-    if (val.trim() === "") {
-        localStorage.removeItem("gistId");
-        alert("Gist ID удалён");
-    } else {
-        localStorage.setItem("gistId", val.trim());
-        alert("Gist ID сохранён");
-    }
+    if (val.trim() === "") { localStorage.removeItem("gistId"); alert("Gist ID удалён"); }
+    else { localStorage.setItem("gistId", val.trim()); alert("Gist ID сохранён"); }
 }
 
 </script>
