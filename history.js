@@ -240,7 +240,15 @@ function histRenderChart_uPlot(data, paramKey){
                 spanGaps:     false,
                 points: { show: false },
             },
-        ],
+            (gustVals ? [{
+                label:    "Порыв",
+                stroke:   "#ff9f5c",
+                fill:     "rgba(255,159,92,0.07)",
+                width:    1.5,
+                dash:     [4, 3],
+                spanGaps: false,
+                points:   { show: false },
+            }] : []),
         hooks: {
             setCursor: [
                 u => {
@@ -252,7 +260,11 @@ function histRenderChart_uPlot(data, paramKey){
         },
     };
 
-    _histChart = new uPlot(opts, [new Float64Array(times), values.map(v => v ?? NaN)], wrap);
+    _histChart = new uPlot(opts, [
+        new Float64Array(times),
+        values.map(v => v ?? NaN),
+        ...(gustVals ? [gustVals.map(v => v ?? NaN)] : []),
+    ], wrap);
 }
 
 /* ── движок SVG (встроенный, без зависимостей) ── */
@@ -264,6 +276,8 @@ function histRenderChart_SVG(data, paramKey){
     if(_histChart){ _histChart.destroy && _histChart.destroy(); _histChart = null; }
 
     const { times, values } = data;
+const isWind   = paramKey === "wind";
+const gustVals = isWind ? data.obs.map(o => o.windGustMs ?? null) : null;
     if(!times.length){
         wrap.innerHTML = `<div style="color:#666;text-align:center;padding:30px;">Нет данных для отображения</div>`;
         return;
@@ -276,10 +290,10 @@ function histRenderChart_SVG(data, paramKey){
     const vals = values.map(v => v ?? NaN);
     const tMin = Math.min(...times), tMax = Math.max(...times);
     const vAll = vals.filter(v => !isNaN(v));
-    if(!vAll.length){ wrap.innerHTML = `<div style="color:#666;text-align:center;padding:30px;">Нет данных</div>`; return; }
-
-    let vMin = Math.min(...vAll), vMax = Math.max(...vAll);
-    if(vMin === vMax){ vMin -= 1; vMax += 1; }
+if(!vAll.length){ wrap.innerHTML = `<div style="color:#666;text-align:center;padding:30px;">Нет данных</div>`; return; }
+const gAll = gustVals ? gustVals.filter(v => v != null && !isNaN(v)) : [];
+let vMin = Math.min(...vAll, ...gAll), vMax = Math.max(...vAll, ...gAll);
+if(vMin === vMax){ vMin -= 1; vMax += 1; }
 
     const px = t => pad.l + (t - tMin) / (tMax - tMin) * iW;
     const py = v => pad.t + (1 - (v - vMin) / (vMax - vMin)) * iH;
@@ -310,6 +324,16 @@ function histRenderChart_SVG(data, paramKey){
     const areaD = pts.length > 1
         ? pathD + ` L${pts[pts.length-1].x},${pad.t+iH} L${pts[0].x},${pad.t+iH} Z`
         : "";
+
+// добавить после строки:  const areaD = ...
+const gustPts = [];
+if(gustVals){
+    times.forEach((t, i) => {
+        if(gustVals[i] == null || isNaN(gustVals[i])) return;
+        gustPts.push({ x: px(t), y: py(gustVals[i]) });
+    });
+}
+const gustPathD = gustPts.length > 1 ? smoothPath(gustPts) : "";
 
     // Метки Y
     const yTicks = 5;
@@ -346,7 +370,8 @@ function histRenderChart_SVG(data, paramKey){
         </defs>
         ${yLabels}${xLabels}
         ${areaD ? `<path d="${areaD}" fill="url(#${gradId})" stroke="none"/>` : ""}
-        <path d="${pathD}" fill="none" stroke="${cfg.stroke}" stroke-width="2" stroke-linejoin="round"/>
+    <path d="${pathD}" fill="none" stroke="${cfg.stroke}" stroke-width="2" stroke-linejoin="round"/>
+    ${gustPathD ? `<path d="${gustPathD}" fill="none" stroke="#ff9f5c" stroke-width="1.5" stroke-dasharray="4 3" stroke-linejoin="round" opacity="0.85"/>` : ""}
     </svg>`;
 
     // Тултип по наведению
@@ -626,6 +651,8 @@ function histRenderChart_ECharts(data, paramKey){
     wrap.innerHTML = "";
 
     const { times, values } = data;
+    const isWind   = paramKey === "wind";
+    const gustVals = isWind ? data.obs.map(o => o.windGustMs ?? null) : null;
     if(!times.length){
         wrap.innerHTML = `<div style="color:#666;text-align:center;padding:30px;">Нет данных для отображения</div>`;
         return;
