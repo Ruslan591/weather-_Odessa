@@ -47,6 +47,15 @@
     </div>
 </div>
 
+<!-- НАБЛЮДЕНИЯ vs ПРОГНОЗ -->
+<div id="obsVsFcSection" style="display:none;margin-bottom:16px;">
+    <div class="section-label">Наблюдения vs прогноз</div>
+    <div class="chart-section">
+        <div id="obsVsFcParamRow" class="param-row"></div>
+        <canvas id="obsVsFcChart" height="160"></canvas>
+    </div>
+</div>
+
 <!-- СРАВНЕНИЕ С ЛУЧШЕЙ МОДЕЛЬЮ -->
 <div id="compareSection" style="display:none;margin-bottom:16px;">
     <div class="section-label">Сравнение с лучшей моделью</div>
@@ -83,9 +92,11 @@
 var GITHUB_OWNER      = "ruslan591";
 var GITHUB_REPO       = "weather-_Odessa";
 var GITHUB_SNAPS_FILE = "data/ensemble_snapshots_synop.json";
+var GITHUB_ACC_FILE   = "data/ensemble_accuracy_synop.json";
 
 var _snaps    = [];
 var _obsIndex = null;
+var _acc      = null;
 
 function getToken() { return localStorage.getItem("ghToken") || ""; }
 
@@ -302,10 +313,27 @@ function emptyErrors() {
     return { temp:[], pressure:[], wind:[], windDir:[], humidity:[], cloudcover:[], precip:[], visibility:[] };
 }
 
-function pushErrors(errors, fh, ob) {
+function applyBiasClient(value, key, horizonH) {
+    if (value == null || !_acc) return value;
+    var byHorizon = _acc.byHorizon || {};
+    var overall   = _acc.overall   || {};
+    var b = null;
+    if (horizonH != null) {
+        var hKey = String(Math.round(horizonH / 3) * 3);
+        b = ((byHorizon[hKey] || {})[key] || {}).bias;
+    }
+    if (b == null) b = (overall[key] || {}).bias;
+    if (b == null) return value;
+    if (key === "windDir") return ((value - b) % 360 + 360) % 360;
+    var result = Math.round((value - b) * 10) / 10;
+    if (key === "wind") result = Math.max(0, result);
+    return result;
+}
+
+function pushErrors(errors, fh, ob, horizonH) {
     function push(k, fv, ov) {
         if (fv == null || ov == null) return;
-        errors[k].push(fv - ov);
+        errors[k].push(applyBiasClient(fv, k, horizonH) - ov);
     }
     push("temp",       fh.temp,       ob.temp);
     push("pressure",   fh.pressure,   ob.pressure);
@@ -314,7 +342,7 @@ function pushErrors(errors, fh, ob) {
     push("cloudcover", fh.cloudcover, ob.cloudcover);
     push("visibility", fh.visibility, ob.visibility);
     if (fh.windDir != null && ob.windDir != null)
-        errors.windDir.push(windDirDiff(fh.windDir, ob.windDir));
+        errors.windDir.push(windDirDiff(applyBiasClient(fh.windDir, "windDir", horizonH), ob.windDir));
     if (fh.rain != null && ob.precip != null)
         errors.precip.push((fh.rain > 0.1 ? 1 : 0) - (ob.precip > 0.1 ? 1 : 0));
 }
@@ -337,11 +365,13 @@ function calcMetrics(obsIndex) {
     var errors = emptyErrors(), matched = 0;
     _snaps.forEach(function(snap) {
         if (!snap.hours) return;
+        var snapStart = new Date(snap.savedAt);
         snap.hours.forEach(function(fh) {
             var ob = obsIndex[snapTimeToHourKey(fh.time)];
             if (!ob) return;
             matched++;
-            pushErrors(errors, fh, ob);
+            var horizonH = Math.round((new Date(fh.time + ":00Z") - snapStart) / 3600000);
+            pushErrors(errors, fh, ob, horizonH);
         });
     });
     return matched ? summarize(errors) : null;
@@ -352,21 +382,21 @@ function calcMetricsByDay(obsIndex) {
     var byDay = {};
     _snaps.forEach(function(snap) {
         if (!snap.hours) return;
+        var snapStart = new Date(snap.savedAt);
         snap.hours.forEach(function(fh) {
             var key = snapTimeToHourKey(fh.time);
             var ob  = obsIndex[key];
             if (!ob) return;
             var day = key.slice(0, 10);
             if (!byDay[day]) byDay[day] = emptyErrors();
-            pushErrors(byDay[day], fh, ob);
+            var horizonH = Math.round((new Date(fh.time + ":00Z") - snapStart) / 3600000);
+            pushErrors(byDay[day], fh, ob, horizonH);
         });
     });
     var result = {};
     Object.keys(byDay).sort().forEach(function(day) { result[day] = summarize(byDay[day]); });
     return result;
 }
-
-var _activeHorizonBucket = 3;
 
 function calcMetricsByHorizon(obsIndex) {
     if (!_snaps.length) return null;
@@ -382,7 +412,7 @@ function calcMetricsByHorizon(obsIndex) {
             var bucket   = Math.round(horizonH / _activeHorizonBucket) * _activeHorizonBucket;
             if (bucket < 0) return;
             if (!byH[bucket]) byH[bucket] = emptyErrors();
-            pushErrors(byH[bucket], fh, ob);
+            pushErrors(byH[bucket], fh, ob, horizonH);
         });
     });
     var result = {};
@@ -778,6 +808,90 @@ function renderHorizonParamRow() {
         '</div>';
 }
 
+/* ── НАБЛЮДЕНИЯ vs ПРОГНОЗ ── */
+var _obsVsFcChartInstance = null;
+var _activeObsVsFcParam   = "temp";
+
+function buildObsVsFcSeries(paramKey) {
+    var fcByHour = {};
+    _snaps.forEach(function(snap) {
+        if (!snap.hours) return;
+        var snapStart = new Date(snap.savedAt);
+        snap.hours.forEach(function(fh) {
+            var key = snapTimeToHourKey(fh.time);
+            if (!_obsIndex[key]) return;
+            var val = fh[paramKey];
+            if (val == null) return;
+            var horizonH = (new Date(fh.time + ":00Z") - snapStart) / 3600000;
+            if (horizonH < 0) return;
+            if (!fcByHour[key] || horizonH < fcByHour[key].horizonH)
+                fcByHour[key] = { val: val, horizonH: horizonH };
+        });
+    });
+    var hours = Object.keys(fcByHour).filter(function(k) {
+        return _obsIndex[k] && _obsIndex[k][paramKey] != null;
+    }).sort();
+    return {
+        labels:  hours.map(function(k) {
+            return k.slice(8,10) + "." + k.slice(5,7) + " " + k.slice(11,13) + "ч";
+        }),
+        obsVals: hours.map(function(k) { return _obsIndex[k][paramKey]; }),
+        fcVals:  hours.map(function(k) {
+            var fc = fcByHour[k];
+            return applyBiasClient(fc.val, paramKey, fc.horizonH);
+        })
+    };
+}
+
+function renderObsVsFcChart(paramKey) {
+    if (paramKey !== undefined) _activeObsVsFcParam = paramKey;
+    document.querySelectorAll(".ovf-btn").forEach(function(b) {
+        b.classList.toggle("active", b.dataset.key === _activeObsVsFcParam);
+    });
+    if (!_obsIndex) return;
+    var p = PARAMS.find(function(x) { return x.key === _activeObsVsFcParam; });
+    if (!p) return;
+    var s = buildObsVsFcSeries(_activeObsVsFcParam);
+    if (!s.labels.length) return;
+    var ctx = document.getElementById("obsVsFcChart").getContext("2d");
+    if (_obsVsFcChartInstance) { _obsVsFcChartInstance.destroy(); _obsVsFcChartInstance = null; }
+    _obsVsFcChartInstance = new Chart(ctx, {
+        type: "line",
+        data: {
+            labels: s.labels,
+            datasets: [
+                { label: "SYNOP",    data: s.obsVals, borderColor: "#ffffff", backgroundColor: "transparent",
+                  borderWidth: 2, pointRadius: 2, tension: 0.2, fill: false, spanGaps: true },
+                { label: "Ансамбль", data: s.fcVals,  borderColor: p.color,   backgroundColor: p.color + "22",
+                  borderWidth: 2, pointRadius: 2, tension: 0.3, fill: true,  spanGaps: true }
+            ]
+        },
+        options: {
+            responsive: true, animation: false,
+            plugins: {
+                legend: { display: true, labels: { color: "#aaa", font: { size: 10 }, boxWidth: 12 } },
+                tooltip: { callbacks: { label: function(ctx) {
+                    var v = ctx.parsed.y;
+                    return ctx.dataset.label + ": " + (v != null ? v.toFixed(1) + p.unit : "—");
+                }}}
+            },
+            scales: {
+                x: { ticks: { color: "#555", font: { size: 9 }, maxRotation: 45 }, grid: { color: "#1e1e1e" } },
+                y: { ticks: { color: "#555", font: { size: 10 } }, grid: { color: "#252525" } }
+            }
+        }
+    });
+}
+
+function renderObsVsFcParamRow() {
+    var ovfParams = PARAMS.filter(function(p) { return p.key !== "windDir" && p.key !== "visibility" && !p.isFact; });
+    document.getElementById("obsVsFcParamRow").innerHTML = ovfParams.map(function(p) {
+        return '<button class="cp-btn ovf-btn' + (p.key === _activeObsVsFcParam ? " active" : "") + '" ' +
+               'data-key="' + p.key + '" style="--c:' + p.color + '" ' +
+               'onclick="renderObsVsFcChart(\'' + p.key + '\')">' + p.label + '</button>';
+    }).join("");
+}
+
 /* ── СТАТУС ── */
 function setStatus(msg) { document.getElementById("statusLine").innerHTML = msg; }
 
@@ -835,21 +949,34 @@ async function render() {
     } else {
         document.getElementById("horizonSection").style.display = "none";
     }
+    if (_obsIndex && Object.keys(_obsIndex).length) {
+        document.getElementById("obsVsFcSection").style.display = "";
+        renderObsVsFcParamRow();
+        renderObsVsFcChart(_activeObsVsFcParam);
+    } else {
+        document.getElementById("obsVsFcSection").style.display = "none";
+    }
 
     renderMetrics(metrics);
     renderCompare(metrics);
     renderCoverage(snapCount, obsCount);
     renderSnapshots();
 
-    setStatus(
-        "Снимков: <b>" + snapCount + "</b>" +
-        " · наблюдений SYNOP: <b>" + obsCount + "</b>"
-    );
+    // строка 844, заменить setStatus(...)
+var updated = (_acc && _acc.updated)
+    ? " · accuracy " + new Date(_acc.updated).toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})
+    : "";
+setStatus(
+    "Снимков: <b>" + snapCount + "</b>" +
+    " · наблюдений SYNOP: <b>" + obsCount + "</b>" + updated
+);
 }
 
 /* ── СТАРТ ── */
 (async function() {
     setStatus("Загрузка снимков…");
+    var accResult  = await ghGetJson(GITHUB_ACC_FILE);
+    _acc = accResult.data;
     var snapResult = await ghGetJson(GITHUB_SNAPS_FILE);
     _snaps = (snapResult.data && Array.isArray(snapResult.data)) ? snapResult.data : [];
     await render();
