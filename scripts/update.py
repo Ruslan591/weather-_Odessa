@@ -1285,10 +1285,17 @@ def main():
 
     pws_obs_by_time = {}
     for obs_key, fields in pws_buckets.items():
-        pws_obs_by_time[obs_key] = {
-            field: round(sum(vals) / len(vals), 2)
-            for field, vals in fields.items() if vals
-        }
+        entry = {}
+        for field, vals in fields.items():
+            if not vals:
+                continue
+            if field == "windDir":
+                sx = sum(math.sin(v * math.pi / 180) for v in vals)
+                sy = sum(math.cos(v * math.pi / 180) for v in vals)
+                entry[field] = round((math.degrees(math.atan2(sx, sy)) + 360) % 360)
+            else:
+                entry[field] = round(sum(vals) / len(vals), 2)
+        pws_obs_by_time[obs_key] = entry
 
     new_recs_pws, remaining_pws = squeeze_snapshots(snaps_pws, pws_obs_by_time, mode="pws")
     gist_log(f"  PWS: выжато {len(new_recs_pws)} записей, осталось {len(remaining_pws)} снимков")
