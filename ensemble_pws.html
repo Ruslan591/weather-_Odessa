@@ -674,6 +674,7 @@ function renderOvfChart(paramKey) {
 }
 
 function renderOvfParamRow() {
+    var ovfParams = PARAMS.filter(function(p) { return !p.isFact; });
     document.getElementById("ovfParamRow").innerHTML = ovfParams.map(function(p) {
         return '<button class="cp-btn ovf-btn' + (p.key === _activeOvfParam ? " active" : "") + '" ' +
                'data-key="' + p.key + '" style="--c:' + p.color + '" ' +
