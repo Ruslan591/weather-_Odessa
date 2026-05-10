@@ -64,6 +64,7 @@
                 style="background:none;border:1px solid #333;color:#777;border-radius:6px;font-size:11px;padding:3px 8px;cursor:pointer;">
                 Всё
             </button>
+            <span style="color:#444;font-size:10px;width:100%;">местное время (UTC+3)</span>
         </div>
         <canvas id="obsVsFcChart" height="160"></canvas>
     </div>
@@ -828,11 +829,16 @@ var _activeObsVsFcParam   = "temp";
 var _ovfFrom = null; // строка вида "2026-04-01T00"
 var _ovfTo   = null; // строка вида "2026-05-10T23"
 
+function localToUtcHour(localStr) {
+    if (!localStr) return null;
+    return new Date(localStr).toISOString().slice(0, 13); // "YYYY-MM-DDTHH" UTC
+}
+
 function setOvfRange() {
     var f = document.getElementById("ovfFrom").value;
     var t = document.getElementById("ovfTo").value;
-    _ovfFrom = f ? f.slice(0, 13) : null; // "YYYY-MM-DDTHH"
-    _ovfTo   = t ? t.slice(0, 13) : null;
+    _ovfFrom = localToUtcHour(f);
+    _ovfTo   = localToUtcHour(t);
     renderObsVsFcChart();
 }
 
