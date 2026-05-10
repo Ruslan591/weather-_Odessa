@@ -52,6 +52,19 @@
     <div class="section-label">Наблюдения vs прогноз</div>
     <div class="chart-section">
         <div id="obsVsFcParamRow" class="param-row"></div>
+        <div id="obsVsFcDateRow" style="display:flex;gap:6px;align-items:center;margin:6px 0;flex-wrap:wrap;">
+            <input type="datetime-local" id="ovfFrom"
+                style="background:#1a1a1a;border:1px solid #333;color:#ccc;border-radius:6px;padding:3px 6px;font-size:11px;flex:1;min-width:130px;"
+                onchange="setOvfRange()">
+            <span style="color:#555;font-size:12px;">—</span>
+            <input type="datetime-local" id="ovfTo"
+                style="background:#1a1a1a;border:1px solid #333;color:#ccc;border-radius:6px;padding:3px 6px;font-size:11px;flex:1;min-width:130px;"
+                onchange="setOvfRange()">
+            <button onclick="clearOvfRange()"
+                style="background:none;border:1px solid #333;color:#777;border-radius:6px;font-size:11px;padding:3px 8px;cursor:pointer;">
+                Всё
+            </button>
+        </div>
         <canvas id="obsVsFcChart" height="160"></canvas>
     </div>
 </div>
@@ -812,6 +825,23 @@ function renderHorizonParamRow() {
 /* ── НАБЛЮДЕНИЯ vs ПРОГНОЗ ── */
 var _obsVsFcChartInstance = null;
 var _activeObsVsFcParam   = "temp";
+var _ovfFrom = null; // строка вида "2026-04-01T00"
+var _ovfTo   = null; // строка вида "2026-05-10T23"
+
+function setOvfRange() {
+    var f = document.getElementById("ovfFrom").value;
+    var t = document.getElementById("ovfTo").value;
+    _ovfFrom = f ? f.slice(0, 13) : null; // "YYYY-MM-DDTHH"
+    _ovfTo   = t ? t.slice(0, 13) : null;
+    renderObsVsFcChart();
+}
+
+function clearOvfRange() {
+    _ovfFrom = _ovfTo = null;
+    document.getElementById("ovfFrom").value = "";
+    document.getElementById("ovfTo").value   = "";
+    renderObsVsFcChart();
+}
 
 function buildObsVsFcSeries(paramKey) {
     var fcByHour = {};
@@ -821,6 +851,8 @@ function buildObsVsFcSeries(paramKey) {
         snap.hours.forEach(function(fh) {
             var key = snapTimeToHourKey(fh.time);
             if (!_obsIndex[key]) return;
+            if (_ovfFrom && key < _ovfFrom) return;
+            if (_ovfTo   && key > _ovfTo)   return;
             var val = fh[paramKey];
             if (val == null) return;
             var horizonH = (new Date(fh.time + ":00Z") - snapStart) / 3600000;
