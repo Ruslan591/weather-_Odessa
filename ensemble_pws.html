@@ -525,13 +525,16 @@ var _ovfChartInstance = null;
 var _activeOvfParam   = "temp";
 var _ovfFrom          = null;
 var _ovfTo            = null;
+var _ovfRangeInit     = false;
 
-function setOvfRange() {
-    var f = document.getElementById("ovfFrom").value;
-    var t = document.getElementById("ovfTo").value;
-    _ovfFrom = f ? f.slice(0, 13) : null;
-    _ovfTo   = t ? t.slice(0, 13) : null;
-    renderOvfChart();
+function initOvfRange() {
+    var now      = new Date();
+    var local    = new Date(now.getTime() + PWS_UTC_OFFSET * 3600000);
+    var pad      = function(n){ return String(n).padStart(2,"0"); };
+    var ymd      = local.getUTCFullYear() + "-" + pad(local.getUTCMonth()+1) + "-" + pad(local.getUTCDate());
+    document.getElementById("ovfFrom").value = ymd + "T00:00";
+    document.getElementById("ovfTo").value   = ymd + "T" + pad(local.getUTCHours()) + ":" + pad(local.getUTCMinutes());
+    setOvfRange();
 }
 
 function clearOvfRange() {
@@ -551,6 +554,7 @@ function buildOvfSeries(paramKey) {
     // Наблюдения по станциям
     var perStation = {};
     _pwsRawData.forEach(function(rec) {
+        if (_currentStation !== "all" && rec.stationId !== _currentStation) return;
         var key = snapTimeToHourKey(rec.hourKey);
         if (!key) return;
         if (_ovfFrom && key < _ovfFrom) return;
@@ -841,6 +845,7 @@ async function render() {
     renderMetrics(metrics);
     if (_snaps.length && _pwsRawData.length) {
         document.getElementById("obsVsFcSection").style.display = "";
+        if (!_ovfRangeInit) { initOvfRange(); _ovfRangeInit = true; }
         renderOvfParamRow();
         renderOvfChart(_activeOvfParam);
     } else {
