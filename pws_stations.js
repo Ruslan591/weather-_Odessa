@@ -6,12 +6,16 @@
    offset = +1.5
 ========================================================= */
 var PWS_SYNC_STATIONS = [
-    { id: "IODESS44",  name: "Одесса 44",  pressureOffset: -1.8 },
-    { id: "IODESS16",  name: "Одесса 16",  pressureOffset: 1.2 },
-    { id: "IODESS37",  name: "Одесса 37",  pressureOffset: 8.2 },
-    { id: "IODESA138", name: "Одесса 138", pressureOffset: 10.3 }
+    { id: "IODESA137", name: "пос. Котовского",  pressureOffset: 0    },
+    { id: "IODESA138", name: "Центр",             pressureOffset: 10.3 },
+    { id: "IODESA139", name: "Чудо Город",        pressureOffset: 0    },
+    { id: "IODESS41",  name: "Судостроительная",  pressureOffset: 0    },
+    { id: "IODESS44",  name: "Аркадия",           pressureOffset: -1.8 },
+    { id: "IODESS16",  name: "Таирова",           pressureOffset: 1.2  },
+    { id: "IODESS31",  name: "Савиньон",          pressureOffset: 0    },
+    { id: "IODESS37",  name: "Застава",           pressureOffset: 8.2  },
+    { id: "IKRASN91",  name: "пос. Степовое",     pressureOffset: 0    },
 ];
-
 /* Публичные API ключи Weather Underground */
 var PWS_WU_KEYS = [
     "6532d6454b8aa370768e63d6ba5a832e",
