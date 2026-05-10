@@ -420,8 +420,7 @@ function makeSkyDial(sun, moon, riseSet, lat, lon, date, kt){
 /* =========================================================
    ОПРЕДЕЛЕНИЕ ТИПА ОБЛАЧНОСТИ по kt и динамике SR
 ========================================================= */
-function detectCloudType(kt, elevDeg){
-    // Берём последние 6 наблюдений SR из истории (≈30 мин)
+function detectCloudType(kt, elevDeg, precipRate){
     let srStd = null;
     if(typeof _histData !== "undefined" && _histData?.obs?.length >= 3){
         const recent = _histData.obs.slice(-6).map(o => o.solarRad).filter(v => v != null);
@@ -432,29 +431,21 @@ function detectCloudType(kt, elevDeg){
         }
     }
 
+    if(precipRate > 0) return { label: "Нижний ярус (осадки)", icon: "🌧️" };
     if(kt == null) return null;
-
-    // Ночь или солнце у горизонта — анализ ненадёжен
     if(elevDeg != null && elevDeg < 5) return null;
 
-    if(kt > 0.85) return { label: "Ясно", icon: "☀️" };
-    if(kt > 0.65) return { label: "Малооблачно", icon: "🌤️" };
-
-    // Переменная облачность: высокое std — кучевая
+    if(kt > 0.85) return { label: "Ясно",                icon: "☀️"  };
+    if(kt > 0.65) return { label: "Малооблачно",          icon: "🌤️" };
     if(kt > 0.40){
-        if(srStd != null && srStd > 40) return { label: "Кучевая (переменная)", icon: "⛅" };
+        if(srStd != null && srStd > 40) return { label: "Кучевые (переменная)", icon: "⛅" };
         return { label: "Переменная облачность", icon: "🌥️" };
     }
-
-    // Сплошная: различаем ярус по абсолютному SR
     if(kt > 0.15){
-        // При низком kt, но заметном SR — высокий/средний ярус
-        if(srStd != null && srStd > 30) return { label: "Кучевая сплошная", icon: "☁️" };
-        return { label: "Средний/высокий ярус (As/Cs)", icon: "☁️" };
+        if(srStd != null && srStd > 30) return { label: "Кучевые сплошные",         icon: "☁️" };
+        return { label: "Средний/верхний ярус", icon: "☁️" };
     }
-
-    // kt < 0.15 — очень плотная, низкий ярус
-    return { label: "Низкий ярус (St/Ns)", icon: "🌫️" };
+    return { label: "Нижний ярус (сплошная)", icon: "🌫️" };
 }
 
 /* =========================================================
@@ -474,7 +465,9 @@ function makeSolarWbgtBlock(p){
     const kt = (sun && sun.elevDeg > 0 && p.solarRad != null)
         ? (() => { const cs = clearskyIrradiance(sun.elevDeg); return cs > 10 ? Math.min(1, p.solarRad / cs) : 0; })()
         : null;
-    const cloudPct = kt != null ? Math.round((1 - kt) * 100) : null;
+    const cloudPct = p.precipRate > 0
+    ? 100
+    : (kt != null ? Math.min(100, Math.max(0, Math.round((0.8 - kt) / 0.65 * 100))) : null);
 
     const dialHtml = (sun && moon) ? makeSkyDial(sun, moon, riseSet, lat, lon, obsDate, kt) : "";
 
@@ -508,7 +501,7 @@ function makeSolarWbgtBlock(p){
     }
 
     // SR и UV
-    const cloudType = detectCloudType(kt, sun?.elevDeg);
+    const cloudType = detectCloudType(kt, sun?.elevDeg, p.precipRate);
     const srHtml = p.solarRad != null ? `
     <div class="districtLine"><span>Солнечная радиация</span><span>${fmt0(p.solarRad," Вт/м²")}</span></div>
     ${cloudPct != null ? `<div class="districtLine"><span>Покрытие неба (оценочно)</span><span>~${cloudPct}%</span></div>` : ""}
