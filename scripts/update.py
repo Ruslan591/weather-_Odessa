@@ -64,6 +64,7 @@ HOURLY_FIELDS = (
 
 PWS_KEEP_DAYS = 30        # сколько дней хранить pws_raw.json
 SNAP_EXPIRE_HOURS = 400   # снимок удаляем когда все его часы прошли (чуть больше 16 суток)
+MAX_PWS_SNAPS = 48    # ~2 суток при почасовом сборе, ≈ 720 КБ
 
 # ── HTTP-утилиты ─────────────────────────────────────────────────────────────
 def http_get(url, headers=None, timeout=40):
@@ -107,9 +108,8 @@ def gh_get(path):
     # Большой файл — через download_url
     dl_url = resp.get("download_url")
     if dl_url:
-        text = http_get(dl_url, timeout=60)
+        text = http_get(dl_url, GH_HEADERS, timeout=60)
         return text, sha
-    return None, sha
 
 def gh_put(path, content, sha, message):
     """Записывает файл на GitHub. Возвращает новый sha."""
@@ -1186,6 +1186,10 @@ def main():
     snap_pws_path   = "data/ensemble_snapshots_pws.json"
     snaps_synop, snaps_synop_sha = gh_load_json(snap_synop_path, default=[])
     snaps_pws,   snaps_pws_sha   = gh_load_json(snap_pws_path,   default=[])
+    if len(snaps_pws) > MAX_PWS_SNAPS:
+        excess = len(snaps_pws) - MAX_PWS_SNAPS
+        snaps_pws = snaps_pws[excess:]
+        gist_log(f"  PWS: превентивно удалено {excess} старых снимков (лимит {MAX_PWS_SNAPS})")
     acc_pws_for_bias, _ = gh_load_json("data/ensemble_accuracy_pws.json", default=None)
     pws_bias_overall    = (acc_pws_for_bias or {}).get("overall", {})
     pws_bias_by_horizon = (acc_pws_for_bias or {}).get("byHorizon", {})
@@ -1318,6 +1322,15 @@ def main():
                                   "ensemble accuracy pws update"),
             gh_path=acc_pws_path)
 
+    # Обрезаем если вдруг превысили лимит после добавления нового снимка
+    if len(remaining_pws) > MAX_PWS_SNAPS:
+        remaining_pws = remaining_pws[-MAX_PWS_SNAPS:]
+
+    # Защита от полной очистки: если входных снимков было много — что-то пошло не так
+    if len(remaining_pws) == 0 and len(snaps_pws) > 3:
+        gist_log(f"  ⚠ PWS: предотвращена полная очистка (было {len(snaps_pws)} снимков)")
+        remaining_pws = snaps_pws[-3:]
+
     if len(remaining_pws) < len(snaps_pws):
         _remaining_pws = remaining_pws
         _snaps_pws_sha2 = snaps_pws_sha
@@ -1325,7 +1338,8 @@ def main():
         snaps_pws_sha = gist_log_save(
             f"ensemble_snapshots_pws.json очищен (-{_removed_p} снимков)",
             lambda: gh_save_json(snap_pws_path, _remaining_pws, _snaps_pws_sha2,
-                                  f"cleanup pws snapshots: {_removed_p} removed"),
+                                  f"cleanup pws snapshots: {_removed_p} removed",
+                                  compact=True),   # ← тоже добавить compact=True
             gh_path=snap_pws_path)
 
     # ── 5. Чистка pws_raw.json ──────────────────────────────────────────────
