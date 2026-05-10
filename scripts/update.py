@@ -1014,9 +1014,6 @@ def build_weights_from_modeldata(all_records):
 def main():
     now  = utcnow()
     year = now.year
-    def main():
-    now  = utcnow()
-    year = now.year
     gist_log(f"=== update.py запущен {now.strftime('%H:%M:%S')} UTC ===")
 
     # ── 1. Загружаем synop_YYYY.txt с GitHub ────────────────────────────────
