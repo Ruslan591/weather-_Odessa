@@ -602,6 +602,11 @@ function buildOvfSeries(paramKey) {
         var data = hours.map(function(k) {
             var vals = perStation[sid][k];
             if (!vals || !vals.length) return null;
+            if (paramKey === "windDir") {
+                var sx = vals.reduce(function(s,v){ return s+Math.sin(v*Math.PI/180); }, 0);
+                var sy = vals.reduce(function(s,v){ return s+Math.cos(v*Math.PI/180); }, 0);
+                return Math.round((Math.atan2(sx,sy)*180/Math.PI+360)%360);
+            }
             return Math.round(vals.reduce(function(s,v){return s+v;},0) / vals.length * 10) / 10;
         });
         datasets.push({
@@ -669,7 +674,6 @@ function renderOvfChart(paramKey) {
 }
 
 function renderOvfParamRow() {
-    var ovfParams = PARAMS.filter(function(p) { return p.key !== "windDir" && !p.isFact; });
     document.getElementById("ovfParamRow").innerHTML = ovfParams.map(function(p) {
         return '<button class="cp-btn ovf-btn' + (p.key === _activeOvfParam ? " active" : "") + '" ' +
                'data-key="' + p.key + '" style="--c:' + p.color + '" ' +
