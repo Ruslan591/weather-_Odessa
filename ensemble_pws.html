@@ -551,7 +551,7 @@ function buildOvfSeries(paramKey) {
     // Наблюдения по станциям
     var perStation = {};
     _pwsRawData.forEach(function(rec) {
-        var key = rec.hourKey;
+        var key = snapTimeToHourKey(rec.hourKey);
         if (!key) return;
         if (_ovfFrom && key < _ovfFrom) return;
         if (_ovfTo   && key > _ovfTo)   return;
