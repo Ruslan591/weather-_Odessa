@@ -341,7 +341,7 @@ function applyBiasClient(value, key, horizonH) {
     if (key === "windDir") return ((value - b) % 360 + 360) % 360;
     var result = Math.round((value - b) * 10) / 10;
     if (key === "wind")     result = Math.max(0, result);
-    if (key === "humidity") result = Math.max(0, Math.min(100, result));
+    if (key === "humidity" || key === "cloudcover") result = Math.max(0, Math.min(100, result));
     return result;
 }
 
