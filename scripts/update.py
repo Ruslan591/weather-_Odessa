@@ -1248,24 +1248,47 @@ def main():
 
     # PWS наблюдения для верификации — из pws_raw.json
     pws_raw, pws_raw_sha = gh_load_json("data/pws_raw.json", default=[])
-    pws_obs_by_time = {}
+
+    pws_groups_cfg, _ = gh_load_json("data/pws_groups.json", default=None)
+    if pws_groups_cfg:
+        active_group    = pws_groups_cfg.get("active", "all")
+        groups          = pws_groups_cfg.get("groups", {})
+        active_stations = groups.get(active_group)
+        if active_stations:
+            gist_log(f"  PWS: группа «{active_group}» → {active_stations}")
+        else:
+            active_stations = None
+            gist_log(f"  PWS: группа «{active_group}» не найдена, все станции")
+    else:
+        active_stations = None
+        gist_log("  PWS: pws_groups.json не найден, все станции")
+
+    pws_buckets = {}
     for rec in pws_raw:
-        hk = rec.get("hourKey", "")   # формат: "2026-04-29T03"
-        if hk:
-            try:
-                dt = datetime.strptime(hk, "%Y-%m-%dT%H").replace(tzinfo=timezone.utc)
-                obs_key = dt.strftime("%Y%m%d%H00")
-                pws_obs_by_time[obs_key] = {
-                    "temp":     rec.get("temp"),
-                    "pressure": rec.get("pressure"),
-                    "wind":     rec.get("wind"),
-                    "windGust": rec.get("windGust"),
-                    "windDir":  rec.get("windDir"),
-                    "humidity": rec.get("humidity"),
-                    "precip":   rec.get("precip"),
-                }
-            except Exception:
-                pass
+        hk  = rec.get("hourKey", "")
+        sid = rec.get("stationId", "")
+        if not hk:
+            continue
+        if active_stations is not None and sid not in active_stations:
+            continue
+        try:
+            dt      = datetime.strptime(hk, "%Y-%m-%dT%H").replace(tzinfo=timezone.utc)
+            obs_key = dt.strftime("%Y%m%d%H00")
+        except Exception:
+            continue
+        if obs_key not in pws_buckets:
+            pws_buckets[obs_key] = {}
+        for field in ("temp", "pressure", "wind", "windGust", "windDir", "humidity", "precip"):
+            val = rec.get(field)
+            if val is not None:
+                pws_buckets[obs_key].setdefault(field, []).append(val)
+
+    pws_obs_by_time = {}
+    for obs_key, fields in pws_buckets.items():
+        pws_obs_by_time[obs_key] = {
+            field: round(sum(vals) / len(vals), 2)
+            for field, vals in fields.items() if vals
+        }
 
     new_recs_pws, remaining_pws = squeeze_snapshots(snaps_pws, pws_obs_by_time, mode="pws")
     gist_log(f"  PWS: выжато {len(new_recs_pws)} записей, осталось {len(remaining_pws)} снимков")
