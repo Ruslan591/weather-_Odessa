@@ -528,17 +528,21 @@ var _ovfTo            = null;
 var _ovfRangeInit     = false;
 
 function initOvfRange() {
-    var now   = new Date();
-    var local = new Date(now.getTime() + PWS_UTC_OFFSET * 3600000);
-    var ago24 = new Date(local.getTime() - 24 * 3600000);
-    var pad   = function(n){ return String(n).padStart(2,"0"); };
-    var fmt   = function(d){
-        return d.getUTCFullYear() + "-" + pad(d.getUTCMonth()+1) + "-" + pad(d.getUTCDate()) +
-               "T" + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes());
-    };
-    document.getElementById("ovfFrom").value = fmt(ago24);
-    document.getElementById("ovfTo").value   = fmt(local);
+    var now      = new Date();
+    var local    = new Date(now.getTime() + PWS_UTC_OFFSET * 3600000);
+    var pad      = function(n){ return String(n).padStart(2,"0"); };
+    var ymd      = local.getUTCFullYear() + "-" + pad(local.getUTCMonth()+1) + "-" + pad(local.getUTCDate());
+    document.getElementById("ovfFrom").value = ymd + "T00:00";
+    document.getElementById("ovfTo").value   = ymd + "T" + pad(local.getUTCHours()) + ":" + pad(local.getUTCMinutes());
     setOvfRange();
+}
+
+function setOvfRange() {
+    var f = document.getElementById("ovfFrom").value;
+    var t = document.getElementById("ovfTo").value;
+    _ovfFrom = f ? f.slice(0, 13) : null;
+    _ovfTo   = t ? t.slice(0, 13) : null;
+    renderOvfChart();
 }
 
 function clearOvfRange() {
