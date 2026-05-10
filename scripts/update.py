@@ -1014,7 +1014,6 @@ def build_weights_from_modeldata(all_records):
 def main():
     now  = utcnow()
     year = now.year
-    _gist_queue.join()   # ждём отправки всего предыдущего
     _gist_lines.clear()
     log.info("GIST_ID=%s GIST_TOKEN_present=%s", GIST_ID, bool(GIST_TOKEN))
     gist_log(f"=== update.py запущен {now.strftime('%H:%M:%S')} UTC ===")
