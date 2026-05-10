@@ -55,6 +55,28 @@
     </div>
 </div>
 
+<!-- НАБЛЮДЕНИЯ vs ПРОГНОЗ -->
+<div id="obsVsFcSection" style="display:none;margin-bottom:16px;">
+    <div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:8px;">НАБЛЮДЕНИЯ VS ПРОГНОЗ</div>
+    <div style="background:#161616;border-radius:10px;padding:10px 8px;">
+        <div id="ovfParamRow" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;padding:0 4px;"></div>
+        <div id="ovfDateRow" style="display:flex;gap:6px;align-items:center;margin:6px 4px;flex-wrap:wrap;">
+            <input type="datetime-local" id="ovfFrom"
+                style="background:#1a1a1a;border:1px solid #333;color:#ccc;border-radius:6px;padding:3px 6px;font-size:11px;flex:1;min-width:130px;"
+                onchange="setOvfRange()">
+            <span style="color:#555;font-size:12px;">—</span>
+            <input type="datetime-local" id="ovfTo"
+                style="background:#1a1a1a;border:1px solid #333;color:#ccc;border-radius:6px;padding:3px 6px;font-size:11px;flex:1;min-width:130px;"
+                onchange="setOvfRange()">
+            <button onclick="clearOvfRange()"
+                style="background:none;border:1px solid #333;color:#777;border-radius:6px;font-size:11px;padding:3px 8px;cursor:pointer;">
+                Всё
+            </button>
+            <span style="color:#444;font-size:10px;width:100%;">местное время (UTC+3)</span>
+        </div>
+        <canvas id="ovfChart" height="160"></canvas>
+    </div>
+</div>
 <!-- ПОКРЫТИЕ -->
 <div style="background:#161616;border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:13px;">
     <div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:10px;">ПОКРЫТИЕ</div>
@@ -498,6 +520,163 @@ function renderHorizonParamRow() {
         '</div>';
 }
 
+/* === НАБЛЮДЕНИЯ vs ПРОГНОЗ === */
+var _ovfChartInstance = null;
+var _activeOvfParam   = "temp";
+var _ovfFrom          = null;
+var _ovfTo            = null;
+
+function setOvfRange() {
+    var f = document.getElementById("ovfFrom").value;
+    var t = document.getElementById("ovfTo").value;
+    _ovfFrom = f ? f.slice(0, 13) : null;
+    _ovfTo   = t ? t.slice(0, 13) : null;
+    renderOvfChart();
+}
+
+function clearOvfRange() {
+    _ovfFrom = _ovfTo = null;
+    document.getElementById("ovfFrom").value = "";
+    document.getElementById("ovfTo").value   = "";
+    renderOvfChart();
+}
+
+function buildOvfSeries(paramKey) {
+    var fcField = paramKey === "precip" ? "rain" : paramKey;
+    var stationNames = {};
+    if (typeof PWS_SYNC_STATIONS !== "undefined") {
+        PWS_SYNC_STATIONS.forEach(function(s) { stationNames[s.id] = s.name; });
+    }
+
+    // Наблюдения по станциям
+    var perStation = {};
+    _pwsRawData.forEach(function(rec) {
+        var key = rec.hourKey;
+        if (!key) return;
+        if (_ovfFrom && key < _ovfFrom) return;
+        if (_ovfTo   && key > _ovfTo)   return;
+        var v = rec[paramKey];
+        if (v == null) return;
+        if (!perStation[rec.stationId]) perStation[rec.stationId] = {};
+        if (!perStation[rec.stationId][key]) perStation[rec.stationId][key] = [];
+        perStation[rec.stationId][key].push(v);
+    });
+
+    // Прогноз (ближайший горизонт)
+    var fcByHour = {};
+    _snaps.forEach(function(snap) {
+        if (!snap.hours) return;
+        snap.hours.forEach(function(fh) {
+            var key = snapTimeToHourKey(fh.time);
+            if (_ovfFrom && key < _ovfFrom) return;
+            if (_ovfTo   && key > _ovfTo)   return;
+            var val = fh[fcField];
+            if (val == null) return;
+            var h = fh.horizonH != null ? fh.horizonH : 0;
+            if (h < 0) return;
+            if (!fcByHour[key] || h < fcByHour[key].horizonH)
+                fcByHour[key] = { val: val, horizonH: h };
+        });
+    });
+
+    // Объединённый набор часов
+    var allKeys = {};
+    Object.keys(perStation).forEach(function(sid) {
+        Object.keys(perStation[sid]).forEach(function(k) { allKeys[k] = true; });
+    });
+    Object.keys(fcByHour).forEach(function(k) { allKeys[k] = true; });
+    var hours = Object.keys(allKeys).sort();
+    if (!hours.length) return { labels: [], datasets: [] };
+
+    var labels = hours.map(function(k) {
+        return k.slice(8,10)+"."+k.slice(5,7)+" "+k.slice(11,13)+"ч";
+    });
+
+    var stColors = ["#ff8f00","#ff5722","#8bc34a","#00bcd4","#e91e63","#b39ddb","#4fc3f7"];
+    var datasets = [];
+    var p = PARAMS.find(function(x){ return x.key === paramKey; });
+
+    // Линия каждой станции
+    Object.keys(perStation).sort().forEach(function(sid, i) {
+        var color = stColors[i % stColors.length];
+        var data = hours.map(function(k) {
+            var vals = perStation[sid][k];
+            if (!vals || !vals.length) return null;
+            return Math.round(vals.reduce(function(s,v){return s+v;},0) / vals.length * 10) / 10;
+        });
+        datasets.push({
+            label: stationNames[sid] || sid,
+            data: data,
+            borderColor: color,
+            backgroundColor: "transparent",
+            borderWidth: 1.5,
+            pointRadius: 1,
+            tension: 0.2,
+            fill: false,
+            spanGaps: true
+        });
+    });
+
+    // Линия ансамбля
+    datasets.push({
+        label: "Ансамбль",
+        data: hours.map(function(k) {
+            var fc = fcByHour[k];
+            return fc ? applyBiasClient(fc.val, paramKey, fc.horizonH) : null;
+        }),
+        borderColor: p ? p.color : "#aaa",
+        backgroundColor: (p ? p.color : "#aaa") + "22",
+        borderWidth: 2.5,
+        pointRadius: 2,
+        tension: 0.3,
+        fill: true,
+        spanGaps: true,
+        borderDash: [5, 3]
+    });
+
+    return { labels: labels, datasets: datasets, p: p };
+}
+
+function renderOvfChart(paramKey) {
+    if (paramKey !== undefined) _activeOvfParam = paramKey;
+    document.querySelectorAll(".ovf-btn").forEach(function(b) {
+        b.classList.toggle("active", b.dataset.key === _activeOvfParam);
+    });
+    var p = PARAMS.find(function(x){ return x.key === _activeOvfParam; });
+    if (!p) return;
+    var s = buildOvfSeries(_activeOvfParam);
+    if (!s.labels.length) return;
+    var ctx = document.getElementById("ovfChart").getContext("2d");
+    if (_ovfChartInstance) { _ovfChartInstance.destroy(); _ovfChartInstance = null; }
+    _ovfChartInstance = new Chart(ctx, {
+        type: "line",
+        data: { labels: s.labels, datasets: s.datasets },
+        options: {
+            responsive: true, animation: false,
+            plugins: {
+                legend: { display: true, labels: { color: "#888", font: { size: 10 }, boxWidth: 12 } },
+                tooltip: { callbacks: { label: function(ctx) {
+                    var v = ctx.parsed.y;
+                    return ctx.dataset.label + ": " + (v != null ? v.toFixed(1) + p.unit : "—");
+                }}}
+            },
+            scales: {
+                x: { ticks: { color: "#555", font: { size: 9 }, maxRotation: 45 }, grid: { color: "#1e1e1e" } },
+                y: { ticks: { color: "#555", font: { size: 10 } }, grid: { color: "#252525" } }
+            }
+        }
+    });
+}
+
+function renderOvfParamRow() {
+    var ovfParams = PARAMS.filter(function(p) { return p.key !== "windDir" && !p.isFact; });
+    document.getElementById("ovfParamRow").innerHTML = ovfParams.map(function(p) {
+        return '<button class="cp-btn ovf-btn' + (p.key === _activeOvfParam ? " active" : "") + '" ' +
+               'data-key="' + p.key + '" style="--c:' + p.color + '" ' +
+               'onclick="renderOvfChart(\'' + p.key + '\')">' + p.label + '</button>';
+    }).join("");
+}
+
 /* === РЕНДЕР МЕТРИК === */
 function renderMetrics(metrics) {
     var grid = document.getElementById("metricsGrid");
@@ -655,6 +834,13 @@ async function render() {
     }
 
     renderMetrics(metrics);
+    if (_snaps.length && _pwsRawData.length) {
+        document.getElementById("obsVsFcSection").style.display = "";
+        renderOvfParamRow();
+        renderOvfChart(_activeOvfParam);
+    } else {
+        document.getElementById("obsVsFcSection").style.display = "none";
+    }
     renderCoverage(snapCount, obsCount, stationLabel);
     renderSnapshots();
 }
