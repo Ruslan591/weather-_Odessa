@@ -433,7 +433,7 @@ function detectCloudType(kt, elevDeg, precipRate){
 
     if(precipRate > 0) return { label: "Нижний ярус (осадки)", icon: "🌧️" };
     if(kt == null) return null;
-    if(elevDeg != null && elevDeg < 5) return null;
+    if(elevDeg != null && elevDeg < 12) return null;
 
     if(kt > 0.85) return { label: "Ясно",                icon: "☀️"  };
     if(kt > 0.65) return { label: "Малооблачно",          icon: "🌤️" };
@@ -467,7 +467,7 @@ function makeSolarWbgtBlock(p){
         : null;
     const cloudPct = p.precipRate > 0
     ? 100
-    : (kt != null ? Math.min(100, Math.max(0, Math.round((0.8 - kt) / 0.65 * 100))) : null);
+    : (kt != null && sun?.elevDeg >= 12 ? Math.min(100, Math.max(0, Math.round((0.8 - kt) / 0.65 * 100))) : null);
 
     const dialHtml = (sun && moon) ? makeSkyDial(sun, moon, riseSet, lat, lon, obsDate, kt) : "";
 
