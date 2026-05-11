@@ -580,46 +580,99 @@ function renderForecastChart(hours, times){
 function synopticDiagnosis(hours) {
     if (hours.length < 4) return [];
 
-    const pVals = hours.map(h => h.pressure_msl).filter(v => v != null);
-if (pVals.length < 4) return [];
+    const pVals  = hours.map(h => h.pressure_msl).filter(v => v != null);
+    if (pVals.length < 4) return [];
 
-const dp3    = pVals[Math.min(3, pVals.length - 1)] - pVals[0];
-const dpTotal= pVals[pVals.length - 1] - pVals[0];
-const dpMin  = Math.min(...pVals) - pVals[0];  // ← добавить эту строку
-const pAvg   = pVals.reduce((a, b) => a + b, 0) / pVals.length;
+    const n      = hours.length;
+    const dp3    = pVals[Math.min(3, pVals.length - 1)] - pVals[0];
+    const dpTotal= pVals[pVals.length - 1] - pVals[0];
+    const dpMin  = Math.min(...pVals) - pVals[0];
+    const pAvg   = pVals.reduce((a, b) => a + b, 0) / pVals.length;
+    const pMinIdx= pVals.indexOf(Math.min(...pVals));
+    const dpAfter= pVals[pVals.length - 1] - pVals[pMinIdx];
 
-    // Векторный суммарный поворот ветра
-    const wDir = hours.map(h => h.wind_direction_10m);
+    const wDir   = hours.map(h => h.wind_direction_10m);
     let windShift = 0;
     for (let i = 1; i < wDir.length; i++) {
-        if (wDir[i] == null || wDir[i - 1] == null) continue;
-        let d = wDir[i] - wDir[i - 1];
+        if (wDir[i] == null || wDir[i-1] == null) continue;
+        let d = wDir[i] - wDir[i-1];
         if (d > 180)  d -= 360;
         if (d < -180) d += 360;
         windShift += d;
     }
 
-    const cloudVals = hours.map(h => h.cloud_cover).filter(v => v != null);
-    const rhVals    = hours.map(h => h.relative_humidity_2m).filter(v => v != null);
-    const avgCloud  = cloudVals.length ? cloudVals.reduce((a, b) => a + b, 0) / cloudVals.length : 0;
-    const avgRH     = rhVals.length    ? rhVals.reduce((a, b) => a + b, 0)    / rhVals.length    : 0;
+    function meanDir(dirs) {
+        const v = dirs.filter(x => x != null);
+        if (!v.length) return null;
+        const sr = v.reduce((s, d) => s + Math.sin(d * Math.PI/180), 0) / v.length;
+        const cr = v.reduce((s, d) => s + Math.cos(d * Math.PI/180), 0) / v.length;
+        return ((Math.atan2(sr, cr) * 180/Math.PI) + 360) % 360;
+    }
+    function meanTemp(hs) {
+        const v = hs.map(h => h.temperature_2m).filter(x => x != null);
+        return v.length ? v.reduce((a,b) => a+b, 0)/v.length : null;
+    }
+
+    const initDir  = meanDir(wDir.slice(0, Math.floor(n/3)));
+    const finalDir = meanDir(wDir.slice(Math.floor(2*n/3)));
+    const tFirst   = meanTemp(hours.slice(0, Math.floor(n/3)));
+    const tLast    = meanTemp(hours.slice(Math.floor(2*n/3)));
+
+    const cloudVals= hours.map(h => h.cloud_cover).filter(v => v != null);
+    const rhVals   = hours.map(h => h.relative_humidity_2m).filter(v => v != null);
+    const avgCloud = cloudVals.length ? cloudVals.reduce((a,b) => a+b, 0)/cloudVals.length : 0;
+    const avgRH    = rhVals.length    ? rhVals.reduce((a,b) => a+b, 0)/rhVals.length       : 0;
+
+    const initFromSW  = initDir  != null && initDir  >= 150 && initDir  <= 270;
+    const initFromSE  = initDir  != null && initDir  >= 60  && initDir  <= 200;
+    const initFromS   = initDir  != null && initDir  >= 160 && initDir  <= 240;
+    const finalFromN  = finalDir != null && (finalDir >= 300 || finalDir <= 60);
+    const frontPassed = pMinIdx < n * 0.4 && dpAfter > 2;
+    const tDrop       = (tFirst != null && tLast != null) ? tLast - tFirst : 0;
 
     const result = [];
 
     // --- Циклон / антициклон ---
     if (dp3 < -3 || dpTotal < -7 || dpMin < -7) {
-        result.push({ icon: "🌀", label: "Приближение циклона", sub: `${dpTotal > 0 ? "+" : ""}${dpTotal.toFixed(1)} гПа`, color: "#74b9ff" });
+        result.push({ icon: "🌀", label: "Приближение циклона",
+            sub: `${dpTotal.toFixed(1)} гПа`, color: "#74b9ff" });
     } else if (dp3 > 3 || dpTotal > 8) {
-        result.push({ icon: "⬆", label: "Рост давления / антициклон", sub: `+${dpTotal.toFixed(1)} гПа`, color: "#ff9f5c" });
-    } else if (pAvg >= 1018 && avgCloud < 40) {
-        result.push({ icon: "☀", label: "Антициклональный тип", sub: `${Math.round(pAvg)} гПа, облачность ${Math.round(avgCloud)}%`, color: "#fdcb6e" });
+        result.push({ icon: "⬆", label: "Рост давления / антициклон",
+            sub: `+${dpTotal.toFixed(1)} гПа`, color: "#ff9f5c" });
+    } else if (pAvg >= 1020 && avgCloud < 35 && Math.min(...pVals) >= 1015 && hours.length >= 48) {
+        result.push({ icon: "☀", label: "Антициклональная блокировка",
+            sub: `P ср. ${Math.round(pAvg)} гПа, малооблачно`, color: "#fdcb6e" });
     }
 
-// --- Фронты ---
-    if (dpTotal < -3 && windShift > 40 && avgCloud > 65 && avgRH > 78) {
-        result.push({ icon: "〰", label: "Фронтальная активность", sub: "пасмурно, влажно, ветер меняет направление", color: "#ff8f00" });
-    } else if (dpTotal > 1 && windShift < -30 && avgCloud > 55) {
-        result.push({ icon: "❄", label: "Прохождение холодного фронта", sub: "поворот ветра, давление растёт", color: "#00e5ff" });
+    // --- Фронты ---
+    if (frontPassed && finalFromN) {
+        result.push({ icon: "❄️", label: "Холодный фронт прошёл",
+            sub: `ветер с ${Math.round(finalDir)}°, давление восстанавливается`, color: "#00e5ff" });
+    } else if (dpMin < -5 && windShift > 60 && initFromSW) {
+        result.push({ icon: "❄️", label: "Холодный фронт",
+            sub: `падение ${Math.abs(dpMin).toFixed(1)} гПа, вращение ветра`, color: "#00e5ff" });
+    } else if (dpTotal < -2 && Math.abs(windShift) < 50 && initFromSE && avgRH > 78 && avgCloud > 55) {
+        result.push({ icon: "〰️", label: "Тёплый фронт",
+            sub: `ветер с ${Math.round(initDir)}°, давление плавно падает`, color: "#ff8f00" });
+    }
+
+    // --- Тёплый сектор ---
+    if (Math.abs(dpTotal) < 3 && initFromS && avgRH > 70 && tFirst != null && tFirst > 14
+        && !result.some(r => r.label.includes("фронт") || r.label.includes("Фронт"))) {
+        result.push({ icon: "🌤️", label: "Тёплый сектор",
+            sub: `Ю/ЮЗ ветер, T ≈ ${tFirst.toFixed(0)}°C, влажно`, color: "#fdcb6e" });
+    }
+
+    // --- Окклюзия ---
+    if (dpMin < -8 && Math.abs(windShift) < 40 && avgCloud > 70) {
+        result.push({ icon: "🌀", label: "Окклюдированный фронт",
+            sub: "глубокий циклон, хаотичный ветер, сплошная облачность", color: "#a29bfe" });
+    }
+
+    // --- Вторжение холодного воздуха ---
+    if (dpAfter > 3 && tDrop < -5 && finalFromN) {
+        result.push({ icon: "🧊", label: "Вторжение холодного воздуха",
+            sub: `похолодание ${Math.abs(tDrop).toFixed(0)}°C, ветер с севера`, color: "#00cec9" });
     }
 
     return result;
@@ -1518,7 +1571,83 @@ function weatherAlerts(hours) {
                 level: feel > 42 ? "red" : "orange"
             });
         }
+    // Духота
+        if (t > 25 && rh > 65 && !night) {
+            const hi = t - (0.55 - 0.0055 * rh) * (t - 14.5);
+            if (hi > 28) alerts.push({
+                time: pKey, icon: "😰",
+                title: hi > 35 ? "Сильная духота" : "Духота",
+                sub: `T ${t.toFixed(0)}°C · влажность ${Math.round(rh)}%`,
+                level: hi > 35 ? "orange" : "yellow"
+            });
+        }
+
+        // Тропическая ночь
+        if (night && t > 20) {
+            alerts.push({
+                time: pKey, icon: "🌙",
+                title: "Тропическая ночь",
+                sub: `T ${t.toFixed(1)}°C`,
+                level: "yellow"
+            });
+        }
     });
+
+// --- Резкое похолодание / потепление (за 12ч) ---
+    for (let i = 12; i < hours.length; i++) {
+        const t0 = hours[i-12].temperature_2m, t1 = hours[i].temperature_2m;
+        if (t0 == null || t1 == null) continue;
+        const dt = t1 - t0;
+        if (dt < -8) {
+            alerts.push({ time: hours[i].time, icon: "🥶",
+                title: "Резкое похолодание",
+                sub: `ΔT ${dt.toFixed(1)}°C за 12ч`, level: dt < -12 ? "orange" : "yellow" });
+            break;
+        }
+        if (dt > 8) {
+            alerts.push({ time: hours[i].time, icon: "🌡️",
+                title: "Резкое потепление",
+                sub: `ΔT +${dt.toFixed(1)}°C за 12ч`, level: "yellow" });
+            break;
+        }
+    }
+
+    // --- Длительные осадки (>=18ч подряд >= 0.3 мм/ч) ---
+    { let rc = 0, rs = null;
+      hours.forEach(h => {
+        const r = (h.rain ?? 0) + (h.showers ?? 0);
+        if (r >= 0.3) { if (!rs) rs = h.time; rc++; }
+        else { if (rc >= 18) alerts.push({ time: rs, icon: "🌧️",
+            title: "Длительные осадки", sub: `${rc}ч подряд`, level: "orange" });
+          rc = 0; rs = null; }
+      });
+      if (rc >= 18) alerts.push({ time: rs, icon: "🌧️",
+          title: "Длительные осадки", sub: `${rc}ч подряд`, level: "orange" });
+    }
+
+    // --- Сухой период (>=72ч без осадков при T>20) ---
+    { let dc = 0, ds = null;
+      hours.forEach(h => {
+        const r = (h.rain ?? 0) + (h.showers ?? 0) + (h.snowfall ?? 0);
+        if (r < 0.05 && (h.temperature_2m ?? 0) > 20) { if (!ds) ds = h.time; dc++; }
+        else { dc = 0; ds = null; }
+      });
+      if (dc >= 72) alerts.push({ time: ds, icon: "🏜️",
+          title: "Засушливый период", sub: `${dc}ч без осадков`, level: "yellow" });
+    }
+
+    // --- Шквальная линия (скачок P > 2 гПа/ч + порывы > 10 м/с) ---
+    for (let i = 1; i < hours.length; i++) {
+        const p0 = hours[i-1].pressure_msl, p1 = hours[i].pressure_msl;
+        const g  = hours[i].wind_gusts_10m ?? 0;
+        if (p0 != null && p1 != null && (p1 - p0) > 2 && g > 10) {
+            alerts.push({ time: hours[i].time, icon: "⚡",
+                title: "Шквальная линия",
+                sub: `скачок P +${(p1-p0).toFixed(1)} гПа/ч · порывы ${g.toFixed(0)} м/с`,
+                level: "orange" });
+            break;
+        }
+    }
 
     // Убираем дубли одного типа в соседних часах — оставляем первый
     const seen = new Set();
