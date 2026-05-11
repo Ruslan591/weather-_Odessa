@@ -703,10 +703,11 @@ function synopticDiagnosis(hours) {
             sub: `ветер ${degToCompass(initDir)}, T ≈ ${tFirst.toFixed(0)}°C, влажно`, color: "#fdcb6e" });
     }
 
-    // --- Окклюзия ---
+    // --- Фронт окклюзии ---
     if (dpMin < -8 && Math.abs(windShift) < 40 && avgCloud > 70) {
-        result.push({ icon: "🌀", label: "Окклюдированный фронт",
-            sub: `глубокий циклон ${fmtTime(pMinTime)} · хаотичный ветер · сплошная облачность`, color: "#a29bfe" });
+        result.push({ icon: "⚡", label: "Фронт окклюзии",
+            sub: `пик ${fmtTime(pMinTime)} · сильные осадки, шквалы, резкий перепад давления ${Math.abs(dpMin).toFixed(1)} гПа`,
+            color: "#ff4d4d" });
     }
 
     // --- Вторжение холодного воздуха ---
