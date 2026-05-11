@@ -594,13 +594,12 @@ function synopticDiagnosis(hours) {
     if (hours.length < 4) return [];
 
     const pVals = hours.map(h => h.pressure_msl).filter(v => v != null);
-    if (pVals.length < 4) return [];
+if (pVals.length < 4) return [];
 
-    // Барическая тенденция: Δp за первые 3 часа
-    const dp3 = pVals[Math.min(3, pVals.length - 1)] - pVals[0];
-    // Тренд за весь период
-    const dpTotal = pVals[pVals.length - 1] - pVals[0];
-    const pAvg = pVals.reduce((a, b) => a + b, 0) / pVals.length;
+const dp3    = pVals[Math.min(3, pVals.length - 1)] - pVals[0];
+const dpTotal= pVals[pVals.length - 1] - pVals[0];
+const dpMin  = Math.min(...pVals) - pVals[0];  // ← добавить эту строку
+const pAvg   = pVals.reduce((a, b) => a + b, 0) / pVals.length;
 
     // Векторный суммарный поворот ветра
     const wDir = hours.map(h => h.wind_direction_10m);
@@ -621,7 +620,7 @@ function synopticDiagnosis(hours) {
     const result = [];
 
     // --- Циклон / антициклон ---
-    if (dp3 < -3 || dpTotal < -8) {
+    if (dp3 < -3 || dpTotal < -7 || dpMin < -7) {
         result.push({ icon: "🌀", label: "Приближение циклона", sub: `${dpTotal > 0 ? "+" : ""}${dpTotal.toFixed(1)} гПа`, color: "#74b9ff" });
     } else if (dp3 > 3 || dpTotal > 8) {
         result.push({ icon: "⬆", label: "Рост давления / антициклон", sub: `+${dpTotal.toFixed(1)} гПа`, color: "#ff9f5c" });
@@ -1584,17 +1583,33 @@ function renderAlertsBlock(hours) {
     const container = document.getElementById("fcAlertsBlock");
     if (!container) return;
 
-    const alerts  = weatherAlerts(hours);
-    const windows = goodWeatherWindows(hours);
+    const alerts   = weatherAlerts(hours);
+    const synoptic = synopticDiagnosis(hours);   // ← добавлено
+    const windows  = goodWeatherWindows(hours);
 
     const LEVEL_COLOR = { red: "#ff4d4d", orange: "#ff9f5c", yellow: "#ffd166" };
     const LEVEL_BG    = { red: "rgba(255,77,77,0.08)", orange: "rgba(255,159,92,0.08)", yellow: "rgba(255,209,102,0.08)" };
 
     let html = "";
 
-    if (alerts.length === 0 && windows.length === 0) {
+    if (alerts.length === 0 && windows.length === 0 && synoptic.length === 0) {  // ← добавлено synoptic
         container.innerHTML = "";
         return;
+    }
+
+    // --- Синоптический диагноз (вверху, без привязки ко времени) ---
+    if (synoptic.length) {
+        html += `<div style="font-size:11px;color:#555;font-weight:700;letter-spacing:0.06em;margin-bottom:6px;padding:0 2px;">СИНОПТИКА</div>`;
+        html += synoptic.map(d => `
+            <div style="display:flex;align-items:center;gap:10px;
+                         background:rgba(0,0,0,0.15);border:1px solid ${d.color}44;
+                         border-radius:10px;padding:8px 12px;margin-bottom:6px;">
+                <span style="font-size:20px;flex-shrink:0;">${d.icon}</span>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:13px;font-weight:700;color:${d.color};">${d.label}</div>
+                    <div style="font-size:11px;color:#666;margin-top:1px;">${d.sub}</div>
+                </div>
+            </div>`).join("");
     }
 
     if (alerts.length) {
