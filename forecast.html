@@ -591,6 +591,19 @@ function synopticDiagnosis(hours) {
     const pMinIdx= pVals.indexOf(Math.min(...pVals));
     const dpAfter= pVals[pVals.length - 1] - pVals[pMinIdx];
 
+const pMinHourIdx = hours.reduce((best, h, i) => {
+        if (h.pressure_msl == null) return best;
+        return (best === -1 || h.pressure_msl < hours[best].pressure_msl) ? i : best;
+    }, -1);
+    const pMinTime = pMinHourIdx >= 0 ? hours[pMinHourIdx].time : null;
+
+    function fmtTime(iso) {
+        if (!iso) return "";
+        const d = new Date(iso);
+        return `${d.getDate().toString().padStart(2,'0')}.${(d.getMonth()+1).toString().padStart(2,'0')}, `
+             + `${d.getHours().toString().padStart(2,'0')}:00`;
+    }
+
     const wDir   = hours.map(h => h.wind_direction_10m);
     let windShift = 0;
     for (let i = 1; i < wDir.length; i++) {
@@ -635,7 +648,7 @@ function synopticDiagnosis(hours) {
     // --- Циклон / антициклон ---
     if (dp3 < -3 || dpTotal < -7 || dpMin < -7) {
         result.push({ icon: "🌀", label: "Приближение циклона",
-            sub: `${dpTotal.toFixed(1)} гПа`, color: "#74b9ff" });
+            sub: `${dpTotal.toFixed(1)} гПа · мин. давления ${fmtTime(pMinTime)}`, color: "#74b9ff" });
     } else if (dp3 > 3 || dpTotal > 8) {
         result.push({ icon: "⬆", label: "Рост давления / антициклон",
             sub: `+${dpTotal.toFixed(1)} гПа`, color: "#ff9f5c" });
@@ -647,13 +660,13 @@ function synopticDiagnosis(hours) {
     // --- Фронты ---
     if (frontPassed && finalFromN) {
         result.push({ icon: "❄️", label: "Холодный фронт прошёл",
-            sub: `ветер с ${Math.round(finalDir)}°, давление восстанавливается`, color: "#00e5ff" });
+            sub: `прохождение ${fmtTime(pMinTime)} · ветер с ${Math.round(finalDir)}°, давление восстанавливается`, color: "#00e5ff" });
     } else if (dpMin < -5 && windShift > 60 && initFromSW) {
         result.push({ icon: "❄️", label: "Холодный фронт",
-            sub: `падение ${Math.abs(dpMin).toFixed(1)} гПа, вращение ветра`, color: "#00e5ff" });
+            sub: `прохождение ${fmtTime(pMinTime)} · падение ${Math.abs(dpMin).toFixed(1)} гПа, вращение ветра`, color: "#00e5ff" });
     } else if (dpTotal < -2 && Math.abs(windShift) < 50 && initFromSE && avgRH > 78 && avgCloud > 55) {
         result.push({ icon: "〰️", label: "Тёплый фронт",
-            sub: `ветер с ${Math.round(initDir)}°, давление плавно падает`, color: "#ff8f00" });
+            sub: `прохождение ${fmtTime(pMinTime)} · ветер с ${Math.round(initDir)}°, давление плавно падает`, color: "#ff8f00" });
     }
 
     // --- Тёплый сектор ---
