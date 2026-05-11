@@ -488,6 +488,7 @@ function renderForecastChart(hours, times){
             </div>`;
             
             }
+         else if(cfg.key === "humidity"){
             const highCount = data.filter(v => v != null && v > 80).length;
             const highPct   = Math.round(highCount / data.filter(v => v != null).length * 100);
             card4 = `
