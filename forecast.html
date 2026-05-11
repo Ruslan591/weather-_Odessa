@@ -486,22 +486,8 @@ function renderForecastChart(hours, times){
                 <div class="fc-stat-value" style="color:${trendC};">${delta>0?"+":""}${delta.toFixed(1)} гПа</div>
                 <div class="fc-stat-time">${trendWord}</div>
             </div>`;
-            // Синоптический диагноз
-            const _diag = synopticDiagnosis(hours);
-            if (_diag.length) {
-                card4 += `<div id="fcSynopDiag" style="grid-column:1/-1;margin-top:2px;display:flex;flex-direction:column;gap:6px;">` +
-                    _diag.map(d => `
-                    <div style="display:flex;align-items:center;gap:10px;background:#191919;
-                                border:1px solid ${d.color}44;border-radius:10px;padding:8px 12px;">
-                        <span style="font-size:18px;flex-shrink:0;">${d.icon}</span>
-                        <div>
-                            <div style="font-size:13px;font-weight:700;color:${d.color};">${d.label}</div>
-                            <div style="font-size:11px;color:#666;margin-top:1px;">${d.sub}</div>
-                        </div>
-                    </div>`).join("") +
-                `</div>`;
+            
             }
-        } else if(cfg.key === "humidity"){
             const highCount = data.filter(v => v != null && v > 80).length;
             const highPct   = Math.round(highCount / data.filter(v => v != null).length * 100);
             card4 = `
@@ -628,11 +614,11 @@ const pAvg   = pVals.reduce((a, b) => a + b, 0) / pVals.length;
         result.push({ icon: "☀", label: "Антициклональный тип", sub: `${Math.round(pAvg)} гПа, облачность ${Math.round(avgCloud)}%`, color: "#fdcb6e" });
     }
 
-    // --- Фронты ---
+// --- Фронты ---
     if (dpTotal < -3 && windShift > 40 && avgCloud > 65 && avgRH > 78) {
-        result.push({ icon: "〰", label: "Признаки тёплого фронта", sub: "пасмурно, влажно, давление падает", color: "#ff8f00" });
+        result.push({ icon: "〰", label: "Фронтальная активность", sub: "пасмурно, влажно, ветер меняет направление", color: "#ff8f00" });
     } else if (dpTotal > 1 && windShift < -30 && avgCloud > 55) {
-        result.push({ icon: "❄", label: "Признаки холодного фронта", sub: "поворот ветра, давление растёт", color: "#00e5ff" });
+        result.push({ icon: "❄", label: "Прохождение холодного фронта", sub: "поворот ветра, давление растёт", color: "#00e5ff" });
     }
 
     return result;
