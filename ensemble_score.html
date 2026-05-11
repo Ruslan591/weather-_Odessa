@@ -336,6 +336,7 @@ function applyBiasClient(value, key, horizonH) {
         var hKey = String(Math.round(horizonH / 3) * 3);
         b = ((byHorizon[hKey] || {})[key] || {}).bias;
     }
+    if (b == null) b = ((_acc.overallRecent || {})[key] || {}).bias;
     if (b == null) b = (overall[key] || {}).bias;
     if (b == null) return value;
     if (key === "windDir") return ((value - b) % 360 + 360) % 360;
