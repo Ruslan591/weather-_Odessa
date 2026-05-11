@@ -591,18 +591,41 @@ function synopticDiagnosis(hours) {
     const pMinIdx= pVals.indexOf(Math.min(...pVals));
     const dpAfter= pVals[pVals.length - 1] - pVals[pMinIdx];
 
-const pMinHourIdx = hours.reduce((best, h, i) => {
+    const MONTHS = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+    function fmtTime(iso) {
+        if (!iso) return "";
+        const d = new Date(iso);
+        return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getHours().toString().padStart(2,'0')}:00`;
+    }
+    function degToCompass(deg) {
+        if (deg == null) return "—";
+        const dirs = ['С','ССВ','СВ','ВСВ','В','ВЮВ','ЮВ','ЮЮВ','Ю','ЮЮЗ','ЮЗ','ЗЮЗ','З','ЗСЗ','СЗ','ССЗ'];
+        return dirs[Math.round(deg / 22.5) % 16];
+    }
+
+    const pMinHourIdx = hours.reduce((best, h, i) => {
         if (h.pressure_msl == null) return best;
         return (best === -1 || h.pressure_msl < hours[best].pressure_msl) ? i : best;
     }, -1);
     const pMinTime = pMinHourIdx >= 0 ? hours[pMinHourIdx].time : null;
 
-    function fmtTime(iso) {
-        if (!iso) return "";
-        const d = new Date(iso);
-        return `${d.getDate().toString().padStart(2,'0')}.${(d.getMonth()+1).toString().padStart(2,'0')}, `
-             + `${d.getHours().toString().padStart(2,'0')}:00`;
+    function findDropStart() {
+        for (let i = 3; i < hours.length; i++) {
+            const p0 = hours[i-3].pressure_msl, p1 = hours[i].pressure_msl;
+            if (p0 != null && p1 != null && p0 - p1 > 0.8) return hours[Math.max(0,i-3)].time;
+        }
+        return hours[0].time;
     }
+    function findRecoveryEnd() {
+        const pMin = pVals[pMinIdx];
+        for (let i = pMinHourIdx + 1; i < hours.length; i++) {
+            if ((hours[i].pressure_msl ?? 0) - pMin >= 3) return hours[i].time;
+        }
+        return hours[hours.length - 1].time;
+    }
+
+    const dropStart   = findDropStart();
+    const recoveryEnd = findRecoveryEnd();
 
     const wDir   = hours.map(h => h.wind_direction_10m);
     let windShift = 0;
@@ -648,7 +671,8 @@ const pMinHourIdx = hours.reduce((best, h, i) => {
     // --- Циклон / антициклон ---
     if (dp3 < -3 || dpTotal < -7 || dpMin < -7) {
         result.push({ icon: "🌀", label: "Приближение циклона",
-            sub: `${dpTotal.toFixed(1)} гПа · мин. давления ${fmtTime(pMinTime)}`, color: "#74b9ff" });
+            sub: `начало ${fmtTime(dropStart)} · минимум ${fmtTime(pMinTime)} · ${Math.abs(dpMin).toFixed(1)} гПа`,
+            color: "#74b9ff" });
     } else if (dp3 > 3 || dpTotal > 8) {
         result.push({ icon: "⬆", label: "Рост давления / антициклон",
             sub: `+${dpTotal.toFixed(1)} гПа`, color: "#ff9f5c" });
@@ -659,33 +683,36 @@ const pMinHourIdx = hours.reduce((best, h, i) => {
 
     // --- Фронты ---
     if (frontPassed && finalFromN) {
-        result.push({ icon: "❄️", label: "Холодный фронт прошёл",
-            sub: `прохождение ${fmtTime(pMinTime)} · ветер с ${Math.round(finalDir)}°, давление восстанавливается`, color: "#00e5ff" });
+        result.push({ icon: "❄️", label: "Холодный фронт",
+            sub: `завершение прохождения ${fmtTime(pMinTime)} · ветер поворачивает на ${degToCompass(finalDir)} · восстановление до ${fmtTime(recoveryEnd)}`,
+            color: "#00e5ff" });
     } else if (dpMin < -5 && windShift > 60 && initFromSW) {
         result.push({ icon: "❄️", label: "Холодный фронт",
-            sub: `прохождение ${fmtTime(pMinTime)} · падение ${Math.abs(dpMin).toFixed(1)} гПа, вращение ветра`, color: "#00e5ff" });
+            sub: `начало ${fmtTime(dropStart)} · прохождение ${fmtTime(pMinTime)} · ветер поворачивает на ${degToCompass(finalDir)}`,
+            color: "#00e5ff" });
     } else if (dpTotal < -2 && Math.abs(windShift) < 50 && initFromSE && avgRH > 78 && avgCloud > 55) {
         result.push({ icon: "〰️", label: "Тёплый фронт",
-            sub: `прохождение ${fmtTime(pMinTime)} · ветер с ${Math.round(initDir)}°, давление плавно падает`, color: "#ff8f00" });
+            sub: `начало ${fmtTime(dropStart)} · прохождение ${fmtTime(pMinTime)} · ветер ${degToCompass(initDir)}`,
+            color: "#ff8f00" });
     }
 
     // --- Тёплый сектор ---
     if (Math.abs(dpTotal) < 3 && initFromS && avgRH > 70 && tFirst != null && tFirst > 14
         && !result.some(r => r.label.includes("фронт") || r.label.includes("Фронт"))) {
         result.push({ icon: "🌤️", label: "Тёплый сектор",
-            sub: `Ю/ЮЗ ветер, T ≈ ${tFirst.toFixed(0)}°C, влажно`, color: "#fdcb6e" });
+            sub: `ветер ${degToCompass(initDir)}, T ≈ ${tFirst.toFixed(0)}°C, влажно`, color: "#fdcb6e" });
     }
 
     // --- Окклюзия ---
     if (dpMin < -8 && Math.abs(windShift) < 40 && avgCloud > 70) {
         result.push({ icon: "🌀", label: "Окклюдированный фронт",
-            sub: "глубокий циклон, хаотичный ветер, сплошная облачность", color: "#a29bfe" });
+            sub: `глубокий циклон ${fmtTime(pMinTime)} · хаотичный ветер · сплошная облачность`, color: "#a29bfe" });
     }
 
     // --- Вторжение холодного воздуха ---
     if (dpAfter > 3 && tDrop < -5 && finalFromN) {
         result.push({ icon: "🧊", label: "Вторжение холодного воздуха",
-            sub: `похолодание ${Math.abs(tDrop).toFixed(0)}°C, ветер с севера`, color: "#00cec9" });
+            sub: `начало ${fmtTime(pMinTime)} · похолодание ${Math.abs(tDrop).toFixed(0)}°C · ветер ${degToCompass(finalDir)}`, color: "#00cec9" });
     }
 
     return result;
