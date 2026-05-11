@@ -660,59 +660,62 @@ def calc_errors(forecast_val, obs_val, param):
     return err, abs(err)
 
 
-def squeeze_snapshots(snaps, obs_by_time, mode="synop"):
+def squeeze_snapshots(snaps, obs_by_time, mode="synop", processed_keys=None):
     """
     Выжимает снимки:
     - считает ошибки для часов у которых есть наблюдения
-    - возвращает (accuracy_records, remaining_snaps)
-      remaining_snaps — те что ещё не истекли (последний час в будущем)
+    - пропускает уже обработанные пары (дедупликация)
+    - возвращает (accuracy_records, remaining_snaps, new_processed_keys)
     """
     now = utcnow()
-    accuracy_records = []   # список {savedAt, dayKey, horizonH, param→error}
+    if processed_keys is None:
+        processed_keys = set()
+
+    accuracy_records = []
     remaining = []
+    new_processed = set()
 
     for snap in snaps:
-        # горизонт от начала суток снимка (00:00 UTC)
         saved_at = parse_iso(snap["savedAt"])
-        snap_day = saved_at.replace(hour=0, minute=0, second=0, microsecond=0)
         hours    = snap.get("hours", [])
         if not hours:
             continue
 
-        # Проверяем истёк ли снимок
-        last_hour_str = hours[-1]["time"]
-        last_hour_dt  = parse_iso(last_hour_str.replace(" ", "T") + ":00" if "T" not in last_hour_str else last_hour_str)
         expired = (now - saved_at).total_seconds() > 96 * 3600
 
-        # Выжимаем часы у которых есть наблюдения
         for h in hours:
             t_str = h["time"] if "T" in h["time"] else h["time"].replace(" ", "T") + ":00"
             t_dt  = parse_iso(t_str)
             if t_dt >= now:
-                break  # остальные ещё не прошли
+                break
 
-            # Ключ наблюдения для SYNOP: YYYYMMDDHH00
+            # Дедупликация: пропускаем уже обработанные пары
+            pair_key = snap["savedAt"][:16] + "|" + t_str[:13]
+            if pair_key in processed_keys:
+                continue
+
             obs_key = t_dt.strftime("%Y%m%d%H00")
             obs = obs_by_time.get(obs_key)
             if obs is None:
                 continue
 
-            horizon_h = round((t_dt - snap_day).total_seconds() / 3600)
-            day_key   = t_dt.strftime("%Y-%m-%d")
+            # Горизонт от savedAt, округлённый до 3ч — согласованно с JS
+            horizon_h_raw = (t_dt - saved_at).total_seconds() / 3600
+            horizon_h     = round(horizon_h_raw / 3) * 3
+            day_key       = t_dt.strftime("%Y-%m-%d")
 
             rec = {
                 "savedAt":  snap["savedAt"],
                 "dayKey":   day_key,
                 "horizonH": horizon_h,
             }
-            # Числовые параметры через маппинг прогнозного поля → наблюдательного
             for param, (fc_field, obs_field) in PARAM_MAP.items():
                 obs_val = obs.get(obs_field)
                 fc_val  = h.get(fc_field)
                 err = calc_errors(fc_val, obs_val, param)
                 if err is not None:
                     rec[param] = {"err": round(err[0], 2), "ae": round(err[1], 2)}
-            # Явления погоды — категориальные (hits/total)
+
             fc_wmo = h.get("weatherCode")
             obs_ww = obs.get("ww")
             if fc_wmo is not None and obs_ww is not None:
@@ -720,30 +723,43 @@ def squeeze_snapshots(snaps, obs_by_time, mode="synop"):
                 og = synop_group(obs_ww)
                 if fg is not None and og is not None:
                     rec["wx"] = {"hit": 1 if fg == og else 0}
+
             accuracy_records.append(rec)
+            new_processed.add(pair_key)
 
         if not expired:
             remaining.append(snap)
         else:
             log.info("  Удалён снимок %s (%d часов)", snap["savedAt"][:16], len(hours))
 
-    return accuracy_records, remaining
+    return accuracy_records, remaining, new_processed
 
 
-def update_accuracy(existing_acc, new_records, mode="synop"):
+def update_accuracy(existing_acc, new_records, new_processed_keys=None, mode="synop"):
     """
     Обновляет ensemble_accuracy.json новыми записями.
     Структура:
     {
-      "updated": "...",
-      "overall":  {param: {mae, rmse, bias, n}},
-      "byDay":    {dayKey: {param: {mae, rmse, bias, n}}},
-      "byHorizon":{str(h): {param: {mae, rmse, bias, n}}}
+      "updated":       "...",
+      "squeezed":      [...],          # ключи уже обработанных пар (дедупликация)
+      "overall":       {param: {mae, rmse, bias, n}},
+      "overallRecent": {param: {mae, rmse, bias, n}},  # скользящий: последние 14 дней
+      "byDay":         {dayKey: {param: {mae, rmse, bias, n}}},
+      "byHorizon":     {str(h): {param: {mae, rmse, bias, n}}}
     }
     """
-    # Собираем все записи: существующие raw + новые
-    # Для экономии места храним агрегированные данные, не сырые записи
-    acc = existing_acc or {"updated": None, "overall": {}, "byDay": {}, "byHorizon": {}, "wx": {"hits": 0, "total": 0}, "wxByDay": {}}
+    acc = existing_acc or {
+        "updated": None, "squeezed": [],
+        "overall": {}, "byDay": {}, "byHorizon": {},
+        "wx": {"hits": 0, "total": 0}, "wxByDay": {}
+    }
+
+    # Миграция: при отсутствии squeezed — старый формат.
+    # Сбрасываем byHorizon (данные с неверными ключами) и начинаем заново.
+    if "squeezed" not in acc:
+        log.info("  Миграция: сброс byHorizon (новое определение горизонта)")
+        acc["byHorizon"] = {}
+        acc["squeezed"]  = []
 
     def add_to_bucket(bucket, key, param, ae, err):
         if key not in bucket:
@@ -765,8 +781,6 @@ def update_accuracy(existing_acc, new_records, mode="synop"):
         b["sum_err"] += err
         b["n"]       += 1
 
-    # Восстанавливаем суммы из хранимых агрегатов если они есть
-    # (при первом запуске overall хранит mae/rmse/bias — переконвертируем)
     def ensure_sums(bucket_dict):
         for key, params in bucket_dict.items():
             for param, stats in params.items():
@@ -784,7 +798,6 @@ def update_accuracy(existing_acc, new_records, mode="synop"):
     overall    = acc.setdefault("overall", {})
     by_day     = acc.setdefault("byDay", {})
     by_horizon = acc.setdefault("byHorizon", {})
-
     wx_overall = acc.setdefault("wx", {"hits": 0, "total": 0})
     wx_by_day  = acc.setdefault("wxByDay", {})
 
@@ -799,7 +812,6 @@ def update_accuracy(existing_acc, new_records, mode="synop"):
             add_to_overall(overall, param, ae, err)
             add_to_bucket(by_day,     day_key,   param, ae, err)
             add_to_bucket(by_horizon, horizon_h, param, ae, err)
-        # Явления погоды
         if "wx" in rec:
             wx_overall["hits"]  += rec["wx"]["hit"]
             wx_overall["total"] += 1
@@ -808,7 +820,6 @@ def update_accuracy(existing_acc, new_records, mode="synop"):
             wx_by_day[day_key]["hits"]  += rec["wx"]["hit"]
             wx_by_day[day_key]["total"] += 1
 
-    # Финализируем — вычисляем MAE/RMSE/bias из накопленных сумм
     def finalize(bucket_dict):
         result = {}
         for key, params in bucket_dict.items():
@@ -818,18 +829,16 @@ def update_accuracy(existing_acc, new_records, mode="synop"):
                 if n == 0:
                     continue
                 result[key][param] = {
-                    "mae":  round(s["sum_ae"]  / n, 3),
-                    "rmse": round(math.sqrt(s["sum_sq"] / n), 3),
-                    "bias": round(s["sum_err"] / n, 3),
-                    "n":    n,
-                    # Сохраняем суммы для будущего пополнения
+                    "mae":     round(s["sum_ae"] / n, 3),
+                    "rmse":    round(math.sqrt(s["sum_sq"] / n), 3),
+                    "bias":    round(s["sum_err"] / n, 3),
+                    "n":       n,
                     "sum_ae":  round(s["sum_ae"], 4),
                     "sum_sq":  round(s["sum_sq"], 4),
                     "sum_err": round(s["sum_err"], 4),
                 }
         return result
 
-    # Финализируем overall отдельно
     overall_final = {}
     for param, s in overall.items():
         n = s.get("n", 0)
@@ -845,7 +854,33 @@ def update_accuracy(existing_acc, new_records, mode="synop"):
             "sum_err": round(s["sum_err"], 4),
         }
 
-    # Финализируем wx: добавляем pct
+    # Скользящий bias: последние 14 дней из byDay
+    cutoff_recent = (utcnow() - timedelta(days=14)).strftime("%Y-%m-%d")
+    recent_sums = {}
+    for dk, params in by_day.items():
+        if dk < cutoff_recent:
+            continue
+        for param, s in params.items():
+            if param not in recent_sums:
+                recent_sums[param] = {"sum_ae": 0.0, "sum_sq": 0.0, "sum_err": 0.0, "n": 0}
+            rs = recent_sums[param]
+            rs["sum_ae"]  += s.get("sum_ae",  s.get("mae",  0) * s.get("n", 0))
+            rs["sum_sq"]  += s.get("sum_sq",  (s.get("rmse", 0) ** 2) * s.get("n", 0))
+            rs["sum_err"] += s.get("sum_err", s.get("bias", 0) * s.get("n", 0))
+            rs["n"]       += s.get("n", 0)
+
+    overall_recent = {}
+    for param, s in recent_sums.items():
+        n = s["n"]
+        if n == 0:
+            continue
+        overall_recent[param] = {
+            "mae":  round(s["sum_ae"] / n, 3),
+            "rmse": round(math.sqrt(s["sum_sq"] / n), 3),
+            "bias": round(s["sum_err"] / n, 3),
+            "n":    n,
+        }
+
     wx_final = {
         "hits":  wx_overall.get("hits", 0),
         "total": wx_overall.get("total", 0),
@@ -857,16 +892,24 @@ def update_accuracy(existing_acc, new_records, mode="synop"):
     for dk, w in wx_by_day.items():
         wx_by_day_final[dk] = {
             "hits": w["hits"], "total": w["total"],
-            "pct": round(w["hits"] / w["total"] * 100) if w["total"] > 0 else 0,
+            "pct":  round(w["hits"] / w["total"] * 100) if w["total"] > 0 else 0,
         }
 
+    # Обновляем squeezed: добавляем новые ключи, чистим старше 5 суток
+    squeezed = set(acc.get("squeezed", []))
+    squeezed.update(new_processed_keys or set())
+    cutoff_str = (utcnow() - timedelta(hours=120)).strftime("%Y-%m-%dT%H:%M")
+    squeezed   = {k for k in squeezed if k[:16] >= cutoff_str}
+
     return {
-        "updated":   utcnow().isoformat(),
-        "overall":   overall_final,
-        "byDay":     finalize(by_day),
-        "byHorizon": finalize(by_horizon),
-        "wx":        wx_final,
-        "wxByDay":   wx_by_day_final,
+        "updated":       utcnow().isoformat(),
+        "squeezed":      sorted(squeezed),
+        "overall":       overall_final,
+        "overallRecent": overall_recent,
+        "byDay":         finalize(by_day),
+        "byHorizon":     finalize(by_horizon),
+        "wx":            wx_final,
+        "wxByDay":       wx_by_day_final,
     }
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -1221,13 +1264,15 @@ def main():
     acc_synop, acc_synop_sha = gh_load_json(acc_synop_path, default=None)
     acc_pws,   acc_pws_sha   = gh_load_json(acc_pws_path,   default=None)
 
-    # Наблюдения SYNOP для верификации
-    new_recs_synop, remaining_synop = squeeze_snapshots(snaps_synop, synop_obs_by_time, mode="synop")
+    # SYNOP
+    processed_synop = set(acc_synop.get("squeezed", [])) if acc_synop else set()
+    new_recs_synop, remaining_synop, new_processed_synop = squeeze_snapshots(
+        snaps_synop, synop_obs_by_time, mode="synop", processed_keys=processed_synop)
     gist_log(f"  SYNOP: выжато {len(new_recs_synop)} записей, осталось {len(remaining_synop)} снимков")
 
     if new_recs_synop:
-        acc_synop = update_accuracy(acc_synop, new_recs_synop, mode="synop")
-        _acc_synop = acc_synop
+        acc_synop = update_accuracy(acc_synop, new_recs_synop, new_processed_synop, mode="synop")
+        _acc_synop     = acc_synop
         _acc_synop_sha = acc_synop_sha
         acc_synop_sha = gist_log_save(
             "ensemble_accuracy_synop.json обновлён",
@@ -1236,9 +1281,9 @@ def main():
             gh_path=acc_synop_path)
 
     if len(remaining_synop) < len(snaps_synop):
-        _remaining_synop = remaining_synop
+        _remaining_synop  = remaining_synop
         _snaps_synop_sha2 = snaps_synop_sha
-        _removed_s = len(snaps_synop) - len(remaining_synop)
+        _removed_s        = len(snaps_synop) - len(remaining_synop)
         snaps_synop_sha = gist_log_save(
             f"ensemble_snapshots_synop.json очищен (-{_removed_s} снимков)",
             lambda: gh_save_json(snap_synop_path, _remaining_synop, _snaps_synop_sha2,
@@ -1297,12 +1342,15 @@ def main():
                 entry[field] = round(sum(vals) / len(vals), 2)
         pws_obs_by_time[obs_key] = entry
 
-    new_recs_pws, remaining_pws = squeeze_snapshots(snaps_pws, pws_obs_by_time, mode="pws")
+    # PWS
+    processed_pws = set(acc_pws.get("squeezed", [])) if acc_pws else set()
+    new_recs_pws, remaining_pws, new_processed_pws = squeeze_snapshots(
+        snaps_pws, pws_obs_by_time, mode="pws", processed_keys=processed_pws)
     gist_log(f"  PWS: выжато {len(new_recs_pws)} записей, осталось {len(remaining_pws)} снимков")
 
     if new_recs_pws:
-        acc_pws = update_accuracy(acc_pws, new_recs_pws, mode="pws")
-        _acc_pws = acc_pws
+        acc_pws = update_accuracy(acc_pws, new_recs_pws, new_processed_pws, mode="pws")
+        _acc_pws     = acc_pws
         _acc_pws_sha = acc_pws_sha
         acc_pws_sha = gist_log_save(
             "ensemble_accuracy_pws.json обновлён",
