@@ -31,7 +31,7 @@ async function fetchEnsembleCloud(){
     if(Date.now() - _ensembleCloudFetchedAt < 3600000) return; // обновляем раз в час
     try {
         const r = await fetch(
-            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/ensemble_snapshots_synop.json",
+            "data/ensemble_snapshots_synop.json",
             {cache:"no-store"}
         );
         if(!r.ok) return;
