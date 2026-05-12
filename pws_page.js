@@ -11,6 +11,7 @@ const PWS_STATIONS = [
     { id:"IODESA139", name:"Чудо Город"      },
     { id:"IODESS41",  name:"Судостроительная" },
     { id:"IODESS44",  name:"Аркадия"         },
+    { id:"IODESS35",  name:"Аркадия2"         },
     { id:"IODESS16",  name:"Таирова"         },
     { id:"IODESS31",  name:"Савиньон"        },
     { id:"IODESS37",  name:"Застава"         },
