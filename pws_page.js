@@ -474,12 +474,31 @@ function makeSkyDial(sun, moon, riseSet, lat, lon, date, kt){
     </svg>`;
 }
 
+// 15 опорных точек [elevDeg, kt_oc] — порог сплошной облачности (N=8)
+const _KT_OC_TABLE = [
+    [12,0.70],[15,0.63],[20,0.52],[25,0.43],[30,0.36],
+    [35,0.30],[40,0.25],[45,0.21],[50,0.17],[55,0.14],
+    [60,0.12],[65,0.10],[70,0.09],[75,0.08],[90,0.07]
+];
+
+function getKtOc(elevDeg){
+    const t = _KT_OC_TABLE;
+    if(elevDeg <= t[0][0])         return t[0][1];
+    if(elevDeg >= t[t.length-1][0]) return t[t.length-1][1];
+    for(let i=0; i<t.length-1; i++){
+        if(elevDeg >= t[i][0] && elevDeg < t[i+1][0]){
+            const f = (elevDeg - t[i][0]) / (t[i+1][0] - t[i][0]);
+            return t[i][1]*(1-f) + t[i+1][1]*f;
+        }
+    }
+    return 0.30;
+}
+
 function ktToCloudPct(kt, elevDeg){
     if(kt == null || elevDeg == null || elevDeg < 12) return null;
-    const sinE  = Math.sin(elevDeg * Math.PI / 180);
-    const kt_oc = Math.min(0.70, 1.389 * Math.exp(-3.04 * sinE));
-    if(kt >= 0.85)    return 0;
-    if(kt <= kt_oc)   return 100;
+    const kt_oc = getKtOc(elevDeg);
+    if(kt <= kt_oc) return 100;
+    if(kt >= 0.85)  return 0;
     return Math.round((0.85 - kt) / (0.85 - kt_oc) * 100);
 }
 
@@ -488,35 +507,46 @@ function ktToCloudPct(kt, elevDeg){
 ========================================================= */
 function detectCloudType(kt, elevDeg, precipRate){
     if(precipRate > 0) return { label:"Нижний ярус (осадки)", icon:"🌧️" };
-    if(kt == null)     return null;
-    if(elevDeg != null && elevDeg < 12) return null;
+    if(kt == null || elevDeg < 12) return null;
 
-    const sinE   = elevDeg != null && elevDeg > 0 ? Math.sin(elevDeg * Math.PI/180) : 1;
-    const kt_oc  = Math.min(0.70, 1.389 * Math.exp(-3.04 * sinE));
-    const ktNorm = kt_oc < 0.85
-        ? Math.max(0, Math.min(1, (kt - kt_oc) / (0.85 - kt_oc)))
-        : 1;
+    const kt_oc  = getKtOc(elevDeg);
+    const ktNorm = kt >= 0.85 ? 1 : kt <= kt_oc ? 0
+                 : (kt - kt_oc) / (0.85 - kt_oc);
+    const reliableTier = elevDeg >= 30; // ярус надёжен только при высоком солнце
 
+    // srStd из истории
     let srStd = null;
     if(typeof _histData !== "undefined" && _histData?.obs?.length >= 3){
-        const recent = _histData.obs.slice(-6).map(o => o.solarRad).filter(v => v != null);
-        if(recent.length >= 3){
-            const mean = recent.reduce((a,b) => a+b, 0) / recent.length;
-            srStd = Math.sqrt(recent.reduce((a,b) => a+(b-mean)**2, 0) / recent.length);
+        const vals = _histData.obs.slice(-6).map(o => o.solarRad).filter(v => v != null);
+        if(vals.length >= 3){
+            const mean = vals.reduce((a,b)=>a+b,0) / vals.length;
+            srStd = Math.sqrt(vals.reduce((a,b)=>a+(b-mean)**2,0) / vals.length);
         }
     }
+    const convective = srStd != null && srStd > 45;
+    const stratiform = srStd != null && srStd < 20;
 
-    if(ktNorm > 0.85) return { label:"Ясно",                icon:"☀️"  };
-    if(ktNorm > 0.65) return { label:"Малооблачно",          icon:"🌤️" };
-    if(ktNorm > 0.40){
-        if(srStd != null && srStd > 40) return { label:"Кучевые (переменная)", icon:"⛅" };
-        return { label:"Переменная облачность", icon:"🌥️" };
+    if(ktNorm >= 0.85) return { label:"Ясно",                         icon:"☀️"  };
+    if(ktNorm >= 0.65) return { label:"Малооблачно",                   icon:"🌤️" };
+
+    if(ktNorm >= 0.45){
+        if(convective)   return { label:"Кучевые (переменная)",         icon:"⛅"  };
+        if(reliableTier && stratiform)
+                         return { label:"Высокий ярус (Ci/Cs)",         icon:"🌥️" };
+        return           { label:"Переменная облачность",               icon:"🌥️" };
     }
-    if(ktNorm > 0.15){
-        if(srStd != null && srStd > 30) return { label:"Кучевые сплошные",    icon:"☁️" };
-        return { label:"Средний/верхний ярус", icon:"☁️" };
+
+    if(ktNorm >= 0.20){
+        if(convective)   return { label:"Кучевые сплошные",             icon:"☁️"  };
+        if(reliableTier) return { label:"Средний ярус (Ac/As)",         icon:"☁️"  };
+        return           { label:"Облачность сплошная",                 icon:"☁️"  };
     }
-    return { label:"Нижний ярус (сплошная)", icon:"🌫️" };
+
+    // ktNorm < 0.20 — оптически плотный слой
+    if(reliableTier && stratiform)
+                         return { label:"Нижний ярус (St/Sc)",          icon:"🌫️" };
+    if(reliableTier)     return { label:"Нижний ярус (Ns)",             icon:"🌧️" };
+    return               { label:"Нижний ярус (сплошная)",              icon:"🌫️" };
 }
 
 /* =========================================================
