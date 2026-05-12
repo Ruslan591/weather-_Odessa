@@ -37,23 +37,30 @@ def main():
             try:
                 data = fetch_day(station, date_str, key)
                 obs_list = data.get("observations", [])
-                # Группируем по синоптическому часу
-                buckets = {}  # hour_utc -> список sr
-                for obs in obs_list:
-                    t = obs.get("obsTimeUtc", "")
-                    if len(t) < 16: continue
-                    hh  = int(t[11:13])
-                    mm  = int(t[14:16])
-                    if hh not in SYNOP_HOURS: continue
-                    if mm != 4: continue   # берём HH:04
-                    sr = obs.get("solarRadiationHigh") or obs.get("solarRadiation")
-                    if sr is None: continue
-                    results.append({
-                        "date":    d.isoformat(),
-                        "hourUtc": hh,
-                        "station": station,
-                        "solarRad": float(sr)
-                    })
+                # Для каждого синоптического часа берём ближайшее наблюдение
+hour_best = {}  # hh -> (abs_diff, sr)
+for obs in obs_list:
+    t = obs.get("obsTimeUtc", "")
+    if len(t) < 16: continue
+    try:
+        hh = int(t[11:13])
+        mm = int(t[14:16])
+    except ValueError: continue
+    if hh not in SYNOP_HOURS: continue
+    diff = abs(mm - 4)
+    if diff > 10: continue   # не дальше ±10 мин от :04
+    sr = obs.get("solarRadiationHigh") or obs.get("solarRadiation")
+    if sr is None: continue
+    if hh not in hour_best or diff < hour_best[hh][0]:
+        hour_best[hh] = (diff, float(sr))
+
+for hh, (_, sr) in hour_best.items():
+    results.append({
+        "date":     d.isoformat(),
+        "hourUtc":  hh,
+        "station":  station,
+        "solarRad": sr
+    })
                 print(f"  {date_str} {station}: {len([r for r in results if r['date']==d.isoformat() and r['station']==station])} записей")
             except Exception as e:
                 print(f"  ОШИБКА {date_str} {station}: {e}")
@@ -61,7 +68,7 @@ def main():
             time.sleep(0.5)
         d += timedelta(days=1)
 
-    with open("pws_solar_april2026.json", "w") as f:
+    with open("data/pws/pws_solar_april2026.json", "w") as f:
         json.dump(results, f)
     print(f"\nГотово: {len(results)} записей → pws_solar_april2026.json")
 
