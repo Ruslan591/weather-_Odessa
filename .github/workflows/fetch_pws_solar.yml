@@ -9,13 +9,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run fetch script
-        run: python3 scripts/fetch_pws_solar.py
+      - - name: Run fetch script
+        run: |
+          mkdir -p data/pws
+          python3 scripts/fetch_pws_solar.py
 
       - name: Commit results
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add data/pws_solar_april2026.json
+          git add data/pws/pws_solar_april2026.json
           git commit -m "Add PWS solar calibration data" || echo "No changes"
           git push
