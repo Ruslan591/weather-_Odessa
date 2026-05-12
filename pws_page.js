@@ -532,7 +532,7 @@ function detectCloudType(kt, elevDeg, precipRate){
     if(ktNorm >= 0.45){
         if(convective)   return { label:"Кучевые (переменная)",         icon:"⛅"  };
         if(reliableTier && stratiform)
-                         return { label:"Высокий ярус (Ci/Cs)",         icon:"🌥️" };
+                         return { label:"Верхний ярус (Ci/Cs)",         icon:"🌥️" };
         return           { label:"Переменная облачность",               icon:"🌥️" };
     }
 
