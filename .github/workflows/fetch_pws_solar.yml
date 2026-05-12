@@ -13,11 +13,14 @@ jobs:
         run: |
           mkdir -p data/pws
           python3 scripts/fetch_pws_solar.py
+          echo "Exit code: $?"
+          ls -la data/pws/ || echo "Папка пуста"
 
       - name: Commit results
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add data/pws/pws_solar_april2026.json
-          git commit -m "Add PWS solar calibration data" || echo "No changes"
+          git add data/pws/ || true
+          git diff --cached --quiet && echo "Нет изменений" && exit 0
+          git commit -m "Add PWS solar calibration data"
           git push
