@@ -55,6 +55,33 @@ async function fetchEnsembleCloud(){
     } catch(e){}
 }
 
+let _synopFetchedAt = 0;
+
+async function fetchSynopCloud(){
+    if(Date.now() - _synopFetchedAt < 2.5 * 3600000) return;
+    _synopFetchedAt = Date.now();
+    try {
+        const year = new Date().getFullYear();
+        const r = await fetch(`data/synop_${year}.txt`, {
+            headers: { Range: "bytes=-500" },
+            cache: "no-store"
+        });
+        if(!r.ok && r.status !== 206){ _synopFetchedAt = 0; return; }
+        const text = await r.text();
+        const lines = text.split("\n").map(s => s.trim()).filter(Boolean);
+        const last  = lines[lines.length - 1];
+        const m = last.match(/33837,\d+,\d+,(\d+),(\d+),\d+,AAXX\s+\d{5}\s+33837\s+[\d\/]{5}\s+([\d\/])/);
+        if(!m){ _synopFetchedAt = 0; return; }
+        const cloudN = parseInt(m[3]);
+        if(isNaN(cloudN) || cloudN === 9){ _synopFetchedAt = 0; return; }
+        const yyggi  = m[1].padStart(2,"0") + m[2].padStart(2,"0") + "1";
+        const existing = JSON.parse(localStorage.getItem("synopLastPressure") || "{}");
+        localStorage.setItem("synopLastPressure", JSON.stringify({
+            ...existing, cloudN, yyggi, ts: Date.now()
+        }));
+    } catch(e){ _synopFetchedAt = 0; }
+}
+
 /* =========================================================
    ШТОРКА
 ========================================================= */
@@ -785,9 +812,10 @@ function onStationChange(id){
 ========================================================= */
 async function loadAndRender(){
     const [stationResult] = await Promise.allSettled([
-        fetchStation(_currentId),
-        fetchEnsembleCloud()
-    ]);
+    fetchStation(_currentId),
+    fetchEnsembleCloud(),
+    fetchSynopCloud()          // ← добавить
+]);
     const p = stationResult.status === "fulfilled"
         ? stationResult.value
         : { error: stationResult.reason?.message || "Ошибка" };
