@@ -24,6 +24,36 @@ const SEL_KEY     = "pwsLastStation";
 let _timer     = null;
 let _currentId = null;
 let _lastData  = null;
+let _ensembleCloudPct = null;  // % из последнего снимка
+let _ensembleCloudFetchedAt = 0;
+
+async function fetchEnsembleCloud(){
+    if(Date.now() - _ensembleCloudFetchedAt < 3600000) return; // обновляем раз в час
+    try {
+        const r = await fetch(
+            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/ensemble_snapshots_synop.json",
+            {cache:"no-store"}
+        );
+        if(!r.ok) return;
+        const snaps = await r.json();
+        if(!snaps.length) return;
+        const last = snaps[snaps.length - 1];
+        const now  = Date.now();
+        let best = null, bestDiff = Infinity;
+        for(const h of last.hours){
+            const t = Date.UTC(
+                +h.time.slice(0,4), +h.time.slice(5,7)-1, +h.time.slice(8,10),
+                +h.time.slice(11,13), 0
+            );
+            const diff = Math.abs(now - t);
+            if(diff < bestDiff){ bestDiff = diff; best = h; }
+        }
+        if(best && bestDiff < 6*3600*1000){
+            _ensembleCloudPct = best.cloudcover;
+            _ensembleCloudFetchedAt = Date.now();
+        }
+    } catch(e){}
+}
 
 /* =========================================================
    ШТОРКА
@@ -502,9 +532,24 @@ function makeSolarWbgtBlock(p){
 
     // SR и UV
     const cloudType = detectCloudType(kt, sun?.elevDeg, p.precipRate);
-    const srHtml = p.solarRad != null ? `
+    // ---- справочные данные облачности ----
+let synopCloudRef = "";
+try {
+    const sd = JSON.parse(localStorage.getItem("synopLastPressure") || "null");
+    if(sd?.cloudN != null && (Date.now() - sd.ts) < 3*3600*1000){
+        const pct    = Math.round(sd.cloudN / 8 * 100);
+        const ageMin = Math.round((Date.now() - sd.ts) / 60000);
+        synopCloudRef = `<div class="districtLine"><span style="color:#888;">↳ SYNOP (${ageMin} мин)</span><span>${sd.cloudN} окт · ${pct}%</span></div>`;
+    }
+} catch(e){}
+
+const ensCloudRef = _ensembleCloudPct != null
+    ? `<div class="districtLine"><span style="color:#888;">↳ Прогноз ансамбля</span><span>${_ensembleCloudPct}%</span></div>`
+    : "";
+
+const srHtml = p.solarRad != null ? `
     <div class="districtLine"><span>Солнечная радиация</span><span>${fmt0(p.solarRad," Вт/м²")}</span></div>
-    ${cloudPct != null ? `<div class="districtLine"><span>Покрытие неба (оценочно)</span><span>~${cloudPct}%</span></div>` : ""}
+    ${cloudPct != null ? `<div class="districtLine"><span>Покрытие неба (оценочно)</span><span>~${cloudPct}%</span></div>${synopCloudRef}${ensCloudRef}` : ""}
     ${cloudType ? `<div class="districtLine"><span>Облачность (оценочно)</span><span>${cloudType.icon} ${cloudType.label}</span></div>` : ""}` : "";
     const uvLevel = p.uv == null ? null
         : p.uv < 3  ? { label:"Низкий",        color:"#4caf50" }
@@ -739,12 +784,14 @@ function onStationChange(id){
    ЗАГРУЗКА И РЕНДЕР
 ========================================================= */
 async function loadAndRender(){
-    try {
-        const p = await fetchStation(_currentId);
-        renderPWSStation(p);
-    } catch(e){
-        renderPWSStation({ error: e.message });
-    }
+    const [stationResult] = await Promise.allSettled([
+        fetchStation(_currentId),
+        fetchEnsembleCloud()
+    ]);
+    const p = stationResult.status === "fulfilled"
+        ? stationResult.value
+        : { error: stationResult.reason?.message || "Ошибка" };
+    renderPWSStation(p);
     const ts = document.getElementById("pwsUpdateTime");
     if(ts) ts.textContent = new Date().toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
 }

@@ -819,10 +819,11 @@ async function loadSynopUI(){
         setMainStatus("✅ Обновлено: " + now);
         if(synop.seaPressure != null){
             localStorage.setItem("synopLastPressure", JSON.stringify({
-                pressure: synop.seaPressure,
-                ts:       Date.now(),
-                yyggi:    synop.yyggi || null
-            }));
+    pressure: synop.seaPressure,
+    ts:       Date.now(),
+    yyggi:    synop.yyggi || null,
+    cloudN:   synop.totalCloud ?? synop.cloudTotalOkta ?? null
+}));
         }
         if(typeof calibratePWSBySynop === "function"){
             calibratePWSBySynop(synop.seaPressure);
