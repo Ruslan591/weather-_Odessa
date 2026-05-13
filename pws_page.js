@@ -634,7 +634,9 @@ function makeSolarWbgtBlock(p){
     // Сглаженный SR: медиана последних 4 точек истории (~20 мин)
     let srSmooth = p.solarRad;
     if(typeof _histData !== "undefined" && _histData?.obs?.length >= 2){
-        const recent = _histData.obs.slice(-4).map(o => o.solarRad).filter(v => v != null);
+        const recent = _histData.obs.slice(-3).map(o => o.solarRad),
+            p.solarRad
+        ].filter(v => v != null);
         if(recent.length >= 2){
             const sorted = [...recent].sort((a,b) => a-b);
             srSmooth = sorted[Math.floor(sorted.length / 2)];
@@ -959,7 +961,8 @@ async function initPWSPage(){
     buildSelect();
     const box = document.getElementById("pwsContent");
     if(box) box.innerHTML = `<div style="padding:20px;color:#888;text-align:center;">Загрузка...</div>`;
-    await loadKtOcTable();   // ← добавить
+    await loadKtOcTable();
+    histLoad();            // ← добавить
     await loadAndRender();
     startRefresh();
 }
