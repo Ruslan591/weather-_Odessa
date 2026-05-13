@@ -27,6 +27,7 @@ let _currentId = null;
 let _lastData  = null;
 let _ensembleCloudPct = null;  // % из последнего снимка
 let _ensembleCloudFetchedAt = 0;
+let _ktOcData = null;
 
 async function fetchEnsembleCloud(){
     if(Date.now() - _ensembleCloudFetchedAt < 3600000) return; // обновляем раз в час
@@ -475,32 +476,57 @@ function makeSkyDial(sun, moon, riseSet, lat, lon, date, kt){
     </svg>`;
 }
 
-// 15 опорных точек [elevDeg, kt_oc] — порог сплошной облачности (N=8)
-const _KT_OC_TABLE = [
-    [12,0.70],[15,0.63],[20,0.52],[25,0.43],[30,0.36],
-    [35,0.30],[40,0.25],[45,0.21],[50,0.17],[55,0.14],
-    [60,0.12],[65,0.10],[70,0.09],[75,0.08],[90,0.07]
-];
+async function loadKtOcTable(){
+    try {
+        const r = await fetch("data/pws/kt_oc_table.json", {cache:"no-store"});
+        if(r.ok) _ktOcData = await r.json();
+    } catch(e){}
+}
 
-function getKtOc(elevDeg){
-    const t = _KT_OC_TABLE;
-    if(elevDeg <= t[0][0])         return t[0][1];
-    if(elevDeg >= t[t.length-1][0]) return t[t.length-1][1];
-    for(let i=0; i<t.length-1; i++){
-        if(elevDeg >= t[i][0] && elevDeg < t[i+1][0]){
-            const f = (elevDeg - t[i][0]) / (t[i+1][0] - t[i][0]);
-            return t[i][1]*(1-f) + t[i+1][1]*f;
+function _getKtRow(elevDeg){
+    if(!_ktOcData) return null;
+    const bins = Object.keys(_ktOcData).map(Number).sort((a,b)=>a-b);
+    if(!bins.length) return null;
+    if(elevDeg <= bins[0]) return _ktOcData[bins[0]];
+    if(elevDeg >= bins[bins.length-1]) return _ktOcData[bins[bins.length-1]];
+    for(let i=0; i<bins.length-1; i++){
+        if(elevDeg >= bins[i] && elevDeg < bins[i+1]){
+            const f   = (elevDeg - bins[i]) / (bins[i+1] - bins[i]);
+            const r0  = _ktOcData[bins[i]];
+            const r1  = _ktOcData[bins[i+1]];
+            const allN = [...new Set([...Object.keys(r0),...Object.keys(r1)])].map(Number).sort((a,b)=>a-b);
+            const merged = {};
+            for(const n of allN){
+                const v0 = r0[n] ?? null, v1 = r1[n] ?? null;
+                merged[n] = (v0!=null && v1!=null) ? v0*(1-f)+v1*f : (v0??v1);
+            }
+            return merged;
         }
     }
-    return 0.30;
+    return null;
+}
+
+function getKtOc(elevDeg){
+    const row = _getKtRow(elevDeg);
+    return row?.[8] ?? 0.35;
 }
 
 function ktToCloudPct(kt, elevDeg){
-    if(kt == null || elevDeg == null || elevDeg < 12) return null;
-    const kt_oc = getKtOc(elevDeg);
-    if(kt <= kt_oc) return 100;
-    if(kt >= 0.85)  return 0;
-    return Math.round((0.85 - kt) / (0.85 - kt_oc) * 100);
+    if(kt == null || elevDeg == null || elevDeg < 8) return null;
+    const row = _getKtRow(elevDeg);
+    if(!row) return kt < 0.35 ? 100 : kt > 0.85 ? 0 : Math.round((0.85-kt)/0.50*100);
+    // пары [N, kt] отсортированы по убыванию kt (ясно→пасмурно)
+    const pairs = Object.entries(row).map(([n,v])=>[+n,v]).sort((a,b)=>b[1]-a[1]);
+    if(kt >= pairs[0][1])              return 0;
+    if(kt <= pairs[pairs.length-1][1]) return 100;
+    for(let i=0; i<pairs.length-1; i++){
+        const [n0,kt0] = pairs[i], [n1,kt1] = pairs[i+1];
+        if(kt <= kt0 && kt >= kt1){
+            const f = (kt0-kt) / (kt0-kt1);
+            return Math.round((n0 + f*(n1-n0)) / 8 * 100);
+        }
+    }
+    return null;
 }
 
 /* =========================================================
@@ -879,6 +905,7 @@ async function initPWSPage(){
     buildSelect();
     const box = document.getElementById("pwsContent");
     if(box) box.innerHTML = `<div style="padding:20px;color:#888;text-align:center;">Загрузка...</div>`;
+    await loadKtOcTable();   // ← добавить
     await loadAndRender();
     startRefresh();
 }
