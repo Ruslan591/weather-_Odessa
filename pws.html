@@ -87,7 +87,7 @@
         t.style.opacity = "1";
         t.textContent = msg;
         clearTimeout(t._timer);
-        t._timer = setTimeout(() => { t.style.opacity = "0"; }, 2000);
+        t._timer = setTimeout(() => { t.style.opacity = "0"; }, 5000);
     }
 
     async function ghGet() {
@@ -191,6 +191,10 @@ if (!r.ok) throw new Error("HTTP " + r.status);
 
     try {
         showToast("⏳ Проверяем PWS...", "#aaa");
+
+        const now         = new Date();
+        const nowHourKey  = now.toISOString().slice(0, 13);
+        const prevHourKey = new Date(now - 3600000).toISOString().slice(0, 13);
 
         const { data: existing, sha } = await ghGet();
         const existKeys = new Set(existing.map(r => r.hourKey + "|" + r.stationId));
