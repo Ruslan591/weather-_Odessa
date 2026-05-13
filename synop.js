@@ -822,7 +822,10 @@ async function loadSynopUI(){
     pressure: synop.seaPressure,
     ts:       Date.now(),
     yyggi:    synop.yyggi || null,
-    cloudN:   synop.totalCloud ?? synop.cloudTotalOkta ?? null
+    cloudN:   (() => {
+        const n = synop.totalCloud ?? synop.cloudTotalOkta ?? null;
+        return (n === 9) ? null : n;
+    })()
 }));
         }
         if(typeof calibratePWSBySynop === "function"){
