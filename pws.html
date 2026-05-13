@@ -196,19 +196,26 @@ if (!r.ok) throw new Error("HTTP " + r.status);
         const existKeys = new Set(existing.map(r => r.hourKey + "|" + r.stationId));
 
         let lastHourKey = null;
-        existing.forEach(function(r) {
-            if (!lastHourKey || r.hourKey > lastHourKey) lastHourKey = r.hourKey;
-        });
+let lastObsTime = null;
+existing.forEach(function(r) {
+    if (!lastHourKey || r.hourKey > lastHourKey) {
+        lastHourKey = r.hourKey;
+        lastObsTime = r.obsTimeUtc || null;
+    }
+});
 
-        const now = new Date();
-        const nowHourKey = now.toISOString().slice(0, 13);
+const ageMs  = lastObsTime ? Date.now() - new Date(lastObsTime) : Infinity;
+const ageMin = Math.round(ageMs / 60000);
+const ageStr = ageMin < 60 ? `${ageMin} мин` : `${Math.round(ageMin/60)} ч`;
+const fresh  = ageMin < 90;
 
-        // Проверяем только завершённые часы (не текущий)
-        const prevHourKey = new Date(now - 3600000).toISOString().slice(0, 13);
-        if (lastHourKey && lastHourKey >= prevHourKey) {
-            showToast("✓ PWS актуален", "#8bc34a");
-            return;
-        }
+if (lastHourKey && lastHourKey >= prevHourKey && fresh) {
+    showToast(`✓ PWS · последнее ${lastHourKey.slice(11)}:00 UTC · ${ageStr} назад`, "#8bc34a");
+    return;
+}
+if (lastHourKey && !fresh) {
+    showToast(`⚠ PWS устарел · ${ageStr} назад · обновляем...`, "#ff9800");
+}
 
         let startDate;
         if (lastHourKey) {
