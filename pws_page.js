@@ -558,44 +558,46 @@ function detectCloudType(kt, elevDeg, precipRate){
     const highSun    = elevDeg >= 30;
     const midSun     = elevDeg >= 15;
 
-    // Осадки
+    const trend = (srTrend != null && !convective && midSun)
+        ? srTrend >  80 ? "↑ быстро рассеивается"
+        : srTrend >  30 ? "↑ рассеивается"
+        : srTrend < -80 ? "↓ быстро нарастает"
+        : srTrend < -30 ? "↓ нарастает"
+        : null
+        : null;
+
     if(precipRate > 0){
-        if(convective) return { label:"Кучево-дождевые (Cb)", icon:"⛈️" };
-        return { label:"Слоисто-дождевые (Ns)", icon:"🌧️" };
+        if(convective) return { label:"Кучево-дождевые (Cb)", icon:"⛈️", trend };
+        return                { label:"Слоисто-дождевые (Ns)", icon:"🌧️", trend };
     }
 
-    // Ясно
-    if(ktNorm >= 0.92) return { label:"Ясно", icon:"☀️" };
+    if(ktNorm >= 0.92) return { label:"Ясно",                              icon:"☀️",  trend };
 
-    // Верхний ярус: Ci, Cs — высокий kt, стабильный
     if(ktNorm >= 0.72){
-        if(midSun && stable)   return { label:"Перистые (Ci/Cs)", icon:"🌤️" };
-        if(convective)         return { label:"Малооблачно (Cu)", icon:"🌤️" };
-        return                        { label:"Малооблачно",       icon:"🌤️" };
+        if(midSun && stable)    return { label:"Перистые (Ci/Cs)",          icon:"🌤️", trend };
+        if(convective)          return { label:"Малооблачно (Cu)",           icon:"🌤️", trend };
+        return                         { label:"Малооблачно",                icon:"🌤️", trend };
     }
 
-    // Средний ярус: Ac, As
     if(ktNorm >= 0.40){
-        if(convective)         return { label:"Кучевые (Cu)",               icon:"⛅"  };
-        if(highSun && stable)  return { label:"Высокослоистые (As)",         icon:"🌥️" };
-        if(highSun && variable)return { label:"Высококучевые (Ac)",          icon:"🌥️" };
-        return                        { label:"Переменная облачность",        icon:"🌥️" };
+        if(convective)          return { label:"Кучевые (Cu)",               icon:"⛅",  trend };
+        if(highSun && stable)   return { label:"Высокослоистые (As)",        icon:"🌥️", trend };
+        if(highSun && variable) return { label:"Высококучевые (Ac)",         icon:"🌥️", trend };
+        return                         { label:"Переменная облачность",       icon:"🌥️", trend };
     }
 
-    // Нижний ярус плотный, но не сплошной
     if(ktNorm >= 0.12){
-        if(convective)         return { label:"Кучевые мощные (Cu)",         icon:"☁️"  };
-        if(highSun && stable)  return { label:"Высокослоистые плотные (As)", icon:"☁️"  };
-        if(highSun && variable)return { label:"Высококучевые плотные (Ac)",  icon:"☁️"  };
-        return                        { label:"Сплошная облачность",          icon:"☁️"  };
+        if(convective)          return { label:"Кучевые мощные (Cu)",        icon:"☁️",  trend };
+        if(highSun && stable)   return { label:"Высокослоистые плотные (As)",icon:"☁️",  trend };
+        if(highSun && variable) return { label:"Высококучевые плотные (Ac)", icon:"☁️",  trend };
+        return                         { label:"Сплошная облачность",         icon:"☁️",  trend };
     }
 
-    // kt ≈ kt_oc → нижний ярус
-    if(highSun && stable)      return { label:"Слоистые (St)",               icon:"🌫️" };
-    if(highSun && variable)    return { label:"Слоисто-кучевые (Sc)",        icon:"☁️"  };
-    if(midSun  && stable)      return { label:"Слоистые (St)",               icon:"🌫️" };
-    if(convective)             return { label:"Кучево-дождевые (Cb)",        icon:"⛈️"  };
-    return                            { label:"Нижний ярус (St/Sc)",         icon:"🌫️" };
+    if(highSun && stable)       return { label:"Слоистые (St)",              icon:"🌫️", trend };
+    if(highSun && variable)     return { label:"Слоисто-кучевые (Sc)",       icon:"☁️",  trend };
+    if(midSun  && stable)       return { label:"Слоистые (St)",              icon:"🌫️", trend };
+    if(convective)              return { label:"Кучево-дождевые (Cb)",       icon:"⛈️",  trend };
+    return                             { label:"Нижний ярус (St/Sc)",        icon:"🌫️", trend };
 }
 
 /* =========================================================
