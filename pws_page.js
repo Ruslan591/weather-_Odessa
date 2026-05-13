@@ -532,7 +532,7 @@ function ktToCloudPct(kt, elevDeg){
 /* =========================================================
    ОПРЕДЕЛЕНИЕ ТИПА ОБЛАЧНОСТИ по kt и динамике SR
 ========================================================= */
-function detectCloudType(kt, elevDeg, precipRate){
+function detectCloudType(kt, elevDeg, precipRate, uv){
     if(kt == null || elevDeg == null) return null;
 
     const kt_oc  = getKtOc(elevDeg);
@@ -566,6 +566,12 @@ function detectCloudType(kt, elevDeg, precipRate){
         : null
         : null;
 
+    const uv_cs   = elevDeg / 9;
+    const uvRatio = (uv != null && uv_cs > 0.5) ? uv / uv_cs : null;
+    const uvHigh  = uvRatio != null && uvRatio >= 0.70;
+    const uvMid   = uvRatio != null && uvRatio >= 0.35 && uvRatio < 0.70;
+    const uvLow   = uvRatio != null && uvRatio < 0.35;
+
     const T = "Верхний ярус (6–13 км)";
     const M = "Средний ярус (2–6 км)";
     const L = "Нижний ярус (0–2 км)";
@@ -576,16 +582,19 @@ function detectCloudType(kt, elevDeg, precipRate){
         return                { label:"Слоисто-дождевые (Ns)", icon:"🌧️", tier:L, trend };
     }
 
-    if(ktNorm >= 0.92) return { label:"Ясно",                               icon:"☀️",  tier:null, trend };
+    if(ktNorm >= 0.92) return { label:"Ясно", icon:"☀️", tier:null, trend };
 
     if(ktNorm >= 0.72){
-        if(midSun && stable)    return { label:"Перистые (Ci/Cs)",           icon:"🌤️", tier:T, trend };
-        if(convective)          return { label:"Малооблачно (Cu)",            icon:"🌤️", tier:V, trend };
-        return                         { label:"Малооблачно",                 icon:"🌤️", tier:null, trend };
+        if(midSun && (stable || uvHigh)) return { label:"Перистые (Ci/Cs)",             icon:"🌤️", tier:T, trend };
+        if(midSun && uvMid)              return { label:"Высокослоистые тонкие (As)",    icon:"🌤️", tier:M, trend };
+        if(convective)                   return { label:"Малооблачно (Cu)",              icon:"🌤️", tier:V, trend };
+        return                                  { label:"Малооблачно",                   icon:"🌤️", tier:null, trend };
     }
 
     if(ktNorm >= 0.40){
         if(convective)          return { label:"Кучевые (Cu)",                icon:"⛅",  tier:V, trend };
+        if(highSun && stable && uvHigh)
+                                return { label:"Перисто-слоистые (Cs)",       icon:"🌥️", tier:T, trend };
         if(highSun && stable)   return { label:"Высокослоистые (As)",         icon:"🌥️", tier:M, trend };
         if(highSun && variable) return { label:"Высококучевые (Ac)",          icon:"🌥️", tier:M, trend };
         return                         { label:"Переменная облачность",        icon:"🌥️", tier:null, trend };
@@ -593,16 +602,19 @@ function detectCloudType(kt, elevDeg, precipRate){
 
     if(ktNorm >= 0.12){
         if(convective)          return { label:"Кучевые мощные (Cu)",         icon:"☁️",  tier:V, trend };
+        if(highSun && uvMid)    return { label:"Высокослоистые плотные (As)", icon:"☁️",  tier:M, trend };
         if(highSun && stable)   return { label:"Высокослоистые плотные (As)", icon:"☁️",  tier:M, trend };
         if(highSun && variable) return { label:"Высококучевые плотные (Ac)",  icon:"☁️",  tier:M, trend };
         return                         { label:"Сплошная облачность",          icon:"☁️",  tier:null, trend };
     }
 
-    if(highSun && stable)       return { label:"Слоистые (St)",               icon:"🌫️", tier:L, trend };
-    if(highSun && variable)     return { label:"Слоисто-кучевые (Sc)",        icon:"☁️",  tier:L, trend };
-    if(midSun  && stable)       return { label:"Слоистые (St)",               icon:"🌫️", tier:L, trend };
-    if(convective)              return { label:"Кучево-дождевые (Cb)",        icon:"⛈️",  tier:V, trend };
-    return                             { label:"Нижний ярус (St/Sc)",         icon:"🌫️", tier:L, trend };
+    if(highSun && uvLow && stable)  return { label:"Слоистые (St)",           icon:"🌫️", tier:L, trend };
+    if(highSun && uvLow && variable)return { label:"Слоисто-кучевые (Sc)",    icon:"☁️",  tier:L, trend };
+    if(highSun && stable)           return { label:"Слоистые (St)",           icon:"🌫️", tier:L, trend };
+    if(highSun && variable)         return { label:"Слоисто-кучевые (Sc)",    icon:"☁️",  tier:L, trend };
+    if(midSun  && stable)           return { label:"Слоистые (St)",           icon:"🌫️", tier:L, trend };
+    if(convective)                  return { label:"Кучево-дождевые (Cb)",    icon:"⛈️",  tier:V, trend };
+    return                                 { label:"Нижний ярус (St/Sc)",     icon:"🌫️", tier:L, trend };
 }
 
 /* =========================================================
@@ -656,7 +668,7 @@ function makeSolarWbgtBlock(p){
     }
 
     // SR и UV
-    const cloudType = detectCloudType(kt, sun?.elevDeg, p.precipRate);
+    const cloudType = detectCloudType(kt, sun?.elevDeg, p.precipRate, p.uv);
     // ---- справочные данные облачности ----
 let synopCloudRef = "";
 try {
