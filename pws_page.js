@@ -631,8 +631,17 @@ function makeSolarWbgtBlock(p){
     const moon    = lat != null ? lunarPosition(lat, lon, obsDate)  : null;
     const riseSet = lat != null ? solarRiseSet(lat, lon, obsDate)   : null;
 
-    const kt = (sun && sun.elevDeg > 0 && p.solarRad != null)
-        ? (() => { const cs = clearskyIrradiance(sun.elevDeg); return cs > 10 ? Math.min(1, p.solarRad / cs) : 0; })()
+    // Сглаженный SR: медиана последних 4 точек истории (~20 мин)
+    let srSmooth = p.solarRad;
+    if(typeof _histData !== "undefined" && _histData?.obs?.length >= 2){
+        const recent = _histData.obs.slice(-4).map(o => o.solarRad).filter(v => v != null);
+        if(recent.length >= 2){
+            const sorted = [...recent].sort((a,b) => a-b);
+            srSmooth = sorted[Math.floor(sorted.length / 2)];
+        }
+    }
+    const kt = (sun && sun.elevDeg > 0 && srSmooth != null)
+        ? (() => { const cs = clearskyIrradiance(sun.elevDeg); return cs > 10 ? Math.min(1, srSmooth / cs) : 0; })()
         : null;
     const cloudPct = p.precipRate > 0 ? 100 : ktToCloudPct(kt, sun?.elevDeg);
 
