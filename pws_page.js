@@ -661,7 +661,7 @@ function makeSolarWbgtBlock(p){
 let synopCloudRef = "";
 try {
     const sd = JSON.parse(localStorage.getItem("synopLastPressure") || "null");
-    if(sd?.cloudN != null && (Date.now() - sd.ts) < 3*3600*1000){
+    if(sd?.cloudN != null && sd.cloudN !== 9 && (Date.now() - sd.ts) < 3*3600*1000){
         const pct    = Math.round(sd.cloudN / 8 * 100);
         const ageMin = Math.round((Date.now() - sd.ts) / 60000);
         synopCloudRef = `<div class="districtLine"><span style="color:#888;">↳ SYNOP (${ageMin} мин)</span><span>${sd.cloudN} окт · ${pct}%</span></div>`;
@@ -675,7 +675,11 @@ const ensCloudRef = _ensembleCloudPct != null
 const srHtml = p.solarRad != null ? `
     <div class="districtLine"><span>Солнечная радиация</span><span>${fmt0(p.solarRad," Вт/м²")}</span></div>
     ${cloudPct != null ? `<div class="districtLine"><span>Покрытие неба (оценочно)</span><span>~${cloudPct}%</span></div>${synopCloudRef}${ensCloudRef}` : ""}
-    ${cloudType ? `<div class="districtLine"><span>Облачность (оценочно)</span><span>${cloudType.icon} ${cloudType.label}</span></div>` : ""}` : "";
+    ${cloudType ? `
+        <div class="districtLine"><span>Облачность (оценочно)</span><span>${cloudType.icon} ${cloudType.label}</span></div>
+        ${cloudType.tier  ? `<div class="districtLine"><span style="color:#888;">↳ Ярус</span><span>${cloudType.tier}</span></div>` : ""}
+        ${cloudType.trend ? `<div class="districtLine"><span style="color:#888;">↳ Динамика</span><span>${cloudType.trend}</span></div>` : ""}
+    ` : ""}` : "";
     const uvLevel = p.uv == null ? null
         : p.uv < 3  ? { label:"Низкий",        color:"#4caf50" }
         : p.uv < 6  ? { label:"Умеренный",     color:"#ffd166" }
