@@ -928,6 +928,7 @@ function onStationChange(id){
     _currentId = id;
     localStorage.setItem(SEL_KEY, id);
     _lastData  = null;
+    _histData  = null;    // ← добавить
     document.getElementById("pwsContent").innerHTML = `<div style="padding:20px;color:#888;text-align:center;">Загрузка...</div>`;
     loadAndRender();
     histLoad();
