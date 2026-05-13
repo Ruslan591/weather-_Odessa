@@ -635,7 +635,7 @@ function makeSolarWbgtBlock(p){
     let srSmooth = p.solarRad;
     if(typeof _histData !== "undefined" && _histData?.obs?.length >= 2){
         const recent = [
-        _histData.obs.slice(-3).map(o => o.solarRad),
+            ..._histData.obs.slice(-3).map(o => o.solarRad),
             p.solarRad
         ].filter(v => v != null);
         if(recent.length >= 2){
