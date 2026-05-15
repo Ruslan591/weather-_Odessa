@@ -30,7 +30,7 @@ let _ensembleCloudFetchedAt = 0;
 let _ktOcData = null;
 
 async function fetchEnsembleCloud(){
-    if(Date.now() - _ensembleCloudFetchedAt < 3600000) return; // обновляем раз в час
+    if(Date.now() - _ensembleCloudFetchedAt < 1200000) return; // обновляем раз в час
     try {
         const r = await fetch(
             "data/ensemble_snapshots_synop.json",
