@@ -703,11 +703,13 @@ def squeeze_snapshots(snaps, obs_by_time, mode="synop", processed_keys=None):
             horizon_h_raw = (t_dt - saved_at).total_seconds() / 3600
             horizon_h     = round(horizon_h_raw / 3) * 3
             day_key       = t_dt.strftime("%Y-%m-%d")
+            hour_utc      = t_dt.hour
 
             rec = {
                 "savedAt":  snap["savedAt"],
                 "dayKey":   day_key,
                 "horizonH": horizon_h,
+                "hourUTC":  hour_utc,
             }
             for param, (fc_field, obs_field) in PARAM_MAP.items():
                 obs_val = obs.get(obs_field)
@@ -750,7 +752,7 @@ def update_accuracy(existing_acc, new_records, new_processed_keys=None, mode="sy
     """
     acc = existing_acc or {
         "updated": None, "squeezed": [],
-        "overall": {}, "byDay": {}, "byHorizon": {},
+        "overall": {}, "byDay": {}, "byHorizon": {}, "byHourUTC": {},
         "wx": {"hits": 0, "total": 0}, "wxByDay": {}
     }
 
@@ -792,12 +794,14 @@ def update_accuracy(existing_acc, new_records, new_processed_keys=None, mode="sy
 
     ensure_sums(acc.get("byDay", {}))
     ensure_sums(acc.get("byHorizon", {}))
+    ensure_sums(acc.get("byHourUTC", {}))
     if "overall" in acc:
         ensure_sums({"_": acc["overall"]})
 
     overall    = acc.setdefault("overall", {})
     by_day     = acc.setdefault("byDay", {})
     by_horizon = acc.setdefault("byHorizon", {})
+    by_hour    = acc.setdefault("byHourUTC", {})
     wx_overall = acc.setdefault("wx", {"hits": 0, "total": 0})
     wx_by_day  = acc.setdefault("wxByDay", {})
 
@@ -810,8 +814,9 @@ def update_accuracy(existing_acc, new_records, new_processed_keys=None, mode="sy
             ae  = rec[param]["ae"]
             err = rec[param]["err"]
             add_to_overall(overall, param, ae, err)
-            add_to_bucket(by_day,     day_key,   param, ae, err)
-            add_to_bucket(by_horizon, horizon_h, param, ae, err)
+            add_to_bucket(by_day,     day_key,             param, ae, err)
+            add_to_bucket(by_horizon, horizon_h,           param, ae, err)
+            add_to_bucket(by_hour,    str(rec["hourUTC"]), param, ae, err)
         if "wx" in rec:
             wx_overall["hits"]  += rec["wx"]["hit"]
             wx_overall["total"] += 1
@@ -908,6 +913,7 @@ def update_accuracy(existing_acc, new_records, new_processed_keys=None, mode="sy
         "overallRecent": overall_recent,
         "byDay":         finalize(by_day),
         "byHorizon":     finalize(by_horizon),
+        "byHourUTC":     finalize(by_hour),
         "wx":            wx_final,
         "wxByDay":       wx_by_day_final,
     }
