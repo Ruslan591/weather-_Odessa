@@ -478,7 +478,7 @@ function makeSkyDial(sun, moon, riseSet, lat, lon, date, kt){
 
 async function loadKtOcTable(){
     try {
-        const r = await fetch("data/pws/kt_oc_table.json", {cache:"no-store"});
+        const r = await fetch("data/pws/combined/kt_oc_table.json", {cache:"no-store"});
         if(r.ok) _ktOcData = await r.json();
     } catch(e){}
 }
