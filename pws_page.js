@@ -477,10 +477,17 @@ function makeSkyDial(sun, moon, riseSet, lat, lon, date, kt){
 }
 
 async function loadKtOcTable(){
-    try {
-        const r = await fetch("data/pws/combined/kt_oc_table.json", {cache:"no-store"});
-        if(r.ok) _ktOcData = await r.json();
-    } catch(e){}
+    const month = String(new Date().getMonth() + 1).padStart(2, "0");
+    const urls = [
+        `data/pws/combined/monthly/kt_oc_table_${month}.json`,
+        `data/pws/combined/kt_oc_table.json`,
+    ];
+    for(const url of urls){
+        try {
+            const r = await fetch(url, {cache:"no-store"});
+            if(r.ok){ _ktOcData = await r.json(); return; }
+        } catch(e){}
+    }
 }
 
 function _getKtRow(elevDeg){
