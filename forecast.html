@@ -1138,18 +1138,22 @@ async function loadPwsBias() {
         _pwsBias = {
             overall:    (acc && acc.overall)    ? acc.overall    : {},
             byHorizon:  (acc && acc.byHorizon)  ? acc.byHorizon  : {},
+            byHourUTC:  (acc && acc.byHourUTC)  ? acc.byHourUTC  : {},
         };
     } catch(e) {
         console.warn("ensemble_accuracy_pws.json не загружен:", e.message);
-        _pwsBias = { overall: {}, byHorizon: {} };
+        _pwsBias = { overall: {}, byHorizon: {}, byHourUTC: {} };
     }
     return _pwsBias;
 }
 
-function applyBias(value, key, biasOverall, byHorizon, horizonH) {
+function applyBias(value, key, biasOverall, byHorizon, horizonH, byHourUTC, hourUTC) {
     if (value == null) return value;
     var b = null;
-    if (byHorizon != null && horizonH != null) {
+    if (byHourUTC != null && hourUTC != null) {
+        b = ((byHourUTC[String(hourUTC)] || {})[key] || {}).bias;
+    }
+    if (b == null && byHorizon != null && horizonH != null) {
         var hKey = String(Math.max(0, Math.round(horizonH)));
         b = ((byHorizon[hKey] || {})[key] || {}).bias;
     }
@@ -1434,13 +1438,14 @@ async function loadEnsemble() {
     var snapTime = new Date(baseTimes[0]).getTime();
     ensembleHours = ensembleHours.map(function(h, idx) {
         var horizonH = (new Date(baseTimes[idx]).getTime() - snapTime) / 3600000;
+        var hourUTC  = new Date(baseTimes[idx]).getUTCHours();
         return Object.assign({}, h, {
-            temperature_2m:       applyBias(h.temperature_2m,       "temp",     bias.overall, bias.byHorizon, horizonH),
-            pressure_msl:         applyBias(h.pressure_msl,         "pressure", bias.overall, bias.byHorizon, horizonH),
-            wind_speed_10m:       applyBias(h.wind_speed_10m,       "wind",     bias.overall, bias.byHorizon, horizonH),
-            wind_gusts_10m:       applyBias(h.wind_gusts_10m,       "windGust", bias.overall, bias.byHorizon, horizonH),
-            wind_direction_10m:   applyBias(h.wind_direction_10m,   "windDir",  bias.overall, bias.byHorizon, horizonH),
-            relative_humidity_2m: applyBias(h.relative_humidity_2m, "humidity", bias.overall, bias.byHorizon, horizonH),
+            temperature_2m:       applyBias(h.temperature_2m,       "temp",     bias.overall, bias.byHorizon, horizonH, bias.byHourUTC, hourUTC),
+            pressure_msl:         applyBias(h.pressure_msl,         "pressure", bias.overall, bias.byHorizon, horizonH, bias.byHourUTC, hourUTC),
+            wind_speed_10m:       applyBias(h.wind_speed_10m,       "wind",     bias.overall, bias.byHorizon, horizonH, bias.byHourUTC, hourUTC),
+            wind_gusts_10m:       applyBias(h.wind_gusts_10m,       "windGust", bias.overall, bias.byHorizon, horizonH, bias.byHourUTC, hourUTC),
+            wind_direction_10m:   applyBias(h.wind_direction_10m,   "windDir",  bias.overall, bias.byHorizon, horizonH, bias.byHourUTC, hourUTC),
+            relative_humidity_2m: applyBias(h.relative_humidity_2m, "humidity", bias.overall, bias.byHorizon, horizonH, bias.byHourUTC, hourUTC),
         });
     });
 
