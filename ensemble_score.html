@@ -327,12 +327,16 @@ function emptyErrors() {
     return { temp:[], pressure:[], wind:[], windDir:[], humidity:[], cloudcover:[], precip:[], visibility:[] };
 }
 
-function applyBiasClient(value, key, horizonH) {
+function applyBiasClient(value, key, horizonH, hourUTC) {
     if (value == null || !_acc) return value;
+    var byHourUTC = _acc.byHourUTC || {};
     var byHorizon = _acc.byHorizon || {};
     var overall   = _acc.overall   || {};
     var b = null;
-    if (horizonH != null) {
+    if (hourUTC != null) {
+        b = ((byHourUTC[String(hourUTC)] || {})[key] || {}).bias;
+    }
+    if (b == null && horizonH != null) {
         var hKey = String(Math.round(horizonH / 3) * 3);
         b = ((byHorizon[hKey] || {})[key] || {}).bias;
     }
@@ -346,10 +350,10 @@ function applyBiasClient(value, key, horizonH) {
     return result;
 }
 
-function pushErrors(errors, fh, ob, horizonH) {
+function pushErrors(errors, fh, ob, horizonH, hourUTC) {
     function push(k, fv, ov) {
         if (fv == null || ov == null) return;
-        errors[k].push(applyBiasClient(fv, k, horizonH) - ov);
+        errors[k].push(applyBiasClient(fv, k, horizonH, hourUTC) - ov);
     }
     push("temp",       fh.temp,       ob.temp);
     push("pressure",   fh.pressure,   ob.pressure);
@@ -358,7 +362,7 @@ function pushErrors(errors, fh, ob, horizonH) {
     push("cloudcover", fh.cloudcover, ob.cloudcover);
     push("visibility", fh.visibility, ob.visibility);
     if (fh.windDir != null && ob.windDir != null)
-        errors.windDir.push(windDirDiff(applyBiasClient(fh.windDir, "windDir", horizonH), ob.windDir));
+        errors.windDir.push(windDirDiff(applyBiasClient(fh.windDir, "windDir", horizonH, hourUTC), ob.windDir));
     if (fh.rain != null && ob.precip != null)
         errors.precip.push((fh.rain > 0.1 ? 1 : 0) - (ob.precip > 0.1 ? 1 : 0));
 }
@@ -387,7 +391,8 @@ function calcMetrics(obsIndex) {
             if (!ob) return;
             matched++;
             var horizonH = Math.round((new Date(fh.time + ":00Z") - snapStart) / 3600000);
-            pushErrors(errors, fh, ob, horizonH);
+            var hourUTC  = parseInt(fh.time.slice(11, 13));  // ← добавить
+            pushErrors(errors, fh, ob, horizonH, hourUTC);   // ← было horizonH
         });
     });
     return matched ? summarize(errors) : null;
@@ -406,7 +411,8 @@ function calcMetricsByDay(obsIndex) {
             var day = key.slice(0, 10);
             if (!byDay[day]) byDay[day] = emptyErrors();
             var horizonH = Math.round((new Date(fh.time + ":00Z") - snapStart) / 3600000);
-            pushErrors(byDay[day], fh, ob, horizonH);
+            var hourUTC  = parseInt(fh.time.slice(11, 13));       // ← добавить
+            pushErrors(byDay[day], fh, ob, horizonH, hourUTC);    // ← было horizonH
         });
     });
     var result = {};
@@ -428,7 +434,8 @@ function calcMetricsByHorizon(obsIndex) {
             var bucket   = Math.round(horizonH / _activeHorizonBucket) * _activeHorizonBucket;
             if (bucket < 0) return;
             if (!byH[bucket]) byH[bucket] = emptyErrors();
-            pushErrors(byH[bucket], fh, ob, horizonH);
+            var hourUTC  = parseInt(fh.time.slice(11, 13));       // ← добавить
+            pushErrors(byH[bucket], fh, ob, horizonH, hourUTC);   // ← было horizonH
         });
     });
     var result = {};
@@ -879,7 +886,8 @@ function buildObsVsFcSeries(paramKey) {
         obsVals: hours.map(function(k) { return _obsIndex[k][paramKey]; }),
         fcVals:  hours.map(function(k) {
             var fc = fcByHour[k];
-            return applyBiasClient(fc.val, paramKey, fc.horizonH);
+            var hourUTC = parseInt(k.slice(11, 13));
+            return applyBiasClient(fc.val, paramKey, fc.horizonH, hourUTC);
         })
     };
 }
