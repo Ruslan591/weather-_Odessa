@@ -47,6 +47,15 @@
     </div>
 </div>
 
+<!-- ГРАФИК ПО ВРЕМЕНИ СУТОК -->
+<div id="hourSection" style="display:none;margin-bottom:16px;">
+    <div class="section-label">Точность по времени суток</div>
+    <div class="chart-section">
+        <div id="hourParamRow" class="param-row"></div>
+        <canvas id="hourChart" height="160"></canvas>
+    </div>
+</div>
+
 <!-- НАБЛЮДЕНИЯ vs ПРОГНОЗ -->
 <div id="obsVsFcSection" style="display:none;margin-bottom:16px;">
     <div class="section-label">Наблюдения vs прогноз</div>
@@ -445,6 +454,29 @@ function calcMetricsByHorizon(obsIndex) {
     return result;
 }
 
+function calcMetricsByHourUTC(obsIndex) {
+    if (!_snaps.length) return null;
+    var byH = {};
+    _snaps.forEach(function(snap) {
+        if (!snap.hours) return;
+        var snapStart = new Date(snap.savedAt);
+        snap.hours.forEach(function(fh) {
+            var key = snapTimeToHourKey(fh.time);
+            var ob  = obsIndex[key];
+            if (!ob) return;
+            var hourUTC  = parseInt(fh.time.slice(11, 13));
+            var horizonH = Math.round((new Date(fh.time + ":00Z") - snapStart) / 3600000);
+            if (!byH[hourUTC]) byH[hourUTC] = emptyErrors();
+            pushErrors(byH[hourUTC], fh, ob, horizonH, hourUTC);
+        });
+    });
+    var result = {};
+    Object.keys(byH).sort(function(a, b) { return +a - +b; }).forEach(function(h) {
+        result[h] = summarize(byH[h]);
+    });
+    return result;
+}
+
 /* ── ЯВЛЕНИЯ ПОГОДЫ ── */
 function wmoToCategory(code) {
     if (code == null) return null;
@@ -668,13 +700,17 @@ function renderSnapshots() {
 /* ── ГРАФИКИ ── */
 var _dayMetrics     = null;
 var _horizonMetrics = null;
+var _hourMetrics    = null;
 var _activeChartParam   = "temp";
 var _activeHorizonParam = "temp";
 var _activeHorizonMode  = "mae";
 var _activeHorizonBucket = 3;
 var _horizonZoom        = 48;
+var _activeHourParam  = "temp";
+var _activeHourMode   = "mae";
 var _chartInstance        = null;
 var _horizonChartInstance = null;
+var _hourChartInstance    = null;
 
 function makeChartOptions(labels, vals, p, getN) {
     return {
@@ -827,6 +863,54 @@ function renderHorizonParamRow() {
                 return '<button class="cp-btn hm-btn' + (m === _activeHorizonMode ? " active" : "") + '" ' +
                        'data-mode="' + m + '" style="--c:#aaa" ' +
                        'onclick="renderHorizonChart(undefined,\'' + m + '\')">' +
+                       (m === 'mae' ? 'MAE' : 'Уклон') + '</button>';
+            }).join("") +
+        '</div>';
+}
+
+function renderHourChart(paramKey, mode) {
+    if (paramKey !== undefined) _activeHourParam = paramKey;
+    if (mode     !== undefined) _activeHourMode  = mode;
+    document.querySelectorAll(".houp-btn").forEach(function(b) {
+        b.classList.toggle("active", b.dataset.key === _activeHourParam);
+    });
+    document.querySelectorAll(".houm-btn").forEach(function(b) {
+        b.classList.toggle("active", b.dataset.mode === _activeHourMode);
+    });
+    if (!_hourMetrics) return;
+    var hours = Object.keys(_hourMetrics).map(Number).sort(function(a, b) { return a - b; });
+    if (!hours.length) return;
+    var p = PARAMS.find(function(x) { return x.key === _activeHourParam; });
+    if (!p) return;
+    var isBias = _activeHourMode === "bias";
+    var vals   = hours.map(function(h) {
+        var s = _hourMetrics[h][_activeHourParam];
+        return s ? (isBias ? s.bias : s.mae) : null;
+    });
+    var labels = hours.map(function(h) {
+        return ((h + 3) % 24) + ":00";  // UTC+3 местное
+    });
+    var ctx = document.getElementById("hourChart").getContext("2d");
+    if (_hourChartInstance) { _hourChartInstance.destroy(); _hourChartInstance = null; }
+    _hourChartInstance = new Chart(ctx, makeChartOptions(labels, vals, p, function(i) {
+        var s = _hourMetrics[hours[i]] && _hourMetrics[hours[i]][_activeHourParam];
+        return s ? s.n : null;
+    }));
+}
+
+function renderHourParamRow() {
+    var hParams = PARAMS.filter(function(p) { return p.key !== "windDir" && !p.isFact; });
+    document.getElementById("hourParamRow").innerHTML =
+        hParams.map(function(p) {
+            return '<button class="cp-btn houp-btn' + (p.key === _activeHourParam ? " active" : "") + '" ' +
+                   'data-key="' + p.key + '" style="--c:' + p.color + '" ' +
+                   'onclick="renderHourChart(\'' + p.key + '\')">' + p.label + '</button>';
+        }).join("") +
+        '<div style="display:flex;gap:4px;margin-top:6px;">' +
+            ['mae','bias'].map(function(m) {
+                return '<button class="cp-btn houm-btn' + (m === _activeHourMode ? " active" : "") + '" ' +
+                       'data-mode="' + m + '" style="--c:#aaa" ' +
+                       'onclick="renderHourChart(undefined,\'' + m + '\')">' +
                        (m === 'mae' ? 'MAE' : 'Уклон') + '</button>';
             }).join("") +
         '</div>';
@@ -998,6 +1082,16 @@ async function render() {
     } else {
         document.getElementById("horizonSection").style.display = "none";
     }
+
+    _hourMetrics = calcMetricsByHourUTC(_obsIndex);
+    if (_hourMetrics && Object.keys(_hourMetrics).length) {
+        document.getElementById("hourSection").style.display = "";
+        renderHourParamRow();
+        renderHourChart(_activeHourParam);
+    } else {
+        document.getElementById("hourSection").style.display = "none";
+    }
+
     if (_obsIndex && Object.keys(_obsIndex).length) {
         document.getElementById("obsVsFcSection").style.display = "";
         renderObsVsFcParamRow();
