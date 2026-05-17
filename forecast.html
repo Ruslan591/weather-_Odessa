@@ -1390,7 +1390,7 @@ async function loadEnsemble() {
     var mw = await loadModelWeights();
     var bias = await loadPwsBias();
     if (bias.byHorizon && Object.keys(bias.byHorizon).length > 2) {
-    bias = { overall: bias.overall, byHorizon: smoothByHorizon(bias.byHorizon) };
+    bias = { overall: bias.overall, byHorizon: smoothByHorizon(bias.byHorizon), byHourUTC: bias.byHourUTC };
 }
 
     // Показываем веса в заголовке
