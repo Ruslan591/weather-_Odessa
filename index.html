@@ -194,7 +194,7 @@
                 );
                 const ageMin = Math.round((Date.now() - lastMs) / 60000);
                 const ageStr = ageMin < 60 ? `${ageMin} мин` : `${Math.round(ageMin/60)} ч`;
-                const fresh  = ageMin < 240; // SYNOP раз в 3ч → порог 4ч
+                const fresh  = ageMin < 20; // SYNOP раз в 3ч → порог 4ч
                 showToast(
                     `${fresh ? "✓" : "⚠"} SYNOP · ${lastKey.slice(6,8)}.${lastKey.slice(4,6)} ${lastKey.slice(8,10)}:${lastKey.slice(10,12)} UTC · ${ageStr} назад`,
                     fresh ? "#8bc34a" : "#ff9800"
