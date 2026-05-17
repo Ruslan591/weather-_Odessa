@@ -573,6 +573,7 @@ def build_snapshot(ensemble_hours, saved_at, run_time, mode="synop", bias=None, 
                 "humidity":    round(h["relative_humidity_2m"]) if h["relative_humidity_2m"] is not None else None,
                 "rain":        round(h["rain"] * 10) / 10 if h["rain"] is not None else None,
                 "cloudcover":  round(h["cloud_cover"]) if h["cloud_cover"] is not None else None,
+                "visibility":  round(h["visibility"]) if h.get("visibility") is not None else None,
                 "weatherCode": h["weather_code"],
             })
         else:  # pws — каждый час, первые 4 дня, без коррекции (применяется на клиенте)
@@ -588,6 +589,7 @@ def build_snapshot(ensemble_hours, saved_at, run_time, mode="synop", bias=None, 
                 "windDir":  round(h["wind_direction_10m"]) if h["wind_direction_10m"] is not None else None,
                 "humidity": round(h["relative_humidity_2m"]) if h["relative_humidity_2m"] is not None else None,
                 "rain":     round(h["rain"] * 10) / 10 if h["rain"] is not None else None,
+                "visibility": round(h["visibility"]) if h.get("visibility") is not None else None,
             })
 
     return {
