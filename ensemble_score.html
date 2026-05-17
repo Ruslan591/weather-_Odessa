@@ -1050,7 +1050,7 @@ function renderObsVsFcChart(paramKey) {
 }
 
 function renderObsVsFcParamRow() {
-    var ovfParams = PARAMS.filter(function(p) { return p.key !== "windDir" && p.key !== "visibility" && !p.isFact; });
+    var ovfParams = PARAMS.filter(function(p) { return p.key !== "windDir" && !p.isFact; });
     document.getElementById("obsVsFcParamRow").innerHTML = ovfParams.map(function(p) {
         return '<button class="cp-btn ovf-btn' + (p.key === _activeObsVsFcParam ? " active" : "") + '" ' +
                'data-key="' + p.key + '" style="--c:' + p.color + '" ' +
