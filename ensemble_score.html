@@ -919,12 +919,23 @@ function renderHourParamRow() {
 /* ── НАБЛЮДЕНИЯ vs ПРОГНОЗ ── */
 var _obsVsFcChartInstance = null;
 var _activeObsVsFcParam   = "temp";
-var _ovfFrom = null; // строка вида "2026-04-01T00"
-var _ovfTo   = null; // строка вида "2026-05-10T23"
+var _ovfFrom      = null;
+var _ovfTo        = null;
+var _ovfRangeInit = false;
 
 function localToUtcHour(localStr) {
     if (!localStr) return null;
     return new Date(localStr).toISOString().slice(0, 13); // "YYYY-MM-DDTHH" UTC
+}
+
+function initOvfRange() {
+    var now   = new Date();
+    var local = new Date(now.getTime() + 3 * 3600000); // UTC+3
+    var pad   = function(n) { return String(n).padStart(2, "0"); };
+    var ymd   = local.getUTCFullYear() + "-" + pad(local.getUTCMonth()+1) + "-" + pad(local.getUTCDate());
+    document.getElementById("ovfFrom").value = ymd + "T00:00";
+    document.getElementById("ovfTo").value   = ymd + "T" + pad(local.getUTCHours()) + ":" + pad(local.getUTCMinutes());
+    setOvfRange();
 }
 
 function setOvfRange() {
@@ -1094,6 +1105,7 @@ async function render() {
 
     if (_obsIndex && Object.keys(_obsIndex).length) {
         document.getElementById("obsVsFcSection").style.display = "";
+        if (!_ovfRangeInit) { initOvfRange(); _ovfRangeInit = true; }
         renderObsVsFcParamRow();
         renderObsVsFcChart(_activeObsVsFcParam);
     } else {
