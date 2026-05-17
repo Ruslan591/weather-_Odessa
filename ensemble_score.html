@@ -69,6 +69,14 @@
             <input type="datetime-local" id="ovfTo"
                 style="background:#1a1a1a;border:1px solid #333;color:#ccc;border-radius:6px;padding:3px 6px;font-size:11px;flex:1;min-width:130px;"
                 onchange="setOvfRange()">
+            <button onclick="setOvfDay(0)"
+                style="background:none;border:1px solid #333;color:#777;border-radius:6px;font-size:11px;padding:3px 8px;cursor:pointer;">
+                Сегодня
+            </button>
+            <button onclick="setOvfDay(-1)"
+                style="background:none;border:1px solid #333;color:#777;border-radius:6px;font-size:11px;padding:3px 8px;cursor:pointer;">
+                Вчера
+            </button>
             <button onclick="clearOvfRange()"
                 style="background:none;border:1px solid #333;color:#777;border-radius:6px;font-size:11px;padding:3px 8px;cursor:pointer;">
                 Всё
@@ -944,6 +952,20 @@ function setOvfRange() {
     _ovfFrom = localToUtcHour(f);
     _ovfTo   = localToUtcHour(t);
     renderObsVsFcChart();
+}
+
+function setOvfDay(offset) {
+    var now   = new Date();
+    var local = new Date(now.getTime() + 3 * 3600000);
+    local.setUTCDate(local.getUTCDate() + offset);
+    var pad = function(n) { return String(n).padStart(2, "0"); };
+    var ymd = local.getUTCFullYear() + "-" + pad(local.getUTCMonth()+1) + "-" + pad(local.getUTCDate());
+    var isToday = offset === 0;
+    document.getElementById("ovfFrom").value = ymd + "T00:00";
+    document.getElementById("ovfTo").value   = isToday
+        ? ymd + "T" + pad(new Date(now.getTime() + 3*3600000).getUTCHours()) + ":" + pad(new Date(now.getTime() + 3*3600000).getUTCMinutes())
+        : ymd + "T23:59";
+    setOvfRange();
 }
 
 function clearOvfRange() {
