@@ -230,10 +230,21 @@ function vvToMeters(vv) {
     if (!vv || vv.includes("/")) return null;
     var v = parseInt(vv, 10);
     if (isNaN(v)) return null;
-    if (v <= 50)                  return v * 100;
-    if (v >= 56 && v <= 80)       return (v - 50) * 1000;
-    if (v >= 81 && v <= 88)       return 35000 + (v - 81) * 5000;
-    if (v === 89)                  return 70000;
+    if (v >= 0  && v <= 50)  return v * 100;                        // 0–5000 м
+    if (v >= 51 && v <= 55)  return (v - 50) * 100 + 5000;          // 5100–5500 м
+    if (v >= 56 && v <= 80)  return (v - 50) * 500;                  // 3000–15000 м
+    if (v >= 81 && v <= 88)  return ((v - 80) * 5 + 25) * 1000;     // 30000–65000 м
+    if (v === 89)             return 70000;
+    if (v === 90)             return 50;
+    if (v === 91)             return 50;
+    if (v === 92)             return 200;
+    if (v === 93)             return 500;
+    if (v === 94)             return 1000;
+    if (v === 95)             return 2000;
+    if (v === 96)             return 4000;
+    if (v === 97)             return 10000;
+    if (v === 98)             return 20000;
+    if (v === 99)             return 50000;
     return null;
 }
 
