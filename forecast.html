@@ -67,6 +67,7 @@
     <div id="fcAlertsBlock" style="margin-top:8px;"></div>
 </div>
 <div id="forecast"></div>
+<div id="ensembleDebug" style="display:none;padding:0 8px;max-width:340px;margin:0 auto;"></div>
 
 <script>
 // СТАЛО
@@ -1394,6 +1395,181 @@ function mergeEnsemble(allModelHours, weights, models) {
     });
 }
 
+// =============================================
+// DEBUG: АРИФМЕТИКА АНСАМБЛЯ
+// =============================================
+function getBiasInfo(key, bias, horizonH, hourUTC) {
+    var b = null, src = "—";
+    if (bias.byHourUTC && hourUTC != null) {
+        var h0 = Math.floor(hourUTC / 3) * 3;
+        var h1 = (h0 + 3) % 24;
+        var b0 = ((bias.byHourUTC[String(h0)] || {})[key] || {}).bias;
+        var b1 = ((bias.byHourUTC[String(h1)] || {})[key] || {}).bias;
+        if (b0 != null && b1 != null) {
+            var t = (hourUTC - h0) / 3;
+            b = b0 + (b1 - b0) * t;
+            src = "byHour " + h0 + "→" + h1;
+        } else if (b0 != null) { b = b0; src = "byHour " + h0; }
+        else if (b1 != null)   { b = b1; src = "byHour " + h1; }
+    }
+    if (b == null && bias.byHorizon && horizonH != null) {
+        var hKey = String(Math.max(0, Math.round(horizonH)));
+        b = ((bias.byHorizon[hKey] || {})[key] || {}).bias;
+        if (b != null) src = "byHorizon " + hKey + "ч";
+    }
+    if (b == null) {
+        b = (bias.overall[key] || {}).bias;
+        if (b != null) src = "overall";
+    }
+    return { bias: b, src: src };
+}
+
+function renderEnsembleDebug(p) {
+    var el = document.getElementById("ensembleDebug");
+    if (!el) return;
+    var models = p.models, failed = p.failed, weights = p.weights;
+    var bias = p.bias, rawH = p.rawHours, corrH = p.corrHours;
+    var times = p.times, snapTime = p.snapTime;
+
+    var html = '<div style="margin:16px 0 24px;padding:12px 10px;background:#0b0b0b;' +
+        'border:1px solid #1e1e1e;border-radius:12px;font-size:11px;color:#aaa;">';
+    html += '<div style="font-size:10px;color:#3a3a3a;font-weight:700;letter-spacing:0.08em;' +
+        'margin-bottom:10px;">🔬 АРИФМЕТИКА АНСАМБЛЯ</div>';
+
+    // --- 1. Статус моделей ---
+    html += '<div style="margin-bottom:10px;">' +
+        '<div style="font-size:10px;color:#444;margin-bottom:5px;">Загрузка моделей:</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
+    models.forEach(function(m) {
+        var ok = !failed.includes(m);
+        html += '<span style="padding:2px 7px;border-radius:8px;font-size:9px;' +
+            (ok ? 'background:#0f1f0f;color:#5fe08f;border:1px solid #1a3a1a;'
+                : 'background:#1f0f0f;color:#ff6b6b;border:1px solid #3a1a1a;') +
+            '">' + m + (ok ? ' ✓' : ' ✗') + '</span>';
+    });
+    html += '</div></div>';
+
+    // --- 2. Веса моделей по параметрам ---
+    var wByParam = weights.byParam;
+    html += '<div style="margin-bottom:10px;">' +
+        '<div style="font-size:10px;color:#444;margin-bottom:5px;">Веса моделей (top-3 по консенсусу MAE):</div>';
+    var shownParams = [
+        { f: 'temperature_2m',   l: 'T °C' },
+        { f: 'wind_speed_10m',   l: 'Ветер' },
+        { f: 'pressure_msl',     l: 'Давл.' },
+        { f: 'cloud_cover',      l: 'Облака' },
+        { f: 'rain',             l: 'Осадки' },
+    ];
+    shownParams.forEach(function(sp) {
+        var fw = (wByParam && wByParam[sp.f]) ? wByParam[sp.f] : weights.equal;
+        var sorted = Object.entries(fw).sort(function(a,b){ return b[1]-a[1]; });
+        html += '<div style="margin-bottom:3px;display:flex;align-items:baseline;gap:4px;">' +
+            '<span style="color:#444;width:46px;flex-shrink:0;">' + sp.l + ':</span>';
+        sorted.forEach(function(e) {
+            var pct = Math.round(e[1] * 100);
+            var col = pct >= 40 ? '#ffd166' : pct >= 25 ? '#fdcb6e' : '#666';
+            html += '<span style="color:#555;">' + e[0].replace(/ecmwf_ifs/,'ecmwf').replace(/_/g,'-') +
+                ' <b style="color:' + col + ';">' + pct + '%</b></span>';
+        });
+        html += '</div>';
+    });
+    if (!wByParam) html += '<div style="color:#555;">model_weights.json не загружен → равные веса</div>';
+    html += '</div>';
+
+    // --- 3. Смещение (overall) ---
+    html += '<div style="margin-bottom:10px;">' +
+        '<div style="font-size:10px;color:#444;margin-bottom:5px;">' +
+        'Смещение bias (overall из ensemble_accuracy_synop.json):</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
+    var bKeys = [
+        {k:'temp',    l:'T'},
+        {k:'pressure',l:'P'},
+        {k:'wind',    l:'Ветер'},
+        {k:'windGust',l:'Порывы'},
+        {k:'humidity',l:'Влаж'},
+        {k:'windDir', l:'Напр°'}
+    ];
+    var hasBias = false;
+    bKeys.forEach(function(bk) {
+        var ob = (bias.overall[bk.k] || {}).bias;
+        if (ob == null) return;
+        hasBias = true;
+        var sign = ob >= 0 ? '+' : '';
+        var col = Math.abs(ob) < 0.1 ? '#555' : ob > 0 ? '#ff6b6b' : '#74b9ff';
+        html += '<span style="padding:2px 8px;border-radius:7px;background:#141414;border:1px solid #222;">' +
+            '<span style="color:#444;">' + bk.l + ': </span>' +
+            '<span style="color:' + col + ';">' + sign + ob.toFixed(3) + '</span></span>';
+    });
+    if (!hasBias) html += '<span style="color:#333;">ensemble_accuracy_synop.json не загружен</span>';
+    html += '</div></div>';
+
+    // --- 4. Почасовая таблица ---
+    var showN = Math.min(rawH.length, 24);
+    html += '<div style="font-size:10px;color:#444;margin-bottom:5px;">' +
+        'Почасовые данные — сырое → Δ (поправка) → итог:</div>' +
+        '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">' +
+        '<table style="border-collapse:collapse;font-size:9.5px;width:100%;min-width:520px;">' +
+        '<thead><tr style="color:#333;border-bottom:1px solid #1a1a1a;">' +
+        '<th style="padding:3px 4px;text-align:left;font-weight:600;">Время</th>' +
+        '<th style="padding:3px 4px;text-align:right;color:#ff8f00;">T сыр</th>' +
+        '<th style="padding:3px 4px;text-align:right;color:#4169e1;">ΔT</th>' +
+        '<th style="padding:3px 4px;text-align:right;color:#ff8f00;font-weight:700;">T итог</th>' +
+        '<th style="padding:3px 4px;text-align:right;color:#8bc34a;">V сыр</th>' +
+        '<th style="padding:3px 4px;text-align:right;color:#4169e1;">ΔV</th>' +
+        '<th style="padding:3px 4px;text-align:right;color:#8bc34a;font-weight:700;">V итог</th>' +
+        '<th style="padding:3px 4px;text-align:right;color:#4aa3ff;">P сыр</th>' +
+        '<th style="padding:3px 4px;text-align:right;color:#4169e1;">ΔP</th>' +
+        '<th style="padding:3px 4px;text-align:right;color:#4aa3ff;font-weight:700;">P итог</th>' +
+        '<th style="padding:3px 4px;text-align:right;color:#333;">Источник</th>' +
+        '</tr></thead><tbody>';
+
+    for (var i = 0; i < showN; i++) {
+        var raw  = rawH[i];
+        var corr = corrH[i];
+        var tObj = new Date(times[i]);
+        var hourUTC  = tObj.getUTCHours();
+        var horizonH = (tObj.getTime() - snapTime) / 3600000;
+        var biT = getBiasInfo('temp',     bias, horizonH, hourUTC);
+        var biW = getBiasInfo('wind',     bias, horizonH, hourUTC);
+        var biP = getBiasInfo('pressure', bias, horizonH, hourUTC);
+
+        function fmtDelta(b) {
+            if (b == null) return '<td style="padding:3px 4px;text-align:right;color:#333;">—</td>';
+            var sign = b >= 0 ? '+' : '';
+            var col = Math.abs(b) < 0.05 ? '#333' : b > 0 ? '#ff6b6b' : '#74b9ff';
+            // bias хранится как "на сколько модель завышает" → поправка = −bias
+            return '<td style="padding:3px 4px;text-align:right;color:' + col + ';">' +
+                (b >= 0 ? '−' : '+') + Math.abs(b).toFixed(2) + '</td>';
+        }
+
+        var timeStr = tObj.toLocaleString('ru-RU',
+            {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+        html += '<tr style="border-bottom:1px solid #111;' + (i%2?'background:#0d0d0d':'') + '">' +
+            '<td style="padding:3px 4px;color:#3a3a3a;">' + timeStr + '</td>' +
+            '<td style="padding:3px 4px;text-align:right;color:#8a5f00;">' +
+                (raw.temperature_2m!=null ? raw.temperature_2m.toFixed(1) : '—') + '</td>' +
+            fmtDelta(biT.bias) +
+            '<td style="padding:3px 4px;text-align:right;font-weight:700;color:#ff8f00;">' +
+                (corr.temperature_2m!=null ? corr.temperature_2m.toFixed(1) : '—') + '</td>' +
+            '<td style="padding:3px 4px;text-align:right;color:#5a8a2a;">' +
+                (raw.wind_speed_10m!=null ? raw.wind_speed_10m.toFixed(1) : '—') + '</td>' +
+            fmtDelta(biW.bias) +
+            '<td style="padding:3px 4px;text-align:right;font-weight:700;color:#8bc34a;">' +
+                (corr.wind_speed_10m!=null ? corr.wind_speed_10m.toFixed(1) : '—') + '</td>' +
+            '<td style="padding:3px 4px;text-align:right;color:#2a6a9a;">' +
+                (raw.pressure_msl!=null ? raw.pressure_msl.toFixed(1) : '—') + '</td>' +
+            fmtDelta(biP.bias) +
+            '<td style="padding:3px 4px;text-align:right;font-weight:700;color:#4aa3ff;">' +
+                (corr.pressure_msl!=null ? corr.pressure_msl.toFixed(1) : '—') + '</td>' +
+            '<td style="padding:3px 4px;text-align:right;color:#2a2a2a;font-size:8.5px;">' +
+                biT.src + '</td>' +
+            '</tr>';
+    }
+    html += '</tbody></table></div></div>';
+    el.innerHTML = html;
+    el.style.display = '';
+}
+
 async function loadEnsemble() {
     var models = getEnsembleModels();
     if (!models.length) return;
@@ -1447,6 +1623,7 @@ async function loadEnsemble() {
     var succeededWeights = getModelWeights(mw, succeededModels);
     var ensembleHours = mergeEnsemble(allModelHours, succeededWeights, succeededModels);
     var snapTime = new Date(baseTimes[0]).getTime();
+    var rawEnsembleHours = ensembleHours.map(function(h){ return Object.assign({}, h); });
     ensembleHours = ensembleHours.map(function(h, idx) {
         var horizonH = (new Date(baseTimes[idx]).getTime() - snapTime) / 3600000;
         var hourUTC  = new Date(baseTimes[idx]).getUTCHours();
@@ -1493,6 +1670,18 @@ const fullDayEndE = Math.min(
     ensembleHours.length
 );
 renderForecastDays(ensembleHours.slice(0, fullDayEndE), baseTimes.slice(0, fullDayEndE));
+
+    var dbgFailed = models.filter(function(m){ return !succeededModels.includes(m); });
+    renderEnsembleDebug({
+        models:    models,
+        failed:    dbgFailed,
+        weights:   succeededWeights,
+        bias:      bias,
+        rawHours:  rawEnsembleHours.slice(startIndex, endIndex),
+        corrHours: _fcHours,
+        times:     _fcTimes,
+        snapTime:  snapTime
+    });
 }
 
 // =============================================
@@ -1956,6 +2145,8 @@ async function load(){
     buildFcParamRow();
     renderForecastChart(_fcHours, _fcTimes);
     renderAlertsBlock(_fcHours);
+    var _dbg = document.getElementById("ensembleDebug");
+    if (_dbg) { _dbg.style.display = "none"; _dbg.innerHTML = ""; }
 
     const lastDayKey = h.time[endIndex2 - 1].slice(0, 10);
 const fullDayEnd = h.time.findLastIndex(t => t.slice(0, 10) === lastDayKey) + 1;
