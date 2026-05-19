@@ -483,10 +483,19 @@ async function startBuild(fillOnly = false) {
     }
 
     // Читаем выбранный период
-    const fromVal = document.getElementById("fromMonth").value || "2023-01";
-    const toVal   = document.getElementById("toMonth").value   ||
-                    (() => { const n = new Date();
-                             return `${n.getFullYear()}-${String(n.getMonth()).padStart(2,"0")}`; })();
+    // При догрузке — всегда полный диапазон, инпуты игнорируем
+    let fromVal, toVal;
+    if (fillOnly) {
+        const _p = new Date();
+        _p.setMonth(_p.getMonth() - 1);
+        fromVal = "2023-01";
+        toVal   = `${_p.getFullYear()}-${String(_p.getMonth() + 1).padStart(2, "0")}`;
+    } else {
+        fromVal = document.getElementById("fromMonth").value || "2023-01";
+        toVal   = document.getElementById("toMonth").value   ||
+                  (() => { const n = new Date();
+                           return `${n.getFullYear()}-${String(n.getMonth()).padStart(2,"0")}`; })();
+    }
     const [fromY, fromM] = fromVal.split("-").map(Number);
     const [toY,   toM]   = toVal.split("-").map(Number);
 
