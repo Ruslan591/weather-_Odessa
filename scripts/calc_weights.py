@@ -158,37 +158,70 @@ def angle_diff(a, b):
     return d if d <= 180 else 360 - d
 
 # ── Расчёт весов ─────────────────────────────────────────────────────────────
+def angle_diff(a, b):
+    d = abs(a - b) % 360
+    return d if d <= 180 else 360 - d
+
+def angle_diff_signed(fc, obs):
+    return ((fc - obs + 180) % 360) - 180
+
 def compute_mae_per_model(records):
+    import math
     PARAMS = ["temp", "pressure", "wind", "windDir", "cloudcover", "precip", "visibility"]
-    errs = {}
+    acc = {}  # acc[mid][param] = {sum_err, sum_ae, sum_sq, n}
     for rec in records:
         obs = rec.get("obs", {})
         for mid, mdata in rec.get("models", {}).items():
-            if mid not in errs:
-                errs[mid] = {p: [] for p in PARAMS}
+            if mid not in acc:
+                acc[mid] = {p: {"sum_err": 0.0, "sum_ae": 0.0, "sum_sq": 0.0, "n": 0}
+                            for p in PARAMS}
             for param in PARAMS:
                 ov = obs.get(param)
                 mv = mdata.get(param)
                 if ov is None or mv is None:
                     continue
-                ae = angle_diff(mv, ov) if param == "windDir" else abs(mv - ov)
-                errs[mid][param].append(ae)
+                err = angle_diff_signed(mv, ov) if param == "windDir" else (mv - ov)
+                ae  = abs(err)
+                s   = acc[mid][param]
+                s["sum_err"] += err
+                s["sum_ae"]  += ae
+                s["sum_sq"]  += err * err
+                s["n"]       += 1
     result = {}
-    for mid, params in errs.items():
+    for mid, params in acc.items():
         result[mid] = {}
-        for param, vals in params.items():
-            if vals:
-                result[mid][param] = {"mae": round(sum(vals) / len(vals), 4), "n": len(vals)}
+        for param, s in params.items():
+            n = s["n"]
+            if not n:
+                continue
+            bias = s["sum_err"] / n
+            mae  = s["sum_ae"]  / n
+            rmse = math.sqrt(s["sum_sq"] / n)
+            # Остаточная RMSE = случайная ошибка после удаления bias
+            residual_rmse = math.sqrt(max(0.0, rmse * rmse - bias * bias))
+            result[mid][param] = {
+                "bias":          round(bias,          4),
+                "mae":           round(mae,           4),
+                "rmse":          round(rmse,          4),
+                "residual_rmse": round(residual_rmse, 4),
+                "n":             n,
+            }
     return result
 
 def top3_for_param(model_mae, param, all_models):
     scored = []
     for mid in all_models:
         if mid in model_mae and param in model_mae[mid]:
-            scored.append({"model": mid,
-                           "mae":   model_mae[mid][param]["mae"],
-                           "n":     model_mae[mid][param]["n"]})
-    scored.sort(key=lambda x: x["mae"])
+            m = model_mae[mid][param]
+            scored.append({
+                "model":         mid,
+                "bias":          m["bias"],
+                "mae":           m["mae"],
+                "residual_rmse": m["residual_rmse"],
+                "n":             m["n"],
+            })
+    # Сортируем по residual_rmse — случайная ошибка после удаления bias
+    scored.sort(key=lambda x: x["residual_rmse"])
     return scored[:3]
 
 def make_section(period_groups, all_models):
