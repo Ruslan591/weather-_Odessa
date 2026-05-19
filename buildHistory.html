@@ -261,7 +261,8 @@ function parseSynop(line, telegramKey) {
         }
         if (/^4\d{4}$/.test(g)) {
             const val = parseInt(g.slice(1));
-            pressure = val < 5000 ? 1000 + val / 10 : 900 + val / 10;
+            const p = val < 5000 ? 1000 + val / 10 : val / 10;
+pressure = (p > 920 && p < 1050) ? p : null;
         }
         if (/^6\d{4}$/.test(g)) {
             const rrr = parseInt(g.slice(1, 4));
