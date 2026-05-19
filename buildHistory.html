@@ -120,6 +120,7 @@ button:disabled { opacity: 0.3; cursor: not-allowed; }
     letter-spacing: 0.05em;
 }
 </style>
+
 <script src="models.js"></script>
 </head>
 <body>
@@ -130,11 +131,24 @@ button:disabled { opacity: 0.3; cursor: not-allowed; }
     <button id="startBtn" onclick="startBuild()">▶ Старт</button>
     <button id="stopBtn" onclick="stopBuild()" disabled>■ Стоп</button>
     <button onclick="retryErrors()" id="retryBtn" disabled>↻ Догрузить ошибки</button>
+    <button onclick="startBuild(true)" id="fillBtn">⊕ Догрузить недостающие</button>
     <button onclick="downloadAll()" id="dlBtn" disabled>↓ Скачать все файлы</button>
     <button onclick="uploadToGitHub()" id="ghBtn" disabled>↑ Залить на GitHub</button>
     <input id="ghToken" type="password" placeholder="GitHub token (ghp_...)"
         style="padding:10px 12px; background:#1a1a1a; border:1px solid #444; color:#ccc;
                font-family:'Courier New',monospace; font-size:0.85em; width:240px;">
+</div>
+<div class="controls" style="margin-top:-12px;">
+    <label style="color:#555;font-size:0.8em;letter-spacing:0.1em;">С&nbsp;
+        <input id="fromMonth" type="month" value="2023-01"
+            style="padding:6px 10px; background:#1a1a1a; border:1px solid #444;
+                   color:#ccc; font-family:'Courier New',monospace; font-size:0.85em;">
+    </label>
+    <label style="color:#555;font-size:0.8em;letter-spacing:0.1em;">По&nbsp;
+        <input id="toMonth" type="month"
+            style="padding:6px 10px; background:#1a1a1a; border:1px solid #444;
+                   color:#ccc; font-family:'Courier New',monospace; font-size:0.85em;">
+    </label>
 </div>
 
 <div class="stats-row">
@@ -170,8 +184,13 @@ button:disabled { opacity: 0.3; cursor: not-allowed; }
 <script>
 const SYNOP_HOURS = [0, 3, 6, 9, 12, 15, 18, 21];
 const GH_RAW_BASE = "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data";
-const SYNOP_FILES = ["synop_2023.txt", "synop_2024.txt", "synop_2025.txt", "synop_2026.txt"];
 const MODELS = modelIds();
+
+function getSynopFiles(fromYear, toYear) {
+    const files = [];
+    for (let y = fromYear; y <= toYear; y++) files.push(`synop_${y}.txt`);
+    return files;
+}
 
 let stopped = false;
 // { "2026_05": [ {synopTime, obs, models}, ... ], ... }
@@ -418,14 +437,64 @@ async function processMonth(year, month, synops) {
     return saved;
 }
 
+async function fetchExistingMonths(token) {
+    const apiUrl = "https://api.github.com/repos/ruslan591/weather-_Odessa/contents/data/modeldata";
+    const headers = {
+        Accept: "application/vnd.github+json",
+        Authorization: `token ${token}`
+    };
+    try {
+        const r = await fetch(apiUrl, { headers });
+        if (!r.ok) return new Set();
+        const items = await r.json();
+        return new Set(
+            items
+                .map(f => f.name.match(/modelData_(\d{4}_\d{2})\.json/))
+                .filter(Boolean)
+                .map(m => m[1])
+        );
+    } catch(e) {
+        log(`⚠️ Не удалось получить список файлов GitHub: ${e}`, "log-warn");
+        return new Set();
+    }
+}
+
 /* ---- Главный процесс ---- */
-async function startBuild() {
+async function startBuild(fillOnly = false) {
     stopped = false;
     outputByMonth = {};
     totalRecords = 0;
     doneMonths = 0;
     totalErrors = 0;
     failedModels = [];
+
+    let existingMonths = new Set();
+    if (fillOnly) {
+        const token = document.getElementById("ghToken").value.trim();
+        if (!token) {
+            log("⚠️ Для догрузки нужен GitHub token", "log-warn");
+            document.getElementById("startBtn").disabled = false;
+            document.getElementById("stopBtn").disabled = true;
+            return;
+        }
+        log("Проверяю существующие файлы на GitHub...", "log-info");
+        existingMonths = await fetchExistingMonths(token);
+        log(`  Уже есть: ${existingMonths.size} месяцев`, "log-info");
+    }
+
+    // Читаем выбранный период
+    const fromVal = document.getElementById("fromMonth").value || "2023-01";
+    const toVal   = document.getElementById("toMonth").value   ||
+                    (() => { const n = new Date();
+                             return `${n.getFullYear()}-${String(n.getMonth()).padStart(2,"0")}`; })();
+    const [fromY, fromM] = fromVal.split("-").map(Number);
+    const [toY,   toM]   = toVal.split("-").map(Number);
+
+    if (fromY > toY || (fromY === toY && fromM > toM)) {
+        log("⚠️ Неверный период: «С» позже «По»", "log-warn"); return;
+    }
+
+    const SYNOP_FILES = getSynopFiles(fromY, toY);
 
     document.getElementById("startBtn").disabled = true;
     document.getElementById("stopBtn").disabled = false;
@@ -451,10 +520,10 @@ async function startBuild() {
     log(`Всего сводок: ${allSynops.length}`, "log-info");
 
     const months = [];
-    const now = new Date();
-    for (let y = 2023; y <= now.getFullYear(); y++) {
-        const maxM = (y === now.getFullYear()) ? now.getMonth() : 12;
-        for (let m = 1; m <= maxM; m++) {
+    for (let y = fromY; y <= toY; y++) {
+        const mStart = (y === fromY) ? fromM : 1;
+        const mEnd   = (y === toY)   ? toM   : 12;
+        for (let m = mStart; m <= mEnd; m++) {
             months.push({ year: y, month: m });
         }
     }
@@ -468,13 +537,20 @@ async function startBuild() {
         if (stopped) { log("⛔ Остановлено", "log-warn"); break; }
 
         const label = `${pad2(month)}.${year}`;
-        updateStats(label);
+        const key   = monthKey(year, month);
 
+        if (fillOnly && existingMonths.has(key)) {
+            log(`${label}: уже есть — пропуск`, "log-dim");
+            doneMonths++;
+            updateStats(label);
+            continue;
+        }
+
+        updateStats(label);
         await processMonth(year, month, allSynops);
 
         doneMonths++;
         updateStats(label);
-
         await sleep(2000);
     }
 
@@ -693,6 +769,15 @@ async function uploadToGitHub() {
     log(`GitHub: готово — ${ok} ОК, ${fail} ошибок`, fail ? "log-warn" : "log-ok");
     setStatus(`GitHub: загружено ${ok} из ${keys.length}`);
 }
+
+// Инициализация "По" = предыдущий месяц
+(function() {
+    const _n = new Date();
+    _n.setMonth(_n.getMonth() - 1);
+    document.getElementById("toMonth").value =
+        `${_n.getFullYear()}-${String(_n.getMonth() + 1).padStart(2, "0")}`;
+})();
+
 </script>
 <script src="nav.js"></script>
 </body>
