@@ -482,6 +482,44 @@ def parse_hourly(h):
         })
     return result
 
+# Маппинг: поле open-meteo → ключ в model_bias.json
+_BIAS_FIELD_MAP = {
+    "temperature_2m":    "temp",
+    "pressure_msl":      "pressure",
+    "wind_speed_10m":    "wind",
+    "wind_direction_10m":"windDir",
+    "cloud_cover":       "cloudcover",
+    "visibility":        "visibility",
+}
+
+def debias_model_hours(model_id, hours, model_bias_models):
+    """Вычитает per-model bias из часовых данных модели до усреднения."""
+    if not hours or model_id not in model_bias_models:
+        return hours
+    m_bias = model_bias_models[model_id]
+    month_key = hours[0]["time"][5:7] if hours else None  # "MM" из ISO-строки
+    # byMonth → fallback overall
+    by_month  = m_bias.get("byMonth", {}).get(month_key, {})
+    overall   = m_bias.get("overall", {})
+
+    result = []
+    for h in hours:
+        hc = dict(h)
+        for field, param in _BIAS_FIELD_MAP.items():
+            val = hc.get(field)
+            if val is None:
+                continue
+            b = (by_month.get(param) or overall.get(param) or {}).get("bias")
+            if b is None:
+                continue
+            if param == "windDir":
+                hc[field] = (val - b) % 360
+            elif param in ("wind_speed_10m",):
+                hc[field] = max(0.0, round((val - b) * 10) / 10)
+            else:
+                hc[field] = round((val - b) * 10) / 10
+        result.append(hc)
+    return result
 
 def merge_ensemble(all_model_hours, succeeded):
     """Смешивает прогнозы моделей в ансамбль (равные веса)."""
@@ -1203,6 +1241,9 @@ def main():
     pws_bias_overall    = (acc_pws_for_bias or {}).get("overall", {})
     pws_bias_by_horizon = (acc_pws_for_bias or {}).get("byHorizon", {})
 
+    model_bias_data, _  = gh_load_json("data/model_bias.json", default=None)
+    model_bias_models   = (model_bias_data or {}).get("models", {})
+
     # Проверяем нужен ли новый снимок
     last_synop_run = parse_iso(snaps_synop[-1]["runTime"]) if snaps_synop and snaps_synop[-1].get("runTime") else None
     last_pws_run   = parse_iso(snaps_pws[-1]["runTime"])   if snaps_pws   and snaps_pws[-1].get("runTime")   else None
@@ -1226,6 +1267,13 @@ def main():
             time.sleep(0.5)
 
         if succeeded:
+            # Применяем per-model bias до усреднения
+            if model_bias_models:
+                cur_month = now.strftime("%m")
+                for mid in succeeded:
+                    all_model_hours[mid] = debias_model_hours(
+                        mid, all_model_hours[mid], model_bias_models)
+                gist_log(f"  Per-model bias применён для {len(succeeded)} моделей (месяц {cur_month})")
             ensemble_hours = merge_ensemble(all_model_hours, succeeded)
             saved_at  = now.isoformat()
             run_time  = ensemble_ready_time.isoformat() if ensemble_ready_time else None
