@@ -1128,6 +1128,21 @@ async function loadModelWeights() {
     return _modelWeights;
 }
 
+var _modelBias = null;
+
+async function loadModelBias() {
+    if (_modelBias) return _modelBias;
+    try {
+        var r = await fetch("data/model_bias.json", { cache: "no-store" });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        _modelBias = (await r.json()).models || {};
+    } catch(e) {
+        console.warn("model_bias.json не загружен:", e.message);
+        _modelBias = {};
+    }
+    return _modelBias;
+}
+
 var _pwsBias = null;
 
 async function loadPwsBias() {
@@ -1197,6 +1212,45 @@ function smoothByHorizon(byHorizon) {
         });
     });
     return result;
+}
+
+var _BIAS_FIELD_MAP = {
+    temperature_2m:      "temp",
+    apparent_temperature:"temp",
+    dew_point_2m:        "temp",
+    pressure_msl:        "pressure",
+    wind_speed_10m:      "wind",
+    wind_gusts_10m:      "wind",
+    wind_direction_10m:  "windDir",
+    cloud_cover:         "cloudcover",
+    visibility:          "visibility",
+};
+
+function debiasModelHours(modelId, hours, modelBiasData) {
+    if (!hours || !hours.length || !modelBiasData[modelId]) return hours;
+    var mb = modelBiasData[modelId];
+    var monthKey = String(new Date().getMonth() + 1).padStart(2, "0");
+    var byMonth  = (mb.byMonth && mb.byMonth[monthKey]) || {};
+    var overall  = mb.overall || {};
+
+    return hours.map(function(h) {
+        var hc = Object.assign({}, h);
+        Object.keys(_BIAS_FIELD_MAP).forEach(function(field) {
+            var param = _BIAS_FIELD_MAP[field];
+            var val = hc[field];
+            if (val == null) return;
+            var b = ((byMonth[param] || overall[param] || {}).bias);
+            if (b == null) return;
+            if (param === "windDir") {
+                hc[field] = ((val - b) % 360 + 360) % 360;
+            } else if (param === "wind") {
+                hc[field] = Math.max(0, Math.round((val - b) * 10) / 10);
+            } else {
+                hc[field] = Math.round((val - b) * 10) / 10;
+            }
+        });
+        return hc;
+    });
 }
 
 function getSeasonKey() {
@@ -1608,8 +1662,9 @@ async function loadEnsemble() {
     var models = getEnsembleModels();
     if (!models.length) return;
 
-    var mw = await loadModelWeights();
-    var bias = await loadPwsBias();
+    var mw            = await loadModelWeights();
+    var bias          = await loadPwsBias();
+    var modelBiasData = await loadModelBias();
     if (bias.byHorizon && Object.keys(bias.byHorizon).length > 2) {
     bias = { overall: bias.overall, byHorizon: smoothByHorizon(bias.byHorizon), byHourUTC: bias.byHourUTC };
 }
@@ -1643,7 +1698,8 @@ async function loadEnsemble() {
     results.forEach(function(res) {
         if (res.error || !res.data || !res.data.hourly) return;
         if (!baseTimes) baseTimes = res.data.hourly.time;
-        allModelHours[res.model] = parseHourly(res.data.hourly);
+        var parsed = parseHourly(res.data.hourly);
+        allModelHours[res.model] = debiasModelHours(res.model, parsed, modelBiasData);
     });
 
     var succeededModels = models.filter(function(m) { return allModelHours[m] != null; });
