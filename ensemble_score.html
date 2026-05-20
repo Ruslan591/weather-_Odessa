@@ -378,10 +378,10 @@ function applyBiasClient(value, key, horizonH, hourUTC) {
     return result;
 }
 
-function pushErrors(errors, fh, ob, horizonH, hourUTC) {
+function pushErrors(errors, fh, ob) {
     function push(k, fv, ov) {
         if (fv == null || ov == null) return;
-        errors[k].push(applyBiasClient(fv, k, horizonH, hourUTC) - ov);
+        errors[k].push(fv - ov);
     }
     push("temp",       fh.temp,       ob.temp);
     push("pressure",   fh.pressure,   ob.pressure);
@@ -390,7 +390,7 @@ function pushErrors(errors, fh, ob, horizonH, hourUTC) {
     push("cloudcover", fh.cloudcover, ob.cloudcover);
     push("visibility", fh.visibility, ob.visibility);
     if (fh.windDir != null && ob.windDir != null)
-        errors.windDir.push(windDirDiff(applyBiasClient(fh.windDir, "windDir", horizonH, hourUTC), ob.windDir));
+        errors.windDir.push(windDirDiff(fh.windDir, ob.windDir));
     if (fh.rain != null && ob.precip != null)
         errors.precip.push((fh.rain > 0.1 ? 1 : 0) - (ob.precip > 0.1 ? 1 : 0));
 }
@@ -420,7 +420,7 @@ function calcMetrics(obsIndex) {
             matched++;
             var horizonH = Math.round((new Date(fh.time + ":00Z") - snapStart) / 3600000);
             var hourUTC  = parseInt(fh.time.slice(11, 13));  // ← добавить
-            pushErrors(errors, fh, ob, horizonH, hourUTC);   // ← было horizonH
+            pushErrors(errors, fh, ob);
         });
     });
     return matched ? summarize(errors) : null;
@@ -440,7 +440,7 @@ function calcMetricsByDay(obsIndex) {
             if (!byDay[day]) byDay[day] = emptyErrors();
             var horizonH = Math.round((new Date(fh.time + ":00Z") - snapStart) / 3600000);
             var hourUTC  = parseInt(fh.time.slice(11, 13));       // ← добавить
-            pushErrors(byDay[day], fh, ob, horizonH, hourUTC);    // ← было horizonH
+            pushErrors(byDay[day], fh, ob);
         });
     });
     var result = {};
@@ -463,7 +463,7 @@ function calcMetricsByHorizon(obsIndex) {
             if (bucket < 0) return;
             if (!byH[bucket]) byH[bucket] = emptyErrors();
             var hourUTC  = parseInt(fh.time.slice(11, 13));       // ← добавить
-            pushErrors(byH[bucket], fh, ob, horizonH, hourUTC);   // ← было horizonH
+            pushErrors(byH[bucket], fh, ob);
         });
     });
     var result = {};
@@ -486,7 +486,7 @@ function calcMetricsByHourUTC(obsIndex) {
             var hourUTC  = parseInt(fh.time.slice(11, 13));
             var horizonH = Math.round((new Date(fh.time + ":00Z") - snapStart) / 3600000);
             if (!byH[hourUTC]) byH[hourUTC] = emptyErrors();
-            pushErrors(byH[hourUTC], fh, ob, horizonH, hourUTC);
+            pushErrors(byH[hourUTC], fh, ob);
         });
     });
     var result = {};
