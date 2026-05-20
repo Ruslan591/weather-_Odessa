@@ -285,7 +285,7 @@ def parse_synop_line(raw_line):
         elif g[0] == "4" and g[1:].isdigit():
             val = int(g[1:]) / 10
             pressure = val if val >= 500 else (1000 + val)
-            if not (920 < pressure < 1050):
+        if not (920 < pressure < 1050):
             pressure = None
         elif g[0] == "6" and g[1:4].isdigit() and iR in (0, 1, 2):
             rrr = int(g[1:4])
