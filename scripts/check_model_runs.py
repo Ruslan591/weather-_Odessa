@@ -1,0 +1,182 @@
+#!/usr/bin/env python3
+"""
+check_model_runs.py — опрос open-meteo на наличие новых прогонов моделей.
+При обнаружении нового прогона запускает пайплайн:
+  1. calc_model_bias.py
+  2. LOCAL=1 calc_weights.py
+  3. update_local.py --snap-only  (снимок + git push)
+
+История сохраняется в data/model_runs_history.json.
+
+Расписание через termux-job-scheduler (~/run_check.sh):
+    termux-job-scheduler --script ~/run_check.sh --period-ms 900000
+"""
+
+import json
+import os
+import subprocess
+import sys
+import urllib.request
+from datetime import datetime, timezone
+
+# ── конфиг ────────────────────────────────────────────────────────────────────
+BASE_DIR     = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+HISTORY_FILE = os.path.join(BASE_DIR, "data", "model_runs_history.json")
+LOG_DIR      = os.path.join(BASE_DIR, "logs")
+MAX_ENTRIES  = 60
+
+PYTHON       = sys.executable   # тот же python3 что запустил этот скрипт
+SCRIPTS_DIR  = os.path.join(BASE_DIR, "scripts")
+
+MODELS = [
+    {"id": "ecmwf_ifs",                     "metaId": "ecmwf_ifs025",                   "label": "ECMWF IFS"},
+    {"id": "icon_eu",                        "metaId": "dwd_icon_eu",                    "label": "ICON EU"},
+    {"id": "ukmo_global_deterministic_10km", "metaId": "ukmo_global_deterministic_10km", "label": "UKMO"},
+    {"id": "meteofrance_arpege_europe",      "metaId": "meteofrance_arpege_europe",      "label": "Arpège"},
+    {"id": "gfs_global",                     "metaId": "ncep_gfs013",                    "label": "GFS"},
+    {"id": "cma_grapes_global",              "metaId": "cma_grapes_global",              "label": "GRAPES"},
+]
+
+OPEN_METEO_META = "https://api.open-meteo.com/data/{metaId}/static/meta.json"
+TIMEOUT = 15
+
+# ── вспомогательные ───────────────────────────────────────────────────────────
+
+def now_utc_iso():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+def ts_to_iso(unix_ts):
+    return datetime.fromtimestamp(unix_ts, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+def iso_to_local(iso_str):
+    try:
+        dt = datetime.strptime(iso_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        return dt.astimezone().strftime("%d.%m %H:%M")
+    except Exception:
+        return iso_str
+
+def age_str(iso_str):
+    try:
+        dt = datetime.strptime(iso_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        hours = (datetime.now(timezone.utc) - dt).total_seconds() / 3600
+        if hours < 1:
+            return f"{int(hours*60)}м назад"
+        return f"{hours:.1f}ч назад"
+    except Exception:
+        return ""
+
+# ── загрузка/сохранение истории ───────────────────────────────────────────────
+
+def load_history():
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"[WARN] Не удалось прочитать историю: {e}")
+    return {}
+
+def save_history(history):
+    os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
+    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(history, f, ensure_ascii=False, indent=2)
+
+# ── запрос к open-meteo ───────────────────────────────────────────────────────
+
+def fetch_run_time(meta_id):
+    url = OPEN_METEO_META.format(metaId=meta_id)
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "weather-verifier/1.0"})
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+            data = json.loads(resp.read().decode())
+        ts = data.get("last_run_availability_time")
+        return ts_to_iso(ts) if ts else None
+    except Exception:
+        return None
+
+# ── пайплайн ──────────────────────────────────────────────────────────────────
+
+def run_pipeline(new_models):
+    """Запускает calc_model_bias → calc_weights → update_local --snap-only."""
+    print(f"\n  🚀 Новых прогонов: {len(new_models)} ({', '.join(new_models)})")
+    print(  "     Запускаю пайплайн...\n")
+
+    steps = [
+        {
+            "name": "calc_model_bias.py",
+            "cmd":  [PYTHON, os.path.join(SCRIPTS_DIR, "calc_model_bias.py")],
+            "env":  None,
+        },
+        {
+            "name": "calc_weights.py (LOCAL)",
+            "cmd":  [PYTHON, os.path.join(SCRIPTS_DIR, "calc_weights.py")],
+            "env":  {**os.environ, "LOCAL": "1"},
+        },
+        {
+            "name": "update_local.py --snap-only",
+            "cmd":  [PYTHON, os.path.join(SCRIPTS_DIR, "update_local.py"), "--snap-only"],
+            "env":  None,
+        },
+    ]
+
+    for step in steps:
+        print(f"  ▶ {step['name']}")
+        result = subprocess.run(
+            step["cmd"],
+            cwd=BASE_DIR,
+            env=step["env"],
+            capture_output=False,   # вывод идёт прямо в лог
+        )
+        if result.returncode != 0:
+            print(f"  ✗ {step['name']} завершился с ошибкой (код {result.returncode})")
+            print(  "    Пайплайн остановлен.")
+            return False
+
+        print(f"  ✓ {step['name']}\n")
+
+    print("  ✅ Пайплайн завершён успешно.")
+    return True
+
+# ── основная логика ───────────────────────────────────────────────────────────
+
+def main():
+    os.makedirs(LOG_DIR, exist_ok=True)
+    now = now_utc_iso()
+    history = load_history()
+    new_models = []   # модели с новым прогоном
+
+    print(f"\n{'─'*52}")
+    print(f"  Проверка прогонов моделей  {iso_to_local(now)}")
+    print(f"{'─'*52}")
+
+    for m in MODELS:
+        label    = m["label"]
+        meta_id  = m["metaId"]
+        entries  = history.setdefault(label, [])
+        last_run = entries[-1]["run_time"] if entries else None
+
+        run_time = fetch_run_time(meta_id)
+
+        if run_time is None:
+            status = "❌ нет ответа"
+        elif run_time == last_run:
+            status = f"  {iso_to_local(run_time)}  ({age_str(run_time)}) — без изменений"
+        else:
+            entries.append({"run_time": run_time, "detected_at": now})
+            if len(entries) > MAX_ENTRIES:
+                history[label] = entries[-MAX_ENTRIES:]
+            new_models.append(label)
+            status = f"🆕 {iso_to_local(run_time)}  ({age_str(run_time)}) ← новый прогон"
+
+        print(f"  {label:<14}  {status}")
+
+    print(f"{'─'*52}\n")
+
+    if new_models:
+        save_history(history)
+        run_pipeline(new_models)
+    else:
+        print("  Новых прогонов нет, пайплайн не запускается.\n")
+
+if __name__ == "__main__":
+    main()
