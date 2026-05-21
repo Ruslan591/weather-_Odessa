@@ -43,7 +43,7 @@ LAT          = 46.4406
 LON          = 30.7703
 SYNOP_HOURS  = {0, 3, 6, 9, 12, 15, 18, 21}
 
-GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "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")
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 GITHUB_OWNER = "ruslan591"
 GITHUB_REPO  = "weather-_Odessa"
 
