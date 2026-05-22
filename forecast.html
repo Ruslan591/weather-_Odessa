@@ -1681,9 +1681,9 @@ async function loadEnsemble() {
 
     var fetches = models.map(function(m) {
         var url = "https://api.open-meteo.com/v1/forecast?latitude=46.43&longitude=30.74" +
-            "&hourly=" + HOURLY_PARAMS +
-            "&models=" + m +
-            "&forecast_days=" + (Math.ceil(forecastHours / 24) + 1) + "&wind_speed_unit=ms"
+    "&hourly=" + HOURLY_PARAMS +
+    "&models=" + m +
+    "&forecast_days=" + (Math.ceil(forecastHours / 24) + 1) + "&wind_speed_unit=ms&timezone=auto"
         return fetch(url)
             .then(function(r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
             .then(function(data) { return { model: m, data: data }; })
