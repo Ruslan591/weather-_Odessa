@@ -58,39 +58,36 @@ _upd.gh_put = _local_gh_put
 # ── Git-операции ──────────────────────────────────────────────────────────────
 
 def git_commit_push(no_push=False):
-    if not _GIT_CHANGED:
-        print("\n  git: нечего коммитить")
-        return
-
-    files_str = ", ".join(os.path.basename(p) for p in _GIT_CHANGED)
-    msg = f"update_local: {files_str}"
-
     try:
-        subprocess.run(
-            ["git", "-C", BASE_DIR, "add"] + _GIT_CHANGED,
-            check=True, capture_output=True
-        )
-        result = subprocess.run(
-            ["git", "-C", BASE_DIR, "commit", "-m", msg],
-            capture_output=True, text=True
-        )
-        if result.returncode != 0:
-            print(f"\n  git commit: {result.stdout.strip() or result.stderr.strip()}")
-            return
-
-        print(f"\n  git commit ✓  ({files_str})")
-
-        if not no_push:
-            push = subprocess.run(
-                ["git", "-C", BASE_DIR, "push"],
+        if _GIT_CHANGED:
+            files_str = ", ".join(os.path.basename(p) for p in _GIT_CHANGED)
+            subprocess.run(
+                ["git", "-C", BASE_DIR, "add"] + _GIT_CHANGED,
+                check=True, capture_output=True
+            )
+            result = subprocess.run(
+                ["git", "-C", BASE_DIR, "commit", "-m", f"update_local: {files_str}"],
                 capture_output=True, text=True
             )
-            if push.returncode == 0:
-                print("  git push ✓")
+            if result.returncode != 0:
+                print(f"\n  git commit: {result.stdout.strip() or result.stderr.strip()}")
             else:
-                print(f"  git push ✗: {push.stderr.strip()}")
+                print(f"\n  git commit ✓  ({files_str})")
         else:
+            print("\n  git: новых файлов нет")
+
+        if no_push:
             print("  git push пропущен (--no-push)")
+            return
+
+        push = subprocess.run(
+            ["git", "-C", BASE_DIR, "push", "--force-with-lease"],
+            capture_output=True, text=True
+        )
+        if push.returncode == 0:
+            print("  git push ✓")
+        else:
+            print(f"  git push ✗: {push.stderr.strip()}")
 
     except subprocess.CalledProcessError as e:
         print(f"\n  git: ошибка — {e}")

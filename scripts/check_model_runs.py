@@ -113,8 +113,8 @@ def run_pipeline(new_models):
             "env":  {**os.environ, "LOCAL": "1"},
         },
         {
-            "name": "update_local.py --snap-only",
-            "cmd":  [PYTHON, os.path.join(SCRIPTS_DIR, "update_local.py"), "--snap-only"],
+            "name": "update_local.py --no-model",
+            "cmd":  [PYTHON, os.path.join(SCRIPTS_DIR, "update_local.py"), "--no-model"],
             "env":  None,
         },
     ]
@@ -136,6 +136,32 @@ def run_pipeline(new_models):
 
     print("  ✅ Пайплайн завершён успешно.")
     return True
+
+# ── PWS-синк ─────────────────────────────────────────────────────────────────
+
+def check_pws_sync():
+    pws_file = os.path.join(BASE_DIR, "data", "pws_raw.json")
+    cur_hk   = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H")
+
+    if os.path.exists(pws_file):
+        try:
+            with open(pws_file, "r", encoding="utf-8") as f:
+                recs = json.load(f)
+            last_hk = max((r.get("hourKey", "") for r in recs), default="")
+            if last_hk >= cur_hk:
+                return
+        except Exception:
+            pass
+
+    print(f"\n  🔄 PWS: нет данных за {cur_hk}, запускаю синк...")
+    result = subprocess.run(
+        [PYTHON, os.path.join(SCRIPTS_DIR, "pws_sync_local.py")],
+        cwd=BASE_DIR, capture_output=False
+    )
+    if result.returncode == 0:
+        print("  ✓ pws_sync_local.py")
+    else:
+        print(f"  ✗ pws_sync_local.py (код {result.returncode})")
 
 # ── основная логика ───────────────────────────────────────────────────────────
 
@@ -176,7 +202,14 @@ def main():
         save_history(history)
         run_pipeline(new_models)
     else:
-        print("  Новых прогонов нет, пайплайн не запускается.\n")
+        print("  Новых прогонов нет.\n")
+        # Всё равно обновляем SYNOP (и снимок если готов новый ансамбль)
+        subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "update_local.py"), "--no-model"],
+            cwd=BASE_DIR, capture_output=False
+        )
+
+check_pws_sync()
 
 if __name__ == "__main__":
     main()
