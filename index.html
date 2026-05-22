@@ -35,7 +35,49 @@
 <script src="synop.js"></script>
 <script src="main.js"></script>
 
+<!-- Отображение последней SYNOP сводки -->
+<script>
+(async function showLastSynop() {
+    function showToast(msg, color) {
+        let t = document.getElementById("synopToast");
+        if (!t) {
+            t = document.createElement("div");
+            t.id = "synopToast";
+            t.style.cssText = "position:fixed;bottom:20px;left:50%;transform:translateX(-50%);" +
+                "background:#1e1e1e;border:1px solid #333;border-radius:10px;" +
+                "padding:10px 18px;font-size:13px;color:#eee;z-index:9999;" +
+                "box-shadow:0 4px 16px rgba(0,0,0,0.5);white-space:nowrap;";
+            document.body.appendChild(t);
+        }
+        t.style.color = color || "#eee";
+        t.style.opacity = "1";
+        t.textContent = msg;
+        clearTimeout(t._timer);
+        t._timer = setTimeout(() => { t.style.opacity = "0"; }, 4000);
+    }
 
+    try {
+        const year = new Date().getUTCFullYear();
+        const url  = "data/synop_" + year + ".txt?_=" + Date.now();
+        const r    = await fetch(url, { cache: "no-store" });
+        if (!r.ok) return;
+        const text  = await r.text();
+        const lines = text.split("\n").map(l => l.trim()).filter(l => l.startsWith("33837,"));
+        if (!lines.length) return;
+        const last  = lines[lines.length - 1];
+        const m     = last.match(/^33837,(\d{4}),(\d{2}),(\d{2}),(\d{2}),(\d{2}),/);
+        if (!m) return;
+        const lastMs  = Date.UTC(+m[1], +m[2]-1, +m[3], +m[4], +m[5]);
+        const ageMin  = Math.round((Date.now() - lastMs) / 60000);
+        const ageStr  = ageMin < 60 ? `${ageMin} мин` : `${Math.round(ageMin/60)} ч`;
+        const fresh   = ageMin < 240;
+        showToast(
+            `${fresh ? "✓" : "⚠"} SYNOP · ${m[3]}.${m[2]} ${m[4]}:${m[5]} UTC · ${ageStr} назад`,
+            fresh ? "#8bc34a" : "#ff9800"
+        );
+    } catch(e) {}
+})();
+</script>
 
 <script src="nav.js"></script>
 </body>
