@@ -1351,17 +1351,32 @@ def main():
     pws_raw, pws_raw_sha = gh_load_json("data/pws_raw.json", default=[])
 
     pws_groups_cfg, _ = gh_load_json("data/pws_groups.json", default=None)
+    active_stations = None   # None = все станции
+    param_stations  = {}     # field → set станций (composite-режим)
+
     if pws_groups_cfg:
-        active_group    = pws_groups_cfg.get("active", "all")
-        groups          = pws_groups_cfg.get("groups", {})
-        active_stations = groups.get(active_group)
-        if active_stations:
-            gist_log(f"  PWS: группа «{active_group}» → {active_stations}")
+        active_group = pws_groups_cfg.get("active", "all")
+        groups       = pws_groups_cfg.get("groups", {})
+
+        if active_group == "composite":
+            composite = pws_groups_cfg.get("composite", {})
+            for field in ("temp", "pressure", "wind", "windGust", "windDir", "humidity", "precip"):
+                grp_name = composite.get(field)
+                if grp_name is None and field == "windGust":
+                    grp_name = composite.get("wind")   # windGust следует за wind
+                if grp_name and grp_name in groups:
+                    param_stations[field] = set(groups[grp_name])
+            gist_log("  PWS: composite — " +
+                     ", ".join(f"{f}→{composite.get(f, composite.get('wind','all'))}"
+                               for f in ("temp","pressure","wind","windDir","humidity","precip")))
         else:
-            active_stations = None
-            gist_log(f"  PWS: группа «{active_group}» не найдена, все станции")
+            active_stations = groups.get(active_group)
+            if active_stations:
+                gist_log(f"  PWS: группа «{active_group}» → {active_stations}")
+            else:
+                active_stations = None
+                gist_log(f"  PWS: группа «{active_group}» не найдена, все станции")
     else:
-        active_stations = None
         gist_log("  PWS: pws_groups.json не найден, все станции")
 
     pws_buckets = {}
@@ -1381,8 +1396,12 @@ def main():
             pws_buckets[obs_key] = {}
         for field in ("temp", "pressure", "wind", "windGust", "windDir", "humidity", "precip"):
             val = rec.get(field)
-            if val is not None:
-                pws_buckets[obs_key].setdefault(field, []).append(val)
+            if val is None:
+                continue
+            # Composite: фильтр по параметру
+            if param_stations and field in param_stations and sid not in param_stations[field]:
+                continue
+            pws_buckets[obs_key].setdefault(field, []).append(val)
 
     pws_obs_by_time = {}
     for obs_key, fields in pws_buckets.items():
@@ -1453,8 +1472,7 @@ def main():
         gist_log(f"  pws_raw.json актуален ({len(pws_raw)} записей)")
 
     # ── 6. model_weights.json ───────────────────────────────────────────────
-    gist_log("--- 6. model_weights.json ---")
-    gist_log("  Пересчёт весов выполняется через calc_weights.yml (ежедневно)")
+    
 
     gist_log("=== Готово ===")
 
