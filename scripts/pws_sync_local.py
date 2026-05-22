@@ -70,22 +70,6 @@ def git_commit_push(no_push=False):
             print("  git push пропущен (--no-push)")
             return
 
-        stash = subprocess.run(
-            ["git", "-C", BASE_DIR, "stash"], capture_output=True, text=True
-        )
-        stashed = "No local changes" not in stash.stdout
-
-        pull = subprocess.run(
-            ["git", "-C", BASE_DIR, "pull", "--rebase", "origin", "main"],
-            capture_output=True, text=True
-        )
-        if stashed:
-            subprocess.run(["git", "-C", BASE_DIR, "stash", "pop"], capture_output=True)
-
-        if pull.returncode != 0:
-            subprocess.run(["git", "-C", BASE_DIR, "rebase", "--abort"], capture_output=True)
-            print(f"  git pull failed, force push...")
-
         push = subprocess.run(
             ["git", "-C", BASE_DIR, "push", "--force-with-lease"],
             capture_output=True, text=True
