@@ -61,27 +61,25 @@
     <div class="section-label">Наблюдения vs прогноз</div>
     <div class="chart-section">
         <div id="obsVsFcParamRow" class="param-row"></div>
-        <div id="obsVsFcDateRow" style="display:flex;gap:6px;align-items:center;margin:6px 0;flex-wrap:wrap;">
-            <input type="datetime-local" id="ovfFrom"
-                style="background:#1a1a1a;border:1px solid #333;color:#ccc;border-radius:6px;padding:3px 6px;font-size:11px;flex:1;min-width:130px;"
-                onchange="setOvfRange()">
-            <span style="color:#555;font-size:12px;">—</span>
-            <input type="datetime-local" id="ovfTo"
-                style="background:#1a1a1a;border:1px solid #333;color:#ccc;border-radius:6px;padding:3px 6px;font-size:11px;flex:1;min-width:130px;"
-                onchange="setOvfRange()">
-            <button onclick="setOvfDay(0)"
-                style="background:none;border:1px solid #333;color:#777;border-radius:6px;font-size:11px;padding:3px 8px;cursor:pointer;">
-                Сегодня
-            </button>
-            <button onclick="setOvfDay(-1)"
-                style="background:none;border:1px solid #333;color:#777;border-radius:6px;font-size:11px;padding:3px 8px;cursor:pointer;">
-                Вчера
-            </button>
-            <button onclick="clearOvfRange()"
-                style="background:none;border:1px solid #333;color:#777;border-radius:6px;font-size:11px;padding:3px 8px;cursor:pointer;">
-                Всё
-            </button>
-            <span style="color:#444;font-size:10px;width:100%;">местное время (UTC+3)</span>
+        <div id="obsVsFcDateRow" style="margin:6px 0;">
+            <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px;">
+                <button onclick="setOvfDay(0)"  id="ovfBtn0" style="flex:1;background:none;border:1px solid #333;color:#aaa;border-radius:6px;font-size:11px;padding:4px 4px;cursor:pointer;">Сегодня</button>
+                <button onclick="setOvfDay(-1)" id="ovfBtn1" style="flex:1;background:none;border:1px solid #333;color:#aaa;border-radius:6px;font-size:11px;padding:4px 4px;cursor:pointer;">Вчера</button>
+                <button onclick="setOvfDay(-2)" id="ovfBtn2" style="flex:1;background:none;border:1px solid #333;color:#aaa;border-radius:6px;font-size:11px;padding:4px 4px;cursor:pointer;"></button>
+                <button onclick="setOvfDay(-3)" id="ovfBtn3" style="flex:1;background:none;border:1px solid #333;color:#aaa;border-radius:6px;font-size:11px;padding:4px 4px;cursor:pointer;"></button>
+                <button onclick="setOvfDay(-4)" id="ovfBtn4" style="flex:1;background:none;border:1px solid #333;color:#aaa;border-radius:6px;font-size:11px;padding:4px 4px;cursor:pointer;"></button>
+                <button onclick="clearOvfRange()" style="flex:1;background:none;border:1px solid #333;color:#777;border-radius:6px;font-size:11px;padding:4px 4px;cursor:pointer;">Всё</button>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                <input type="datetime-local" id="ovfFrom"
+                    style="background:#1a1a1a;border:1px solid #333;color:#ccc;border-radius:6px;padding:3px 6px;font-size:11px;flex:1;min-width:130px;"
+                    onchange="setOvfRange()">
+                <span style="color:#555;font-size:12px;">—</span>
+                <input type="datetime-local" id="ovfTo"
+                    style="background:#1a1a1a;border:1px solid #333;color:#ccc;border-radius:6px;padding:3px 6px;font-size:11px;flex:1;min-width:130px;"
+                    onchange="setOvfRange()">
+            </div>
+            <span style="color:#444;font-size:10px;">местное время (UTC+3)</span>
         </div>
         <canvas id="obsVsFcChart" height="160"></canvas>
     </div>
@@ -976,6 +974,21 @@ function setOvfDay(offset) {
     document.getElementById("ovfTo").value   = isToday
         ? ymd + "T" + pad(new Date(now.getTime() + 3*3600000).getUTCHours()) + ":" + pad(new Date(now.getTime() + 3*3600000).getUTCMinutes())
         : ymd + "T23:59";
+    // Подсветить активную кнопку
+    for (var i = 0; i <= 4; i++) {
+        var b = document.getElementById("ovfBtn" + i);
+        if (b) b.style.borderColor = "#333";
+    }
+    var active = document.getElementById("ovfBtn" + Math.abs(offset));
+    if (active) active.style.borderColor = "#888";
+    // Подписи кнопок -2..-4
+    for (var j = 2; j <= 4; j++) {
+        var btn = document.getElementById("ovfBtn" + j);
+        if (!btn) continue;
+        var d = new Date(now.getTime() + 3 * 3600000);
+        d.setUTCDate(d.getUTCDate() - j);
+        btn.textContent = d.toLocaleDateString("ru-RU", { day:"2-digit", month:"2-digit" });
+    }
     setOvfRange();
 }
 
