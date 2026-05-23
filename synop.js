@@ -306,110 +306,25 @@ function parseSynop(line){
 /* =========================================================
    3. ЗАГРУЗКА SYNOP
 ========================================================= */
-let db;
-
-function initDB(){
-    return new Promise((resolve, reject) => {
-        const req = indexedDB.open("modelStats", 2);
-        req.onupgradeneeded = e => {
-            db = e.target.result;
-            if(!db.objectStoreNames.contains("stats"))
-                db.createObjectStore("stats", { keyPath: "time" });
-        };
-        req.onsuccess = e => { db = e.target.result; resolve(); };
-        req.onerror = e => reject(new Error("IndexedDB: " + (e.target.error?.message || e.target.error)));
-    });
-}
-
-async function recordExists(timeKey){
-    if(!db) await initDB();
-    const req = db.transaction("stats","readonly").objectStore("stats").getAll();
-    return new Promise(res => {
-        req.onsuccess = () => res(req.result.some(r => r.synopTime === timeKey));
-        req.onerror = () => { res(false); };
-    });
-}
-
-function saveProxyTime(proxyTimes, proxy, ms, limit=10){
-    if(!proxyTimes[proxy]) proxyTimes[proxy] = [];
-    proxyTimes[proxy].push(ms);
-    if(proxyTimes[proxy].length > limit)
-        proxyTimes[proxy] = proxyTimes[proxy].slice(-limit);
-}
-
 async function loadSynop(){
-    const cacheBust = Date.now();
-    const ogimet = `https://www.ogimet.com/display_synops2.php?lang=en&lugar=33837&tipo=ALL&ord=REV&nil=SI&fmt=txt&_=${cacheBust}`;
+    const year = new Date().getUTCFullYear();
+    const url  = `data/synop_${year}.txt?_=${Date.now()}`;
 
-    const proxies = [
-        "https://api.allorigins.win/raw?url=",
-        "https://corsproxy.io/?",
-        "https://proxy.cors.sh/",
-        "https://cors.x2u.in/"
-    ];
+    const r = await fetch(url, { cache: "no-store" });
+    if(!r.ok) throw new Error(`synop_${year}.txt не найден (HTTP ${r.status})`);
+    const text = await r.text();
 
-    const storageKey = "synopProxyTimes";
-    let proxyTimes = JSON.parse(localStorage.getItem(storageKey) || "{}");
-    proxies.forEach(p => { if(!proxyTimes[p]) proxyTimes[p] = []; });
+    const lines = text.split("\n")
+        .map(l => l.trim())
+        .filter(l => l.startsWith("33837,"));
+    if(!lines.length) throw new Error("SYNOP-строки не найдены в файле");
 
-    function extractKey(text){
-        for(const l of text.split("\n").map(s => s.trim()).filter(Boolean)){
-            const m = l.match(/^(\d{12})\s+AAXX\b/);
-            if(m) return m[1];
-        }
-        return null;
-    }
+    const last = lines[lines.length - 1];
+    // 6 полей: 33837,YYYY,MM,DD,HH,mm,<телеграмма>
+    const synopLine = last.split(",").slice(6).join(",").trim();
+    if(!synopLine) throw new Error("Пустая телеграмма в последней строке");
 
-    function extractLine(text){
-        const lines = text.split("\n").map(s => s.trim()).filter(Boolean);
-        const start = lines.findIndex(l => /(AAXX|BBXX|OOXX)\b/.test(l));
-        if(start === -1) return null;
-        const out = [];
-        for(let i = start; i < lines.length; i++){
-            if(i !== start && /(AAXX|BBXX|OOXX)\b/.test(lines[i])) break;
-            out.push(lines[i]);
-        }
-        return out.join(" ");
-    }
-
-    const requests = proxies.map(proxy => new Promise(async (resolve, reject) => {
-        const ctrl  = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 8000);
-        const t0    = performance.now();
-        try {
-            const r    = await fetch(proxy + encodeURIComponent(ogimet), { signal: ctrl.signal, cache: "no-store" });
-            if(!r.ok) throw new Error("HTTP " + r.status);
-            const text = await r.text();
-            if(!text?.trim()) throw new Error("Пустой ответ");
-            const telegramKey = extractKey(text);
-            const line        = extractLine(text);
-            if(!telegramKey) throw new Error("Ключ телеграммы не найден");
-            if(!line)        throw new Error("SYNOP не найден");
-            const ms = Math.round(performance.now() - t0);
-            saveProxyTime(proxyTimes, proxy, ms);
-            resolve({ proxy, line, telegramKey, ms });
-        } catch(e){
-            saveProxyTime(proxyTimes, proxy, Math.round(performance.now() - t0));
-            reject(e);
-        } finally {
-            clearTimeout(timer);
-        }
-    }));
-
-    const settled = await Promise.allSettled(requests);
-    localStorage.setItem(storageKey, JSON.stringify(proxyTimes));
-
-    const ok = settled.filter(r => r.status === "fulfilled").map(r => r.value);
-    if(!ok.length) throw new Error("Все прокси SYNOP не ответили");
-
-    ok.sort((a,b) => a.telegramKey !== b.telegramKey
-        ? b.telegramKey.localeCompare(a.telegramKey)
-        : a.ms - b.ms);
-
-    const best = ok[0];
-    if(!db) await initDB();
-    await recordExists(best.telegramKey);
-    return parseSynop(best.line);
+    return parseSynop(synopLine);
 }
 
 /* =========================================================
