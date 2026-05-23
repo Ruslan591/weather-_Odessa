@@ -96,6 +96,20 @@ def fetch_run_time(meta_id):
 
 # ── пайплайн ──────────────────────────────────────────────────────────────────
 
+def git_push_history():
+    try:
+        subprocess.run(["git", "-C", BASE_DIR, "add", "data/model_runs_history.json"],
+                      check=True, capture_output=True)
+        result = subprocess.run(
+            ["git", "-C", BASE_DIR, "commit", "-m", "model_runs: history update"],
+            capture_output=True, text=True)
+        if result.returncode == 0:
+            subprocess.run(
+                ["git", "-C", BASE_DIR, "push", "--force-with-lease"],
+                capture_output=True, text=True)
+    except Exception:
+        pass
+
 def run_pipeline(new_models):
     """Запускает calc_model_bias → calc_weights → update_local --snap-only."""
     print(f"\n  🚀 Новых прогонов: {len(new_models)} ({', '.join(new_models)})")
@@ -200,6 +214,7 @@ def main():
 
     if new_models:
         save_history(history)
+        git_push_history()
         run_pipeline(new_models)
     else:
         print("  Новых прогонов нет.\n")

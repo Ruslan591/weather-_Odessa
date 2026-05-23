@@ -105,6 +105,8 @@
 <div id="modelRunsSection" style="background:#161616;border-radius:10px;padding:12px 14px;margin-bottom:16px;">
     <div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:10px;">ПОСЛЕДНИЕ ПРОГОНЫ</div>
     <div id="modelRunsList" style="color:#555;font-size:12px;">Загрузка...</div>
+    <div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin:12px 0 8px;">ИСТОРИЯ ПРОГОНОВ</div>
+    <div id="modelRunsHistory" style="overflow-x:auto;font-size:11px;"></div>
 </div>
 </div>
 
@@ -956,39 +958,64 @@ async function render() {
 }
 
 async function loadModelRuns() {
-    var list = document.getElementById("modelRunsList");
-    var results = await Promise.all(MODEL_META.map(async function(m) {
-        try {
-            var r = await fetch("https://api.open-meteo.com/data/" + m.metaId + "/static/meta.json", { cache: "no-store" });
-            if (!r.ok) return { label: m.label, time: null };
-            var data = await r.json();
-            var ts = data.last_run_availability_time;
-            return { label: m.label, time: ts ? new Date(ts * 1000) : null };
-        } catch(e) {
-            return { label: m.label, time: null };
-        }
-    }));
+    var histResult = await ghGetJson("data/model_runs_history.json");
+    var history    = (histResult && histResult.data) ? histResult.data : {};
 
+    // ── Последние прогоны ────────────────────────────────────────────────────
+    var list = document.getElementById("modelRunsList");
+    var results = MODEL_META.map(function(m) {
+        var entries = history[m.label] || [];
+        var last    = entries.length ? entries[entries.length - 1] : null;
+        return { label: m.label, time: last ? new Date(last.run_time) : null };
+    });
     results.sort(function(a, b) {
         if (!a.time && !b.time) return 0;
         if (!a.time) return 1;
         if (!b.time) return -1;
         return b.time - a.time;
     });
-
     list.innerHTML = results.map(function(m) {
         var timeStr = m.time
             ? m.time.toLocaleString("ru-RU", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" })
             : "—";
-        var age = m.time ? Math.round((Date.now() - m.time) / 3600000) : null;
-        var ageStr = age !== null ? '<span style="color:#444;"> ·&nbsp;' + age + 'ч назад</span>' : "";
-        var col = age !== null && age <= 6 ? "#5fe08f" : age !== null && age <= 12 ? "#fdcb6e" : "#ff6b6b";
-        if (age === null) col = "#555";
+        var age  = m.time ? (Date.now() - m.time) / 3600000 : null;
+        var col  = age !== null ? (age <= 6 ? "#5fe08f" : age <= 12 ? "#fdcb6e" : "#ff6b6b") : "#555";
+        var ageS = age !== null ? '<span style="color:#444;"> · ' + Math.round(age) + 'ч</span>' : "";
         return '<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #1e1e1e;">' +
             '<span style="color:#888;">' + m.label + '</span>' +
-            '<span style="color:' + col + ';">' + timeStr + ageStr + '</span>' +
-            '</div>';
+            '<span style="color:' + col + ';">' + timeStr + ageS + '</span></div>';
     }).join("");
+
+    // ── Таблица истории ──────────────────────────────────────────────────────
+    var days = [];
+    var now  = new Date();
+    for (var i = 4; i >= 0; i--) {
+        var d = new Date(now);
+        d.setDate(d.getDate() - i);
+        days.push(d.toLocaleDateString("ru-RU", { day:"2-digit", month:"2-digit" }));
+    }
+
+    var rows = MODEL_META.map(function(m) {
+        var entries = history[m.label] || [];
+        var cells   = days.map(function(day) {
+            var dayEntries = entries.filter(function(e) {
+                var t = new Date(e.run_time);
+                return t.toLocaleDateString("ru-RU", { day:"2-digit", month:"2-digit" }) === day;
+            });
+            if (!dayEntries.length) return '<td style="color:#333;text-align:center;">—</td>';
+            var times = dayEntries.map(function(e) {
+                return new Date(e.run_time).toLocaleTimeString("ru-RU", { hour:"2-digit", minute:"2-digit" });
+            }).join("<br>");
+            return '<td style="color:#8bc34a;text-align:center;line-height:1.6;">' + times + '</td>';
+        });
+        return '<tr><td style="color:#888;padding-right:8px;white-space:nowrap;">' + m.label + '</td>' + cells.join("") + '</tr>';
+    });
+
+    var header = '<tr><th style="color:#555;text-align:left;font-weight:normal;padding-right:8px;">Модель</th>' +
+        days.map(function(d) { return '<th style="color:#555;font-weight:normal;text-align:center;padding:0 4px;">' + d + '</th>'; }).join("") + '</tr>';
+
+    document.getElementById("modelRunsHistory").innerHTML =
+        '<table style="width:100%;border-collapse:collapse;">' + header + rows.join("") + '</table>';
 }
 
 /* === СТАРТ === */
