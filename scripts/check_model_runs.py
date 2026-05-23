@@ -207,8 +207,9 @@ def main():
         subprocess.run(
             [PYTHON, os.path.join(SCRIPTS_DIR, "update_local.py"), "--no-model"],
             cwd=BASE_DIR, capture_output=False
-        check_pws_sync()
-       )
+        )
+
+    check_pws_sync()
 
 
 
