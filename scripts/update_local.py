@@ -60,21 +60,20 @@ _upd.gh_put = _local_gh_put
 def git_commit_push(no_push=False):
     try:
         if _GIT_CHANGED:
-            files_str = ", ".join(os.path.basename(p) for p in _GIT_CHANGED)
             subprocess.run(
                 ["git", "-C", BASE_DIR, "add"] + _GIT_CHANGED,
                 check=True, capture_output=True
             )
             result = subprocess.run(
-                ["git", "-C", BASE_DIR, "commit", "-m", f"update_local: {files_str}"],
+                ["git", "-C", BASE_DIR, "commit", "-m", "pws_sync_local: pws_raw.json"],
                 capture_output=True, text=True
             )
             if result.returncode != 0:
                 print(f"\n  git commit: {result.stdout.strip() or result.stderr.strip()}")
             else:
-                print(f"\n  git commit ✓  ({files_str})")
+                print("\n  git commit ✓  (pws_raw.json)")
         else:
-            print("\n  git: новых файлов нет")
+            print("\n  git: новых данных нет")
 
         if no_push:
             print("  git push пропущен (--no-push)")

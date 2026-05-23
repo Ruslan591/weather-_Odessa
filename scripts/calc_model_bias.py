@@ -215,32 +215,32 @@ def compute_bias(all_records):
     return result
 
 # ── Сводная таблица для лога ──────────────────────────────────────────────────
-def print_summary(bias_data):
-    log.info("")
-    log.info("=== СВОДКА: overall bias по температуре ===")
-    rows = []
-    for mid, m in bias_data.items():
-        s = m["overall"].get("temp")
-        if s:
-            rows.append((s["bias"], mid, s["mae"], s["n"]))
-    rows.sort()
-    for bias, mid, mae, n in rows:
-        sign = "+" if bias > 0 else ""
-        log.info("  %-40s  bias=%s%.3f°C  MAE=%.3f°C  n=%d",
-                 mid, sign, bias, mae, n)
-    log.info("")
+SUMMARY_PARAMS = [
+    ("temp",       "температуре",  "°C"  ),
+    ("pressure",   "давлению",     " гПа"),
+    ("wind",       "ветру",        " м/с"),
+    ("windDir",    "направлению",  "°"   ),
+    ("humidity",   "влажности",    "%"   ),
+    ("cloudcover", "облачности",   "%"   ),
+    ("visibility", "видимости",    " м"  ),
+]
 
-    log.info("=== СВОДКА: overall bias по давлению ===")
-    rows = []
-    for mid, m in bias_data.items():
-        s = m["overall"].get("pressure")
-        if s:
-            rows.append((s["bias"], mid, s["mae"], s["n"]))
-    rows.sort()
-    for bias, mid, mae, n in rows:
-        sign = "+" if bias > 0 else ""
-        log.info("  %-40s  bias=%s%.3f гПа  MAE=%.3f гПа  n=%d",
-                 mid, sign, bias, mae, n)
+def print_summary(bias_data):
+    for param, label, unit in SUMMARY_PARAMS:
+        rows = []
+        for mid, m in bias_data.items():
+            s = m["overall"].get(param)
+            if s and s.get("n", 0) > 0:
+                rows.append((s["bias"], mid, s["mae"], s["n"]))
+        if not rows:
+            continue
+        rows.sort()
+        log.info("")
+        log.info("=== СВОДКА: overall bias по %s ===", label)
+        for bias, mid, mae, n in rows:
+            sign = "+" if bias > 0 else ""
+            log.info("  %-40s  bias=%s%.3f%s  MAE=%.3f%s  n=%d",
+                     mid, sign, bias, unit, mae, unit, n)
 
 # ── Главная функция ───────────────────────────────────────────────────────────
 def main():
