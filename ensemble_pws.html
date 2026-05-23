@@ -689,11 +689,31 @@ function buildOvfSeries(paramKey) {
         perStation[rec.stationId][key].push(v);
     });
 
-    // Прогноз (ближайший горизонт)
+    // Прогноз: один снимок на каждый день (ближайший к полуночи дня)
+    // Это устраняет пилообразность от смешения разных прогонов
     var fcByHour = {};
+
+    // Группируем снимки по дням (UTC+3)
+    var snapsByDay = {};
     _snaps.forEach(function(snap) {
         if (!snap.hours) return;
-        snap.hours.forEach(function(fh) {
+        var savedLocal = new Date(new Date(snap.savedAt).getTime() + 3 * 3600000);
+        var dayKey = savedLocal.getUTCFullYear() + "-" +
+            String(savedLocal.getUTCMonth()+1).padStart(2,"0") + "-" +
+            String(savedLocal.getUTCDate()).padStart(2,"0");
+        if (!snapsByDay[dayKey]) snapsByDay[dayKey] = [];
+        snapsByDay[dayKey].push(snap);
+    });
+
+    // Для каждого дня берём снимок ближайший к 00:00 местного времени
+    Object.keys(snapsByDay).forEach(function(dayKey) {
+        var midnight = new Date(dayKey + "T00:00:00+03:00").getTime();
+        var best = snapsByDay[dayKey].reduce(function(a, b) {
+            var da = Math.abs(new Date(a.savedAt).getTime() - midnight);
+            var db = Math.abs(new Date(b.savedAt).getTime() - midnight);
+            return da <= db ? a : b;
+        });
+        best.hours.forEach(function(fh) {
             var key = snapTimeToHourKey(fh.time);
             if (_ovfFrom && key < _ovfFrom) return;
             if (_ovfTo   && key > _ovfTo)   return;
@@ -701,7 +721,8 @@ function buildOvfSeries(paramKey) {
             if (val == null) return;
             var h = fh.horizonH != null ? fh.horizonH : 0;
             if (h < 0) return;
-            if (!fcByHour[key] || h < fcByHour[key].horizonH)
+            // Не перезаписываем если уже есть от того же дня
+            if (!fcByHour[key])
                 fcByHour[key] = { val: val, horizonH: h };
         });
     });
