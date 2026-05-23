@@ -80,6 +80,9 @@ def git_commit_push(no_push=False):
             print("  git push пропущен (--no-push)")
             return
 
+        if not _GIT_CHANGED:
+            return  # нечего пушить
+
         push = subprocess.run(
             ["git", "-C", BASE_DIR, "push", "--force-with-lease"],
             capture_output=True, text=True
