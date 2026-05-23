@@ -103,12 +103,18 @@ def git_push_history():
         result = subprocess.run(
             ["git", "-C", BASE_DIR, "commit", "-m", "model_runs: history update"],
             capture_output=True, text=True)
-        if result.returncode == 0:
-            subprocess.run(
-                ["git", "-C", BASE_DIR, "push", "--force-with-lease"],
-                capture_output=True, text=True)
-    except Exception:
-        pass
+        if result.returncode != 0:
+            print(f"  history commit: {result.stdout.strip() or result.stderr.strip()}")
+            return
+        push = subprocess.run(
+            ["git", "-C", BASE_DIR, "push", "--force-with-lease"],
+            capture_output=True, text=True)
+        if push.returncode == 0:
+            print("  history push ✓")
+        else:
+            print(f"  history push ✗: {push.stderr.strip()}")
+    except Exception as e:
+        print(f"  history git error: {e}")
 
 def run_pipeline(new_models):
     """Запускает calc_model_bias → calc_weights → update_local --snap-only."""
