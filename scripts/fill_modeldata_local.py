@@ -285,3 +285,62 @@ def fill_missing_months(changed_files: list, dry_run=False) -> int:
         time.sleep(2)
 
     return added
+    
+def update_current_month(changed_files: list) -> int:
+    """
+    Дополняет modelData_YYYY_MM.json за текущий месяц
+    записями которых нет (сравнивает с synop_YYYY.txt).
+    """
+    today = datetime.date.today()
+    year, month = today.year, today.month
+
+    modeldata_dir = os.path.join(BASE_DIR, "data", "modeldata")
+    out_path = os.path.join(modeldata_dir, f"modelData_{year}_{month:02d}.json")
+
+    if os.path.exists(out_path):
+        with open(out_path, encoding="utf-8") as f:
+            existing = json.load(f)
+    else:
+        existing = []
+
+    existing_keys = {r["synopTime"] for r in existing}
+    synops = _load_synop_for_month(year, month)
+    to_add = [s for s in synops if s["synopTime"] not in existing_keys]
+
+    if not to_add:
+        log.info("  modelData_%d_%02d.json актуален", year, month)
+        return 0
+
+    log.info("  modelData_%d_%02d.json: %d новых сводок, загружаем модели...",
+             year, month, len(to_add))
+
+    by_date = {}
+    for obs in to_add:
+        tk = obs["synopTime"]
+        by_date.setdefault(f"{tk[:4]}-{tk[4:6]}-{tk[6:8]}", []).append(obs)
+
+    new_records = []
+    for date_str, date_obs in sorted(by_date.items()):
+        log.info("    %s (%d сводок)...", date_str, len(date_obs))
+        hourly_by_model = {}
+        for model in MODELS:
+            hourly_by_model[model] = _fetch_model_month(model, date_str, date_str)
+            time.sleep(0.3)
+        for obs in date_obs:
+            tk     = obs["synopTime"]
+            target = f"{tk[:4]}-{tk[4:6]}-{tk[6:8]}T{tk[8:10]}:00"
+            rec    = _build_record(obs, hourly_by_model, target)
+            if rec:
+                new_records.append(rec)
+
+    if new_records:
+        merged = sorted(existing + new_records, key=lambda r: r["synopTime"])
+        os.makedirs(modeldata_dir, exist_ok=True)
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(merged, f, ensure_ascii=False, indent=2)
+        rel = os.path.relpath(out_path, BASE_DIR)
+        if rel not in changed_files:
+            changed_files.append(rel)
+        log.info("  ✓ modelData_%d_%02d.json: +%d записей", year, month, len(new_records))
+
+    return len(new_records)
