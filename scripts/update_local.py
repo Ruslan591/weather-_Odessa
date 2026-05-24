@@ -98,38 +98,35 @@ def git_commit_push(no_push=False):
 # ── Точка входа ───────────────────────────────────────────────────────────────
 
 def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-        datefmt="%H:%M:%S"
-    )
-    logger = logging.getLogger(__name__)
-
     parser = argparse.ArgumentParser(description="update_local.py — локальный апдейтер")
     parser.add_argument("--no-push",   action="store_true", help="Не делать git push")
     parser.add_argument("--no-synop",  action="store_true", help="Пропустить шаг 1 (SYNOP)")
     parser.add_argument("--no-model",  action="store_true", help="Пропустить шаг 2 (modelData)")
     parser.add_argument("--snap-only", action="store_true", help="Только снять снимок (шаг 3+4)")
-    parser.add_argument("--no-fill",   action="store_true", help="Не заполнять пропущенные месяцы modeldata")
+    parser.add_argument("--no-fill",   action="store_true", help="Не заполнять modeldata")
     args = parser.parse_args()
 
-    # ── Шаг 0: заполнение пропущенных месяцев modeldata ───────────────────────
-    if not args.snap_only and not args.no_fill:
-        logger.info("── Шаг 0: проверка пропущенных месяцев modeldata ──")
-        from fill_modeldata_local import fill_missing_months
-        n = fill_missing_months(_GIT_CHANGED, dry_run=False)
-        if n:
-            logger.info("  Добавлено месяцев: %d", n)
-    else:
-        logger.info("  [local] Шаг 0 (fill modeldata) пропущен")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+        datefmt="%H:%M:%S"
+    )
 
-    # --snap-only / --no-synop: fetch_synop_ogimet возвращает None → шаг 1 пустой
+    # ── Шаг 0: заполнение modeldata ───────────────────────────────────────────
+    if not args.snap_only and not args.no_fill:
+        from fill_modeldata_local import fill_missing_months, update_current_month
+        fill_missing_months(_GIT_CHANGED)
+        update_current_month(_GIT_CHANGED)
+    else:
+        _upd.log.info("  [local] Шаг 0 (fill modeldata) пропущен")
+
+    # ── Шаг 1: SYNOP ──────────────────────────────────────────────────────────
     if args.snap_only or args.no_synop:
         _upd.fetch_synop_ogimet = lambda d: None
         _upd.time.sleep = lambda s: None
         _upd.log.info("  [local] Шаг 1 (SYNOP) пропущен")
 
-    # --snap-only / --no-model: fetch_historical_model возвращает None → шаг 2 пустой
+    # ── Шаг 2: modelData (через update.py) ────────────────────────────────────
     if args.snap_only or args.no_model:
         _upd.fetch_historical_model = lambda m, d: None
         _upd.log.info("  [local] Шаг 2 (modelData) пропущен")
