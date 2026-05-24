@@ -775,7 +775,10 @@ function buildOvfSeries(paramKey) {
         label: "Ансамбль",
         data: hours.map(function(k) {
             var fc = fcByHour[k];
-            return fc ? applyBiasClient(fc.val, paramKey, fc.horizonH) : null;
+            if (!fc) return null;
+var localHour = parseInt(k.slice(11, 13));
+var hourUTC = (localHour - PWS_UTC_OFFSET + 24) % 24;
+return applyBiasClient(fc.val, paramKey, fc.horizonH, hourUTC);
         }),
         borderColor: p ? p.color : "#aaa",
         backgroundColor: (p ? p.color : "#aaa") + "22",
