@@ -314,14 +314,19 @@ async function loadSynop(){
     if(!r.ok) throw new Error(`synop_${year}.txt не найден (HTTP ${r.status})`);
     const text = await r.text();
 
-    const lines = text.split("\n")
-        .map(l => l.trim())
-        .filter(l => l.startsWith("33837,"));
-    if(!lines.length) throw new Error("SYNOP-строки не найдены в файле");
+    // Ищем строку с максимальным UTC-временем по полям CSV
+    let best = null, bestTs = -Infinity;
+    for(const raw of text.split("\n")){
+        const l = raw.trim();
+        if(!l.startsWith("33837,")) continue;
+        const p = l.split(",");
+        if(p.length < 7) continue;
+        const ts = Date.UTC(+p[1], +p[2]-1, +p[3], +p[4], +p[5], 0);
+        if(Number.isFinite(ts) && ts > bestTs){ bestTs = ts; best = l; }
+    }
+    if(!best) throw new Error("SYNOP-строки не найдены в файле");
 
-    const last = lines[lines.length - 1];
-    // 6 полей: 33837,YYYY,MM,DD,HH,mm,<телеграмма>
-    const synopLine = last.split(",").slice(6).join(",").trim();
+    const synopLine = best.split(",").slice(6).join(",").trim();
     if(!synopLine) throw new Error("Пустая телеграмма в последней строке");
 
     return parseSynop(synopLine);
