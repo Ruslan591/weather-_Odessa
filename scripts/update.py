@@ -540,6 +540,9 @@ def merge_ensemble(all_model_hours, succeeded):
             vals = [all_model_hours[m][i][f] for m in succeeded
                     if all_model_hours[m] and i < len(all_model_hours[m])
                     and all_model_hours[m][i][f] is not None]
+            # Фильтр выбросов для давления
+            if f == "pressure_msl" and vals:
+                vals = [v for v in vals if 930 < v < 1060]
             merged[f] = sum(vals) / len(vals) if vals else None
         # Направление ветра — векторное среднее
         sx = sy = 0
