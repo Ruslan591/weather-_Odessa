@@ -168,14 +168,21 @@ async function ghGetJson(path) {
     return { data: JSON.parse(content), sha: resp.sha };
 }
 
+async function rawGetJson(path) {
+    var url = "https://raw.githubusercontent.com/" + GITHUB_OWNER + "/" + GITHUB_REPO + "/main/" + path + "?t=" + Date.now();
+    var r = await fetch(url, { cache: "no-store" });
+    if (!r.ok) return null;
+    return await r.json();
+}
+
 async function loadSnaps() {
-    var result = await ghGetJson(GITHUB_SNAPS_FILE);
-    _snaps = (result.data && Array.isArray(result.data)) ? result.data : [];
+    var data = await rawGetJson(GITHUB_SNAPS_FILE);
+    _snaps = Array.isArray(data) ? data : [];
 }
 
 async function loadPwsRaw() {
-    var result = await ghGetJson(GITHUB_PWS_FILE);
-    _pwsRawData = (result.data && Array.isArray(result.data)) ? result.data : [];
+    var data = await rawGetJson(GITHUB_PWS_FILE);
+    _pwsRawData = Array.isArray(data) ? data : [];
 }
 
 /* === ПАРАМЕТРЫ === */
@@ -1076,7 +1083,7 @@ async function render() {
 }
 
 async function loadModelRuns() {
-    var histResult = await ghGetJson("data/model_runs_history.json");
+    var histResult = { data: await rawGetJson("data/model_runs_history.json") };
     var history    = (histResult && histResult.data) ? histResult.data : {};
 
     // ── Последние прогоны ────────────────────────────────────────────────────
@@ -1142,9 +1149,13 @@ async function loadModelRuns() {
 /* === СТАРТ === */
 (async function init() {
     setStatus("☁️ Загрузка снимков с GitHub...");
-    var accResult = await ghGetJson(GITHUB_ACC_FILE);
-    _acc = accResult.data;
-    await Promise.all([loadSnaps(), loadPwsRaw(), loadModelRuns()]);
+    try {
+        _acc = await rawGetJson(GITHUB_ACC_FILE);
+        await Promise.all([loadSnaps(), loadPwsRaw(), loadModelRuns()]);
+    } catch(e) {
+        setStatus("⚠️ Ошибка загрузки: " + e.message);
+        console.error(e);
+    }
     render();
 })();
 
