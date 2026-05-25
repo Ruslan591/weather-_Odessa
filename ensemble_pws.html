@@ -804,7 +804,9 @@ return applyBiasClient(fc.val, paramKey, fc.horizonH, hourUTC);
     hours.forEach(function(k) {
         var fc = fcByHour[k];
         if (!fc) return;
-        var ensVal = fc.val;
+        var localHour = parseInt(k.slice(11, 13));
+        var hourUTC = (localHour - PWS_UTC_OFFSET + 24) % 24;
+        var ensVal = applyBiasClient(fc.val, paramKey, fc.horizonH, hourUTC);
         var obsVals = [];
         Object.keys(perStation).forEach(function(sid) {
             var vals = perStation[sid][k];
