@@ -1026,8 +1026,10 @@ function buildObsVsFcSeries(paramKey) {
     _ovfDailyBias = {};
     hours.forEach(function(k) {
         var obs = _obsIndex[k] ? _obsIndex[k][paramKey] : null;
-        var fc  = fcByHour[k]  ? fcByHour[k].val        : null;
-        if (obs == null || fc == null) return;
+        var fcRaw = fcByHour[k] ? fcByHour[k] : null;
+        if (obs == null || !fcRaw) return;
+        var hourUTC = parseInt(k.slice(11, 13));
+        var fc = applyBiasClient(fcRaw.val, paramKey, fcRaw.horizonH, hourUTC);
         var dayKey = k.slice(0, 10);
         if (!_ovfDailyBias[dayKey]) _ovfDailyBias[dayKey] = { sum: 0, n: 0 };
         _ovfDailyBias[dayKey].sum += obs - fc;
