@@ -163,6 +163,11 @@ def compute_bias(all_records):
             for param, (fc_field, obs_field) in PARAM_MAP.items():
                 fc_val  = mdata.get(fc_field)
                 obs_val = obs.get(obs_field)
+                if param == "pressure":
+                    if obs_val is not None and not (900 < obs_val < 1060):
+                        continue
+                    if fc_val is not None and not (900 < fc_val < 1060):
+                        continue
                 result  = calc_err(fc_val, obs_val, param)
                 if result is None:
                     continue
