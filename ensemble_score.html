@@ -939,6 +939,8 @@ var _activeObsVsFcParam   = "temp";
 var _ovfFrom      = null;
 var _ovfTo        = null;
 var _ovfRangeInit = false;
+var _ovfDailyBias = {};
+var _ovfHours     = [];
 
 function localToUtcHour(localStr) {
     if (!localStr) return null;
@@ -1020,6 +1022,18 @@ function buildObsVsFcSeries(paramKey) {
     var hours = Object.keys(fcByHour).filter(function(k) {
         return _obsIndex[k] && _obsIndex[k][paramKey] != null;
     }).sort();
+    _ovfHours = hours;
+    _ovfDailyBias = {};
+    hours.forEach(function(k) {
+        var obs = _obsIndex[k] ? _obsIndex[k][paramKey] : null;
+        var fc  = fcByHour[k]  ? fcByHour[k].val        : null;
+        if (obs == null || fc == null) return;
+        var dayKey = k.slice(0, 10);
+        if (!_ovfDailyBias[dayKey]) _ovfDailyBias[dayKey] = { sum: 0, n: 0 };
+        _ovfDailyBias[dayKey].sum += obs - fc;
+        _ovfDailyBias[dayKey].n++;
+    });
+
     return {
         labels:  hours.map(function(k) {
             return k.slice(8,10) + "." + k.slice(5,7) + " " + k.slice(11,13) + "ч";
@@ -1060,10 +1074,32 @@ function renderObsVsFcChart(paramKey) {
             responsive: true, animation: false,
             plugins: {
                 legend: { display: true, labels: { color: "#aaa", font: { size: 10 }, boxWidth: 12 } },
-                tooltip: { callbacks: { label: function(ctx) {
-                    var v = ctx.parsed.y;
-                    return ctx.dataset.label + ": " + (v != null ? v.toFixed(1) + p.unit : "—");
-                }}}
+                tooltip: { callbacks: {
+                    label: function(ctx) {
+                        var v = ctx.parsed.y;
+                        return " " + ctx.dataset.label + ": " + (v != null ? v.toFixed(1) + p.unit : "—");
+                    },
+                    afterBody: function(items) {
+                        var obs = items.find(function(i){ return i.dataset.label === "SYNOP"; });
+                        var ens = items.find(function(i){ return i.dataset.label === "Ансамбль"; });
+                        if (!obs || !ens || obs.parsed.y == null || ens.parsed.y == null) return [];
+                        var diff = obs.parsed.y - ens.parsed.y;
+                        var sign = diff >= 0 ? "+" : "";
+                        var lines = ["──────────────", " ↕ " + sign + diff.toFixed(1) + p.unit];
+                        var idx = items[0] ? items[0].dataIndex : null;
+                        if (idx != null && _ovfHours[idx]) {
+                            var dayKey = _ovfHours[idx].slice(0, 10);
+                            var db = _ovfDailyBias[dayKey];
+                            if (db && db.n) {
+                                var avg = db.sum / db.n;
+                                var sign2 = avg >= 0 ? "+" : "";
+                                lines.push("──────────────");
+                                lines.push(" Ср.откл. за день: " + sign2 + avg.toFixed(1) + p.unit);
+                            }
+                        }
+                        return lines;
+                    }
+                }}
             },
             scales: {
                 x: { ticks: { color: "#555", font: { size: 9 }, maxRotation: 45 }, grid: { color: "#1e1e1e" } },
@@ -1173,13 +1209,23 @@ setStatus(
 );
 }
 
+async function rawGetJson(path) {
+    var url = "https://raw.githubusercontent.com/" + GITHUB_OWNER + "/" + GITHUB_REPO + "/main/" + path + "?t=" + Date.now();
+    var r = await fetch(url, { cache: "no-store" });
+    if (!r.ok) return null;
+    return await r.json();
+}
+
 /* ── СТАРТ ── */
 (async function() {
     setStatus("Загрузка снимков…");
-    var accResult  = await ghGetJson(GITHUB_ACC_FILE);
-    _acc = accResult.data;
-    var snapResult = await ghGetJson(GITHUB_SNAPS_FILE);
-    _snaps = (snapResult.data && Array.isArray(snapResult.data)) ? snapResult.data : [];
+    try {
+        _acc   = await rawGetJson(GITHUB_ACC_FILE);
+        _snaps = await rawGetJson(GITHUB_SNAPS_FILE) || [];
+    } catch(e) {
+        setStatus("⚠️ Ошибка загрузки: " + e.message);
+        console.error(e);
+    }
     await render();
 })();
 
