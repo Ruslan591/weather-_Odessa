@@ -617,6 +617,8 @@ var _activeOvfParam   = "temp";
 var _ovfFrom          = null;
 var _ovfTo            = null;
 var _ovfRangeInit     = false;
+var _ovfDailyBias     = {};
+var _ovfHours         = [];
 
 function initOvfRange() {
     setOvfDay(0);
@@ -790,6 +792,35 @@ return applyBiasClient(fc.val, paramKey, fc.horizonH, hourUTC);
         borderDash: [5, 3]
     });
 
+    _ovfHours = hours;
+    _ovfDailyBias = {};
+    hours.forEach(function(k) {
+        var fc = fcByHour[k];
+        if (!fc) return;
+        var ensVal = fc.val;
+        var obsVals = [];
+        Object.keys(perStation).forEach(function(sid) {
+            var vals = perStation[sid][k];
+            if (!vals || !vals.length) return;
+            var v;
+            if (paramKey === "windDir") {
+                var sx = vals.reduce(function(s,v){ return s+Math.sin(v*Math.PI/180); }, 0);
+                var sy = vals.reduce(function(s,v){ return s+Math.cos(v*Math.PI/180); }, 0);
+                v = (Math.atan2(sx,sy)*180/Math.PI+360)%360;
+            } else {
+                v = vals.reduce(function(s,v){ return s+v; }, 0) / vals.length;
+            }
+            obsVals.push(v);
+        });
+        if (!obsVals.length) return;
+        var obsAvg = obsVals.reduce(function(s,v){ return s+v; }, 0) / obsVals.length;
+        var diff = obsAvg - ensVal;
+        var dayKey = k.slice(0, 10);
+        if (!_ovfDailyBias[dayKey]) _ovfDailyBias[dayKey] = { sum: 0, n: 0 };
+        _ovfDailyBias[dayKey].sum += diff;
+        _ovfDailyBias[dayKey].n++;
+    });
+
     return { labels: labels, datasets: datasets, p: p };
 }
 
@@ -833,6 +864,17 @@ function renderOvfChart(paramKey) {
                                 lines.push(" ↕ " + item.dataset.label + ": " + sign + diff.toFixed(1) + p.unit);
                             });
                             if (lines.length) lines.unshift("──────────────");
+                            var idx = items[0] ? items[0].dataIndex : null;
+                            if (idx != null && _ovfHours[idx]) {
+                                var dayKey = _ovfHours[idx].slice(0, 10);
+                                var db = _ovfDailyBias[dayKey];
+                                if (db && db.n) {
+                                    var avg = db.sum / db.n;
+                                    var sign2 = avg >= 0 ? "+" : "";
+                                    lines.push("──────────────");
+                                    lines.push(" Ср.откл. за день: " + sign2 + avg.toFixed(1) + p.unit);
+                                }
+                            }
                             return lines;
                         }
                     }
