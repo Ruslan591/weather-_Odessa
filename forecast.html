@@ -1363,6 +1363,8 @@ function parseHourly(h) {
             cloud_cover_high:      h.cloud_cover_high[i],
             cape:                  h.cape ? h.cape[i] : null,
             uv_index:              h.uv_index ? h.uv_index[i] : null,
+            lifted_index:          h.lifted_index ? h.lifted_index[i] : null,
+            convective_inhibition: h.convective_inhibition ? h.convective_inhibition[i] : null,
         };
     });
 }
@@ -1677,7 +1679,8 @@ async function loadEnsemble() {
         "weather_code,visibility,wind_speed_10m,wind_gusts_10m,wind_direction_10m," +
         "precipitation,precipitation_probability,showers,snowfall,snow_depth," +
         "shortwave_radiation,direct_radiation,diffuse_radiation,dew_point_2m,runoff," +
-        "cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,cape,uv_index";
+        "cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,cape,uv_index," +
+        "lifted_index,convective_inhibition";
 
     var fetches = models.map(function(m) {
         var url = "https://api.open-meteo.com/v1/forecast?latitude=46.43&longitude=30.74" +
@@ -1798,13 +1801,20 @@ function weatherAlerts(hours) {
         const night   = hr < 7 || hr >= 22;
         const pKey    = h.time;
 
-        // Гроза (weather_code + CAPE)
-        if (code >= 95) {
+        // Гроза: weather_code ИЛИ высокий CAPE без code>=95 (модели занижают)
+        const thunderByCode = code >= 95;
+        const thunderByCAPE = cape > 800 && (h.relative_humidity_2m ?? 0) > 70
+            && (h.lifted_index ?? 0) < -1
+            && hr >= 10 && hr <= 22;
+        if (thunderByCode || thunderByCAPE) {
             const severe = cape > 1500 || gust > 20;
+            const src = thunderByCode ? "" : " [CAPE↑]";
             alerts.push({
                 time: pKey, icon: "⛈️",
                 title: severe ? "Сильная гроза" : "Гроза",
-                sub: cape > 0 ? `CAPE ${Math.round(cape)} Дж/кг · порывы ${gust.toFixed(0)} м/с` : `порывы ${gust.toFixed(0)} м/с`,
+                sub: cape > 0
+                    ? `CAPE ${Math.round(cape)} Дж/кг · LI ${h.lifted_index != null ? h.lifted_index.toFixed(1) : "?"} · порывы ${gust.toFixed(0)} м/с${src}`
+                    : `порывы ${gust.toFixed(0)} м/с`,
                 level: severe ? "red" : "orange"
             });
         }
@@ -1985,12 +1995,14 @@ function weatherAlerts(hours) {
         }
     }
 
-    // Убираем дубли одного типа в соседних часах — оставляем первый
+    // Убираем дубли: гроза — уникально по часу, остальные — по дню
     const seen = new Set();
     const deduped = alerts.filter(a => {
-        const key = a.title;
-        const d   = new Date(a.time);
-        const bucket = `${key}_${d.toISOString().slice(0,10)}`; // уникально по дню+типу
+        const d = new Date(a.time);
+        const isThunder = a.title === "Гроза" || a.title === "Сильная гроза";
+        const bucket = isThunder
+            ? `${a.title}_${d.toISOString().slice(0, 13)}`
+            : `${a.title}_${d.toISOString().slice(0, 10)}`;
         if (seen.has(bucket)) return false;
         seen.add(bucket);
         return true;
@@ -2110,9 +2122,9 @@ function renderAlertsBlock(hours) {
 // =============================================
 function weatherCode(code, hour, cloud, rain, snow){
     const isDay = hour >= 6 && hour < 21;
-    if(snow > 0)  return { icon:"🌨️", text:"Снег" };
-    if(rain > 0.5) return { icon:"🌧️", text:"Дождь" };
+    if(snow > 0)   return { icon:"🌨️", text:"Снег" };
     if(code >= 95) return { icon:"⛈️",  text:"Гроза" };
+    if(rain > 0.5) return { icon:"🌧️", text:"Дождь" };
     if(code >= 80) return { icon:"🌦️", text:"Ливень" };
     if(code >= 71) return { icon:"🌨️", text:"Снегопад" };
     if(code >= 61) return { icon:"🌧️", text:"Дождь" };
@@ -2160,7 +2172,7 @@ function comfortLevel(h){
 async function load(){
     if (weatherModel === "ensemble") { loadEnsemble(); return; }
     const apiForecastDays = Math.ceil(forecastHours / 24) + 1; // +1 для запаса
-    const API = `https://api.open-meteo.com/v1/forecast?latitude=46.43&longitude=30.74&hourly=temperature_2m,apparent_temperature,pressure_msl,relative_humidity_2m,weather_code,visibility,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,precipitation_probability,showers,snowfall,snow_depth,shortwave_radiation,direct_radiation,diffuse_radiation,dew_point_2m,runoff,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,cape,uv_index&models=${weatherModel}&timezone=auto&forecast_days=${apiForecastDays}&wind_speed_unit=ms`;
+    const API = `https://api.open-meteo.com/v1/forecast?latitude=46.43&longitude=30.74&hourly=temperature_2m,apparent_temperature,pressure_msl,relative_humidity_2m,weather_code,visibility,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,precipitation_probability,showers,snowfall,snow_depth,shortwave_radiation,direct_radiation,diffuse_radiation,dew_point_2m,runoff,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,cape,uv_index,lifted_index,convective_inhibition&models=${weatherModel}&timezone=auto&forecast_days=${apiForecastDays}&wind_speed_unit=ms`;
     let data;
     try {
         const r = await fetch(API);
@@ -2210,6 +2222,8 @@ async function load(){
         cloud_cover_high:      h.cloud_cover_high[i],
         cape:                  h.cape?.[i] ?? null,
         uv_index:              h.uv_index?.[i] ?? null,
+        lifted_index:          h.lifted_index?.[i] ?? null,
+        convective_inhibition: h.convective_inhibition?.[i] ?? null,
     }));
 
     window._fcAllHours = hours;
