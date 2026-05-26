@@ -773,6 +773,7 @@ function renderForecastWindDir(hours, times){
     const wrap     = document.getElementById("fcChartWrap");
     const statsBox = document.getElementById("fcStats");
     if(!wrap) return;
+    const zeroLine = "";
 
     const cfg  = FC_PARAMS.find(p => p.key === "winddir");
     const data = hours.map(h => h.wind_direction_10m);
@@ -930,6 +931,7 @@ function renderForecastCloud(hours, times){
     const wrap     = document.getElementById("fcChartWrap");
     const statsBox = document.getElementById("fcStats");
     if(!wrap) return;
+    const zeroLine = "";
 
     const W = 320, H = 160;
     const pad = { t:24, r:10, b:28, l:34 };
@@ -2620,6 +2622,7 @@ function renderForecastProb(hours, times){
     const wrap     = document.getElementById("fcChartWrap");
     const statsBox = document.getElementById("fcStats");
     if(!wrap) return;
+    const zeroLine = "";
 
     const W = 320, H = 160;
     const pad = { t:24, r:10, b:28, l:34 };
