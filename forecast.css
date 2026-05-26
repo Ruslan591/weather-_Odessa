@@ -432,3 +432,31 @@ svg{margin-bottom:15px;}
     to   { opacity: 1; transform: translateY(0); }
 }
 
+
+.fc-day-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.fc-day-row::-webkit-scrollbar { display: none; }
+.fc-day-btn {
+    padding: 5px 13px;
+    font-size: 12px;
+    border-radius: 20px;
+    background: #1c1c1c;
+    color: #666;
+    border: 1px solid #2a2a2a;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: 0.15s;
+}
+.fc-day-btn:hover { color: #ccc; background: #252525; }
+.fc-day-btn.active {
+    background: #1a1a1a;
+    color: #fff;
+    border-color: #555;
+    box-shadow: 0 0 0 1px #555 inset;
+}
