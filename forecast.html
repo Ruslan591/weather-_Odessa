@@ -181,7 +181,7 @@ function buildFcDayRow(){
         const hasData = window._fcAllTimes.some(t => t.slice(0,10) === key);
         if(!hasData) break;
         const label = i===0 ? "Сегодня" : i===1 ? "Завтра"
-            : `${DAY_NAMES[d.getDay()]} ${d.getDate()}`;
+            : `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}`;
         btns.push(`<button class="fc-day-btn${_fcDayOffset===i?' active':''}"
             onclick="fcSwitchDay(${i})">${label}</button>`);
     }
