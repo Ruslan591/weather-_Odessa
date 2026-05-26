@@ -135,6 +135,9 @@ const FC_PARAMS = [
     { key:"rain",     label:"Осадки",      color:"#448aff", unit:" мм",  field: h => h.rain                  },
     { key:"prob",     label:"Вер-ть осадков", color:"#5b8fc9", unit:"%", field: h => h.precip_prob ?? 0      },
     { key:"cloud",    label:"Облачность",  color:"#b0bec5", unit:"%",    field: h => h.cloud_cover           },
+    { key:"cape",     label:"CAPE",         color:"#ff6b6b", unit:" Дж/кг", field: h => h.cape ?? null              },
+    { key:"li",       label:"Lifted Index", color:"#a29bfe", unit:"",       field: h => h.lifted_index ?? null     },
+    { key:"cin",      label:"CIN",          color:"#fd79a8", unit:" Дж/кг", field: h => h.convective_inhibition ?? null },
 ];
 
 let _fcParam = "temp";
@@ -1801,21 +1804,62 @@ function weatherAlerts(hours) {
         const night   = hr < 7 || hr >= 22;
         const pKey    = h.time;
 
-        // Гроза: weather_code ИЛИ высокий CAPE без code>=95 (модели занижают)
+        // ── Конвективный анализ по всем доступным параметрам ──
+        const li      = h.lifted_index          ?? 0;
+        const cin     = h.convective_inhibition  ?? 0;
+        const dewDep  = dew != null ? t - dew : 10;   // дефицит точки росы
+        const shear   = gust - wind;                    // сдвиг ветра
+
+        let cScore = 0;
+        // CAPE — энергия подъёма
+        if (cape > 200)  cScore += 1;
+        if (cape > 500)  cScore += 1;
+        if (cape > 1000) cScore += 1;
+        if (cape > 2000) cScore += 1;
+        // Lifted Index (отриц. = нестабильно)
+        if (li <  0)  cScore += 1;
+        if (li < -2)  cScore += 1;
+        if (li < -4)  cScore += 1;
+        // CIN — торможение конвекции
+        if      (cin > -50)  cScore += 2;   // слабое — легко пробить
+        else if (cin > -100) cScore += 1;
+        else if (cin < -200) cScore -= 3;   // сильное — конвекция заблокирована
+        // Влажность приземная
+        if (rh > 65) cScore += 1;
+        if (rh > 80) cScore += 1;
+        // Дефицит точки росы (< 5°C = влажно)
+        if (dewDep < 5) cScore += 1;
+        if (dewDep < 3) cScore += 1;
+        // Сдвиг ветра (гусь - средний)
+        if (shear > 5)  cScore += 1;
+        if (shear > 10) cScore += 1;
+        // Дневной прогрев (пик конвекции 11-20)
+        if (hr >= 11 && hr <= 20) cScore += 1;
+        // Облачность: не сплошной покров = есть инсоляция
+        if (cloud < 70) cScore += 1;
+
         const thunderByCode = code >= 95;
-        const thunderByCAPE = cape > 800 && (h.relative_humidity_2m ?? 0) > 70
-            && (h.lifted_index ?? 0) < -1
-            && hr >= 10 && hr <= 22;
+        const thunderByCAPE = cScore >= 9 && cape > 500;
+        const prethunder    = cScore >= 6 && cape > 200 && !thunderByCode && !thunderByCAPE;
+
         if (thunderByCode || thunderByCAPE) {
             const severe = cape > 1500 || gust > 20;
-            const src = thunderByCode ? "" : " [CAPE↑]";
+            const tag    = thunderByCode ? "" : " [расч]";
+            const liStr  = h.lifted_index != null ? h.lifted_index.toFixed(1) : "?";
+            const cinStr = h.convective_inhibition != null ? h.convective_inhibition.toFixed(0) : "?";
             alerts.push({
                 time: pKey, icon: "⛈️",
                 title: severe ? "Сильная гроза" : "Гроза",
-                sub: cape > 0
-                    ? `CAPE ${Math.round(cape)} Дж/кг · LI ${h.lifted_index != null ? h.lifted_index.toFixed(1) : "?"} · порывы ${gust.toFixed(0)} м/с${src}`
-                    : `порывы ${gust.toFixed(0)} м/с`,
+                sub: `CAPE ${Math.round(cape)} · LI ${liStr} · CIN ${cinStr} · балл ${cScore}${tag}`,
                 level: severe ? "red" : "orange"
+            });
+        }
+        if (prethunder) {
+            alerts.push({
+                time: pKey, icon: "🌩️",
+                title: "Грозоопасная обстановка",
+                sub: `CAPE ${Math.round(cape)} · LI ${li.toFixed(1)} · CIN ${cin.toFixed(0)} · балл ${cScore}`,
+                level: "yellow"
             });
         }
 
