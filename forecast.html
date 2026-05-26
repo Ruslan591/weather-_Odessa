@@ -305,7 +305,11 @@ function renderForecastChart(hours, times){
     const iH  = H - pad.t - pad.b;
 
     const vAll = data.filter(v => v != null && !isNaN(v));
-    if(!vAll.length){ wrap.innerHTML = ""; return; }
+    if(!vAll.length){
+        wrap.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:160px;color:#555;font-size:13px;">нет данных для модели ${weatherModel}</div>`;
+        if(statsBox) statsBox.innerHTML = "";
+        return;
+    }
 
     let vMin = Math.min(...vAll), vMax = Math.max(...vAll);
     const spread = vMax - vMin || 1;
@@ -332,6 +336,14 @@ function renderForecastChart(hours, times){
         const y = pad.t + iH * i / 4;
         yGrid   += `<line x1="${pad.l}" y1="${y}" x2="${pad.l+iW}" y2="${y}" stroke="#252525" stroke-width="1"/>`;
         yLabels += `<text x="${pad.l-4}" y="${y+4}" text-anchor="end" font-size="9" fill="#555">${v.toFixed(cfg.key==="pressure"?0:1)}</text>`;
+    }
+    // Нулевая линия для LI и CIN
+    let zeroLine = "";
+    if((cfg.key === "li" || cfg.key === "cin") && vMin < 0 && vMax > 0){
+        const yZero = pad.t + (1 - (0 - vMin) / (vMax - vMin)) * iH;
+        zeroLine = `<line x1="${pad.l}" y1="${yZero}" x2="${pad.l+iW}" y2="${yZero}"
+                          stroke="rgba(255,255,255,0.35)" stroke-width="1.2" stroke-dasharray="4 3"/>
+                    <text x="${pad.l-4}" y="${yZero+4}" text-anchor="end" font-size="9" fill="#aaa">0</text>`;
     }
 
     const FC_DAY_NAMES = ["Вс","Пн","Вт","Ср","Чт","Пт","Сб"];
@@ -403,7 +415,7 @@ function renderForecastChart(hours, times){
                 <stop offset="100%" stop-color="${cfg.color}" stop-opacity="0"/>
             </linearGradient>
         </defs>
-        ${yGrid}${xGrid}${nowLine}
+        ${yGrid}${xGrid}${nowLine}${zeroLine}
         ${bandPath}
         ${weatherModel !== "ensemble" ? `<path d="${areaPath}" fill="url(#${gradId})" stroke="none"/>` : ""}
         ${trendLine}
@@ -528,6 +540,37 @@ function renderForecastChart(hours, times){
                     <div class="fc-stat-time">из ${data.filter(v=>v!=null).length} ч</div>
                 </div>`;
             }
+        } else if(cfg.key === "cape"){
+            const highConv  = data.filter(v => v != null && v > 1000).length;
+            const modConv   = data.filter(v => v != null && v > 300 && v <= 1000).length;
+            const capeColor = max > 2000 ? "#ff4444" : max > 1000 ? "#ff9f5c" : max > 300 ? "#fdcb6e" : "#55efc4";
+            const capeWord  = max > 2000 ? "Экстремальная" : max > 1000 ? "Высокая" : max > 300 ? "Умеренная" : "Слабая";
+            card4 = `
+            <div class="fc-stat-card">
+                <div class="fc-stat-label">Нестабильность</div>
+                <div class="fc-stat-value" style="color:${capeColor};">${capeWord}</div>
+                <div class="fc-stat-time">пик ${max.toFixed(0)} Дж/кг</div>
+            </div>`;
+        } else if(cfg.key === "li"){
+            const unstableH = data.filter(v => v != null && v < 0).length;
+            const severeH   = data.filter(v => v != null && v < -4).length;
+            const liColor   = min < -4 ? "#ff4444" : min < -2 ? "#ff9f5c" : min < 0 ? "#fdcb6e" : "#55efc4";
+            card4 = `
+            <div class="fc-stat-card">
+                <div class="fc-stat-label">Нестаб. часов</div>
+                <div class="fc-stat-value" style="color:${liColor};">${unstableH} ч</div>
+                <div class="fc-stat-time">LI<0 · сильн: ${severeH} ч</div>
+            </div>`;
+        } else if(cfg.key === "cin"){
+            const blockedH  = data.filter(v => v != null && v < -200).length;
+            const openH     = data.filter(v => v != null && v > -50).length;
+            const cinColor  = min < -200 ? "#a29bfe" : min < -100 ? "#fd79a8" : "#55efc4";
+            card4 = `
+            <div class="fc-stat-card">
+                <div class="fc-stat-label">Открыто (>-50)</div>
+                <div class="fc-stat-value" style="color:#55efc4;">${openH} ч</div>
+                <div class="fc-stat-time">заблок (<-200): ${blockedH} ч</div>
+            </div>`;
         } else if(cfg.key === "rain"){
             const rainHours = data.filter(v => v != null && v > 0).length;
             const totalHours= data.filter(v => v != null).length;
@@ -830,7 +873,7 @@ function renderForecastWindDir(hours, times){
 
     wrap.innerHTML = `
     <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="display:block;">
-        ${yGrid}${xGrid}${nowLine}${connectLine}${arrows}
+        ${yGrid}${xGrid}${nowLine}${zeroLine}${connectLine}${arrows}
         ${yLabels}${xLabels}
     </svg>`;
 
@@ -962,7 +1005,7 @@ function renderForecastCloud(hours, times){
     wrap.innerHTML = `
     <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="display:block;">
         <defs>${defs}</defs>
-        ${yGrid}${xGrid}${nowLine}
+        ${yGrid}${xGrid}${nowLine}${zeroLine}
         ${areas}${lines}
         ${yLabels}${xLabels}
     </svg>
@@ -2641,7 +2684,7 @@ function renderForecastProb(hours, times){
                 <stop offset="100%" stop-color="#5b8fc9" stop-opacity="0.04"/>
             </linearGradient>
         </defs>
-        ${yGrid}${xGrid}${nowLine}
+        ${yGrid}${xGrid}${nowLine}${zeroLine}
         ${zones}
         <path d="${areaPath}" fill="url(#probGrad)" stroke="none"/>
         <path d="${linePath}" fill="none" stroke="#5b8fc9" stroke-width="2.5"/>
