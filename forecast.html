@@ -1886,7 +1886,9 @@ function weatherAlerts(hours) {
 
         const thunderByCode = code >= 95;
         const thunderByCAPE = cScore >= 9 && cape > 500;
-        const prethunder    = cScore >= 6 && cape > 200 && !thunderByCode && !thunderByCAPE;
+        const convLevel3    = cScore >= 8 && cape > 300 && !thunderByCode && !thunderByCAPE;
+        const convLevel2    = cScore >= 6 && cape > 200 && !thunderByCode && !thunderByCAPE && !convLevel3;
+        const convLevel1    = cScore >= 4 && cape > 100 && !thunderByCode && !thunderByCAPE && !convLevel3 && !convLevel2;
 
         if (thunderByCode || thunderByCAPE) {
             const severe = cape > 1500 || gust > 20;
@@ -1900,12 +1902,33 @@ function weatherAlerts(hours) {
                 level: severe ? "red" : "orange"
             });
         }
-        if (prethunder) {
+        if (convLevel3) {
+            const tProb = Math.min(80, Math.round(
+                30 + (cScore - 8) * 15
+                + (cape > 600 ? 10 : 0)
+                + (li < -3   ?  5 : 0)
+            ));
+            alerts.push({
+                time: pKey, icon: "⛈️",
+                title: `Возможна гроза ~${tProb}%`,
+                sub: `CAPE ${Math.round(cape)} · LI ${li.toFixed(1)} · CIN ${cin.toFixed(0)} · балл ${cScore}`,
+                level: "orange"
+            });
+        }
+        if (convLevel2) {
             alerts.push({
                 time: pKey, icon: "🌩️",
-                title: "Грозоопасная обстановка",
+                title: "Условия для развития гроз",
                 sub: `CAPE ${Math.round(cape)} · LI ${li.toFixed(1)} · CIN ${cin.toFixed(0)} · балл ${cScore}`,
                 level: "yellow"
+            });
+        }
+        if (convLevel1) {
+            alerts.push({
+                time: pKey, icon: "⚡",
+                title: "Грозовое положение",
+                sub: `CAPE ${Math.round(cape)} · LI ${li.toFixed(1)} · балл ${cScore}`,
+                level: "blue"
             });
         }
 
