@@ -17,3 +17,9 @@ const isDay = isDayNow(STATION_LAT, STATION_LON, new Date());
 })();
 
 loadSynopUI();
+
+setInterval(loadSynopUI, 20 * 60 * 1000);
+
+document.addEventListener("visibilitychange", function(){
+    if (!document.hidden) loadSynopUI();
+});
