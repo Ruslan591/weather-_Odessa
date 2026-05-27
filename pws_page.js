@@ -925,7 +925,7 @@ function makeMarineBlock(){
         m.seaWindSpeed != null ? ["🌬️ Ветер над морем",
             `${fV(m.seaWindSpeed)} м/с · порывы ${fV(m.seaWindGust)} · ${fDir(m.seaWindDir)}`
         ] : null,
-        m.seaPressure != null ? ["🔵 Давление (море)", `${Math.round(m.seaPressure)} гПа`] : null,
+        m.seaPressure != null ? ["🔵 Давление (море)", `${m.seaPressure.toFixed(1)} гПа`] : null,
         m.currentV   != null && m.currentV > 0.05 ? ["🔄 Течение",
             `${fV(m.currentV)} м/с · ${fDir(m.currentDir)}`
         ] : null,
