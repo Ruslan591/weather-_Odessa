@@ -100,11 +100,11 @@ async function loadMarine(){
 ",swell_wave_height,swell_wave_period,swell_wave_direction" +
 ",sea_surface_temperature" +
 ",ocean_current_velocity,ocean_current_direction" +
-"&timezone=auto&forecast_days=1";
+"&hourly=sea_level_height_msl&timezone=auto&forecast_days=1";
     const windUrl =
         "https://api.open-meteo.com/v1/forecast" +
         "?latitude=46.35&longitude=30.90" +
-        "&current=wind_speed_10m,wind_gusts_10m,wind_direction_10m" +
+        "&current=wind_speed_10m,wind_gusts_10m,wind_direction_10m,surface_pressure" +
         "&wind_speed_unit=ms&timezone=auto";
     try {
         const [mr, wr] = await Promise.all([
@@ -149,6 +149,7 @@ async function loadMarine(){
             _marineData.seaWindSpeed = wc.wind_speed_10m     ?? null;
             _marineData.seaWindGust  = wc.wind_gusts_10m     ?? null;
             _marineData.seaWindDir   = wc.wind_direction_10m ?? null;
+            _marineData.seaPressure  = wc.surface_pressure   ?? null;
         }
     } catch(e){
         console.warn("Marine API:", e.message);
@@ -924,6 +925,7 @@ function makeMarineBlock(){
         m.seaWindSpeed != null ? ["🌬️ Ветер над морем",
             `${fV(m.seaWindSpeed)} м/с · порывы ${fV(m.seaWindGust)} · ${fDir(m.seaWindDir)}`
         ] : null,
+        m.seaPressure != null ? ["🔵 Давление (море)", `${Math.round(m.seaPressure)} гПа`] : null,
         m.currentV   != null && m.currentV > 0.05 ? ["🔄 Течение",
             `${fV(m.currentV)} м/с · ${fDir(m.currentDir)}`
         ] : null,
