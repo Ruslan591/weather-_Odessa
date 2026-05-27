@@ -947,7 +947,7 @@ function makeMarineBlock(){
         ${warnHtml}
         ${sstHtml}
         <div class="pws-fields">
-            
+            ${seaLevelHtml}
             ${rows.map(([k,v]) =>
                 `<div class="districtLine"><span>${k}</span><span>${v}</span></div>`
             ).join("")}
