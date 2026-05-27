@@ -898,6 +898,16 @@ function makeMarineBlock(){
         </div>` : "";
         
 
+    const seaLevelHtml = m.seaLevel != null ? (() => {
+        const cm  = m.seaLevel;
+        const arr = cm > 5 ? " ↑" : cm < -5 ? " ↓" : " →";
+        const col = cm > 5 ? "#74b9ff" : cm < -5 ? "#ff9f5c" : "#888";
+        return `<div class="districtLine">
+            <span>📏 Нагон/сгон</span>
+            <span style="color:${col};font-weight:600;">${cm >= 0 ? "+" : ""}${cm} см${arr}</span>
+        </div>`;
+    })() : "";
+
     const rows = [
         m.waveH      != null ? ["🌊 Волна",
             `${fV(m.waveH)} м · ${fDir(m.waveDir)}`
