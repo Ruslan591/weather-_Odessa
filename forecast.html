@@ -139,6 +139,10 @@ const FC_PARAMS = [
     { key:"cape",     label:"CAPE",         color:"#ff6b6b", unit:" Дж/кг", field: h => h.cape ?? null              },
     { key:"li",       label:"Lifted Index", color:"#a29bfe", unit:"",       field: h => h.lifted_index ?? null     },
     { key:"cin",      label:"CIN",          color:"#fd79a8", unit:" Дж/кг", field: h => h.convective_inhibition ?? null },
+    // Морской прогноз
+    { key:"wave",     label:"Волна",         color:"#00cec9", unit:" м",  field: h => h.wave_height       ?? null, marine:true },
+    { key:"swell",    label:"Зыбь",          color:"#0984e3", unit:" м",  field: h => h.swell_wave_height ?? null, marine:true },
+    { key:"wave_per", label:"Период волны",  color:"#6c5ce7", unit:" с",  field: h => h.wave_period       ?? null, marine:true },
 ];
 
 let _fcParam = "temp";
@@ -363,6 +367,8 @@ function renderForecastChart(hours, times){
     if(_fcParam === "winddir") return renderForecastWindDir(hours, times);
     if(_fcParam === "cloud")   return renderForecastCloud(hours, times);
     if(_fcParam === "prob")    return renderForecastProb(hours, times);
+    const _cfgCheck = FC_PARAMS.find(p => p.key === _fcParam);
+    if(_cfgCheck && _cfgCheck.marine) return renderMarineChart(times, _cfgCheck);
 
     const wrap     = document.getElementById("fcChartWrap");
     const statsBox = document.getElementById("fcStats");
@@ -690,6 +696,175 @@ function renderForecastChart(hours, times){
             <div class="fc-stat-time">${vAll.length} значений</div>
         </div>
         ${card4}`;
+    }
+}
+
+// =============================================
+// МОРСКОЙ ПРОГНОЗ
+// =============================================
+function renderMarineChart(times, cfg){
+    const wrap     = document.getElementById("fcChartWrap");
+    const statsBox = document.getElementById("fcStats");
+    if(!wrap) return;
+
+    if(!window._marineByTime){
+        wrap.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:160px;
+            color:#555;font-size:13px;">🌊 Загрузка морских данных…</div>`;
+        if(statsBox) statsBox.innerHTML = "";
+        return;
+    }
+
+    const data = times.map(t => {
+        const m = window._marineByTime[t];
+        return m ? (cfg.field(m) ?? null) : null;
+    });
+    const dirData = (cfg.key === "wave") ? times.map(t => {
+        const m = window._marineByTime[t];
+        return m ? (m.wave_direction ?? null) : null;
+    }) : null;
+
+    const vAll = data.filter(v => v != null && !isNaN(v));
+    if(!vAll.length){
+        wrap.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:160px;
+            color:#555;font-size:13px;">🌊 Нет морских данных для этого района</div>`;
+        if(statsBox) statsBox.innerHTML = "";
+        return;
+    }
+
+    const W = 320, H = 160;
+    const pad = { t:24, r:10, b:28, l:38 };
+    const iW  = W - pad.l - pad.r;
+    const iH  = H - pad.t - pad.b;
+
+    let vMin = 0, vMax = Math.max(...vAll);
+    vMax += vMax * 0.2 || 0.5;
+
+    const tMin = new Date(times[0]).getTime();
+    const tMax_t= new Date(times[times.length-1]).getTime();
+    const px = t => pad.l + (new Date(t).getTime() - tMin) / (tMax_t - tMin) * iW;
+    const py = v => pad.t + (1 - (v - vMin) / (vMax - vMin)) * iH;
+
+    const pts = times.map((t, i) => ({ x: px(t), y: py(data[i] ?? 0) }));
+    const linePath = smooth(pts.filter((_, i) => data[i] != null));
+
+    const x0 = pts[0].x, y0 = pts[0].y;
+    const xN = pts[pts.length-1].x, yN = pts[pts.length-1].y;
+    const areaPath = linePath + ` L${xN},${H-pad.b} L${x0},${H-pad.b} Z`;
+
+    let yGrid = "", yLabels = "";
+    for(let i = 0; i <= 4; i++){
+        const v = vMin + (vMax - vMin) * (1 - i / 4);
+        const y = pad.t + iH * i / 4;
+        yGrid   += `<line x1="${pad.l}" y1="${y}" x2="${pad.l+iW}" y2="${y}" stroke="#252525" stroke-width="1"/>`;
+        yLabels += `<text x="${pad.l-4}" y="${y+4}" text-anchor="end" font-size="9" fill="#555">${v.toFixed(1)}</text>`;
+    }
+
+    // Горизонтальные уровни шторма
+    const STORM_LEVELS = [
+        { h: 0.5, label:"0.5", col:"#fdcb6e" },
+        { h: 1.5, label:"1.5", col:"#ff9f5c" },
+        { h: 3.0, label:"3.0", col:"#ff4d4d" },
+    ];
+    let stormLines = "";
+    STORM_LEVELS.forEach(sl => {
+        if(sl.h <= vMax){
+            const ys = py(sl.h);
+            stormLines += `<line x1="${pad.l}" y1="${ys}" x2="${pad.l+iW}" y2="${ys}"
+                stroke="${sl.col}" stroke-width="0.8" stroke-dasharray="3 3" stroke-opacity="0.5"/>
+                <text x="${pad.l+iW-2}" y="${ys-2}" text-anchor="end" font-size="7.5" fill="${sl.col}" opacity="0.7">${sl.label}м</text>`;
+        }
+    });
+
+    const FC_DAY_NAMES = ["Вс","Пн","Вт","Ср","Чт","Пт","Сб"];
+    let xGrid = "", xLabels = "";
+    times.forEach((t, i) => {
+        const d = new Date(t); const hr = d.getHours(); const x = px(t);
+        if(hr === 0){
+            xGrid += `<line x1="${x}" y1="${pad.t}" x2="${x}" y2="${pad.t+iH}" stroke="#444" stroke-dasharray="2 4"/>`;
+            const nextMidnight = times.slice(i+1).find(t2 => new Date(t2).getHours() === 0);
+            const xEnd = nextMidnight ? px(nextMidnight) : pad.l + iW;
+            xLabels += `<text x="${(x+xEnd)/2}" y="${pad.t-6}" text-anchor="middle" font-size="8.5" fill="#777" font-weight="700">${FC_DAY_NAMES[d.getDay()]} ${d.getDate()}</text>`;
+        }
+        if(hr % 6 === 0)
+            xLabels += `<text x="${x}" y="${H-6}" text-anchor="middle" font-size="9" fill="#555">${hr}:00</text>`;
+    });
+
+    const nowTs = Date.now();
+    let nowLine = "";
+    if(nowTs >= tMin && nowTs <= tMax_t){
+        const xNow = pad.l + (nowTs - tMin) / (tMax_t - tMin) * iW;
+        nowLine = `<line x1="${xNow}" y1="${pad.t}" x2="${xNow}" y2="${pad.t+iH}"
+            stroke="rgba(255,255,255,0.3)" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+    }
+
+    // Стрелки направления волны (только для "wave")
+    let arrowsSvg = "";
+    if(dirData){
+        times.forEach((t, i) => {
+            if(i % 3 !== 0) return;
+            const dir = dirData[i];
+            if(dir == null) return;
+            const x = px(t);
+            const y = pad.t + iH / 2;
+            const rad = (dir + 180) * Math.PI / 180;
+            const dx = Math.sin(rad) * 7, dy = -Math.cos(rad) * 7;
+            arrowsSvg += `<line x1="${x}" y1="${y}" x2="${x+dx}" y2="${y+dy}"
+                stroke="${cfg.color}" stroke-width="1.5" stroke-opacity="0.5"/>
+                <circle cx="${x+dx*0.85}" cy="${y+dy*0.85}" r="1.5" fill="${cfg.color}" opacity="0.4"/>`;
+        });
+    }
+
+    const gradId = "marineGrad_" + cfg.key;
+    wrap.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="display:block;">
+        <defs>
+            <linearGradient id="${gradId}" x1="0" y1="${pad.t}" x2="0" y2="${pad.t+iH}" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="${cfg.color}" stop-opacity="0.28"/>
+                <stop offset="100%" stop-color="${cfg.color}" stop-opacity="0"/>
+            </linearGradient>
+        </defs>
+        ${yGrid}${xGrid}${nowLine}${stormLines}
+        <path d="${areaPath}" fill="url(#${gradId})" stroke="none"/>
+        ${arrowsSvg}
+        <path d="${linePath}" fill="none" stroke="${cfg.color}" stroke-width="2.5"/>
+        ${yLabels}${xLabels}
+    </svg>`;
+
+    const svgEl = wrap.querySelector("svg");
+    if(svgEl) addCrosshair(svgEl, pts, pad, iW, iH, W, cfg.color, data, times, cfg, false);
+
+    // Статистика
+    const min = Math.min(...vAll), max = Math.max(...vAll);
+    const avg = vAll.reduce((a,b)=>a+b,0)/vAll.length;
+    const iMax = data.indexOf(max);
+    const tFmt = idx => {
+        if(idx < 0 || !times[idx]) return "";
+        const d = new Date(times[idx]);
+        return isNaN(d) ? "" : d.toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+    };
+    const waveLabel = max < 0.5 ? "Штиль" : max < 1.5 ? "Слабое волнение" :
+                      max < 3.0 ? "Умеренное" : max < 4.0 ? "Значительное" : "Сильное волнение";
+    const waveColor = max < 0.5 ? "#55efc4" : max < 1.5 ? "#00cec9" :
+                      max < 3.0 ? "#fdcb6e" : max < 4.0 ? "#ff9f5c" : "#ff4d4d";
+
+    if(statsBox){
+        statsBox.style.display = "grid";
+        statsBox.innerHTML = `
+        <div class="fc-stat-card">
+            <div class="fc-stat-label">Максимум</div>
+            <div class="fc-stat-value" style="color:${cfg.color};">${max.toFixed(1)}${cfg.unit}</div>
+            <div class="fc-stat-time">${tFmt(iMax)}</div>
+        </div>
+        <div class="fc-stat-card">
+            <div class="fc-stat-label">Среднее</div>
+            <div class="fc-stat-value" style="color:#ccc;">${avg.toFixed(1)}${cfg.unit}</div>
+            <div class="fc-stat-time">${vAll.length} значений</div>
+        </div>
+        <div class="fc-stat-card">
+            <div class="fc-stat-label">Состояние</div>
+            <div class="fc-stat-value" style="color:${waveColor};font-size:11px;">${waveLabel}</div>
+            <div class="fc-stat-time">&nbsp;</div>
+        </div>`;
     }
 }
 
@@ -1791,6 +1966,7 @@ function renderEnsembleDebug(p) {
 }
 
 async function loadEnsemble() {
+    loadMarine(); // параллельно, не await
     var models = getEnsembleModels();
     if (!models.length) return;
 
@@ -2447,10 +2623,43 @@ function comfortLevel(h){
 }
 
 // =============================================
+// МОРСКОЙ API
+// =============================================
+async function loadMarine(){
+    // Точка в Чёрном море у Одессы (~8 км от берега)
+    const url = "https://marine-api.open-meteo.com/v1/marine" +
+        "?latitude=46.35&longitude=30.90" +
+        "&hourly=wave_height,wave_direction,wave_period,wind_wave_height,swell_wave_height,swell_wave_period" +
+        "&timezone=auto&forecast_days=7";
+    try {
+        const r = await fetch(url);
+        if(!r.ok) throw new Error("HTTP " + r.status);
+        const data = await r.json();
+        if(!data.hourly || !data.hourly.time){ window._marineByTime = null; return; }
+        const mh = data.hourly;
+        window._marineByTime = {};
+        mh.time.forEach((t, i) => {
+            window._marineByTime[t] = {
+                wave_height:       mh.wave_height?.[i]       ?? null,
+                wave_direction:    mh.wave_direction?.[i]    ?? null,
+                wave_period:       mh.wave_period?.[i]       ?? null,
+                wind_wave_height:  mh.wind_wave_height?.[i]  ?? null,
+                swell_wave_height: mh.swell_wave_height?.[i] ?? null,
+                swell_wave_period: mh.swell_wave_period?.[i] ?? null,
+            };
+        });
+    } catch(e) {
+        console.warn("Marine API error:", e.message);
+        window._marineByTime = null;
+    }
+}
+
+// =============================================
 // LOAD
 // =============================================
 async function load(){
     if (weatherModel === "ensemble") { loadEnsemble(); return; }
+    loadMarine(); // параллельно, не await
     const apiForecastDays = Math.max(5, Math.ceil(forecastHours / 24) + 1);
     const API = `https://api.open-meteo.com/v1/forecast?latitude=46.43&longitude=30.74&hourly=temperature_2m,apparent_temperature,pressure_msl,relative_humidity_2m,weather_code,visibility,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,precipitation_probability,showers,snowfall,snow_depth,shortwave_radiation,direct_radiation,diffuse_radiation,dew_point_2m,runoff,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,cape,uv_index,lifted_index,convective_inhibition,temperature_850hPa,temperature_700hPa,temperature_500hPa,dewpoint_850hPa,dewpoint_700hPa,windspeed_850hPa,windspeed_500hPa,winddirection_850hPa,winddirection_500hPa&models=${weatherModel}&timezone=auto&forecast_days=${apiForecastDays}&wind_speed_unit=ms`;
     let data;
@@ -2803,6 +3012,16 @@ function renderHourCard(h){
                     ${barRow("Облака", cloudPct, "#666", Math.round(cloudPct)+"%")}
                 </div>
                 <div style="padding:8px 0;border-top:1px solid #222;">
+                    ${(()=>{ const m = window._marineByTime?.[h.time];
+                        if(!m || m.wave_height == null) return "";
+                        const wDir = m.wave_direction != null ? windDir(m.wave_direction) : "";
+                        const swStr= m.swell_wave_height != null ? ` · зыбь ${m.swell_wave_height.toFixed(1)} м` : "";
+                        return `<div style="padding:6px 0 4px;border-bottom:1px solid #222;margin-bottom:6px;font-size:12px;color:#00cec9;">
+                            🌊 волна ${m.wave_height.toFixed(1)} м${swStr}
+                            ${wDir ? ` · ${wDir}` : ""}
+                            ${m.wave_period != null ? ` · T=${m.wave_period.toFixed(0)} с` : ""}
+                        </div>`;
+                    })()}
                     <div class="grid-container" style="gap:10px;">
                         <div><span class="label" style="font-size:12px;">Ощущается</span><div class="val" style="font-size:15px;">${h.apparent_temperature.toFixed(1)}°</div></div>
                         <div><span class="label" style="font-size:12px;">Влажность</span><div class="val" style="font-size:15px;">${Math.round(h.relative_humidity_2m)}%</div></div>
