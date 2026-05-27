@@ -143,6 +143,7 @@ const FC_PARAMS = [
     { key:"wave",     label:"Волна",         color:"#00cec9", unit:" м",  field: h => h.wave_height       ?? null, marine:true },
     { key:"swell",    label:"Зыбь",          color:"#0984e3", unit:" м",  field: h => h.swell_wave_height ?? null, marine:true },
     { key:"wave_per", label:"Период волны",  color:"#6c5ce7", unit:" с",  field: h => h.wave_period       ?? null, marine:true },
+    { key:"sst",      label:"Т воды",        color:"#fd79a8", unit:"°",   field: h => h.sea_surface_temperature ?? null, marine:true },
 ];
 
 let _fcParam = "temp";
@@ -2629,7 +2630,7 @@ async function loadMarine(){
     // Точка в Чёрном море у Одессы (~8 км от берега)
     const url = "https://marine-api.open-meteo.com/v1/marine" +
         "?latitude=46.35&longitude=30.90" +
-        "&hourly=wave_height,wave_direction,wave_period,wind_wave_height,swell_wave_height,swell_wave_period" +
+        "&hourly=wave_height,wave_direction,wave_period,wind_wave_height,swell_wave_height,swell_wave_period,sea_surface_temperature" +
         "&timezone=auto&forecast_days=7";
     try {
         const r = await fetch(url);
@@ -2640,12 +2641,13 @@ async function loadMarine(){
         window._marineByTime = {};
         mh.time.forEach((t, i) => {
             window._marineByTime[t] = {
-                wave_height:       mh.wave_height?.[i]       ?? null,
-                wave_direction:    mh.wave_direction?.[i]    ?? null,
-                wave_period:       mh.wave_period?.[i]       ?? null,
-                wind_wave_height:  mh.wind_wave_height?.[i]  ?? null,
-                swell_wave_height: mh.swell_wave_height?.[i] ?? null,
-                swell_wave_period: mh.swell_wave_period?.[i] ?? null,
+                wave_height:             mh.wave_height?.[i]             ?? null,
+                wave_direction:          mh.wave_direction?.[i]          ?? null,
+                wave_period:             mh.wave_period?.[i]             ?? null,
+                wind_wave_height:        mh.wind_wave_height?.[i]        ?? null,
+                swell_wave_height:       mh.swell_wave_height?.[i]       ?? null,
+                swell_wave_period:       mh.swell_wave_period?.[i]       ?? null,
+                sea_surface_temperature: mh.sea_surface_temperature?.[i] ?? null,
             };
         });
     } catch(e) {
@@ -3016,10 +3018,11 @@ function renderHourCard(h){
                         if(!m || m.wave_height == null) return "";
                         const wDir = m.wave_direction != null ? windDir(m.wave_direction) : "";
                         const swStr= m.swell_wave_height != null ? ` · зыбь ${m.swell_wave_height.toFixed(1)} м` : "";
+                        const sstStr = m.sea_surface_temperature != null ? ` · вода ${m.sea_surface_temperature.toFixed(1)}°` : "";
                         return `<div style="padding:6px 0 4px;border-bottom:1px solid #222;margin-bottom:6px;font-size:12px;color:#00cec9;">
                             🌊 волна ${m.wave_height.toFixed(1)} м${swStr}
                             ${wDir ? ` · ${wDir}` : ""}
-                            ${m.wave_period != null ? ` · T=${m.wave_period.toFixed(0)} с` : ""}
+                            ${m.wave_period != null ? ` · T=${m.wave_period.toFixed(0)} с` : ""}${sstStr}
                         </div>`;
                     })()}
                     <div class="grid-container" style="gap:10px;">
