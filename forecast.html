@@ -1469,6 +1469,15 @@ function parseHourly(h) {
             uv_index:              h.uv_index ? h.uv_index[i] : null,
             lifted_index:          h.lifted_index ? h.lifted_index[i] : null,
             convective_inhibition: h.convective_inhibition ? h.convective_inhibition[i] : null,
+            temperature_850hPa:   h.temperature_850hPa   ? h.temperature_850hPa[i]   : null,
+            temperature_700hPa:   h.temperature_700hPa   ? h.temperature_700hPa[i]   : null,
+            temperature_500hPa:   h.temperature_500hPa   ? h.temperature_500hPa[i]   : null,
+            dewpoint_850hPa:      h.dewpoint_850hPa      ? h.dewpoint_850hPa[i]      : null,
+            dewpoint_700hPa:      h.dewpoint_700hPa      ? h.dewpoint_700hPa[i]      : null,
+            windspeed_850hPa:     h.windspeed_850hPa     ? h.windspeed_850hPa[i]     : null,
+            windspeed_500hPa:     h.windspeed_500hPa     ? h.windspeed_500hPa[i]     : null,
+            winddirection_850hPa: h.winddirection_850hPa ? h.winddirection_850hPa[i] : null,
+            winddirection_500hPa: h.winddirection_500hPa ? h.winddirection_500hPa[i] : null,
         };
     });
 }
@@ -1785,7 +1794,10 @@ async function loadEnsemble() {
         "precipitation,precipitation_probability,showers,snowfall,snow_depth," +
         "shortwave_radiation,direct_radiation,diffuse_radiation,dew_point_2m,runoff," +
         "cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,cape,uv_index," +
-        "lifted_index,convective_inhibition";
+        "lifted_index,convective_inhibition," +
+        "temperature_850hPa,temperature_700hPa,temperature_500hPa," +
+        "dewpoint_850hPa,dewpoint_700hPa," +
+        "windspeed_850hPa,windspeed_500hPa,winddirection_850hPa,winddirection_500hPa";
 
     var fetches = models.map(function(m) {
         var url = "https://api.open-meteo.com/v1/forecast?latitude=46.43&longitude=30.74" +
@@ -1911,8 +1923,45 @@ function weatherAlerts(hours) {
         // ── Конвективный анализ по всем доступным параметрам ──
         const li      = h.lifted_index          ?? 0;
         const cin     = h.convective_inhibition  ?? 0;
-        const dewDep  = dew != null ? t - dew : 10;   // дефицит точки росы
-        const shear   = gust - wind;                    // сдвиг ветра
+        const dewDep  = dew != null ? t - dew : 10;
+        const shear   = gust - wind;  // приземный сдвиг (гусь − средний)
+
+        // ── Давленческие уровни (850/700/500 гПа) ──
+        const T850  = h.temperature_850hPa   ?? null;
+        const T700  = h.temperature_700hPa   ?? null;
+        const T500  = h.temperature_500hPa   ?? null;
+        const Td850 = h.dewpoint_850hPa      ?? null;
+        const Td700 = h.dewpoint_700hPa      ?? null;
+        const ws850 = h.windspeed_850hPa     ?? null;
+        const ws500 = h.windspeed_500hPa     ?? null;
+        const wd850 = h.winddirection_850hPa ?? null;
+        const wd500 = h.winddirection_500hPa ?? null;
+
+        // K-Index = (T850−T500) + Td850 − (T700−Td700)
+        // >25: рассеянные, >30: многочисленные, >35: обильные грозы
+        let kIndex = null;
+        if (T850 != null && T700 != null && T500 != null && Td850 != null && Td700 != null)
+            kIndex = (T850 - T500) + Td850 - (T700 - Td700);
+
+        // Totals-Totals = T850 + Td850 − 2×T500
+        // >44: возможны, >50: вероятны сильные, >55: опасные грозы
+        let ttIndex = null;
+        if (T850 != null && T500 != null && Td850 != null)
+            ttIndex = T850 + Td850 - 2 * T500;
+
+        // Вертикальный сдвиг ветра 850–500 гПа (векторная разность, м/с)
+        // >10: умеренный (организованная конвекция), >20: сильный (суперячейки)
+        let vShear = null;
+        if (ws850 != null && ws500 != null && wd850 != null && wd500 != null) {
+            const toRad = d => d * Math.PI / 180;
+            const u850 = -ws850 * Math.sin(toRad(wd850));
+            const v850 = -ws850 * Math.cos(toRad(wd850));
+            const u500 = -ws500 * Math.sin(toRad(wd500));
+            const v500 = -ws500 * Math.cos(toRad(wd500));
+            vShear = Math.sqrt((u850 - u500) ** 2 + (v850 - v500) ** 2);
+        }
+
+        const hasPressureData = kIndex != null || ttIndex != null;
 
         let cScore = 0;
         // CAPE — энергия подъёма
@@ -1920,72 +1969,103 @@ function weatherAlerts(hours) {
         if (cape > 500)  cScore += 1;
         if (cape > 1000) cScore += 1;
         if (cape > 2000) cScore += 1;
-        // Lifted Index (отриц. = нестабильно)
+        // Lifted Index
         if (li <  0)  cScore += 1;
         if (li < -2)  cScore += 1;
         if (li < -4)  cScore += 1;
         // CIN — торможение конвекции
-        if      (cin > -50)  cScore += 2;   // слабое — легко пробить
+        if      (cin > -50)  cScore += 2;
         else if (cin > -100) cScore += 1;
-        else if (cin < -200) cScore -= 3;   // сильное — конвекция заблокирована
+        else if (cin < -200) cScore -= 3;
         // Влажность приземная
         if (rh > 65) cScore += 1;
         if (rh > 80) cScore += 1;
-        // Дефицит точки росы (< 5°C = влажно)
+        // Дефицит точки росы
         if (dewDep < 5) cScore += 1;
         if (dewDep < 3) cScore += 1;
-        // Сдвиг ветра (гусь - средний)
+        // Сдвиг ветра приземный
         if (shear > 5)  cScore += 1;
         if (shear > 10) cScore += 1;
-        // Дневной прогрев (пик конвекции 11-20)
+        // Дневной прогрев
         if (hr >= 11 && hr <= 20) cScore += 1;
-        // Облачность: не сплошной покров = есть инсоляция
+        // Облачность (инсоляция)
         if (cloud < 70) cScore += 1;
+        // K-Index
+        if (kIndex != null) {
+            if (kIndex > 25) cScore += 1;
+            if (kIndex > 30) cScore += 1;
+            if (kIndex > 35) cScore += 1;
+        }
+        // Totals-Totals
+        if (ttIndex != null) {
+            if (ttIndex > 44) cScore += 1;
+            if (ttIndex > 50) cScore += 1;
+            if (ttIndex > 55) cScore += 1;
+        }
+        // Вертикальный сдвиг 850–500 гПа
+        if (vShear != null) {
+            if (vShear > 10) cScore += 1;
+            if (vShear > 20) cScore += 1;
+        }
 
+        // Пороги: при наличии данных по уровням давления повышаем (max доп. ~8 очков)
+        const pB = hasPressureData ? 5 : 0;
         const thunderByCode = code >= 95;
-        const thunderByCAPE = cScore >= 9 && cape > 500;
-        const convLevel3    = cScore >= 8 && cape > 300 && !thunderByCode && !thunderByCAPE;
-        const convLevel2    = cScore >= 6 && cape > 200 && !thunderByCode && !thunderByCAPE && !convLevel3;
-        const convLevel1    = cScore >= 4 && cape > 100 && !thunderByCode && !thunderByCAPE && !convLevel3 && !convLevel2;
+        const thunderByCAPE = cScore >= (9  + pB) && cape > 500;
+        const convLevel3    = cScore >= (8  + pB) && cape > 300 && !thunderByCode && !thunderByCAPE;
+        const convLevel2    = cScore >= (6  + pB) && cape > 200 && !thunderByCode && !thunderByCAPE && !convLevel3;
+        const convLevel1    = cScore >= (4  + pB) && cape > 100 && !thunderByCode && !thunderByCAPE && !convLevel3 && !convLevel2;
 
         if (thunderByCode || thunderByCAPE) {
             const severe = cape > 1500 || gust > 20;
             const tag    = thunderByCode ? "" : " [расч]";
             const liStr  = h.lifted_index != null ? h.lifted_index.toFixed(1) : "?";
             const cinStr = h.convective_inhibition != null ? h.convective_inhibition.toFixed(0) : "?";
+            const kStr   = kIndex  != null ? ` · K ${kIndex.toFixed(0)}`    : "";
+            const ttStr  = ttIndex != null ? ` · TT ${ttIndex.toFixed(0)}`  : "";
+            const vsStr  = vShear  != null ? ` · Sh ${vShear.toFixed(0)}м/с` : "";
             alerts.push({
                 time: pKey, icon: "⛈️",
                 title: severe ? "Сильная гроза" : "Гроза",
-                sub: `CAPE ${Math.round(cape)} · LI ${liStr} · CIN ${cinStr} · балл ${cScore}${tag}`,
+                sub: `CAPE ${Math.round(cape)} · LI ${liStr} · CIN ${cinStr}${kStr}${ttStr}${vsStr} · балл ${cScore}${tag}`,
                 level: severe ? "red" : "orange"
             });
         }
         if (convLevel3) {
             const tProb = Math.min(80, Math.round(
-                30 + (cScore - 8) * 15
+                30 + (cScore - (8 + pB)) * 15
                 + (cape > 600 ? 10 : 0)
                 + (li < -3   ?  5 : 0)
+                + (kIndex  != null && kIndex  > 30 ? 10 : 0)
+                + (ttIndex != null && ttIndex > 50 ?  5 : 0)
             ));
+            const kStr  = kIndex  != null ? ` · K ${kIndex.toFixed(0)}`    : "";
+            const ttStr = ttIndex != null ? ` · TT ${ttIndex.toFixed(0)}`  : "";
+            const vsStr = vShear  != null ? ` · Sh ${vShear.toFixed(0)}м/с` : "";
             alerts.push({
                 time: pKey, icon: "⛈️",
                 title: `Возможна гроза ~${tProb}%`,
-                sub: `CAPE ${Math.round(cape)} · LI ${li.toFixed(1)} · CIN ${cin.toFixed(0)} · балл ${cScore}`,
+                sub: `CAPE ${Math.round(cape)} · LI ${li.toFixed(1)} · CIN ${cin.toFixed(0)}${kStr}${ttStr}${vsStr} · балл ${cScore}`,
                 level: "orange"
             });
         }
         if (convLevel2) {
+            const kStr  = kIndex  != null ? ` · K ${kIndex.toFixed(0)}`   : "";
+            const ttStr = ttIndex != null ? ` · TT ${ttIndex.toFixed(0)}` : "";
             alerts.push({
                 time: pKey, icon: "🌩️",
                 title: "Условия для развития гроз",
-                sub: `CAPE ${Math.round(cape)} · LI ${li.toFixed(1)} · CIN ${cin.toFixed(0)} · балл ${cScore}`,
+                sub: `CAPE ${Math.round(cape)} · LI ${li.toFixed(1)} · CIN ${cin.toFixed(0)}${kStr}${ttStr} · балл ${cScore}`,
                 level: "yellow"
             });
         }
         if (convLevel1) {
+            const kStr  = kIndex  != null ? ` · K ${kIndex.toFixed(0)}`   : "";
+            const ttStr = ttIndex != null ? ` · TT ${ttIndex.toFixed(0)}` : "";
             alerts.push({
                 time: pKey, icon: "⚡",
                 title: "Грозовое положение",
-                sub: `CAPE ${Math.round(cape)} · LI ${li.toFixed(1)} · балл ${cScore}`,
+                sub: `CAPE ${Math.round(cape)} · LI ${li.toFixed(1)}${kStr}${ttStr} · балл ${cScore}`,
                 level: "blue"
             });
         }
@@ -2343,7 +2423,7 @@ function comfortLevel(h){
 async function load(){
     if (weatherModel === "ensemble") { loadEnsemble(); return; }
     const apiForecastDays = Math.max(5, Math.ceil(forecastHours / 24) + 1);
-    const API = `https://api.open-meteo.com/v1/forecast?latitude=46.43&longitude=30.74&hourly=temperature_2m,apparent_temperature,pressure_msl,relative_humidity_2m,weather_code,visibility,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,precipitation_probability,showers,snowfall,snow_depth,shortwave_radiation,direct_radiation,diffuse_radiation,dew_point_2m,runoff,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,cape,uv_index,lifted_index,convective_inhibition&models=${weatherModel}&timezone=auto&forecast_days=${apiForecastDays}&wind_speed_unit=ms`;
+    const API = `https://api.open-meteo.com/v1/forecast?latitude=46.43&longitude=30.74&hourly=temperature_2m,apparent_temperature,pressure_msl,relative_humidity_2m,weather_code,visibility,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,precipitation_probability,showers,snowfall,snow_depth,shortwave_radiation,direct_radiation,diffuse_radiation,dew_point_2m,runoff,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,cape,uv_index,lifted_index,convective_inhibition,temperature_850hPa,temperature_700hPa,temperature_500hPa,dewpoint_850hPa,dewpoint_700hPa,windspeed_850hPa,windspeed_500hPa,winddirection_850hPa,winddirection_500hPa&models=${weatherModel}&timezone=auto&forecast_days=${apiForecastDays}&wind_speed_unit=ms`;
     let data;
     try {
         const r = await fetch(API);
@@ -2395,6 +2475,15 @@ async function load(){
         uv_index:              h.uv_index?.[i] ?? null,
         lifted_index:          h.lifted_index?.[i] ?? null,
         convective_inhibition: h.convective_inhibition?.[i] ?? null,
+        temperature_850hPa:   h.temperature_850hPa?.[i]   ?? null,
+        temperature_700hPa:   h.temperature_700hPa?.[i]   ?? null,
+        temperature_500hPa:   h.temperature_500hPa?.[i]   ?? null,
+        dewpoint_850hPa:      h.dewpoint_850hPa?.[i]      ?? null,
+        dewpoint_700hPa:      h.dewpoint_700hPa?.[i]      ?? null,
+        windspeed_850hPa:     h.windspeed_850hPa?.[i]     ?? null,
+        windspeed_500hPa:     h.windspeed_500hPa?.[i]     ?? null,
+        winddirection_850hPa: h.winddirection_850hPa?.[i] ?? null,
+        winddirection_500hPa: h.winddirection_500hPa?.[i] ?? null,
     }));
 
     window._fcAllHours = hours;
