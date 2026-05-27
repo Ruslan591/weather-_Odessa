@@ -96,11 +96,11 @@ async function loadMarine(){
         "https://marine-api.open-meteo.com/v1/marine" +
         "?latitude=46.35&longitude=30.90" +
         "&current=wave_height,wave_direction,wave_period,wave_peak_period" +
-        ",wind_wave_height,wind_wave_direction" +
-        ",swell_wave_height,swell_wave_period,swell_wave_direction" +
-        ",sea_surface_temperature,sea_level_height" +
-        ",ocean_current_velocity,ocean_current_direction" +
-        "&timezone=auto&forecast_days=1";
+",wind_wave_height,wind_wave_direction" +
+",swell_wave_height,swell_wave_period,swell_wave_direction" +
+",sea_surface_temperature" +
+",ocean_current_velocity,ocean_current_direction" +
+"&timezone=auto&forecast_days=1";
     const windUrl =
         "https://api.open-meteo.com/v1/forecast" +
         "?latitude=46.35&longitude=30.90" +
@@ -123,7 +123,6 @@ async function loadMarine(){
             swellH:     c.swell_wave_height          ?? null,
             swellPer:   c.swell_wave_period          ?? null,
             swellDir:   c.swell_wave_direction       ?? null,
-            seaLevel:   c.sea_level_height           ?? null,
             currentV:   c.ocean_current_velocity     ?? null,
             currentDir: c.ocean_current_direction    ?? null,
             time:       c.time                       ?? null,
@@ -880,16 +879,7 @@ function makeMarineBlock(){
             <span style="font-size:14px;color:#888;">🌡️ Температура воды</span>
             <span style="font-size:26px;font-weight:800;color:${sstColor};">${m.sst.toFixed(1)}°C</span>
         </div>` : "";
-
-    const seaLevelHtml = m.seaLevel != null ? (() => {
-        const cm  = Math.round(m.seaLevel * 100);
-        const arr = cm > 3 ? " ↑" : cm < -3 ? " ↓" : " →";
-        const col = cm > 3 ? "#74b9ff" : cm < -3 ? "#ff9f5c" : "#888";
-        return `<div class="districtLine">
-            <span>📏 Уровень моря</span>
-            <span style="color:${col};font-weight:600;">${cm >= 0 ? "+" : ""}${cm} см${arr}</span>
-        </div>`;
-    })() : "";
+        
 
     const rows = [
         m.waveH      != null ? ["🌊 Волна",
@@ -930,7 +920,7 @@ function makeMarineBlock(){
         ${warnHtml}
         ${sstHtml}
         <div class="pws-fields">
-            ${seaLevelHtml}
+            
             ${rows.map(([k,v]) =>
                 `<div class="districtLine"><span>${k}</span><span>${v}</span></div>`
             ).join("")}
