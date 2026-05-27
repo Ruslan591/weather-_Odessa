@@ -27,7 +27,9 @@ let _currentId = null;
 let _lastData  = null;
 let _ensembleCloudPct = null;  // % из последнего снимка
 let _ensembleCloudFetchedAt = 0;
-let _ktOcData = null;
+let _ktOcData    = null;
+let _marineData  = null;   // { current, hourly } из Marine API
+let _marineFetchedAt = 0;
 
 async function fetchEnsembleCloud(){
     if(Date.now() - _ensembleCloudFetchedAt < 1200000) return; // обновляем раз в час
@@ -82,6 +84,43 @@ async function fetchSynopCloud(){
             ...existing, cloudN, yyggi, ts: Date.now()
         }));
     } catch(e){ _synopFetchedAt = 0; }
+}
+
+/* =========================================================
+   МОРСКОЙ API (open-meteo marine)
+========================================================= */
+async function loadMarine(){
+    if(Date.now() - _marineFetchedAt < 15 * 60000) return; // раз в 15 мин
+    _marineFetchedAt = Date.now();
+    const url =
+        "https://marine-api.open-meteo.com/v1/marine" +
+        "?latitude=46.35&longitude=30.90" +
+        "&current=wave_height,wave_direction,wave_period,wind_wave_height" +
+        ",swell_wave_height,swell_wave_period,sea_surface_temperature" +
+        ",ocean_current_velocity,ocean_current_direction" +
+        "&hourly=sea_surface_temperature,wave_height,wave_direction" +
+        "&timezone=auto&forecast_days=2";
+    try {
+        const r = await fetch(url, { cache: "no-store" });
+        if(!r.ok) throw new Error("HTTP " + r.status);
+        const data = await r.json();
+        const c = data.current || {};
+        _marineData = {
+            sst:           c.sea_surface_temperature    ?? null,
+            waveH:         c.wave_height                ?? null,
+            waveDir:       c.wave_direction             ?? null,
+            wavePer:       c.wave_period                ?? null,
+            windWaveH:     c.wind_wave_height           ?? null,
+            swellH:        c.swell_wave_height          ?? null,
+            swellPer:      c.swell_wave_period          ?? null,
+            currentV:      c.ocean_current_velocity     ?? null,
+            currentDir:    c.ocean_current_direction    ?? null,
+            time:          c.time                       ?? null,
+        };
+    } catch(e){
+        console.warn("Marine API:", e.message);
+        _marineFetchedAt = 0;
+    }
 }
 
 /* =========================================================
@@ -779,6 +818,85 @@ const pct = (() => {
 }
 
 /* =========================================================
+   БЛОК: МОРЕ
+========================================================= */
+function makeMarineBlock(){
+    const m = _marineData;
+    if(!m) return "";
+
+    // Балльность волнения по высоте (шкала WMO)
+    function seaStateLabel(h){
+        if(h == null) return null;
+        if(h < 0.10) return { label:"Штиль (0 баллов)",          color:"#55efc4" };
+        if(h < 0.50) return { label:"Рябь (1 балл)",             color:"#00cec9" };
+        if(h < 1.25) return { label:"Лёгкое волнение (2)",       color:"#74b9ff" };
+        if(h < 2.50) return { label:"Умеренное волнение (3–4)",  color:"#ffd166" };
+        if(h < 4.00) return { label:"Значительное (5)",          color:"#ff9f5c" };
+        if(h < 6.00) return { label:"Сильное (6–7)",             color:"#ff6b6b" };
+        return              { label:"Очень сильное (8–9)",        color:"#d63031" };
+    }
+
+    const state   = seaStateLabel(m.waveH);
+    const sstColor = m.sst == null ? "#aaa"
+        : m.sst < 12 ? "#74b9ff"
+        : m.sst < 20 ? "#00cec9"
+        : m.sst < 26 ? "#55efc4"
+        :               "#ffd166";
+
+    // Форматирование
+    const fDir = deg => {
+        if(deg == null) return "—";
+        const dirs = ["С","ССВ","СВ","ВСВ","В","ВЮВ","ЮВ","ЮЮВ","Ю","ЮЮЗ","ЮЗ","ЗЮЗ","З","ЗСЗ","СЗ","ССЗ"];
+        return dirs[Math.round(deg/22.5)%16] + " " + Math.round(deg) + "°";
+    };
+    const fV = v => v != null ? v.toFixed(1) : "—";
+
+    // Строка предупреждения
+    const warnHtml = m.waveH != null && m.waveH >= 1.25 ? `
+        <div style="margin-bottom:8px;padding:7px 10px;border-radius:8px;
+             background:${state.color}15;border:1px solid ${state.color}44;
+             font-size:13px;font-weight:700;color:${state.color};">
+            🌊 ${state.label}
+        </div>` : "";
+
+    // Строка SST
+    const sstHtml = m.sst != null ? `
+        <div style="display:flex;justify-content:space-between;align-items:center;
+                    padding:8px 0 10px;border-bottom:1px solid #1e1e1e;margin-bottom:6px;">
+            <span style="font-size:14px;color:#888;">🌡️ Температура воды</span>
+            <span style="font-size:26px;font-weight:800;color:${sstColor};">${m.sst.toFixed(1)}°C</span>
+        </div>` : "";
+
+    const rows = [
+        m.waveH    != null ? ["🌊 Волна",          `${fV(m.waveH)} м · ${fDir(m.waveDir)}${m.wavePer != null ? " · T="+m.wavePer.toFixed(0)+" с" : ""}`] : null,
+        m.swellH   != null ? ["〰️ Зыбь",           `${fV(m.swellH)} м${m.swellPer != null ? " · T="+m.swellPer.toFixed(0)+" с" : ""}`] : null,
+        m.windWaveH!= null ? ["💨 Ветровая волна", `${fV(m.windWaveH)} м`] : null,
+        m.currentV != null && m.currentV > 0.05
+                           ? ["🔄 Течение",         `${fV(m.currentV)} м/с · ${fDir(m.currentDir)}`] : null,
+    ].filter(Boolean);
+
+    if(!sstHtml && !rows.length) return "";
+
+    const sourceTime = m.time
+        ? (() => { const d = new Date(m.time); return isNaN(d) ? "" :
+            " · " + d.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}); })()
+        : "";
+
+    return `
+    <div style="margin-top:12px;border-top:1px solid #2a2a2a;padding-top:10px;">
+        <div style="font-size:11px;color:#555;margin-bottom:8px;
+                    text-transform:uppercase;letter-spacing:.5px;">
+            Море · Чёрное море<span style="font-weight:400;letter-spacing:0;color:#333;">${sourceTime} · модель CMEMS</span>
+        </div>
+        ${warnHtml}
+        ${sstHtml}
+        <div class="pws-fields">
+            ${rows.map(([k,v]) => `<div class="districtLine"><span>${k}</span><span>${v}</span></div>`).join("")}
+        </div>
+    </div>`;
+}
+
+/* =========================================================
    ЗАГРУЗКА
 ========================================================= */
 async function fetchStation(id){
@@ -876,6 +994,7 @@ function renderPWSStation(p){
         ${rows.length ? `<div class="pws-fields">${rows.map(([k,v])=>`<div class="districtLine"><span>${k}</span><span>${v}</span></div>`).join("")}</div>` : ""}
 
         ${makeSolarWbgtBlock(p)}
+        ${makeMarineBlock()}
 
         ${rowsAbout.length ? `<details style="margin-top:8px;">
             <summary onclick="toggleDetails(event)">О станции</summary>
@@ -936,7 +1055,8 @@ async function loadAndRender(){
     const [stationResult] = await Promise.allSettled([
     fetchStation(_currentId),
     fetchEnsembleCloud(),
-    fetchSynopCloud()          // ← добавить
+    fetchSynopCloud(),
+    loadMarine()
 ]);
     const p = stationResult.status === "fulfilled"
         ? stationResult.value
