@@ -28,7 +28,7 @@ let _lastData  = null;
 let _ensembleCloudPct = null;  // % из последнего снимка
 let _ensembleCloudFetchedAt = 0;
 let _ktOcData    = null;
-let _marineData  = null;   // { current, hourly } из Marine API
+let _marineData  = null;
 let _marineFetchedAt = 0;
 
 async function fetchEnsembleCloud(){
@@ -87,36 +87,53 @@ async function fetchSynopCloud(){
 }
 
 /* =========================================================
-   МОРСКОЙ API (open-meteo marine)
+   МОРСКОЙ API (open-meteo marine + ветер над морем)
 ========================================================= */
 async function loadMarine(){
-    if(Date.now() - _marineFetchedAt < 15 * 60000) return; // раз в 15 мин
+    if(Date.now() - _marineFetchedAt < 15 * 60000) return;
     _marineFetchedAt = Date.now();
-    const url =
+    const marineUrl =
         "https://marine-api.open-meteo.com/v1/marine" +
         "?latitude=46.35&longitude=30.90" +
-        "&current=wave_height,wave_direction,wave_period,wind_wave_height" +
-        ",swell_wave_height,swell_wave_period,sea_surface_temperature" +
+        "&current=wave_height,wave_direction,wave_period,wave_peak_period" +
+        ",wind_wave_height,wind_wave_direction" +
+        ",swell_wave_height,swell_wave_period,swell_wave_direction" +
+        ",sea_surface_temperature,sea_level_height" +
         ",ocean_current_velocity,ocean_current_direction" +
-        "&hourly=sea_surface_temperature,wave_height,wave_direction" +
-        "&timezone=auto&forecast_days=2";
+        "&timezone=auto&forecast_days=1";
+    const windUrl =
+        "https://api.open-meteo.com/v1/forecast" +
+        "?latitude=46.35&longitude=30.90" +
+        "&current=wind_speed_10m,wind_gusts_10m,wind_direction_10m" +
+        "&wind_speed_unit=ms&timezone=auto";
     try {
-        const r = await fetch(url, { cache: "no-store" });
-        if(!r.ok) throw new Error("HTTP " + r.status);
-        const data = await r.json();
-        const c = data.current || {};
+        const [mr, wr] = await Promise.all([
+            fetch(marineUrl, { cache:"no-store" }),
+            fetch(windUrl,   { cache:"no-store" }),
+        ]);
+        const c = mr.ok ? ((await mr.json()).current || {}) : {};
         _marineData = {
-            sst:           c.sea_surface_temperature    ?? null,
-            waveH:         c.wave_height                ?? null,
-            waveDir:       c.wave_direction             ?? null,
-            wavePer:       c.wave_period                ?? null,
-            windWaveH:     c.wind_wave_height           ?? null,
-            swellH:        c.swell_wave_height          ?? null,
-            swellPer:      c.swell_wave_period          ?? null,
-            currentV:      c.ocean_current_velocity     ?? null,
-            currentDir:    c.ocean_current_direction    ?? null,
-            time:          c.time                       ?? null,
+            sst:        c.sea_surface_temperature    ?? null,
+            waveH:      c.wave_height                ?? null,
+            waveDir:    c.wave_direction             ?? null,
+            wavePer:    c.wave_period                ?? null,
+            wavePeakPer:c.wave_peak_period           ?? null,
+            windWaveH:  c.wind_wave_height           ?? null,
+            windWaveDir:c.wind_wave_direction        ?? null,
+            swellH:     c.swell_wave_height          ?? null,
+            swellPer:   c.swell_wave_period          ?? null,
+            swellDir:   c.swell_wave_direction       ?? null,
+            seaLevel:   c.sea_level_height           ?? null,
+            currentV:   c.ocean_current_velocity     ?? null,
+            currentDir: c.ocean_current_direction    ?? null,
+            time:       c.time                       ?? null,
         };
+        if(wr.ok){
+            const wc = ((await wr.json()).current || {});
+            _marineData.seaWindSpeed = wc.wind_speed_10m     ?? null;
+            _marineData.seaWindGust  = wc.wind_gusts_10m     ?? null;
+            _marineData.seaWindDir   = wc.wind_direction_10m ?? null;
+        }
     } catch(e){
         console.warn("Marine API:", e.message);
         _marineFetchedAt = 0;
@@ -824,42 +841,39 @@ function makeMarineBlock(){
     const m = _marineData;
     if(!m) return "";
 
-    // Балльность волнения по высоте (шкала WMO)
     function seaStateLabel(h){
         if(h == null) return null;
-        if(h < 0.10) return { label:"Штиль (0 баллов)",          color:"#55efc4" };
-        if(h < 0.50) return { label:"Рябь (1 балл)",             color:"#00cec9" };
-        if(h < 1.25) return { label:"Лёгкое волнение (2)",       color:"#74b9ff" };
-        if(h < 2.50) return { label:"Умеренное волнение (3–4)",  color:"#ffd166" };
-        if(h < 4.00) return { label:"Значительное (5)",          color:"#ff9f5c" };
-        if(h < 6.00) return { label:"Сильное (6–7)",             color:"#ff6b6b" };
-        return              { label:"Очень сильное (8–9)",        color:"#d63031" };
+        if(h < 0.10) return { label:"Штиль (0 баллов)",         color:"#55efc4" };
+        if(h < 0.50) return { label:"Рябь (1 балл)",            color:"#00cec9" };
+        if(h < 1.25) return { label:"Лёгкое волнение (2)",      color:"#74b9ff" };
+        if(h < 2.50) return { label:"Умеренное волнение (3–4)", color:"#ffd166" };
+        if(h < 4.00) return { label:"Значительное (5)",         color:"#ff9f5c" };
+        if(h < 6.00) return { label:"Сильное (6–7)",            color:"#ff6b6b" };
+        return              { label:"Очень сильное (8–9)",       color:"#d63031" };
     }
 
-    const state   = seaStateLabel(m.waveH);
+    const state    = seaStateLabel(m.waveH);
     const sstColor = m.sst == null ? "#aaa"
         : m.sst < 12 ? "#74b9ff"
         : m.sst < 20 ? "#00cec9"
         : m.sst < 26 ? "#55efc4"
         :               "#ffd166";
 
-    // Форматирование
+    const fV   = v   => v != null ? v.toFixed(1) : "—";
     const fDir = deg => {
         if(deg == null) return "—";
-        const dirs = ["С","ССВ","СВ","ВСВ","В","ВЮВ","ЮВ","ЮЮВ","Ю","ЮЮЗ","ЮЗ","ЗЮЗ","З","ЗСЗ","СЗ","ССЗ"];
+        const dirs = ["С","ССВ","СВ","ВСВ","В","ВЮВ","ЮВ","ЮЮВ",
+                      "Ю","ЮЮЗ","ЮЗ","ЗЮЗ","З","ЗСЗ","СЗ","ССЗ"];
         return dirs[Math.round(deg/22.5)%16] + " " + Math.round(deg) + "°";
     };
-    const fV = v => v != null ? v.toFixed(1) : "—";
 
-    // Строка предупреждения
-    const warnHtml = m.waveH != null && m.waveH >= 1.25 ? `
+    const warnHtml = state && m.waveH >= 1.25 ? `
         <div style="margin-bottom:8px;padding:7px 10px;border-radius:8px;
              background:${state.color}15;border:1px solid ${state.color}44;
              font-size:13px;font-weight:700;color:${state.color};">
             🌊 ${state.label}
         </div>` : "";
 
-    // Строка SST
     const sstHtml = m.sst != null ? `
         <div style="display:flex;justify-content:space-between;align-items:center;
                     padding:8px 0 10px;border-bottom:1px solid #1e1e1e;margin-bottom:6px;">
@@ -867,31 +881,59 @@ function makeMarineBlock(){
             <span style="font-size:26px;font-weight:800;color:${sstColor};">${m.sst.toFixed(1)}°C</span>
         </div>` : "";
 
+    const seaLevelHtml = m.seaLevel != null ? (() => {
+        const cm  = Math.round(m.seaLevel * 100);
+        const arr = cm > 3 ? " ↑" : cm < -3 ? " ↓" : " →";
+        const col = cm > 3 ? "#74b9ff" : cm < -3 ? "#ff9f5c" : "#888";
+        return `<div class="districtLine">
+            <span>📏 Уровень моря</span>
+            <span style="color:${col};font-weight:600;">${cm >= 0 ? "+" : ""}${cm} см${arr}</span>
+        </div>`;
+    })() : "";
+
     const rows = [
-        m.waveH    != null ? ["🌊 Волна",          `${fV(m.waveH)} м · ${fDir(m.waveDir)}${m.wavePer != null ? " · T="+m.wavePer.toFixed(0)+" с" : ""}`] : null,
-        m.swellH   != null ? ["〰️ Зыбь",           `${fV(m.swellH)} м${m.swellPer != null ? " · T="+m.swellPer.toFixed(0)+" с" : ""}`] : null,
-        m.windWaveH!= null ? ["💨 Ветровая волна", `${fV(m.windWaveH)} м`] : null,
-        m.currentV != null && m.currentV > 0.05
-                           ? ["🔄 Течение",         `${fV(m.currentV)} м/с · ${fDir(m.currentDir)}`] : null,
+        m.waveH      != null ? ["🌊 Волна",
+            `${fV(m.waveH)} м · ${fDir(m.waveDir)}`
+            + (m.wavePeakPer != null ? ` · Tп=${m.wavePeakPer.toFixed(0)} с`
+               : m.wavePer   != null ? ` · T=${m.wavePer.toFixed(0)} с` : "")
+        ] : null,
+        m.swellH     != null ? ["〰️ Зыбь",
+            `${fV(m.swellH)} м · ${fDir(m.swellDir)}`
+            + (m.swellPer != null ? ` · T=${m.swellPer.toFixed(0)} с` : "")
+        ] : null,
+        m.windWaveH  != null ? ["💨 Ветровая волна",
+            `${fV(m.windWaveH)} м · ${fDir(m.windWaveDir)}`
+        ] : null,
+        m.seaWindSpeed != null ? ["🌬️ Ветер над морем",
+            `${fV(m.seaWindSpeed)} м/с · порывы ${fV(m.seaWindGust)} · ${fDir(m.seaWindDir)}`
+        ] : null,
+        m.currentV   != null && m.currentV > 0.05 ? ["🔄 Течение",
+            `${fV(m.currentV)} м/с · ${fDir(m.currentDir)}`
+        ] : null,
     ].filter(Boolean);
 
     if(!sstHtml && !rows.length) return "";
 
-    const sourceTime = m.time
-        ? (() => { const d = new Date(m.time); return isNaN(d) ? "" :
-            " · " + d.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}); })()
-        : "";
+    const sourceTime = m.time ? (() => {
+        const d = new Date(m.time);
+        return isNaN(d) ? "" :
+            " · " + d.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
+    })() : "";
 
     return `
     <div style="margin-top:12px;border-top:1px solid #2a2a2a;padding-top:10px;">
         <div style="font-size:11px;color:#555;margin-bottom:8px;
                     text-transform:uppercase;letter-spacing:.5px;">
-            Море · Чёрное море<span style="font-weight:400;letter-spacing:0;color:#333;">${sourceTime} · модель CMEMS</span>
+            Море · Чёрное море<span style="font-weight:400;letter-spacing:0;
+            color:#333;">${sourceTime} · модель CMEMS</span>
         </div>
         ${warnHtml}
         ${sstHtml}
         <div class="pws-fields">
-            ${rows.map(([k,v]) => `<div class="districtLine"><span>${k}</span><span>${v}</span></div>`).join("")}
+            ${seaLevelHtml}
+            ${rows.map(([k,v]) =>
+                `<div class="districtLine"><span>${k}</span><span>${v}</span></div>`
+            ).join("")}
         </div>
     </div>`;
 }
