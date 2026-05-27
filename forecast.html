@@ -196,7 +196,7 @@ function fcSwitchDay(offset){
 
 function applyFcDayFilter(){
     if(!window._fcAllHours || !window._fcAllTimes) return;
-    let hrs, tms;
+    let hrs, tms, idxs;
     if(_fcDayOffset === null){
         const nowTime = Date.now();
         const td = window._fcAllTimes.map(t => new Date(t));
@@ -204,13 +204,14 @@ function applyFcDayFilter(){
         if(si === -1) si = 0;
         si = Math.max(0, si - 1);
         const ei = Math.min(si + forecastHours, window._fcAllHours.length);
-        hrs = window._fcAllHours.slice(si, ei);
-        tms = window._fcAllTimes.slice(si, ei);
+        idxs = Array.from({length: ei - si}, (_, k) => si + k);
+        hrs = idxs.map(i => window._fcAllHours[i]);
+        tms = idxs.map(i => window._fcAllTimes[i]);
     } else {
         const d = new Date();
         d.setDate(d.getDate() + _fcDayOffset);
         const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-        const idxs = window._fcAllTimes.map((t,i) => t.slice(0,10)===key ? i : -1).filter(i => i>=0);
+        idxs = window._fcAllTimes.map((t,i) => t.slice(0,10)===key ? i : -1).filter(i => i>=0);
         if(!idxs.length) return;
         hrs = idxs.map(i => window._fcAllHours[i]);
         tms = idxs.map(i => window._fcAllTimes[i]);
@@ -219,6 +220,21 @@ function applyFcDayFilter(){
     _fcTimes = tms;
     renderForecastChart(_fcHours, _fcTimes);
     renderAlertsBlock(_fcHours);
+
+    // Синхронизация таблицы арифметики ансамбля с выбранным днём
+    if(window._dbgBase){
+        const b = window._dbgBase;
+        renderEnsembleDebug({
+            models:    b.models,
+            failed:    b.failed,
+            weights:   b.weights,
+            bias:      b.bias,
+            rawHours:  idxs.map(i => b.rawAll[i]),
+            corrHours: idxs.map(i => b.corrAll[i]),
+            times:     idxs.map(i => b.timesAll[i]),
+            snapTime:  b.snapTime
+        });
+    }
 }
 
 // =============================================
@@ -1884,6 +1900,19 @@ const fullDayEndE = Math.min(
 renderForecastDays(ensembleHours.slice(0, fullDayEndE), baseTimes.slice(0, fullDayEndE));
 
     var dbgFailed = models.filter(function(m){ return !succeededModels.includes(m); });
+
+    // Сохраняем полные массивы для синхронизации с кнопками дней
+    window._dbgBase = {
+        models:   models,
+        failed:   dbgFailed,
+        weights:  succeededWeights,
+        bias:     bias,
+        rawAll:   rawEnsembleHours,
+        corrAll:  ensembleHours,
+        timesAll: baseTimes,
+        snapTime: snapTime
+    };
+
     renderEnsembleDebug({
         models:    models,
         failed:    dbgFailed,
