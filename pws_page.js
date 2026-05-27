@@ -111,9 +111,26 @@ async function loadMarine(){
             fetch(marineUrl, { cache:"no-store" }),
             fetch(windUrl,   { cache:"no-store" }),
         ]);
-        const c = mr.ok ? ((await mr.json()).current || {}) : {};
+        const marineJson = mr.ok ? await mr.json() : {};
+        const c = marineJson.current || {};
+        let seaLevelCm = null;
+        try {
+            const htimes = marineJson.hourly?.time || [];
+            const hvals  = marineJson.hourly?.sea_level_height_msl || [];
+            if(htimes.length && hvals.length){
+                const now = Date.now();
+                let bestI = 0, bestDiff = Infinity;
+                for(let i=0; i<htimes.length; i++){
+                    const diff = Math.abs(new Date(htimes[i]).getTime() - now);
+                    if(diff < bestDiff){ bestDiff = diff; bestI = i; }
+                }
+                const mean = hvals.reduce((a,b)=>a+b,0) / hvals.length;
+                seaLevelCm = Math.round((hvals[bestI] - mean) * 100);
+            }
+        } catch(e){}
         _marineData = {
             sst:        c.sea_surface_temperature    ?? null,
+            seaLevel:   seaLevelCm,
             waveH:      c.wave_height                ?? null,
             waveDir:    c.wave_direction             ?? null,
             wavePer:    c.wave_period                ?? null,
