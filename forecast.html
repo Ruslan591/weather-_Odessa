@@ -739,6 +739,7 @@ function renderMarineChart(times, cfg){
 
     let vMin = 0, vMax = Math.max(...vAll);
     vMax += vMax * 0.2 || 0.5;
+    if(cfg.key === "wave" || cfg.key === "swell") vMax = Math.max(vMax, 0.6);
 
     const tMin = new Date(times[0]).getTime();
     const tMax_t= new Date(times[times.length-1]).getTime();
