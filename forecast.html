@@ -843,16 +843,49 @@ function renderMarineChart(times, cfg){
         const d = new Date(times[idx]);
         return isNaN(d) ? "" : d.toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
     };
-    const waveLabel = max < 0.1 ? "Штиль" : max < 0.5 ? "Рябь" :
-                      max < 1.25 ? "Слабое волнение" : max < 2.5 ? "Умеренное" :
-                      max < 4.0 ? "Значительное" : "Сильное волнение";
-    const waveColor = max < 0.1 ? "#55efc4" : max < 0.5 ? "#74b9ff" :
-                      max < 1.25 ? "#00cec9" : max < 2.5 ? "#fdcb6e" :
-                      max < 4.0 ? "#ff9f5c" : "#ff4d4d";
+    // Третья карточка: зависит от типа параметра
+    let thirdCard = "";
+    if(cfg.key === "wave" || cfg.key === "swell"){
+        const waveLabel = max < 0.1 ? "Штиль" : max < 0.5 ? "Рябь" :
+                          max < 1.25 ? "Слабое волнение" : max < 2.5 ? "Умеренное" :
+                          max < 4.0 ? "Значительное" : "Сильное волнение";
+        const waveColor = max < 0.1 ? "#55efc4" : max < 0.5 ? "#74b9ff" :
+                          max < 1.25 ? "#00cec9" : max < 2.5 ? "#fdcb6e" :
+                          max < 4.0 ? "#ff9f5c" : "#ff4d4d";
+        thirdCard = `<div class="fc-stat-card">
+            <div class="fc-stat-label">Состояние</div>
+            <div class="fc-stat-value" style="color:${waveColor};font-size:11px;">${waveLabel}</div>
+            <div class="fc-stat-time">&nbsp;</div>
+        </div>`;
+    } else if(cfg.key === "wave_per"){
+        const perLabel = avg < 5 ? "Короткая" : avg < 8 ? "Средняя" :
+                         avg < 12 ? "Длинная (зыбь)" : "Океанская зыбь";
+        const perColor = avg < 5 ? "#74b9ff" : avg < 8 ? "#00cec9" :
+                         avg < 12 ? "#fdcb6e" : "#a29bfe";
+        thirdCard = `<div class="fc-stat-card">
+            <div class="fc-stat-label">Тип волны</div>
+            <div class="fc-stat-value" style="color:${perColor};font-size:11px;">${perLabel}</div>
+            <div class="fc-stat-time">&nbsp;</div>
+        </div>`;
+    }
 
     if(statsBox){
         statsBox.style.display = "grid";
-        statsBox.innerHTML = `
+        const sstLabel = avg < 14 ? "Холодная" : avg < 18 ? "Прохладная" :
+                         avg < 22 ? "Тёплая" : avg < 26 ? "Комфортная" : "Горячая";
+        const sstColor = avg < 14 ? "#74b9ff" : avg < 18 ? "#00cec9" :
+                         avg < 22 ? "#fdcb6e" : avg < 26 ? "#ff9f5c" : "#ff4d4d";
+        const mainCards = cfg.key === "sst" ? `
+        <div class="fc-stat-card">
+            <div class="fc-stat-label">Мин / Макс</div>
+            <div class="fc-stat-value" style="color:${cfg.color};">${min.toFixed(1)} / ${max.toFixed(1)}${cfg.unit}</div>
+            <div class="fc-stat-time">&nbsp;</div>
+        </div>
+        <div class="fc-stat-card">
+            <div class="fc-stat-label">Оценка</div>
+            <div class="fc-stat-value" style="color:${sstColor};font-size:11px;">${sstLabel}</div>
+            <div class="fc-stat-time">&nbsp;</div>
+        </div>` : `
         <div class="fc-stat-card">
             <div class="fc-stat-label">Максимум</div>
             <div class="fc-stat-value" style="color:${cfg.color};">${max.toFixed(1)}${cfg.unit}</div>
@@ -862,12 +895,8 @@ function renderMarineChart(times, cfg){
             <div class="fc-stat-label">Среднее</div>
             <div class="fc-stat-value" style="color:#ccc;">${avg.toFixed(1)}${cfg.unit}</div>
             <div class="fc-stat-time">${vAll.length} значений</div>
-        </div>
-        <div class="fc-stat-card">
-            <div class="fc-stat-label">Состояние</div>
-            <div class="fc-stat-value" style="color:${waveColor};font-size:11px;">${waveLabel}</div>
-            <div class="fc-stat-time">&nbsp;</div>
         </div>`;
+        statsBox.innerHTML = mainCards + thirdCard;
     }
 }
 
