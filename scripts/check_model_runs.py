@@ -101,7 +101,9 @@ def git_push_history():
         year = datetime.now(timezone.utc).year
         subprocess.run(["git", "-C", BASE_DIR, "add",
                         "data/model_runs_history.json",
-                        f"data/synop_{year}.txt"],
+                        f"data/synop_{year}.txt",
+                        "data/model_bias.json",
+                        "data/model_weights.json"],
                       check=True, capture_output=True)
         result = subprocess.run(
             ["git", "-C", BASE_DIR, "commit", "-m", "data: synop + history update"],
