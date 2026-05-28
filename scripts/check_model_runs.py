@@ -230,7 +230,7 @@ def main():
         print("  Новых прогонов нет.\n")
         # Всё равно обновляем SYNOP (и снимок если готов новый ансамбль)
         subprocess.run(
-            [PYTHON, os.path.join(SCRIPTS_DIR, "update_local.py"), "--no-model"],
+            [PYTHON, os.path.join(SCRIPTS_DIR, "update_local.py"), "--no-model", "--no-fill"],
             cwd=BASE_DIR, capture_output=False
         )
         git_push_history()   # пушим synop даже без новых моделей
