@@ -98,10 +98,13 @@ def fetch_run_time(meta_id):
 
 def git_push_history():
     try:
-        subprocess.run(["git", "-C", BASE_DIR, "add", "data/model_runs_history.json"],
+        year = datetime.now(timezone.utc).year
+        subprocess.run(["git", "-C", BASE_DIR, "add",
+                        "data/model_runs_history.json",
+                        f"data/synop_{year}.txt"],
                       check=True, capture_output=True)
         result = subprocess.run(
-            ["git", "-C", BASE_DIR, "commit", "-m", "model_runs: history update"],
+            ["git", "-C", BASE_DIR, "commit", "-m", "data: synop + history update"],
             capture_output=True, text=True)
         if result.returncode != 0:
             print(f"  history commit: {result.stdout.strip() or result.stderr.strip()}")
@@ -229,6 +232,7 @@ def main():
             [PYTHON, os.path.join(SCRIPTS_DIR, "update_local.py"), "--no-model"],
             cwd=BASE_DIR, capture_output=False
         )
+        git_push_history()   # пушим synop даже без новых моделей
 
     check_pws_sync()
 
