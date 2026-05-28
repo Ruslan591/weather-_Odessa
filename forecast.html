@@ -767,14 +767,16 @@ function renderMarineChart(times, cfg){
         { h: 3.0, label:"3.0", col:"#ff4d4d" },
     ];
     let stormLines = "";
-    STORM_LEVELS.forEach(sl => {
-        if(sl.h <= vMax){
-            const ys = py(sl.h);
-            stormLines += `<line x1="${pad.l}" y1="${ys}" x2="${pad.l+iW}" y2="${ys}"
-                stroke="${sl.col}" stroke-width="0.8" stroke-dasharray="3 3" stroke-opacity="0.5"/>
-                <text x="${pad.l+iW-2}" y="${ys-2}" text-anchor="end" font-size="7.5" fill="${sl.col}" opacity="0.7">${sl.label}м</text>`;
-        }
-    });
+    if(cfg.key === "wave" || cfg.key === "swell"){
+        STORM_LEVELS.forEach(sl => {
+            if(sl.h <= vMax){
+                const ys = py(sl.h);
+                stormLines += `<line x1="${pad.l}" y1="${ys}" x2="${pad.l+iW}" y2="${ys}"
+                    stroke="${sl.col}" stroke-width="0.8" stroke-dasharray="3 3" stroke-opacity="0.5"/>
+                    <text x="${pad.l+iW-2}" y="${ys-2}" text-anchor="end" font-size="7.5" fill="${sl.col}" opacity="0.7">${sl.label}м</text>`;
+            }
+        });
+    }
 
     const FC_DAY_NAMES = ["Вс","Пн","Вт","Ср","Чт","Пт","Сб"];
     let xGrid = "", xLabels = "";
