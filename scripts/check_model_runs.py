@@ -107,8 +107,9 @@ def git_push_history():
             ["git", "-C", BASE_DIR, "commit", "-m", "data: synop + history update"],
             capture_output=True, text=True)
         if result.returncode != 0:
-            print(f"  history commit: {result.stdout.strip() or result.stderr.strip()}")
-            return
+            msg = result.stdout.strip() or result.stderr.strip()
+            if "nothing to commit" not in msg and "nothing added" not in msg:
+                print(f"  commit warn: {msg}")
         push = subprocess.run(
             ["git", "-C", BASE_DIR, "push", "--force-with-lease"],
             capture_output=True, text=True)
@@ -223,8 +224,8 @@ def main():
 
     if new_models:
         save_history(history)
-        git_push_history()
         run_pipeline(new_models)
+        git_push_history()
     else:
         print("  Новых прогонов нет.\n")
         # Всё равно обновляем SYNOP (и снимок если готов новый ансамбль)
