@@ -878,28 +878,25 @@ function renderMarineChart(times, cfg){
                          avg < 22 ? "Тёплая" : avg < 26 ? "Комфортная" : "Горячая";
         const sstColor = avg < 14 ? "#74b9ff" : avg < 18 ? "#00cec9" :
                          avg < 22 ? "#fdcb6e" : avg < 26 ? "#ff9f5c" : "#ff4d4d";
-        const mainCards = cfg.key === "sst" ? `
-        <div class="fc-stat-card">
-            <div class="fc-stat-label">Мин / Макс</div>
-            <div class="fc-stat-value" style="color:${cfg.color};">${min.toFixed(1)} / ${max.toFixed(1)}${cfg.unit}</div>
-            <div class="fc-stat-time">&nbsp;</div>
-        </div>
-        <div class="fc-stat-card">
-            <div class="fc-stat-label">Оценка</div>
-            <div class="fc-stat-value" style="color:${sstColor};font-size:11px;">${sstLabel}</div>
-            <div class="fc-stat-time">&nbsp;</div>
-        </div>` : `
+        const card1 = `
         <div class="fc-stat-card">
             <div class="fc-stat-label">Максимум</div>
             <div class="fc-stat-value" style="color:${cfg.color};">${max.toFixed(1)}${cfg.unit}</div>
             <div class="fc-stat-time">${tFmt(iMax)}</div>
-        </div>
+        </div>`;
+        const card2 = `
         <div class="fc-stat-card">
             <div class="fc-stat-label">Среднее</div>
             <div class="fc-stat-value" style="color:#ccc;">${avg.toFixed(1)}${cfg.unit}</div>
             <div class="fc-stat-time">${vAll.length} значений</div>
         </div>`;
-        statsBox.innerHTML = mainCards + thirdCard;
+        const card3 = cfg.key === "sst" ? `
+        <div class="fc-stat-card">
+            <div class="fc-stat-label">Оценка</div>
+            <div class="fc-stat-value" style="color:${sstColor};font-size:11px;">${sstLabel}</div>
+            <div class="fc-stat-time">&nbsp;</div>
+        </div>` : thirdCard;
+        statsBox.innerHTML = card1 + card2 + card3;
     }
 }
 
