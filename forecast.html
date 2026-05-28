@@ -843,10 +843,12 @@ function renderMarineChart(times, cfg){
         const d = new Date(times[idx]);
         return isNaN(d) ? "" : d.toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
     };
-    const waveLabel = max < 0.5 ? "Штиль" : max < 1.5 ? "Слабое волнение" :
-                      max < 3.0 ? "Умеренное" : max < 4.0 ? "Значительное" : "Сильное волнение";
-    const waveColor = max < 0.5 ? "#55efc4" : max < 1.5 ? "#00cec9" :
-                      max < 3.0 ? "#fdcb6e" : max < 4.0 ? "#ff9f5c" : "#ff4d4d";
+    const waveLabel = max < 0.1 ? "Штиль" : max < 0.5 ? "Рябь" :
+                      max < 1.25 ? "Слабое волнение" : max < 2.5 ? "Умеренное" :
+                      max < 4.0 ? "Значительное" : "Сильное волнение";
+    const waveColor = max < 0.1 ? "#55efc4" : max < 0.5 ? "#74b9ff" :
+                      max < 1.25 ? "#00cec9" : max < 2.5 ? "#fdcb6e" :
+                      max < 4.0 ? "#ff9f5c" : "#ff4d4d";
 
     if(statsBox){
         statsBox.style.display = "grid";
