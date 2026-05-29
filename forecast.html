@@ -108,12 +108,6 @@ function windDir(d){
     return dirs[Math.round(d/22.5)%16];
 }
 
-// Вся страница — кнопка перехода на обновление
-document.addEventListener('click', function(e) {
-    if (!e.target.closest('button, a, svg, input, select, .fc-stat-card, .bottom-sheet')) {
-        window.location.href = 'update_status.html';
-    }
-});
 
 function smooth(points){
     if(!points.length) return "";
