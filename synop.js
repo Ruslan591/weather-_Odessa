@@ -308,7 +308,7 @@ function parseSynop(line){
 ========================================================= */
 async function loadSynop(){
     const year = new Date().getUTCFullYear();
-    const url  = `data/synop_${year}.txt?_=${Date.now()}`;
+    const url  = `https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/synop_${year}.txt?_=${Date.now()}`;
 
     const r = await fetch(url, { cache: "no-store" });
     if(!r.ok) throw new Error(`synop_${year}.txt не найден (HTTP ${r.status})`);

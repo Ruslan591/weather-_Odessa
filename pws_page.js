@@ -66,7 +66,7 @@ async function fetchSynopCloud(){
     _synopFetchedAt = Date.now();
     try {
         const year = new Date().getFullYear();
-        const r = await fetch(`data/synop_${year}.txt`, {
+        const r = await fetch(`https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/synop_${year}.txt`, {
             headers: { Range: "bytes=-500" },
             cache: "no-store"
         });
