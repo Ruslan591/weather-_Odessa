@@ -176,6 +176,33 @@ function localTimeFromSynopYYGGi(yyggi){
     return `${dd}.${mm} ${hh}:00 местное`;
 }
 
+function pastWeatherPeriods(yyggi){
+    if(!yyggi || yyggi.length < 4) return { w1label: "Погода W1", w2label: "Погода W2" };
+    const day     = parseInt(yyggi.slice(0,2), 10);
+    const hourUTC = parseInt(yyggi.slice(2,4), 10);
+    if(!Number.isFinite(day) || !Number.isFinite(hourUTC))
+        return { w1label: "Погода W1", w2label: "Погода W2" };
+
+    const isMain    = [0,6,12,18].includes(hourUTC);
+    const intervalH = isMain ? 6 : 3;
+
+    const now    = new Date();
+    const obsUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), day, hourUTC, 0, 0));
+
+    const toLocal = d => {
+        const l = new Date(d.getTime() + 3 * 3600000);
+        return String(l.getUTCHours()).padStart(2,"0") + ":00";
+    };
+
+    const w2Start = new Date(obsUTC.getTime() - 1         * 3600000);
+    const w1Start = new Date(obsUTC.getTime() - intervalH * 3600000);
+
+    return {
+        w1label: `Погода W1 · ${toLocal(w1Start)}–${toLocal(w2Start)}`,
+        w2label: `Погода W2 · ${toLocal(w2Start)}–${toLocal(obsUTC)}`
+    };
+}
+
 function formatAutoTime(isoString){
     if(!isoString) return "-";
     const d = new Date(isoString);
