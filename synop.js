@@ -474,14 +474,15 @@ function renderSynop(d){
     const hasWx = d.weatherNow && d.weatherNow !== "00";
     const hasPastWx = (d.weatherPast1 && d.weatherPast1 !== "0") ||
                       (d.weatherPast2 && d.weatherPast2 !== "0");
+    const { w1label, w2label } = pastWeatherPeriods(d.yyggi);
     let wxBlockHtml = "";
     if(hasWx || hasPastWx){
         const wxRows = [
             hasWx ? row("Текущее явление", escapeHtml(wx)) : "",
             (d.weatherPast1 && d.weatherPast1 !== "0")
-                ? row("Погода за прошлый период (W1)", escapeHtml(synopPastWeatherText(d.weatherPast1))) : "",
+                ? row(w1label, escapeHtml(synopPastWeatherText(d.weatherPast1))) : "",
             (d.weatherPast2 && d.weatherPast2 !== "0")
-                ? row("Погода за последний час (W2)", escapeHtml(synopPastWeatherText(d.weatherPast2))) : "",
+                ? row(w2label, escapeHtml(synopPastWeatherText(d.weatherPast2))) : "",
         ].filter(Boolean).join("");
         wxBlockHtml = `
         <div class="card" style="margin-top:12px;">
