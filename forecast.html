@@ -134,6 +134,10 @@ const FC_PARAMS = [
     { key:"cape",     label:"CAPE",         color:"#ff6b6b", unit:" Дж/кг", field: h => h.cape ?? null              },
     { key:"li",       label:"Lifted Index", color:"#a29bfe", unit:"",       field: h => h.lifted_index ?? null     },
     { key:"cin",      label:"CIN",          color:"#fd79a8", unit:" Дж/кг", field: h => h.convective_inhibition ?? null },
+    // Атмосферный профиль
+    { key:"temp_profile", label:"T ↑ уровни", color:"#ff8f00", unit:"°",    field: h => h.temperature_2m },
+    { key:"wind_profile", label:"Ветер ↑",    color:"#8bc34a", unit:" м/с", field: h => h.wind_speed_10m },
+    { key:"freeze",       label:"0°C высота", color:"#74b9ff", unit:" м",   field: h => null },
     // Морской прогноз
     { key:"wave",     label:"Волна",         color:"#00cec9", unit:" м",  field: h => h.wave_height       ?? null, marine:true },
     { key:"swell",    label:"Зыбь",          color:"#0984e3", unit:" м",  field: h => h.swell_wave_height ?? null, marine:true },
@@ -144,6 +148,7 @@ const FC_PARAMS = [
 let _fcParam = "temp";
 let _fcHours = null;
 let _fcTimes = null;
+
 
 function buildFcParamRow(){
     const row = document.getElementById("fcParamRow");
@@ -357,12 +362,216 @@ function addCrosshair(svgEl, pts, pad, iW, iH, W, color, data, times, cfg, extra
 }
 
 // =============================================
+// ПРОФИЛЬ АТМОСФЕРЫ: НУЛЕВАЯ ИЗОТЕРМА
+// =============================================
+function calcFreezeHeight(h) {
+    const lvls = [
+        [0,    h.temperature_2m        ?? null],
+        [1500, h.temperature_850hPa    ?? null],
+        [3000, h.temperature_700hPa    ?? null],
+        [5500, h.temperature_500hPa    ?? null],
+    ].filter(([,t]) => t != null);
+    if(lvls.length < 2) return null;
+    if(lvls[0][1] <= 0) return 0;
+    if(lvls[lvls.length-1][1] >= 0) return lvls[lvls.length-1][0];
+    for(let i = 0; i < lvls.length-1; i++){
+        const [h1,t1] = lvls[i], [h2,t2] = lvls[i+1];
+        if(t1 >= 0 && t2 <= 0) return Math.round(h1 + (h2-h1) * t1 / (t1-t2));
+    }
+    return null;
+}
+
+function renderFreezeLevel(hours, times) {
+    const wrap = document.getElementById("fcChartWrap");
+    const statsBox = document.getElementById("fcStats");
+    if(!wrap) return;
+    const data = hours.map(h => calcFreezeHeight(h));
+    const vAll = data.filter(v => v != null && !isNaN(v));
+    if(!vAll.length){
+        wrap.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:160px;color:#555;font-size:13px;">нет данных уровней давления</div>`;
+        if(statsBox) statsBox.innerHTML = ""; return;
+    }
+    const W=320, H=160, pad={t:24,r:10,b:28,l:44};
+    const iW=W-pad.l-pad.r, iH=H-pad.t-pad.b;
+    let vMin=Math.max(0,Math.min(...vAll)-300), vMax=Math.max(...vAll)+300;
+    const tMin=new Date(times[0]).getTime(), tMax_=new Date(times[times.length-1]).getTime();
+    const px = t => pad.l+(new Date(t).getTime()-tMin)/(tMax_-tMin)*iW;
+    const py = v => pad.t+(1-(v-vMin)/(vMax-vMin))*iH;
+    const validPts = times.map((t,i) => data[i]!=null ? {x:px(t),y:py(data[i])} : null).filter(Boolean);
+    let seg=[], linePath="";
+    times.forEach((t,i) => {
+        if(data[i]!=null) seg.push({x:px(t),y:py(data[i])});
+        else if(seg.length){ linePath+=smooth(seg); seg=[]; }
+    });
+    if(seg.length) linePath+=smooth(seg);
+    let yGrid="",yLabels="";
+    for(let i=0;i<=4;i++){
+        const v=vMin+(vMax-vMin)*(1-i/4), y=pad.t+iH*i/4;
+        yGrid+=`<line x1="${pad.l}" y1="${y}" x2="${pad.l+iW}" y2="${y}" stroke="#252525" stroke-width="1"/>`;
+        yLabels+=`<text x="${pad.l-4}" y="${y+4}" text-anchor="end" font-size="9" fill="#555">${(v/1000).toFixed(1)}км</text>`;
+    }
+    const REF_LVLS=[{h:0,col:"#74b9ff",l:"0м"},{h:1500,col:"#4488aa",l:"850hPa"},{h:3000,col:"#336688",l:"700hPa"}];
+    let refs="";
+    REF_LVLS.forEach(r=>{ if(r.h<vMin||r.h>vMax) return; const y=py(r.h);
+        refs+=`<line x1="${pad.l}" y1="${y}" x2="${pad.l+iW}" y2="${y}" stroke="${r.col}" stroke-width="0.8" stroke-dasharray="3 3" stroke-opacity="0.5"/>
+            <text x="${pad.l+iW-2}" y="${y-2}" text-anchor="end" font-size="7.5" fill="${r.col}" opacity="0.6">${r.l}</text>`; });
+    const FC_DAY_NAMES=["Вс","Пн","Вт","Ср","Чт","Пт","Сб"];
+    let xGrid="",xLabels="";
+    times.forEach((t,i)=>{ const d=new Date(t),hr=d.getHours(),x=px(t);
+        if(hr===0){ xGrid+=`<line x1="${x}" y1="${pad.t}" x2="${x}" y2="${pad.t+iH}" stroke="#444" stroke-dasharray="2 4"/>`;
+            const nxt=times.slice(i+1).find(t2=>new Date(t2).getHours()===0); const xE=nxt?px(nxt):pad.l+iW;
+            xLabels+=`<text x="${(x+xE)/2}" y="${pad.t-6}" text-anchor="middle" font-size="8.5" fill="#777" font-weight="700">${FC_DAY_NAMES[d.getDay()]} ${d.getDate()}</text>`; }
+        if(hr%6===0) xLabels+=`<text x="${x}" y="${H-6}" text-anchor="middle" font-size="9" fill="#555">${hr}:00</text>`; });
+    const nowTs=Date.now(); let nowLine="";
+    if(nowTs>=tMin&&nowTs<=tMax_){ const xN=pad.l+(nowTs-tMin)/(tMax_-tMin)*iW;
+        nowLine=`<line x1="${xN}" y1="${pad.t}" x2="${xN}" y2="${pad.t+iH}" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" stroke-dasharray="4 3"/>`; }
+    // Область заливки под кривой
+    const aFill = linePath + ` L${validPts[validPts.length-1].x},${py(vMin)} L${validPts[0].x},${py(vMin)} Z`;
+    wrap.innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="display:block;">
+        <defs><linearGradient id="frzGrad" x1="0" y1="${pad.t}" x2="0" y2="${pad.t+iH}" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#74b9ff" stop-opacity="0.25"/><stop offset="100%" stop-color="#74b9ff" stop-opacity="0"/>
+        </linearGradient></defs>
+        ${yGrid}${xGrid}${nowLine}${refs}
+        <path d="${aFill}" fill="url(#frzGrad)" stroke="none"/>
+        <path d="${linePath}" fill="none" stroke="#74b9ff" stroke-width="2.5"/>
+        ${yLabels}${xLabels}</svg>`;
+    const svgEl=wrap.querySelector("svg");
+    const cfg={label:"0°C изотерма",unit:" м",color:"#74b9ff"};
+    if(svgEl) addCrosshair(svgEl,validPts,pad,iW,iH,W,"#74b9ff",data,times,cfg,true);
+    const min=Math.min(...vAll),max=Math.max(...vAll),avg=Math.round(vAll.reduce((a,b)=>a+b,0)/vAll.length);
+    const iMin=data.indexOf(min),iMax=data.indexOf(max);
+    const tFmt=idx=>{ if(idx<0||!times[idx]) return ""; const d=new Date(times[idx]); return isNaN(d)?"":d.toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}); };
+    const snowH=data.filter(v=>v!=null&&v<500).length;
+    if(statsBox){ statsBox.style.display="grid"; statsBox.innerHTML=`
+        <div class="fc-stat-card"><div class="fc-stat-label">Минимум</div><div class="fc-stat-value" style="color:#74b9ff;">${(min/1000).toFixed(2)} км</div><div class="fc-stat-time">${tFmt(iMin)}</div></div>
+        <div class="fc-stat-card"><div class="fc-stat-label">Максимум</div><div class="fc-stat-value" style="color:#ff8f00;">${(max/1000).toFixed(2)} км</div><div class="fc-stat-time">${tFmt(iMax)}</div></div>
+        <div class="fc-stat-card"><div class="fc-stat-label">Среднее</div><div class="fc-stat-value" style="color:#ccc;">${(avg/1000).toFixed(2)} км</div><div class="fc-stat-time">&nbsp;</div></div>
+        <div class="fc-stat-card"><div class="fc-stat-label">Снег у земли</div><div class="fc-stat-value" style="color:#74b9ff;">${snowH} ч</div><div class="fc-stat-time">&lt;500м</div></div>`; }
+}
+
+function renderTempProfile(hours, times) {
+    const wrap=document.getElementById("fcChartWrap"), statsBox=document.getElementById("fcStats");
+    if(!wrap) return;
+    const LEVELS=[
+        {key:"temperature_2m",    label:"2м",   color:"#ff8f00"},
+        {key:"temperature_850hPa",label:"850",  color:"#fdcb6e"},
+        {key:"temperature_700hPa",label:"700",  color:"#00cec9"},
+        {key:"temperature_500hPa",label:"500",  color:"#a29bfe"},
+    ];
+    const W=320,H=170,pad={t:28,r:10,b:28,l:38};
+    const iW=W-pad.l-pad.r,iH=H-pad.t-pad.b;
+    let vMin=Infinity,vMax=-Infinity;
+    LEVELS.forEach(lv=>hours.forEach(h=>{ const v=h[lv.key]; if(v!=null){vMin=Math.min(vMin,v);vMax=Math.max(vMax,v);} }));
+    if(vMin===Infinity){ wrap.innerHTML=`<div style="display:flex;align-items:center;justify-content:center;height:170px;color:#555;font-size:13px;">нет данных уровней давления</div>`; return; }
+    const spr=vMax-vMin||4; vMin-=spr*0.12; vMax+=spr*0.12;
+    const tMin=new Date(times[0]).getTime(),tMax_=new Date(times[times.length-1]).getTime();
+    const px=t=>pad.l+(new Date(t).getTime()-tMin)/(tMax_-tMin)*iW;
+    const py=v=>pad.t+(1-(v-vMin)/(vMax-vMin))*iH;
+    let yGrid="",yLabels="";
+    for(let i=0;i<=4;i++){ const v=vMin+(vMax-vMin)*(1-i/4),y=pad.t+iH*i/4;
+        yGrid+=`<line x1="${pad.l}" y1="${y}" x2="${pad.l+iW}" y2="${y}" stroke="#252525" stroke-width="1"/>`;
+        yLabels+=`<text x="${pad.l-4}" y="${y+4}" text-anchor="end" font-size="9" fill="#555">${v.toFixed(0)}°</text>`; }
+    let zeroLine="";
+    if(vMin<0&&vMax>0){ const yZ=py(0);
+        zeroLine=`<line x1="${pad.l}" y1="${yZ}" x2="${pad.l+iW}" y2="${yZ}" stroke="rgba(116,185,255,0.45)" stroke-width="1.2" stroke-dasharray="4 3"/>
+            <text x="${pad.l-4}" y="${yZ+4}" text-anchor="end" font-size="9" fill="#74b9ff">0°</text>`; }
+    const FC_DAY_NAMES=["Вс","Пн","Вт","Ср","Чт","Пт","Сб"];
+    let xGrid="",xLabels="";
+    times.forEach((t,i)=>{ const d=new Date(t),hr=d.getHours(),x=px(t);
+        if(hr===0){ xGrid+=`<line x1="${x}" y1="${pad.t}" x2="${x}" y2="${pad.t+iH}" stroke="#444" stroke-dasharray="2 4"/>`;
+            const nxt=times.slice(i+1).find(t2=>new Date(t2).getHours()===0); const xE=nxt?px(nxt):pad.l+iW;
+            xLabels+=`<text x="${(x+xE)/2}" y="${pad.t-8}" text-anchor="middle" font-size="8.5" fill="#777" font-weight="700">${FC_DAY_NAMES[d.getDay()]} ${d.getDate()}</text>`; }
+        if(hr%6===0) xLabels+=`<text x="${x}" y="${H-6}" text-anchor="middle" font-size="9" fill="#555">${hr}:00</text>`; });
+    const nowTs=Date.now(); let nowLine="";
+    if(nowTs>=tMin&&nowTs<=tMax_){ const xN=pad.l+(nowTs-tMin)/(tMax_-tMin)*iW;
+        nowLine=`<line x1="${xN}" y1="${pad.t}" x2="${xN}" y2="${pad.t+iH}" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" stroke-dasharray="4 3"/>`; }
+    let paths="",legendSvg="";
+    LEVELS.forEach((lv,li)=>{ const dArr=hours.map(h=>h[lv.key]??null);
+        let seg=[],d="";
+        times.forEach((t,i)=>{ if(dArr[i]!=null) seg.push({x:px(t),y:py(dArr[i])}); else if(seg.length){d+=smooth(seg);seg=[];} });
+        if(seg.length) d+=smooth(seg);
+        if(d) paths+=`<path d="${d}" fill="none" stroke="${lv.color}" stroke-width="2"/>`;
+        const xL=pad.l+iW-2,yL=pad.t+8+li*13;
+        legendSvg+=`<line x1="${xL-18}" y1="${yL}" x2="${xL-4}" y2="${yL}" stroke="${lv.color}" stroke-width="2"/>
+            <text x="${xL-20}" y="${yL+3}" text-anchor="end" font-size="8.5" fill="${lv.color}">${lv.label}</text>`; });
+    wrap.innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="display:block;">
+        ${yGrid}${xGrid}${nowLine}${zeroLine}${paths}${yLabels}${xLabels}${legendSvg}</svg>`;
+    if(statsBox){ statsBox.style.display="grid";
+        const now=Date.now(); let iNow=times.map(t=>new Date(t).getTime()).findIndex(t=>t>=now); if(iNow<0) iNow=0;
+        const h=hours[iNow];
+        statsBox.innerHTML=LEVELS.map(lv=>{ const v=h?h[lv.key]:null; return `
+            <div class="fc-stat-card"><div class="fc-stat-label">${lv.label}</div>
+            <div class="fc-stat-value" style="color:${lv.color};">${v!=null?v.toFixed(1)+'°':'—'}</div>
+            <div class="fc-stat-time">сейчас</div></div>`; }).join(""); }
+}
+
+function renderWindProfile(hours, times){
+    const wrap=document.getElementById("fcChartWrap"), statsBox=document.getElementById("fcStats");
+    if(!wrap) return;
+    const LEVELS=[
+        {spd:"wind_speed_10m",   dir:"wind_direction_10m",   label:"10м",  color:"#8bc34a"},
+        {spd:"windspeed_850hPa", dir:"winddirection_850hPa", label:"850",  color:"#00cec9"},
+        {spd:"windspeed_500hPa", dir:"winddirection_500hPa", label:"500",  color:"#a29bfe"},
+    ];
+    const W=320,H=170,pad={t:28,r:10,b:28,l:38};
+    const iW=W-pad.l-pad.r,iH=H-pad.t-pad.b;
+    let vMax=0;
+    LEVELS.forEach(lv=>hours.forEach(h=>{ const v=h[lv.spd]; if(v!=null) vMax=Math.max(vMax,v); }));
+    if(!vMax){ wrap.innerHTML=`<div style="display:flex;align-items:center;justify-content:center;height:170px;color:#555;font-size:13px;">нет данных</div>`; return; }
+    vMax=Math.ceil((vMax+2)/5)*5;
+    const tMin=new Date(times[0]).getTime(),tMax_=new Date(times[times.length-1]).getTime();
+    const px=t=>pad.l+(new Date(t).getTime()-tMin)/(tMax_-tMin)*iW;
+    const py=v=>pad.t+(1-v/vMax)*iH;
+    let yGrid="",yLabels="";
+    for(let i=0;i<=4;i++){ const v=vMax*(1-i/4),y=pad.t+iH*i/4;
+        yGrid+=`<line x1="${pad.l}" y1="${y}" x2="${pad.l+iW}" y2="${y}" stroke="#252525" stroke-width="1"/>`;
+        yLabels+=`<text x="${pad.l-4}" y="${y+4}" text-anchor="end" font-size="9" fill="#555">${v.toFixed(0)}</text>`; }
+    const FC_DAY_NAMES=["Вс","Пн","Вт","Ср","Чт","Пт","Сб"];
+    let xGrid="",xLabels="";
+    times.forEach((t,i)=>{ const d=new Date(t),hr=d.getHours(),x=px(t);
+        if(hr===0){ xGrid+=`<line x1="${x}" y1="${pad.t}" x2="${x}" y2="${pad.t+iH}" stroke="#444" stroke-dasharray="2 4"/>`;
+            const nxt=times.slice(i+1).find(t2=>new Date(t2).getHours()===0); const xE=nxt?px(nxt):pad.l+iW;
+            xLabels+=`<text x="${(x+xE)/2}" y="${pad.t-8}" text-anchor="middle" font-size="8.5" fill="#777" font-weight="700">${FC_DAY_NAMES[d.getDay()]} ${d.getDate()}</text>`; }
+        if(hr%6===0) xLabels+=`<text x="${x}" y="${H-6}" text-anchor="middle" font-size="9" fill="#555">${hr}:00</text>`; });
+    const nowTs=Date.now(); let nowLine="";
+    if(nowTs>=tMin&&nowTs<=tMax_){ const xN=pad.l+(nowTs-tMin)/(tMax_-tMin)*iW;
+        nowLine=`<line x1="${xN}" y1="${pad.t}" x2="${xN}" y2="${pad.t+iH}" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" stroke-dasharray="4 3"/>`; }
+    let paths="",arrows="",legendSvg="";
+    LEVELS.forEach((lv,li)=>{
+        const sArr=hours.map(h=>h[lv.spd]??null), dArr=hours.map(h=>h[lv.dir]??null);
+        let seg=[],d="";
+        times.forEach((t,i)=>{ if(sArr[i]!=null) seg.push({x:px(t),y:py(sArr[i])}); else if(seg.length){d+=smooth(seg);seg=[];} });
+        if(seg.length) d+=smooth(seg);
+        if(d) paths+=`<path d="${d}" fill="none" stroke="${lv.color}" stroke-width="2"/>`;
+        times.forEach((t,i)=>{ if(i%4!==0) return; const s=sArr[i],dir=dArr[i]; if(s==null||dir==null) return;
+            const x=px(t),y=py(s),rad=(dir+180)*Math.PI/180,dx=Math.sin(rad)*5,dy=-Math.cos(rad)*5;
+            arrows+=`<line x1="${x}" y1="${y}" x2="${x+dx}" y2="${y+dy}" stroke="${lv.color}" stroke-width="1.2" stroke-opacity="0.65"/>
+                <circle cx="${x+dx}" cy="${y+dy}" r="1.3" fill="${lv.color}" opacity="0.5"/>`; });
+        const xL=pad.l+iW-2,yL=pad.t+8+li*13;
+        legendSvg+=`<line x1="${xL-18}" y1="${yL}" x2="${xL-4}" y2="${yL}" stroke="${lv.color}" stroke-width="2"/>
+            <text x="${xL-20}" y="${yL+3}" text-anchor="end" font-size="8.5" fill="${lv.color}">${lv.label}</text>`; });
+    wrap.innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="display:block;">
+        <text x="${pad.l}" y="${pad.t-12}" font-size="8" fill="#444">м/с</text>
+        ${yGrid}${xGrid}${nowLine}${paths}${arrows}${yLabels}${xLabels}${legendSvg}</svg>`;
+    if(statsBox){ statsBox.style.display="grid";
+        const now=Date.now(); let iNow=times.map(t=>new Date(t).getTime()).findIndex(t=>t>=now); if(iNow<0) iNow=0;
+        const h=hours[iNow];
+        statsBox.innerHTML=LEVELS.map(lv=>{ const v=h?h[lv.spd]:null,dir=h?h[lv.dir]:null;
+            return `<div class="fc-stat-card"><div class="fc-stat-label">${lv.label}</div>
+            <div class="fc-stat-value" style="color:${lv.color};">${v!=null?v.toFixed(1)+' м/с':'—'}</div>
+            <div class="fc-stat-time">${dir!=null?windDir(dir)+' '+dir.toFixed(0)+'°':'&nbsp;'}</div></div>`; }).join(""); }
+}
+
+// =============================================
 // MAIN LINE CHART
 // =============================================
 function renderForecastChart(hours, times){
-    if(_fcParam === "winddir") return renderForecastWindDir(hours, times);
-    if(_fcParam === "cloud")   return renderForecastCloud(hours, times);
-    if(_fcParam === "prob")    return renderForecastProb(hours, times);
+    if(_fcParam === "winddir")      return renderForecastWindDir(hours, times);
+    if(_fcParam === "cloud")        return renderForecastCloud(hours, times);
+    if(_fcParam === "prob")         return renderForecastProb(hours, times);
+    if(_fcParam === "temp_profile") return renderTempProfile(hours, times);
+    if(_fcParam === "wind_profile") return renderWindProfile(hours, times);
+    if(_fcParam === "freeze")       return renderFreezeLevel(hours, times);
     const _cfgCheck = FC_PARAMS.find(p => p.key === _fcParam);
     if(_cfgCheck && _cfgCheck.marine) return renderMarineChart(times, _cfgCheck);
 
@@ -1706,7 +1915,9 @@ function mergeEnsemble(allModelHours, weights, models) {
         "wind_speed_10m","wind_gusts_10m","rain","showers","precip_prob","snowfall",
         "snow_depth","cloud_cover","cloud_cover_low","cloud_cover_mid","cloud_cover_high",
         "shortwave_radiation","dew_point_2m","visibility","cape","uv_index",
-        "lifted_index","convective_inhibition"
+        "lifted_index","convective_inhibition",
+        "temperature_850hPa","temperature_700hPa","temperature_500hPa",
+        "windspeed_850hPa","windspeed_500hPa"
     ];
     var base = allModelHours[models[0]];
     if (!base) return [];
@@ -1743,7 +1954,16 @@ function mergeEnsemble(allModelHours, weights, models) {
         merged.wind_direction_10m = wSum2 > 0
             ? ((Math.atan2(sx / wSum2, sy / wSum2) * 180 / Math.PI) + 360) % 360
             : null;
-
+        // Направление ветра на уровнях давления — векторное среднее
+        ["winddirection_850hPa","winddirection_500hPa"].forEach(function(dirField){
+            var sx2=0,sy2=0,ws2=0;
+            models.forEach(function(m){
+                var mh=allModelHours[m]; if(!mh||!mh[i]) return;
+                var d=mh[i][dirField];
+                if(d!=null){ var r=d*Math.PI/180; sx2+=Math.sin(r); sy2+=Math.cos(r); ws2++; }
+            });
+            merged[dirField]=ws2>0?((Math.atan2(sx2/ws2,sy2/ws2)*180/Math.PI)+360)%360:null;
+        });
         // weather_code — взвешенный мажоритарный
         var codeCounts = {};
         var cfw = (weights.byParam && weights.byParam["weather_code"]) ? weights.byParam["weather_code"] : weights.equal;
