@@ -271,7 +271,16 @@ function parseHourly(h) {
             winddirection_850hPa: h.winddirection_850hPa ? h.winddirection_850hPa[i] : null,
             winddirection_700hPa: h.winddirection_700hPa ? h.winddirection_700hPa[i] : null,
             winddirection_500hPa: h.winddirection_500hPa ? h.winddirection_500hPa[i] : null,
-            winddirection_300hPa: h.winddirection_300hPa ? h.winddirection_300hPa[i] : null,
+            winddirection_300hPa:        h.winddirection_300hPa        ? h.winddirection_300hPa[i]        : null,
+            geopotential_height_850hPa:  h.geopotential_height_850hPa  ? h.geopotential_height_850hPa[i]  : null,
+            geopotential_height_700hPa:  h.geopotential_height_700hPa  ? h.geopotential_height_700hPa[i]  : null,
+            geopotential_height_500hPa:  h.geopotential_height_500hPa  ? h.geopotential_height_500hPa[i]  : null,
+            geopotential_height_300hPa:  h.geopotential_height_300hPa  ? h.geopotential_height_300hPa[i]  : null,
+            geopotential_height_250hPa:  h.geopotential_height_250hPa  ? h.geopotential_height_250hPa[i]  : null,
+            geopotential_height_200hPa:  h.geopotential_height_200hPa  ? h.geopotential_height_200hPa[i]  : null,
+            vertical_velocity_850hPa:    h.vertical_velocity_850hPa    ? h.vertical_velocity_850hPa[i]    : null,
+            vertical_velocity_700hPa:    h.vertical_velocity_700hPa    ? h.vertical_velocity_700hPa[i]    : null,
+            vertical_velocity_500hPa:    h.vertical_velocity_500hPa    ? h.vertical_velocity_500hPa[i]    : null,
         };
     });
 }
@@ -284,7 +293,10 @@ function mergeEnsemble(allModelHours, weights, models) {
         "shortwave_radiation","dew_point_2m","visibility","cape","uv_index",
         "lifted_index","convective_inhibition",
         "temperature_925hPa","temperature_850hPa","temperature_700hPa","temperature_500hPa","temperature_300hPa",
-        "windspeed_925hPa","windspeed_850hPa","windspeed_700hPa","windspeed_500hPa","windspeed_300hPa"
+        "windspeed_925hPa","windspeed_850hPa","windspeed_700hPa","windspeed_500hPa","windspeed_300hPa",
+        "geopotential_height_850hPa","geopotential_height_700hPa","geopotential_height_500hPa",
+        "geopotential_height_300hPa","geopotential_height_250hPa","geopotential_height_200hPa",
+        "vertical_velocity_850hPa","vertical_velocity_700hPa","vertical_velocity_500hPa"
     ];
     var base = allModelHours[models[0]];
     if (!base) return [];
@@ -604,7 +616,10 @@ async function loadEnsemble() {
         "temperature_925hPa,temperature_850hPa,temperature_700hPa,temperature_500hPa,temperature_300hPa," +
         "dewpoint_850hPa,dewpoint_700hPa," +
         "windspeed_925hPa,windspeed_850hPa,windspeed_700hPa,windspeed_500hPa,windspeed_300hPa," +
-        "winddirection_925hPa,winddirection_850hPa,winddirection_700hPa,winddirection_500hPa,winddirection_300hPa";
+        "winddirection_925hPa,winddirection_850hPa,winddirection_700hPa,winddirection_500hPa,winddirection_300hPa," +
+        "geopotential_height_850hPa,geopotential_height_700hPa,geopotential_height_500hPa," +
+        "geopotential_height_300hPa,geopotential_height_250hPa,geopotential_height_200hPa," +
+        "vertical_velocity_850hPa,vertical_velocity_700hPa,vertical_velocity_500hPa";
 
     var fetches = models.map(function(m) {
         var url = "https://api.open-meteo.com/v1/forecast?latitude=46.43&longitude=30.74" +
