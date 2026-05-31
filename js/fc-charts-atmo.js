@@ -682,6 +682,7 @@ function renderGeopotentialChart(hours, times) {
 }
 
 // ─── renderVerticalVelocity ───────────────────────────────────────────────
+// ─── renderVerticalVelocity ───────────────────────────────────────────────
 function renderVerticalVelocity(hours, times){
     const wrap=document.getElementById("fcChartWrap"), statsBox=document.getElementById("fcStats");
     if(!wrap) return;
@@ -713,7 +714,7 @@ function renderVerticalVelocity(hours, times){
     let xGrid="",xLabels="";
     times.forEach((t,i)=>{ const d=new Date(t),hr=d.getHours(),x=px(t);
         if(hr===0){ xGrid+=`<line x1="${x}" y1="${pad.t}" x2="${x}" y2="${pad.t+iH}" stroke="#444" stroke-dasharray="2 4"/>`;
-            const nxt=times.slice(i+1).find(t2=>new Date(t2).getHours()===0); const xE=nxt?px(nxt):pad.l+iW;
+            const nxt=times.slice(i+1).find(t2=>new Date(t2).getHours()===0);
             xLabels+=`<text x="${((x+(nxt?px(nxt):pad.l+iW))/2).toFixed(1)}" y="${pad.t-8}" text-anchor="middle" font-size="8.5" fill="#777" font-weight="700">${FC_DAY_NAMES[d.getDay()]} ${d.getDate()}</text>`; }
         if(hr%6===0) xLabels+=`<text x="${x}" y="${H-6}" text-anchor="middle" font-size="9" fill="#555">${hr}h</text>`; });
     const nowTs=Date.now(); let nowLine="";
@@ -728,19 +729,146 @@ function renderVerticalVelocity(hours, times){
             if(validPts.length>1){ const fp=d+` L${validPts[validPts.length-1].x},${yZ} L${validPts[0].x},${yZ} Z`; fills+=`<path d="${fp}" fill="${lv.color}" fill-opacity="0.08"/>`; }
             paths+=`<path d="${d}" fill="none" stroke="${lv.color}" stroke-width="2"/>`; }
         allPts[lv.key]=pts; });
-    const legendHtml=`<div style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap;padding:5px 8px 4px;border-top:1px solid #1e1e1e;font-size:10px;">${LEVELS.map(lv=>`<span style="display:inline-flex;align-items:center;gap:4px;color:${lv.color};"><span style="display:inline-block;width:12px;height:2px;background:${lv.color};border-radius:1px;"></span>${lv.label}</span>`).join("")}<span style="color:#555;">· Па/с, − = вверх</span></div>`;
-    wrap.innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="display:block;">${yGrid}${xGrid}${zoneUp}${zoneDn}${zeroLine}${nowLine}${fills}${paths}${yLabels}${xLabels}</svg>${legendHtml}`;
-    const svgEl=wrap.querySelector("svg");
-    if(svgEl){ const allSeries=LEVELS.map(lv=>({label:lv.label,color:lv.color,unit:" Па/с",data:hours.map(h=>h[lv.key]??null),pts:allPts[lv.key]||times.map(()=>null)}));
-        addMultiLineCrosshair(svgEl,allSeries,pad,iW,iH,W,times); }
-    if(statsBox){ statsBox.style.display="grid";
-        const now=Date.now(); let iNow=times.map(t=>new Date(t).getTime()).findIndex(t=>t>=now); if(iNow<0) iNow=0;
-        const h=hours[iNow];
-        function omegaLabel(v){ if(v==null) return {t:"—",c:"#555",s:""}; if(v<-0.5) return {t:"Сильный подъём",c:"#ff6b6b",s:"осадки/гроза вероятны"}; if(v<-0.1) return {t:"Умеренный подъём",c:"#ff9f5c",s:"облачность растёт"}; if(v<0.1) return {t:"Нейтрально",c:"#aaa",s:""}; if(v<0.5) return {t:"Умеренный спуск",c:"#74b9ff",s:"прояснение"}; return {t:"Сильный спуск",c:"#4488ff",s:"ясно, сухо"}; }
-        const o5=omegaLabel(h?.vertical_velocity_500hPa);
+    const crossId="omgCross"+Date.now();
+    const crossSvg=`<line id="${crossId}" x1="0" y1="${pad.t}" x2="0" y2="${pad.t+iH}" stroke="rgba(255,255,255,0.4)" stroke-width="1" stroke-dasharray="3 3" style="display:none;"/>`;
+    const legendHtml=`<div style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap;padding:5px 8px 4px;border-top:1px solid #1e1e1e;font-size:10px;">${LEVELS.map(lv=>`<span style="display:inline-flex;align-items:center;gap:4px;color:${lv.color};"><span style="display:inline-block;width:12px;height:2px;background:${lv.color};border-radius:1px;"></span>${lv.label}</span>`).join("")}<span style="color:#555;">· Па/с, − = вверх · касание = детали</span></div>`;
+    wrap.innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="display:block;touch-action:none;">${yGrid}${xGrid}${zoneUp}${zoneDn}${zeroLine}${nowLine}${fills}${paths}${crossSvg}${yLabels}${xLabels}</svg>${legendHtml}`;
+
+    // ── helpers ──────────────────────────────────────────────────────────
+    function omegaLabel(v){
+        if(v==null) return {t:"—",c:"#555",s:""};
+        if(v<-0.5)  return {t:"Мощный подъём",   c:"#ff4444",s:"ливни, грозы, возможен град"};
+        if(v<-0.2)  return {t:"Умеренный подъём", c:"#ff8f00",s:"осадки вероятны"};
+        if(v<-0.05) return {t:"Слабый подъём",    c:"#fdcb6e",s:"облачность развивается"};
+        if(v< 0.05) return {t:"Нейтрально",       c:"#aaa",   s:"без выраженных процессов"};
+        if(v< 0.2)  return {t:"Слабый спуск",     c:"#74b9ff",s:"без осадков"};
+        if(v< 0.5)  return {t:"Умеренный спуск",  c:"#4488ff",s:"прояснение"};
+        return              {t:"Мощный спуск",     c:"#0055ff",s:"жара, инверсия, антициклон"};
+    }
+
+    function sign(v,thr=0.05){ if(v==null) return 0; if(v<-thr) return -1; if(v>thr) return 1; return 0; }
+
+    function analyzeOmega(w850,w700,w500){
+        const s8=sign(w850),s7=sign(w700),s5=sign(w500);
+        const strong=v=>v!=null&&Math.abs(v)>0.3;
+        const mod=v=>v!=null&&Math.abs(v)>0.1;
+        const allDn=s8>0&&s7>0&&s5>0, allUp=s8<0&&s7<0&&s5<0;
+        if(allDn){
+            if(strong(w850)&&strong(w700)&&strong(w500))
+                return {title:"Мощный антициклон",color:"#0055ff",
+                    desc:"Интенсивный субсиденс охватывает всю тропосферу от земли до 500 гПа. Воздух опускаясь нагревается — устойчивая инверсия температуры. Жара, небо ясное. Конвекция и грозы полностью исключены. Ночью возможен приземный радиационный туман или дымка из-за накопления влаги под инверсией."};
+            if(mod(w850)&&mod(w700)&&mod(w500))
+                return {title:"Антициклонический субсиденс",color:"#4488ff",
+                    desc:"Опускание воздуха во всей тропосфере. Облака растворяются снизу вверх. Осадков нет. Устойчивая погода на 12-24ч вперёд. При длительном субсиденсе накапливаются аэрозоли и дымка у земли — видимость может ухудшаться к утру."};
+            return {title:"Слабый субсиденс",color:"#74b9ff",
+                desc:"Слабое нисходящее движение во всех слоях тропосферы. Погода стабильная, без осадков. Возможна переменная облачность, но конвективного развития не ожидается."};
+        }
+        if(allUp){
+            if(strong(w850)&&strong(w700)&&strong(w500))
+                return {title:"Мощная конвекция",color:"#ff2222",
+                    desc:"Восходящее движение охватывает всю тропосферу — от земли до 500 гПа. Классический признак глубокой конвективной ячейки. Ливни, интенсивные грозы, возможен крупный град и шквалы. Характерно для суперячеек и мезомасштабных конвективных систем."};
+            if(mod(w850)&&mod(w700)&&mod(w500))
+                return {title:"Умеренная конвекция",color:"#ff8f00",
+                    desc:"Восходящее движение во всей толще тропосферы. Осадки вероятны, особенно во второй половине дня. Кучево-дождевые облака развиваются по всей высоте. Грозы возможны, преимущественно одиночные ячейки."};
+            return {title:"Слабая конвекция",color:"#fdcb6e",
+                desc:"Слабый подъём воздуха на всех уровнях. Кучевая облачность развивается, возможен кратковременный дождь. Полноценных гроз маловероятно. Конвекция ограниченная, без глубокого вертикального развития."};
+        }
+        // Расслоение
+        if(s8>0&&s7>0&&s5<0)
+            return {title:"Блокирующий антициклон",color:"#6c5ce7",
+                desc:"Субсиденс в нижней и средней тропосфере (850-700 гПа) при восходящем движении наверху (500 гПа). Инверсия субсиденса запирает влагу у земли. Туман и смог в утренние часы, особенно в долинах и над морем. Кучевые облака образуются, но не развиваются выше уровня инверсии."};
+        if(s8<0&&s7<0&&s5>0)
+            return {title:"Фронтальный подъём / тёплая адвекция",color:"#fd79a8",
+                desc:"Подъём воздуха в нижней тропосфере (850-700 гПа) при субсиденсе сверху (500 гПа). Типично для тёплого фронта: у земли поднимается влажный воздух, формируются слоисто-дождевые облака. Обложные осадки без гроз, монотонный дождь. Температура постепенно повышается."};
+        if(s8>0&&s7<0&&s5<0)
+            return {title:"Конвекция подавлена",color:"#00b894",
+                desc:"Подъём у земли (850 гПа) блокируется нисходящим потоком выше 700 гПа. «Лопнувшая» конвекция: кучевые облака образуются, но не развиваются в грозовые. Конвективный предел чётко выражен по высоте. Кратковременный ливень из конвективного облака возможен, но без грозовой активности."};
+        if(s8<0&&s7>0&&s5>0)
+            return {title:"Приземная / бризовая конвекция",color:"#e17055",
+                desc:"Восходящее движение только у земли (850 гПа), выше — субсиденс. Термическая или бризовая конвекция без глубокого вертикального развития. Кучевые облака образуются ближе к полудню над сушей, к вечеру рассеиваются над морем. Грозы маловероятны."};
+        if(s8<0&&s7>0&&s5<0)
+            return {title:"Слоистая нестабильность",color:"#a29bfe",
+                desc:"Нестабильность сосредоточена в среднем слое (700 гПа) при стабильных низах и верхах. Волновые облака или слоисто-дождевой фронт. Характерно для струйного течения с волновой активностью. Осадки слабые, преимущественно в виде мороси или обложного дождя."};
+        if(s8>0&&s7<0&&s5>0)
+            return {title:"Волновое возмущение",color:"#55efc4",
+                desc:"Нисходящее движение в нижнем слое и наверху при подъёме в среднем слое (700 гПа). Признак баротропной волны или орографического возмущения в тропосфере. Погода переходная, возможна волновая облачность без осадков. Состояние кратковременное."};
+        return {title:"Смешанный режим",color:"#aaa",
+            desc:"Разнонаправленные вертикальные движения на разных уровнях. Переходное состояние атмосферы — смена синоптического режима или прохождение фронта. Прогнозировать погоду только по омеге сложно: обратитесь к геопотенциалу и термодинамике."};
+    }
+
+    // ── обновление карточек ───────────────────────────────────────────────
+    function renderStats(idx){
+        if(!statsBox) return;
+        const h=hours[idx];
+        const t=times[idx]?new Date(times[idx]):null;
+        const timeStr=t&&!isNaN(t)?t.toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"";
+        const w850=h?.vertical_velocity_850hPa??null;
+        const w700=h?.vertical_velocity_700hPa??null;
+        const w500=h?.vertical_velocity_500hPa??null;
+        const o8=omegaLabel(w850),o7=omegaLabel(w700),o5=omegaLabel(w500);
+        const an=analyzeOmega(w850,w700,w500);
+        statsBox.style.display="grid";
         statsBox.innerHTML=`
-        <div class="fc-stat-card" style="grid-column:1/-1;"><div class="fc-stat-label">500 гПа сейчас</div><div class="fc-stat-value" style="color:${o5.c};font-size:13px;">${o5.t}</div><div class="fc-stat-time">${o5.s}</div></div>
-        ${LEVELS.map(lv=>{ const v=h?h[lv.key]:null; const o=omegaLabel(v); return `<div class="fc-stat-card"><div class="fc-stat-label">${lv.label}</div><div class="fc-stat-value" style="color:${o.c};font-size:12px;">${v!=null?v.toFixed(3)+' Па/с':'—'}</div><div class="fc-stat-time">${o.s}</div></div>`; }).join("")}`; }
+        <div class="fc-stat-card" style="grid-column:1/-1;padding:4px 8px;">
+            <div class="fc-stat-label" style="font-size:11px;color:#666;">${timeStr||'сейчас'}</div>
+        </div>
+        <div class="fc-stat-card">
+            <div class="fc-stat-label">850 гПа</div>
+            <div class="fc-stat-value" style="color:${o8.c};font-size:12px;">${w850!=null?w850.toFixed(3)+' Па/с':'—'}</div>
+            <div class="fc-stat-time" style="color:${o8.c};">${o8.t}</div>
+            <div class="fc-stat-time">${o8.s}</div>
+        </div>
+        <div class="fc-stat-card">
+            <div class="fc-stat-label">700 гПа</div>
+            <div class="fc-stat-value" style="color:${o7.c};font-size:12px;">${w700!=null?w700.toFixed(3)+' Па/с':'—'}</div>
+            <div class="fc-stat-time" style="color:${o7.c};">${o7.t}</div>
+            <div class="fc-stat-time">${o7.s}</div>
+        </div>
+        <div class="fc-stat-card">
+            <div class="fc-stat-label">500 гПа</div>
+            <div class="fc-stat-value" style="color:${o5.c};font-size:12px;">${w500!=null?w500.toFixed(3)+' Па/с':'—'}</div>
+            <div class="fc-stat-time" style="color:${o5.c};">${o5.t}</div>
+            <div class="fc-stat-time">${o5.s}</div>
+        </div>
+        <div class="fc-stat-card" style="grid-column:1/-1;">
+            <div class="fc-stat-label">Синоптический анализ</div>
+            <div class="fc-stat-value" style="color:${an.color};font-size:13px;margin-bottom:6px;">${an.title}</div>
+            <div style="font-size:11px;line-height:1.55;color:#888;">${an.desc}</div>
+        </div>`;
+    }
+
+    // ── touch/mouse handler ───────────────────────────────────────────────
+    const svgEl=wrap.querySelector("svg");
+    if(svgEl){
+        const crossEl=document.getElementById(crossId);
+        function getIdx(clientX){
+            const rect=svgEl.getBoundingClientRect();
+            const mx=(clientX-rect.left)*W/rect.width;
+            let best=0,bestDist=Infinity;
+            times.forEach((t,i)=>{ const d=Math.abs(px(t)-mx); if(d<bestDist){bestDist=d;best=i;} });
+            return best;
+        }
+        function onMove(clientX){
+            const idx=getIdx(clientX);
+            if(crossEl){ const xc=px(times[idx]); crossEl.setAttribute("x1",xc); crossEl.setAttribute("x2",xc); crossEl.style.display=""; }
+            renderStats(idx);
+        }
+        function onEnd(){
+            if(crossEl) crossEl.style.display="none";
+            let iNow=times.map(t=>new Date(t).getTime()).findIndex(t=>t>=Date.now());
+            if(iNow<0) iNow=0;
+            renderStats(iNow);
+        }
+        svgEl.addEventListener("mousemove",e=>onMove(e.clientX));
+        svgEl.addEventListener("mouseleave",onEnd);
+        svgEl.addEventListener("touchmove",e=>{ e.preventDefault(); onMove(e.touches[0].clientX); },{passive:false});
+        svgEl.addEventListener("touchend",onEnd);
+    }
+
+    // начальный рендер
+    let iNow=times.map(t=>new Date(t).getTime()).findIndex(t=>t>=Date.now());
+    if(iNow<0) iNow=0;
+    renderStats(iNow);
 }
 
 // ─── renderPolarVortex ────────────────────────────────────────────────────
