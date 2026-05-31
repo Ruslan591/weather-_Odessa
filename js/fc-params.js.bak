@@ -11,14 +11,9 @@ const FC_PARAMS = [
     { key:"li",       label:"Lifted Index", color:"#a29bfe", unit:"",       field: h => h.lifted_index ?? null     },
     { key:"cin",      label:"CIN",          color:"#fd79a8", unit:" Дж/кг", field: h => h.convective_inhibition ?? null },
     // Атмосферный профиль
-    { key:"temp_profile", label:"T ↑ уровни",   color:"#ff8f00", unit:"°",    field: h => h.temperature_2m },
-    { key:"wind_profile", label:"Ветер ↑",       color:"#8bc34a", unit:" м/с", field: h => h.wind_speed_10m },
-    { key:"freeze",       label:"0°C высота",    color:"#74b9ff", unit:" м",   field: h => null },
-    { key:"wind_barbs",   label:"Разрез ветра",  color:"#fd79a8", unit:" м/с", field: h => h.wind_speed_10m },
-    // Синоптика
-    { key:"geo_height",   label:"Геопотенциал",  color:"#00cec9", unit:" м",   field: h => null },
-    { key:"vert_vel",     label:"Омега ω",        color:"#ff6b6b", unit:" Па/с",field: h => null },
-    { key:"polar_vortex", label:"Полярный вихрь", color:"#a29bfe", unit:" м",   field: h => null },
+    { key:"temp_profile", label:"T ↑ уровни", color:"#ff8f00", unit:"°",    field: h => h.temperature_2m },
+    { key:"wind_profile", label:"Ветер ↑",    color:"#8bc34a", unit:" м/с", field: h => h.wind_speed_10m },
+    { key:"freeze",       label:"0°C высота", color:"#74b9ff", unit:" м",   field: h => null },
     // Морской прогноз
     { key:"wave",     label:"Волна",         color:"#00cec9", unit:" м",  field: h => h.wave_height       ?? null, marine:true },
     { key:"swell",    label:"Зыбь",          color:"#0984e3", unit:" м",  field: h => h.swell_wave_height ?? null, marine:true },
@@ -34,8 +29,7 @@ let _fcTimes = null;
 const FC_GROUPS = [
     { label: null,         keys: ["temp","pressure","humidity","wind","winddir","rain","prob","cloud"] },
     { label: "Конвекция",  keys: ["cape","li","cin"] },
-    { label: "Атмосфера",  keys: ["temp_profile","wind_profile","freeze","wind_barbs"] },
-    { label: "Синоптика",    keys: ["geo_height","vert_vel","polar_vortex"] },
+    { label: "Атмосфера",  keys: ["temp_profile","wind_profile","freeze"] },
     { label: "Море",       keys: ["wave","swell","wave_per","sst"] },
 ];
 
