@@ -255,15 +255,23 @@ function parseHourly(h) {
             uv_index:              h.uv_index ? h.uv_index[i] : null,
             lifted_index:          h.lifted_index ? h.lifted_index[i] : null,
             convective_inhibition: h.convective_inhibition ? h.convective_inhibition[i] : null,
+            temperature_925hPa:   h.temperature_925hPa   ? h.temperature_925hPa[i]   : null,
             temperature_850hPa:   h.temperature_850hPa   ? h.temperature_850hPa[i]   : null,
             temperature_700hPa:   h.temperature_700hPa   ? h.temperature_700hPa[i]   : null,
             temperature_500hPa:   h.temperature_500hPa   ? h.temperature_500hPa[i]   : null,
+            temperature_300hPa:   h.temperature_300hPa   ? h.temperature_300hPa[i]   : null,
             dewpoint_850hPa:      h.dewpoint_850hPa      ? h.dewpoint_850hPa[i]      : null,
             dewpoint_700hPa:      h.dewpoint_700hPa      ? h.dewpoint_700hPa[i]      : null,
+            windspeed_925hPa:     h.windspeed_925hPa     ? h.windspeed_925hPa[i]     : null,
             windspeed_850hPa:     h.windspeed_850hPa     ? h.windspeed_850hPa[i]     : null,
+            windspeed_700hPa:     h.windspeed_700hPa     ? h.windspeed_700hPa[i]     : null,
             windspeed_500hPa:     h.windspeed_500hPa     ? h.windspeed_500hPa[i]     : null,
+            windspeed_300hPa:     h.windspeed_300hPa     ? h.windspeed_300hPa[i]     : null,
+            winddirection_925hPa: h.winddirection_925hPa ? h.winddirection_925hPa[i] : null,
             winddirection_850hPa: h.winddirection_850hPa ? h.winddirection_850hPa[i] : null,
+            winddirection_700hPa: h.winddirection_700hPa ? h.winddirection_700hPa[i] : null,
             winddirection_500hPa: h.winddirection_500hPa ? h.winddirection_500hPa[i] : null,
+            winddirection_300hPa: h.winddirection_300hPa ? h.winddirection_300hPa[i] : null,
         };
     });
 }
@@ -275,8 +283,8 @@ function mergeEnsemble(allModelHours, weights, models) {
         "snow_depth","cloud_cover","cloud_cover_low","cloud_cover_mid","cloud_cover_high",
         "shortwave_radiation","dew_point_2m","visibility","cape","uv_index",
         "lifted_index","convective_inhibition",
-        "temperature_850hPa","temperature_700hPa","temperature_500hPa",
-        "windspeed_850hPa","windspeed_500hPa"
+        "temperature_925hPa","temperature_850hPa","temperature_700hPa","temperature_500hPa","temperature_300hPa",
+        "windspeed_925hPa","windspeed_850hPa","windspeed_700hPa","windspeed_500hPa","windspeed_300hPa"
     ];
     var base = allModelHours[models[0]];
     if (!base) return [];
@@ -314,7 +322,7 @@ function mergeEnsemble(allModelHours, weights, models) {
             ? ((Math.atan2(sx / wSum2, sy / wSum2) * 180 / Math.PI) + 360) % 360
             : null;
         // Направление ветра на уровнях давления — векторное среднее
-        ["winddirection_850hPa","winddirection_500hPa"].forEach(function(dirField){
+        ["winddirection_925hPa","winddirection_850hPa","winddirection_700hPa","winddirection_500hPa","winddirection_300hPa"].forEach(function(dirField){
             var sx2=0,sy2=0,ws2=0;
             models.forEach(function(m){
                 var mh=allModelHours[m]; if(!mh||!mh[i]) return;
@@ -593,9 +601,10 @@ async function loadEnsemble() {
         "shortwave_radiation,direct_radiation,diffuse_radiation,dew_point_2m,runoff," +
         "cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,cape,uv_index," +
         "lifted_index,convective_inhibition," +
-        "temperature_850hPa,temperature_700hPa,temperature_500hPa," +
+        "temperature_925hPa,temperature_850hPa,temperature_700hPa,temperature_500hPa,temperature_300hPa," +
         "dewpoint_850hPa,dewpoint_700hPa," +
-        "windspeed_850hPa,windspeed_500hPa,winddirection_850hPa,winddirection_500hPa";
+        "windspeed_925hPa,windspeed_850hPa,windspeed_700hPa,windspeed_500hPa,windspeed_300hPa," +
+        "winddirection_925hPa,winddirection_850hPa,winddirection_700hPa,winddirection_500hPa,winddirection_300hPa";
 
     var fetches = models.map(function(m) {
         var url = "https://api.open-meteo.com/v1/forecast?latitude=46.43&longitude=30.74" +
