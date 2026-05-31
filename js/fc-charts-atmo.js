@@ -609,12 +609,12 @@ function renderGeopotentialChart(hours, times) {
     const wrap=document.getElementById("fcChartWrap"), statsBox=document.getElementById("fcStats");
     if(!wrap) return;
     const LEVELS=[
-        {key:"geopotential_height_850hPa", label:"850", color:"#ff8f00", refLow:1350, refHigh:1600},
-        {key:"geopotential_height_700hPa", label:"700", color:"#55efc4", refLow:2850, refHigh:3150},
-        {key:"geopotential_height_500hPa", label:"500", color:"#74b9ff", refLow:5400, refHigh:5700},
-        {key:"geopotential_height_300hPa", label:"300", color:"#a29bfe", refLow:8800, refHigh:9500},
-        {key:"geopotential_height_250hPa", label:"250", color:"#fd79a8", refLow:9800, refHigh:10600},
         {key:"geopotential_height_200hPa", label:"200", color:"#fdcb6e", refLow:11400,refHigh:12300},
+        {key:"geopotential_height_250hPa", label:"250", color:"#fd79a8", refLow:9800, refHigh:10600},
+        {key:"geopotential_height_300hPa", label:"300", color:"#a29bfe", refLow:8800, refHigh:9500},
+        {key:"geopotential_height_500hPa", label:"500", color:"#74b9ff", refLow:5400, refHigh:5700},
+        {key:"geopotential_height_700hPa", label:"700", color:"#55efc4", refLow:2850, refHigh:3150},
+        {key:"geopotential_height_850hPa", label:"850", color:"#ff8f00", refLow:1350, refHigh:1600},
     ];
     const W=320,H=220,pad={t:24,r:10,b:28,l:50};
     const iW=W-pad.l-pad.r,iH=H-pad.t-pad.b;
