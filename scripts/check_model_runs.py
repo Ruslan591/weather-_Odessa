@@ -17,7 +17,7 @@ import os
 import subprocess
 import sys
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 # ── конфиг ────────────────────────────────────────────────────────────────────
 BASE_DIR     = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -165,21 +165,45 @@ def run_pipeline(new_models):
 
 # ── PWS-синк ─────────────────────────────────────────────────────────────────
 
+PWS_SYNC_STATE = os.path.join(BASE_DIR, "data", "pws_sync_state.json")
+MAX_PWS_RETRIES = 3   # после 3 неудачных попыток час считается пустым
+
 def check_pws_sync():
     pws_file = os.path.join(BASE_DIR, "data", "pws_raw.json")
-    cur_hk   = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H")
+    now_utc  = datetime.now(timezone.utc)
+    cur_hk   = now_utc.strftime("%Y-%m-%dT%H")
+    # Данные текущего часа могут ещё не поступить — проверяем предыдущий
+    prev_hk  = (now_utc - timedelta(hours=1)).strftime("%Y-%m-%dT%H")
 
+    # Читаем состояние (счётчики попыток)
+    sync_state = {}
+    if os.path.exists(PWS_SYNC_STATE):
+        try:
+            with open(PWS_SYNC_STATE, "r", encoding="utf-8") as f:
+                sync_state = json.load(f)
+        except Exception:
+            pass
+
+    # Проверяем актуальность данных
+    last_hk = ""
     if os.path.exists(pws_file):
         try:
             with open(pws_file, "r", encoding="utf-8") as f:
                 recs = json.load(f)
             last_hk = max((r.get("hourKey", "") for r in recs), default="")
-            if last_hk >= cur_hk:
-                return
         except Exception:
             pass
 
-    print(f"\n  🔄 PWS: нет данных за {cur_hk}, запускаю синк...")
+    if last_hk >= prev_hk:
+        return  # данные актуальны (есть за предыдущий час или новее)
+
+    # Проверяем лимит попыток для prev_hk
+    retries = sync_state.get(prev_hk, 0)
+    if retries >= MAX_PWS_RETRIES:
+        return  # тихо пропускаем
+
+    print(f"\n  🔄 PWS: нет данных за {prev_hk}, запускаю синк "
+          f"(попытка {retries + 1}/{MAX_PWS_RETRIES})...")
     result = subprocess.run(
         [PYTHON, os.path.join(SCRIPTS_DIR, "pws_sync_local.py")],
         cwd=BASE_DIR, capture_output=False
@@ -188,6 +212,25 @@ def check_pws_sync():
         print("  ✓ pws_sync_local.py")
     else:
         print(f"  ✗ pws_sync_local.py (код {result.returncode})")
+
+    # Проверяем, появились ли данные после синка
+    try:
+        with open(pws_file, "r", encoding="utf-8") as f:
+            recs = json.load(f)
+        new_last_hk = max((r.get("hourKey", "") for r in recs), default="")
+    except Exception:
+        new_last_hk = last_hk
+
+    if new_last_hk < prev_hk:
+        # Данных всё равно нет — увеличиваем счётчик
+        sync_state[prev_hk] = retries + 1
+        cutoff = (now_utc - timedelta(hours=48)).strftime("%Y-%m-%dT%H")
+        sync_state = {k: v for k, v in sync_state.items() if k >= cutoff}
+        try:
+            with open(PWS_SYNC_STATE, "w", encoding="utf-8") as f:
+                json.dump(sync_state, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"  [WARN] sync_state: {e}")
 
 # ── основная логика ───────────────────────────────────────────────────────────
 
