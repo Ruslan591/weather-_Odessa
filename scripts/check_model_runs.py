@@ -172,8 +172,6 @@ def check_pws_sync():
     pws_file = os.path.join(BASE_DIR, "data", "pws_raw.json")
     now_utc  = datetime.now(timezone.utc)
     cur_hk   = now_utc.strftime("%Y-%m-%dT%H")
-    # Данные текущего часа могут ещё не поступить — проверяем предыдущий
-    prev_hk  = (now_utc - timedelta(hours=1)).strftime("%Y-%m-%dT%H")
 
     # Читаем состояние (счётчики попыток)
     sync_state = {}
@@ -194,15 +192,15 @@ def check_pws_sync():
         except Exception:
             pass
 
-    if last_hk >= prev_hk:
-        return  # данные актуальны (есть за предыдущий час или новее)
+    if last_hk >= cur_hk:
+        return  # данные актуальны
 
-    # Проверяем лимит попыток для prev_hk
-    retries = sync_state.get(prev_hk, 0)
+    # Проверяем лимит попыток для cur_hk (станция могла быть офлайн)
+    retries = sync_state.get(cur_hk, 0)
     if retries >= MAX_PWS_RETRIES:
         return  # тихо пропускаем
 
-    print(f"\n  🔄 PWS: нет данных за {prev_hk}, запускаю синк "
+    print(f"\n  🔄 PWS: нет данных за {cur_hk}, запускаю синк "
           f"(попытка {retries + 1}/{MAX_PWS_RETRIES})...")
     result = subprocess.run(
         [PYTHON, os.path.join(SCRIPTS_DIR, "pws_sync_local.py")],
@@ -221,9 +219,9 @@ def check_pws_sync():
     except Exception:
         new_last_hk = last_hk
 
-    if new_last_hk < prev_hk:
-        # Данных всё равно нет — увеличиваем счётчик
-        sync_state[prev_hk] = retries + 1
+    if new_last_hk < cur_hk:
+        # Данных нет — станция была офлайн, увеличиваем счётчик
+        sync_state[cur_hk] = retries + 1
         cutoff = (now_utc - timedelta(hours=48)).strftime("%Y-%m-%dT%H")
         sync_state = {k: v for k, v in sync_state.items() if k >= cutoff}
         try:
