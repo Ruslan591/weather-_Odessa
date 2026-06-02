@@ -168,7 +168,17 @@ function renderFreezeLevel(hours, times) {
     const iMin=data.indexOf(min),iMax=data.indexOf(max);
     const tFmt=idx=>{ if(idx<0||!times[idx]) return ""; const d=new Date(times[idx]); return isNaN(d)?"":d.toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}); };
     const snowH=data.filter(v=>v!=null&&v<500).length;
-    if(statsBox){ statsBox.style.display="grid"; statsBox.innerHTML=`
+    if(statsBox){ statsBox.style.display="grid";
+        const _frQ=Math.max(1,Math.floor(vAll.length/4));
+        const _frTrend=vAll.length>4?Math.round(vAll.slice(-_frQ).reduce((a,b)=>a+b,0)/_frQ-vAll.slice(0,_frQ).reduce((a,b)=>a+b,0)/_frQ):0;
+        const _frAn=analyzeFreezeLevel(avg,_frTrend,min,max);
+        function _frLabel(){ const d0=new Date(times[0]),now=new Date(); if(d0.toDateString()===now.toDateString()) return 'Сегодня'; const tm=new Date(now); tm.setDate(now.getDate()+1); if(d0.toDateString()===tm.toDateString()) return 'Завтра'; return d0.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit'}); }
+        statsBox.innerHTML=`
+        <div class="fc-stat-card" style="grid-column:1/-1;">
+            <div class="fc-stat-label" style="margin-bottom:4px;">${_frLabel()}</div>
+            <div class="fc-stat-value" style="color:${_frAn.color};font-size:13px;margin-bottom:6px;">${_frAn.title}</div>
+            <div style="font-size:10px;line-height:1.55;color:#888;">${_frAn.desc}</div>
+        </div>
         <div class="fc-stat-card"><div class="fc-stat-label">Минимум</div><div class="fc-stat-value" style="color:#74b9ff;">${(min/1000).toFixed(2)} км</div><div class="fc-stat-time">${tFmt(iMin)}</div></div>
         <div class="fc-stat-card"><div class="fc-stat-label">Максимум</div><div class="fc-stat-value" style="color:#ff8f00;">${(max/1000).toFixed(2)} км</div><div class="fc-stat-time">${tFmt(iMax)}</div></div>
         <div class="fc-stat-card"><div class="fc-stat-label">Среднее</div><div class="fc-stat-value" style="color:#ccc;">${(avg/1000).toFixed(2)} км</div><div class="fc-stat-time">&nbsp;</div></div>
@@ -476,10 +486,156 @@ function renderTempProfile(hours, times) {
     const svgEl=wrap.querySelector("svg");
     if(svgEl){ const allSeries=LEVELS.map(lv=>({label:lv.label,color:lv.color,unit:"°",data:hours.map(h=>h[lv.key]??null),pts:allPts[lv.key]}));
         addMultiLineCrosshair(svgEl,allSeries,pad,iW,iH,W,times); }
-    if(statsBox){ statsBox.style.display="grid";
-        const now=Date.now(); let iNow=times.map(t=>new Date(t).getTime()).findIndex(t=>t>=now); if(iNow<0) iNow=0;
-        const h=hours[iNow];
-        statsBox.innerHTML=LEVELS.map(lv=>{ const v=h?h[lv.key]:null; return `<div class="fc-stat-card"><div class="fc-stat-label">${lv.label}</div><div class="fc-stat-value" style="color:${lv.color};">${v!=null?v.toFixed(1)+'°':'—'}</div><div class="fc-stat-time">сейчас</div></div>`; }).join(""); }
+    if(statsBox){
+        function _tpAvg(key){ const vs=hours.map(h=>h[key]??null).filter(v=>v!=null); return vs.length?vs.reduce((a,b)=>a+b,0)/vs.length:null; }
+        function _tpLabel(){ const d0=new Date(times[0]),d1=new Date(times[times.length-1]),now=new Date(); if(d0.toDateString()===now.toDateString()&&d1.toDateString()===now.toDateString()) return 'Сегодня'; const tm=new Date(now); tm.setDate(now.getDate()+1); if(d0.toDateString()===tm.toDateString()&&d1.toDateString()===tm.toDateString()) return 'Завтра'; const fmt=d=>d.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit'}); return fmt(d0); }
+        const _tpAn=analyzeTempProfile(_tpAvg('temperature_2m'),_tpAvg('temperature_925hPa'),_tpAvg('temperature_850hPa'),_tpAvg('temperature_700hPa'),_tpAvg('temperature_500hPa'));
+        const _tp2m=_tpAvg('temperature_2m'),_tp850=_tpAvg('temperature_850hPa'),_tp700=_tpAvg('temperature_700hPa'),_tp500=_tpAvg('temperature_500hPa');
+        statsBox.style.display='grid';
+        statsBox.innerHTML=`
+        <div class="fc-stat-card" style="grid-column:1/-1;">
+            <div class="fc-stat-label" style="margin-bottom:4px;">${_tpLabel()}</div>
+            <div class="fc-stat-value" style="color:${_tpAn.color};font-size:13px;margin-bottom:6px;">${_tpAn.title}</div>
+            <div style="font-size:10px;line-height:1.55;color:#888;margin-bottom:8px;">${_tpAn.desc}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;font-size:10px;">
+                ${_tp2m!=null?`<span style="color:#ff8f00;">2м: <b>${_tp2m.toFixed(1)}°</b></span>`:''}
+                ${_tp850!=null?`<span style="color:#fdcb6e;">850: <b>${_tp850.toFixed(1)}°</b></span>`:''}
+                ${_tp700!=null?`<span style="color:#55efc4;">700: <b>${_tp700.toFixed(1)}°</b></span>`:''}
+                ${_tp500!=null?`<span style="color:#74b9ff;">500: <b>${_tp500.toFixed(1)}°</b></span>`:''}
+            </div>
+            <div style="margin-top:8px;border-top:1px solid #252525;padding-top:6px;">
+                <div style="font-size:10px;color:#555;margin-bottom:4px;">Для уточнения:</div>
+                <div style="display:flex;gap:5px;flex-wrap:wrap;">
+                    <button onclick="window._fcGoTo('cape')" style="padding:3px 9px;border-radius:8px;border:1px solid #252525;background:#111;color:#888;font-size:10px;cursor:pointer;touch-action:manipulation;">⚡ CAPE</button>
+                    <button onclick="window._fcGoTo('vert_vel')" style="padding:3px 9px;border-radius:8px;border:1px solid #252525;background:#111;color:#888;font-size:10px;cursor:pointer;touch-action:manipulation;">💨 Омега ω</button>
+                </div>
+            </div>
+        </div>`; }
+}
+
+// ─── analyzeTempProfile ──────────────────────────────────────────────────────
+function analyzeTempProfile(avgT2m, avgT925, avgT850, avgT700, avgT500){
+    const lr_low = (avgT2m!=null&&avgT850!=null)?(avgT2m-avgT850)/1.5:null;
+    const lr_mid = (avgT850!=null&&avgT500!=null)?(avgT850-avgT500)/4.0:null;
+    const invLow  = avgT850!=null&&avgT2m!=null&&avgT850>avgT2m+3;
+    const invMid  = avgT700!=null&&avgT850!=null&&avgT700>avgT850+2;
+    const warmMass = avgT850!=null&&avgT850>15;
+    const coldMass = avgT850!=null&&avgT850<0;
+    const veryCold = avgT850!=null&&avgT850<-10;
+    if(invLow)
+        return {title:"Приземная инверсия",color:"#e17055",
+            desc:"Температура у земли ниже, чем на 850 гПа — классическая приземная инверсия. Конвекция полностью подавлена. Вероятен туман, дымка, смог. Облачность низкая слоистая. Грозы исключены."};
+    if(lr_mid!=null&&lr_mid>8)
+        return {title:"Суперадиабатический градиент",color:"#ff0000",
+            desc:"Вертикальный температурный градиент превышает сухоадиабатический — крайняя конвективная нестабильность. Вероятны мощные грозы, смерчи, крупный град. Немедленно проверьте CAPE и CIN."};
+    if(lr_mid!=null&&lr_mid>6.5)
+        return {title:"Нестабильная стратификация",color:"#ff6b6b",
+            desc:"Крутой вертикальный температурный градиент — условия для активной конвекции. При достаточной влажности и триггере (фронт, прогрев) вероятны грозы, ливни, шквалы. Оцените CAPE и CIN."};
+    if(lr_mid!=null&&lr_mid>5&&warmMass)
+        return {title:"Тёплая умеренно нестабильная масса",color:"#fd79a8",
+            desc:"Тёплый воздух на 850 гПа с умеренным вертикальным градиентом. Конвективный потенциал умеренный — грозы возможны во второй половине дня при дополнительном прогреве."};
+    if(veryCold)
+        return {title:"Арктическое вторжение",color:"#0984e3",
+            desc:"Крайне холодный воздух на уровне 850 гПа. Арктическая воздушная масса. При осадках возможен снег до уровня моря. Интенсивный приземной прогрев даёт послефронтальную конвекцию."};
+    if(coldMass)
+        return {title:"Холодная воздушная масса",color:"#a29bfe",
+            desc:"Холодный воздух на 850 гПа. Конвекция усиливается при дневном прогреве. Кратковременные ливни и отдельные грозы во второй половине дня. Ночью — стабилизация."};
+    if(invMid)
+        return {title:"Инверсия на 700 гПа",color:"#fdcb6e",
+            desc:"Задавливающий слой инверсии на средней тропосфере. Конвекция ограничена — мелкие кучевые без мощного вертикального развития. Грозы маловероятны, осадки слабые."};
+    if(lr_mid!=null&&lr_mid<3)
+        return {title:"Устойчивая стратификация",color:"#55efc4",
+            desc:"Слабый вертикальный температурный градиент — атмосфера устойчива. Конвекция подавлена. Осадки возможны как обложной дождь при наличии фронта. Грозы маловероятны."};
+    return {title:"Нейтральная стратификация",color:"#aaa",
+        desc:"Умеренный вертикальный температурный профиль — атмосфера в условно-нейтральном состоянии. Конвекция возможна при дополнительном триггере. Оцените CAPE и влажность."};
+}
+
+// ─── analyzeFreezeLevel ───────────────────────────────────────────────────────
+function analyzeFreezeLevel(avgFreeze, trend, minFreeze, maxFreeze){
+    const range=maxFreeze-minFreeze;
+    if(avgFreeze>4500)
+        return {title:"Очень высокая нулевая изотерма",color:"#ff6b6b",
+            desc:"Изотерма 0°C исключительно высоко — жаркая тропическая воздушная масса. Снег в регионе исключён. Высокий риск тепловой конвекции и гроз. Повышенное испарение, тепловой дискомфорт."};
+    if(avgFreeze>3500&&trend>300)
+        return {title:"Рост нулевой изотермы",color:"#fdcb6e",
+            desc:"Высокая и продолжающая расти изотерма — тёплая масса наступает. Потепление продолжается. Риска снега нет, возможны летние конвективные грозы при достаточной влажности."};
+    if(avgFreeze>3500)
+        return {title:"Высокая нулевая изотерма",color:"#ff8f00",
+            desc:"Нулевая изотерма выше нормы — тёплый воздух господствует. Все осадки в жидком виде. При высокой влажности возможны грозы преимущественно во второй половине дня."};
+    if(avgFreeze<300)
+        return {title:"Изотерма у поверхности",color:"#0055ff",
+            desc:"Нулевая изотерма практически у земли — сильное арктическое вторжение. Снегопад, гололёд, обледенение. Крайне опасные условия. Температура у земли ниже нуля."};
+    if(avgFreeze<1000&&trend<-300)
+        return {title:"Резкое опускание изотермы",color:"#74b9ff",
+            desc:"Нулевая изотерма низко и быстро опускается — активный холодный фронт. Осадки переходят в мокрый снег и снег. Гололедица возможна при температуре у земли около нуля."};
+    if(avgFreeze<1500)
+        return {title:"Низкая нулевая изотерма",color:"#a29bfe",
+            desc:"Нулевая изотерма ниже нормы — холодная воздушная масса. При осадках возможен мокрый снег на возвышенностях и ночью у моря. Температура у земли около нуля при облачности."};
+    if(range>900)
+        return {title:"Значительное колебание изотермы",color:"#00cec9",
+            desc:`Нулевая изотерма колеблется на ${Math.round(range)} м — смена воздушных масс. Возможен переход осадков от дождя к мокрому снегу. Следите за температурой у земли в ночные часы.`};
+    if(Math.abs(trend)>400)
+        return {title:trend>0?"Потепление — рост изотермы":"Похолодание — опускание изотермы",
+            color:trend>0?"#ff8f00":"#74b9ff",
+            desc:trend>0?`Нулевая изотерма поднимается (+${Math.round(trend)} м за период) — тёплая масса наступает. Риск замерзания снижается.`:`Нулевая изотерма опускается (${Math.round(trend)} м за период) — холодеет. Следите за переходом осадков в снег.`};
+    return {title:"Нулевая изотерма в норме",color:"#aaa",
+        desc:"Уровень нулевой изотермы в пределах нормы. Осадки преимущественно жидкие. Устойчивые температурные условия без резких смен воздушных масс."};
+}
+
+// ─── analyzeWindBarbs ─────────────────────────────────────────────────────────
+function analyzeWindBarbs(veer10_850, veer850_500, avgSpd850, avgSpd500, avgSpd300){
+    const warmLow  = veer10_850!=null  && veer10_850>30;
+    const coldLow  = veer10_850!=null  && veer10_850<-30;
+    const warmMid  = veer850_500!=null && veer850_500>30;
+    const coldMid  = veer850_500!=null && veer850_500<-30;
+    const strongJet= avgSpd300!=null   && avgSpd300>25;
+    const strongLow= avgSpd850!=null   && avgSpd850>12;
+    if(warmLow&&warmMid)
+        return {title:"Тёплая адвекция на всей высоте",color:"#ff9f5c",
+            desc:"Вирация ветра с высотой на всех уровнях — интенсивная тёплая адвекция. Предфронтальный тёплый сектор или гребень. Слоистая облачность, обложные осадки. При достаточном CAPE — высокий конвективный потенциал."};
+    if(coldLow&&coldMid)
+        return {title:"Холодная адвекция на всей высоте",color:"#74b9ff",
+            desc:"Ротация ветра с высотой на всех уровнях — активная холодная адвекция. Тыловая часть циклона или прохождение холодного фронта. Послефронтальные ливни, порывы ветра, прояснения после фронта."};
+    if(warmLow&&coldMid)
+        return {title:"Окклюзия / слоистая адвекция",color:"#fd79a8",
+            desc:"Тёплая адвекция внизу и холодная на средних уровнях — структура окклюдированного фронта. Смешанные осадки, нестабильность. Уточните по геопотенциалу."};
+    if(coldLow&&warmMid)
+        return {title:"Термическое расслоение",color:"#a29bfe",
+            desc:"Холодный воздух у земли при тёплом на средних уровнях. Инверсия подавляет конвекцию. Туман или низкая облачность при слабом приземном ветре. Осадки слабые слоистые."};
+    if(strongJet&&!warmLow&&!coldLow)
+        return {title:"Струйное течение / нейтральная адвекция",color:"#fdcb6e",
+            desc:"Мощная струя на верхних уровнях без значительной термической адвекции у земли. Дивергенция под струёй может активизировать восходящие движения. Следите за геопотенциалом."};
+    if(warmLow&&!warmMid&&!coldMid)
+        return {title:"Тёплая адвекция в нижней тропосфере",color:"#fdcb6e",
+            desc:"Вирация ветра от земли до 850 гПа — тёплая адвекция в нижнем слое. Слоистая облачность ниже 850 гПа, морось или слабый дождь. Характерно для тёплого фронта на расстоянии."};
+    if(coldLow&&!warmMid&&!coldMid)
+        return {title:"Холодная адвекция в нижней тропосфере",color:"#b2bec3",
+            desc:"Ротация ветра у земли и на 850 гПа — холодная адвекция в нижнем слое. Прояснение после фронта или начало похолодания. Ветер порывистый при конвективной погоде."};
+    if(strongLow)
+        return {title:"Интенсивный горизонтальный перенос",color:"#55efc4",
+            desc:"Высокие скорости ветра без выраженного вращения — интенсивный перенос воздушной массы. Погода определяется источником воздуха. Гроз нет при отсутствии сдвига и нестабильности."};
+    return {title:"Нейтральный поток",color:"#aaa",
+        desc:"Слабая адвекция на всех уровнях. Нейтральный вертикальный профиль ветра. Погода определяется крупномасштабным синоптическим фоном без выраженных динамических процессов."};
+}
+
+// ─── analyzePolarVortex ───────────────────────────────────────────────────────
+function analyzePolarVortex(avgT10, avgT50, trend10){
+    const t = avgT10 ?? avgT50;
+    if(t==null) return {title:"Нет данных",color:"#555",desc:"Данные стратосферных уровней недоступны."};
+    if(t>-30)
+        return {title:"Внезапное стратосферное потепление",color:"#ff0000",
+            desc:"Критический нагрев стратосферы — вихрь разрушается или смещается. Риск вторжения арктического воздуха в умеренные широты через 2-6 недель. Вероятны аномальные холода в Европе при южном смещении вихря."};
+    if(t>-45)
+        return {title:"Ослабленный полярный вихрь",color:"#ff6b6b",
+            desc:"Полярный вихрь значительно ослаблен. Повышен риск прорывов холодного воздуха и блокирующих антициклонов в Европе. Возможны значительные температурные аномалии в ближайшие 2-4 недели."};
+    if(t>-60)
+        return {title:"Умеренный полярный вихрь",color:"#fdcb6e",
+            desc:"Полярный вихрь в умеренном состоянии. Небольшой риск прорывов холода. Погода в умеренных широтах относительно нормальная, но возможны кратковременные вторжения холодных масс."};
+    if(t>-75)
+        return {title:"Сильный полярный вихрь",color:"#74b9ff",
+            desc:"Полярный вихрь интенсивный, хорошо организован. Надёжная изоляция арктического воздуха. Зима в умеренных широтах без аномальных холодов. Типичная зональная циркуляция."};
+    return {title:"Исключительно сильный вихрь",color:"#0055ff",
+        desc:"Рекордно низкие температуры стратосферы — полярный вихрь максимально интенсивен. Полная изоляция Арктики. Мягкая зима в Европе, тёплые аномалии в умеренных широтах."};
 }
 
 // ─── analyzeGeopotential ─────────────────────────────────────────────────────
@@ -725,10 +881,21 @@ function renderWindBarbs(hours, times) {
         const h=hours[iNow];
         function angleDiff(a,b){ if(a==null||b==null) return null; let d=((b-a)+360)%360; if(d>180) d-=360; return d; }
         function veerLabel(diff){ if(diff==null) return {t:"—",c:"#555",s:""}; if(Math.abs(diff)<15) return {t:"Нейтральный",c:"#aaa",s:""}; if(diff>0) return {t:`Вирация +${Math.round(diff)}°`,c:"#ff9f5c",s:"тёплая адвекция ↑"}; return {t:`Ротация ${Math.round(diff)}°`,c:"#74b9ff",s:"холодная адвекция ↓"}; }
+        function _wbCircDiff(kA,kB){ const ds=hours.map(h=>angleDiff(h[kA],h[kB])).filter(v=>v!=null); if(!ds.length) return null; const sx=ds.reduce((s,d)=>s+Math.sin(d*Math.PI/180),0)/ds.length,sy=ds.reduce((s,d)=>s+Math.cos(d*Math.PI/180),0)/ds.length; let r=(Math.atan2(sx,sy)*180/Math.PI+360)%360; return r>180?r-360:r; }
+        function _wbAvgSpd(key){ const vs=hours.map(h=>h[key]??null).filter(v=>v!=null); return vs.length?vs.reduce((a,b)=>a+b,0)/vs.length:null; }
+        function _wbLabel(){ const d0=new Date(times[0]),now=new Date(); if(d0.toDateString()===now.toDateString()) return 'Сегодня'; const tm=new Date(now); tm.setDate(now.getDate()+1); if(d0.toDateString()===tm.toDateString()) return 'Завтра'; return d0.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit'}); }
+        const _wb_v10_850=_wbCircDiff('wind_direction_10m','winddirection_850hPa');
+        const _wb_v850_500=_wbCircDiff('winddirection_850hPa','winddirection_500hPa');
+        const _wbAn=analyzeWindBarbs(_wb_v10_850,_wb_v850_500,_wbAvgSpd('windspeed_850hPa'),_wbAvgSpd('windspeed_500hPa'),_wbAvgSpd('windspeed_300hPa'));
         const v1=veerLabel(angleDiff(h.wind_direction_10m, h.winddirection_850hPa));
         const v2=veerLabel(angleDiff(h.winddirection_850hPa, h.winddirection_500hPa));
         const g850=h.geopotential_height_850hPa, g500=h.geopotential_height_500hPa;
         statsBox.innerHTML=`
+        <div class="fc-stat-card" style="grid-column:1/-1;">
+            <div class="fc-stat-label" style="margin-bottom:4px;">${_wbLabel()}</div>
+            <div class="fc-stat-value" style="color:${_wbAn.color};font-size:13px;margin-bottom:6px;">${_wbAn.title}</div>
+            <div style="font-size:10px;line-height:1.55;color:#888;">${_wbAn.desc}</div>
+        </div>
         <div class="fc-stat-card"><div class="fc-stat-label">850 гПа</div><div class="fc-stat-value" style="color:#00cec9;">${g850!=null?Math.round(g850)+' м':'~1500 м'}</div><div class="fc-stat-time">высота уровня</div></div>
         <div class="fc-stat-card"><div class="fc-stat-label">500 гПа</div><div class="fc-stat-value" style="color:#74b9ff;">${g500!=null?Math.round(g500)+' м':'~5500 м'}</div><div class="fc-stat-time">высота уровня</div></div>
         <div class="fc-stat-card" style="grid-column:1/-1;"><div class="fc-stat-label">10м → 850: ${v1.t}</div><div class="fc-stat-value" style="color:${v1.c};font-size:13px;">${v1.s}</div></div>
@@ -1197,8 +1364,20 @@ function renderPolarVortex(hours, times){
         const t10=h?.temperature_10hPa,t50=h?.temperature_50hPa;
         function pvLabel(t){ if(t==null) return {l:"—",c:"#555",s:""}; if(t>-40) return {l:"Разрушен",c:"#ff6b6b",s:"риск ВСП → холод через 2-4 нед."}; if(t>-55) return {l:"Ослаблен",c:"#fd79a8",s:"возможны вторжения холода"}; if(t>-70) return {l:"Умеренный",c:"#fdcb6e",s:"умеренная изоляция"}; return {l:"Сильный",c:"#74b9ff",s:"защита от арктических вторжений"}; }
         const pv=pvLabel(t10);
+        const _pvVals=hours.map(h=>h?.temperature_10hPa??null).filter(v=>v!=null);
+        const _pvAvg=_pvVals.length?_pvVals.reduce((a,b)=>a+b,0)/_pvVals.length:t10;
+        const _pvQ=Math.max(1,Math.floor(_pvVals.length/4));
+        const _pvTrend=_pvVals.length>4?_pvVals.slice(-_pvQ).reduce((a,b)=>a+b,0)/_pvQ-_pvVals.slice(0,_pvQ).reduce((a,b)=>a+b,0)/_pvQ:null;
+        const _pvAn=analyzePolarVortex(_pvAvg,null,_pvTrend);
+        const _pvTrendStr=_pvTrend!=null?(_pvTrend>2?`↑ нагрев +${_pvTrend.toFixed(1)}° → ослабление`:_pvTrend<-2?`↓ охлаждение ${_pvTrend.toFixed(1)}° → укрепление`:'→ стабильно'):'';
+        function _pvPlLabel(){ const d0=new Date(times[0]),now=new Date(); if(d0.toDateString()===now.toDateString()) return 'Сегодня'; const tm=new Date(now); tm.setDate(now.getDate()+1); if(d0.toDateString()===tm.toDateString()) return 'Завтра'; const fmt=d=>d.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit'}); return fmt(d0); }
         statsBox.innerHTML=`
-        <div class="fc-stat-card" style="grid-column:1/-1;"><div class="fc-stat-label">Полярный вихрь (10 гПа)</div><div class="fc-stat-value" style="color:${pv.c};font-size:13px;">${pv.l}</div><div class="fc-stat-time">${pv.s}</div></div>
+        <div class="fc-stat-card" style="grid-column:1/-1;">
+            <div class="fc-stat-label" style="margin-bottom:4px;">${_pvPlLabel()} · сейчас: <span style="color:${pv.c};">${pv.l}</span></div>
+            <div class="fc-stat-value" style="color:${_pvAn.color};font-size:13px;margin-bottom:6px;">${_pvAn.title}</div>
+            <div style="font-size:10px;line-height:1.55;color:#888;margin-bottom:6px;">${_pvAn.desc}</div>
+            ${_pvTrendStr?`<div style="font-size:10px;color:#777;">Тренд Т10: ${_pvTrendStr}</div>`:''}
+        </div>
         <div class="fc-stat-card"><div class="fc-stat-label">T 10 гПа</div><div class="fc-stat-value" style="color:#ff6b6b;">${t10!=null?t10.toFixed(1)+'°':'—'}</div></div>
         <div class="fc-stat-card"><div class="fc-stat-label">T 50 гПа</div><div class="fc-stat-value" style="color:#a29bfe;">${t50!=null?t50.toFixed(1)+'°':'—'}</div></div>`; }
 }
