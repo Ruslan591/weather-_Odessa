@@ -28,6 +28,16 @@ def load_api_key():
                     return line.strip().split("=", 1)[1]
     return os.environ.get("ANTHROPIC_API_KEY")
 
+def ai_enabled():
+    """Проверяет флаг AI_ANALYSIS_ENABLED в .env (default: true)."""
+    if os.path.exists(ENV_FILE):
+        with open(ENV_FILE, "r") as f:
+            for line in f:
+                if line.startswith("AI_ANALYSIS_ENABLED="):
+                    val = line.strip().split("=", 1)[1].lower()
+                    return val not in ("0", "false", "no", "off")
+    return True
+
 # ── Запрос open-meteo ─────────────────────────────────────────────────────────
 
 HOURLY_FIELDS = ",".join([
@@ -289,7 +299,7 @@ def build_prompt(days):
 
 def call_claude(prompt, api_key):
     payload = json.dumps({
-        "model": "claude-sonnet-4-20250514",
+        "model": "claude-sonnet-4-5",
         "max_tokens": 1024,
         "messages": [{"role": "user", "content": prompt}]
     }).encode()
@@ -311,6 +321,10 @@ def call_claude(prompt, api_key):
 # ── Основная логика ───────────────────────────────────────────────────────────
 
 def main():
+    if not ai_enabled():
+        print("  [AI] Анализ отключён (AI_ANALYSIS_ENABLED=false в .env)")
+        return
+
     api_key = load_api_key()
     if not api_key:
         print("  [AI] ANTHROPIC_API_KEY не найден — пропускаю генерацию анализа")
