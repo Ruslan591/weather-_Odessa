@@ -19,6 +19,8 @@ const FC_PARAMS = [
     { key:"geo_height",   label:"Геопотенциал",  color:"#00cec9", unit:" м",   field: h => null },
     { key:"vert_vel",     label:"Омега ω",        color:"#ff6b6b", unit:" Па/с",field: h => null },
     { key:"polar_vortex", label:"Полярный вихрь", color:"#a29bfe", unit:" м",   field: h => null },
+    { key:"humidity_profile", label:"Влажность ↑",  color:"#55efc4", unit:"%",   field: h => h.relative_humidity_2m ?? null },
+    { key:"cloud_profile",    label:"Облачность ↑", color:"#b2bec3", unit:"%",   field: h => h.cloud_cover ?? null },
     // Морской прогноз
     { key:"wave",     label:"Волна",         color:"#00cec9", unit:" м",  field: h => h.wave_height       ?? null, marine:true },
     { key:"swell",    label:"Зыбь",          color:"#0984e3", unit:" м",  field: h => h.swell_wave_height ?? null, marine:true },
@@ -35,7 +37,7 @@ const FC_GROUPS = [
     { label: null,         keys: ["temp","pressure","humidity","wind","winddir","rain","prob","cloud"] },
     { label: "Конвекция",  keys: ["cape","li","cin"] },
     { label: "Атмосфера",  keys: ["temp_profile","wind_profile","freeze","wind_barbs"] },
-    { label: "Синоптика",    keys: ["geo_height","vert_vel","polar_vortex"] },
+    { label: "Синоптика",    keys: ["geo_height","vert_vel","polar_vortex","humidity_profile","cloud_profile"] },
     { label: "Море",       keys: ["wave","swell","wave_per","sst"] },
 ];
 
