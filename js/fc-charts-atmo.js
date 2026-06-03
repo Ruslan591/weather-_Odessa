@@ -1388,9 +1388,11 @@ function renderHumidityProfile(hours, times){
     if(!wrap) return;
     const LEVELS=[
         {key:"relative_humidity_2m",    label:"2м",   color:"#74b9ff"},
-        {key:"relative_humidity_850hPa",label:"850",  color:"#55efc4"},
+        {key:"relative_humidity_925hPa",label:"925",  color:"#55efc4"},
+        {key:"relative_humidity_850hPa",label:"850",  color:"#00cec9"},
         {key:"relative_humidity_700hPa",label:"700",  color:"#a29bfe"},
         {key:"relative_humidity_500hPa",label:"500",  color:"#fdcb6e"},
+        {key:"relative_humidity_300hPa",label:"300",  color:"#ff8f00"},
     ];
     const W=320,H=165,pad={t:24,r:10,b:28,l:38};
     const iW=W-pad.l-pad.r,iH=H-pad.t-pad.b;
@@ -1501,12 +1503,14 @@ function renderCloudProfile(hours, times){
     if(!wrap) return;
     // Уровни облачности: surface-based + по уровням давления
     const LAYERS=[
-        {key:"cloud_cover_low",  label:"Низкий",  sublabel:"<2км",   color:"#74b9ff"},
-        {key:"cloud_cover_mid",  label:"Средний", sublabel:"2-6км",  color:"#a29bfe"},
-        {key:"cloud_cover_high", label:"Высокий", sublabel:">6км",   color:"#fdcb6e"},
-        {key:"cloud_cover",      label:"Общая",   sublabel:"total",  color:"#dfe6e9"},
+        {key:"cloud_cover_925hPa", label:"925",   sublabel:"~800м",  color:"#74b9ff"},
+        {key:"cloud_cover_850hPa", label:"850",   sublabel:"~1.5км", color:"#55efc4"},
+        {key:"cloud_cover_700hPa", label:"700",   sublabel:"~3км",   color:"#00cec9"},
+        {key:"cloud_cover_500hPa", label:"500",   sublabel:"~5.6км", color:"#a29bfe"},
+        {key:"cloud_cover_300hPa", label:"300",   sublabel:"~9км",   color:"#fdcb6e"},
+        {key:"cloud_cover",        label:"Общая", sublabel:"total",  color:"#dfe6e9"},
     ];
-    const W=320,H=190,pad={t:24,r:10,b:28,l:44};
+    const W=320,H=210,pad={t:24,r:10,b:28,l:44};
     const iW=W-pad.l-pad.r,iH=H-pad.t-pad.b;
     const nL=LAYERS.length, trackH=iH/nL;
     const tMin=new Date(times[0]).getTime(),tMax_=new Date(times[times.length-1]).getTime();
@@ -1554,8 +1558,8 @@ function renderCloudProfile(hours, times){
     if(statsBox){ statsBox.style.display="grid";
         function _ccAvg(key){ const vs=hours.map(h=>h[key]??null).filter(v=>v!=null); return vs.length?Math.round(vs.reduce((a,b)=>a+b,0)/vs.length):null; }
         function _ccLabel(){ const d0=new Date(times[0]),now=new Date(); if(d0.toDateString()===now.toDateString()) return 'Сегодня'; const tm=new Date(now); tm.setDate(now.getDate()+1); if(d0.toDateString()===tm.toDateString()) return 'Завтра'; return d0.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit'}); }
-        const avgLow=_ccAvg('cloud_cover_low'),avgMid=_ccAvg('cloud_cover_mid');
-        const avgHigh=_ccAvg('cloud_cover_high'),avgTotal=_ccAvg('cloud_cover');
+        const avgLow=_ccAvg('cloud_cover_925hPa'),avgMid=_ccAvg('cloud_cover_700hPa');
+        const avgHigh=_ccAvg('cloud_cover_300hPa'),avgTotal=_ccAvg('cloud_cover');
         const ccAn=analyzeCloudProfile(avgLow,avgMid,avgHigh,avgTotal);
         const now=Date.now(); let iNow=times.map(t=>new Date(t).getTime()).findIndex(t=>t>=now); if(iNow<0) iNow=0;
         const h=hours[iNow];

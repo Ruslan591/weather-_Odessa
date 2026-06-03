@@ -84,7 +84,7 @@ async function load(){
     if (weatherModel === "ensemble") { loadEnsemble(); return; }
     loadMarine(); // параллельно, не await
     const apiForecastDays = Math.max(5, Math.ceil(forecastHours / 24) + 1);
-    const API = `https://api.open-meteo.com/v1/forecast?latitude=46.43&longitude=30.74&hourly=temperature_2m,apparent_temperature,pressure_msl,relative_humidity_2m,weather_code,visibility,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,precipitation_probability,showers,snowfall,snow_depth,shortwave_radiation,direct_radiation,diffuse_radiation,dew_point_2m,runoff,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,cape,uv_index,lifted_index,convective_inhibition,temperature_925hPa,temperature_850hPa,temperature_700hPa,temperature_500hPa,temperature_300hPa,temperature_250hPa,temperature_200hPa,temperature_150hPa,temperature_100hPa,temperature_50hPa,temperature_30hPa,temperature_10hPa,dewpoint_850hPa,dewpoint_700hPa,windspeed_925hPa,windspeed_850hPa,windspeed_700hPa,windspeed_500hPa,windspeed_300hPa,windspeed_250hPa,windspeed_200hPa,winddirection_925hPa,winddirection_850hPa,winddirection_700hPa,winddirection_500hPa,winddirection_300hPa,winddirection_250hPa,winddirection_200hPa,geopotential_height_925hPa,geopotential_height_850hPa,geopotential_height_700hPa,geopotential_height_500hPa,geopotential_height_300hPa,geopotential_height_250hPa,geopotential_height_200hPa,geopotential_height_150hPa,geopotential_height_100hPa,geopotential_height_50hPa,geopotential_height_30hPa,geopotential_height_10hPa,vertical_velocity_500hPa,vertical_velocity_700hPa,vertical_velocity_850hPa,relative_humidity_850hPa,relative_humidity_700hPa,relative_humidity_500hPa,cloudcover_850hPa,cloudcover_700hPa,cloudcover_500hPa,cloudcover_250hPa&models=${weatherModel}&timezone=auto&forecast_days=${apiForecastDays}&wind_speed_unit=ms`;
+    const API = `https://api.open-meteo.com/v1/forecast?latitude=46.43&longitude=30.74&hourly=temperature_2m,apparent_temperature,pressure_msl,relative_humidity_2m,weather_code,visibility,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,precipitation_probability,showers,snowfall,snow_depth,shortwave_radiation,direct_radiation,diffuse_radiation,dew_point_2m,runoff,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,cape,uv_index,lifted_index,convective_inhibition,temperature_925hPa,temperature_850hPa,temperature_700hPa,temperature_500hPa,temperature_300hPa,temperature_250hPa,temperature_200hPa,temperature_150hPa,temperature_100hPa,temperature_50hPa,temperature_30hPa,temperature_10hPa,dewpoint_850hPa,dewpoint_700hPa,windspeed_925hPa,windspeed_850hPa,windspeed_700hPa,windspeed_500hPa,windspeed_300hPa,windspeed_250hPa,windspeed_200hPa,winddirection_925hPa,winddirection_850hPa,winddirection_700hPa,winddirection_500hPa,winddirection_300hPa,winddirection_250hPa,winddirection_200hPa,geopotential_height_925hPa,geopotential_height_850hPa,geopotential_height_700hPa,geopotential_height_500hPa,geopotential_height_300hPa,geopotential_height_250hPa,geopotential_height_200hPa,geopotential_height_150hPa,geopotential_height_100hPa,geopotential_height_50hPa,geopotential_height_30hPa,geopotential_height_10hPa,vertical_velocity_500hPa,vertical_velocity_700hPa,vertical_velocity_850hPa,relative_humidity_925hPa,relative_humidity_850hPa,relative_humidity_700hPa,relative_humidity_500hPa,relative_humidity_300hPa,cloud_cover_925hPa,cloud_cover_850hPa,cloud_cover_700hPa,cloud_cover_500hPa,cloud_cover_300hPa&models=${weatherModel}&timezone=auto&forecast_days=${apiForecastDays}&wind_speed_unit=ms`;
     let data;
     try {
         const r = await fetch(API);
@@ -179,13 +179,16 @@ async function load(){
         vertical_velocity_500hPa:    h.vertical_velocity_500hPa?.[i]    ?? null,
         vertical_velocity_700hPa:    h.vertical_velocity_700hPa?.[i]    ?? null,
         vertical_velocity_850hPa:    h.vertical_velocity_850hPa?.[i]    ?? null,
+        relative_humidity_925hPa:    h.relative_humidity_925hPa?.[i]    ?? null,
         relative_humidity_850hPa:    h.relative_humidity_850hPa?.[i]    ?? null,
         relative_humidity_700hPa:    h.relative_humidity_700hPa?.[i]    ?? null,
         relative_humidity_500hPa:    h.relative_humidity_500hPa?.[i]    ?? null,
-        cloudcover_850hPa:           h.cloudcover_850hPa?.[i]           ?? null,
-        cloudcover_700hPa:           h.cloudcover_700hPa?.[i]           ?? null,
-        cloudcover_500hPa:           h.cloudcover_500hPa?.[i]           ?? null,
-        cloudcover_250hPa:           h.cloudcover_250hPa?.[i]           ?? null,
+        relative_humidity_300hPa:    h.relative_humidity_300hPa?.[i]    ?? null,
+        cloud_cover_925hPa:          h.cloud_cover_925hPa?.[i]          ?? null,
+        cloud_cover_850hPa:          h.cloud_cover_850hPa?.[i]          ?? null,
+        cloud_cover_700hPa:          h.cloud_cover_700hPa?.[i]          ?? null,
+        cloud_cover_500hPa:          h.cloud_cover_500hPa?.[i]          ?? null,
+        cloud_cover_300hPa:          h.cloud_cover_300hPa?.[i]          ?? null,
     }));
 
     window._fcAllHours = hours;

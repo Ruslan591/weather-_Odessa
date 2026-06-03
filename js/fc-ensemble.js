@@ -291,13 +291,16 @@ function parseHourly(h) {
             geopotential_height_50hPa:      h.geopotential_height_50hPa      ? h.geopotential_height_50hPa[i]      : null,
             geopotential_height_30hPa:      h.geopotential_height_30hPa      ? h.geopotential_height_30hPa[i]      : null,
             geopotential_height_10hPa:      h.geopotential_height_10hPa      ? h.geopotential_height_10hPa[i]      : null,
+            relative_humidity_925hPa:       h.relative_humidity_925hPa       ? h.relative_humidity_925hPa[i]       : null,
             relative_humidity_850hPa:       h.relative_humidity_850hPa       ? h.relative_humidity_850hPa[i]       : null,
             relative_humidity_700hPa:       h.relative_humidity_700hPa       ? h.relative_humidity_700hPa[i]       : null,
             relative_humidity_500hPa:       h.relative_humidity_500hPa       ? h.relative_humidity_500hPa[i]       : null,
-            cloudcover_850hPa:              h.cloudcover_850hPa              ? h.cloudcover_850hPa[i]              : null,
-            cloudcover_700hPa:              h.cloudcover_700hPa              ? h.cloudcover_700hPa[i]              : null,
-            cloudcover_500hPa:              h.cloudcover_500hPa              ? h.cloudcover_500hPa[i]              : null,
-            cloudcover_250hPa:              h.cloudcover_250hPa              ? h.cloudcover_250hPa[i]              : null,
+            relative_humidity_300hPa:       h.relative_humidity_300hPa       ? h.relative_humidity_300hPa[i]       : null,
+            cloud_cover_925hPa:             h.cloud_cover_925hPa             ? h.cloud_cover_925hPa[i]             : null,
+            cloud_cover_850hPa:             h.cloud_cover_850hPa             ? h.cloud_cover_850hPa[i]             : null,
+            cloud_cover_700hPa:             h.cloud_cover_700hPa             ? h.cloud_cover_700hPa[i]             : null,
+            cloud_cover_500hPa:             h.cloud_cover_500hPa             ? h.cloud_cover_500hPa[i]             : null,
+            cloud_cover_300hPa:             h.cloud_cover_300hPa             ? h.cloud_cover_300hPa[i]             : null,
         };
     });
 }
@@ -317,8 +320,8 @@ function mergeEnsemble(allModelHours, weights, models) {
         "temperature_150hPa","temperature_100hPa","temperature_50hPa","temperature_30hPa","temperature_10hPa",
         "geopotential_height_150hPa","geopotential_height_100hPa","geopotential_height_50hPa",
         "geopotential_height_30hPa","geopotential_height_10hPa",
-        "relative_humidity_850hPa","relative_humidity_700hPa","relative_humidity_500hPa",
-        "cloudcover_850hPa","cloudcover_700hPa","cloudcover_500hPa","cloudcover_250hPa"
+        "relative_humidity_925hPa","relative_humidity_850hPa","relative_humidity_700hPa","relative_humidity_500hPa","relative_humidity_300hPa",
+        "cloud_cover_925hPa","cloud_cover_850hPa","cloud_cover_700hPa","cloud_cover_500hPa","cloud_cover_300hPa"
     ];
     var base = allModelHours[models[0]];
     if (!base) return [];
@@ -644,8 +647,8 @@ async function loadEnsemble() {
         "vertical_velocity_850hPa,vertical_velocity_700hPa,vertical_velocity_500hPa," +
         "temperature_150hPa,temperature_100hPa,temperature_50hPa,temperature_30hPa,temperature_10hPa," +
         "geopotential_height_150hPa,geopotential_height_100hPa,geopotential_height_50hPa,geopotential_height_30hPa,geopotential_height_10hPa," +
-        "relative_humidity_850hPa,relative_humidity_700hPa,relative_humidity_500hPa," +
-        "cloudcover_850hPa,cloudcover_700hPa,cloudcover_500hPa,cloudcover_250hPa";
+        "relative_humidity_925hPa,relative_humidity_850hPa,relative_humidity_700hPa,relative_humidity_500hPa,relative_humidity_300hPa," +
+        "cloud_cover_925hPa,cloud_cover_850hPa,cloud_cover_700hPa,cloud_cover_500hPa,cloud_cover_300hPa";
 
     var fetches = models.map(function(m) {
         var url = "https://api.open-meteo.com/v1/forecast?latitude=46.43&longitude=30.74" +
