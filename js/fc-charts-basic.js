@@ -8,7 +8,9 @@ function renderForecastChart(hours, times){
     if(_fcParam === "wind_barbs")   return renderWindBarbs(hours, times);
     if(_fcParam === "geo_height")   return renderGeopotentialChart(hours, times);
     if(_fcParam === "vert_vel")     return renderVerticalVelocity(hours, times);
-    if(_fcParam === "polar_vortex") return renderPolarVortex(hours, times);
+    if(_fcParam === "polar_vortex")    return renderPolarVortex(hours, times);
+    if(_fcParam === "humidity_profile") return renderHumidityProfile(hours, times);
+    if(_fcParam === "cloud_profile")    return renderCloudProfile(hours, times);
     const _cfgCheck = FC_PARAMS.find(p => p.key === _fcParam);
     if(_cfgCheck && _cfgCheck.marine) return renderMarineChart(times, _cfgCheck);
 
