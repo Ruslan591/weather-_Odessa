@@ -103,7 +103,8 @@ def git_push_history():
                         "data/model_runs_history.json",
                         f"data/synop_{year}.txt",
                         "data/model_bias.json",
-                        "data/model_weights.json"],
+                        "data/model_weights.json",
+                        "data/forecast_analysis.json"],
                       check=True, capture_output=True)
         result = subprocess.run(
             ["git", "-C", BASE_DIR, "commit", "-m", "data: synop + history update"],
@@ -267,7 +268,12 @@ def main():
 
     if new_models:
         save_history(history)
-        run_pipeline(new_models)
+        ok = run_pipeline(new_models)
+        if ok:
+            subprocess.run(
+                [PYTHON, os.path.join(SCRIPTS_DIR, "generate_ai_analysis.py")],
+                cwd=BASE_DIR, capture_output=False
+            )
         git_push_history()
     else:
         print("  Новых прогонов нет.\n")
