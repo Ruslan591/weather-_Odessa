@@ -207,6 +207,31 @@
     40% { transform: translateY(-6px); opacity: 1; }
   }
 
+  /* ── Audio player ── */
+  .audio-wrap {
+    margin-bottom: 16px;
+    background: var(--status-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    display: none;
+  }
+  .audio-wrap.visible { display: block; }
+  .audio-wrap audio {
+    width: 100%;
+    height: 36px;
+    accent-color: var(--accent);
+  }
+  .audio-label {
+    font-family: "Helvetica Neue", sans-serif;
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
   .error-msg {
     text-align: center;
     padding: 40px 20px;
@@ -247,7 +272,6 @@
     <button class="font-btn" onclick="changeFontSize(-1)" title="Меньше">A−</button>
     <button class="font-btn" onclick="changeFontSize(1)" title="Больше">A+</button>
   </div>
-  <button class="theme-btn" onclick="toggleTts()" id="ttsBtn" title="Озвучить">🔊</button>
   <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Сменить тему">🌙</button>
 </div>
 
@@ -255,6 +279,12 @@
   <div id="statusBar" class="status-bar" style="display:none">
     <div class="status-dot" id="statusDot"></div>
     <span id="statusText"></span>
+  </div>
+  <div id="audioWrap" class="audio-wrap">
+    <div class="audio-label">🔊 Озвучка (Microsoft Neural TTS)</div>
+    <audio id="audioPlayer" controls preload="none">
+      <source src="data/forecast_analysis.mp3" type="audio/mpeg">
+    </audio>
   </div>
   <div id="content">
     <div class="loading">
@@ -301,31 +331,6 @@ function applyFontSize(s) {
 
 function changeFontSize(delta) {
   applyFontSize(_fontSize + delta);
-}
-
-// ── TTS ───────────────────────────────────────────────────────────────────
-var _ttsActive = false;
-function toggleTts() {
-  var btn = document.getElementById('ttsBtn');
-  if (_ttsActive) {
-    speechSynthesis.cancel();
-    _ttsActive = false;
-    btn.textContent = '🔊';
-    return;
-  }
-  var card = document.querySelector('.analysis-card');
-  if (!card) { alert('Анализ ещё не загружен'); return; }
-  var text = card.innerText || card.textContent;
-  if (!text.trim()) { alert('Нет текста для озвучки'); return; }
-  var utt = new SpeechSynthesisUtterance(text);
-  utt.lang = 'ru-RU';
-  utt.rate = 0.92;
-  utt.pitch = 1;
-  utt.onend = function() { _ttsActive = false; btn.textContent = '🔊'; };
-  utt.onerror = function() { _ttsActive = false; btn.textContent = '🔊'; };
-  _ttsActive = true;
-  btn.textContent = '⏹';
-  speechSynthesis.speak(utt);
 }
 
 // ── Load data ──────────────────────────────────────────────────────────────
@@ -414,6 +419,12 @@ fetch('data/forecast_analysis.json?t=' + Date.now())
       statusDot.className = 'status-dot stale';
       statusText.textContent = 'Проверено: ' + chkAt + ' · данные не изменились с ' + genAt;
     }
+
+    // Audio player
+    var audioWrap = document.getElementById('audioWrap');
+    var audioPlayer = document.getElementById('audioPlayer');
+    audioWrap.classList.add('visible');
+    audioPlayer.load();
 
     // Analysis
     var html = markdownToHtml(d.text || '');
