@@ -115,7 +115,7 @@ window.addEventListener('unhandledrejection', function(e){
 </script>
 <script>
 // ── AI-анализ ────────────────────────────────────────────────────────────────
-var _aiLoaded = false;
+var _aiLoaded = false; // reload each open
 function toggleAiTab(){
     var content = document.getElementById('aiTabContent');
     var arrow   = document.getElementById('aiTabArrow');
@@ -124,10 +124,10 @@ function toggleAiTab(){
     content.style.display = open ? 'block' : 'none';
     arrow.textContent = open ? '▴' : '▾';
     btn.style.color   = open ? '#aaa' : '#888';
-    if(open && !_aiLoaded) loadAiAnalysis();
+    if(open) loadAiAnalysis();
 }
 function loadAiAnalysis(){
-    _aiLoaded = true;
+    // always reload
     var body = document.getElementById('aiTabBody');
     fetch('data/forecast_analysis.json?t=' + Date.now())
         .then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
