@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Синоптический анализ ИИ — Одесса</title>
+<style>
+  :root {
+    --bg: #0d0d0d;
+    --surface: #141414;
+    --border: #222;
+    --text: #d4d4d4;
+    --text-dim: #666;
+    --text-muted: #444;
+    --accent: #4fc3f7;
+    --accent-warm: #ffb74d;
+    --heading: #e0e0e0;
+    --h2-border: #1e1e1e;
+    --status-bg: #111;
+    --btn-bg: #1a1a1a;
+    --btn-hover: #222;
+    --shadow: 0 4px 24px rgba(0,0,0,0.6);
+    --radius: 14px;
+  }
+  body.light {
+    --bg: #f2f4f6;
+    --surface: #ffffff;
+    --border: #dde1e7;
+    --text: #1a1a2e;
+    --text-dim: #6b7280;
+    --text-muted: #9ca3af;
+    --accent: #0284c7;
+    --accent-warm: #d97706;
+    --heading: #111827;
+    --h2-border: #e5e7eb;
+    --status-bg: #f8fafc;
+    --btn-bg: #e8ecf0;
+    --btn-hover: #dde1e7;
+    --shadow: 0 4px 24px rgba(0,0,0,0.08);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Georgia', 'Times New Roman', serif;
+    font-size: 16px;
+    line-height: 1.75;
+    min-height: 100vh;
+    transition: background 0.25s, color 0.25s;
+  }
+
+  /* ── Header ── */
+  .header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  }
+  .back-btn {
+    background: var(--btn-bg);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: background 0.15s, color 0.15s;
+    white-space: nowrap;
+  }
+  .back-btn:hover { background: var(--btn-hover); color: var(--text); }
+
+  .header-title {
+    flex: 1;
+    font-size: 14px;
+    color: var(--text-dim);
+    font-family: 'Helvetica Neue', sans-serif;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .header-title span { color: var(--text); }
+
+  .theme-btn {
+    background: var(--btn-bg);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1;
+    transition: background 0.15s, transform 0.1s;
+    flex-shrink: 0;
+  }
+  .theme-btn:active { transform: scale(0.92); }
+
+  /* ── Content ── */
+  .container {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 20px 16px 48px;
+  }
+
+  /* ── Status bar ── */
+  .status-bar {
+    background: var(--status-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Helvetica Neue', sans-serif;
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #4ade80;
+    flex-shrink: 0;
+    box-shadow: 0 0 6px #4ade8088;
+  }
+  .status-dot.stale { background: #888; box-shadow: none; }
+
+  /* ── Analysis card ── */
+  .analysis-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px 20px;
+    box-shadow: var(--shadow);
+  }
+
+  .analysis-card h3 {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--heading);
+    margin: 20px 0 8px;
+    padding-top: 16px;
+    border-top: 1px solid var(--h2-border);
+    letter-spacing: -0.01em;
+  }
+  .analysis-card h3:first-child {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+  }
+
+  .analysis-card h4 {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--accent-warm);
+    margin: 16px 0 6px;
+  }
+  .analysis-card h4.warn { color: #fbbf24; }
+
+  .analysis-card p {
+    font-size: 16px;
+    line-height: 1.8;
+    color: var(--text);
+    margin-bottom: 12px;
+  }
+  .analysis-card p:last-child { margin-bottom: 0; }
+
+  .analysis-card b {
+    color: var(--heading);
+    font-weight: 600;
+  }
+
+  /* ── Loading / Error ── */
+  .loading {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-dim);
+    font-family: 'Helvetica Neue', sans-serif;
+    font-size: 14px;
+  }
+  .loading-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin: 0 3px;
+    animation: bounce 1.2s infinite;
+  }
+  .loading-dot:nth-child(2) { animation-delay: 0.2s; }
+  .loading-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce {
+    0%,80%,100% { transform: translateY(0); opacity: 0.4; }
+    40% { transform: translateY(-6px); opacity: 1; }
+  }
+
+  .error-msg {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+    font-family: 'Helvetica Neue', sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  /* ── Font size control ── */
+  .font-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+  }
+  .font-btn {
+    background: var(--btn-bg);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    border-radius: 6px;
+    width: 30px; height: 30px;
+    font-size: 15px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+    flex-shrink: 0;
+  }
+  .font-btn:hover { background: var(--btn-hover); color: var(--text); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <a href="forecast.html" class="back-btn">← Прогноз</a>
+  <div class="header-title">🤖 <span>Анализ ИИ</span></div>
+  <div class="font-controls">
+    <button class="font-btn" onclick="changeFontSize(-1)" title="Меньше">A−</button>
+    <button class="font-btn" onclick="changeFontSize(1)" title="Больше">A+</button>
+  </div>
+  <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Сменить тему">🌙</button>
+</div>
+
+<div class="container">
+  <div id="statusBar" class="status-bar" style="display:none">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="statusText"></span>
+  </div>
+  <div id="content">
+    <div class="loading">
+      <div style="margin-bottom:16px">
+        <span class="loading-dot"></span>
+        <span class="loading-dot"></span>
+        <span class="loading-dot"></span>
+      </div>
+      Загрузка анализа…
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Theme ──────────────────────────────────────────────────────────────────
+var _theme = localStorage.getItem('aiTheme') || 'dark';
+applyTheme(_theme);
+
+function applyTheme(t) {
+  _theme = t;
+  if (t === 'light') {
+    document.body.classList.add('light');
+    document.getElementById('themeBtn').textContent = '☀️';
+  } else {
+    document.body.classList.remove('light');
+    document.getElementById('themeBtn').textContent = '🌙';
+  }
+  localStorage.setItem('aiTheme', t);
+}
+
+function toggleTheme() {
+  applyTheme(_theme === 'dark' ? 'light' : 'dark');
+}
+
+// ── Font size ──────────────────────────────────────────────────────────────
+var _fontSize = parseInt(localStorage.getItem('aiFontSize') || '16');
+applyFontSize(_fontSize);
+
+function applyFontSize(s) {
+  _fontSize = Math.max(13, Math.min(22, s));
+  document.body.style.fontSize = _fontSize + 'px';
+  localStorage.setItem('aiFontSize', _fontSize);
+}
+
+function changeFontSize(delta) {
+  applyFontSize(_fontSize + delta);
+}
+
+// ── Load data ──────────────────────────────────────────────────────────────
+function formatTime(iso) {
+  try {
+    var d = new Date(iso);
+    return d.toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
+  } catch(e) { return iso; }
+}
+
+function markdownToHtml(text) {
+  // Escape HTML
+  text = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  var lines = text.split('\n');
+  var html = '';
+  var inP = false;
+  var pBuffer = [];
+
+  function flushP() {
+    if (pBuffer.length > 0) {
+      var t = pBuffer.join(' ').trim();
+      if (t) html += '<p>' + t + '</p>\n';
+      pBuffer = [];
+    }
+    inP = false;
+  }
+
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    var trimmed = line.trim();
+
+    // H2 ##
+    if (/^## (.+)/.test(trimmed)) {
+      flushP();
+      var title = trimmed.replace(/^## /, '');
+      if (title.indexOf('⚠') === 0) {
+        html += '<h4 class="warn">' + inlineFormat(title) + '</h4>\n';
+      } else {
+        html += '<h3>' + inlineFormat(title) + '</h3>\n';
+      }
+      continue;
+    }
+    // H3 ###
+    if (/^### (.+)/.test(trimmed)) {
+      flushP();
+      var title3 = trimmed.replace(/^### /, '');
+      html += '<h4>' + inlineFormat(title3) + '</h4>\n';
+      continue;
+    }
+    // Empty line = paragraph break
+    if (trimmed === '') {
+      flushP();
+      continue;
+    }
+    // Normal line
+    pBuffer.push(inlineFormat(trimmed));
+  }
+  flushP();
+  return html;
+}
+
+function inlineFormat(text) {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>');
+}
+
+fetch('data/forecast_analysis.json?t=' + Date.now())
+  .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
+  .then(function(d) {
+    var statusBar = document.getElementById('statusBar');
+    var statusDot = document.getElementById('statusDot');
+    var statusText = document.getElementById('statusText');
+    var content = document.getElementById('content');
+
+    // Status bar
+    statusBar.style.display = 'flex';
+    var genAt = d.generated_at ? formatTime(d.generated_at) : '—';
+    var chkAt = d.last_checked ? formatTime(d.last_checked) : '—';
+
+    if (d.changed !== false) {
+      statusDot.className = 'status-dot';
+      statusText.textContent = 'Обновлён: ' + genAt;
+    } else {
+      statusDot.className = 'status-dot stale';
+      statusText.textContent = 'Проверено: ' + chkAt + ' · данные не изменились с ' + genAt;
+    }
+
+    // Analysis
+    var html = markdownToHtml(d.text || '');
+    content.innerHTML = '<div class="analysis-card">' + html + '</div>';
+  })
+  .catch(function() {
+    document.getElementById('content').innerHTML =
+      '<div class="error-msg">Анализ ещё не сгенерирован.<br>Запустите <code>generate_ai_analysis.py</code> вручную.</div>';
+  });
+</script>
+</body>
+</html>
