@@ -152,17 +152,15 @@ function formatAiTime(iso){
     } catch(e){ return iso; }
 }
 function markdownToHtml(text){
-    // ## Заголовки → <h4>, **bold** → <b>, параграфы
     return text
         .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-        .replace(/^## ⚠️ (.+)$/gm,'<h4 style="color:#fdcb6e;font-size:12px;margin:12px 0 4px;">⚠️ $1</h4>')
-        .replace(/^## (.+)$/gm,'<h4 style="color:#aaa;font-size:12px;margin:12px 0 4px;border-top:1px solid #1e1e1e;padding-top:8px;">$1</h4>')
-        .replace(/\*\*(.+?)\*\*/g,'<b style="color:#ccc;">$1</b>')
-        .replace(/
-
-/g,'</p><p style="margin:0 0 6px;line-height:1.6;">')
-        .replace(/
-/g,' ')
+        .replace(/^## (.+)$/gm,function(m,t){
+            if(t.indexOf('⚠')===0) return '<h4 style="color:#fdcb6e;font-size:12px;margin:12px 0 4px;">'+t+'</h4>';
+            return '<h4 style="color:#aaa;font-size:12px;margin:12px 0 4px;border-top:1px solid #1e1e1e;padding-top:8px;">'+t+'</h4>';
+        })
+        .replace(/[*][*](.+?)[*][*]/g,'<b style="color:#ccc;">$1</b>')
+        .split('\n\n').join('</p><p style="margin:0 0 6px;line-height:1.6;">')
+        .split('\n').join(' ')
         .replace(/^/,'<p style="margin:0 0 6px;line-height:1.6;">')
         .replace(/$/,'</p>');
 }
