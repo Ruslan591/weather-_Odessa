@@ -7,6 +7,8 @@ generate_ai_analysis.py — генерация синоптического ан
 """
 
 import json, os, urllib.request, urllib.error
+import asyncio
+import edge_tts
 from datetime import datetime, timezone, timedelta
 import hashlib
 
@@ -419,6 +421,18 @@ def build_prompt(days):
 
 # ── Запрос к Claude API ───────────────────────────────────────────────────────
 
+async def _generate_tts_async(text, out_path):
+    communicate = edge_tts.Communicate(text, voice="ru-RU-SvetlanaNeural", rate="-5%")
+    await communicate.save(out_path)
+
+def generate_tts(text, out_path):
+    try:
+        asyncio.run(_generate_tts_async(text, out_path))
+        size_kb = os.path.getsize(out_path) // 1024
+        print(f"  [TTS] Сохранено: {out_path} ({size_kb} кб)")
+    except Exception as e:
+        print(f"  [TTS] Ошибка: {e}")
+
 def call_claude(prompt, api_key):
     payload = json.dumps({
         "model": "claude-sonnet-4-5",
@@ -507,6 +521,9 @@ def main():
         "days_count": len(days),
         "text": text,
     }
+    # TTS
+    mp3_path = OUTPUT_FILE.replace(".json", ".mp3")
+    generate_tts(text, mp3_path)
 
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
