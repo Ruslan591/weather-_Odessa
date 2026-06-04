@@ -283,7 +283,7 @@
   <div id="audioWrap" class="audio-wrap">
     <div class="audio-label">🔊 Озвучка (Microsoft Neural TTS)</div>
     <audio id="audioPlayer" controls preload="none">
-      <source src="data/forecast_analysis.mp3" type="audio/mpeg">
+      <source src="data/forecast_analysis_claude.mp3" type="audio/mpeg">
     </audio>
   </div>
   <div id="content">
@@ -399,7 +399,7 @@ function inlineFormat(text) {
     .replace(/\*(.+?)\*/g, '<em>$1</em>');
 }
 
-fetch('data/forecast_analysis.json?t=' + Date.now())
+fetch('data/forecast_analysis_claude.json?t=' + Date.now())
   .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
   .then(function(d) {
     var statusBar = document.getElementById('statusBar');
