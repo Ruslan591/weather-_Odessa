@@ -79,6 +79,40 @@
 
 </div>
 <script src="nav.js"></script>
+
+<script src="models.js"></script>
+<script src="modelCheck.js"></script>
+<script src="js/fc-utils.js"></script>
+<script src="js/fc-params.js"></script>
+<script src="js/fc-day.js"></script>
+<script src="js/fc-tooltip.js"></script>
+<script src="js/fc-charts-atmo.js"></script>
+<script src="js/fc-charts-basic.js"></script>
+<script src="js/fc-ensemble.js"></script>
+<script src="js/fc-alerts.js"></script>
+<script src="js/fc-forecast.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function(){
+    if(weatherModel === "ensemble") loadEnsemble();
+    else load();
+});
+</script>
+
+<div id="_dbg" style="position:fixed;bottom:0;left:0;right:0;background:#1a0000;
+color:#ff6b6b;font-size:11px;padding:6px;z-index:9999;display:none;
+max-height:40vh;overflow:auto;white-space:pre-wrap;"></div>
+<script>
+window.onerror = function(msg, src, line, col){
+    var d = document.getElementById('_dbg');
+    d.style.display = 'block';
+    d.textContent += src.split('/').pop() + ':' + line + '\n' + msg + '\n\n';
+};
+window.addEventListener('unhandledrejection', function(e){
+    var d = document.getElementById('_dbg');
+    d.style.display = 'block';
+    d.textContent += 'Promise: ' + e.reason + '\n';
+});
+</script>
 <script>
 // ── AI-анализ ────────────────────────────────────────────────────────────────
 var _aiLoaded = false;
@@ -132,40 +166,6 @@ function markdownToHtml(text){
         .replace(/^/,'<p style="margin:0 0 6px;line-height:1.6;">')
         .replace(/$/,'</p>');
 }
-</script>
-
-<script src="models.js"></script>
-<script src="modelCheck.js"></script>
-<script src="js/fc-utils.js"></script>
-<script src="js/fc-params.js"></script>
-<script src="js/fc-day.js"></script>
-<script src="js/fc-tooltip.js"></script>
-<script src="js/fc-charts-atmo.js"></script>
-<script src="js/fc-charts-basic.js"></script>
-<script src="js/fc-ensemble.js"></script>
-<script src="js/fc-alerts.js"></script>
-<script src="js/fc-forecast.js"></script>
-<script>
-document.addEventListener("DOMContentLoaded", function(){
-    if(weatherModel === "ensemble") loadEnsemble();
-    else load();
-});
-</script>
-
-<div id="_dbg" style="position:fixed;bottom:0;left:0;right:0;background:#1a0000;
-color:#ff6b6b;font-size:11px;padding:6px;z-index:9999;display:none;
-max-height:40vh;overflow:auto;white-space:pre-wrap;"></div>
-<script>
-window.onerror = function(msg, src, line, col){
-    var d = document.getElementById('_dbg');
-    d.style.display = 'block';
-    d.textContent += src.split('/').pop() + ':' + line + '\n' + msg + '\n\n';
-};
-window.addEventListener('unhandledrejection', function(e){
-    var d = document.getElementById('_dbg');
-    d.style.display = 'block';
-    d.textContent += 'Promise: ' + e.reason + '\n';
-});
 </script>
 </body>
 </html>
