@@ -247,6 +247,7 @@
     <button class="font-btn" onclick="changeFontSize(-1)" title="Меньше">A−</button>
     <button class="font-btn" onclick="changeFontSize(1)" title="Больше">A+</button>
   </div>
+  <button class="theme-btn" onclick="toggleTts()" id="ttsBtn" title="Озвучить">🔊</button>
   <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Сменить тему">🌙</button>
 </div>
 
@@ -300,6 +301,31 @@ function applyFontSize(s) {
 
 function changeFontSize(delta) {
   applyFontSize(_fontSize + delta);
+}
+
+// ── TTS ───────────────────────────────────────────────────────────────────
+var _ttsActive = false;
+function toggleTts() {
+  var btn = document.getElementById('ttsBtn');
+  if (_ttsActive) {
+    speechSynthesis.cancel();
+    _ttsActive = false;
+    btn.textContent = '🔊';
+    return;
+  }
+  var card = document.querySelector('.analysis-card');
+  if (!card) { alert('Анализ ещё не загружен'); return; }
+  var text = card.innerText || card.textContent;
+  if (!text.trim()) { alert('Нет текста для озвучки'); return; }
+  var utt = new SpeechSynthesisUtterance(text);
+  utt.lang = 'ru-RU';
+  utt.rate = 0.92;
+  utt.pitch = 1;
+  utt.onend = function() { _ttsActive = false; btn.textContent = '🔊'; };
+  utt.onerror = function() { _ttsActive = false; btn.textContent = '🔊'; };
+  _ttsActive = true;
+  btn.textContent = '⏹';
+  speechSynthesis.speak(utt);
 }
 
 // ── Load data ──────────────────────────────────────────────────────────────
