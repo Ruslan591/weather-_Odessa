@@ -435,7 +435,7 @@ def generate_tts(text, out_path):
 
 def call_claude(prompt, api_key):
     payload = json.dumps({
-        "model": "meta-llama/llama-3.3-70b-instruct:free",
+        "model": "deepseek/deepseek-r1:free",
         "max_tokens": 1024,
         "messages": [{"role": "user", "content": prompt}]
     }).encode()
