@@ -421,7 +421,49 @@ def build_prompt(days):
 
 # ── Запрос к Claude API ───────────────────────────────────────────────────────
 
+def preprocess_tts(text):
+    import re
+    # Единицы давления
+    text = text.replace('гПа', 'гектопаскалей')
+    # Градусы
+    text = re.sub(r'(\d+)\s*°C', r' градуса Цельсия', text)
+    text = re.sub(r'(-\d+)\s*°C', r' градуса Цельсия', text)
+    text = text.replace('°C', 'градусов Цельсия')
+    # Скорость ветра км/ч -> м/с
+    def kmh_to_ms(m):
+        try:
+            val = float(m.group(1))
+            ms = round(val / 3.6, 1)
+            return f"{ms} метров в секунду"
+        except:
+            return m.group(0)
+    text = re.sub(r'(\d+(?:\.\d+)?)\s*км/ч', kmh_to_ms, text)
+    # мм осадков
+    text = re.sub(r'(\d+(?:\.\d+)?)\s*мм', r' миллиметра', text)
+    # Дж/кг
+    text = text.replace('Дж/кг', 'джоулей на килограмм')
+    # Десятичные дроби: 0.2 -> 0 целых 2 десятых (перед заменой запятой)
+    def decimal_to_words(m):
+        int_part = m.group(1)
+        dec_part = m.group(2)
+        if len(dec_part) == 1:
+            tenth = {'1':'одна','2':'две','3':'три','4':'четыре',
+                     '5':'пять','6':'шесть','7':'семь','8':'восемь','9':'девять','0':'ноль'}
+            return f"{int_part} целых {tenth.get(dec_part, dec_part)} десятых"
+        return f"{int_part} целых {dec_part} сотых"
+    text = re.sub(r'(\d+)\.(\d{1,2})', decimal_to_words, text)
+    # % -> процентов
+    text = re.sub(r'(\d+)\s*%', r' процентов', text)
+    # CAPE убрать аббревиатуру (уже должно быть в тексте словами, просто на случай)
+    text = text.replace('CAPE', 'индекс CAPE')
+    # Убрать решётки markdown
+    text = re.sub(r'#+\s*', '', text)
+    # Убрать ** *
+    text = re.sub(r'\*+', '', text)
+    return text
+
 async def _generate_tts_async(text, out_path):
+    text = preprocess_tts(text)
     communicate = edge_tts.Communicate(text, voice="ru-RU-SvetlanaNeural", rate="-5%")
     await communicate.save(out_path)
 
