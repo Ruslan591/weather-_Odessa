@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-generate_ai_analysis.py — генерация синоптического анализа через Claude API.
+generate_ai_analysis_or.py — генерация синоптического анализа через OpenRouter API.
 Запрашивает open-meteo (ансамбль), агрегирует данные по дням,
 отправляет в Claude, сохраняет data/forecast_analysis.json.
 Вызывается из check_model_runs.py после run_pipeline().
@@ -13,7 +13,7 @@ from datetime import datetime, timezone, timedelta
 import hashlib
 
 BASE_DIR      = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUTPUT_FILE   = os.path.join(BASE_DIR, "data", "forecast_analysis_claude.json")
+OUTPUT_FILE   = os.path.join(BASE_DIR, "data", "forecast_analysis_or.json")
 ENV_FILE      = os.path.join(BASE_DIR, ".env")
 TIMEOUT       = 30
 
@@ -26,16 +26,16 @@ def load_api_key():
     if os.path.exists(ENV_FILE):
         with open(ENV_FILE, "r") as f:
             for line in f:
-                if line.startswith("ANTHROPIC_API_KEY="):
+                if line.startswith("OPENROUTER_API_KEY="):
                     return line.strip().split("=", 1)[1]
-    return os.environ.get("ANTHROPIC_API_KEY")
+    return os.environ.get("OPENROUTER_API_KEY")
 
 def ai_enabled():
-    """Проверяет флаг AI_ANALYSIS_ENABLED в .env (default: true)."""
+    """Проверяет флаг OR_ANALYSIS_ENABLED в .env (default: true)."""
     if os.path.exists(ENV_FILE):
         with open(ENV_FILE, "r") as f:
             for line in f:
-                if line.startswith("AI_ANALYSIS_ENABLED="):
+                if line.startswith("OR_ANALYSIS_ENABLED="):
                     val = line.strip().split("=", 1)[1].lower()
                     return val not in ("0", "false", "no", "off")
     return True
@@ -435,38 +435,39 @@ def generate_tts(text, out_path):
 
 def call_claude(prompt, api_key):
     payload = json.dumps({
-        "model": "claude-sonnet-4-5",
+        "model": "google/gemini-2.0-flash-exp:free",
         "max_tokens": 1024,
         "messages": [{"role": "user", "content": prompt}]
     }).encode()
 
     req = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages",
+        "https://openrouter.ai/api/v1/chat/completions",
         data=payload,
         headers={
             "Content-Type": "application/json",
-            "x-api-key": api_key,
-            "anthropic-version": "2023-06-01",
+            "Authorization": f"Bearer {api_key}",
+            "HTTP-Referer": "https://ruslan591.github.io/weather-_Odessa/",
+            "X-Title": "Odessa Weather Forecast",
         },
         method="POST"
     )
     with urllib.request.urlopen(req, timeout=60) as r:
         resp = json.loads(r.read().decode())
-    return resp["content"][0]["text"]
+    return resp["choices"][0]["message"]["content"]
 
 # ── Основная логика ───────────────────────────────────────────────────────────
 
 def main():
     if not ai_enabled():
-        print("  [AI] Анализ отключён (AI_ANALYSIS_ENABLED=false в .env)")
+        print("  [OR] Анализ отключён (AI_ANALYSIS_ENABLED=false в .env)")
         return
 
     api_key = load_api_key()
     if not api_key:
-        print("  [AI] ANTHROPIC_API_KEY не найден — пропускаю генерацию анализа")
+        print("  [OR] OPENROUTER_API_KEY не найден — пропускаю генерацию анализа")
         return
 
-    print("\n  🤖 Генерация синоптического анализа...")
+    print("\n  🤖 Генерация анализа (OpenRouter/Gemini)...")
 
     # Загружаем текущий результат (если есть)
     existing = {}
@@ -481,12 +482,12 @@ def main():
     try:
         raw = fetch_ensemble()
     except Exception as e:
-        print(f"  [AI] Ошибка open-meteo: {e}")
+        print(f"  [OR] Ошибка open-meteo: {e}")
         return
 
     days = aggregate_days(raw)
     if not days:
-        print("  [AI] Нет данных для анализа")
+        print("  [OR] Нет данных для анализа")
         return
 
     # Проверяем изменились ли данные
@@ -500,17 +501,17 @@ def main():
         existing["changed"] = False
         with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
             json.dump(existing, f, ensure_ascii=False, indent=2)
-        print(f"  [AI] Данные не изменились — обновлена метка времени")
+        print(f"  [OR] Данные не изменились — обновлена метка времени")
         return
 
     # Данные изменились — генерируем новый анализ
     prompt = build_prompt(days)
-    print(f"  [AI] Промпт: ~{len(prompt.split())} слов, запрос к Claude...")
+    print(f"  [OR] Промпт: ~{len(prompt.split())} слов, запрос к Claude...")
 
     try:
         text = call_claude(prompt, api_key)
     except Exception as e:
-        print(f"  [AI] Ошибка Claude API: {e}")
+        print(f"  [OR] Ошибка OpenRouter API: {e}")
         return
 
     result = {
@@ -528,7 +529,7 @@ def main():
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
 
-    print(f"  [AI] ✅ Анализ сохранён ({len(text)} символов)")
+    print(f"  [OR] ✅ Анализ сохранён ({len(text)} символов)")
 
 if __name__ == "__main__":
     main()
