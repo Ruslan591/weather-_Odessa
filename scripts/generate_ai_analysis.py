@@ -472,7 +472,7 @@ def generate_tts(text, out_path):
 def call_claude(prompt, api_key):
     payload = json.dumps({
         "model": "claude-sonnet-4-5",
-        "max_tokens": 1024,
+        "max_tokens": 2048,
         "messages": [{"role": "user", "content": prompt}]
     }).encode()
 
