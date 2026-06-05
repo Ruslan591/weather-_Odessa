@@ -26,13 +26,13 @@ VOICE = "ru-RU-SvetlanaNeural"
 RATE  = "-5%"
 
 # ── Блоки — порядок и названия ────────────────────────────────────────────────
+# Префиксы — ищем по началу заголовка (дата в скобках игнорируется)
 BLOCK_DEFS = [
-    # (key, section_title_in_markdown, filename, display_title, icon)
-    ("today",    "Сегодня",             "block_0_today.mp3",    "Сегодня",        "☀️"),
-    ("tomorrow", "Завтра",              "block_1_tomorrow.mp3", "Завтра",         "🌤"),
-    ("next3",    "Последующие 3 дня",   "block_2_next3.mp3",    "Ближайшие дни",  "📅"),
-    ("warnings", "\u26a0\ufe0f Предупреждения", "block_3_warnings.mp3", "Предупреждения", "⚠️"),
-    ("trend",    "Тенденция",           "block_4_trend.mp3",    "Тенденция",      "📈"),
+    ("today",    "Сегодня",     "block_0_today.mp3",    "Сегодня",        "☀️"),
+    ("tomorrow", "Завтра",      "block_1_tomorrow.mp3", "Завтра",         "🌤"),
+    ("next3",    "Последующие", "block_2_next3.mp3",    "Ближайшие дни",  "📅"),
+    ("warnings", "\u26a0",     "block_3_warnings.mp3", "Предупреждения", "⚠️"),
+    ("trend",    "Тенденция",   "block_4_trend.mp3",    "Тенденция",      "📈"),
 ]
 
 # ── Парсинг секций ────────────────────────────────────────────────────────────
@@ -53,6 +53,12 @@ def parse_sections(text):
     if current_key is not None:
         sections[current_key] = '\n'.join(current_lines).strip()
     return sections
+
+def find_section(sections, prefix):
+    for key, val in sections.items():
+        if key.startswith(prefix):
+            return val
+    return ''
 
 # ── Подготовка текста для TTS (из generate_ai_analysis.py) ───────────────────
 
@@ -150,7 +156,7 @@ def main():
 
     blocks_meta = []
     for key, section_title, filename, display_title, icon in BLOCK_DEFS:
-        section_text = sections.get(section_title, '')
+        section_text = find_section(sections, section_title)
 
         # Пропускаем пустые блоки (например, нет предупреждений)
         if not section_text.strip():
