@@ -399,7 +399,7 @@ function inlineFormat(text) {
     .replace(/\*(.+?)\*/g, '<em>$1</em>');
 }
 
-fetch('data/forecast_analysis_claude.json?t=' + Date.now())
+fetch('https://raw.githubusercontent.com/Ruslan591/weather-_Odessa/main/data/forecast_analysis_claude.json?_=' + Date.now(), { cache: 'no-store' })
   .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
   .then(function(d) {
     var statusBar = document.getElementById('statusBar');
