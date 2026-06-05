@@ -104,7 +104,8 @@ def git_push_history():
                         f"data/synop_{year}.txt",
                         "data/model_bias.json",
                         "data/model_weights.json",
-                        "data/forecast_analysis_claude.json", "data/forecast_analysis_claude.mp3"],
+                        "data/forecast_analysis_claude.json", "data/forecast_analysis_claude.mp3",
+                        "data/blocks"],
                       check=True, capture_output=True)
         result = subprocess.run(
             ["git", "-C", BASE_DIR, "commit", "-m", "data: synop + history update"],
@@ -272,6 +273,10 @@ def main():
         if ok:
             subprocess.run(
                 [PYTHON, os.path.join(SCRIPTS_DIR, "generate_ai_analysis.py")],
+                cwd=BASE_DIR, capture_output=False
+            )
+            subprocess.run(
+                [PYTHON, os.path.join(SCRIPTS_DIR, "make_blocks.py")],
                 cwd=BASE_DIR, capture_output=False
             )
         git_push_history()
