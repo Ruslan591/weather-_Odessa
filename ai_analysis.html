@@ -650,9 +650,7 @@ function showBlock(idx) {
 function blockTextToHtml(text) {
   text = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   text = text.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/\*(.+?)\*/g,'<em>$1</em>');
-  var parts = text.split(/
-
-+/);
+  var parts = text.split(/\n\n+/);
   return parts.map(function(p){ return '<p>' + p.trim() + '</p>'; }).join('');
 }
 
