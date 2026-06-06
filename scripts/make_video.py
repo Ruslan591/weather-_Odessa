@@ -68,7 +68,7 @@ BLOCK_ICONS = {
 
 FONT_BODY_SIZE = 52   # крупнее для читаемости
 LINE_H         = 72   # межстрочный интервал
-LINES_PER_PAGE = 10   # строк на страницу
+LINES_PER_PAGE = 7    # строк на страницу (52px шрифт)
 
 def wrap_text(text, font, maxw, draw):
     words = text.split()
@@ -338,8 +338,9 @@ def main():
 
         print(f"\n  [BLOCK] '{block.get('title','')}' → {n_pages} стр., ~{duration:.0f} сек")
 
-        # Делим аудио пропорционально по страницам
-        sec_per_page = duration / n_pages
+        # Делим аудио пропорционально символам на странице
+        chars_per_page = [sum(len(l) for l in pg) for pg in pages]
+        total_chars = sum(chars_per_page) or 1
 
         for page_num, page_lines in enumerate(pages):
             png_path  = os.path.join(TMP_DIR, f"slide_{slide_counter:03d}.png")
@@ -351,16 +352,17 @@ def main():
                          page_lines, page_num, n_pages, png_path)
             print(f"  [SLIDE] стр.{page_num+1}/{n_pages}", end=" ")
 
-            # Вырезаем нужный кусок аудио
+            # Вырезаем нужный кусок аудио пропорционально символам
+            page_sec = duration * chars_per_page[page_num] / total_chars
+            start_sec = duration * sum(chars_per_page[:page_num]) / total_chars
             audio_for_slide = None
             if os.path.exists(mp3_path):
-                start = page_num * sec_per_page
-                ok = trim_audio(mp3_path, aac_path, start, sec_per_page)
+                ok = trim_audio(mp3_path, aac_path, start_sec, page_sec)
                 if ok:
                     audio_for_slide = aac_path
 
             ok = make_slide_video(png_path, audio_for_slide, mp4_path,
-                                  sec_per_page)
+                                  page_sec)
             if ok:
                 all_mp4s.append(mp4_path)
 
