@@ -492,7 +492,39 @@ def call_claude(prompt, api_key):
 
 # ── Основная логика ───────────────────────────────────────────────────────────
 
-def main():
+GOOD_HOURS_UTC = [9, 12, 15, 21]
+COOLDOWN_HOURS = 6
+
+def in_good_window(now_utc=None):
+    if now_utc is None:
+        now_utc = datetime.now(timezone.utc)
+    for h in GOOD_HOURS_UTC:
+        target = now_utc.replace(hour=h, minute=0, second=0, microsecond=0)
+        if abs((now_utc - target).total_seconds()) <= 45 * 60:
+            return True
+    return False
+
+def cooldown_ok(existing, force=False):
+    if force:
+        return True
+    last_gen = existing.get("generated_at", "")
+    if not last_gen:
+        return True
+    try:
+        last_dt = datetime.fromisoformat(last_gen.replace("Z", "+00:00"))
+        elapsed = (datetime.now(timezone.utc) - last_dt).total_seconds() / 3600
+        if elapsed < COOLDOWN_HOURS:
+            print(f"  [AI] Cooldown: последний анализ {elapsed:.1f}ч назад, пропускаю")
+            return False
+    except Exception:
+        pass
+    if not in_good_window():
+        now_h = datetime.now(timezone.utc).hour
+        print(f"  [AI] Вне окна моделей (сейчас {now_h:02d}UTC), пропускаю")
+        return False
+    return True
+
+def main(force=False):
     if not ai_enabled():
         print("  [AI] Анализ отключён (AI_ANALYSIS_ENABLED=false в .env)")
         return
@@ -512,6 +544,9 @@ def main():
                 existing = json.load(f)
         except Exception:
             pass
+
+    if not cooldown_ok(existing, force=force):
+        return
 
     # Запрашиваем данные
     try:
@@ -567,4 +602,8 @@ def main():
     print(f"  [AI] ✅ Анализ сохранён ({len(text)} символов)")
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    p = argparse.ArgumentParser()
+    p.add_argument("--force", action="store_true")
+    a = p.parse_args()
+    main(force=a.force)
