@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 make_video.py — вертикальное видео 9:16 для TikTok/Reels из блоков blocks_meta.json.
-Каждый блок → отдельный слайд-видео → concat в forecast_video.mp4.
-Запуск: python3 scripts/make_video.py
+Текст блока делится на страницы, каждая страница = отдельный слайд.
+Аудио блока делится пропорционально по страницам через ffmpeg trim.
 """
 
 import json, os, re, math, time, subprocess
@@ -15,10 +15,8 @@ META_FILE  = os.path.join(BLOCKS_DIR, "blocks_meta.json")
 TMP_DIR    = os.path.join(BASE_DIR, "data", "blocks", "tmp")
 MP4_FILE   = os.path.join(BASE_DIR, "data", "forecast_video.mp4")
 
-# ── Размер: вертикальный 9:16 ─────────────────────────────────────────────────
 W, H = 1080, 1920
 
-# ── Шрифты ────────────────────────────────────────────────────────────────────
 FONT_CANDIDATES = [
     "/system/fonts/Roboto-Regular.ttf",
     "/system/fonts/NotoSans-Regular.ttf",
@@ -50,7 +48,6 @@ def F(size, bold=False):
         except: pass
     return ImageFont.load_default()
 
-# ── Темы блоков ───────────────────────────────────────────────────────────────
 THEMES = {
     "today":    {"top": (8, 20, 55),  "bot": (15, 45, 90),  "accent": (79, 195, 247),  "glow": (30, 100, 200)},
     "tomorrow": {"top": (8, 30, 18),  "bot": (15, 55, 28),  "accent": (129, 199, 132), "glow": (20, 120, 40)},
@@ -60,10 +57,20 @@ THEMES = {
 }
 DEFAULT_THEME = THEMES["today"]
 
-# ── Утилиты ───────────────────────────────────────────────────────────────────
+# ── Иконки блоков — ASCII/Unicode вместо эмодзи ───────────────────────────────
+BLOCK_ICONS = {
+    "today":    "\u2600",   # ☀ солнце
+    "tomorrow": "\u26c5",   # ⛅ солнце с облаком
+    "next3":    "\u25a6",   # ▦ сетка (календарь)
+    "warnings": "\u26a0",   # ⚠ предупреждение
+    "trend":    "\u2197",   # ↗ стрелка вверх
+}
+
+FONT_BODY_SIZE = 52   # крупнее для читаемости
+LINE_H         = 72   # межстрочный интервал
+LINES_PER_PAGE = 10   # строк на страницу
 
 def wrap_text(text, font, maxw, draw):
-    """Перенос текста по ширине."""
     words = text.split()
     lines = []; cur = []
     for w in words:
@@ -76,12 +83,31 @@ def wrap_text(text, font, maxw, draw):
     return lines
 
 def clean_text(text):
-    """Убирает markdown-разметку для отображения на слайде."""
     text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
     text = re.sub(r'\*(.+?)\*', r'\1', text)
-    text = text.replace('\u26a0\ufe0f', '⚠').replace('\u26a0', '⚠')
     text = re.sub(r'\s+', ' ', text)
     return text.strip()
+
+def split_into_pages(text, font, maxw, draw):
+    """Разбивает текст на страницы по LINES_PER_PAGE строк."""
+    raw = clean_text(text)
+    paragraphs = [p.strip() for p in raw.split('\n') if p.strip()]
+    all_lines = []
+    for para in paragraphs:
+        all_lines.extend(wrap_text(para, font, maxw, draw))
+        all_lines.append('')  # пустая строка между абзацами
+
+    # Убираем лишние пустые строки в конце
+    while all_lines and all_lines[-1] == '':
+        all_lines.pop()
+
+    pages = []
+    i = 0
+    while i < len(all_lines):
+        page = all_lines[i:i + LINES_PER_PAGE]
+        pages.append(page)
+        i += LINES_PER_PAGE
+    return pages
 
 def draw_gradient(draw, top, bot):
     for y in range(H):
@@ -100,7 +126,6 @@ def draw_stars(draw, seed=42):
         draw.ellipse([x, y, x+sz, y+sz], fill=(a, min(a+30, 255), 255))
 
 def draw_glow_circle(img, cx, cy, radius, color, alpha_max=60):
-    """Рисует мягкое свечение — накладываем несколько полупрозрачных кругов."""
     from PIL import Image as PILImage
     overlay = PILImage.new('RGBA', img.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(overlay)
@@ -121,111 +146,100 @@ def draw_corner_marks(draw, accent, size=24, margin=40):
     for px, py, dx, dy in corners:
         draw.line([px, py, px+dx*size, py+dy*size], fill=accent, width=3)
 
-def draw_icon_big(draw, icon_char, cx, cy, size=160, color=(255,255,255)):
-    """Рисует эмодзи/иконку большим текстом по центру."""
-    try:
-        fnt = F(size)
-        draw.text((cx, cy), icon_char, font=fnt, fill=color, anchor='mm')
-    except:
-        # fallback без anchor
-        bb = draw.textbbox((0,0), icon_char, font=F(size))
-        tw = bb[2]-bb[0]; th = bb[3]-bb[1]
-        draw.text((cx-tw//2, cy-th//2), icon_char, font=F(size), fill=color)
-
-# ── Основной рендер слайда ────────────────────────────────────────────────────
-
-def render_slide(block, idx, total, out_png):
-    theme = THEMES.get(block.get("key", ""), DEFAULT_THEME)
+def render_slide(block, slide_idx, total_slides, page_lines, page_num, total_pages, out_png):
+    """Рендерит один слайд (одну страницу блока)."""
+    key   = block.get("key", "today")
+    theme = THEMES.get(key, DEFAULT_THEME)
     acc   = theme["accent"]
     glow  = theme["glow"]
 
     img  = Image.new('RGBA', (W, H), (0, 0, 0, 255))
     draw = ImageDraw.Draw(img)
 
-    # Фон
     draw_gradient(draw, theme["top"], theme["bot"])
-    draw_stars(draw, seed=idx*7+1)
-
-    # Свечение (мягкое пятно в центре)
+    draw_stars(draw, seed=slide_idx * 7 + page_num + 1)
     draw_glow_circle(img, W//2, H//2, 600, glow, alpha_max=45)
-
-    draw = ImageDraw.Draw(img)  # пересоздаём после paste
-
-    # Угловые маркеры
+    draw = ImageDraw.Draw(img)
     draw_corner_marks(draw, acc)
 
-    # Верхний бейдж: «Одесса · Погода»
-    badge_y = 70
-    badge_text = "ОДЕССА · ПОГОДА"
-    draw.text((W//2, badge_y), badge_text, font=F(32, True), fill=(*acc, 180), anchor='mm')
+    # Верхний бейдж
+    draw.text((W//2, 70), "ОДЕССА · ПОГОДА",
+              font=F(32, True), fill=(*acc, 180), anchor='mm')
 
-    # Полоска прогресса слайдов
-    seg_w = (W - 120) // total
-    seg_y = 110
-    for i in range(total):
+    # Полоска прогресса (по слайдам блоков, не страницам)
+    seg_w = (W - 120) // total_slides
+    for i in range(total_slides):
         sx = 60 + i * (seg_w + 4)
-        color_seg = acc if i <= idx else (80, 80, 100)
-        draw.rounded_rectangle([sx, seg_y, sx+seg_w, seg_y+5], radius=3, fill=color_seg)
+        color_seg = acc if i <= slide_idx else (80, 80, 100)
+        draw.rounded_rectangle([sx, 110, sx+seg_w, 115], radius=3, fill=color_seg)
 
-    # Иконка блока (большая)
-    icon = block.get("icon", "🌤")
-    icon_y = 310
-    draw_icon_big(draw, icon, W//2, icon_y, size=160, color=(255, 255, 255))
+    # Иконка блока
+    icon_char = BLOCK_ICONS.get(key, "\u2600")
+    try:
+        draw.text((W//2, 280), icon_char, font=F(140, True),
+                  fill=(255, 255, 255), anchor='mm')
+    except:
+        bb = draw.textbbox((0,0), icon_char, font=F(140, True))
+        tw = bb[2]-bb[0]; th = bb[3]-bb[1]
+        draw.text((W//2 - tw//2, 280 - th//2), icon_char,
+                  font=F(140, True), fill=(255, 255, 255))
 
     # Заголовок блока
     title = block.get("title", "").upper()
-    draw.text((W//2, icon_y + 120), title, font=F(68, True), fill=(255,255,255), anchor='mm')
+    draw.text((W//2, 400), title, font=F(72, True),
+              fill=(255, 255, 255), anchor='mm')
+
+    # Номер страницы (если больше одной)
+    if total_pages > 1:
+        draw.text((W//2, 455), f"{page_num + 1} / {total_pages}",
+                  font=F(30), fill=(*acc, 150), anchor='mm')
 
     # Разделитель
-    div_y = icon_y + 200
+    div_y = 490
     draw.rectangle([80, div_y, W-80, div_y+3], fill=(*acc, 120))
 
-    # Текст блока
-    raw_text = clean_text(block.get("text", ""))
-    paragraphs = [p.strip() for p in raw_text.split('\n') if p.strip()]
+    # Текст страницы
+    font_body = F(FONT_BODY_SIZE)
+    text_x  = 65
+    text_maxw = W - 130
+    y = div_y + 45
 
-    font_body = F(40)
-    font_small = F(34)
-    text_x = 70
-    text_maxw = W - 140
-    y = div_y + 40
-    line_h = 56
-    max_y = H - 260  # оставляем место под подпись
-
-    for para in paragraphs:
-        if y >= max_y: break
-        lines = wrap_text(para, font_body, text_maxw, draw)
-        for line in lines:
-            if y >= max_y: break
-            draw.text((text_x, y), line, font=font_body, fill=(210, 235, 255))
-            y += line_h
-        y += 16  # межабзацный отступ
-
-    # Если текст не влез — многоточие
-    if y >= max_y:
-        draw.text((text_x, max_y - line_h), "...", font=font_small, fill=(*acc, 150))
+    for line in page_lines:
+        if not line:
+            y += LINE_H // 2
+            continue
+        draw.text((text_x, y), line, font=font_body, fill=(215, 238, 255))
+        y += LINE_H
 
     # Нижняя подпись
-    bottom_y = H - 100
     now_str = datetime.now().strftime("%d.%m.%Y")
-    draw.text((W//2, bottom_y), f"Синоптический прогноз · {now_str}",
+    draw.text((W//2, H - 100),
+              f"Синоптический прогноз · {now_str}",
               font=F(30), fill=(120, 150, 200), anchor='mm')
-    # Маленькая акцентная линия снизу
-    draw.rectangle([W//2 - 120, bottom_y + 38, W//2 + 120, bottom_y + 41], fill=(*acc, 100))
+    draw.rectangle([W//2 - 120, H-62, W//2 + 120, H-59], fill=(*acc, 100))
 
     img = img.convert('RGB')
     img.save(out_png, 'PNG')
-    print(f"  [SLIDE] #{idx+1}/{total} '{block.get('title','')}' → {os.path.basename(out_png)}")
 
-# ── FFmpeg: PNG + MP3 → видео-слайд ──────────────────────────────────────────
+def trim_audio(mp3_path, out_path, start_sec, duration_sec):
+    """Обрезает кусок аудио через ffmpeg."""
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", mp3_path,
+        "-ss", str(round(start_sec, 3)),
+        "-t",  str(round(duration_sec, 3)),
+        "-c:a", "aac", "-b:a", "96k",
+        out_path
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    return result.returncode == 0
 
-def make_slide_video(png_path, mp3_path, out_mp4, duration):
-    """Создаёт видео из статичного PNG + аудио. duration — запасная длительность если mp3 не найден."""
-    if os.path.exists(mp3_path):
+def make_slide_video(png_path, audio_path, out_mp4, duration):
+    if audio_path and os.path.exists(audio_path):
         cmd = [
             "ffmpeg", "-y",
             "-loop", "1", "-i", png_path,
-            "-i", mp3_path,
+            "-i", audio_path,
             "-c:v", "libx264", "-preset", "veryfast",
             "-tune", "stillimage",
             "-c:a", "aac", "-b:a", "96k",
@@ -249,11 +263,11 @@ def make_slide_video(png_path, mp3_path, out_mp4, duration):
         ]
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        print(f"  [FFM] Ошибка slide:\n{result.stderr[-500:]}")
+        print(f"  [FFM] Ошибка:\n{result.stderr[-400:]}")
         return False
+    size_kb = os.path.getsize(out_mp4) // 1024
+    print(f"  [FFM] готов ({size_kb} кб)")
     return True
-
-# ── FFmpeg: concat всех слайдов ───────────────────────────────────────────────
 
 def concat_videos(slide_mp4s, out_mp4):
     list_file = os.path.join(TMP_DIR, "concat_list.txt")
@@ -269,20 +283,17 @@ def concat_videos(slide_mp4s, out_mp4):
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        print(f"  [FFM] Ошибка concat:\n{result.stderr[-500:]}")
+        print(f"  [FFM] Ошибка concat:\n{result.stderr[-400:]}")
         return False
     size_mb = os.path.getsize(out_mp4) / 1024 / 1024
-    print(f"  [FFM] ✅ Итоговое видео: {out_mp4} ({size_mb:.1f} Мб)")
+    print(f"  [FFM] \u2705 Итоговое видео: {out_mp4} ({size_mb:.1f} Мб)")
     return True
 
-# ── Main ──────────────────────────────────────────────────────────────────────
-
 def main():
-    print("\n  📹 Генерация вертикального видео (9:16) для TikTok...")
+    print("\n  \U0001f4f9 Генерация вертикального видео (9:16) для TikTok...")
 
     if not os.path.exists(META_FILE):
         print(f"  Файл не найден: {META_FILE}")
-        print("  Запустите сначала: python3 scripts/make_blocks.py")
         return
 
     with open(META_FILE, 'r', encoding='utf-8') as f:
@@ -294,55 +305,88 @@ def main():
         return
 
     if not FONT_REG_PATH:
-        print("  ОШИБКА: кириллический шрифт не найден!")
-        print("  pkg install fonts-dejavu  или  apt install fonts-freefont-ttf")
+        print("  ОШИБКА: шрифт не найден!")
         return
 
     print(f"  Шрифт: {FONT_REG_PATH}")
     print(f"  Блоков: {len(blocks)}")
     os.makedirs(TMP_DIR, exist_ok=True)
 
-    slide_mp4s = []
-    total = len(blocks)
+    # Считаем страницы для каждого блока
+    dummy_img  = Image.new('RGB', (W, H))
+    dummy_draw = ImageDraw.Draw(dummy_img)
+    font_body  = F(FONT_BODY_SIZE)
+    text_maxw  = W - 130
 
-    for idx, block in enumerate(blocks):
-        key      = block.get("key", f"block_{idx}")
-        filename = block.get("filename", f"block_{idx}.mp3")
+    block_pages = []
+    for block in blocks:
+        pages = split_into_pages(
+            block.get("text", ""), font_body, text_maxw, dummy_draw)
+        block_pages.append(pages)
+
+    total_slides = len(blocks)
+    all_mp4s = []
+    slide_counter = 0
+
+    for block_idx, block in enumerate(blocks):
+        key      = block.get("key", f"block_{block_idx}")
+        filename = block.get("filename", f"block_{block_idx}.mp3")
         mp3_path = os.path.join(BLOCKS_DIR, filename)
         duration = block.get("duration", 15)
+        pages    = block_pages[block_idx]
+        n_pages  = len(pages)
 
-        png_path = os.path.join(TMP_DIR, f"slide_{idx:02d}.png")
-        mp4_path = os.path.join(TMP_DIR, f"slide_{idx:02d}.mp4")
+        print(f"\n  [BLOCK] '{block.get('title','')}' → {n_pages} стр., ~{duration:.0f} сек")
 
-        # 1. Рендерим картинку
-        render_slide(block, idx, total, png_path)
+        # Делим аудио пропорционально по страницам
+        sec_per_page = duration / n_pages
 
-        # 2. Делаем видео-слайд
-        print(f"  [FFM] Конвертирую слайд {idx+1}/{total}...")
-        ok = make_slide_video(png_path, mp3_path, mp4_path, duration)
-        if ok:
-            slide_mp4s.append(mp4_path)
-        else:
-            print(f"  [FFM] Пропускаю слайд {idx+1}")
+        for page_num, page_lines in enumerate(pages):
+            png_path  = os.path.join(TMP_DIR, f"slide_{slide_counter:03d}.png")
+            mp4_path  = os.path.join(TMP_DIR, f"slide_{slide_counter:03d}.mp4")
+            aac_path  = os.path.join(TMP_DIR, f"audio_{slide_counter:03d}.aac")
 
-        # Пауза между слайдами — даём телефону выдохнуть
-        if idx < total - 1:
-            print(f"  [WAIT] Пауза 3 сек перед следующим слайдом...")
+            # Рендерим картинку
+            render_slide(block, block_idx, total_slides,
+                         page_lines, page_num, n_pages, png_path)
+            print(f"  [SLIDE] стр.{page_num+1}/{n_pages}", end=" ")
+
+            # Вырезаем нужный кусок аудио
+            audio_for_slide = None
+            if os.path.exists(mp3_path):
+                start = page_num * sec_per_page
+                ok = trim_audio(mp3_path, aac_path, start, sec_per_page)
+                if ok:
+                    audio_for_slide = aac_path
+
+            ok = make_slide_video(png_path, audio_for_slide, mp4_path,
+                                  sec_per_page)
+            if ok:
+                all_mp4s.append(mp4_path)
+
+            slide_counter += 1
+
+            # Пауза между страницами (кроме последней)
+            if page_num < n_pages - 1:
+                time.sleep(1)
+
+        # Пауза между блоками
+        if block_idx < len(blocks) - 1:
+            print(f"  [WAIT] Пауза 3 сек...")
             time.sleep(3)
 
-    if not slide_mp4s:
+    if not all_mp4s:
         print("  Не удалось создать ни одного слайда")
         return
 
-    # 3. Склеиваем
-    print(f"\n  [FFM] Склеиваю {len(slide_mp4s)} слайдов...")
-    ok = concat_videos(slide_mp4s, MP4_FILE)
+    print(f"\n  [FFM] Склеиваю {len(all_mp4s)} слайдов...")
+    ok = concat_videos(all_mp4s, MP4_FILE)
 
-    # 4. Чистим временные файлы
     if ok:
-        for f in os.listdir(TMP_DIR):
-            if f.endswith('.png') or (f.endswith('.mp4') and f.startswith('slide_')):
-                try: os.remove(os.path.join(TMP_DIR, f))
+        for fname in os.listdir(TMP_DIR):
+            if fname.endswith(('.png', '.aac')) or \
+               (fname.endswith('.mp4') and fname.startswith('slide_')):
+                try: os.remove(os.path.join(TMP_DIR, fname))
                 except: pass
         print("  [CLEAN] Временные файлы удалены")
 

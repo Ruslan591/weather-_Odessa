@@ -1,16 +1,7 @@
 #!/usr/bin/env python3
 """
 make_blocks.py — нарезка forecast_analysis_claude.json на блоки с озвучкой.
-Читает data/forecast_analysis_claude.json, генерирует:
-  data/blocks/block_0_today.mp3
-  data/blocks/block_1_tomorrow.mp3
-  data/blocks/block_2_next3.mp3
-  data/blocks/block_3_warnings.mp3   (только если есть предупреждения)
-  data/blocks/block_4_trend.mp3
-  data/blocks/blocks_meta.json       (мета: заголовки, длительности, наличие)
-
-Вызывается из check_model_runs.py после generate_ai_analysis.py,
-или вручную: python3 scripts/make_blocks.py [--force]
+Запуск: python3 scripts/make_blocks.py [--force]
 """
 
 import json, os, re, asyncio, argparse, random
@@ -23,18 +14,17 @@ BLOCKS_DIR  = os.path.join(BASE_DIR, "data", "blocks")
 META_FILE   = os.path.join(BLOCKS_DIR, "blocks_meta.json")
 
 VOICES = [
-    "ru-RU-SvetlanaNeural",   # женский
-    "ru-RU-DmitryNeural",     # мужской
-    "ru-RU-DariyaNeural",     # женский, другой тембр
+    "ru-RU-SvetlanaNeural",
+    "ru-RU-DmitryNeural",
+    "ru-RU-DariyaNeural",
 ]
-RATE  = "-5%"
+RATE = "-5%"
 
 MONTH_RU = [
     'января','февраля','марта','апреля','мая','июня',
     'июля','августа','сентября','октября','ноября','декабря'
 ]
 
-# ── Блоки — порядок и названия ───────────────────────────────────────────────
 BLOCK_DEFS = [
     ("today",    "Сегодня",     "block_0_today.mp3",    "Сегодня",        "☀️"),
     ("tomorrow", "Завтра",      "block_1_tomorrow.mp3", "Завтра",         "🌤"),
@@ -42,8 +32,6 @@ BLOCK_DEFS = [
     ("warnings", "\u26a0",      "block_3_warnings.mp3", "Предупреждения", "⚠️"),
     ("trend",    "Тенденция",   "block_4_trend.mp3",    "Тенденция",      "📈"),
 ]
-
-# ── Парсинг секций ────────────────────────────────────────────────────────────
 
 def parse_sections(text):
     sections = {}
@@ -67,22 +55,26 @@ def find_section(sections, prefix):
             return val
     return ''
 
-# ── TTS preprocess ────────────────────────────────────────────────────────────
-
 def preprocess_tts(text):
     # Предупреждения
     text = text.replace('\u26a0\ufe0f', 'Внимание!')
     text = text.replace('\u26a0', 'Внимание!')
 
-    # Диапазоны температур: 14–16°C / -2-+3°C → от 14 до 16 градусов Цельсия
-    # Тире: обычное, en-dash, em-dash
+    # Защищаем диапазоны дат (9-10 июня, 7-8 июля и т.п.) — временная замена
     text = re.sub(
-        r'(-?\d+)\s*[\u2013\u2014\-]\s*(-?\d+)\s*\u00b0C',
-        lambda m: f'от {m.group(1)} до {m.group(2)} градусов Цельсия',
+        r'(\d{1,2})\s*[-\u2013\u2014]\s*(\d{1,2})\s+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)',
+        lambda m: f'с {m.group(1)} по {m.group(2)} {m.group(3)}',
         text
     )
 
-    # Одиночные температуры со склонением
+    # Диапазоны температур: 14–16°C → от 14 до 16 градусов
+    text = re.sub(
+        r'(-?\d+)\s*[-\u2013\u2014]\s*(-?\d+)\s*\u00b0C',
+        lambda m: f'от {m.group(1)} до {m.group(2)} градусов',
+        text
+    )
+
+    # Одиночные температуры со склонением (без слова Цельсия)
     def temp_word(m):
         n = abs(int(m.group(1)))
         last2 = n % 100
@@ -95,10 +87,10 @@ def preprocess_tts(text):
             w = 'градуса'
         else:
             w = 'градусов'
-        return f'{m.group(1)} {w} Цельсия'
+        return f'{m.group(1)} {w}'
 
     text = re.sub(r'(-?\d+)\s*\u00b0C', temp_word, text)
-    text = text.replace('\u00b0C', 'градусов Цельсия')
+    text = text.replace('\u00b0C', 'градусов')
     text = text.replace('\u00b0', ' градусов')
 
     # Давление
@@ -113,13 +105,15 @@ def preprocess_tts(text):
     # Энергия
     text = text.replace('Дж/кг', 'джоулей на килограмм')
 
-    # Аббревиатуры — до decimal_to_words чтобы не ломать числа
+    # Аббревиатуры — T-Td заменяем БЕЗ слова «дефицит» чтобы не дублировать
+    text = re.sub(r'\bT-Td\b', 'точки росы', text)
     text = re.sub(r'\bCAPE\b', 'индекс конвективной энергии', text)
     text = re.sub(r'\bLI\b', 'индекс неустойчивости', text)
     text = re.sub(r'\bCIN\b', 'конвективное торможение', text)
-    text = re.sub(r'\bT-Td\b', 'дефицит точки росы', text)
     text = re.sub(r'\bKI\b', 'индекс Кельтса', text)
-    text = re.sub(r'\bTT\b', 'индекс тотальных тотал', text)
+
+    # Ударения
+    text = text.replace('малооблачн', 'малоо\u0301блачн')
 
     # Десятичные дроби
     def decimal_to_words(m):
@@ -142,15 +136,11 @@ def preprocess_tts(text):
     # Убираем markdown
     text = re.sub(r'#+\s*', '', text)
     text = re.sub(r'\*+', '', text)
-
-    # Убираем лишние пробелы
     text = re.sub(r' {2,}', ' ', text)
 
     return text.strip()
 
-# ── TTS ───────────────────────────────────────────────────────────────────────
-
-_selected_voice = VOICES[0]  # будет выбран в main()
+_selected_voice = VOICES[0]
 
 async def _tts_async(text, out_path):
     communicate = edge_tts.Communicate(text, voice=_selected_voice, rate=RATE)
@@ -162,10 +152,8 @@ def generate_block_tts(text, out_path):
         return 0
     asyncio.run(_tts_async(clean, out_path))
     size_kb = os.path.getsize(out_path) // 1024
-    print(f"    \u2192 {os.path.basename(out_path)} ({size_kb} \u043a\u0431)")
+    print(f"    \u2192 {os.path.basename(out_path)} ({size_kb} кб)")
     return size_kb
-
-# ── Длительность mp3 ─────────────────────────────────────────────────────────
 
 def get_mp3_duration(path):
     try:
@@ -173,8 +161,6 @@ def get_mp3_duration(path):
         return round(size / 16000, 1)
     except:
         return 0
-
-# ── Основная логика ───────────────────────────────────────────────────────────
 
 def main(force=False):
     if not os.path.exists(INPUT_FILE):
@@ -190,11 +176,9 @@ def main(force=False):
         return
 
     os.makedirs(BLOCKS_DIR, exist_ok=True)
-
     sections = parse_sections(text)
     print(f"\n  [BLOCKS] Найдено секций: {list(sections.keys())}")
 
-    # Проверяем изменился ли текст
     existing_meta = {}
     if os.path.exists(META_FILE):
         try:
@@ -208,13 +192,11 @@ def main(force=False):
         print("  [BLOCKS] Данные не изменились — пропускаю генерацию блоков")
         return
 
-    # Выбираем голос рандомно для этого запуска
     global _selected_voice
     _selected_voice = random.choice(VOICES)
     print(f"  [BLOCKS] Голос: {_selected_voice}")
     print("  [BLOCKS] Генерирую блоки озвучки...")
 
-    # Дата для заголовков блоков
     gen_at = data.get('generated_at', '')
     try:
         base_dt = datetime.fromisoformat(gen_at.replace('Z', '+00:00'))
@@ -237,9 +219,7 @@ def main(force=False):
             print(f"    \u2192 {filename}: пропущен (пусто)")
             continue
 
-        # Добавляем дату в начало озвучки для today/tomorrow
         tts_text = DATE_PREFIX.get(key, '') + section_text
-
         out_path = os.path.join(BLOCKS_DIR, filename)
         size_kb = generate_block_tts(tts_text, out_path)
 
@@ -270,6 +250,6 @@ def main(force=False):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
-    p.add_argument("--force", action="store_true", help="Перегенерировать даже если данные не изменились")
+    p.add_argument("--force", action="store_true")
     a = p.parse_args()
     main(force=a.force)
