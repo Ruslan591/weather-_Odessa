@@ -365,12 +365,7 @@
     <div class="status-dot" id="statusDot"></div>
     <span id="statusText"></span>
   </div>
-  <div id="audioWrap" class="audio-wrap">
-    <div class="audio-label">🔊 Озвучка (Microsoft Neural TTS)</div>
-    <audio id="audioPlayer" controls preload="none">
-      <source src="data/forecast_analysis_claude.mp3" type="audio/mpeg">
-    </audio>
-  </div>
+
   <div id="content">
     <div class="loading">
       <div style="margin-bottom:16px">
@@ -385,7 +380,7 @@
 
 <!-- ── Кнопка презентации ── -->
 <button class="pres-btn hidden" id="presBtn" onclick="openPresentation()">
-  ▶ Презентация по блокам
+  ▶ Презентация
 </button>
 
 <!-- ── Presentation overlay ── -->
@@ -534,12 +529,6 @@ fetch('https://raw.githubusercontent.com/Ruslan591/weather-_Odessa/main/data/for
       statusDot.className = 'status-dot stale';
       statusText.textContent = 'Проверено: ' + chkAt + ' · данные не изменились с ' + genAt;
     }
-
-    // Audio player
-    var audioWrap = document.getElementById('audioWrap');
-    var audioPlayer = document.getElementById('audioPlayer');
-    audioWrap.classList.add('visible');
-    audioPlayer.load();
 
     // Analysis
     var html = markdownToHtml(d.text || '');
