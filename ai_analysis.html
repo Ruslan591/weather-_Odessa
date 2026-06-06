@@ -795,23 +795,32 @@ function getChartData(block) {
 }
 
 function getTempRange(text, key) {
-  // Ищем ночь/день/ощущ
   var night=null, day=null, eve=null;
   var m;
-  m = text.match(/(\d{1,2})[°°]\s*C\s*ночью|ночью\s*(-?\d{1,2})/i);
-  if (m) night = parseInt(m[1]||m[2]);
-  m = text.match(/(\d{1,2})[°°]\s*C\s*дн|дн[её]м\s*(\d{1,2})|до\s*(\d{1,2})[°°]\s*C/i);
-  if (m) day = parseInt(m[1]||m[2]||m[3]);
-  m = text.match(/вечером\s*(\d{1,2})|(\d{1,2})[°°]\s*C\s*вечером/i);
+  // Ночная температура: "ночных 18°C" / "18°C ночью" / "ночью 18"
+  m = text.match(/ночн\w*\s+(-?\d{1,2})[°°]|(-?\d{1,2})[°°]\s*C\s*ноч|ноч\w*\s+(-?\d{1,2})/i);
+  if (m) night = parseInt(m[1]||m[2]||m[3]);
+  // Дневная температура: "максимум 25°C" / "до 25°C днём" / "днём 25" / "25°C днём"
+  m = text.match(/максимум\s+(-?\d{1,2})[°°]|до\s+(-?\d{1,2})[°°]\s*C\s*дн|дн[её]м\s+(-?\d{1,2})[°°]?|(-?\d{1,2})[°°]\s*C\s*дн/i);
+  if (m) day = parseInt(m[1]||m[2]||m[3]||m[4]);
+  // Вечерняя
+  m = text.match(/вечером\s+(-?\d{1,2})|(-?\d{1,2})[°°]\s*C\s*вечером/i);
   if (m) eve = parseInt(m[1]||m[2]);
-  // fallback: ищем min..max
-  if (!day) {
-    m = text.match(/(-?\d{1,2})…(\d{1,2})|от\s+(-?\d{1,2}).*до\s+(\d{1,2})/);
-    if (m) { night=parseInt(m[1]||m[3]); day=parseInt(m[2]||m[4]); }
+  // Fallback: диапазон "от X до Y"
+  if (!day && !night) {
+    m = text.match(/от\s+(-?\d{1,2})\s+до\s+(\d{1,2})/i);
+    if (m) { night=parseInt(m[1]); day=parseInt(m[2]); }
   }
-  var vals=[night,eve,day];
-  var labels=['Ночь','Вечер','День'];
-  if (!eve) { vals=[night,day]; labels=['Ночь','День']; }
+  // Fallback: просто "поднимется до X°C" / "восстановится до X°C"
+  if (!day) {
+    m = text.match(/(?:поднимется|восстановится|достигнет)\s+до\s+(-?\d{1,2})[°°]/i);
+    if (m) day = parseInt(m[1]);
+  }
+  var vals, labels;
+  if (eve) { vals=[night,eve,day]; labels=['Ночь','Вечер','День']; }
+  else if (night && day) { vals=[night,day]; labels=['Ночь','День']; }
+  else if (day) { vals=[day]; labels=['День']; }
+  else { vals=[null]; labels=['']; }
   return { type:'bar', label:'Температура (°C)', xLabels:labels, values:vals };
 }
 
