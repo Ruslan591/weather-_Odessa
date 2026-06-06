@@ -284,10 +284,19 @@ def main():
                 cwd=BASE_DIR, capture_output=False
             )
             if ai_result.returncode == 0:
-                subprocess.run(
-                    [PYTHON, os.path.join(SCRIPTS_DIR, "make_video.py")],
-                    cwd=BASE_DIR, capture_output=False
-                )
+                import json, os as _os
+                _ai_file = _os.path.join(BASE_DIR, "data", "forecast_analysis_claude.json")
+                _ai_changed = False
+                try:
+                    with open(_ai_file, encoding="utf-8") as _f:
+                        _ai_changed = json.load(_f).get("changed", False)
+                except Exception:
+                    pass
+                if _ai_changed:
+                    subprocess.run(
+                        [PYTHON, _os.path.join(SCRIPTS_DIR, "make_video.py")],
+                        cwd=BASE_DIR, capture_output=False
+                    )
         git_push_history()
     else:
         print("  Новых прогонов нет.\n")
