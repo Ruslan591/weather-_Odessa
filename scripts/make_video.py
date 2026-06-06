@@ -1,40 +1,31 @@
 #!/usr/bin/env python3
 """
-make_video.py — генерация видео-обзора погоды из forecast_analysis_claude.json
+make_video.py — вертикальное видео 9:16 для TikTok/Reels из блоков blocks_meta.json.
+Каждый блок → отдельный слайд-видео → concat в forecast_video.mp4.
 Запуск: python3 scripts/make_video.py
-Результат: data/forecast_video.mp4
-
-Зависимости: pip install edge-tts Pillow --break-system-packages
-             pkg install ffmpeg
 """
 
-import json, os, re, math, asyncio, subprocess
+import json, os, re, math, time, subprocess
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
-import edge_tts
 
-BASE_DIR  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-JSON_FILE = os.path.join(BASE_DIR, "data", "forecast_analysis_claude.json")
-OUT_DIR   = os.path.join(BASE_DIR, "data")
-IMG_FILE  = os.path.join(OUT_DIR, "forecast_bg.png")
-MP3_FILE  = os.path.join(OUT_DIR, "forecast_voice.mp3")
-MP4_FILE  = os.path.join(OUT_DIR, "forecast_video.mp4")
+BASE_DIR   = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BLOCKS_DIR = os.path.join(BASE_DIR, "data", "blocks")
+META_FILE  = os.path.join(BLOCKS_DIR, "blocks_meta.json")
+TMP_DIR    = os.path.join(BASE_DIR, "data", "blocks", "tmp")
+MP4_FILE   = os.path.join(BASE_DIR, "data", "forecast_video.mp4")
 
-W, H = 1280, 720
+# ── Размер: вертикальный 9:16 ─────────────────────────────────────────────────
+W, H = 1080, 1920
 
 # ── Шрифты ────────────────────────────────────────────────────────────────────
-# Ищем кириллический шрифт в нескольких местах
 FONT_CANDIDATES = [
-    # Android системные
     "/system/fonts/Roboto-Regular.ttf",
     "/system/fonts/NotoSans-Regular.ttf",
-    # Termux
     "/data/data/com.termux/files/usr/share/fonts/TTF/DejaVuSans.ttf",
     "/data/data/com.termux/files/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    # Linux сервер
     "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
 ]
 FONT_BOLD_CANDIDATES = [
     "/system/fonts/Roboto-Bold.ttf",
@@ -42,13 +33,11 @@ FONT_BOLD_CANDIDATES = [
     "/data/data/com.termux/files/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
     "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
 ]
 
 def find_font(candidates):
     for p in candidates:
-        if os.path.exists(p):
-            return p
+        if os.path.exists(p): return p
     return None
 
 FONT_REG_PATH  = find_font(FONT_CANDIDATES)
@@ -57,51 +46,26 @@ FONT_BOLD_PATH = find_font(FONT_BOLD_CANDIDATES) or FONT_REG_PATH
 def F(size, bold=False):
     path = FONT_BOLD_PATH if bold else FONT_REG_PATH
     if path:
-        return ImageFont.truetype(path, size)
+        try: return ImageFont.truetype(path, size)
+        except: pass
     return ImageFont.load_default()
 
-# ── Цвета ─────────────────────────────────────────────────────────────────────
-BG_TOP    = (8, 15, 35)
-BG_BOTTOM = (18, 35, 70)
-ACCENT    = (64, 180, 255)
-ACCENT2   = (120, 220, 180)
-WARNING   = (255, 160, 60)
-TEXT_MAIN = (230, 240, 255)
-TEXT_DIM  = (140, 160, 200)
-DIVIDER   = (40, 70, 120)
+# ── Темы блоков ───────────────────────────────────────────────────────────────
+THEMES = {
+    "today":    {"top": (8, 20, 55),  "bot": (15, 45, 90),  "accent": (79, 195, 247),  "glow": (30, 100, 200)},
+    "tomorrow": {"top": (8, 30, 18),  "bot": (15, 55, 28),  "accent": (129, 199, 132), "glow": (20, 120, 40)},
+    "next3":    {"top": (35, 22, 5),  "bot": (60, 38, 10),  "accent": (255, 183, 77),  "glow": (180, 80, 0)},
+    "warnings": {"top": (45, 10, 5),  "bot": (75, 18, 8),   "accent": (255, 112, 67),  "glow": (200, 40, 10)},
+    "trend":    {"top": (15, 12, 38), "bot": (28, 20, 65),  "accent": (206, 147, 216), "glow": (100, 40, 180)},
+}
+DEFAULT_THEME = THEMES["today"]
 
-# ── Парсинг ───────────────────────────────────────────────────────────────────
+# ── Утилиты ───────────────────────────────────────────────────────────────────
 
-def parse_sections(text):
-    d = {}; k = None; ls = []
-    for line in text.split('\n'):
-        if line.startswith('## '):
-            if k: d[k] = '\n'.join(ls).strip()
-            k = line[3:].strip(); ls = []
-        else:
-            ls.append(line)
-    if k: d[k] = '\n'.join(ls).strip()
-    return d
-
-def extract_temp(text):
-    m = re.search(r'от\s+(-?\d+)[°\s]*C[^\d]*до\s+(-?\d+)[°\s]*C', text)
-    if m: return int(m.group(1)), int(m.group(2))
-    m = re.search(r'(-?\d+)[°\s]*C\s+ночью.*?(\d+)[°\s]*C', text, re.S)
-    if m: return int(m.group(1)), int(m.group(2))
-    m = re.search(r'до\s+(\d+)[°\s]*C', text)
-    if m: return None, int(m.group(1))
-    return None, None
-
-def detect_weather(text):
-    t = text.lower()
-    if any(w in t for w in ['гроз', 'шквал', 'ливн']): return 'storm'
-    if any(w in t for w in ['осадк', 'дожд']): return 'rain'
-    if any(w in t for w in ['пасмурн', 'сплошн']): return 'cloudy'
-    if any(w in t for w in ['малооблач', 'ясн', 'антициклон', 'безоблачн']): return 'clear'
-    return 'partly'
-
-def wrap(text, font, maxw, draw):
-    words = text.split(); lines = []; cur = []
+def wrap_text(text, font, maxw, draw):
+    """Перенос текста по ширине."""
+    words = text.split()
+    lines = []; cur = []
     for w in words:
         t = ' '.join(cur + [w])
         if draw.textbbox((0, 0), t, font=font)[2] > maxw and cur:
@@ -111,244 +75,278 @@ def wrap(text, font, maxw, draw):
     if cur: lines.append(' '.join(cur))
     return lines
 
-def clean_for_tts(text):
-    text = re.sub(r'##\s+', '', text)
-    text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
-    text = re.sub(r'\*([^*]+)\*', r'\1', text)
-    text = text.replace('\u26a0\ufe0f', 'Внимание!')
-    text = text.replace('\u26a0', 'Внимание!')
-    text = text.replace('\u2019', "'")
-    text = re.sub(r'(-?\d+)\s*\u00b0C', r'\1 градусов', text)
-    text = text.replace('\u00b0', ' градусов')
-    text = text.replace('%', ' процентов')
-    text = re.sub(r'\bгПа\b', ' гектопаскалей', text)
-    text = re.sub(r'\bм/с\b', ' метров в секунду', text)
-    text = re.sub(r'\bДж/кг\b', ' джоулей на килограмм', text)
-    text = re.sub(r'\bLI\b', 'индекс неустойчивости', text)
-    text = re.sub(r'\bCAPE\b', 'конвективная энергия', text)
-    text = re.sub(r'\bCIN\b', 'конвективное торможение', text)
+def clean_text(text):
+    """Убирает markdown-разметку для отображения на слайде."""
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+    text = re.sub(r'\*(.+?)\*', r'\1', text)
+    text = text.replace('\u26a0\ufe0f', '⚠').replace('\u26a0', '⚠')
     text = re.sub(r'\s+', ' ', text)
     return text.strip()
 
-# ── Рисование ─────────────────────────────────────────────────────────────────
-
-def draw_gradient(draw):
+def draw_gradient(draw, top, bot):
     for y in range(H):
         t = y / H
-        r = int(BG_TOP[0] + (BG_BOTTOM[0] - BG_TOP[0]) * t)
-        g = int(BG_TOP[1] + (BG_BOTTOM[1] - BG_TOP[1]) * t)
-        b = int(BG_TOP[2] + (BG_BOTTOM[2] - BG_TOP[2]) * t)
+        r = int(top[0] + (bot[0]-top[0])*t)
+        g = int(top[1] + (bot[1]-top[1])*t)
+        b = int(top[2] + (bot[2]-top[2])*t)
         draw.line([(0, y), (W, y)], fill=(r, g, b))
 
-def draw_stars(draw):
-    import random; rng = random.Random(42)
-    for _ in range(100):
-        x = rng.randint(0, W); y = rng.randint(0, H // 2)
-        sz = rng.choice([1, 1, 2]); a = rng.randint(70, 180)
-        draw.ellipse([x, y, x+sz, y+sz], fill=(a, min(a+20, 255), 255))
+def draw_stars(draw, seed=42):
+    import random; rng = random.Random(seed)
+    for _ in range(180):
+        x = rng.randint(0, W); y = rng.randint(0, H//2)
+        sz = rng.choice([1, 1, 2, 2, 3])
+        a  = rng.randint(60, 200)
+        draw.ellipse([x, y, x+sz, y+sz], fill=(a, min(a+30, 255), 255))
 
-def draw_icon(draw, wtype, cx, cy, s=72):
-    if wtype == 'clear':
-        r = s // 2
-        draw.ellipse([cx-r, cy-r, cx+r, cy+r], fill=(255, 220, 60))
-        for a in range(0, 360, 45):
-            rad = math.radians(a)
-            x1 = cx + int((r+8)*math.cos(rad)); y1 = cy + int((r+8)*math.sin(rad))
-            x2 = cx + int((r+22)*math.cos(rad)); y2 = cy + int((r+22)*math.sin(rad))
-            draw.line([x1, y1, x2, y2], fill=(255, 220, 60), width=4)
-    elif wtype == 'storm':
-        cr = s // 2
-        draw.ellipse([cx-cr, cy-cr//3-15, cx+cr//2, cy+cr//2-15], fill=(50, 60, 90))
-        draw.ellipse([cx-cr//3, cy-cr-15, cx+cr, cy+cr//3-15], fill=(65, 75, 105))
-        draw.ellipse([cx-cr//4, cy-cr//2-15, cx+cr//4, cy+cr//4-15], fill=(80, 90, 120))
-        draw.polygon([
-            (cx+5, cy-5), (cx-10, cy+20), (cx+2, cy+20),
-            (cx-12, cy+45), (cx+15, cy+15), (cx+5, cy+15), (cx+5, cy-5)
-        ], fill=(255, 230, 50))
-    elif wtype == 'rain':
-        cr = s // 2
-        draw.ellipse([cx-cr, cy-cr//3-10, cx+cr//2, cy+cr//2-10], fill=(90, 110, 150))
-        draw.ellipse([cx-cr//3, cy-cr-10, cx+cr, cy+cr//3-10], fill=(105, 125, 165))
-        draw.ellipse([cx-cr//4, cy-cr//2-10, cx+cr//4, cy+cr//4-10], fill=(120, 140, 180))
-        for dx, dy in [(-22, 18), (0, 28), (22, 18), (-11, 40), (11, 40)]:
-            draw.ellipse([cx+dx-3, cy+dy-3, cx+dx+3, cy+dy+10], fill=(90, 170, 255))
-    elif wtype == 'cloudy':
-        cr = s // 2
-        draw.ellipse([cx-cr, cy-cr//3, cx+cr//2, cy+cr//2], fill=(130, 150, 185))
-        draw.ellipse([cx-cr//3, cy-cr, cx+cr, cy+cr//3], fill=(150, 170, 205))
-        draw.ellipse([cx, cy-cr//3, cx+cr+cr//3, cy+cr//2], fill=(140, 160, 195))
-    else:  # partly
-        r = s // 3
-        draw.ellipse([cx-r-10, cy-r-10, cx+r-10, cy+r-10], fill=(255, 220, 60))
-        cr = s // 3
-        draw.ellipse([cx-cr+5, cy-cr//2+5, cx+cr+5, cy+cr//2+5], fill=(180, 200, 230))
-        draw.ellipse([cx-cr//2+15, cy-cr+5, cx+cr//2+15, cy+cr-10], fill=(200, 215, 240))
-        draw.ellipse([cx+5, cy-cr//3+5, cx+cr+15, cy+cr//2+5], fill=(190, 210, 235))
+def draw_glow_circle(img, cx, cy, radius, color, alpha_max=60):
+    """Рисует мягкое свечение — накладываем несколько полупрозрачных кругов."""
+    from PIL import Image as PILImage
+    overlay = PILImage.new('RGBA', img.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(overlay)
+    steps = 8
+    for i in range(steps, 0, -1):
+        r = radius * i // steps
+        a = alpha_max * (steps - i + 1) // steps
+        d.ellipse([cx-r, cy-r, cx+r, cy+r], fill=(*color, a))
+    img.paste(overlay, mask=overlay)
 
-# ── Генерация картинки ────────────────────────────────────────────────────────
+def draw_corner_marks(draw, accent, size=24, margin=40):
+    corners = [
+        (margin, margin, 1, 0), (margin, margin, 0, 1),
+        (W-margin, margin, -1, 0), (W-margin, margin, 0, 1),
+        (margin, H-margin, 1, 0), (margin, H-margin, 0, -1),
+        (W-margin, H-margin, -1, 0), (W-margin, H-margin, 0, -1),
+    ]
+    for px, py, dx, dy in corners:
+        draw.line([px, py, px+dx*size, py+dy*size], fill=accent, width=3)
 
-def create_image(data):
-    text = data.get('text', '')
-    ga = data.get('generated_at', '')
+def draw_icon_big(draw, icon_char, cx, cy, size=160, color=(255,255,255)):
+    """Рисует эмодзи/иконку большим текстом по центру."""
     try:
-        dt = datetime.fromisoformat(ga.replace('Z', '+00:00'))
-        ds = dt.strftime('%d %B %Y').lstrip('0')
-        for en, ru in [
-            ('January','января'),('February','февраля'),('March','марта'),
-            ('April','апреля'),('May','мая'),('June','июня'),
-            ('July','июля'),('August','августа'),('September','сентября'),
-            ('October','октября'),('November','ноября'),('December','декабря')
-        ]:
-            ds = ds.replace(en, ru)
+        fnt = F(size)
+        draw.text((cx, cy), icon_char, font=fnt, fill=color, anchor='mm')
     except:
-        ds = datetime.now().strftime('%d.%m.%Y')
+        # fallback без anchor
+        bb = draw.textbbox((0,0), icon_char, font=F(size))
+        tw = bb[2]-bb[0]; th = bb[3]-bb[1]
+        draw.text((cx-tw//2, cy-th//2), icon_char, font=F(size), fill=color)
 
-    S = parse_sections(text)
-    today   = S.get('Сегодня', '')
-    tomorrow = S.get('Завтра', '')
-    warn    = S.get('\u26a0\ufe0f Предупреждения', S.get('Предупреждения', ''))
-    trend   = S.get('Тенденция', '')
-    next3   = S.get('Последующие 3 дня', '')
+# ── Основной рендер слайда ────────────────────────────────────────────────────
 
-    t_min, t_max = extract_temp(today)
-    wt = detect_weather(today)
+def render_slide(block, idx, total, out_png):
+    theme = THEMES.get(block.get("key", ""), DEFAULT_THEME)
+    acc   = theme["accent"]
+    glow  = theme["glow"]
 
-    img = Image.new('RGB', (W, H))
+    img  = Image.new('RGBA', (W, H), (0, 0, 0, 255))
     draw = ImageDraw.Draw(img)
-    draw_gradient(draw)
-    draw_stars(draw)
 
-    # Левый акцент
-    draw.rectangle([6, 42, 9, H-42], fill=ACCENT)
+    # Фон
+    draw_gradient(draw, theme["top"], theme["bot"])
+    draw_stars(draw, seed=idx*7+1)
 
-    # Верхняя строка
-    draw.text((28, 18), ds, font=F(18), fill=TEXT_DIM)
-    draw.text((W-28, 18), 'Синоптический прогноз', font=F(18), fill=TEXT_DIM, anchor='ra')
-    draw.rectangle([22, 50, W-22, 52], fill=DIVIDER)
+    # Свечение (мягкое пятно в центре)
+    draw_glow_circle(img, W//2, H//2, 600, glow, alpha_max=45)
 
-    # Левая колонка: иконка + температура
-    LCX = 110
-    draw_icon(draw, wt, LCX, 150, s=72)
-    temp_str = (f'{t_min}°...{t_max}°' if t_min is not None and t_max is not None
-                else (f'до {t_max}°' if t_max else '—'))
-    draw.text((LCX, 232), temp_str, font=F(38, True), fill=TEXT_MAIN, anchor='mm')
-    wlbl = {'clear':'Ясно','partly':'Перем. облачно','cloudy':'Облачно','rain':'Осадки','storm':'Гроза'}
-    draw.text((LCX, 262), wlbl[wt], font=F(13), fill=TEXT_DIM, anchor='mm')
-
-    # Разделитель лев/центр
-    draw.rectangle([218, 62, 221, H-42], fill=DIVIDER)
-
-    CX = 235; RX = W - 245; CW = RX - CX - 20
-
-    # СЕГОДНЯ
-    draw.text((CX, 64), 'СЕГОДНЯ', font=F(12, True), fill=ACCENT)
-    y = 86
-    for line in wrap(today, F(17), CW, draw)[:6]:
-        draw.text((CX, y), line, font=F(17), fill=TEXT_MAIN); y += 26
-
-    # ЗАВТРА
-    draw.rectangle([CX, y+6, CX+CW, y+7], fill=DIVIDER); y += 16
-    draw.text((CX, y), 'ЗАВТРА', font=F(12, True), fill=ACCENT2); y += 22
-    tm, tM = extract_temp(tomorrow)
-    if tM:
-        draw.text((CX, y), f'до {tM}°', font=F(26, True), fill=TEXT_MAIN); y += 32
-    for line in wrap(tomorrow, F(14), CW, draw)[:4]:
-        draw.text((CX, y), line, font=F(14), fill=TEXT_DIM); y += 20
-
-    # Разделитель центр/прав
-    draw.rectangle([RX-12, 62, RX-9, H-42], fill=DIVIDER)
-
-    # ДАЛЕЕ
-    draw.text((RX, 64), 'ДАЛЕЕ', font=F(12, True), fill=TEXT_DIM)
-    ry = 86
-    for line in wrap(next3, F(13), 230, draw)[:8]:
-        draw.text((RX, ry), line, font=F(13), fill=TEXT_DIM); ry += 20
-
-    # ВНИМАНИЕ
-    if warn:
-        ry = max(ry + 10, 330)
-        wlines = wrap(warn, F(13), 225, draw)[:5]
-        bh = len(wlines) * 19 + 32
-        draw.rounded_rectangle([RX-12, ry-8, RX+237, ry+bh], radius=6,
-                                fill=(55, 22, 5), outline=WARNING, width=1)
-        draw.text((RX, ry), 'ВНИМАНИЕ', font=F(13, True), fill=WARNING); ry += 20
-        for line in wlines:
-            draw.text((RX, ry), line, font=F(11), fill=(255, 200, 130)); ry += 18
-
-    # ТЕНДЕНЦИЯ
-    draw.rectangle([22, H-68, W-22, H-66], fill=DIVIDER)
-    tlines = wrap(trend, F(13), W-185, draw)
-    draw.text((28, H-56), 'ТЕНДЕНЦИЯ:', font=F(13, True), fill=ACCENT)
-    if tlines: draw.text((175, H-56), tlines[0], font=F(13), fill=TEXT_DIM)
-    if len(tlines) > 1: draw.text((28, H-36), tlines[1], font=F(13), fill=TEXT_DIM)
+    draw = ImageDraw.Draw(img)  # пересоздаём после paste
 
     # Угловые маркеры
-    c = 14
-    for px, py, dx, dy in [
-        (22,22,1,0),(22,22,0,1),(W-22,22,-1,0),(W-22,22,0,1),
-        (22,H-20,1,0),(22,H-20,0,-1),(W-22,H-20,-1,0),(W-22,H-20,0,-1)
-    ]:
-        draw.line([px, py, px+dx*c, py+dy*c], fill=ACCENT, width=2)
+    draw_corner_marks(draw, acc)
 
-    img.save(IMG_FILE, 'PNG')
-    print(f"  [IMG] Сохранено: {IMG_FILE}")
+    # Верхний бейдж: «Одесса · Погода»
+    badge_y = 70
+    badge_text = "ОДЕССА · ПОГОДА"
+    draw.text((W//2, badge_y), badge_text, font=F(32, True), fill=(*acc, 180), anchor='mm')
 
-# ── TTS ───────────────────────────────────────────────────────────────────────
+    # Полоска прогресса слайдов
+    seg_w = (W - 120) // total
+    seg_y = 110
+    for i in range(total):
+        sx = 60 + i * (seg_w + 4)
+        color_seg = acc if i <= idx else (80, 80, 100)
+        draw.rounded_rectangle([sx, seg_y, sx+seg_w, seg_y+5], radius=3, fill=color_seg)
 
-async def _tts_async(text):
-    comm = edge_tts.Communicate(text, voice="ru-RU-SvetlanaNeural", rate="-5%")
-    await comm.save(MP3_FILE)
+    # Иконка блока (большая)
+    icon = block.get("icon", "🌤")
+    icon_y = 310
+    draw_icon_big(draw, icon, W//2, icon_y, size=160, color=(255, 255, 255))
 
-def generate_tts(text):
-    clean = clean_for_tts(text)
-    print(f"  [TTS] Генерирую озвучку ({len(clean)} символов)...")
-    asyncio.run(_tts_async(clean))
-    size_kb = os.path.getsize(MP3_FILE) // 1024
-    print(f"  [TTS] Сохранено: {MP3_FILE} ({size_kb} кб)")
+    # Заголовок блока
+    title = block.get("title", "").upper()
+    draw.text((W//2, icon_y + 120), title, font=F(68, True), fill=(255,255,255), anchor='mm')
 
-# ── FFMPEG ────────────────────────────────────────────────────────────────────
+    # Разделитель
+    div_y = icon_y + 200
+    draw.rectangle([80, div_y, W-80, div_y+3], fill=(*acc, 120))
 
-def make_video():
+    # Текст блока
+    raw_text = clean_text(block.get("text", ""))
+    paragraphs = [p.strip() for p in raw_text.split('\n') if p.strip()]
+
+    font_body = F(40)
+    font_small = F(34)
+    text_x = 70
+    text_maxw = W - 140
+    y = div_y + 40
+    line_h = 56
+    max_y = H - 260  # оставляем место под подпись
+
+    for para in paragraphs:
+        if y >= max_y: break
+        lines = wrap_text(para, font_body, text_maxw, draw)
+        for line in lines:
+            if y >= max_y: break
+            draw.text((text_x, y), line, font=font_body, fill=(210, 235, 255))
+            y += line_h
+        y += 16  # межабзацный отступ
+
+    # Если текст не влез — многоточие
+    if y >= max_y:
+        draw.text((text_x, max_y - line_h), "...", font=font_small, fill=(*acc, 150))
+
+    # Нижняя подпись
+    bottom_y = H - 100
+    now_str = datetime.now().strftime("%d.%m.%Y")
+    draw.text((W//2, bottom_y), f"Синоптический прогноз · {now_str}",
+              font=F(30), fill=(120, 150, 200), anchor='mm')
+    # Маленькая акцентная линия снизу
+    draw.rectangle([W//2 - 120, bottom_y + 38, W//2 + 120, bottom_y + 41], fill=(*acc, 100))
+
+    img = img.convert('RGB')
+    img.save(out_png, 'PNG')
+    print(f"  [SLIDE] #{idx+1}/{total} '{block.get('title','')}' → {os.path.basename(out_png)}")
+
+# ── FFmpeg: PNG + MP3 → видео-слайд ──────────────────────────────────────────
+
+def make_slide_video(png_path, mp3_path, out_mp4, duration):
+    """Создаёт видео из статичного PNG + аудио. duration — запасная длительность если mp3 не найден."""
+    if os.path.exists(mp3_path):
+        cmd = [
+            "ffmpeg", "-y",
+            "-loop", "1", "-i", png_path,
+            "-i", mp3_path,
+            "-c:v", "libx264", "-preset", "veryfast",
+            "-tune", "stillimage",
+            "-c:a", "aac", "-b:a", "96k",
+            "-pix_fmt", "yuv420p",
+            "-shortest",
+            "-vf", f"scale={W}:{H}",
+            out_mp4
+        ]
+    else:
+        dur_sec = max(int(duration), 5)
+        cmd = [
+            "ffmpeg", "-y",
+            "-loop", "1", "-i", png_path,
+            "-t", str(dur_sec),
+            "-c:v", "libx264", "-preset", "veryfast",
+            "-tune", "stillimage",
+            "-pix_fmt", "yuv420p",
+            "-vf", f"scale={W}:{H}",
+            "-an",
+            out_mp4
+        ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"  [FFM] Ошибка slide:\n{result.stderr[-500:]}")
+        return False
+    return True
+
+# ── FFmpeg: concat всех слайдов ───────────────────────────────────────────────
+
+def concat_videos(slide_mp4s, out_mp4):
+    list_file = os.path.join(TMP_DIR, "concat_list.txt")
+    with open(list_file, 'w') as f:
+        for p in slide_mp4s:
+            f.write(f"file '{p}'\n")
     cmd = [
         "ffmpeg", "-y",
-        "-loop", "1", "-i", IMG_FILE,
-        "-i", MP3_FILE,
-        "-c:v", "libx264",
-        "-tune", "stillimage",
-        "-c:a", "aac", "-b:a", "128k",
-        "-pix_fmt", "yuv420p",
-        "-shortest",
-        MP4_FILE
+        "-f", "concat", "-safe", "0",
+        "-i", list_file,
+        "-c", "copy",
+        out_mp4
     ]
-    print("  [FFM] Создаю видео...")
     result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode == 0:
-        size_mb = os.path.getsize(MP4_FILE) / 1024 / 1024
-        print(f"  [FFM] Готово: {MP4_FILE} ({size_mb:.1f} Мб)")
-    else:
-        print(f"  [FFM] Ошибка ffmpeg:\n{result.stderr[-800:]}")
+    if result.returncode != 0:
+        print(f"  [FFM] Ошибка concat:\n{result.stderr[-500:]}")
+        return False
+    size_mb = os.path.getsize(out_mp4) / 1024 / 1024
+    print(f"  [FFM] ✅ Итоговое видео: {out_mp4} ({size_mb:.1f} Мб)")
+    return True
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
-    print("\n  Генерация видео-обзора погоды...")
-    if not os.path.exists(JSON_FILE):
-        print(f"  Файл не найден: {JSON_FILE}"); return
-    with open(JSON_FILE, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-    if not data.get('text'):
-        print("  Нет текста в JSON"); return
+    print("\n  📹 Генерация вертикального видео (9:16) для TikTok...")
+
+    if not os.path.exists(META_FILE):
+        print(f"  Файл не найден: {META_FILE}")
+        print("  Запустите сначала: python3 scripts/make_blocks.py")
+        return
+
+    with open(META_FILE, 'r', encoding='utf-8') as f:
+        meta = json.load(f)
+
+    blocks = meta.get("blocks", [])
+    if not blocks:
+        print("  Нет блоков в мета-файле")
+        return
 
     if not FONT_REG_PATH:
         print("  ОШИБКА: кириллический шрифт не найден!")
-        print("  Установите: pkg install fonts-dejavu  или  apt install fonts-freefont-ttf")
+        print("  pkg install fonts-dejavu  или  apt install fonts-freefont-ttf")
         return
 
     print(f"  Шрифт: {FONT_REG_PATH}")
-    create_image(data)
-    generate_tts(data['text'])
-    make_video()
-    print("\n  Готово!")
+    print(f"  Блоков: {len(blocks)}")
+    os.makedirs(TMP_DIR, exist_ok=True)
+
+    slide_mp4s = []
+    total = len(blocks)
+
+    for idx, block in enumerate(blocks):
+        key      = block.get("key", f"block_{idx}")
+        filename = block.get("filename", f"block_{idx}.mp3")
+        mp3_path = os.path.join(BLOCKS_DIR, filename)
+        duration = block.get("duration", 15)
+
+        png_path = os.path.join(TMP_DIR, f"slide_{idx:02d}.png")
+        mp4_path = os.path.join(TMP_DIR, f"slide_{idx:02d}.mp4")
+
+        # 1. Рендерим картинку
+        render_slide(block, idx, total, png_path)
+
+        # 2. Делаем видео-слайд
+        print(f"  [FFM] Конвертирую слайд {idx+1}/{total}...")
+        ok = make_slide_video(png_path, mp3_path, mp4_path, duration)
+        if ok:
+            slide_mp4s.append(mp4_path)
+        else:
+            print(f"  [FFM] Пропускаю слайд {idx+1}")
+
+        # Пауза между слайдами — даём телефону выдохнуть
+        if idx < total - 1:
+            print(f"  [WAIT] Пауза 3 сек перед следующим слайдом...")
+            time.sleep(3)
+
+    if not slide_mp4s:
+        print("  Не удалось создать ни одного слайда")
+        return
+
+    # 3. Склеиваем
+    print(f"\n  [FFM] Склеиваю {len(slide_mp4s)} слайдов...")
+    ok = concat_videos(slide_mp4s, MP4_FILE)
+
+    # 4. Чистим временные файлы
+    if ok:
+        for f in os.listdir(TMP_DIR):
+            if f.endswith('.png') or (f.endswith('.mp4') and f.startswith('slide_')):
+                try: os.remove(os.path.join(TMP_DIR, f))
+                except: pass
+        print("  [CLEAN] Временные файлы удалены")
+
+    print("\n  Готово!" if ok else "\n  Завершено с ошибками.")
 
 if __name__ == "__main__":
     main()
