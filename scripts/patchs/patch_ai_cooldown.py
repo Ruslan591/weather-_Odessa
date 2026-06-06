@@ -1,0 +1,52 @@
+import os
+BASE = '/storage/emulated/0/Documents/weather'
+
+FILE = BASE + '/scripts/generate_ai_analysis.py'
+with open(FILE,'r',encoding='utf-8') as f: src=f.read()
+
+OLD = 'def main():\n    if not ai_enabled():\n        print("  [AI] \u0410\u043d\u0430\u043b\u0438\u0437 \u043e\u0442\u043a\u043b\u044e\u0447\u0451\u043d (AI_ANALYSIS_ENABLED=false \u0432 .env)")\n        return\n\n    api_key = load_api_key()\n    if not api_key:\n        print("  [AI] ANTHROPIC_API_KEY \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d \u2014 \u043f\u0440\u043e\u043f\u0443\u0441\u043a\u0430\u044e \u0433\u0435\u043d\u0435\u0440\u0430\u0446\u0438\u044e \u0430\u043d\u0430\u043b\u0438\u0437\u0430")\n        return'
+
+NEW = ('GOOD_HOURS_UTC = [9, 12, 15, 21]\n'
+'COOLDOWN_HOURS = 6\n'
+'\n'
+'def in_good_window(now_utc=None):\n'
+'    if now_utc is None:\n'
+'        now_utc = datetime.now(timezone.utc)\n'
+'    for h in GOOD_HOURS_UTC:\n'
+'        target = now_utc.replace(hour=h, minute=0, second=0, microsecond=0)\n'
+'        if abs((now_utc - target).total_seconds()) <= 45 * 60:\n'
+'            return True\n'
+'    return False\n'
+'\n'
+'def cooldown_ok(existing, force=False):\n'
+'    if force:\n'
+'        return True\n'
+'    last_gen = existing.get("generated_at", "")\n'
+'    if not last_gen:\n'
+'        return True\n'
+'    try:\n'
+'        last_dt = datetime.fromisoformat(last_gen.replace("Z", "+00:00"))\n'
+'        elapsed = (datetime.now(timezone.utc) - last_dt).total_seconds() / 3600\n'
+'        if elapsed < COOLDOWN_HOURS:\n'
+'            print(f"  [AI] Cooldown: \u043f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0439 \u0430\u043d\u0430\u043b\u0438\u0437 {elapsed:.1f}\u0447 \u043d\u0430\u0437\u0430\u0434, \u043f\u0440\u043e\u043f\u0443\u0441\u043a\u0430\u044e")\n'
+'            return False\n'
+'    except Exception:\n'
+'        pass\n'
+'    if not in_good_window():\n'
+'        now_h = datetime.now(timezone.utc).hour\n'
+'        print(f"  [AI] \u0412\u043d\u0435 \u043e\u043a\u043d\u0430 \u043c\u043e\u0434\u0435\u043b\u0435\u0439 (\u0441\u0435\u0439\u0447\u0430\u0441 {now_h:02d}UTC), \u043f\u0440\u043e\u043f\u0443\u0441\u043a\u0430\u044e")\n'
+'        return False\n'
+'    return True\n'
+'\n'
+'def main(force=False):\n'
+'    if not ai_enabled():\n'
+'        print("  [AI] \u0410\u043d\u0430\u043b\u0438\u0437 \u043e\u0442\u043a\u043b\u044e\u0447\u0451\u043d (AI_ANALYSIS_ENABLED=false \u0432 .env)")\n'
+'        return\n'
+'\n'
+'    api_key = load_api_key()\n'
+'    if not api_key:\n'
+'        print("  [AI] ANTHROPIC_API_KEY \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d \u2014 \u043f\u0440\u043e\u043f\u0443\u0441\u043a\u0430\u044e \u0433\u0435\u043d\u0435\u0440\u0430\u0446\u0438\u044e \u0430\u043d\u0430\u043b\u0438\u0437\u0430")\n'
+'        return')
+
+assert OLD in src, "OLD not found block 1"
+src = src.rep
