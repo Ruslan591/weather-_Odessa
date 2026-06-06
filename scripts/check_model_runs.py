@@ -235,6 +235,10 @@ def check_pws_sync():
 # ── основная логика ───────────────────────────────────────────────────────────
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--force-ai", action="store_true")
+    args, _ = parser.parse_known_args()
     os.makedirs(LOG_DIR, exist_ok=True)
     now = now_utc_iso()
     history = load_history()
@@ -271,14 +275,19 @@ def main():
         save_history(history)
         ok = run_pipeline(new_models)
         if ok:
-            subprocess.run(
-                [PYTHON, os.path.join(SCRIPTS_DIR, "generate_ai_analysis.py")],
-                cwd=BASE_DIR, capture_output=False
-            )
+            ai_cmd = [PYTHON, os.path.join(SCRIPTS_DIR, "generate_ai_analysis.py")]
+            if args.force_ai:
+                ai_cmd.append("--force")
+            ai_result = subprocess.run(ai_cmd, cwd=BASE_DIR, capture_output=False)
             subprocess.run(
                 [PYTHON, os.path.join(SCRIPTS_DIR, "make_blocks.py")],
                 cwd=BASE_DIR, capture_output=False
             )
+            if ai_result.returncode == 0:
+                subprocess.run(
+                    [PYTHON, os.path.join(SCRIPTS_DIR, "make_video.py")],
+                    cwd=BASE_DIR, capture_output=False
+                )
         git_push_history()
     else:
         print("  Новых прогонов нет.\n")
