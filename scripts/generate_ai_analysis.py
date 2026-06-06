@@ -592,10 +592,6 @@ def main(force=False):
         "days_count": len(days),
         "text": text,
     }
-    # TTS
-    mp3_path = OUTPUT_FILE.replace(".json", ".mp3")
-    generate_tts(text, mp3_path)
-
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
 
