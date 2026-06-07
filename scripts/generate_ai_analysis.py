@@ -351,8 +351,62 @@ WMO_CODES = {
     95:"гроза", 96:"гроза с градом", 99:"сильная гроза с градом",
 }
 
+MONTH_RU = ['января','февраля','марта','апреля','мая','июня',
+            'июля','августа','сентября','октября','ноября','декабря']
+
+def fmt_date(dt):
+    return f"{dt.day} {MONTH_RU[dt.month-1]}"
+
 def build_prompt(days):
-    now_str = datetime.now(timezone.utc).astimezone().strftime("%d.%m.%Y %H:%M местного")
+    now_local = datetime.now(timezone.utc).astimezone()
+    now_str = now_local.strftime("%d.%m.%Y %H:%M местного")
+    evening_mode = now_local.hour >= 20
+
+    # Даты блоков
+    dates = [datetime.strptime(d["date"], "%Y-%m-%d") for d in days]
+
+    if evening_mode:
+        # Вечерний режим: блок 0 = эта ночь, блок 1 = завтра днём
+        d0 = dates[0] if dates else now_local
+        d1 = dates[1] if len(dates) > 1 else d0
+        d2 = dates[2] if len(dates) > 2 else d1
+        d_last = dates[-1] if dates else d0
+        # Последующие: +2..+4 от сегодня = индексы 2,3,4
+        next_start = dates[2] if len(dates) > 2 else d1
+        next_end   = dates[4] if len(dates) > 4 else dates[-1]
+        tend_start = dates[5] if len(dates) > 5 else dates[-1]
+        tend_end   = dates[-1]
+        block1 = f"## Этой ночью"
+        block2 = f"## Завтра днём, {fmt_date(d1)}"
+        block3 = f"## Последующие дни, {fmt_date(next_start)}–{fmt_date(next_end)}"
+        block5 = f"## Тенденция, {fmt_date(tend_start)}–{fmt_date(tend_end)}"
+        struct = [
+            f"1. {block1} — ночные условия до рассвета (2-3 предложения)",
+            f"2. {block2} — подробный дневной анализ (3-5 предложений)",
+            f"3. {block3} — общий обзор (3-4 предложения)",
+            f"4. ## ⚠️ Предупреждения — только если есть реальные риски. Если рисков нет — пропусти.",
+            f"5. {block5} — краткий прогноз изменений (1-2 предложения)",
+        ]
+        mode_hint = "Сейчас вечер. Первый блок — только ночь (до рассвета), без дневных показателей."
+    else:
+        d0 = dates[0] if dates else now_local
+        d1 = dates[1] if len(dates) > 1 else d0
+        next_start = dates[2] if len(dates) > 2 else d1
+        next_end   = dates[4] if len(dates) > 4 else dates[-1]
+        tend_start = dates[5] if len(dates) > 5 else dates[-1]
+        tend_end   = dates[-1]
+        block1 = f"## Сегодня, {fmt_date(d0)}"
+        block2 = f"## Завтра, {fmt_date(d1)}"
+        block3 = f"## Последующие дни, {fmt_date(next_start)}–{fmt_date(next_end)}"
+        block5 = f"## Тенденция, {fmt_date(tend_start)}–{fmt_date(tend_end)}"
+        struct = [
+            f"1. {block1} — подробный анализ (3-5 предложений)",
+            f"2. {block2} — подробный анализ (3-5 предложений)",
+            f"3. {block3} — общий обзор (3-4 предложения)",
+            f"4. ## ⚠️ Предупреждения — только если есть реальные риски. Если рисков нет — пропусти.",
+            f"5. {block5} — краткий прогноз изменений (1-2 предложения)",
+        ]
+        mode_hint = ""
 
     lines = [
         f"Время генерации: {now_str}",
@@ -368,6 +422,10 @@ def build_prompt(days):
         "Не 'устанавливается', 'наблюдается', 'составляет' — а 'установится', 'ожидается', 'составит'.",
         "Сегодняшний день тоже прогноз, не факт — используй будущее время.",
         "Скорость ветра указывай ТОЛЬКО в м/с (метрах в секунду). Никаких км/ч.",
+    ]
+    if mode_hint:
+        lines.append(mode_hint)
+    lines += [
         "",
         "ДАННЫЕ ПРОГНОЗА (ансамбль 8 моделей: ECMWF/GFS/ICON/GEM/UKMO/ARPEGE/CMA, агрегаты по дням):",
         "",
@@ -408,12 +466,8 @@ def build_prompt(days):
         ]
 
     lines += [
-        "СТРУКТУРА ОТВЕТА (строго):",
-        "1. ## Сегодня — подробный анализ (3-5 предложений)",
-        "2. ## Завтра — подробный анализ (3-5 предложений)",
-        "3. ## Последующие 3 дня — общий обзор (3-4 предложения)",
-        "4. ## ⚠️ Предупреждения — только если есть реальные риски (гроза, шторм, сильные осадки). Если рисков нет — этот раздел пропусти.",
-        "5. ## Тенденция — краткий прогноз изменений за горизонтом (1-2 предложения)",
+        "СТРУКТУРА ОТВЕТА (строго, используй точные заголовки):",
+    ] + struct + [
         "",
         "Не используй таблицы. Не повторяй цифры из данных дословно — интерпретируй их синоптически.",
     ]
