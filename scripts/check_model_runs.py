@@ -290,30 +290,14 @@ def main():
                 except Exception:
                     pass
                 if _ai_changed:
-                    _blocks_meta = _os.path.join(BASE_DIR, "data", "blocks", "blocks_meta.json")
-                    _old_hash = ""
-                    try:
-                        with open(_blocks_meta, encoding="utf-8") as _f:
-                            _old_hash = json.load(_f).get("data_hash", "")
-                    except Exception:
-                        pass
-                    subprocess.run(
+                    _blocks_result = subprocess.run(
                         [PYTHON, _os.path.join(SCRIPTS_DIR, "make_blocks.py")],
                         cwd=BASE_DIR, capture_output=False
                     )
-                    _new_hash = ""
-                    try:
-                        with open(_blocks_meta, encoding="utf-8") as _f:
-                            _new_hash = json.load(_f).get("data_hash", "")
-                    except Exception:
-                        pass
-                    if _new_hash and _new_hash != _old_hash:
-                        subprocess.run(
-                            [PYTHON, _os.path.join(SCRIPTS_DIR, "make_video.py")],
-                            cwd=BASE_DIR, capture_output=False
-                        )
-                    else:
-                        print("  [VIDEO] Блоки не изменились — пропускаю генерацию видео")
+                    subprocess.run(
+                        [PYTHON, _os.path.join(SCRIPTS_DIR, "make_video.py")],
+                        cwd=BASE_DIR, capture_output=False
+                    )
 
         git_push_history()
     else:
