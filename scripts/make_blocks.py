@@ -70,7 +70,6 @@ META_FILE   = os.path.join(BLOCKS_DIR, "blocks_meta.json")
 VOICES = [
     "ru-RU-SvetlanaNeural",
     "ru-RU-DmitryNeural",
-    "ru-RU-DariyaNeural",
 ]
 RATE = "-5%"
 
