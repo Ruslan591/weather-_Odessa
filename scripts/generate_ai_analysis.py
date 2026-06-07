@@ -494,6 +494,7 @@ def call_claude(prompt, api_key):
 
 GOOD_HOURS_UTC = [9, 12, 15, 21]
 COOLDOWN_HOURS = 6
+STALE_HOURS = 8  # если анализ старше — генерировать вне окна
 
 def in_good_window(now_utc=None):
     if now_utc is None:
@@ -516,6 +517,19 @@ def cooldown_ok(existing, force=False):
         if elapsed < COOLDOWN_HOURS:
             print(f"  [AI] Cooldown: последний анализ {elapsed:.1f}ч назад, пропускаю")
             return False
+    except Exception:
+        pass
+    # Если анализ устарел или сменились сутки — генерировать вне окна
+    try:
+        last_gen = existing.get("generated_at", "")
+        last_dt = datetime.fromisoformat(last_gen.replace("Z", "+00:00"))
+        now_utc = datetime.now(timezone.utc)
+        elapsed = (now_utc - last_dt).total_seconds() / 3600
+        day_changed = last_dt.date() < now_utc.date()
+        if elapsed >= STALE_HOURS or day_changed:
+            reason = "смена суток" if day_changed else f"{elapsed:.1f}ч без обновления"
+            print(f"  [AI] Анализ устарел ({reason}) — генерирую вне окна")
+            return True
     except Exception:
         pass
     if not in_good_window():
