@@ -218,14 +218,23 @@ async def _tts_async(text, out_path):
     communicate = edge_tts.Communicate(text, voice=_selected_voice, rate=RATE)
     await communicate.save(out_path)
 
-def generate_block_tts(text, out_path):
+def generate_block_tts(text, out_path, retries=3, delay=5):
+    import time
     clean = preprocess_tts(text)
     if not clean.strip():
         return 0
-    asyncio.run(_tts_async(clean, out_path))
-    size_kb = os.path.getsize(out_path) // 1024
-    print(f"    \u2192 {os.path.basename(out_path)} ({size_kb} кб)")
-    return size_kb
+    for attempt in range(1, retries + 1):
+        try:
+            asyncio.run(_tts_async(clean, out_path))
+            size_kb = os.path.getsize(out_path) // 1024
+            print(f"    \u2192 {os.path.basename(out_path)} ({size_kb} кб)")
+            return size_kb
+        except Exception as e:
+            print(f"    [TTS] Ошибка (попытка {attempt}/{retries}): {e}")
+            if attempt < retries:
+                time.sleep(delay)
+    print(f"    [TTS] Не удалось сгенерировать {os.path.basename(out_path)} — пропускаю")
+    return 0
 
 def get_mp3_duration(path):
     try:
