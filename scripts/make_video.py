@@ -379,7 +379,10 @@ def main():
                 if ok:
                     audio_for_slide = aac_path
             elif os.path.exists(mp3_path):
-                audio_for_slide = mp3_path
+                aac_path = os.path.join(TMP_DIR, f"audio_{slide_counter:03d}.aac")
+                ok = trim_audio(mp3_path, aac_path, 0, real_duration)
+                if ok:
+                    audio_for_slide = aac_path
                 page_dur = real_duration
 
             ok = make_slide_video(png_path, audio_for_slide, mp4_path, page_dur)
