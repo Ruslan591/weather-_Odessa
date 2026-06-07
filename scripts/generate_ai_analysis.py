@@ -481,8 +481,17 @@ def build_prompt(days, marine=None):
     next_end   = dates[4] if len(dates) > 4 else dates[-1]
     tend_start = dates[5] if len(dates) > 5 else dates[-1]
     tend_end   = dates[-1]
-    tend_block = f"## Тенденция, {fmt_date(tend_start)}–{fmt_date(tend_end)}"
-    next_block = f"## Последующие дни, {fmt_date(next_start)}–{fmt_date(next_end)}"
+    if tend_start >= tend_end:
+        tend_block = f"## Тенденция, после {fmt_date(tend_end)}"
+    elif tend_start.month == tend_end.month:
+        tend_block = f"## Тенденция, {tend_start.day}–{fmt_date(tend_end)}"
+    else:
+        tend_block = f"## Тенденция, {fmt_date(tend_start)}–{fmt_date(tend_end)}"
+    # Если месяц одинаковый — компактный формат "9–11 июня"
+    if next_start.month == next_end.month:
+        next_block = f"## Последующие дни, {next_start.day}–{fmt_date(next_end)}"
+    else:
+        next_block = f"## Последующие дни, {fmt_date(next_start)}–{fmt_date(next_end)}"
 
     if mode == "night":
         block1 = f"## Сегодня, {fmt_date(d0)}"
