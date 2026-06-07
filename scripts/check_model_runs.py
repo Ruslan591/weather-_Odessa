@@ -105,6 +105,7 @@ def git_push_history():
                         "data/model_bias.json",
                         "data/model_weights.json",
                         "data/forecast_analysis_claude.json", "data/forecast_analysis_claude.mp3",
+                        "data/forecast_video.mp4", "data/forecast_voice.mp3",
                         "data/blocks"],
                       check=True, capture_output=True)
         result = subprocess.run(
@@ -297,20 +298,7 @@ def main():
                         [PYTHON, _os.path.join(SCRIPTS_DIR, "make_video.py")],
                         cwd=BASE_DIR, capture_output=False
                     )
-                    # Коммитим видео и аудио после генерации
-                    import subprocess as _sp
-                    _video_files = [
-                        "data/forecast_video.mp4",
-                        "data/forecast_voice.mp3",
-                        "data/blocks/blocks_meta.json",
-                    ]
-                    _sp.run(["git", "-C", BASE_DIR, "add"] + _video_files,
-                            capture_output=True)
-                    _sp.run(["git", "-C", BASE_DIR, "commit", "-m", "auto: обновление видео и блоков"],
-                            capture_output=True)
-                    _sp.run(["git", "-C", BASE_DIR, "push", "--force-with-lease"],
-                            capture_output=True)
-                    print("  git: видео запушено")
+
         git_push_history()
     else:
         print("  Новых прогонов нет.\n")
