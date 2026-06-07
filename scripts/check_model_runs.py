@@ -279,10 +279,6 @@ def main():
             if args.force_ai:
                 ai_cmd.append("--force")
             ai_result = subprocess.run(ai_cmd, cwd=BASE_DIR, capture_output=False)
-            subprocess.run(
-                [PYTHON, os.path.join(SCRIPTS_DIR, "make_blocks.py")],
-                cwd=BASE_DIR, capture_output=False
-            )
             if ai_result.returncode == 0:
                 import json, os as _os
                 _ai_file = _os.path.join(BASE_DIR, "data", "forecast_analysis_claude.json")
@@ -293,6 +289,10 @@ def main():
                 except Exception:
                     pass
                 if _ai_changed:
+                    subprocess.run(
+                        [PYTHON, _os.path.join(SCRIPTS_DIR, "make_blocks.py")],
+                        cwd=BASE_DIR, capture_output=False
+                    )
                     subprocess.run(
                         [PYTHON, _os.path.join(SCRIPTS_DIR, "make_video.py")],
                         cwd=BASE_DIR, capture_output=False
