@@ -4,7 +4,7 @@ make_blocks.py — нарезка forecast_analysis_claude.json на блоки 
 Запуск: python3 scripts/make_blocks.py [--force]
 """
 
-import json, os, re, asyncio, argparse, random
+import json, os, re, asyncio, argparse, random, subprocess
 from datetime import datetime, timezone, timedelta
 import edge_tts
 from PIL import Image, ImageDraw, ImageFont
@@ -139,10 +139,10 @@ def preprocess_tts(text):
         text
     )
 
-    # Диапазоны температур: 14–16°C → от 14 до 16 градусов
+    # Диапазоны температур: 14–16°C → 14–16 градусов (без "от...до" чтобы не дублировать предлоги)
     text = re.sub(
         r'(-?\d+)\s*[-\u2013\u2014]\s*(-?\d+)\s*\u00b0C',
-        lambda m: f'от {m.group(1)} до {m.group(2)} градусов',
+        lambda m: f'{m.group(1)}\u2013{m.group(2)} градусов',
         text
     )
 
@@ -218,7 +218,23 @@ async def _tts_async(text, out_path):
     communicate = edge_tts.Communicate(text, voice=_selected_voice, rate=RATE)
     await communicate.save(out_path)
 
-def generate_block_tts(text, out_path, retries=3, delay=5):
+def strip_silence(path):
+    """Убирает тишину в начале и конце mp3 через ffmpeg."""
+    tmp = path + ".tmp.mp3"
+    cmd = [
+        "ffmpeg", "-y", "-i", path,
+        "-af", "silenceremove=start_periods=1:start_silence=0.05:start_threshold=-50dB"
+               ":stop_periods=1:stop_silence=0.05:stop_threshold=-50dB",
+        "-c:a", "libmp3lame", "-q:a", "4",
+        tmp
+    ]
+    result = subprocess.run(cmd, capture_output=True)
+    if result.returncode == 0 and os.path.exists(tmp) and os.path.getsize(tmp) > 1000:
+        os.replace(tmp, path)
+    elif os.path.exists(tmp):
+        os.remove(tmp)
+
+def generate_block_tts(text, out_path, retries=3, delay=5, trim_silence=False):
     import time
     clean = preprocess_tts(text)
     if not clean.strip():
@@ -226,6 +242,8 @@ def generate_block_tts(text, out_path, retries=3, delay=5):
     for attempt in range(1, retries + 1):
         try:
             asyncio.run(_tts_async(clean, out_path))
+            if trim_silence:
+                strip_silence(out_path)
             size_kb = os.path.getsize(out_path) // 1024
             print(f"    \u2192 {os.path.basename(out_path)} ({size_kb} кб)")
             return size_kb
@@ -334,7 +352,7 @@ def main(force=False):
                 page_tts = DATE_PREFIX.get(key, '') + page_text if pi == 0 else page_text
                 page_fn = filename.replace('.mp3', f'_p{pi+1}.mp3')
                 page_path = os.path.join(BLOCKS_DIR, page_fn)
-                psize = generate_block_tts(page_tts, page_path)
+                psize = generate_block_tts(page_tts, page_path, trim_silence=True)
                 if psize > 0:
                     page_files.append({
                         "filename": page_fn,
