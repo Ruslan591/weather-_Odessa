@@ -165,18 +165,39 @@ def aggregate_marine(marine_data):
         "swell_period":     avg("swell_wave_period"),
     }
 
-def fmt_marine(m):
+def _wave_str(val_m):
+    """Высота волны: < 1м → сантиметры, иначе метры."""
+    if val_m is None: return "?"
+    if val_m < 1.0:
+        return f"{round(val_m * 100)} см"
+    return f"{val_m} м"
+
+def _period_str(val_s):
+    """Период волны → целые секунды."""
+    if val_s is None: return "?"
+    return f"{round(val_s)} с"
+
+def fmt_marine(m, today_str=None):
     """Строки данных моря для промпта."""
     if not m: return ["  Данные недоступны"]
     lines = []
+    if today_str:
+        try:
+            from datetime import datetime as _dt
+            dt = _dt.strptime(today_str, "%Y-%m-%d")
+            MONTH_RU2 = ['января','февраля','марта','апреля','мая','июня',
+                         'июля','августа','сентября','октября','ноября','декабря']
+            lines.append(f"  Дата: {dt.day} {MONTH_RU2[dt.month-1]}")
+        except Exception:
+            lines.append(f"  Дата: {today_str}")
     if m.get("sst") is not None:
         lines.append(f"  Температура воды: {m['sst']}°C")
     wh = m.get("wave_height_max")
     wa = m.get("wave_height_avg")
     if wh is not None:
-        lines.append(f"  Высота волны: макс {wh}м, ср {wa}м, направление {m.get('wave_dir','?')}, период {m.get('wave_period')}с")
+        lines.append(f"  Высота волны: макс {_wave_str(wh)}, ср {_wave_str(wa)}, направление {m.get('wave_dir','?')}, период {_period_str(m.get('wave_period'))}")
     if m.get("wind_wave_max") is not None:
-        lines.append(f"  Ветровое волнение: {m['wind_wave_max']}м")
+        lines.append(f"  Ветровое волнение: {_wave_str(m['wind_wave_max'])}")
     if m.get("swell_height_max") is not None:
         lines.append(f"  Зыбь: {m['swell_height_max']}м, период {m.get('swell_period')}с")
     return lines
@@ -598,9 +619,11 @@ def build_prompt(days, marine=None):
 
     # Marine данные в промпт
     if marine:
+        now_local = datetime.now(timezone.utc).astimezone()
+        today_str = now_local.strftime("%Y-%m-%d")
         lines += [
             "СОСТОЯНИЕ ЧЁРНОГО МОРЯ (сегодня, точка 8 км от берега):",
-        ] + fmt_marine(marine) + [""]
+        ] + fmt_marine(marine, today_str=today_str) + [""]
 
     lines += [
         "СТРУКТУРА ОТВЕТА (строго, используй точные заголовки):",
