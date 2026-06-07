@@ -351,7 +351,7 @@ def main(force=False):
                 page_tts = DATE_PREFIX.get(key, '') + page_text if pi == 0 else page_text
                 page_fn = filename.replace('.mp3', f'_p{pi+1}.mp3')
                 page_path = os.path.join(BLOCKS_DIR, page_fn)
-                psize = generate_block_tts(page_tts, page_path, trim_silence=True)
+                psize = generate_block_tts(page_tts, page_path, trim_silence=False)
                 if psize > 0:
                     page_files.append({
                         "filename": page_fn,
