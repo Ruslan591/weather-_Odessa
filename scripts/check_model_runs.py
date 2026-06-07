@@ -290,18 +290,44 @@ def main():
                 except Exception:
                     pass
                 if _ai_changed:
+                    _pending_file = _os.path.join(BASE_DIR, "data", "blocks", "pending_video.json")
                     _blocks_result = subprocess.run(
                         [PYTHON, _os.path.join(SCRIPTS_DIR, "make_blocks.py")],
                         cwd=BASE_DIR, capture_output=False
                     )
-                    subprocess.run(
-                        [PYTHON, _os.path.join(SCRIPTS_DIR, "make_video.py")],
-                        cwd=BASE_DIR, capture_output=False
-                    )
+                    if _blocks_result.returncode == 0:
+                        subprocess.run(
+                            [PYTHON, _os.path.join(SCRIPTS_DIR, "make_video.py")],
+                            cwd=BASE_DIR, capture_output=False
+                        )
+                        if _os.path.exists(_pending_file):
+                            _os.remove(_pending_file)
+                    else:
+                        import json as _json2
+                        with open(_pending_file, "w", encoding="utf-8") as _pf:
+                            _json2.dump({"reason": "make_blocks failed"}, _pf)
+                        print("  [AI] make_blocks упал — отложено, повтор при следующем запуске")
 
         git_push_history()
     else:
         print("  Новых прогонов нет.\n")
+        # Повтор отложенной генерации видео
+        _pending_file = os.path.join(BASE_DIR, "data", "blocks", "pending_video.json")
+        if os.path.exists(_pending_file):
+            print("  [AI] Найден pending_video — повторяю make_blocks + make_video...")
+            _b = subprocess.run(
+                [PYTHON, os.path.join(SCRIPTS_DIR, "make_blocks.py"), "--force"],
+                cwd=BASE_DIR, capture_output=False
+            )
+            if _b.returncode == 0:
+                subprocess.run(
+                    [PYTHON, os.path.join(SCRIPTS_DIR, "make_video.py")],
+                    cwd=BASE_DIR, capture_output=False
+                )
+                os.remove(_pending_file)
+                print("  [AI] Повтор успешен, pending снят")
+            else:
+                print("  [AI] Повтор снова упал — pending остаётся")
         # Всё равно обновляем SYNOP (и снимок если готов новый ансамбль)
         subprocess.run(
             [PYTHON, os.path.join(SCRIPTS_DIR, "update_local.py"), "--no-model", "--no-fill"],
