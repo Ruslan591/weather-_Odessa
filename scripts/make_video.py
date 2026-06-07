@@ -221,6 +221,19 @@ def render_slide(block, slide_idx, total_slides, page_lines, page_num, total_pag
     img = img.convert('RGB')
     img.save(out_png, 'PNG')
 
+def get_audio_duration(path):
+    """Точная длительность аудио через ffprobe."""
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-v", "quiet", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", path],
+            capture_output=True, text=True
+        )
+        return float(result.stdout.strip())
+    except Exception:
+        # Fallback: по размеру файла
+        return os.path.getsize(path) / 16000
+
 def trim_audio(mp3_path, out_path, start_sec, duration_sec):
     """Обрезает кусок аудио через ffmpeg."""
     cmd = [
@@ -342,7 +355,11 @@ def main():
         chars_per_page = [sum(len(l) for l in pg) for pg in pages]
         total_chars = sum(chars_per_page) or 1
 
-        page_meta = block.get("pages", [])
+        # Точная длительность основного mp3 через ffprobe
+        if os.path.exists(mp3_path):
+            real_duration = get_audio_duration(mp3_path)
+        else:
+            real_duration = duration
 
         for page_num, page_lines in enumerate(pages):
             png_path = os.path.join(TMP_DIR, f"slide_{slide_counter:03d}.png")
@@ -352,24 +369,18 @@ def main():
                          page_lines, page_num, n_pages, png_path)
             print(f"  [SLIDE] стр.{page_num+1}/{n_pages}", end=" ")
 
-            # Берём готовый постраничный mp3
+            # Нарезаем основной mp3 пропорционально символам — без пауз между страницами
             audio_for_slide = None
-            page_dur = 10
-            if page_num < len(page_meta):
-                pm = page_meta[page_num]
-                candidate = os.path.join(BLOCKS_DIR, pm["filename"])
-                if os.path.exists(candidate):
-                    audio_for_slide = candidate
-                    page_dur = pm.get("duration", 10)
-            else:
-                # Fallback: старый метод trim
+            page_dur = real_duration * chars_per_page[page_num] / total_chars
+            start_sec = real_duration * sum(chars_per_page[:page_num]) / total_chars
+            if os.path.exists(mp3_path) and n_pages > 1:
                 aac_path = os.path.join(TMP_DIR, f"audio_{slide_counter:03d}.aac")
-                page_dur = duration * chars_per_page[page_num] / total_chars
-                start_sec = duration * sum(chars_per_page[:page_num]) / total_chars
-                if os.path.exists(mp3_path):
-                    ok = trim_audio(mp3_path, aac_path, start_sec, page_dur)
-                    if ok:
-                        audio_for_slide = aac_path
+                ok = trim_audio(mp3_path, aac_path, start_sec, page_dur)
+                if ok:
+                    audio_for_slide = aac_path
+            elif os.path.exists(mp3_path):
+                audio_for_slide = mp3_path
+                page_dur = real_duration
 
             ok = make_slide_video(png_path, audio_for_slide, mp4_path, page_dur)
             if ok:
