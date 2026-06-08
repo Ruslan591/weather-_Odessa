@@ -648,32 +648,52 @@ def build_prompt(days, marine=None):
 
 def preprocess_tts(text):
     import re
+    # Аббревиатуры
+    text = re.sub(r'(?i)индекс\s+LI', 'индекс неустойчивости', text)
+    text = re.sub(r'LI', 'индекс неустойчивости', text)
+    text = text.replace('CAPE', 'индекс конвективной доступной энергии')
+    text = text.replace('CIN', 'конвективное торможение')
     # Единицы давления
     text = text.replace('гПа', 'гектопаскалей')
-    # Градусы
-    text = re.sub(r'(\d+)\s*°C', r' градуса Цельсия', text)
-    text = re.sub(r'(-\d+)\s*°C', r' градуса Цельсия', text)
-    text = text.replace('°C', 'градусов Цельсия')
+    # Градусы со склонением
+    def _grad(n):
+        try: n = abs(int(float(str(n).replace(',','.')))) % 100
+        except: return 'градусов'
+        if 11 <= n <= 19: return 'градусов'
+        r = n % 10
+        if r == 1: return 'градус'
+        if 2 <= r <= 4: return 'градуса'
+        return 'градусов'
+    text = re.sub(r'(-?\d+(?:[.,]\d+)?)\s*°C', lambda m: f"{m.group(1)} {_grad(m.group(1))}", text)
+    text = text.replace('°C', 'градусов')
     # м/с
-    text = re.sub(r'(\d+(?:\.\d+)?)\s*м/с', r'\1 метров в секунду', text)
+    text = re.sub(r'(\d+(?:[.,]\d+)?)\s*м/с', r' метров в секунду', text)
     # мм осадков
-    text = re.sub(r'(\d+(?:\.\d+)?)\s*мм', r' миллиметра', text)
+    text = re.sub(r'(\d+(?:[.,]\d+)?)\s*мм', r' миллиметра', text)
     # Дж/кг
     text = text.replace('Дж/кг', 'джоулей на килограмм')
-    # Десятичные дроби: 0.2 -> 0 целых 2 десятых (перед заменой запятой)
+    # Десятичные дроби
     def decimal_to_words(m):
         int_part = m.group(1)
         dec_part = m.group(2)
         if len(dec_part) == 1:
-            tenth = {'1':'одна','2':'две','3':'три','4':'четыре',
+            words = {'1':'одна','2':'две','3':'три','4':'четыре',
                      '5':'пять','6':'шесть','7':'семь','8':'восемь','9':'девять','0':'ноль'}
-            return f"{int_part} целых {tenth.get(dec_part, dec_part)} десятых"
+            form = 'десятая' if dec_part == '1' else 'десятых'
+            return f"{int_part} целых {words.get(dec_part, dec_part)} {form}"
         return f"{int_part} целых {dec_part} сотых"
-    text = re.sub(r'(\d+)\.(\d{1,2})', decimal_to_words, text)
-    # % -> процентов
-    text = re.sub(r'(\d+)\s*%', r' процентов', text)
-    # CAPE убрать аббревиатуру (уже должно быть в тексте словами, просто на случай)
-    text = text.replace('CAPE', 'индекс CAPE')
+    text = re.sub(r'(\d+)\.(\d{1,2})', decimal_to_words, text)
+    text = re.sub(r'(\d+),(\d{1,2})', decimal_to_words, text)
+    # % со склонением
+    def _proc(n):
+        try: n = abs(int(n)) % 100
+        except: return 'процентов'
+        if 11 <= n <= 19: return 'процентов'
+        r = n % 10
+        if r == 1: return 'процент'
+        if 2 <= r <= 4: return 'процента'
+        return 'процентов'
+    text = re.sub(r'(\d+)\s*%', lambda m: f"{m.group(1)} {_proc(m.group(1))}", text)
     # Убрать решётки markdown
     text = re.sub(r'#+\s*', '', text)
     # Убрать ** *
