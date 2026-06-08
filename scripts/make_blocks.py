@@ -72,6 +72,7 @@ VOICES = [
     "ru-RU-DmitryNeural",
 ]
 RATE = "-5%"
+PITCH = "+10Hz"
 
 MONTH_RU = [
     'января','февраля','марта','апреля','мая','июня',
@@ -221,7 +222,7 @@ def preprocess_tts(text):
 _selected_voice = VOICES[0]
 
 async def _tts_async(text, out_path):
-    communicate = edge_tts.Communicate(text, voice=_selected_voice, rate=RATE)
+    communicate = edge_tts.Communicate(text, voice=_selected_voice, rate=RATE, pitch=PITCH)
     await communicate.save(out_path)
 
 def strip_silence(path):
