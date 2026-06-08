@@ -26,6 +26,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/forecast_video.mp4 || true
-          git diff --cached --quiet || git commit -m "auto: generate forecast video"
-          git pull --rebase origin main
+          git diff --cached --quiet && echo "No changes" && exit 0
+          git commit -m "auto: generate forecast video"
+          git fetch origin main
+          git rebase origin/main
           git push
