@@ -116,10 +116,11 @@ def parse_sections(text):
         sections[current_key] = '\n'.join(current_lines).strip()
     return sections
 
-def find_section(sections, prefix):
-    for key, val in sections.items():
-        if key.startswith(prefix):
-            return val
+def find_section(sections, *prefixes):
+    for prefix in prefixes:
+        for key, val in sections.items():
+            if key.startswith(prefix):
+                return val
     return ''
 
 def preprocess_tts(text):
@@ -333,7 +334,14 @@ def main(force=False):
         if key == 'today' and today_stale:
             print(f"    → {filename}: пропущен (устарел, уже вечер)")
             continue
-        section_text = find_section(sections, section_title)
+        ALT = {
+            'today':   ('Сегодня', 'Утром и', 'Утром', 'Днём'),
+            'tonight': ('Этой ночью', 'Ночью', 'Сегодня ночью'),
+        }
+        if key in ALT:
+            section_text = find_section(sections, *ALT[key])
+        else:
+            section_text = find_section(sections, section_title)
 
         if not section_text.strip():
             print(f"    \u2192 {filename}: пропущен (пусто)")
