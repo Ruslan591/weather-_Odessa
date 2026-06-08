@@ -361,12 +361,15 @@
 </div>
 
 <div class="container">
-  <div id="videoWrap" style="display:none;margin-bottom:20px">
+  <div id="videoWrap" style="display:none;margin-bottom:12px">
     <video controls playsinline preload="none"
       style="width:100%;max-width:340px;border-radius:14px;display:block;margin:0 auto;box-shadow:0 4px 24px rgba(0,0,0,0.6)">
       <source id="videoSrc" src="" type="video/mp4">
     </video>
   </div>
+  <button class="pres-btn hidden" id="presBtnTop" onclick="openPresentation()" style="margin-bottom:16px">
+    ▶ Презентация
+  </button>
   <div id="statusBar" class="status-bar" style="display:none">
     <div class="status-dot" id="statusDot"></div>
     <span id="statusText"></span>
@@ -556,6 +559,7 @@ function loadBlocksMeta() {
       if (meta.blocks && meta.blocks.length > 0) {
         _blocksMeta = meta;
         document.getElementById('presBtn').classList.remove('hidden');
+        document.getElementById('presBtnTop').classList.remove('hidden');
       }
     })
     .catch(function(){});
