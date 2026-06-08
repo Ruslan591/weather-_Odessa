@@ -11,6 +11,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 BASE_DIR   = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BLOCKS_DIR = os.path.join(BASE_DIR, "data", "blocks")
+ICONS_DIR  = os.path.join(BASE_DIR, "data", "icons")
 META_FILE  = os.path.join(BLOCKS_DIR, "blocks_meta.json")
 TMP_DIR    = os.path.join(BASE_DIR, "data", "blocks", "tmp")
 MP4_FILE   = os.path.join(BASE_DIR, "data", "forecast_video.mp4")
@@ -173,34 +174,26 @@ def render_slide(block, slide_idx, total_slides, page_lines, page_num, total_pag
         color_seg = acc if i <= slide_idx else (80, 80, 100)
         draw.rounded_rectangle([sx, 110, sx+seg_w, 115], radius=3, fill=color_seg)
 
-    # Иконка блока
-    icon_char = BLOCK_ICONS.get(key, "\u2600")
-    try:
-        draw.text((W//2, 280), icon_char, font=F(140, True),
-                  fill=(255, 255, 255), anchor='mm')
-    except:
-        bb = draw.textbbox((0,0), icon_char, font=F(140, True))
-        tw = bb[2]-bb[0]; th = bb[3]-bb[1]
-        draw.text((W//2 - tw//2, 280 - th//2), icon_char,
-                  font=F(140, True), fill=(255, 255, 255))
+    # Иконка блока (PNG)
+    paste_icon(img, weather_icon_path(block.get("text",""), key), W//2, 280, size=180)
+    draw = ImageDraw.Draw(img)
 
     # Заголовок блока
     title = block.get("title", "").upper()
     draw.text((W//2, 400), title, font=F(72, True),
               fill=(255, 255, 255), anchor='mm')
 
-    # Иконка погоды по тексту + экстремумы
-    block_text = block.get("text", "")
-    w_icon = weather_icon(block_text, key)
-    t_min, t_max = extract_temp_range(block_text)
+    # Экстремумы температуры
+    t_min, t_max = extract_temp_range(block.get("text", ""))
     if t_min is not None and t_min != t_max:
-        temp_str = f"{w_icon}  {t_min}°..{t_max}°C"
+        temp_str = f"{t_min}°..{t_max}°C"
     elif t_max is not None:
-        temp_str = f"{w_icon}  {t_max}°C"
+        temp_str = f"{t_max}°C"
     else:
-        temp_str = w_icon
-    draw.text((W//2, 455), temp_str, font=F(38, True),
-              fill=(*acc, 220), anchor='mm')
+        temp_str = ""
+    if temp_str:
+        draw.text((W//2, 455), temp_str, font=F(42, True),
+                  fill=(*acc, 220), anchor='mm')
 
     # Номер страницы (если больше одной)
     if total_pages > 1:
@@ -330,6 +323,23 @@ def weather_icon(text, key):
     if 'облачно' in t or 'облака' in t: return '☁'  # ☁ облачно
     if 'ясно' in t or 'солнечно' in t: return '☀'  # ☀ ясно
     return '⛅'  # ⛅ переменная облачность
+
+def weather_icon_path(text, key):
+    t = text.lower()
+    if key == 'marine': return os.path.join(ICONS_DIR, 'wave.png')
+    if key == 'trend':  return os.path.join(ICONS_DIR, 'trend.png')
+    if key == 'next3':  return os.path.join(ICONS_DIR, 'calendar.png')
+    if 'гроза' in t or 'молния' in t: return os.path.join(ICONS_DIR, 'thunder.png')
+    if 'дождь' in t or 'осадки' in t: return os.path.join(ICONS_DIR, 'rain.png')
+    if 'облачно' in t or 'облака' in t: return os.path.join(ICONS_DIR, 'cloudy.png')
+    if 'ясно' in t or 'солнечно' in t: return os.path.join(ICONS_DIR, 'sunny.png')
+    return os.path.join(ICONS_DIR, 'partly_cloudy.png')
+
+def paste_icon(img, icon_path, cx, cy, size=180):
+    if not os.path.exists(icon_path): return
+    icon = Image.open(icon_path).convert('RGBA')
+    icon = icon.resize((size, size), Image.LANCZOS)
+    img.paste(icon, (cx - size//2, cy - size//2), icon)
 
 def main():
     print("\n  \U0001f4f9 Генерация вертикального видео (9:16) для TikTok...")
