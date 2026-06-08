@@ -296,10 +296,7 @@ def main():
                         cwd=BASE_DIR, capture_output=False
                     )
                     if _blocks_result.returncode == 0:
-                        subprocess.run(
-                            [PYTHON, _os.path.join(SCRIPTS_DIR, "make_video.py")],
-                            cwd=BASE_DIR, capture_output=False
-                        )
+                        # make_video отключён
                         if _os.path.exists(_pending_file):
                             _os.remove(_pending_file)
                     else:
@@ -320,10 +317,7 @@ def main():
                 cwd=BASE_DIR, capture_output=False
             )
             if _b.returncode == 0:
-                subprocess.run(
-                    [PYTHON, os.path.join(SCRIPTS_DIR, "make_video.py")],
-                    cwd=BASE_DIR, capture_output=False
-                )
+                # make_video отключён
                 os.remove(_pending_file)
                 print("  [AI] Повтор успешен, pending снят")
             else:
