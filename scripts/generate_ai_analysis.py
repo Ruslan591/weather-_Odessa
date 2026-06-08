@@ -667,9 +667,9 @@ def preprocess_tts(text):
     text = re.sub(r'(-?\d+(?:[.,]\d+)?)\s*°C', lambda m: f"{m.group(1)} {_grad(m.group(1))}", text)
     text = text.replace('°C', 'градусов')
     # м/с
-    text = re.sub(r'(\d+(?:[.,]\d+)?)\s*м/с', r' метров в секунду', text)
+    text = re.sub(r'(\d+(?:[.,]\d+)?)\s*м/с', r'\1 метров в секунду', text)
     # мм осадков
-    text = re.sub(r'(\d+(?:[.,]\d+)?)\s*мм', r' миллиметра', text)
+    text = re.sub(r'(\d+(?:[.,]\d+)?)\s*мм', r'\1 миллиметра', text)
     # Дж/кг
     text = text.replace('Дж/кг', 'джоулей на килограмм')
     # Десятичные дроби
