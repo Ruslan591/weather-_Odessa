@@ -189,13 +189,26 @@ def render_slide(block, slide_idx, total_slides, page_lines, page_num, total_pag
     draw.text((W//2, 400), title, font=F(72, True),
               fill=(255, 255, 255), anchor='mm')
 
+    # Иконка погоды по тексту + экстремумы
+    block_text = block.get("text", "")
+    w_icon = weather_icon(block_text, key)
+    t_min, t_max = extract_temp_range(block_text)
+    if t_min is not None and t_min != t_max:
+        temp_str = f"{w_icon}  {t_min}°..{t_max}°C"
+    elif t_max is not None:
+        temp_str = f"{w_icon}  {t_max}°C"
+    else:
+        temp_str = w_icon
+    draw.text((W//2, 455), temp_str, font=F(38, True),
+              fill=(*acc, 220), anchor='mm')
+
     # Номер страницы (если больше одной)
     if total_pages > 1:
-        draw.text((W//2, 455), f"{page_num + 1} / {total_pages}",
-                  font=F(30), fill=(*acc, 150), anchor='mm')
+        draw.text((W//2, 505), f"{page_num + 1} / {total_pages}",
+                  font=F(28), fill=(*acc, 150), anchor='mm')
 
     # Разделитель
-    div_y = 490
+    div_y = 540
     draw.rectangle([80, div_y, W-80, div_y+3], fill=(*acc, 120))
 
     # Текст страницы
@@ -301,6 +314,22 @@ def concat_videos(slide_mp4s, out_mp4):
     size_mb = os.path.getsize(out_mp4) / 1024 / 1024
     print(f"  [FFM] \u2705 Итоговое видео: {out_mp4} ({size_mb:.1f} Мб)")
     return True
+
+def extract_temp_range(text):
+    """Извлекает мин/макс температуру из текста блока."""
+    nums = [int(m) for m in re.findall(r'(-?\d{1,2})°C', text)]
+    if not nums: return None, None
+    return min(nums), max(nums)
+
+def weather_icon(text, key):
+    """Определяет иконку погоды по тексту."""
+    t = text.lower()
+    if key == 'marine': return '≈~'  # ~~ волны
+    if 'гроза' in t or 'молния' in t: return '⚡'  # ⚡ гроза
+    if 'дождь' in t or 'осадки' in t: return '☔'  # ☔ дождь
+    if 'облачно' in t or 'облака' in t: return '☁'  # ☁ облачно
+    if 'ясно' in t or 'солнечно' in t: return '☀'  # ☀ ясно
+    return '⛅'  # ⛅ переменная облачность
 
 def main():
     print("\n  \U0001f4f9 Генерация вертикального видео (9:16) для TikTok...")
