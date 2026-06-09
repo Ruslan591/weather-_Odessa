@@ -818,6 +818,11 @@ def main(force=False):
         print("  [AI] Нет данных для анализа")
         return
 
+    # Сохраняем агрегированные данные по дням
+    _days_file = os.path.join(BASE_DIR, "data", "forecast_days.json")
+    with open(_days_file, "w", encoding="utf-8") as _f:
+        json.dump(days, _f, ensure_ascii=False, indent=2)
+
     # Marine данные
     marine_raw = fetch_marine()
     marine = aggregate_marine(marine_raw)
