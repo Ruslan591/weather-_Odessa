@@ -183,12 +183,13 @@ def render_slide(block, slide_idx, total_slides, page_lines, page_num, total_pag
     draw.text((W//2, 400), title, font=F(72, True),
               fill=(255, 255, 255), anchor='mm')
 
-    # Экстремумы температуры
-    t_min, t_max = extract_temp_range(block.get("text", ""))
-    if t_min is not None and t_min != t_max:
-        temp_str = f"{t_min}°..{t_max}°C"
+    # Экстремумы температуры из мета
+    t_min = block.get("t_min")
+    t_max = block.get("t_max")
+    if t_min is not None and t_max is not None and t_min != t_max:
+        temp_str = f"{round(t_min)}°..{round(t_max)}°C"
     elif t_max is not None:
-        temp_str = f"{t_max}°C"
+        temp_str = f"{round(t_max)}°C"
     else:
         temp_str = ""
     if temp_str:
