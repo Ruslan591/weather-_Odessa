@@ -194,6 +194,31 @@ def draw_temp_chart(img, hours, acc, card_x, card_y, card_w, card_h):
     d.text((xx, xy-24), f"{round(max_t)}\u00b0", font=F(26,True), fill=(255,140,80,255), anchor="mm")
     img.paste(overlay, mask=overlay)
 
+def weather_icon_path(text, key):
+    t = text.lower()
+    if key == 'marine': return os.path.join(ICONS_DIR, 'wave.png')
+    if key == 'trend':  return os.path.join(ICONS_DIR, 'trend.png')
+    if key == 'next3':  return os.path.join(ICONS_DIR, 'calendar.png')
+    if 'гроза' in t or 'молния' in t: return os.path.join(ICONS_DIR, 'thunder.png')
+    if 'дождь' in t or 'осадки' in t: return os.path.join(ICONS_DIR, 'rain.png')
+    if 'облачно' in t or 'облака' in t: return os.path.join(ICONS_DIR, 'cloudy.png')
+    if 'ясно' in t or 'солнечно' in t: return os.path.join(ICONS_DIR, 'sunny.png')
+    return os.path.join(ICONS_DIR, 'partly_cloudy.png')
+
+def paste_icon(img, icon_path, cx, cy, size=180):
+    if not os.path.exists(icon_path): return
+    icon = Image.open(icon_path).convert('RGBA')
+    icon = icon.resize((size, size), Image.LANCZOS)
+    img.paste(icon, (cx - size//2, cy - size//2), icon)
+
+def extract_temp_range(text):
+    import re
+    short = text[:350]
+    nums = [int(m) for m in re.findall(r'(-?\d{1,2})°C', short)]
+    nums = [n for n in nums if -20 <= n <= 45]
+    if not nums: return None, None
+    return min(nums), max(nums)
+
 def draw_info_card(img, block, acc):
     from PIL import Image as PILImage
     key = block.get("key", "today")
@@ -282,3 +307,105 @@ def render_slide(block, slide_idx, total_slides, page_lines, page_num, total_pag
     draw.rectangle([W//2-120, H-50, W//2+120, H-47], fill=(*acc, 100))
     img = img.convert('RGB')
     img.save(out_png, 'PNG')
+
+def trim_audio(mp3_path, out_path, start_sec, duration_sec):
+    cmd = ["ffmpeg", "-y", "-i", mp3_path, "-ss", str(round(start_sec, 3)),
+           "-t", str(round(duration_sec, 3)), "-c:a", "aac", "-b:a", "96k", out_path]
+    return subprocess.run(cmd, capture_output=True).returncode == 0
+
+def make_slide_video(png_path, audio_path, out_mp4, duration):
+    if audio_path and os.path.exists(audio_path):
+        cmd = ["ffmpeg", "-y", "-loop", "1", "-i", png_path, "-i", audio_path,
+               "-c:v", "libx264", "-preset", "veryfast", "-tune", "stillimage",
+               "-c:a", "aac", "-b:a", "96k", "-pix_fmt", "yuv420p",
+               "-shortest", "-vf", f"scale={W}:{H}", out_mp4]
+    else:
+        cmd = ["ffmpeg", "-y", "-loop", "1", "-i", png_path, "-t", str(max(int(duration),5)),
+               "-c:v", "libx264", "-preset", "veryfast", "-tune", "stillimage",
+               "-pix_fmt", "yuv420p", "-vf", f"scale={W}:{H}", "-an", out_mp4]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"  [FFM] Ошибка:\n{result.stderr[-400:]}")
+        return False
+    print(f"  [FFM] готов ({os.path.getsize(out_mp4)//1024} кб)")
+    return True
+
+def concat_videos(slide_mp4s, out_mp4):
+    list_file = os.path.join(TMP_DIR, "concat_list.txt")
+    with open(list_file, 'w') as f:
+        for p in slide_mp4s:
+            f.write(f"file '{p}'\n")
+    cmd = ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_file, "-c", "copy", out_mp4]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"  [FFM] Ошибка concat:\n{result.stderr[-400:]}")
+        return False
+    print(f"  [FFM] Итоговое видео: {out_mp4} ({os.path.getsize(out_mp4)/1024/1024:.1f} Мб)")
+    return True
+
+def main():
+    print("\n  Генерация вертикального видео (9:16) для TikTok...")
+    if not os.path.exists(META_FILE):
+        print(f"  Файл не найден: {META_FILE}"); return
+    with open(META_FILE, 'r', encoding='utf-8') as f:
+        meta = json.load(f)
+    blocks = meta.get("blocks", [])
+    if not blocks:
+        print("  Нет блоков"); return
+    if not FONT_REG_PATH:
+        print("  ОШИБКА: шрифт не найден!"); return
+    print(f"  Шрифт: {FONT_REG_PATH}\n  Блоков: {len(blocks)}")
+    os.makedirs(TMP_DIR, exist_ok=True)
+    dummy_img = Image.new('RGB', (W, H))
+    dummy_draw = ImageDraw.Draw(dummy_img)
+    font_body = F(FONT_BODY_SIZE)
+    text_maxw = W - 130
+    block_pages = [split_into_pages(b.get("text",""), font_body, text_maxw, dummy_draw) for b in blocks]
+    total_slides = len(blocks)
+    all_mp4s = []; slide_counter = 0
+    for block_idx, block in enumerate(blocks):
+        key = block.get("key", f"block_{block_idx}")
+        filename = block.get("filename", f"block_{block_idx}.mp3")
+        mp3_path = os.path.join(BLOCKS_DIR, filename)
+        duration = block.get("duration", 15)
+        pages = block_pages[block_idx]
+        n_pages = len(pages)
+        print(f"\n  [BLOCK] '{block.get('title','')}' -> {n_pages} стр., ~{duration:.0f} сек")
+        chars_per_page = [sum(len(l) for l in pg) for pg in pages]
+        total_chars = sum(chars_per_page) or 1
+        page_meta = block.get("pages", [])
+        for page_num, page_lines in enumerate(pages):
+            png_path = os.path.join(TMP_DIR, f"slide_{slide_counter:03d}.png")
+            mp4_path = os.path.join(TMP_DIR, f"slide_{slide_counter:03d}.mp4")
+            render_slide(block, block_idx, total_slides, page_lines, page_num, n_pages, png_path)
+            print(f"  [SLIDE] стр.{page_num+1}/{n_pages}", end=" ")
+            audio_for_slide = None; page_dur = 10
+            if page_num < len(page_meta):
+                pm = page_meta[page_num]
+                candidate = os.path.join(BLOCKS_DIR, pm["filename"])
+                if os.path.exists(candidate):
+                    audio_for_slide = candidate
+                    page_dur = pm.get("duration", 10)
+            else:
+                aac_path = os.path.join(TMP_DIR, f"audio_{slide_counter:03d}.aac")
+                page_dur = duration * chars_per_page[page_num] / total_chars
+                start_sec = duration * sum(chars_per_page[:page_num]) / total_chars
+                if os.path.exists(mp3_path):
+                    if trim_audio(mp3_path, aac_path, start_sec, page_dur):
+                        audio_for_slide = aac_path
+            if make_slide_video(png_path, audio_for_slide, mp4_path, page_dur):
+                all_mp4s.append(mp4_path)
+            slide_counter += 1
+    if not all_mp4s:
+        print("  Не удалось создать ни одного слайда"); return
+    print(f"\n  [FFM] Склеиваю {len(all_mp4s)} слайдов...")
+    ok = concat_videos(all_mp4s, MP4_FILE)
+    if ok:
+        for fname in os.listdir(TMP_DIR):
+            if fname.endswith(('.png','.aac')) or (fname.endswith('.mp4') and fname.startswith('slide_')):
+                try: os.remove(os.path.join(TMP_DIR, fname))
+                except: pass
+    print("  Готово!" if ok else "  Завершено с ошибками.")
+
+if __name__ == "__main__":
+    main()
