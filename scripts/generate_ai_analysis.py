@@ -822,6 +822,8 @@ def main(force=False):
     _days_file = os.path.join(BASE_DIR, "data", "forecast_days.json")
     with open(_days_file, "w", encoding="utf-8") as _f:
         json.dump(days, _f, ensure_ascii=False, indent=2)
+    import subprocess as _sp
+    _sp.run(["git", "-C", BASE_DIR, "add", "data/forecast_days.json"], capture_output=True)
 
     # Сохраняем агрегированные данные по дням
     _days_file = os.path.join(BASE_DIR, "data", "forecast_days.json")
