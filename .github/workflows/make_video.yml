@@ -32,8 +32,8 @@ jobs:
           git add data/forecast_video.mp4
           git diff --cached --quiet && echo "No changes" && exit 0
           git commit -m "auto: generate forecast video"
-          git fetch origin main
-          git stash
-          git rebase origin/main
-          git stash pop
-          git push
+          for i in 1 2 3; do
+            git pull --rebase origin main && git push && break
+            echo "Retry $i..."
+            sleep 5
+          done
