@@ -6,6 +6,10 @@ on:
       - 'data/blocks/blocks_meta.json'
       - 'data/blocks/*.mp3'
 
+concurrency:
+  group: video-generation
+  cancel-in-progress: false
+
 jobs:
   make-video:
     runs-on: ubuntu-latest
