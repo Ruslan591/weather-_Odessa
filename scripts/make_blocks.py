@@ -336,6 +336,20 @@ def main(force=False):
     b2 = MODE_BLOCK2[gen_mode]
     BLOCK_DEFS = [b1, b2] + BLOCK_DEFS_COMMON
 
+    # Читаем t_min/t_max из forecast_days.json
+    _days_file = os.path.join(os.path.dirname(BLOCKS_DIR), "forecast_days.json")
+    _days_by_idx = {}
+    if os.path.exists(_days_file):
+        try:
+            import json as _json2
+            _days = _json2.load(open(_days_file, encoding='utf-8'))
+            for _i, _d in enumerate(_days):
+                _days_by_idx[_i] = (_d.get('T',{}).get('min'), _d.get('T',{}).get('max'))
+        except Exception: pass
+
+    # Соответствие key -> индекс дня
+    _key_to_day = {'today':0,'tonight':0,'tomorrow':1,'next3':2,'marine':None,'trend':None,'warnings':None}
+
     blocks_meta = []
     for key, section_title, filename, display_title, icon in BLOCK_DEFS:
         if key == 'today' and today_stale:
@@ -374,6 +388,8 @@ def main(force=False):
                         "duration": get_mp3_duration(page_path),
                         "text": page_text,
                     })
+            _day_idx = _key_to_day.get(key)
+            _t_min, _t_max = _days_by_idx.get(_day_idx, (None, None)) if _day_idx is not None else (None, None)
             blocks_meta.append({
                 "key":      key,
                 "filename": filename,
@@ -383,6 +399,8 @@ def main(force=False):
                 "text":     section_text,
                 "duration": get_mp3_duration(out_path),
                 "pages":    page_files,
+                "t_min":    _t_min,
+                "t_max":    _t_max,
             })
 
     meta = {
