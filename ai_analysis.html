@@ -387,11 +387,6 @@
   </div>
 </div>
 
-<!-- ── Кнопка презентации ── -->
-<button class="pres-btn hidden" id="presBtn" onclick="openPresentation()">
-  ▶ Презентация
-</button>
-
 <!-- ── Presentation overlay ── -->
 <div class="presentation" id="presentation">
   <canvas class="pres-bg" id="presBg"></canvas>
@@ -558,7 +553,6 @@ function loadBlocksMeta() {
     .then(function(meta) {
       if (meta.blocks && meta.blocks.length > 0) {
         _blocksMeta = meta;
-        document.getElementById('presBtn').classList.remove('hidden');
         document.getElementById('presBtnTop').classList.remove('hidden');
       }
     })
