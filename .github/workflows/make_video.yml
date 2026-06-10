@@ -36,7 +36,10 @@ jobs:
           git diff --cached --quiet && echo "No changes" && exit 0
           git commit -m "auto: generate forecast video"
           for i in 1 2 3; do
-            git pull --rebase origin main && git push && break
+            git stash
+            git pull --rebase origin main
+            git stash pop
+            git push && break
             echo "Retry $i..."
             sleep 5
           done
