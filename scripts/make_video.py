@@ -287,7 +287,7 @@ def render_slide(block, slide_idx, total_slides, page_lines, page_num, total_pag
         sx = 60 + i * (seg_w + 4)
         color_seg = acc if i <= slide_idx else (80, 80, 100)
         draw.rounded_rectangle([sx, 105, sx+seg_w, 110], radius=3, fill=color_seg)
-    card_bottom = draw_info_card(img, block, acc, base_dt)
+    card_bottom = draw_info_card(img, block, acc)
     draw = ImageDraw.Draw(img)
     div_y = card_bottom + 15
     if total_pages > 1:
