@@ -526,12 +526,14 @@ fetch('https://raw.githubusercontent.com/Ruslan591/weather-_Odessa/main/data/for
     var genAt = d.generated_at ? formatTime(d.generated_at) : '—';
     var chkAt = d.last_checked ? formatTime(d.last_checked) : '—';
 
+    var dataAt = d.data_fetched_at ? formatTime(d.data_fetched_at) : null;
+    var dataStr = dataAt ? ' · данные: ' + dataAt : '';
     if (d.changed !== false) {
       statusDot.className = 'status-dot';
-      statusText.textContent = 'Обновлён: ' + genAt;
+      statusText.textContent = 'Обновлён: ' + genAt + dataStr;
     } else {
       statusDot.className = 'status-dot stale';
-      statusText.textContent = 'Проверено: ' + chkAt + ' · данные не изменились с ' + genAt;
+      statusText.textContent = 'Проверено: ' + chkAt + ' · анализ от ' + genAt + dataStr;
     }
 
     // Analysis
