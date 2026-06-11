@@ -207,6 +207,7 @@ def fetch_one_model(model):
         f"https://api.open-meteo.com/v1/forecast"
         f"?latitude={LAT}&longitude={LON}"
         f"&hourly={HOURLY_FIELDS}"
+        f"&current=temperature_2m"
         f"&models={model}"
         f"&forecast_days=7"
         f"&timezone={TIMEZONE}"
@@ -218,12 +219,16 @@ def fetch_one_model(model):
 def fetch_ensemble():
     all_hourly = []
     times = None
+    data_time = None
     for model in FORECAST_MODELS:
         try:
             data = fetch_one_model(model)
             h = data.get("hourly", {})
             if not h.get("time"): continue
             if times is None: times = h["time"]
+            if data_time is None:
+                cur = data.get("current", {})
+                data_time = cur.get("time")
             all_hourly.append(h)
             print(f"  [AI] ok {model}")
         except Exception as e:
@@ -244,7 +249,7 @@ def fetch_ensemble():
             vals = [c[i] for c in cols if i < len(c) and c[i] is not None]
             avg.append(round(sum(vals)/len(vals), 2) if vals else None)
         merged[key] = avg
-    return {"hourly": merged}
+    return {"hourly": merged, "data_time": data_time}
 
 # ── Агрегация по дням ─────────────────────────────────────────────────────────
 
@@ -489,7 +494,7 @@ def _get_mode(now_utc_hour):
     if 16 <= now_utc_hour < 18: return "evening"
     return "evening"  # 18-23 UTC
 
-def build_prompt(days, marine=None):
+def build_prompt(days, marine=None, data_time=None):
     now_local = datetime.now(timezone.utc).astimezone()
     now_utc   = datetime.now(timezone.utc)
     now_str   = now_local.strftime("%d.%m.%Y %H:%M местного")
@@ -558,8 +563,19 @@ def build_prompt(days, marine=None):
         f"6. {tend_block} — краткий прогноз изменений (1-2 предложения)",
     ]
 
+    # Форматируем время данных open-meteo для промпта
+    if data_time:
+        try:
+            dt_parsed = datetime.strptime(data_time[:16], "%Y-%m-%dT%H:%M")
+            data_time_str = dt_parsed.strftime("%d.%m.%Y %H:%M местного")
+        except Exception:
+            data_time_str = data_time
+    else:
+        data_time_str = "неизвестно"
+
     lines = [
         f"Время генерации: {now_str}",
+        f"Данные open-meteo обновлены: {data_time_str}",
         f"Место: Одесса, Украина (46.43°N, 30.74°E, побережье Чёрного моря)",
         "",
         "Ты — опытный синоптик. Напиши профессиональный синоптический анализ прогноза погоды.",
@@ -810,6 +826,9 @@ def main(force=False):
         return
 
     days = aggregate_days(raw)
+    data_time = raw.get("data_time")
+    if data_time:
+        print(f"  [AI] Данные open-meteo: {data_time}")
     if not days:
         print("  [AI] Нет данных для анализа")
         return
@@ -858,7 +877,7 @@ def main(force=False):
         return
 
     # Данные изменились — генерируем новый анализ
-    prompt = build_prompt(days, marine=marine)
+    prompt = build_prompt(days, marine=marine, data_time=data_time)
     print(f"  [AI] Промпт: ~{len(prompt.split())} слов, запрос к Claude...")
 
     try:
