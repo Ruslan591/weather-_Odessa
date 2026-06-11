@@ -856,25 +856,26 @@ def main(force=False):
     prev_hash = existing.get("data_hash", "")
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
+    STALE_HOURS = 6
+
     if current_hash == prev_hash and existing.get("text"):
-        # Данные не изменились — обновляем только метку времени
-        existing["last_checked"] = now_iso
-        existing["changed"] = False
-        # Фиксируем закрытое окно даже если данные не изменились
-        now_utc_close = datetime.now(timezone.utc)
-        win_closed = _current_window(now_utc_close)
-        prev_windows = existing.get("windows_closed", [])
-        if win_closed:
-            prev_windows.append({"window": win_closed, "closed_at": now_iso})
-        cutoff = now_utc_close.timestamp() - 2 * 86400
-        existing["windows_closed"] = [
-            e for e in prev_windows
-            if datetime.fromisoformat(e["closed_at"].replace("Z", "+00:00")).timestamp() >= cutoff
-        ]
-        with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-            json.dump(existing, f, ensure_ascii=False, indent=2)
-        print(f"  [AI] Данные не изменились — обновлена метка времени")
-        return
+        try:
+            last_gen = datetime.fromisoformat(existing.get("generated_at", "").replace("Z", "+00:00"))
+            age_hours = (datetime.now(timezone.utc) - last_gen).total_seconds() / 3600
+        except Exception:
+            age_hours = 999
+
+        if age_hours < STALE_HOURS:
+            # Данные не изменились, анализ свежий — окно остаётся открытым
+            existing["last_checked"] = now_iso
+            existing["changed"] = False
+            with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+                json.dump(existing, f, ensure_ascii=False, indent=2)
+            print(f"  [AI] Данные не изменились ({age_hours:.1f}ч < {STALE_HOURS}ч) — окно открыто, повтор через 15 мин")
+            return
+        else:
+            # Данные не изменились, но анализ устарел — регенерируем с обновлённым временным контекстом
+            print(f"  [AI] Данные не изменились, но анализ устарел ({age_hours:.1f}ч >= {STALE_HOURS}ч) — регенерирую")
 
     # Данные изменились — генерируем новый анализ
     prompt = build_prompt(days, marine=marine, data_time=data_time)
