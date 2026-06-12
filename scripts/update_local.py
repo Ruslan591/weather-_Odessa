@@ -87,6 +87,14 @@ def git_commit_push(no_push=False):
         if not _GIT_CHANGED:
             return  # нечего пушить
 
+        # Прячем возможные unstaged-изменения (напр. data/forecast_days.json
+        # от generate_ai_analysis.py), чтобы pull --rebase не падал на "unstaged changes"
+        stash = subprocess.run(
+            ["git", "-C", BASE_DIR, "stash", "--include-untracked"],
+            capture_output=True, text=True
+        )
+        stashed = "No local changes to save" not in (stash.stdout + stash.stderr)
+
         pull = subprocess.run(
             ["git", "-C", BASE_DIR, "pull", "--rebase", "origin", "main"],
             capture_output=True, text=True
@@ -103,7 +111,14 @@ def git_commit_push(no_push=False):
             )
             if pull.returncode != 0:
                 print(f"  git pull --rebase (retry) ✗: {pull.stderr.strip()}")
+                if stashed:
+                    subprocess.run(["git", "-C", BASE_DIR, "stash", "pop"], capture_output=True, text=True)
                 return
+
+        if stashed:
+            pop = subprocess.run(["git", "-C", BASE_DIR, "stash", "pop"], capture_output=True, text=True)
+            if pop.returncode != 0:
+                print(f"  git stash pop ✗: {pop.stderr.strip()}")
 
         push = subprocess.run(
             ["git", "-C", BASE_DIR, "push", "--force-with-lease"],
