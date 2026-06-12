@@ -279,6 +279,7 @@ def main():
             ai_cmd = [PYTHON, os.path.join(SCRIPTS_DIR, "generate_ai_analysis.py")]
             if args.force_ai:
                 ai_cmd.append("--force")
+            ai_cmd += ["--models", ",".join(new_models)]
             ai_result = subprocess.run(ai_cmd, cwd=BASE_DIR, capture_output=False)
             if ai_result.returncode == 0:
                 import json, os as _os

@@ -666,7 +666,7 @@ def preprocess_tts(text):
     import re
     # Аббревиатуры
     text = re.sub(r'(?i)индекс\s+LI', 'индекс неустойчивости', text)
-    text = re.sub(r'LI', 'индекс неустойчивости', text)
+    text = re.sub(r'LI', 'индекс неустойчивости', text)
     text = text.replace('CAPE', 'индекс конвективной доступной энергии')
     text = text.replace('CIN', 'конвективное торможение')
     # Единицы давления
@@ -750,51 +750,64 @@ def call_claude(prompt, api_key):
         resp = json.loads(r.read().decode())
     return resp["content"][0]["text"]
 
-# ── Основная логика ───────────────────────────────────────────────────────────
+# ── Расписание (data/ai_schedule.json) ─────────────────────────────────────────
 
-# 5 обязательных окон (UTC час, минута) — привязаны к прогонам ECMWF
-# 03:00, 09:00, 11:30, 16:45, 23:30 UTC
-WINDOWS_UTC = [(3,0), (9,0), (11,30), (16,45), (23,30)]
-WINDOW_TOLERANCE_MIN = 45  # окно считается активным ±45 мин от целевого времени
+SCHEDULE_FILE = os.path.join(BASE_DIR, "data", "ai_schedule.json")
 
-def _windows_closed_today(existing, now_utc):
-    """Возвращает set строк вида 'HH:MM' для окон закрытых сегодня."""
-    closed = set()
-    for entry in existing.get("windows_closed", []):
+def load_schedule():
+    default = {"time_points": [], "model_triggers": [], "tolerance_min": 20}
+    if os.path.exists(SCHEDULE_FILE):
         try:
-            dt = datetime.fromisoformat(entry["closed_at"].replace("Z", "+00:00"))
-            if dt.date() == now_utc.date():
-                closed.add(entry["window"])
-        except Exception:
-            pass
-    return closed
+            with open(SCHEDULE_FILE, "r", encoding="utf-8") as f:
+                d = json.load(f)
+            default.update(d)
+        except Exception as e:
+            print(f"  [AI] Ошибка чтения ai_schedule.json: {e}")
+    return default
 
-def _current_window(now_utc):
-    """Возвращает строку 'HH:MM' если сейчас активно окно, иначе None."""
-    for h, m in WINDOWS_UTC:
-        target = now_utc.replace(hour=h, minute=m, second=0, microsecond=0)
-        if abs((now_utc - target).total_seconds()) <= WINDOW_TOLERANCE_MIN * 60:
-            return f"{h:02d}:{m:02d}"
+def _matching_time_point(schedule, now_utc):
+    """Возвращает строку 'HH:MM' если сейчас попадаем в точку расписания, иначе None."""
+    tol = schedule.get("tolerance_min", 20) * 60
+    weekday = (now_utc.weekday() + 1) % 7  # 0=Вс..6=Сб (как в ai_schedule.py)
+    for tp in schedule.get("time_points", []):
+        days = tp.get("days", list(range(7)))
+        if weekday not in days:
+            continue
+        target = now_utc.replace(hour=tp["hour"], minute=tp["minute"], second=0, microsecond=0)
+        if abs((now_utc - target).total_seconds()) <= tol:
+            return f"{tp['hour']:02d}:{tp['minute']:02d}"
     return None
 
-def cooldown_ok(existing, force=False):
+def cooldown_ok(existing, new_models=None, force=False):
     if force:
-        return True
+        return True, "force"
+    new_models = new_models or []
+    schedule = load_schedule()
     now_utc = datetime.now(timezone.utc)
-    win = _current_window(now_utc)
-    if win is None:
-        now_h = now_utc.hour
-        now_m = now_utc.minute
-        print(f"  [AI] Вне окна моделей (сейчас {now_h:02d}:{now_m:02d} UTC), пропускаю")
-        return False
-    closed = _windows_closed_today(existing, now_utc)
-    if win in closed:
-        print(f"  [AI] Окно {win} UTC уже закрыто сегодня, пропускаю")
-        return False
-    print(f"  [AI] Активно окно {win} UTC — генерирую")
-    return True
 
-def main(force=False):
+    tp = _matching_time_point(schedule, now_utc)
+    if tp:
+        run_key = f"time:{now_utc.strftime('%Y-%m-%d')}:{tp}"
+        if existing.get("last_run_key") == run_key:
+            print(f"  [AI] Точка расписания {tp} UTC уже выполнена сегодня, пропускаю")
+        else:
+            print(f"  [AI] Точка расписания {tp} UTC активна -- генерирую")
+            return True, run_key
+
+    triggers = set(schedule.get("model_triggers", []))
+    hit = triggers & set(new_models)
+    if hit:
+        run_key = f"model:{now_utc.strftime('%Y-%m-%dT%H:%M')}:{','.join(sorted(hit))}"
+        print(f"  [AI] Триггер по модели(ям) {', '.join(sorted(hit))} -- генерирую")
+        return True, run_key
+
+    print(f"  [AI] Не попадаем в расписание (сейчас {now_utc.strftime('%H:%M')} UTC, "
+          f"новые модели: {new_models or 'нет'}), пропускаю")
+    return False, None
+
+# ── Основная логика ───────────────────────────────────────────────────────────
+
+def main(force=False, new_models=None):
     if not ai_enabled():
         print("  [AI] Анализ отключён (AI_ANALYSIS_ENABLED=false в .env)")
         return
@@ -815,7 +828,8 @@ def main(force=False):
         except Exception:
             pass
 
-    if not cooldown_ok(existing, force=force):
+    ok, run_key = cooldown_ok(existing, new_models=new_models, force=force)
+    if not ok:
         return
 
     # Запрашиваем данные
@@ -840,11 +854,6 @@ def main(force=False):
     import subprocess as _sp
     _sp.run(["git", "-C", BASE_DIR, "add", "data/forecast_days.json"], capture_output=True)
 
-    # Сохраняем агрегированные данные по дням
-    _days_file = os.path.join(BASE_DIR, "data", "forecast_days.json")
-    with open(_days_file, "w", encoding="utf-8") as _f:
-        json.dump(days, _f, ensure_ascii=False, indent=2)
-
     # Marine данные
     marine_raw = fetch_marine()
     marine = aggregate_marine(marine_raw)
@@ -866,12 +875,12 @@ def main(force=False):
             age_hours = 999
 
         if age_hours < STALE_HOURS:
-            # Данные не изменились, анализ свежий — окно остаётся открытым
+            # Данные не изменились, анализ свежий — отмечаем как проверенный, но не помечаем run_key
             existing["last_checked"] = now_iso
             existing["changed"] = False
             with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
                 json.dump(existing, f, ensure_ascii=False, indent=2)
-            print(f"  [AI] Данные не изменились ({age_hours:.1f}ч < {STALE_HOURS}ч) — окно открыто, повтор через 15 мин")
+            print(f"  [AI] Данные не изменились ({age_hours:.1f}ч < {STALE_HOURS}ч) — пропускаю генерацию")
             return
         else:
             # Данные не изменились, но анализ устарел — регенерируем с обновлённым временным контекстом
@@ -887,22 +896,6 @@ def main(force=False):
         print(f"  [AI] Ошибка Claude API: {e}")
         return
 
-    # Фиксируем закрытое окно
-    now_utc_close = datetime.now(timezone.utc)
-    win_closed = _current_window(now_utc_close)
-    prev_windows = existing.get("windows_closed", [])
-    if win_closed:
-        prev_windows.append({
-            "window": win_closed,
-            "closed_at": now_iso
-        })
-    # Чистим старые записи (старше 2 суток)
-    cutoff = now_utc_close.timestamp() - 2 * 86400
-    prev_windows = [
-        e for e in prev_windows
-        if datetime.fromisoformat(e["closed_at"].replace("Z", "+00:00")).timestamp() >= cutoff
-    ]
-
     result = {
         "generated_at": now_iso,
         "last_checked": now_iso,
@@ -910,7 +903,7 @@ def main(force=False):
         "data_hash": current_hash,
         "days_count": len(days),
         "text": text,
-        "windows_closed": prev_windows,
+        "last_run_key": run_key,
     }
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
@@ -921,5 +914,7 @@ if __name__ == "__main__":
     import argparse
     p = argparse.ArgumentParser()
     p.add_argument("--force", action="store_true")
+    p.add_argument("--models", default="", help="Comma-separated list of models with new runs")
     a = p.parse_args()
-    main(force=a.force)
+    new_models = [m.strip() for m in a.models.split(",") if m.strip()]
+    main(force=a.force, new_models=new_models)
