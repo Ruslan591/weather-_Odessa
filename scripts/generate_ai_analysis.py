@@ -666,7 +666,7 @@ def preprocess_tts(text):
     import re
     # Аббревиатуры
     text = re.sub(r'(?i)индекс\s+LI', 'индекс неустойчивости', text)
-    text = re.sub(r'LI', 'индекс неустойчивости', text)
+    text = re.sub(r'\bLI\b', 'индекс неустойчивости', text)
     text = text.replace('CAPE', 'индекс конвективной доступной энергии')
     text = text.replace('CIN', 'конвективное торможение')
     # Единицы давления
