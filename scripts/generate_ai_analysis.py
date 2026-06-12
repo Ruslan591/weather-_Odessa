@@ -92,7 +92,7 @@ MARINE_URL = (
     "?latitude=46.35&longitude=30.90"
     "&hourly=wave_height,wave_direction,wave_period,"
     "wind_wave_height,swell_wave_height,swell_wave_period,sea_surface_temperature"
-    "&timezone=Europe/Kiev&forecast_days=3"
+    "&timezone=Europe/Kiev&forecast_days=5"
 )
 
 def fetch_marine():
@@ -120,17 +120,8 @@ def fetch_marine():
         print(f"  [AI] Marine API error: {e}")
         return None
 
-def aggregate_marine(marine_data):
-    """Агрегат морских данных на сегодня (дневные часы 06-21)."""
-    if not marine_data: return None
+def _aggregate_marine_one_day(day_recs):
     import math
-    now_local = datetime.now(timezone.utc).astimezone()
-    today_str = now_local.strftime("%Y-%m-%d")
-    day_recs = [r for r in marine_data
-                if r["time"][:10] == today_str
-                and 6 <= int(r["time"][11:13]) <= 21]
-    if not day_recs:
-        day_recs = [r for r in marine_data if r["time"][:10] == today_str]
     if not day_recs: return None
 
     def avg(key):
@@ -141,11 +132,9 @@ def aggregate_marine(marine_data):
         vals = [r[key] for r in day_recs if r.get(key) is not None]
         return round(max(vals), 1) if vals else None
 
-    # Средняя температура воды за период
     sst_vals = [r["sea_surface_temp"] for r in day_recs if r.get("sea_surface_temp") is not None]
     sst = round(sum(sst_vals)/len(sst_vals), 1) if sst_vals else None
 
-    # Среднее направление волны (векторное)
     dir_vals = [r["wave_direction"] for r in day_recs if r.get("wave_direction") is not None]
     if dir_vals:
         sx = sum(math.sin(math.radians(d)) for d in dir_vals)
@@ -167,6 +156,20 @@ def aggregate_marine(marine_data):
         "swell_period":     avg("swell_wave_period"),
     }
 
+def aggregate_marine_days(marine_data, dates):
+    """Агрегаты моря по каждой дате из dates (список 'YYYY-MM-DD'), дневные часы 06-21."""
+    if not marine_data: return {}
+    result = {}
+    for date in dates:
+        day_recs = [r for r in marine_data
+                    if r["time"][:10] == date
+                    and 6 <= int(r["time"][11:13]) <= 21]
+        if not day_recs:
+            day_recs = [r for r in marine_data if r["time"][:10] == date]
+        agg = _aggregate_marine_one_day(day_recs)
+        if agg: result[date] = agg
+    return result
+
 def _wave_str(val_m):
     """Высота волны: < 1м → сантиметры, иначе метры."""
     if val_m is None: return "?"
@@ -180,18 +183,9 @@ def _period_str(val_s):
     return f"{round(val_s)} с"
 
 def fmt_marine(m, today_str=None):
-    """Строки данных моря для промпта."""
+    """Строки данных моря для промпта (один день)."""
     if not m: return ["  Данные недоступны"]
     lines = []
-    if today_str:
-        try:
-            from datetime import datetime as _dt
-            dt = _dt.strptime(today_str, "%Y-%m-%d")
-            MONTH_RU2 = ['января','февраля','марта','апреля','мая','июня',
-                         'июля','августа','сентября','октября','ноября','декабря']
-            lines.append(f"  Дата: {dt.day} {MONTH_RU2[dt.month-1]}")
-        except Exception:
-            lines.append(f"  Дата: {today_str}")
     if m.get("sst") is not None:
         lines.append(f"  Температура воды: {m['sst']}°C")
     wh = m.get("wave_height_max")
@@ -652,13 +646,17 @@ def build_prompt(days, marine=None, data_time=None):
             "",
         ]
 
-    # Marine данные в промпт
+    # Marine данные в промпт (по дням, как и суша)
     if marine:
-        now_local = datetime.now(timezone.utc).astimezone()
-        today_str = now_local.strftime("%Y-%m-%d")
-        lines += [
-            "СОСТОЯНИЕ ЧЁРНОГО МОРЯ (сегодня, точка 8 км от берега):",
-        ] + fmt_marine(marine, today_str=today_str) + [""]
+        lines += ["СОСТОЯНИЕ ЧЁРНОГО МОРЯ ПО ДНЯМ (точка 8 км от берега):", ""]
+        for i, d in enumerate(days):
+            m = marine.get(d["date"])
+            if not m: continue
+            dt = datetime.strptime(d["date"], "%Y-%m-%d")
+            label = day_labels[i] if i < len(day_labels) else f"День +{i}"
+            lines.append(f"-- {label} ({dt.strftime('%d.%m')}) --")
+            lines += fmt_marine(m)
+        lines.append("")
 
     lines += [
         "СТРУКТУРА ОТВЕТА (строго, используй точные заголовки):",
@@ -866,9 +864,13 @@ def main(force=False, new_models=None):
 
     # Marine данные
     marine_raw = fetch_marine()
-    marine = aggregate_marine(marine_raw)
+    marine_dates = [d["date"] for d in days]
+    marine = aggregate_marine_days(marine_raw, marine_dates)
     if marine:
-        print(f"  [AI] Marine: SST={marine.get('sst')}°C wave={marine.get('wave_height_max')}м")
+        first_key = marine_dates[0]
+        first = marine.get(first_key)
+        if first:
+            print(f"  [AI] Marine: SST={first.get('sst')}°C wave={first.get('wave_height_max')}м")
 
     # Проверяем изменились ли данные
     current_hash = data_hash(days)
