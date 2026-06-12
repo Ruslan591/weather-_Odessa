@@ -83,10 +83,24 @@ def git_commit_push(no_push=False):
         if not _GIT_CHANGED:
             return  # нечего пушить
 
-        subprocess.run(
+        pull = subprocess.run(
             ["git", "-C", BASE_DIR, "pull", "--rebase", "origin", "main"],
             capture_output=True, text=True
         )
+        if pull.returncode != 0:
+            print(f"  git pull --rebase ✗: {pull.stderr.strip()}")
+            subprocess.run(
+                ["git", "-C", BASE_DIR, "rebase", "--abort"],
+                capture_output=True, text=True
+            )
+            pull = subprocess.run(
+                ["git", "-C", BASE_DIR, "pull", "--rebase", "origin", "main"],
+                capture_output=True, text=True
+            )
+            if pull.returncode != 0:
+                print(f"  git pull --rebase (retry) ✗: {pull.stderr.strip()}")
+                return
+
         push = subprocess.run(
             ["git", "-C", BASE_DIR, "push", "--force-with-lease"],
             capture_output=True, text=True
