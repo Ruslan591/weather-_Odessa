@@ -76,6 +76,8 @@ HOURLY_FIELDS = ",".join([
     "windspeed_300hPa","winddirection_300hPa",
     "windspeed_250hPa","winddirection_250hPa",
     "windspeed_200hPa","winddirection_200hPa",
+    "windspeed_100hPa","winddirection_100hPa",
+    "windspeed_50hPa","winddirection_50hPa",
     "temperature_50hPa","temperature_30hPa","temperature_10hPa",
 ])
 
@@ -314,6 +316,8 @@ def aggregate_days(data):
     WS300 = col("windspeed_300hPa");  WD300 = col("winddirection_300hPa")
     WS250 = col("windspeed_250hPa");  WD250 = col("winddirection_250hPa")
     WS200 = col("windspeed_200hPa");  WD200 = col("winddirection_200hPa")
+    WS100 = col("windspeed_100hPa");  WD100 = col("winddirection_100hPa")
+    WS50  = col("windspeed_50hPa");   WD50  = col("winddirection_50hPa")
 
     # группировка по датам
     from collections import defaultdict
@@ -375,6 +379,7 @@ def aggregate_days(data):
         ws700m,wd700m=wmd(WS700,WD700); ws500m,wd500m=wmd(WS500,WD500)
         ws300m,wd300m=wmd(WS300,WD300); ws250m,wd250m=wmd(WS250,WD250)
         ws200m,wd200m=wmd(WS200,WD200)
+        ws100m,wd100m=wmd(WS100,WD100); ws50m,wd50m=wmd(WS50,WD50)
         day_data = {
             "date": date,
             "T": {
@@ -442,6 +447,7 @@ def aggregate_days(data):
                 "700":{"s":ws700m,"d":wd700m},"500":{"s":ws500m,"d":wd500m},
                 "300":{"s":ws300m,"d":wd300m},"250":{"s":ws250m,"d":wd250m},
                 "200":{"s":ws200m,"d":wd200m},
+                "100":{"s":ws100m,"d":wd100m},"50":{"s":ws50m,"d":wd50m},
             },
             "freeze_level_m": rnd(mean(frz_vals)),
         }
@@ -581,6 +587,10 @@ def build_prompt(days, marine=None, data_time=None):
         "Ты — опытный синоптик. Напиши профессиональный синоптический анализ прогноза погоды.",
         "Используй все предоставленные данные: температуру по уровням, геопотенциал,",
         "вертикальное движение (омега), влажность, облачность, CAPE, LI, нулевую изотерму.",
+        "Также учитывай состояние стратосферы и полярного вихря (геопотенциал и температура",
+        "на 150-10 гПа, ветер на 100 и 50 гПа): если видна резкая аномалия (потепление",
+        "стратосферы, ослабление/разрушение зонального потока) — упомяни возможное влияние",
+        "на погоду в среднесрочной перспективе.",
         "Анализируй связи между параметрами. Текст живой, профессиональный, без шаблонных фраз.",
         "Если предвидятся значительные события (грозы, шторм, резкое похолодание/потепление,",
         "сильные осадки) — акцентируй на них. Пиши по-русски.",
@@ -635,10 +645,10 @@ def build_prompt(days, marine=None, data_time=None):
             f"  Точка росы: 925={tp.get('Td925')} 850={tp.get('Td850')} 700={tp.get('Td700')} 500={tp.get('Td500')}  деф T-Td: 850={tp.get('def850')} 700={tp.get('def700')}",
             f"  Стратосфера T: 50={tp.get('T50')}C 30={tp.get('T30')}C 10={tp.get('T10')}C",
             f"  ГЕОПОТЕНЦИАЛ (м): 925={gp.get('Z925')} 850={gp.get('Z850')} 700={gp.get('Z700')} 600={gp.get('Z600')} 500={gp.get('Z500')} 400={gp.get('Z400')} 300={gp.get('Z300')} 250={gp.get('Z250')} 200={gp.get('Z200')} 150={gp.get('Z150')} 100={gp.get('Z100')}",
-            f"  Стратосфера Z: 50={gp.get('Z50')} 30={gp.get('Z30')} 10={gp.get('Z10')}",
+            f"  Стратосфера Z: 150={gp.get('Z150')} 100={gp.get('Z100')} 50={gp.get('Z50')} 30={gp.get('Z30')} 10={gp.get('Z10')}",
             f"  ВЛАЖНОСТЬ (%): 925={rh.get('RH925')} 850={rh.get('RH850')} 700={rh.get('RH700')} 500={rh.get('RH500')} 300={rh.get('RH300')}",
             f"  ОМЕГА (Па/с, -=восх): 1000={om.get('W1000')} 925={om.get('W925')} 850={om.get('W850')} 700={om.get('W700')} 600={om.get('W600')} 500={om.get('W500')} 400={om.get('W400')} 300={om.get('W300')}",
-            f"  ВЕТЕР: 925={wp.get('925',{}).get('s')}км/ч {wdir(wp.get('925',{}).get('d'))}  850={wp.get('850',{}).get('s')} {wdir(wp.get('850',{}).get('d'))}  700={wp.get('700',{}).get('s')} {wdir(wp.get('700',{}).get('d'))}  500={wp.get('500',{}).get('s')} {wdir(wp.get('500',{}).get('d'))}  300={wp.get('300',{}).get('s')} {wdir(wp.get('300',{}).get('d'))}  200={wp.get('200',{}).get('s')} {wdir(wp.get('200',{}).get('d'))}",
+            f"  ВЕТЕР: 925={wp.get('925',{}).get('s')}км/ч {wdir(wp.get('925',{}).get('d'))}  850={wp.get('850',{}).get('s')} {wdir(wp.get('850',{}).get('d'))}  700={wp.get('700',{}).get('s')} {wdir(wp.get('700',{}).get('d'))}  500={wp.get('500',{}).get('s')} {wdir(wp.get('500',{}).get('d'))}  300={wp.get('300',{}).get('s')} {wdir(wp.get('300',{}).get('d'))}  200={wp.get('200',{}).get('s')} {wdir(wp.get('200',{}).get('d'))}  100={wp.get('100',{}).get('s')} {wdir(wp.get('100',{}).get('d'))}  50={wp.get('50',{}).get('s')} {wdir(wp.get('50',{}).get('d'))}",
             "",
         ]
 
