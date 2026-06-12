@@ -59,6 +59,10 @@ _upd.gh_put = _local_gh_put
 
 def git_commit_push(no_push=False):
     try:
+        subprocess.run(
+            ["git", "-C", BASE_DIR, "fetch", "origin", "main"],
+            capture_output=True, text=True
+        )
         if _GIT_CHANGED:
             files_str = ", ".join(os.path.basename(p) for p in _GIT_CHANGED)
             subprocess.run(
