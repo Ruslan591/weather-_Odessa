@@ -851,6 +851,45 @@ function drawBlockChart(block, theme) {
 
   var pad = {t:28, b:28, l:34, r:10};
   var cW = W-pad.l-pad.r, cH = H-pad.t-pad.b;
+
+  // multiscale — отдельный путь без vals/xLabels
+  if (data.type === 'multiscale') {
+    var panels = data.panels;
+    var pn = panels.length;
+    var pgap = 8;
+    var panW = (W - pad.l - pad.r - pgap*(pn-1)) / pn;
+    panels.forEach(function(p, pi) {
+      if (p.value === null || p.value === undefined) return;
+      var x0 = pad.l + pi*(panW+pgap);
+      ctx.fillStyle = 'rgba(255,255,255,0.04)';
+      ctx.beginPath();
+      if(ctx.roundRect) ctx.roundRect(x0,pad.t,panW,cH,4); else ctx.rect(x0,pad.t,panW,cH);
+      ctx.fill();
+      var prange = p.max - p.min || 1;
+      var val = p.negate ? -p.value : p.value;
+      var norm = Math.max(0, Math.min(1, (val - p.min) / prange));
+      var barH = norm * cH;
+      var pby = pad.t + cH - barH;
+      var pgr = ctx.createLinearGradient(0,pby,0,pad.t+cH);
+      pgr.addColorStop(0, p.color); pgr.addColorStop(1, p.color+'33');
+      ctx.fillStyle = pgr;
+      ctx.beginPath();
+      if(ctx.roundRect) ctx.roundRect(x0+4,pby,panW-8,barH,3); else ctx.rect(x0+4,pby,panW-8,barH);
+      ctx.fill();
+      var dispVal = p.value;
+      var valStr = (typeof dispVal==='number' && !Number.isInteger(dispVal)) ? dispVal.toFixed(1) : String(Math.round(dispVal));
+      ctx.fillStyle='#fff'; ctx.font='bold 12px Helvetica Neue,sans-serif'; ctx.textAlign='center';
+      ctx.fillText(valStr, x0+panW/2, pby-4);
+      ctx.fillStyle='rgba(255,255,255,0.45)'; ctx.font='9px Helvetica Neue,sans-serif';
+      ctx.fillText(p.unit, x0+panW/2, pby-15);
+      ctx.fillStyle='rgba(255,255,255,0.5)'; ctx.font='10px Helvetica Neue,sans-serif';
+      var plines = p.label.split('
+');
+      plines.forEach(function(ln,li2){ ctx.fillText(ln, x0+panW/2, H-6-(plines.length-1-li2)*13); });
+    });
+    ctx.textAlign='left'; wrap.classList.add('visible'); return;
+  }
+
   var vals = data.values, xLabels = data.xLabels, n = vals.length;
 
   // Сетка
@@ -918,55 +957,6 @@ function drawBlockChart(block, theme) {
       ctx.fillStyle='rgba(255,255,255,0.85)'; ctx.textAlign='center'; ctx.font='11px sans-serif';
       ctx.fillText(Math.round(vals[pi])+'°', toX(pi), toY(vals[pi])-8);
     }
-  } else if (data.type === 'multiscale') {
-    var panels = data.panels;
-    var n = panels.length;
-    var gap = 8;
-    var panW = (W - pad.l - pad.r - gap*(n-1)) / n;
-    panels.forEach(function(p, i) {
-      if (p.value === null || p.value === undefined) return;
-      var x0 = pad.l + i*(panW+gap);
-      // фон панели
-      ctx.fillStyle = 'rgba(255,255,255,0.04)';
-      ctx.beginPath();
-      if(ctx.roundRect) ctx.roundRect(x0,pad.t,panW,cH,4);
-      else ctx.rect(x0,pad.t,panW,cH);
-      ctx.fill();
-      // нормируем значение
-      var range = p.max - p.min || 1;
-      var val = p.negate ? -p.value : p.value;
-      var norm = Math.max(0, Math.min(1, (val - p.min) / range));
-      var barH = norm * cH;
-      var by = pad.t + cH - barH;
-      // бар
-      var gr = ctx.createLinearGradient(0,by,0,pad.t+cH);
-      gr.addColorStop(0, p.color);
-      gr.addColorStop(1, p.color+'33');
-      ctx.fillStyle = gr;
-      ctx.beginPath();
-      if(ctx.roundRect) ctx.roundRect(x0+4, by, panW-8, barH, 3);
-      else ctx.rect(x0+4, by, panW-8, barH);
-      ctx.fill();
-      // значение сверху
-      var dispVal = p.negate ? p.value : p.value;
-      var valStr = (typeof dispVal === 'number' && !Number.isInteger(dispVal))
-        ? dispVal.toFixed(1) : String(Math.round(dispVal));
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 12px Helvetica Neue, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(valStr, x0+panW/2, by - 4);
-      // единица
-      ctx.fillStyle = 'rgba(255,255,255,0.45)';
-      ctx.font = '9px Helvetica Neue, sans-serif';
-      ctx.fillText(p.unit, x0+panW/2, by - 15);
-      // подпись снизу (многострочная)
-      ctx.fillStyle = 'rgba(255,255,255,0.5)';
-      ctx.font = '10px Helvetica Neue, sans-serif';
-      var lines = p.label.split('\n');
-      lines.forEach(function(ln, li2) {
-        ctx.fillText(ln, x0+panW/2, H - 6 - (lines.length-1-li2)*13);
-      });
-    });
   }
   ctx.textAlign='left';
   wrap.classList.add('visible');
