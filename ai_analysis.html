@@ -894,7 +894,7 @@ function drawBlockChart(block, theme) {
       ctx.fillStyle='rgba(255,255,255,0.8)'; ctx.textAlign='center'; ctx.font='bold 11px sans-serif';
       ctx.fillText(Math.round(vals[bi]), bx+bw/2, by-4);
     }
-  } else {
+  } else if (data.type !== 'multiscale') {
     // line
     ctx.strokeStyle=theme.accent; ctx.lineWidth=2.5; ctx.lineJoin='round';
     ctx.beginPath(); var started=false;
