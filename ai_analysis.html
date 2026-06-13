@@ -919,6 +919,56 @@ function drawBlockChart(block, theme) {
       ctx.fillText(Math.round(vals[pi])+'°', toX(pi), toY(vals[pi])-8);
     }
   }
+  } else if (data.type === 'multiscale') {
+    var panels = data.panels;
+    var n = panels.length;
+    var gap = 8;
+    var panW = (W - pad.l - pad.r - gap*(n-1)) / n;
+    panels.forEach(function(p, i) {
+      if (p.value === null || p.value === undefined) return;
+      var x0 = pad.l + i*(panW+gap);
+      // фон панели
+      ctx.fillStyle = 'rgba(255,255,255,0.04)';
+      ctx.beginPath();
+      if(ctx.roundRect) ctx.roundRect(x0,pad.t,panW,cH,4);
+      else ctx.rect(x0,pad.t,panW,cH);
+      ctx.fill();
+      // нормируем значение
+      var range = p.max - p.min || 1;
+      var val = p.negate ? -p.value : p.value;
+      var norm = Math.max(0, Math.min(1, (val - p.min) / range));
+      var barH = norm * cH;
+      var by = pad.t + cH - barH;
+      // бар
+      var gr = ctx.createLinearGradient(0,by,0,pad.t+cH);
+      gr.addColorStop(0, p.color);
+      gr.addColorStop(1, p.color+'33');
+      ctx.fillStyle = gr;
+      ctx.beginPath();
+      if(ctx.roundRect) ctx.roundRect(x0+4, by, panW-8, barH, 3);
+      else ctx.rect(x0+4, by, panW-8, barH);
+      ctx.fill();
+      // значение сверху
+      var dispVal = p.negate ? p.value : p.value;
+      var valStr = (typeof dispVal === 'number' && !Number.isInteger(dispVal))
+        ? dispVal.toFixed(1) : String(Math.round(dispVal));
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 12px Helvetica Neue, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(valStr, x0+panW/2, by - 4);
+      // единица
+      ctx.fillStyle = 'rgba(255,255,255,0.45)';
+      ctx.font = '9px Helvetica Neue, sans-serif';
+      ctx.fillText(p.unit, x0+panW/2, by - 15);
+      // подпись снизу (многострочная)
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.font = '10px Helvetica Neue, sans-serif';
+      var lines = p.label.split('\n');
+      lines.forEach(function(ln, li2) {
+        ctx.fillText(ln, x0+panW/2, H - 6 - (lines.length-1-li2)*13);
+      });
+    });
+  }
   ctx.textAlign='left';
   wrap.classList.add('visible');
 }
@@ -983,15 +1033,28 @@ function getNext3Data(text) {
 }
 
 function getWarningsData(text) {
-  var cape=null, li=null;
-  var mc=text.match(/CAPE[^\d]*(\d{2,4})/i); if(mc) cape=parseInt(mc[1]);
-  var ml=text.match(/(?:LI|неустойчивости)[^\d-]*(-?\d{1,2}(?:[.,]\d)?)/i);
-  if(ml) li=Math.round(Math.abs(parseFloat(ml[1].replace(',','.')))*100);
-  if(!cape && !li) return null;
+  var cape=null, li=null, hum=null, prec=null;
+  var m;
+  m=text.match(/CAPE[^\d]*(\d{2,4})/i); if(m) cape=parseInt(m[1]);
+  m=text.match(/(?:LI|неустойчивости)[^\d-]*(-?\d{1,2}(?:[.,]\d)?)/i);
+  if(m) li=parseFloat(m[1].replace(',','.'));
+  m=text.match(/(\d{1,3})%[^.]*(?:700|влаж|средн)/i);
+  if(!m) m=text.match(/влаж\w*[^\d]*(\d{1,3})%/i);
+  if(!m) m=text.match(/(\d{1,3})%\s*на\s*(?:700|850)/i);
+  if(m) hum=parseInt(m[1]);
+  m=text.match(/вероятност\w*[^\d]*(\d{1,3})%/i);
+  if(!m) m=text.match(/(\d{1,3})%[^.]*вероятн/i);
+  if(m) prec=parseInt(m[1]);
+  if(!cape && !li && !hum && !prec) return null;
   return {
-    type:'bar', label:'CAPE / |LI|×100',
-    xLabels:['CAPE','|LI|×100'],
-    values:[cape, li]
+    type:'multiscale',
+    panels:[
+      { label:'CAPE', unit:'Дж/кг', value:cape, min:0, max:1000, color:'#ff7043' },
+      { label:'LI',   unit:'°C',    value:li,   min:-6, max:2,   color:'#ff8a65', negate:true },
+      { label:'Влажн
+700гПа', unit:'%', value:hum, min:0, max:100, color:'#4fc3f7' },
+      { label:'Осадки', unit:'%',   value:prec, min:0, max:100, color:'#81d4fa' },
+    ]
   };
 }
 
