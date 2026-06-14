@@ -735,7 +735,7 @@ def preprocess_tts(text):
 
 async def _generate_tts_async(text, out_path):
     text = preprocess_tts(text)
-    communicate = edge_tts.Communicate(text, voice="ru-RU-SvetlanaNeural", rate="-5%")
+    communicate = edge_tts.Communicate(text, voice="ru-RU-SvetlanaNeural", rate="+0%")
     await communicate.save(out_path)
 
 def generate_tts(text, out_path):
