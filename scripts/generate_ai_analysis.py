@@ -78,6 +78,8 @@ HOURLY_FIELDS = ",".join([
     "windspeed_200hPa","winddirection_200hPa",
     "windspeed_100hPa","winddirection_100hPa",
     "windspeed_50hPa","winddirection_50hPa",
+    "windspeed_10hPa","winddirection_10hPa",
+    "cloud_cover_10hPa","relative_humidity_10hPa",
     "temperature_50hPa","temperature_30hPa","temperature_10hPa",
 ])
 
@@ -312,6 +314,8 @@ def aggregate_days(data):
     WS200 = col("windspeed_200hPa");  WD200 = col("winddirection_200hPa")
     WS100 = col("windspeed_100hPa");  WD100 = col("winddirection_100hPa")
     WS50  = col("windspeed_50hPa");   WD50  = col("winddirection_50hPa")
+    WS10  = col("windspeed_10hPa");   WD10  = col("winddirection_10hPa")
+    CC10  = col("cloud_cover_10hPa"); RH10  = col("relative_humidity_10hPa")
 
     # группировка по датам
     from collections import defaultdict
