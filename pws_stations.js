@@ -13,7 +13,7 @@ var PWS_SYNC_STATIONS = [
     { id: "IODESS44",  name: "Аркадия",           pressureOffset: -1.8 },
     { id: "IODESS16",  name: "Таирова",           pressureOffset: 1.2  },
     { id: "IODESS31",  name: "Савиньон",          pressureOffset: 17.9 },
-    { id: "IODESS37",  name: "Застава",           pressureOffset: 8.2  },
+    { id: "IODESS37",  name: "Застава",           pressureOffset: 2  },
     { id: "IKRASN91",  name: "пос. Степовое",     pressureOffset: -1.5 },
 ];
 /* Публичные API ключи Weather Underground */
