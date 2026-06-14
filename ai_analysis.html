@@ -647,6 +647,7 @@ var _bgAnim = null;
 
 var BLOCK_THEMES = {
   today:    { from: '#0a1628', to: '#0d2137', accent: '#4fc3f7' },
+  tonight:  { from: '#070d1a', to: '#0b1830', accent: '#4fc3f7' },
   tomorrow: { from: '#0e1a10', to: '#162818', accent: '#81c784' },
   next3:    { from: '#1a1000', to: '#251808', accent: '#ffb74d' },
   marine:   { from: '#001a22', to: '#072a36', accent: '#4dd0e1' },
@@ -964,19 +965,90 @@ function drawBlockChart(block, theme) {
 function getChartData(block) {
   // Пытаемся извлечь данные из текста блока
   var text = block.text || '';
-  if (block.key === 'today' || block.key === 'tomorrow') {
-    return getTempRange(text, block.key);
+  if (block.key === 'tonight' || block.key === 'today') {
+    return getTonightPanels(block, text);
+  }
+  if (block.key === 'tomorrow') {
+    return getTomorrowPanels(block, text);
   }
   if (block.key === 'next3') {
-    return getNext3Data(text);
+    return getNext3Panels(block, text);
+  }
+  if (block.key === 'marine') {
+    return getMarinePanels(text);
   }
   if (block.key === 'warnings') {
     return getWarningsData(text);
   }
   if (block.key === 'trend') {
-    return getTrendData(text);
+    return getTrendPanels(text);
   }
   return null;
+}
+
+// ── Дашборды-панели для всех блоков ────────────────────────────────────────
+function getTonightPanels(block, text) {
+  var panels = [];
+  if (block.t_min != null) panels.push({label:'T мин', unit:'°C', value:block.t_min, min:-10, max:35, color:'#4fc3f7'});
+  var m = text.match(/ощущени\w*\s*около\s*[+-]?(\d{1,2}(?:[.,]\d)?)/i);
+  if (m) panels.push({label:'ощущ.', unit:'°C', value:parseFloat(m[1].replace(',','.')), min:-10, max:35, color:'#80deea'});
+  m = text.match(/ветр\w*\s*до\s*(\d{1,2})\s*м\/с|ветр\w*[^\d]*(\d{1,2})\s*м\/с/i);
+  if (m) panels.push({label:'ветер', unit:'м/с', value:parseInt(m[1]||m[2]), min:0, max:20, color:'#90caf9'});
+  m = text.match(/давлени\w*\s*(\d{3,4})\s*гПа/i);
+  if (m) panels.push({label:'давл.', unit:'гПа', value:parseInt(m[1]), min:990, max:1030, color:'#ce93d8'});
+  if (!panels.length) return null;
+  return {type:'multiscale', panels:panels};
+}
+
+function getTomorrowPanels(block, text) {
+  var panels = [];
+  if (block.t_min != null) panels.push({label:'T мин', unit:'°C', value:block.t_min, min:-10, max:35, color:'#81c784'});
+  if (block.t_max != null) panels.push({label:'T макс', unit:'°C', value:block.t_max, min:-10, max:35, color:'#ffb74d'});
+  var m = text.match(/CAPE[^\d]*(\d{2,4})/i);
+  if (m) panels.push({label:'CAPE', unit:'Дж/кг', value:parseInt(m[1]), min:0, max:1000, color:'#ff7043'});
+  m = text.match(/300\s*гПа[^\d]*(\d{1,2})\s*м\/с/i);
+  if (m) panels.push({label:'ветер\n300гПа', unit:'м/с', value:parseInt(m[1]), min:0, max:35, color:'#90caf9'});
+  if (!panels.length) return null;
+  return {type:'multiscale', panels:panels};
+}
+
+function getNext3Panels(block, text) {
+  var panels = [];
+  if (block.t_min != null) panels.push({label:'T мин', unit:'°C', value:block.t_min, min:-10, max:35, color:'#81c784'});
+  if (block.t_max != null) panels.push({label:'T макс', unit:'°C', value:block.t_max, min:-10, max:35, color:'#ffb74d'});
+  var m = text.match(/500\s*гПа[^\d]*(\d{1,2})\s*м\/с/i);
+  if (m) panels.push({label:'ветер\n500гПа', unit:'м/с', value:parseInt(m[1]), min:0, max:35, color:'#90caf9'});
+  m = text.match(/CAPE[^\d]*(\d{2,4})/i);
+  if (m) panels.push({label:'CAPE', unit:'Дж/кг', value:parseInt(m[1]), min:0, max:1000, color:'#ff7043'});
+  if (!panels.length) return null;
+  return {type:'multiscale', panels:panels};
+}
+
+function getMarinePanels(text) {
+  var panels = [];
+  var m = text.match(/текущих\s*[+-]?(\d{1,2}(?:[.,]\d)?)/i);
+  if (m) panels.push({label:'T воды\nсейчас', unit:'°C', value:parseFloat(m[1].replace(',','.')), min:10, max:28, color:'#4dd0e1'});
+  m = text.match(/до\s*[+-]?(\d{1,2}(?:[.,]\d)?)\s*°?C\s*к/i);
+  if (m) panels.push({label:'T воды\nпозже', unit:'°C', value:parseFloat(m[1].replace(',','.')), min:10, max:28, color:'#26c6da'});
+  m = text.match(/(\d{1,3})[–-](\d{1,3})\s*см/);
+  if (m) panels.push({label:'волна', unit:'см', value:(parseInt(m[1])+parseInt(m[2]))/2, min:0, max:150, color:'#64b5f6'});
+  else { m = text.match(/до\s*(\d{1,3})\s*см/); if(m) panels.push({label:'волна', unit:'см', value:parseInt(m[1]), min:0, max:150, color:'#64b5f6'}); }
+  m = text.match(/период\w*\s*(\d{1,2})[–-](\d{1,2})\s*сек/i);
+  if (m) panels.push({label:'период', unit:'с', value:(parseInt(m[1])+parseInt(m[2]))/2, min:0, max:10, color:'#80deea'});
+  if (!panels.length) return null;
+  return {type:'multiscale', panels:panels};
+}
+
+function getTrendPanels(text) {
+  var panels = [];
+  var m = text.match(/(\d{1,2})[–-](\d{1,2})°C/);
+  if (m) panels.push({label:'T днём', unit:'°C', value:(parseInt(m[1])+parseInt(m[2]))/2, min:-10, max:35, color:'#ce93d8'});
+  m = text.match(/50\s*гПа\D*(-?\d{1,3})/i);
+  if (m) panels.push({label:'T\n50гПа', unit:'°C', value:parseInt(m[1]), min:-70, max:-30, color:'#b39ddb'});
+  m = text.match(/поток\s*(\d{1,2})[–-](\d{1,2})\s*м\/с/i);
+  if (m) panels.push({label:'ветер\nстрато', unit:'м/с', value:(parseInt(m[1])+parseInt(m[2]))/2, min:0, max:20, color:'#90caf9'});
+  if (!panels.length) return null;
+  return {type:'multiscale', panels:panels};
 }
 
 function getTempRange(text, key) {
