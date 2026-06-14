@@ -221,9 +221,20 @@ def preprocess_tts(text):
 
 _selected_voice = VOICES[0]
 
-async def _tts_async(text, out_path):
+async def _tts_async(text, out_path, collect_boundaries=False):
     communicate = edge_tts.Communicate(text, voice=_selected_voice, rate=RATE, pitch=PITCH)
-    await communicate.save(out_path)
+    boundaries = []
+    with open(out_path, 'wb') as f:
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                f.write(chunk["data"])
+            elif chunk["type"] == "WordBoundary" and collect_boundaries:
+                boundaries.append({
+                    "offset": chunk["offset"] / 1e7,
+                    "duration": chunk["duration"] / 1e7,
+                    "text": chunk["text"],
+                })
+    return boundaries
 
 def strip_silence(path):
     """Убирает тишину в начале и конце mp3 через ffmpeg."""
@@ -241,25 +252,25 @@ def strip_silence(path):
     elif os.path.exists(tmp):
         os.remove(tmp)
 
-def generate_block_tts(text, out_path, retries=3, delay=5, trim_silence=False):
+def generate_block_tts(text, out_path, retries=3, delay=5, trim_silence=False, collect_boundaries=False):
     import time
     clean = preprocess_tts(text)
     if not clean.strip():
-        return 0
+        return (0, []) if collect_boundaries else 0
     for attempt in range(1, retries + 1):
         try:
-            asyncio.run(_tts_async(clean, out_path))
+            boundaries = asyncio.run(_tts_async(clean, out_path, collect_boundaries))
             if trim_silence:
                 strip_silence(out_path)
             size_kb = os.path.getsize(out_path) // 1024
             print(f"    \u2192 {os.path.basename(out_path)} ({size_kb} кб)")
-            return size_kb
+            return (size_kb, boundaries) if collect_boundaries else size_kb
         except Exception as e:
             print(f"    [TTS] Ошибка (попытка {attempt}/{retries}): {e}")
             if attempt < retries:
                 time.sleep(delay)
     print(f"    [TTS] Не удалось сгенерировать {os.path.basename(out_path)} — пропускаю")
-    return 0
+    return (0, []) if collect_boundaries else 0
 
 def get_mp3_duration(path):
     try:
@@ -267,6 +278,32 @@ def get_mp3_duration(path):
         return round(size / 16000, 1)
     except:
         return 0
+
+SENT_RE = re.compile(r'[^.!?]+[.!?]+(?:\s+|$)|[^.!?]+$')
+
+def split_sentences(text):
+    return [s.strip() for s in SENT_RE.findall(text) if s.strip()]
+
+def build_text_segments(section_text, date_prefix, boundaries):
+    sentences = split_sentences(section_text)
+    if not sentences or not boundaries:
+        return []
+    segments = []
+    bi = 0
+    n = len(boundaries)
+    for si, sent in enumerate(sentences):
+        if bi >= n:
+            break
+        prefix = date_prefix if si == 0 else ''
+        wcount = max(1, len(preprocess_tts(prefix + sent).split()))
+        start_i = bi
+        end_i = min(bi + wcount, n) - 1
+        start = boundaries[start_i]["offset"]
+        end = boundaries[end_i]["offset"] + boundaries[end_i]["duration"]
+        segments.append({"text": sent, "start": round(start, 2), "end": round(end, 2)})
+        bi += wcount
+    return segments
+
 
 def main(force=False):
     if not os.path.exists(INPUT_FILE):
@@ -370,7 +407,8 @@ def main(force=False):
 
         tts_text = DATE_PREFIX.get(key, '') + section_text
         out_path = os.path.join(BLOCKS_DIR, filename)
-        size_kb = generate_block_tts(tts_text, out_path)
+        size_kb, _boundaries = generate_block_tts(tts_text, out_path, collect_boundaries=True)
+        text_segments = build_text_segments(section_text, DATE_PREFIX.get(key, ''), _boundaries)
 
         if size_kb > 0:
             # Постраничные mp3
@@ -399,6 +437,7 @@ def main(force=False):
                 "text":     section_text,
                 "duration": get_mp3_duration(out_path),
                 "pages":    page_files,
+                "text_segments": text_segments,
                 "t_min":    _t_min,
                 "t_max":    _t_max,
             })
