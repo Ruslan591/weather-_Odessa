@@ -378,6 +378,7 @@ def aggregate_days(data):
         ws300m,wd300m=wmd(WS300,WD300); ws250m,wd250m=wmd(WS250,WD250)
         ws200m,wd200m=wmd(WS200,WD200)
         ws100m,wd100m=wmd(WS100,WD100); ws50m,wd50m=wmd(WS50,WD50)
+        ws10m,wd10m=wmd(WS10,WD10)
         day_data = {
             "date": date,
             "T": {
@@ -404,7 +405,7 @@ def aggregate_days(data):
                 "mid": rnd(mean(v(CCM))), "high": rnd(mean(v(CCH))),
                 "c925": rnd(mean(v(CC925))), "c850": rnd(mean(v(CC850))),
                 "c700": rnd(mean(v(CC700))), "c500": rnd(mean(v(CC500))),
-                "c300": rnd(mean(v(CC300))),
+                "c300": rnd(mean(v(CC300))), "c10": rnd(mean(v(CC10))),
             },
             "conv": {
                 "CAPE_max": rnd(max((x for x in v(CAPE) if x is not None), default=None)),
@@ -432,7 +433,7 @@ def aggregate_days(data):
             "rh": {
                 "RH925":rnd(mean(v(RH925))),"RH850":rnd(mean(v(RH850))),
                 "RH700":rnd(mean(v(RH700))),"RH500":rnd(mean(v(RH500))),
-                "RH300":rnd(mean(v(RH300))),
+                "RH300":rnd(mean(v(RH300))),"RH10":rnd(mean(v(RH10))),
             },
             "omega": {
                 "W1000":rnd(mean(v(W1000)),3),"W925":rnd(mean(v(W925)),3),
@@ -446,6 +447,7 @@ def aggregate_days(data):
                 "300":{"s":ws300m,"d":wd300m},"250":{"s":ws250m,"d":wd250m},
                 "200":{"s":ws200m,"d":wd200m},
                 "100":{"s":ws100m,"d":wd100m},"50":{"s":ws50m,"d":wd50m},
+                "10":{"s":ws10m,"d":wd10m},
             },
             "freeze_level_m": rnd(mean(frz_vals)),
         }
@@ -636,7 +638,7 @@ def build_prompt(days, marine=None, data_time=None):
             f"  Погода: {wc_label}",
             f"  Ветер 10м: ср {ws.get('mean_kmh')} макс {ws.get('max_kmh')} пор {ws.get('gust_max_kmh')} км/ч  80м: {ws.get('spd80')} км/ч",
             f"  Облачность: общ {cl.get('total')}% низ {cl.get('low')}% ср {cl.get('mid')}% выс {cl.get('high')}%",
-            f"  Облачность по уровням: 925={cl.get('c925')}% 850={cl.get('c850')}% 700={cl.get('c700')}% 500={cl.get('c500')}% 300={cl.get('c300')}%",
+            f"  Облачность по уровням: 925={cl.get('c925')}% 850={cl.get('c850')}% 700={cl.get('c700')}% 500={cl.get('c500')}% 300={cl.get('c300')}% 10={cl.get('c10')}%",
             f"  Нулевая изотерма: {d['freeze_level_m']}м",
             f"  КОНВЕКЦИЯ: CAPE макс/ср={cv.get('CAPE_max')}/{cv.get('CAPE_mean')} Дж/кг  LI мин={cv.get('LI_min')}  CIN={cv.get('CIN')}",
             f"  ПРОФИЛЬ Т (C): 925={tp.get('T925')} 850={tp.get('T850')} 700={tp.get('T700')} 600={tp.get('T600')} 500={tp.get('T500')} 400={tp.get('T400')} 300={tp.get('T300')} 250={tp.get('T250')} 200={tp.get('T200')}",
@@ -644,9 +646,9 @@ def build_prompt(days, marine=None, data_time=None):
             f"  Стратосфера T: 50={tp.get('T50')}C 30={tp.get('T30')}C 10={tp.get('T10')}C",
             f"  ГЕОПОТЕНЦИАЛ (м): 925={gp.get('Z925')} 850={gp.get('Z850')} 700={gp.get('Z700')} 600={gp.get('Z600')} 500={gp.get('Z500')} 400={gp.get('Z400')} 300={gp.get('Z300')} 250={gp.get('Z250')} 200={gp.get('Z200')} 150={gp.get('Z150')} 100={gp.get('Z100')}",
             f"  Стратосфера Z: 150={gp.get('Z150')} 100={gp.get('Z100')} 50={gp.get('Z50')} 30={gp.get('Z30')} 10={gp.get('Z10')}",
-            f"  ВЛАЖНОСТЬ (%): 925={rh.get('RH925')} 850={rh.get('RH850')} 700={rh.get('RH700')} 500={rh.get('RH500')} 300={rh.get('RH300')}",
+            f"  ВЛАЖНОСТЬ (%): 925={rh.get('RH925')} 850={rh.get('RH850')} 700={rh.get('RH700')} 500={rh.get('RH500')} 300={rh.get('RH300')} 10={rh.get('RH10')}",
             f"  ОМЕГА (Па/с, -=восх): 1000={om.get('W1000')} 925={om.get('W925')} 850={om.get('W850')} 700={om.get('W700')} 600={om.get('W600')} 500={om.get('W500')} 400={om.get('W400')} 300={om.get('W300')}",
-            f"  ВЕТЕР: 925={wp.get('925',{}).get('s')}км/ч {wdir(wp.get('925',{}).get('d'))}  850={wp.get('850',{}).get('s')} {wdir(wp.get('850',{}).get('d'))}  700={wp.get('700',{}).get('s')} {wdir(wp.get('700',{}).get('d'))}  500={wp.get('500',{}).get('s')} {wdir(wp.get('500',{}).get('d'))}  300={wp.get('300',{}).get('s')} {wdir(wp.get('300',{}).get('d'))}  200={wp.get('200',{}).get('s')} {wdir(wp.get('200',{}).get('d'))}  100={wp.get('100',{}).get('s')} {wdir(wp.get('100',{}).get('d'))}  50={wp.get('50',{}).get('s')} {wdir(wp.get('50',{}).get('d'))}",
+            f"  ВЕТЕР: 925={wp.get('925',{}).get('s')}км/ч {wdir(wp.get('925',{}).get('d'))}  850={wp.get('850',{}).get('s')} {wdir(wp.get('850',{}).get('d'))}  700={wp.get('700',{}).get('s')} {wdir(wp.get('700',{}).get('d'))}  500={wp.get('500',{}).get('s')} {wdir(wp.get('500',{}).get('d'))}  300={wp.get('300',{}).get('s')} {wdir(wp.get('300',{}).get('d'))}  200={wp.get('200',{}).get('s')} {wdir(wp.get('200',{}).get('d'))}  100={wp.get('100',{}).get('s')} {wdir(wp.get('100',{}).get('d'))}  50={wp.get('50',{}).get('s')} {wdir(wp.get('50',{}).get('d'))}  10={wp.get('10',{}).get('s')} {wdir(wp.get('10',{}).get('d'))}",
             "",
         ]
 
