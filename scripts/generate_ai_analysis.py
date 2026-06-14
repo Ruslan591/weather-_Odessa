@@ -688,6 +688,9 @@ def preprocess_tts(text):
     text = text.replace('CIN', 'конвективное торможение')
     # Единицы давления
     text = text.replace('гПа', 'гектопаскалей')
+    # Тильда (приближение) и метры
+    text = text.replace('~', 'около ')
+    text = re.sub(r'(\d)\s?м(?!/с)\b', r'\1 метров', text)
     # Градусы со склонением
     def _grad(n):
         try: n = abs(int(float(str(n).replace(',','.')))) % 100
