@@ -14,6 +14,8 @@ import hashlib
 
 BASE_DIR      = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUTPUT_FILE   = os.path.join(BASE_DIR, "data", "forecast_analysis_claude.json")
+OUTPUT_FILE_GEMINI = os.path.join(BASE_DIR, "data", "forecast_analysis_gemini.json")
+GEMINI_MODEL  = "gemini-2.0-flash"
 ENV_FILE      = os.path.join(BASE_DIR, ".env")
 TIMEOUT       = 30
 
@@ -29,6 +31,24 @@ def load_api_key():
                 if line.startswith("ANTHROPIC_API_KEY="):
                     return line.strip().split("=", 1)[1]
     return os.environ.get("ANTHROPIC_API_KEY")
+
+def load_gemini_api_key():
+    if os.path.exists(ENV_FILE):
+        with open(ENV_FILE, "r") as f:
+            for line in f:
+                if line.startswith("GEMINI_API_KEY="):
+                    return line.strip().split("=", 1)[1]
+    return os.environ.get("GEMINI_API_KEY")
+
+def gemini_enabled():
+    """Проверяет флаг GEMINI_ANALYSIS_ENABLED в .env (default: false)."""
+    if os.path.exists(ENV_FILE):
+        with open(ENV_FILE, "r") as f:
+            for line in f:
+                if line.startswith("GEMINI_ANALYSIS_ENABLED="):
+                    val = line.strip().split("=", 1)[1].lower()
+                    return val not in ("0", "false", "no", "off")
+    return False
 
 def ai_enabled():
     """Проверяет флаг AI_ANALYSIS_ENABLED в .env (default: true)."""
@@ -779,6 +799,50 @@ def call_claude(prompt, api_key):
         resp = json.loads(r.read().decode())
     return resp["content"][0]["text"]
 
+def call_gemini(prompt, api_key, model=GEMINI_MODEL):
+    payload = json.dumps({
+        "contents": [{"parts": [{"text": prompt}]}]
+    }).encode()
+
+    url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
+           f"{model}:generateContent?key={api_key}")
+
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST"
+    )
+    with urllib.request.urlopen(req, timeout=60) as r:
+        resp = json.loads(r.read().decode())
+    return resp["candidates"][0]["content"]["parts"][0]["text"]
+
+def generate_gemini_analysis(prompt, now_iso, current_hash, days, run_key):
+    api_key = load_gemini_api_key()
+    if not api_key:
+        print("  [AI-Gemini] GEMINI_API_KEY не найден -- пропускаю")
+        return
+    try:
+        text = call_gemini(prompt, api_key)
+    except Exception as e:
+        print(f"  [AI-Gemini] Ошибка Gemini API: {e}")
+        return
+
+    result = {
+        "generated_at": now_iso,
+        "last_checked": now_iso,
+        "changed": True,
+        "data_hash": current_hash,
+        "days_count": len(days),
+        "text": text,
+        "last_run_key": run_key,
+        "provider": "gemini",
+    }
+    with open(OUTPUT_FILE_GEMINI, "w", encoding="utf-8") as f:
+        json.dump(result, f, ensure_ascii=False, indent=2)
+
+    print(f"  [AI-Gemini] ✅ Анализ сохранён ({len(text)} символов)")
+
 # ── Расписание (data/ai_schedule.json) ─────────────────────────────────────────
 
 SCHEDULE_FILE = os.path.join(BASE_DIR, "data", "ai_schedule.json")
@@ -942,6 +1006,9 @@ def main(force=False, new_models=None):
         json.dump(result, f, ensure_ascii=False, indent=2)
 
     print(f"  [AI] ✅ Анализ сохранён ({len(text)} символов)")
+
+    if gemini_enabled():
+        generate_gemini_analysis(prompt, now_iso, current_hash, days, run_key)
 
 if __name__ == "__main__":
     import argparse
