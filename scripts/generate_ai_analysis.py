@@ -799,9 +799,18 @@ def call_claude(prompt, api_key):
         resp = json.loads(r.read().decode())
     return resp["content"][0]["text"]
 
+GEMINI_STYLE_INSTRUCTION = (
+    "Текст должен иметь вид профессиональной метеосводки: сухо, по делу, "
+    "без художественных метафор и драматизации (избегай оборотов вроде "
+    "'завоюет инициативу', 'продолжит радовать', 'по-настоящему жаркой', "
+    "'уходящего влажного массива'). Все числовые значения округляй до целых "
+    "(температуру, скорость ветра, осадки, высоту волны) — без десятых долей."
+)
+
 def call_gemini(prompt, api_key, model=GEMINI_MODEL):
     payload = json.dumps({
-        "contents": [{"parts": [{"text": prompt}]}]
+        "contents": [{"parts": [{"text": prompt}]}],
+        "systemInstruction": {"parts": [{"text": GEMINI_STYLE_INSTRUCTION}]}
     }).encode()
 
     url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
