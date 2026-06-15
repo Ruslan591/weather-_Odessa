@@ -40,6 +40,16 @@ def load_gemini_api_key():
                     return line.strip().split("=", 1)[1]
     return os.environ.get("GEMINI_API_KEY")
 
+def claude_enabled():
+    """Проверяет флаг CLAUDE_ANALYSIS_ENABLED в .env (default: true)."""
+    if os.path.exists(ENV_FILE):
+        with open(ENV_FILE, "r") as f:
+            for line in f:
+                if line.startswith("CLAUDE_ANALYSIS_ENABLED="):
+                    val = line.strip().split("=", 1)[1].lower()
+                    return val not in ("0", "false", "no", "off")
+    return True
+
 def gemini_enabled():
     """Проверяет флаг GEMINI_ANALYSIS_ENABLED в .env (default: false)."""
     if os.path.exists(ENV_FILE):
@@ -996,25 +1006,28 @@ def main(force=False, new_models=None):
     prompt = build_prompt(days, marine=marine, data_time=data_time)
     print(f"  [AI] Промпт: ~{len(prompt.split())} слов, запрос к Claude...")
 
-    try:
-        text = call_claude(prompt, api_key)
-    except Exception as e:
-        print(f"  [AI] Ошибка Claude API: {e}")
-        return
+    if claude_enabled():
+        try:
+            text = call_claude(prompt, api_key)
+        except Exception as e:
+            print(f"  [AI] Ошибка Claude API: {e}")
+            return
 
-    result = {
-        "generated_at": now_iso,
-        "last_checked": now_iso,
-        "changed": True,
-        "data_hash": current_hash,
-        "days_count": len(days),
-        "text": text,
-        "last_run_key": run_key,
-    }
-    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-        json.dump(result, f, ensure_ascii=False, indent=2)
+        result = {
+            "generated_at": now_iso,
+            "last_checked": now_iso,
+            "changed": True,
+            "data_hash": current_hash,
+            "days_count": len(days),
+            "text": text,
+            "last_run_key": run_key,
+        }
+        with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+            json.dump(result, f, ensure_ascii=False, indent=2)
 
-    print(f"  [AI] ✅ Анализ сохранён ({len(text)} символов)")
+        print(f"  [AI] ✅ Анализ сохранён ({len(text)} символов)")
+    else:
+        print("  [AI] Claude отключён (CLAUDE_ANALYSIS_ENABLED=false) -- пропускаю")
 
     if gemini_enabled():
         generate_gemini_analysis(prompt, now_iso, current_hash, days, run_key)
