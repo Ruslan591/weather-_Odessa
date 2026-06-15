@@ -877,11 +877,21 @@ def load_schedule():
             print(f"  [AI] Ошибка чтения ai_schedule.json: {e}")
     return default
 
-def _matching_time_point(schedule, now_utc):
-    """Возвращает строку 'HH:MM' если сейчас попадаем в точку расписания, иначе None."""
+def _provider_match(entry_provider, provider):
+    """Проверяет, входит ли provider в entry_provider (строка/список/отсутствует=все)."""
+    if entry_provider is None:
+        return True
+    if isinstance(entry_provider, str):
+        return entry_provider == provider
+    return provider in entry_provider
+
+def _matching_time_point(schedule, now_utc, provider):
+    """Возвращает строку 'HH:MM' если сейчас попадаем в точку расписания для provider, иначе None."""
     tol = schedule.get("tolerance_min", 20) * 60
     weekday = (now_utc.weekday() + 1) % 7  # 0=Вс..6=Сб (как в ai_schedule.py)
     for tp in schedule.get("time_points", []):
+        if not _provider_match(tp.get("provider"), provider):
+            continue
         days = tp.get("days", list(range(7)))
         if weekday not in days:
             continue
@@ -890,30 +900,39 @@ def _matching_time_point(schedule, now_utc):
             return f"{tp['hour']:02d}:{tp['minute']:02d}"
     return None
 
-def cooldown_ok(existing, new_models=None, force=False):
+def cooldown_ok(existing, new_models=None, force=False, provider="claude"):
     if force:
         return True, "force"
     new_models = new_models or []
     schedule = load_schedule()
     now_utc = datetime.now(timezone.utc)
 
-    tp = _matching_time_point(schedule, now_utc)
+    tp = _matching_time_point(schedule, now_utc, provider)
     if tp:
         run_key = f"time:{now_utc.strftime('%Y-%m-%d')}:{tp}"
         if existing.get("last_run_key") == run_key:
-            print(f"  [AI] Точка расписания {tp} UTC уже выполнена сегодня, пропускаю")
+            print(f"  [AI-{provider}] Точка расписания {tp} UTC уже выполнена сегодня, пропускаю")
         else:
-            print(f"  [AI] Точка расписания {tp} UTC активна -- генерирую")
+            print(f"  [AI-{provider}] Точка расписания {tp} UTC активна -- генерирую")
             return True, run_key
 
-    triggers = set(schedule.get("model_triggers", []))
-    hit = triggers & set(new_models)
+    raw_triggers = schedule.get("model_triggers", [])
+    trigger_models = set()
+    for t in raw_triggers:
+        if isinstance(t, str):
+            if _provider_match(None, provider):
+                trigger_models.add(t)
+        else:
+            if _provider_match(t.get("provider"), provider):
+                trigger_models.add(t.get("model"))
+
+    hit = trigger_models & set(new_models)
     if hit:
         run_key = f"model:{now_utc.strftime('%Y-%m-%dT%H:%M')}:{','.join(sorted(hit))}"
-        print(f"  [AI] Триггер по модели(ям) {', '.join(sorted(hit))} -- генерирую")
+        print(f"  [AI-{provider}] Триггер по модели(ям) {', '.join(sorted(hit))} -- генерирую")
         return True, run_key
 
-    print(f"  [AI] Не попадаем в расписание (сейчас {now_utc.strftime('%H:%M')} UTC, "
+    print(f"  [AI-{provider}] Не попадаем в расписание (сейчас {now_utc.strftime('%H:%M')} UTC, "
           f"новые модели: {new_models or 'нет'}), пропускаю")
     return False, None
 
