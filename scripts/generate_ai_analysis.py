@@ -944,9 +944,8 @@ def main(force=False, new_models=None):
         return
 
     api_key = load_api_key()
-    if not api_key:
-        print("  [AI] ANTHROPIC_API_KEY не найден — пропускаю генерацию анализа")
-        return
+    if claude_enabled() and not api_key:
+        print("  [AI] ANTHROPIC_API_KEY не найден — Claude пропущен")
 
     print("\n  🤖 Генерация синоптического анализа...")
 
@@ -959,8 +958,23 @@ def main(force=False, new_models=None):
         except Exception:
             pass
 
-    ok, run_key = cooldown_ok(existing, new_models=new_models, force=force)
-    if not ok:
+    existing_gemini = {}
+    if os.path.exists(OUTPUT_FILE_GEMINI):
+        try:
+            with open(OUTPUT_FILE_GEMINI, "r", encoding="utf-8") as f:
+                existing_gemini = json.load(f)
+        except Exception:
+            pass
+
+    ok_claude, run_key_claude = (False, None)
+    if claude_enabled() and api_key:
+        ok_claude, run_key_claude = cooldown_ok(existing, new_models=new_models, force=force, provider="claude")
+
+    ok_gemini, run_key_gemini = (False, None)
+    if gemini_enabled():
+        ok_gemini, run_key_gemini = cooldown_ok(existing_gemini, new_models=new_models, force=force, provider="gemini")
+
+    if not ok_claude and not ok_gemini:
         return
 
     # Запрашиваем данные
@@ -997,35 +1011,43 @@ def main(force=False, new_models=None):
 
     # Проверяем изменились ли данные
     current_hash = data_hash(days)
-    prev_hash = existing.get("data_hash", "")
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
     STALE_HOURS = 6
 
-    if current_hash == prev_hash and existing.get("text"):
+    def _is_fresh(existing_data):
+        if current_hash != existing_data.get("data_hash", "") or not existing_data.get("text"):
+            return False
         try:
-            last_gen = datetime.fromisoformat(existing.get("generated_at", "").replace("Z", "+00:00"))
+            last_gen = datetime.fromisoformat(existing_data.get("generated_at", "").replace("Z", "+00:00"))
             age_hours = (datetime.now(timezone.utc) - last_gen).total_seconds() / 3600
         except Exception:
             age_hours = 999
+        return age_hours < STALE_HOURS
 
-        if age_hours < STALE_HOURS:
-            # Данные не изменились, анализ свежий — отмечаем как проверенный, но не помечаем run_key
-            existing["last_checked"] = now_iso
-            existing["changed"] = False
-            with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-                json.dump(existing, f, ensure_ascii=False, indent=2)
-            print(f"  [AI] Данные не изменились ({age_hours:.1f}ч < {STALE_HOURS}ч) — пропускаю генерацию")
-            return
-        else:
-            # Данные не изменились, но анализ устарел — регенерируем с обновлённым временным контекстом
-            print(f"  [AI] Данные не изменились, но анализ устарел ({age_hours:.1f}ч >= {STALE_HOURS}ч) — регенерирую")
-
-    # Данные изменились — генерируем новый анализ
     prompt = build_prompt(days, marine=marine, data_time=data_time)
-    print(f"  [AI] Промпт: ~{len(prompt.split())} слов, запрос к Claude...")
 
-    if claude_enabled():
+    if ok_claude and _is_fresh(existing):
+        existing["last_checked"] = now_iso
+        existing["changed"] = False
+        with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+            json.dump(existing, f, ensure_ascii=False, indent=2)
+        print("  [AI-claude] Данные не изменились, анализ свежий -- пропускаю")
+        ok_claude = False
+
+    if ok_gemini and _is_fresh(existing_gemini):
+        existing_gemini["last_checked"] = now_iso
+        existing_gemini["changed"] = False
+        with open(OUTPUT_FILE_GEMINI, "w", encoding="utf-8") as f:
+            json.dump(existing_gemini, f, ensure_ascii=False, indent=2)
+        print("  [AI-gemini] Данные не изменились, анализ свежий -- пропускаю")
+        ok_gemini = False
+
+    if not ok_claude and not ok_gemini:
+        return
+
+    print(f"  [AI] Промпт: ~{len(prompt.split())} слов")
+
+    if claude_enabled() and ok_claude:
         try:
             text = call_claude(prompt, api_key)
         except Exception as e:
@@ -1039,17 +1061,17 @@ def main(force=False, new_models=None):
             "data_hash": current_hash,
             "days_count": len(days),
             "text": text,
-            "last_run_key": run_key,
+            "last_run_key": run_key_claude,
         }
         with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
             json.dump(result, f, ensure_ascii=False, indent=2)
 
         print(f"  [AI] ✅ Анализ сохранён ({len(text)} символов)")
-    else:
+    elif not claude_enabled():
         print("  [AI] Claude отключён (CLAUDE_ANALYSIS_ENABLED=false) -- пропускаю")
 
-    if gemini_enabled():
-        generate_gemini_analysis(prompt, now_iso, current_hash, days, run_key)
+    if gemini_enabled() and ok_gemini:
+        generate_gemini_analysis(prompt, now_iso, current_hash, days, run_key_gemini)
 
 if __name__ == "__main__":
     import argparse
