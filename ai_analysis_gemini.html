@@ -679,6 +679,7 @@ function buildBlockMeta(block) {
     var dd = String(base.getDate()).padStart(2,'0');
     var mo = String(base.getMonth()+1).padStart(2,'0');
     infoParts.push('обновлено ' + dd + '.' + mo + ' ' + hh + ':' + mm);
+    infoParts.push('Gemini');
 
     if (_analysisData.last_run_key) {
       var m = _analysisData.last_run_key.match(/model:[^:]+:[^:]+:(.+)$/);
