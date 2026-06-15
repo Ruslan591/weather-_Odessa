@@ -37,9 +37,16 @@ def save(d):
         json.dump(d, f, ensure_ascii=False, indent=2)
     print("Сохранено.")
 
+PROVIDERS = ["claude", "gemini"]
+
 def fmt_days(days):
     if len(days) == 7: return "ежедневно"
     return ",".join(DAY_NAMES[d] for d in sorted(days))
+
+def fmt_provider(p):
+    if p is None: return "все"
+    if isinstance(p, list): return "+".join(p)
+    return p
 
 def show(d):
     print("\n── Текущее расписание ──")
@@ -47,12 +54,17 @@ def show(d):
         print("  Точки времени: нет")
     else:
         for i, tp in enumerate(d["time_points"]):
-            print(f"  [{i}] {tp['hour']:02d}:{tp['minute']:02d} UTC — {fmt_days(tp.get('days', list(range(7))))}")
+            prov = fmt_provider(tp.get("provider"))
+            print(f"  [{i}] {tp['hour']:02d}:{tp['minute']:02d} UTC — {fmt_days(tp.get('days', list(range(7))))} [{prov}]")
     print(f"  Допуск: ±{d['tolerance_min']} мин")
     if not d["model_triggers"]:
         print("  Триггеры по моделям: нет")
     else:
-        print(f"  Триггеры по моделям: {', '.join(d['model_triggers'])}")
+        for t in d["model_triggers"]:
+            if isinstance(t, str):
+                print(f"  - {t} [все]")
+            else:
+                print(f"  - {t.get('model')} [{fmt_provider(t.get('provider'))}]")
     print()
 
 def input_days():
@@ -65,6 +77,13 @@ def input_days():
     except Exception:
         return list(range(7))
 
+def input_provider():
+    print("  Провайдер: 1=claude, 2=gemini, 3=оба (Enter=оба):")
+    s = input("  > ").strip()
+    if s == "1": return "claude"
+    if s == "2": return "gemini"
+    return None  # оба — поле не добавляем
+
 def add_time_point(d):
     try:
         t = input("  Время HH:MM (UTC): ").strip()
@@ -76,7 +95,11 @@ def add_time_point(d):
         print("  Неверный формат.")
         return
     days = input_days()
-    d["time_points"].append({"hour": hh, "minute": mm, "days": days})
+    provider = input_provider()
+    tp = {"hour": hh, "minute": mm, "days": days}
+    if provider is not None:
+        tp["provider"] = provider
+    d["time_points"].append(tp)
     save(d)
 
 def remove_time_point(d):
@@ -90,10 +113,15 @@ def remove_time_point(d):
     except Exception:
         print("  Неверный номер.")
 
+def _trigger_models(d):
+    """Возвращает список имён моделей в триггерах (строки и dict)."""
+    return [t if isinstance(t, str) else t.get("model") for t in d["model_triggers"]]
+
 def toggle_model_trigger(d):
     print("\n  Модели:")
+    active = _trigger_models(d)
     for i, m in enumerate(ALL_MODELS):
-        mark = "✓" if m in d["model_triggers"] else " "
+        mark = "✓" if m in active else " "
         print(f"  [{mark}] {i}: {m}")
     print("  Введите номера для переключения, через запятую (Enter=отмена):")
     s = input("  > ").strip()
@@ -106,10 +134,16 @@ def toggle_model_trigger(d):
     for i in idxs:
         if 0 <= i < len(ALL_MODELS):
             m = ALL_MODELS[i]
-            if m in d["model_triggers"]:
-                d["model_triggers"].remove(m)
+            existing_names = _trigger_models(d)
+            if m in existing_names:
+                d["model_triggers"] = [t for t in d["model_triggers"]
+                                        if (t if isinstance(t, str) else t.get("model")) != m]
             else:
-                d["model_triggers"].append(m)
+                provider = input_provider()
+                if provider is None:
+                    d["model_triggers"].append(m)
+                else:
+                    d["model_triggers"].append({"model": m, "provider": provider})
     save(d)
 
 def set_tolerance(d):
