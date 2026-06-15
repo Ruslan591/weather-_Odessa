@@ -1,0 +1,1228 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Синоптический анализ ИИ — Одесса</title>
+<style>
+  :root {
+    --bg: #0d0d0d;
+    --surface: #141414;
+    --border: #222;
+    --text: #d4d4d4;
+    --text-dim: #666;
+    --text-muted: #444;
+    --accent: #4fc3f7;
+    --accent-warm: #ffb74d;
+    --heading: #e0e0e0;
+    --h2-border: #1e1e1e;
+    --status-bg: #111;
+    --btn-bg: #1a1a1a;
+    --btn-hover: #222;
+    --shadow: 0 4px 24px rgba(0,0,0,0.6);
+    --radius: 14px;
+  }
+  body.light {
+    --bg: #f2f4f6;
+    --surface: #ffffff;
+    --border: #dde1e7;
+    --text: #1a1a2e;
+    --text-dim: #6b7280;
+    --text-muted: #9ca3af;
+    --accent: #0284c7;
+    --accent-warm: #d97706;
+    --heading: #111827;
+    --h2-border: #e5e7eb;
+    --status-bg: #f8fafc;
+    --btn-bg: #e8ecf0;
+    --btn-hover: #dde1e7;
+    --shadow: 0 4px 24px rgba(0,0,0,0.08);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Georgia', 'Times New Roman', serif;
+    font-size: 16px;
+    line-height: 1.75;
+    min-height: 100vh;
+    transition: background 0.25s, color 0.25s, font-size 0.15s;
+  }
+
+  /* ── Header ── */
+  .header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  }
+  .back-btn {
+    background: var(--btn-bg);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: background 0.15s, color 0.15s;
+    white-space: nowrap;
+  }
+  .back-btn:hover { background: var(--btn-hover); color: var(--text); }
+
+  .header-title {
+    flex: 1;
+    font-size: 14px;
+    color: var(--text-dim);
+    font-family: 'Helvetica Neue', sans-serif;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .header-title span { color: var(--text); }
+
+  .theme-btn {
+    background: var(--btn-bg);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1;
+    transition: background 0.15s, transform 0.1s;
+    flex-shrink: 0;
+  }
+  .theme-btn:active { transform: scale(0.92); }
+
+  /* ── Content ── */
+  .container {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 20px 16px 48px;
+  }
+
+  /* ── Status bar ── */
+  .status-bar {
+    background: var(--status-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Helvetica Neue', sans-serif;
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #4ade80;
+    flex-shrink: 0;
+    box-shadow: 0 0 6px #4ade8088;
+  }
+  .status-dot.stale { background: #888; box-shadow: none; }
+
+  /* ── Analysis card ── */
+  .analysis-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px 20px;
+    box-shadow: var(--shadow);
+  }
+
+  .analysis-card h3 {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 1.15em;
+    font-weight: 700;
+    color: var(--heading);
+    margin: 20px 0 8px;
+    padding-top: 16px;
+    border-top: 1px solid var(--h2-border);
+    letter-spacing: -0.01em;
+  }
+  .analysis-card h3:first-child {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+  }
+
+  .analysis-card h4 {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.95em;
+    font-weight: 600;
+    color: var(--accent-warm);
+    margin: 16px 0 6px;
+  }
+  .analysis-card h4.warn { color: #fbbf24; }
+
+  .analysis-card p {
+    font-size: 1em;
+    line-height: 1.8;
+    color: var(--text);
+    margin-bottom: 12px;
+  }
+  .analysis-card p:last-child { margin-bottom: 0; }
+
+  .analysis-card b {
+    color: var(--heading);
+    font-weight: 600;
+  }
+
+  /* ── Loading / Error ── */
+  .loading {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-dim);
+    font-family: 'Helvetica Neue', sans-serif;
+    font-size: 14px;
+  }
+  .loading-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin: 0 3px;
+    animation: bounce 1.2s infinite;
+  }
+  .loading-dot:nth-child(2) { animation-delay: 0.2s; }
+  .loading-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce {
+    0%,80%,100% { transform: translateY(0); opacity: 0.4; }
+    40% { transform: translateY(-6px); opacity: 1; }
+  }
+
+  /* ── Audio player ── */
+  .audio-wrap {
+    margin-bottom: 16px;
+    background: var(--status-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    display: none;
+  }
+  .audio-wrap.visible { display: block; }
+  .audio-wrap audio {
+    width: 100%;
+    height: 36px;
+    accent-color: var(--accent);
+  }
+  .audio-label {
+    font-family: "Helvetica Neue", sans-serif;
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .error-msg {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+    font-family: 'Helvetica Neue', sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  /* ── Font size control ── */
+  .font-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+  }
+  .font-btn {
+    background: var(--btn-bg);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    border-radius: 6px;
+    width: 30px; height: 30px;
+    font-size: 15px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+    flex-shrink: 0;
+  }
+  .font-btn:hover { background: var(--btn-hover); color: var(--text); }
+
+  /* ── Кнопка презентации ── */
+  .pres-btn {
+    width: 100%; padding: 12px; margin-bottom: 16px;
+    background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+    border: 1px solid #2a5a7a; border-radius: 10px; color: #4fc3f7;
+    font-family: 'Helvetica Neue', sans-serif; font-size: 14px; font-weight: 600;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+    transition: opacity .15s, transform .1s; letter-spacing: .03em;
+  }
+  .pres-btn:hover { opacity: .85; }
+  .pres-btn:active { transform: scale(.98); }
+  .pres-btn.hidden { display: none; }
+
+  /* ── Режим презентации ── */
+  .presentation {
+    display: none; position: fixed; inset: 0; z-index: 200;
+    background: #080c14; flex-direction: column;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+  }
+  .presentation.active { display: flex; }
+  .pres-bg { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; display: block; }
+
+  .pres-header {
+    position: relative; z-index: 10; display: flex; align-items: center;
+    padding: 12px 16px; gap: 12px;
+    background: linear-gradient(to bottom, rgba(0,0,0,.7), transparent);
+  }
+  .pres-close {
+    background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
+    color: #ccc; border-radius: 8px; padding: 6px 14px; font-size: 13px;
+    cursor: pointer; transition: background .15s;
+  }
+  .pres-close:hover { background: rgba(255,255,255,.2); }
+  .pres-header { flex-direction: column; gap: 4px; }
+  .pres-header-top { display: flex; align-items: center; width: 100%; gap: 12px; }
+  .pres-block-title {
+    flex: 1; text-align: center; font-size: 15px; font-weight: 700;
+    color: #fff; letter-spacing: .05em; text-transform: uppercase; opacity: .9;
+  }
+  .pres-block-icon { font-size: 22px; }
+
+  .pres-progress { position: relative; z-index: 10; display: flex; gap: 4px; padding: 0 16px 8px; }
+  .pres-seg { flex: 1; height: 3px; border-radius: 2px; background: rgba(255,255,255,.2); overflow: hidden; }
+  .pres-seg-fill { height: 100%; background: #4fc3f7; width: 0%; transition: width .1s linear; }
+  .pres-seg.done .pres-seg-fill { width: 100%; }
+  .pres-seg.active .pres-seg-fill { background: #fff; }
+
+  .pres-body {
+    position: relative; z-index: 10; flex: 1; overflow: hidden;
+    display: flex; flex-direction: column; padding: 0 16px 12px;
+  }
+  .pres-chart-wrap {
+    height: 160px; margin-bottom: 12px; opacity: 0;
+    transition: opacity .4s; flex-shrink: 0;
+  }
+  .pres-chart-wrap.visible { opacity: 1; }
+  .pres-chart { width: 100%; height: 100%; }
+
+  .pres-text-card {
+    flex: 1; background: rgba(10,20,40,.75); border: 1px solid rgba(79,195,247,.2);
+    border-radius: 12px; padding: 16px; overflow-y: auto;
+    backdrop-filter: blur(8px); font-size: 15px; line-height: 1.7; color: #d4e8ff;
+  }
+  .pres-text-card b { color: #fff; }
+  .pres-text-card p { margin-bottom: 10px; }
+  .pres-text-card.warn-card { border-color: rgba(255,160,60,.4); }
+
+  .pres-footer {
+    position: relative; z-index: 10; padding: 10px 16px 16px;
+    background: linear-gradient(to top, rgba(0,0,0,.7), transparent);
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .pres-audio { width: 100%; height: 32px; accent-color: #4fc3f7; }
+  .pres-nav { display: flex; gap: 8px; justify-content: center; }
+  .pres-nav-btn {
+    background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
+    color: #ccc; border-radius: 8px; padding: 8px 20px; font-size: 14px;
+    cursor: pointer; transition: background .15s;
+  }
+  .pres-nav-btn:hover { background: rgba(255,255,255,.2); color: #fff; }
+  .pres-nav-btn:disabled { opacity: .3; cursor: default; }
+  .pres-nav-btn.play-btn {
+    background: rgba(79,195,247,.15); border-color: rgba(79,195,247,.4); color: #4fc3f7;
+    min-width: 120px; display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .pres-nav-btn.play-btn:hover { background: rgba(79,195,247,.25); }
+
+  /* ── Подзаголовок слайда (дата/обновлено/модель) ── */
+  .pres-block-meta {
+    position: relative; z-index: 10; text-align: center;
+    font-size: 12px; color: rgba(255,255,255,.55);
+    letter-spacing: .03em; padding-top: 2px;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .pres-block-meta .meta-date { font-size: 14px; color: rgba(255,255,255,.85); font-weight: 600; }
+  .pres-block-meta .dot { margin: 0 6px; opacity: .5; }
+
+  /* ── Прогресс разделов (кликабельные) ── */
+  .pres-seg { cursor: pointer; }
+  .pres-seg-fill { background: linear-gradient(90deg, #4fc3f7, #81d4fa); }
+
+  /* ── Кастомный аудиоплеер ── */
+  .pres-audio { display: none; }
+  .pres-player {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12);
+    border-radius: 12px; padding: 8px 12px;
+  }
+  .pres-play-btn {
+    flex-shrink: 0; width: 40px; height: 40px; border-radius: 50%;
+    background: rgba(79,195,247,.18); border: 1px solid rgba(79,195,247,.45);
+    color: #4fc3f7; font-size: 16px; display: flex; align-items: center;
+    justify-content: center; cursor: pointer; transition: background .15s, transform .1s;
+  }
+  .pres-play-btn:hover { background: rgba(79,195,247,.28); }
+  .pres-play-btn:active { transform: scale(.94); }
+  .pres-seek-wrap { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .pres-seek-bar {
+    position: relative; height: 6px; border-radius: 3px;
+    background: rgba(255,255,255,.15); cursor: pointer;
+  }
+  .pres-seek-fill {
+    position: absolute; inset: 0; width: 0%; border-radius: 3px;
+    background: linear-gradient(90deg, #4fc3f7, #81d4fa);
+    transition: width .1s linear;
+  }
+  .pres-seek-handle {
+    position: absolute; top: 50%; left: 0%; width: 12px; height: 12px;
+    border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4);
+    transform: translate(-50%, -50%); transition: left .1s linear;
+  }
+  .pres-time {
+    display: flex; justify-content: space-between;
+    font-size: 11px; color: rgba(255,255,255,.5); font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Компактные кнопки навигации блоков ── */
+  .pres-nav { align-items: center; }
+  .pres-nav-btn.side-btn {
+    width: 44px; height: 44px; border-radius: 50%; padding: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 18px;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <a href="forecast.html" class="back-btn">← Прогноз</a>
+  <div class="header-title">🤖 <span>Анализ ИИ</span></div>
+  <div class="font-controls">
+    <button class="font-btn" onclick="changeFontSize(-1)" title="Меньше">A−</button>
+    <button class="font-btn" onclick="changeFontSize(1)" title="Больше">A+</button>
+  </div>
+  <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Сменить тему">🌙</button>
+</div>
+
+<div class="container">
+  <div id="videoWrap" style="display:none;margin-bottom:12px">
+    <video controls playsinline preload="none"
+      style="width:100%;max-width:340px;border-radius:14px;display:block;margin:0 auto;box-shadow:0 4px 24px rgba(0,0,0,0.6)">
+      <source id="videoSrc" src="" type="video/mp4">
+    </video>
+  </div>
+  <button class="pres-btn hidden" id="presBtnTop" onclick="openPresentation()" style="margin-bottom:16px">
+    ▶ Презентация
+  </button>
+  <div id="statusBar" class="status-bar" style="display:none">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="statusText"></span>
+  </div>
+
+  <div id="content">
+    <div class="loading">
+      <div style="margin-bottom:16px">
+        <span class="loading-dot"></span>
+        <span class="loading-dot"></span>
+        <span class="loading-dot"></span>
+      </div>
+      Загрузка анализа…
+    </div>
+  </div>
+</div>
+
+<!-- ── Presentation overlay ── -->
+<div class="presentation" id="presentation">
+  <canvas class="pres-bg" id="presBg"></canvas>
+  <div class="pres-header">
+    <div class="pres-header-top">
+      <button class="pres-close" onclick="closePresentation()">✕ Закрыть</button>
+      <div class="pres-block-title" id="presTitle"></div>
+      <div class="pres-block-icon" id="presIcon"></div>
+    </div>
+    <div class="pres-block-meta" id="presMeta"></div>
+  </div>
+  <div class="pres-progress" id="presProgress"></div>
+  <div class="pres-body">
+    <div class="pres-chart-wrap" id="presChartWrap">
+      <canvas class="pres-chart" id="presChart"></canvas>
+    </div>
+    <div class="pres-text-card" id="presText"></div>
+  </div>
+  <div class="pres-footer">
+    <audio class="pres-audio" id="presAudio" preload="none"></audio>
+    <div class="pres-player">
+      <div class="pres-play-btn" id="playBtn" onclick="presTogglePlay()">▶</div>
+      <div class="pres-seek-wrap">
+        <div class="pres-seek-bar" id="seekBar" onclick="presSeek(event)">
+          <div class="pres-seek-fill" id="seekFill"></div>
+          <div class="pres-seek-handle" id="seekHandle"></div>
+        </div>
+        <div class="pres-time">
+          <span id="timeCur">0:00</span>
+          <span id="timeDur">0:00</span>
+        </div>
+      </div>
+    </div>
+    <div class="pres-nav">
+      <button class="pres-nav-btn side-btn" id="prevBtn" onclick="presNav(-1)">←</button>
+      <button class="pres-nav-btn side-btn" id="nextBtn" onclick="presNav(1)">→</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Theme ──────────────────────────────────────────────────────────────────
+var _theme = localStorage.getItem('aiTheme') || 'dark';
+applyTheme(_theme);
+
+function applyTheme(t) {
+  _theme = t;
+  if (t === 'light') {
+    document.body.classList.add('light');
+    document.getElementById('themeBtn').textContent = '☀️';
+  } else {
+    document.body.classList.remove('light');
+    document.getElementById('themeBtn').textContent = '🌙';
+  }
+  localStorage.setItem('aiTheme', t);
+}
+
+function toggleTheme() {
+  applyTheme(_theme === 'dark' ? 'light' : 'dark');
+}
+
+// ── Font size ──────────────────────────────────────────────────────────────
+var _fontSize = parseInt(localStorage.getItem('aiFontSize') || '16');
+applyFontSize(_fontSize);
+
+function applyFontSize(s) {
+  _fontSize = Math.max(13, Math.min(22, s));
+  document.body.style.fontSize = _fontSize + 'px';
+  localStorage.setItem('aiFontSize', _fontSize);
+}
+
+function changeFontSize(delta) {
+  applyFontSize(_fontSize + delta);
+}
+
+// ── Load data ──────────────────────────────────────────────────────────────
+function formatTime(iso) {
+  try {
+    var d = new Date(iso);
+    return d.toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
+  } catch(e) { return iso; }
+}
+
+function markdownToHtml(text) {
+  // Escape HTML
+  text = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  var lines = text.split('\n');
+  var html = '';
+  var inP = false;
+  var pBuffer = [];
+
+  function flushP() {
+    if (pBuffer.length > 0) {
+      var t = pBuffer.join(' ').trim();
+      if (t) html += '<p>' + t + '</p>\n';
+      pBuffer = [];
+    }
+    inP = false;
+  }
+
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    var trimmed = line.trim();
+
+    // H2 ##
+    if (/^## (.+)/.test(trimmed)) {
+      flushP();
+      var title = trimmed.replace(/^## /, '');
+      if (title.indexOf('⚠') === 0) {
+        html += '<h4 class="warn">' + inlineFormat(title) + '</h4>\n';
+      } else {
+        html += '<h3>' + inlineFormat(title) + '</h3>\n';
+      }
+      continue;
+    }
+    // H3 ###
+    if (/^### (.+)/.test(trimmed)) {
+      flushP();
+      var title3 = trimmed.replace(/^### /, '');
+      html += '<h4>' + inlineFormat(title3) + '</h4>\n';
+      continue;
+    }
+    // Empty line = paragraph break
+    if (trimmed === '') {
+      flushP();
+      continue;
+    }
+    // Normal line
+    pBuffer.push(inlineFormat(trimmed));
+  }
+  flushP();
+  return html;
+}
+
+function inlineFormat(text) {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>');
+}
+
+fetch('https://raw.githubusercontent.com/Ruslan591/weather-_Odessa/main/data/forecast_analysis_gemini.json?_=' + Date.now(), { cache: 'no-store' })
+  .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
+  .then(function(d) {
+    var statusBar = document.getElementById('statusBar');
+    var statusDot = document.getElementById('statusDot');
+    var statusText = document.getElementById('statusText');
+    var content = document.getElementById('content');
+
+    // Status bar
+    statusBar.style.display = 'flex';
+    var genAt = d.generated_at ? formatTime(d.generated_at) : '—';
+    var chkAt = d.last_checked ? formatTime(d.last_checked) : '—';
+
+    var dataAt = d.data_fetched_at ? formatTime(d.data_fetched_at) : null;
+    var dataStr = dataAt ? ' · данные: ' + dataAt : '';
+    if (d.changed !== false) {
+      statusDot.className = 'status-dot';
+      statusText.textContent = 'Обновлён: ' + genAt + dataStr;
+    } else {
+      statusDot.className = 'status-dot stale';
+      statusText.textContent = 'Проверено: ' + chkAt + ' · анализ от ' + genAt + dataStr;
+    }
+
+    // Analysis
+    _analysisData = d;
+    var html = markdownToHtml(d.text || '');
+    content.innerHTML = '<div class="analysis-card">' + html + '</div>';
+  })
+  .catch(function() {
+    document.getElementById('content').innerHTML =
+      '<div class="error-msg">Анализ ещё не сгенерирован.<br>Запустите <code>generate_ai_analysis.py</code> вручную.</div>';
+  });
+
+// ── Загрузка мета блоков ───────────────────────────────────────────────────
+var _blocksMeta = null;
+var _analysisData = null;
+
+function loadBlocksMeta() {
+  fetch('https://raw.githubusercontent.com/Ruslan591/weather-_Odessa/main/data/blocks_gemini/blocks_meta.json?_=' + Date.now(), {cache:'no-store'})
+    .then(function(r){ return r.ok ? r.json() : Promise.reject(); })
+    .then(function(meta) {
+      if (meta.blocks && meta.blocks.length > 0) {
+        _blocksMeta = meta;
+        document.getElementById('presBtnTop').classList.remove('hidden');
+      }
+    })
+    .catch(function(){});
+}
+
+// Перехватываем успешную загрузку analysisData чтобы сохранить её
+var _origFetch = fetch;
+// Данные сохраняются в обработчике ниже через глобальную переменную
+
+// ── Presentation engine ────────────────────────────────────────────────────
+var _presIdx = 0;
+var _presBlocks = [];
+var _presAudioEl = null;
+var _bgAnim = null;
+
+var BLOCK_THEMES = {
+  today:    { from: '#0a1628', to: '#0d2137', accent: '#4fc3f7' },
+  tonight:  { from: '#070d1a', to: '#0b1830', accent: '#4fc3f7' },
+  tomorrow: { from: '#0e1a10', to: '#162818', accent: '#81c784' },
+  next3:    { from: '#1a1000', to: '#251808', accent: '#ffb74d' },
+  marine:   { from: '#001a22', to: '#072a36', accent: '#4dd0e1' },
+  warnings: { from: '#200800', to: '#2d0e00', accent: '#ff7043' },
+  trend:    { from: '#0d0d20', to: '#151530', accent: '#ce93d8' },
+};
+
+var WEEKDAY_RU = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
+var MONTH_RU = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+
+function buildBlockMeta(block) {
+  var dateLine = '';
+  var infoParts = [];
+  if (_analysisData && _analysisData.generated_at) {
+    var base = new Date(_analysisData.generated_at);
+    if (block.key === 'today') {
+      dateLine = 'сегодня, ' + WEEKDAY_RU[base.getDay()];
+    } else if (block.key === 'tomorrow') {
+      var d1 = new Date(base); d1.setDate(d1.getDate() + 1);
+      dateLine = 'завтра, ' + d1.getDate() + ' ' + MONTH_RU[d1.getMonth()];
+    } else if (block.key === 'next3') {
+      var d2 = new Date(base); d2.setDate(d2.getDate() + 2);
+      var d4 = new Date(base); d4.setDate(d4.getDate() + 4);
+      dateLine = d2.getDate() + '–' + d4.getDate() + ' ' + MONTH_RU[d4.getMonth()];
+    }
+
+    var hh = String(base.getHours()).padStart(2,'0');
+    var mm = String(base.getMinutes()).padStart(2,'0');
+    var dd = String(base.getDate()).padStart(2,'0');
+    var mo = String(base.getMonth()+1).padStart(2,'0');
+    infoParts.push('обновлено ' + dd + '.' + mo + ' ' + hh + ':' + mm);
+
+    if (_analysisData.last_run_key) {
+      var m = _analysisData.last_run_key.match(/model:[^:]+:[^:]+:(.+)$/);
+      if (m && m[1]) infoParts.push(m[1]);
+    }
+  }
+  var html = '';
+  if (dateLine) html += '<div class="meta-date">' + dateLine + '</div>';
+  if (infoParts.length) html += '<div>' + infoParts.join('<span class="dot">·</span>') + '</div>';
+  return html;
+}
+
+function openPresentation() {
+  if (!_blocksMeta || !_blocksMeta.blocks.length) return;
+  _presBlocks = _blocksMeta.blocks;
+  _presIdx = 0;
+  buildProgress();
+  document.getElementById('presentation').classList.add('active');
+  document.body.style.overflow = 'hidden';
+  _presAudioEl = document.getElementById('presAudio');
+  _presAudioEl.addEventListener('ended', presOnEnd);
+  _presAudioEl.addEventListener('timeupdate', presOnTime);
+  startBgAnim();
+  showBlock(0);
+}
+
+function closePresentation() {
+  document.getElementById('presentation').classList.remove('active');
+  document.body.style.overflow = '';
+  if (_presAudioEl) { _presAudioEl.pause(); _presAudioEl.src = ''; }
+  if (_bgAnim) { cancelAnimationFrame(_bgAnim); _bgAnim = null; }
+}
+
+function buildProgress() {
+  var wrap = document.getElementById('presProgress');
+  wrap.innerHTML = '';
+  _presBlocks.forEach(function(_, i) {
+    var seg = document.createElement('div');
+    seg.className = 'pres-seg'; seg.id = 'seg_' + i;
+    seg.innerHTML = '<div class="pres-seg-fill" id="segfill_' + i + '"></div>';
+    seg.onclick = function() {
+      _presAudioEl.pause();
+      _presIdx = i;
+      showBlock(_presIdx);
+    };
+    wrap.appendChild(seg);
+  });
+}
+
+function showBlock(idx) {
+  var block = _presBlocks[idx];
+  if (!block) return;
+  var theme = BLOCK_THEMES[block.key] || BLOCK_THEMES.today;
+
+  document.getElementById('presTitle').textContent = block.title;
+  document.getElementById('presIcon').textContent = block.icon;
+  document.getElementById('presMeta').innerHTML = buildBlockMeta(block);
+
+  _presBlocks.forEach(function(_, i) {
+    var seg = document.getElementById('seg_' + i);
+    seg.className = 'pres-seg' + (i < idx ? ' done' : i === idx ? ' active' : '');
+    document.getElementById('segfill_' + i).style.width = (i < idx ? '100%' : '0%');
+  });
+
+  var textEl = document.getElementById('presText');
+  textEl.className = 'pres-text-card' + (block.key === 'warnings' ? ' warn-card' : '');
+  textEl.innerHTML = blockTextToHtml(block.text || '');
+  textEl.scrollTop = 0;
+
+  _presAudioEl.pause();
+  _presAudioEl.src = 'https://raw.githubusercontent.com/Ruslan591/weather-_Odessa/main/' + block.path + '?_=' + Date.now();
+  _presAudioEl.load();
+  document.getElementById('playBtn').textContent = '▶';
+  document.getElementById('seekFill').style.width = '0%';
+  document.getElementById('seekHandle').style.left = '0%';
+  document.getElementById('timeCur').textContent = '0:00';
+  document.getElementById('timeDur').textContent = '0:00';
+
+  document.getElementById('prevBtn').disabled = (idx === 0);
+  document.getElementById('nextBtn').disabled = (idx === _presBlocks.length - 1);
+
+  drawBlockChart(block, theme);
+  updateBgTheme(theme);
+}
+
+function blockTextToHtml(text) {
+  text = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  text = text.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/\*(.+?)\*/g,'<em>$1</em>');
+  var parts = text.split(/\n\n+/);
+  return parts.map(function(p){ return '<p>' + p.trim() + '</p>'; }).join('');
+}
+
+function presTogglePlay() {
+  if (_presAudioEl.paused) {
+    _presAudioEl.play();
+    document.getElementById('playBtn').textContent = '⏸';
+  } else {
+    _presAudioEl.pause();
+    document.getElementById('playBtn').textContent = '▶';
+  }
+}
+
+function fmtTime(s) {
+  if (!s || isNaN(s)) return '0:00';
+  var m = Math.floor(s / 60), sec = Math.floor(s % 60);
+  return m + ':' + String(sec).padStart(2,'0');
+}
+
+function presSeek(e) {
+  var bar = document.getElementById('seekBar');
+  var rect = bar.getBoundingClientRect();
+  var pct = (e.clientX - rect.left) / rect.width;
+  pct = Math.max(0, Math.min(1, pct));
+  var dur = _presAudioEl.duration;
+  if (dur && !isNaN(dur)) _presAudioEl.currentTime = pct * dur;
+}
+
+function presNav(dir) {
+  _presAudioEl.pause();
+  var next = _presIdx + dir;
+  if (next >= 0 && next < _presBlocks.length) {
+    _presIdx = next;
+    showBlock(_presIdx);
+  }
+}
+
+function presOnEnd() {
+  document.getElementById('playBtn').textContent = '▶';
+  var next = _presIdx + 1;
+  if (next < _presBlocks.length) {
+    _presIdx = next;
+    showBlock(_presIdx);
+    setTimeout(function() {
+      _presAudioEl.play();
+      document.getElementById('playBtn').textContent = '⏸';
+    }, 800);
+  }
+}
+
+function presOnTime() {
+  var dur = _presAudioEl.duration;
+  if (!dur || isNaN(dur)) return;
+  var pct = (_presAudioEl.currentTime / dur) * 100;
+  var fill = document.getElementById('segfill_' + _presIdx);
+  if (fill) fill.style.width = pct + '%';
+
+  document.getElementById('seekFill').style.width = pct + '%';
+  document.getElementById('seekHandle').style.left = pct + '%';
+  document.getElementById('timeCur').textContent = fmtTime(_presAudioEl.currentTime);
+  document.getElementById('timeDur').textContent = fmtTime(dur);
+
+  if (_msRedraw && _msPanelCount > 0) {
+    var idx = Math.min(_msPanelCount - 1, Math.floor((pct / 100) * _msPanelCount));
+    if (idx !== _msActiveIdx) {
+      _msActiveIdx = idx;
+      _msRedraw(idx);
+    }
+  }
+}
+
+// ── Графики ────────────────────────────────────────────────────────────────
+var _msRedraw = null;
+var _msPanelCount = 0;
+var _msActiveIdx = -1;
+
+function drawBlockChart(block, theme) {
+  var wrap = document.getElementById('presChartWrap');
+  var canvas = document.getElementById('presChart');
+  canvas.width  = wrap.offsetWidth  || 340;
+  canvas.height = wrap.offsetHeight || 160;
+  var ctx = canvas.getContext('2d');
+  var W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  var data = getChartData(block);
+  if (!data) { wrap.classList.remove('visible'); return; }
+
+  // Фон
+  var bg = ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'rgba(10,20,40,0.55)'); bg.addColorStop(1,'rgba(5,10,20,0.75)');
+  ctx.fillStyle = bg;
+  ctx.beginPath(); if(ctx.roundRect) ctx.roundRect(0,0,W,H,10); else ctx.rect(0,0,W,H); ctx.fill();
+
+  var pad = {t:28, b:28, l:34, r:10};
+  var cW = W-pad.l-pad.r, cH = H-pad.t-pad.b;
+
+  // multiscale — отдельный путь без vals/xLabels
+  if (data.type === 'multiscale') {
+    var panels = data.panels;
+    var pn = panels.length;
+    var pgap = 8;
+    var panW = (W - pad.l - pad.r - pgap*(pn-1)) / pn;
+    var bgGrad = bg;
+
+    function renderPanels(activeIdx) {
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = bgGrad;
+      ctx.beginPath(); if(ctx.roundRect) ctx.roundRect(0,0,W,H,10); else ctx.rect(0,0,W,H); ctx.fill();
+
+      panels.forEach(function(p, pi) {
+        if (p.value === null || p.value === undefined) return;
+        var x0 = pad.l + pi*(panW+pgap);
+        var active = (pi === activeIdx);
+        ctx.fillStyle = active ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.04)';
+        ctx.beginPath();
+        if(ctx.roundRect) ctx.roundRect(x0,pad.t,panW,cH,4); else ctx.rect(x0,pad.t,panW,cH);
+        ctx.fill();
+        if (active) {
+          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = p.color;
+          ctx.beginPath();
+          if(ctx.roundRect) ctx.roundRect(x0+0.75,pad.t+0.75,panW-1.5,cH-1.5,4); else ctx.rect(x0,pad.t,panW,cH);
+          ctx.stroke();
+        }
+        var prange = p.max - p.min || 1;
+        var val = p.negate ? -p.value : p.value;
+        var norm = Math.max(0, Math.min(1, (val - p.min) / prange));
+        var barH = norm * cH;
+        var pby = pad.t + cH - barH;
+        var pgr = ctx.createLinearGradient(0,pby,0,pad.t+cH);
+        pgr.addColorStop(0, p.color); pgr.addColorStop(1, p.color+'33');
+        ctx.fillStyle = pgr;
+        ctx.beginPath();
+        if(ctx.roundRect) ctx.roundRect(x0+4,pby,panW-8,barH,3); else ctx.rect(x0+4,pby,panW-8,barH);
+        ctx.fill();
+        var dispVal = p.value;
+        var valStr = (typeof dispVal==='number' && !Number.isInteger(dispVal)) ? dispVal.toFixed(1) : String(Math.round(dispVal));
+        ctx.fillStyle='#fff'; ctx.font=(active?'bold 13px':'bold 12px')+' Helvetica Neue,sans-serif'; ctx.textAlign='center';
+        ctx.fillText(valStr, x0+panW/2, pby-4);
+        ctx.fillStyle='rgba(255,255,255,0.45)'; ctx.font='9px Helvetica Neue,sans-serif';
+        ctx.fillText(p.unit, x0+panW/2, pby-15);
+        ctx.fillStyle= active ? '#fff' : 'rgba(255,255,255,0.85)';
+        ctx.font='600 11px Helvetica Neue,sans-serif';
+        var plines = p.label.split('\n');
+        plines.forEach(function(ln,li2){ ctx.fillText(ln, x0+panW/2, H-6-(plines.length-1-li2)*13); });
+      });
+      ctx.textAlign='left';
+    }
+
+    renderPanels(-1);
+    _msRedraw = renderPanels;
+    _msPanelCount = pn;
+    _msActiveIdx = -1;
+    wrap.classList.add('visible');
+    return;
+  } else {
+    _msRedraw = null;
+  }
+
+  var vals = data.values, xLabels = data.xLabels, n = vals.length;
+
+  // Сетка
+  ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.lineWidth = 1;
+  for (var gi=0; gi<=3; gi++) {
+    var gy = pad.t + (cH/3)*gi;
+    ctx.beginPath(); ctx.moveTo(pad.l,gy); ctx.lineTo(W-pad.r,gy); ctx.stroke();
+  }
+
+  // Заголовок и единицы
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.font = '11px Helvetica Neue, sans-serif'; ctx.textAlign = 'left';
+  ctx.fillText(data.label, pad.l, 16);
+
+  // X-метки
+  ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.textAlign = 'center';
+  for (var xi=0; xi<n; xi++) {
+    ctx.fillText(xLabels[xi], pad.l + (n>1 ? (xi/(n-1))*cW : cW/2), H-8);
+  }
+
+  var validVals = vals.filter(function(v){ return v !== null; });
+  if (!validVals.length) {
+    ctx.fillStyle='rgba(255,255,255,0.2)'; ctx.textAlign='center'; ctx.font='13px sans-serif';
+    ctx.fillText('Нет данных', W/2, H/2); return;
+  }
+
+  var minV = Math.min.apply(null,validVals)-2, maxV = Math.max.apply(null,validVals)+2;
+  var range = maxV-minV || 1;
+  function toY(v){ return pad.t + cH - ((v-minV)/range)*cH; }
+  function toX(i){ return n>1 ? pad.l + (i/(n-1))*cW : pad.l+cW/2; }
+
+  if (data.type === 'bar') {
+    var bw = Math.min(40, (cW/n)*0.55);
+    for (var bi=0; bi<n; bi++) {
+      if (vals[bi]===null) continue;
+      var bx = toX(bi)-bw/2, by = toY(vals[bi]), bh = (pad.t+cH)-by;
+      var gr = ctx.createLinearGradient(0,by,0,pad.t+cH);
+      gr.addColorStop(0,theme.accent); gr.addColorStop(1,theme.accent+'33');
+      ctx.fillStyle = gr;
+      ctx.beginPath(); if(ctx.roundRect) ctx.roundRect(bx,by,bw,bh,3); else ctx.rect(bx,by,bw,bh); ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,0.8)'; ctx.textAlign='center'; ctx.font='bold 11px sans-serif';
+      ctx.fillText(Math.round(vals[bi]), bx+bw/2, by-4);
+    }
+  } else if (data.type !== 'multiscale') {
+    // line
+    ctx.strokeStyle=theme.accent; ctx.lineWidth=2.5; ctx.lineJoin='round';
+    ctx.beginPath(); var started=false;
+    for (var li=0; li<n; li++) {
+      if (vals[li]===null) continue;
+      if (!started){ ctx.moveTo(toX(li),toY(vals[li])); started=true; } else { ctx.lineTo(toX(li),toY(vals[li])); }
+    }
+    ctx.stroke();
+    var ag=ctx.createLinearGradient(0,pad.t,0,pad.t+cH);
+    ag.addColorStop(0,theme.accent+'44'); ag.addColorStop(1,theme.accent+'00');
+    ctx.fillStyle=ag; ctx.beginPath(); started=false;
+    for (var ai=0; ai<n; ai++) {
+      if (vals[ai]===null) continue;
+      if (!started){ ctx.moveTo(toX(ai),pad.t+cH); ctx.lineTo(toX(ai),toY(vals[ai])); started=true; } else { ctx.lineTo(toX(ai),toY(vals[ai])); }
+    }
+    if (n>1) ctx.lineTo(toX(n-1),pad.t+cH); ctx.closePath(); ctx.fill();
+    for (var pi=0; pi<n; pi++) {
+      if (vals[pi]===null) continue;
+      ctx.fillStyle=theme.accent; ctx.beginPath(); ctx.arc(toX(pi),toY(vals[pi]),4,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(toX(pi),toY(vals[pi]),2,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,0.85)'; ctx.textAlign='center'; ctx.font='11px sans-serif';
+      ctx.fillText(Math.round(vals[pi])+'°', toX(pi), toY(vals[pi])-8);
+    }
+  }
+  ctx.textAlign='left';
+  wrap.classList.add('visible');
+}
+
+function getChartData(block) {
+  // Пытаемся извлечь данные из текста блока
+  var text = block.text || '';
+  if (block.key === 'tonight' || block.key === 'today') {
+    return getTonightPanels(block, text);
+  }
+  if (block.key === 'tomorrow') {
+    return getTomorrowPanels(block, text);
+  }
+  if (block.key === 'next3') {
+    return getNext3Panels(block, text);
+  }
+  if (block.key === 'marine') {
+    return getMarinePanels(text);
+  }
+  if (block.key === 'warnings') {
+    return getWarningsData(text);
+  }
+  if (block.key === 'trend') {
+    return getTrendPanels(text);
+  }
+  return null;
+}
+
+// ── Дашборды-панели для всех блоков ────────────────────────────────────────
+function getTonightPanels(block, text) {
+  var panels = [];
+  if (block.t_min != null) panels.push({label:'T мин', unit:'°C', value:block.t_min, min:-10, max:35, color:'#4fc3f7'});
+  var m = text.match(/ощущени\w*\s*около\s*[+-]?(\d{1,2}(?:[.,]\d)?)/i);
+  if (m) panels.push({label:'ощущ.', unit:'°C', value:parseFloat(m[1].replace(',','.')), min:-10, max:35, color:'#80deea'});
+  m = text.match(/ветр\w*\s*до\s*(\d{1,2})\s*м\/с|ветр\w*[^\d]*(\d{1,2})\s*м\/с/i);
+  if (m) panels.push({label:'ветер', unit:'м/с', value:parseInt(m[1]||m[2]), min:0, max:20, color:'#90caf9'});
+  m = text.match(/давлени\w*\s*(\d{3,4})\s*гПа/i);
+  if (m) panels.push({label:'давл.', unit:'гПа', value:parseInt(m[1]), min:990, max:1030, color:'#ce93d8'});
+  if (!panels.length) return null;
+  return {type:'multiscale', panels:panels};
+}
+
+function getTomorrowPanels(block, text) {
+  var panels = [];
+  if (block.t_min != null) panels.push({label:'T мин', unit:'°C', value:block.t_min, min:-10, max:35, color:'#81c784'});
+  if (block.t_max != null) panels.push({label:'T макс', unit:'°C', value:block.t_max, min:-10, max:35, color:'#ffb74d'});
+  var m = text.match(/CAPE[^\d]*(\d{2,4})/i);
+  if (m) panels.push({label:'CAPE', unit:'Дж/кг', value:parseInt(m[1]), min:0, max:1000, color:'#ff7043'});
+  m = text.match(/300\s*гПа[^\d]*(\d{1,2})\s*м\/с/i);
+  if (m) panels.push({label:'ветер\n300гПа', unit:'м/с', value:parseInt(m[1]), min:0, max:35, color:'#90caf9'});
+  if (!panels.length) return null;
+  return {type:'multiscale', panels:panels};
+}
+
+function getNext3Panels(block, text) {
+  var panels = [];
+  if (block.t_min != null) panels.push({label:'T мин', unit:'°C', value:block.t_min, min:-10, max:35, color:'#81c784'});
+  if (block.t_max != null) panels.push({label:'T макс', unit:'°C', value:block.t_max, min:-10, max:35, color:'#ffb74d'});
+  var m = text.match(/500\s*гПа[^\d]*(\d{1,2})\s*м\/с/i);
+  if (m) panels.push({label:'ветер\n500гПа', unit:'м/с', value:parseInt(m[1]), min:0, max:35, color:'#90caf9'});
+  m = text.match(/CAPE[^\d]*(\d{2,4})/i);
+  if (m) panels.push({label:'CAPE', unit:'Дж/кг', value:parseInt(m[1]), min:0, max:1000, color:'#ff7043'});
+  if (!panels.length) return null;
+  return {type:'multiscale', panels:panels};
+}
+
+function getMarinePanels(text) {
+  var panels = [];
+  var m = text.match(/текущих\s*[+-]?(\d{1,2}(?:[.,]\d)?)/i);
+  if (m) panels.push({label:'T воды\nсейчас', unit:'°C', value:parseFloat(m[1].replace(',','.')), min:10, max:28, color:'#4dd0e1'});
+  m = text.match(/до\s*[+-]?(\d{1,2}(?:[.,]\d)?)\s*°?C\s*к/i);
+  if (m) panels.push({label:'T воды\nпозже', unit:'°C', value:parseFloat(m[1].replace(',','.')), min:10, max:28, color:'#26c6da'});
+  m = text.match(/(\d{1,3})[–-](\d{1,3})\s*см/);
+  if (m) panels.push({label:'волна', unit:'см', value:(parseInt(m[1])+parseInt(m[2]))/2, min:0, max:150, color:'#64b5f6'});
+  else { m = text.match(/до\s*(\d{1,3})\s*см/); if(m) panels.push({label:'волна', unit:'см', value:parseInt(m[1]), min:0, max:150, color:'#64b5f6'}); }
+  m = text.match(/период\w*\s*(\d{1,2})[–-](\d{1,2})\s*сек/i);
+  if (m) panels.push({label:'период', unit:'с', value:(parseInt(m[1])+parseInt(m[2]))/2, min:0, max:10, color:'#80deea'});
+  if (!panels.length) return null;
+  return {type:'multiscale', panels:panels};
+}
+
+function getTrendPanels(text) {
+  var panels = [];
+  var m = text.match(/(\d{1,2})[–-](\d{1,2})°C/);
+  if (m) panels.push({label:'T днём', unit:'°C', value:(parseInt(m[1])+parseInt(m[2]))/2, min:-10, max:35, color:'#ce93d8'});
+  m = text.match(/50\s*гПа[^\d-]*(-?\d{1,3})/i);
+  if (m) panels.push({label:'T\n50гПа', unit:'°C', value:parseInt(m[1]), min:-70, max:-30, color:'#b39ddb'});
+  m = text.match(/поток\s*(\d{1,2})[–-](\d{1,2})\s*м\/с/i);
+  if (m) panels.push({label:'ветер\nстрато', unit:'м/с', value:(parseInt(m[1])+parseInt(m[2]))/2, min:0, max:20, color:'#90caf9'});
+  if (!panels.length) return null;
+  return {type:'multiscale', panels:panels};
+}
+
+function getTempRange(text, key) {
+  var night=null, day=null, eve=null;
+  var m;
+  // Ночная температура: "ночных 18°C" / "18°C ночью" / "ночью 18"
+  m = text.match(/ночн\w*\s+(-?\d{1,2})[°°]|(-?\d{1,2})[°°]\s*C\s*ноч|ноч\w*\s+(-?\d{1,2})/i);
+  if (m) night = parseInt(m[1]||m[2]||m[3]);
+  // Дневная температура: "максимум 25°C" / "до 25°C днём" / "днём 25" / "25°C днём"
+  m = text.match(/максимум\s+(-?\d{1,2})[°°]|до\s+(-?\d{1,2})[°°]\s*C\s*дн|дн[её]м\s+(-?\d{1,2})[°°]?|(-?\d{1,2})[°°]\s*C\s*дн/i);
+  if (m) day = parseInt(m[1]||m[2]||m[3]||m[4]);
+  // Вечерняя
+  m = text.match(/вечером\s+(-?\d{1,2})|(-?\d{1,2})[°°]\s*C\s*вечером/i);
+  if (m) eve = parseInt(m[1]||m[2]);
+  // Fallback: диапазон "от X до Y"
+  if (!day && !night) {
+    m = text.match(/от\s+(-?\d{1,2})\s+до\s+(\d{1,2})/i);
+    if (m) { night=parseInt(m[1]); day=parseInt(m[2]); }
+  }
+  // Fallback: просто "поднимется до X°C" / "восстановится до X°C"
+  if (!day) {
+    m = text.match(/(?:поднимется|восстановится|достигнет)\s+до\s+(-?\d{1,2})[°°]/i);
+    if (m) day = parseInt(m[1]);
+  }
+  var vals, labels;
+  if (eve) { vals=[night,eve,day]; labels=['Ночь','Вечер','День']; }
+  else if (night && day) { vals=[night,day]; labels=['Ночь','День']; }
+  else if (day) { vals=[day]; labels=['День']; }
+  else { vals=[null]; labels=['']; }
+  return { type:'bar', label:'Температура (°C)', xLabels:labels, values:vals };
+}
+
+function getNext3Data(text) {
+  var nums=[], labels=['+2','+3','+4'];
+  var re=/до\s+(\d{1,2})[°°]|(\d{1,2})…(\d{1,2})/g, m;
+  while((m=re.exec(text))!==null && nums.length<3) {
+    if(m[1]) nums.push(parseInt(m[1]));
+    else if(m[2]&&m[3]) nums.push((parseInt(m[2])+parseInt(m[3]))/2);
+  }
+  while(nums.length<3) nums.push(null);
+  return { type:'bar', label:'Ожидаемая температура (°C)', xLabels:labels, values:nums };
+}
+
+function getWarningsData(text) {
+  var cape=null, li=null, hum=null, prec=null;
+  var m;
+  m=text.match(/CAPE[^\d]*(\d{2,4})/i); if(m) cape=parseInt(m[1]);
+  m=text.match(/(?:LI|неустойчивости)[^\d-]*(-?\d{1,2}(?:[.,]\d)?)/i);
+  if(m) li=parseFloat(m[1].replace(',','.'));
+  m=text.match(/(\d{1,3})%[^.]*(?:700|влаж|средн)/i);
+  if(!m) m=text.match(/влаж\w*[^\d]*(\d{1,3})%/i);
+  if(!m) m=text.match(/(\d{1,3})%\s*на\s*(?:700|850)/i);
+  if(m) hum=parseInt(m[1]);
+  m=text.match(/вероятност\w*[^\d]*(\d{1,3})%/i);
+  if(!m) m=text.match(/(\d{1,3})%[^.]*вероятн/i);
+  if(m) prec=parseInt(m[1]);
+  if(!cape && !li && !hum && !prec) return null;
+  return {
+    type:'multiscale',
+    panels:[
+      { label:'CAPE', unit:'Дж/кг', value:cape, min:0, max:1000, color:'#ff7043' },
+      { label:'LI',   unit:'°C',    value:li,   min:-6, max:2,   color:'#ff8a65', negate:true },
+      { label:'Влажн\n700гПа', unit:'%', value:hum, min:0, max:100, color:'#4fc3f7' },
+      { label:'Осадки', unit:'%',   value:prec, min:0, max:100, color:'#81d4fa' },
+    ]
+  };
+}
+
+function getTrendData(text) {
+  var vals=[], re=/до\s+(\d{1,2})[°°]|(\d{1,2})–(\d{1,2})[°°]/g, m;
+  while((m=re.exec(text))!==null && vals.length<4) {
+    if(m[1]) vals.push(parseInt(m[1]));
+    else if(m[2]&&m[3]) vals.push((parseInt(m[2])+parseInt(m[3]))/2);
+  }
+  while(vals.length<4) vals.push(null);
+  return { type:'line', label:'Тенденция температуры (°C)', xLabels:['+1','+2','+3','+4'], values:vals };
+}
+
+// ── Анимированный фон ──────────────────────────────────────────────────────
+var _bgTheme = BLOCK_THEMES.today;
+var _bgParticles = [];
+
+function updateBgTheme(t) { _bgTheme = t; }
+
+function initParticles() {
+  _bgParticles = [];
+  for (var i=0; i<60; i++) {
+    _bgParticles.push({
+      x: Math.random(), y: Math.random(),
+      r: Math.random()*1.6+0.6,
+      vx: (Math.random()-.5)*0.0012, vy: (Math.random()-.5)*0.0012,
+      a: Math.random()*0.5+0.15,
+      ph: Math.random()*Math.PI*2,
+    });
+  }
+}
+
+function startBgAnim() {
+  initParticles();
+  var canvas = document.getElementById('presBg');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  var t = 0;
+  function frame() {
+    t += 0.02;
+    var W=canvas.width=window.innerWidth, H=canvas.height=window.innerHeight;
+    if (!W||!H) { _bgAnim=requestAnimationFrame(frame); return; }
+    var ctx=canvas.getContext('2d');
+    var g=ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,_bgTheme.from); g.addColorStop(1,_bgTheme.to);
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    _bgParticles.forEach(function(p) {
+      p.x+=p.vx; p.y+=p.vy;
+      if(p.x<0)p.x=1; if(p.x>1)p.x=0;
+      if(p.y<0)p.y=1; if(p.y>1)p.y=0;
+      var pulse = 0.6 + 0.4*Math.sin(t + p.ph);
+      var alpha = Math.max(0, Math.min(1, p.a * pulse));
+      var hex=Math.round(alpha*255).toString(16).padStart(2,'0');
+      ctx.beginPath(); ctx.arc(p.x*W,p.y*H,p.r*pulse,0,Math.PI*2);
+      ctx.fillStyle=_bgTheme.accent+hex; ctx.fill();
+    });
+    _bgAnim=requestAnimationFrame(frame);
+  }
+  _bgAnim=requestAnimationFrame(frame);
+}
+
+// Загружаем мета блоков сразу
+loadBlocksMeta();
+(function(){
+  var url='https://ruslan591.github.io/weather-_Odessa/data/forecast_video.mp4?v='+Date.now();
+  var vid = document.getElementById('videoSrc');
+  var wrap = document.getElementById('videoWrap');
+  vid.src = url;
+  vid.parentElement.load();
+  wrap.style.display='block';
+})();
+</script>
+</body>
+</html>
