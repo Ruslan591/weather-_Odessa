@@ -99,7 +99,7 @@ def fetch_run_time(meta_id):
 def git_push_history():
     try:
         year = datetime.now(timezone.utc).year
-        subprocess.run(["git", "-C", BASE_DIR, "add",
+        _candidates = [
                         "data/model_runs_history.json",
                         f"data/synop_{year}.txt",
                         "data/model_bias.json",
@@ -108,7 +108,11 @@ def git_push_history():
                         "data/forecast_video.mp4", "data/forecast_voice.mp3",
                         "data/blocks",
                         "data/forecast_analysis_gemini.json", "data/forecast_analysis_gemini.mp3",
-                        "data/blocks_gemini"],
+                        "data/blocks_gemini",
+                        "data/ai_schedule.json",
+                        ]
+        _to_add = [p for p in _candidates if os.path.exists(os.path.join(BASE_DIR, p))]
+        subprocess.run(["git", "-C", BASE_DIR, "add"] + _to_add,
                       check=True, capture_output=True)
         result = subprocess.run(
             ["git", "-C", BASE_DIR, "commit", "-m", "data: synop + history update"],
