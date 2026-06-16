@@ -307,7 +307,7 @@ def build_text_segments(section_text, date_prefix, boundaries):
 
 def main(force=False):
     if not os.path.exists(INPUT_FILE):
-        print(f"  [BLOCKS] Файл не найден: {INPUT_FILE}")
+        print(f"  [BLOCKS-Gemini] Файл не найден: {INPUT_FILE}")
         return
 
     with open(INPUT_FILE, 'r', encoding='utf-8') as f:
@@ -315,12 +315,12 @@ def main(force=False):
 
     text = data.get('text', '')
     if not text:
-        print("  [BLOCKS] Нет текста в JSON")
+        print("  [BLOCKS-Gemini] Нет текста в JSON")
         return
 
     os.makedirs(BLOCKS_DIR, exist_ok=True)
     sections = parse_sections(text)
-    print(f"\n  [BLOCKS] Найдено секций: {list(sections.keys())}")
+    print(f"\n  [BLOCKS-Gemini] Найдено секций: {list(sections.keys())}")
 
     existing_meta = {}
     if os.path.exists(META_FILE):
@@ -332,13 +332,13 @@ def main(force=False):
 
     src_hash = data.get('data_hash', '')
     if not force and existing_meta.get('data_hash') == src_hash and src_hash:
-        print("  [BLOCKS] Данные не изменились — пропускаю генерацию блоков")
+        print("  [BLOCKS-Gemini] Данные не изменились — пропускаю генерацию блоков")
         return
 
     global _selected_voice
     _selected_voice = random.choice(VOICES)
-    print(f"  [BLOCKS] Голос: {_selected_voice}")
-    print("  [BLOCKS] Генерирую блоки озвучки...")
+    print(f"  [BLOCKS-Gemini] Голос: {_selected_voice}")
+    print("  [BLOCKS-Gemini] Генерирую блоки озвучки...")
 
     gen_at = data.get('generated_at', '')
     try:
@@ -453,8 +453,8 @@ def main(force=False):
         json.dump(meta, f, ensure_ascii=False, indent=2)
 
     total_dur = sum(b['duration'] for b in blocks_meta)
-    print(f"  [BLOCKS] \u2705 {len(blocks_meta)} блоков, ~{total_dur:.0f} сек суммарно")
-    print(f"  [BLOCKS] Мета: {META_FILE}")
+    print(f"  [BLOCKS-Gemini] \u2705 {len(blocks_meta)} блоков, ~{total_dur:.0f} сек суммарно")
+    print(f"  [BLOCKS-Gemini] Мета: {META_FILE}")
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
