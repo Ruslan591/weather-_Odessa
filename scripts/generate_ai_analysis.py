@@ -844,7 +844,19 @@ def generate_gemini_analysis(prompt, now_iso, current_hash, days, run_key):
     try:
         text = call_gemini(prompt, api_key)
     except Exception as e:
-        print(f"  [AI-Gemini] Ошибка Gemini API: {e}")
+        print(f"  [AI-Gemini] Ошибка Gemini API: {e} -- сохраняю pending")
+        _existing = {}
+        if os.path.exists(OUTPUT_FILE_GEMINI):
+            try:
+                with open(OUTPUT_FILE_GEMINI, encoding="utf-8") as _f:
+                    _existing = json.load(_f)
+            except Exception:
+                pass
+        _existing["pending"] = True
+        _existing["pending_run_key"] = run_key
+        _existing["changed"] = False
+        with open(OUTPUT_FILE_GEMINI, "w", encoding="utf-8") as _f:
+            json.dump(_existing, _f, ensure_ascii=False, indent=2)
         return
 
     result = {
