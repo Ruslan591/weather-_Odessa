@@ -339,6 +339,37 @@ def main():
                 print("  [AI] Повтор успешен, pending снят")
             else:
                 print("  [AI] Повтор снова упал — pending остаётся")
+        # Повтор Gemini если pending
+        _gemini_file = os.path.join(BASE_DIR, "data", "forecast_analysis_gemini.json")
+        _gemini_pending = False
+        _gemini_run_key = None
+        if os.path.exists(_gemini_file):
+            try:
+                import json as _jg
+                with open(_gemini_file, encoding="utf-8") as _fg:
+                    _gd = _jg.load(_fg)
+                _gemini_pending = _gd.get("pending", False)
+                _gemini_run_key = _gd.get("pending_run_key")
+            except Exception:
+                pass
+        if _gemini_pending:
+            print("  [AI-Gemini] Найден pending -- повторная попытка Gemini...")
+            _gr = subprocess.run(
+                [PYTHON, os.path.join(SCRIPTS_DIR, "generate_ai_analysis.py"), "--force-gemini"],
+                cwd=BASE_DIR, capture_output=False
+            )
+            if _gr.returncode == 0:
+                try:
+                    with open(_gemini_file, encoding="utf-8") as _fg2:
+                        _gd2 = _jg.load(_fg2)
+                    if _gd2.get("changed") and not _gd2.get("pending"):
+                        subprocess.run(
+                            [PYTHON, os.path.join(SCRIPTS_DIR, "make_blocks_gemini.py")],
+                            cwd=BASE_DIR, capture_output=False
+                        )
+                except Exception:
+                    pass
+
         # Всё равно обновляем SYNOP (и снимок если готов новый ансамбль)
         subprocess.run(
             [PYTHON, os.path.join(SCRIPTS_DIR, "update_local.py"), "--no-model", "--no-fill"],
