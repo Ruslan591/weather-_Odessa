@@ -106,7 +106,9 @@ def git_push_history():
                         "data/model_weights.json",
                         "data/forecast_analysis_claude.json", "data/forecast_analysis_claude.mp3",
                         "data/forecast_video.mp4", "data/forecast_voice.mp3",
-                        "data/blocks"],
+                        "data/blocks",
+                        "data/forecast_analysis_gemini.json", "data/forecast_analysis_gemini.mp3",
+                        "data/blocks_gemini"],
                       check=True, capture_output=True)
         result = subprocess.run(
             ["git", "-C", BASE_DIR, "commit", "-m", "data: synop + history update"],
