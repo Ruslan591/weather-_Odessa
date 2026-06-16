@@ -950,7 +950,7 @@ def cooldown_ok(existing, new_models=None, force=False, provider="claude"):
 
 # ── Основная логика ───────────────────────────────────────────────────────────
 
-def main(force=False, new_models=None):
+def main(force=False, new_models=None, force_gemini=False):
     if not ai_enabled():
         print("  [AI] Анализ отключён (AI_ANALYSIS_ENABLED=false в .env)")
         return
@@ -984,7 +984,7 @@ def main(force=False, new_models=None):
 
     ok_gemini, run_key_gemini = (False, None)
     if gemini_enabled():
-        ok_gemini, run_key_gemini = cooldown_ok(existing_gemini, new_models=new_models, force=force, provider="gemini")
+        ok_gemini, run_key_gemini = cooldown_ok(existing_gemini, new_models=new_models, force=(force or force_gemini), provider="gemini")
 
     if not ok_claude and not ok_gemini:
         return
@@ -1089,7 +1089,8 @@ if __name__ == "__main__":
     import argparse
     p = argparse.ArgumentParser()
     p.add_argument("--force", action="store_true")
+    p.add_argument("--force-gemini", action="store_true")
     p.add_argument("--models", default="", help="Comma-separated list of models with new runs")
     a = p.parse_args()
     new_models = [m.strip() for m in a.models.split(",") if m.strip()]
-    main(force=a.force, new_models=new_models)
+    main(force=a.force, new_models=new_models, force_gemini=a.force_gemini)
