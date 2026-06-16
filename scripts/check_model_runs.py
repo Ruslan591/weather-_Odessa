@@ -97,6 +97,7 @@ def fetch_run_time(meta_id):
 # ── пайплайн ──────────────────────────────────────────────────────────────────
 
 def git_push_history():
+    import time as _time
     try:
         year = datetime.now(timezone.utc).year
         _candidates = [
@@ -121,13 +122,24 @@ def git_push_history():
             msg = result.stdout.strip() or result.stderr.strip()
             if "nothing to commit" not in msg and "nothing added" not in msg:
                 print(f"  commit warn: {msg}")
-        push = subprocess.run(
-            ["git", "-C", BASE_DIR, "push", "--force-with-lease"],
-            capture_output=True, text=True)
-        if push.returncode == 0:
-            print("  history push ✓")
-        else:
-            print(f"  history push ✗: {push.stderr.strip()}")
+        # push with retry (3 attempts, delays 15s/30s)
+        _delays = [15, 30]
+        for _attempt in range(3):
+            push = subprocess.run(
+                ["git", "-C", BASE_DIR, "push", "--force-with-lease"],
+                capture_output=True, text=True)
+            if push.returncode == 0:
+                suffix = f" (attempt {_attempt+1})" if _attempt > 0 else ""
+                print(f"  history push ✓{suffix}")
+                return
+            err = push.stderr.strip()
+            print(f"  history push ✗ attempt {_attempt+1}: {err}")
+            if _attempt < 2:
+                _time.sleep(_delays[_attempt])
+                # resync ref before retry
+                subprocess.run(["git", "-C", BASE_DIR, "fetch", "origin", "main"],
+                               capture_output=True)
+        print("  history push failed after 3 attempts")
     except Exception as e:
         print(f"  history git error: {e}")
 
