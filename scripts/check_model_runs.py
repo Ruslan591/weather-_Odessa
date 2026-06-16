@@ -306,6 +306,22 @@ def main():
                             _json2.dump({"reason": "make_blocks failed"}, _pf)
                         print("  [AI] make_blocks упал — отложено, повтор при следующем запуске")
 
+                # --- Gemini blocks ---
+                _ai_file_g = _os.path.join(BASE_DIR, "data", "forecast_analysis_gemini.json")
+                _ai_changed_g = False
+                try:
+                    with open(_ai_file_g, encoding="utf-8") as _fg:
+                        _ai_changed_g = json.load(_fg).get("changed", False)
+                except Exception:
+                    pass
+                if _ai_changed_g:
+                    _blocks_result_g = subprocess.run(
+                        [PYTHON, _os.path.join(SCRIPTS_DIR, "make_blocks_gemini.py")],
+                        cwd=BASE_DIR, capture_output=False
+                    )
+                    if _blocks_result_g.returncode != 0:
+                        print("  [AI-Gemini] make_blocks_gemini упал")
+
         git_push_history()
     else:
         print("  Новых прогонов нет.\n")
