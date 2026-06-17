@@ -166,6 +166,11 @@ def preprocess_tts(text):
     text = text.replace('\u00b0C', 'градусов')
     text = text.replace('\u00b0', ' градусов')
 
+    # Скобки с тильдой: (~5,8 км) → 5,8 километра
+    text = re.sub(r'\(~(\d+(?:[.,]\d+)?)\s*км\)', r' километра', text)
+    # Остальные км без скобок
+    text = re.sub(r'(\d+(?:[.,]\d+)?)\s*км', r' километра', text)
+
     # Давление
     text = text.replace('гПа', 'гектопаскалей')
 
