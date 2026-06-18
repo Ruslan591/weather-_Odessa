@@ -839,8 +839,13 @@ def call_gemini(prompt, api_key, model=GEMINI_MODEL):
         headers={"Content-Type": "application/json"},
         method="POST"
     )
-    with urllib.request.urlopen(req, timeout=60) as r:
-        resp = json.loads(r.read().decode())
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            raw = r.read().decode()
+        resp = json.loads(raw)
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        raise Exception(f"HTTP Error {e.code}: {e.reason} | {body[:300]}")
     return resp["candidates"][0]["content"]["parts"][0]["text"]
 
 def generate_gemini_analysis(prompt, now_iso, current_hash, days, run_key):
