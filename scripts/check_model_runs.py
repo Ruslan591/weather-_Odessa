@@ -371,22 +371,40 @@ def main():
             except Exception:
                 pass
         if _gemini_pending:
-            print("  [AI-Gemini] Найден pending -- повторная попытка Gemini...")
-            _gr = subprocess.run(
-                [PYTHON, os.path.join(SCRIPTS_DIR, "generate_ai_analysis.py"), "--force-gemini"],
-                cwd=BASE_DIR, capture_output=False
-            )
-            if _gr.returncode == 0:
+            # Лимит retry: не более 3 в сутки на один run_key
+            import datetime as _dt
+            _retry_count = _gd.get("pending_retry_count", 0)
+            _retry_date = _gd.get("pending_retry_date", "")
+            _today = _dt.datetime.utcnow().strftime("%Y-%m-%d")
+            if _retry_date != _today:
+                _retry_count = 0
+            if _retry_count >= 3:
+                print(f"  [AI-Gemini] pending retry лимит ({_retry_count}/3 за {_today}) -- пропускаю")
+            else:
+                _retry_count += 1
                 try:
-                    with open(_gemini_file, encoding="utf-8") as _fg2:
-                        _gd2 = _jg.load(_fg2)
-                    if _gd2.get("changed") and not _gd2.get("pending"):
-                        subprocess.run(
-                            [PYTHON, os.path.join(SCRIPTS_DIR, "make_blocks_gemini.py")],
-                            cwd=BASE_DIR, capture_output=False
-                        )
+                    _gd["pending_retry_count"] = _retry_count
+                    _gd["pending_retry_date"] = _today
+                    with open(_gemini_file, "w", encoding="utf-8") as _fw:
+                        _jg.dump(_gd, _fw, ensure_ascii=False, indent=2)
                 except Exception:
                     pass
+                print(f"  [AI-Gemini] Найден pending -- повторная попытка Gemini ({_retry_count}/3)...")
+                _gr = subprocess.run(
+                    [PYTHON, os.path.join(SCRIPTS_DIR, "generate_ai_analysis.py"), "--force-gemini"],
+                    cwd=BASE_DIR, capture_output=False
+                )
+                if _gr.returncode == 0:
+                    try:
+                        with open(_gemini_file, encoding="utf-8") as _fg2:
+                            _gd2 = _jg.load(_fg2)
+                        if _gd2.get("changed") and not _gd2.get("pending"):
+                            subprocess.run(
+                                [PYTHON, os.path.join(SCRIPTS_DIR, "make_blocks_gemini.py")],
+                                cwd=BASE_DIR, capture_output=False
+                            )
+                    except Exception:
+                        pass
 
         # Всё равно обновляем SYNOP (и снимок если готов новый ансамбль)
         subprocess.run(
