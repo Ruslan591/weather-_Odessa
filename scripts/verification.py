@@ -23,9 +23,40 @@ PERIOD_LABELS_RU = {
 }
 
 
+def _kiev_dst_offset(utc_dt):
+    """EU DST: переход в последнее воскресенье марта (01:00 UTC, +2->+3) и
+    последнее воскресенье октября (01:00 UTC, +3->+2). Используется только как
+    fallback, если на устройстве нет базы tzdata для zoneinfo."""
+    year = utc_dt.year
+
+    def last_sunday(y, month):
+        d = datetime(y, month, 31, tzinfo=timezone.utc)
+        while d.month != month:
+            d -= timedelta(days=1)
+        while d.weekday() != 6:  # 6 = воскресенье
+            d -= timedelta(days=1)
+        return d.replace(hour=1, minute=0, second=0, microsecond=0)
+
+    dst_start = last_sunday(year, 3)
+    dst_end = last_sunday(year, 10)
+    if dst_start <= utc_dt < dst_end:
+        return 3  # EEST (летнее)
+    return 2  # EET (зимнее)
+
+
+def _to_kiev(utc_dt):
+    """Конвертирует UTC datetime в Europe/Kiev. НЕ зависит от системного TZ
+    устройства (он может быть выставлен неверно/измениться) — использует
+    zoneinfo, а если базы tzdata нет на устройстве — расчёт DST вручную."""
+    try:
+        from zoneinfo import ZoneInfo
+        return utc_dt.astimezone(ZoneInfo("Europe/Kiev"))
+    except Exception:
+        return utc_dt.astimezone(timezone(timedelta(hours=_kiev_dst_offset(utc_dt))))
+
+
 def local_now():
-    # Системный часовой пояс устройства (как и остальной проект, см. now_str в build_prompt)
-    return datetime.now(timezone.utc).astimezone()
+    return _to_kiev(datetime.now(timezone.utc))
 
 
 def current_and_previous_period(now_local=None):
@@ -199,9 +230,9 @@ def ww_has_rain(ww):
 
 
 def _synop_local_dt(r):
-    """SYNOP-время хранится в UTC; конвертируем в системный часовой пояс устройства."""
+    """SYNOP-время хранится в UTC; конвертируем в Europe/Kiev (см. _to_kiev)."""
     dt_utc = datetime(int(r["y"]), int(r["mo"]), int(r["dd"]), int(r["hh"]), tzinfo=timezone.utc)
-    return dt_utc.astimezone()
+    return _to_kiev(dt_utc)
 
 
 def aggregate_synop_period(synop_records, date_str, period_name):
