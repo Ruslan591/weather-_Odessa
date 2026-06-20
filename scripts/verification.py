@@ -90,8 +90,10 @@ def aggregate_forecast_period(raw_hourly, date_str, period_name):
         return None
 
     t_vals = [T2m[i] for i in idxs if T2m[i] is not None]
-    ws_vals = [WS[i] for i in idxs if WS[i] is not None]
-    wg_vals = [WG[i] for i in idxs if WG[i] is not None]
+    # open-meteo по умолчанию отдаёт скорость ветра в км/ч (windspeed_unit не задан в запросе);
+    # SYNOP-факт — в м/с. Переводим в м/с здесь, чтобы прогноз и факт были в одних единицах.
+    ws_vals = [WS[i] / 3.6 for i in idxs if WS[i] is not None]
+    wg_vals = [WG[i] / 3.6 for i in idxs if WG[i] is not None]
     p_vals = [P[i] for i in idxs if P[i] is not None]
     prec_sum = sum(x for i in idxs for x in [Prec[i]] if x is not None)
     wc_vals = [WC[i] for i in idxs if WC[i] is not None]
