@@ -764,8 +764,8 @@ def preprocess_tts(text):
             form = 'десятая' if dec_part == '1' else 'десятых'
             return f"{int_part} целых {words.get(dec_part, dec_part)} {form}"
         return f"{int_part} целых {dec_part} сотых"
-    text = re.sub(r'(\d+)\.(\d{1,2})', decimal_to_words, text)
-    text = re.sub(r'(\d+),(\d{1,2})', decimal_to_words, text)
+    text = re.sub(r'(\d+)\.\s?(\d{1,2})\b', decimal_to_words, text)
+    text = re.sub(r'(\d+),\s?(\d{1,2})\b', decimal_to_words, text)
     # % со склонением
     def _proc(n):
         try: n = abs(int(n)) % 100
