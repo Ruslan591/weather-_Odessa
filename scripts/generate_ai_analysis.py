@@ -11,6 +11,7 @@ import asyncio
 import edge_tts
 from datetime import datetime, timezone, timedelta
 import hashlib
+import verification
 
 BASE_DIR      = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUTPUT_FILE   = os.path.join(BASE_DIR, "data", "forecast_analysis_claude.json")
@@ -530,7 +531,7 @@ def _get_mode(now_utc_hour):
     if 16 <= now_utc_hour < 18: return "evening"
     return "evening"  # 18-23 UTC
 
-def build_prompt(days, marine=None, data_time=None):
+def build_prompt(days, marine=None, data_time=None, verification_text=None):
     now_local = datetime.now(timezone.utc).astimezone()
     now_utc   = datetime.now(timezone.utc)
     now_str   = now_local.strftime("%d.%m.%Y %H:%M местного")
@@ -590,13 +591,18 @@ def build_prompt(days, marine=None, data_time=None):
         b1_desc = "только ночь до рассвета (2-3 предложения)"
         b2_desc = "подробный дневной анализ (3-5 предложений)"
 
-    struct = [
-        f"1. {block1} — {b1_desc}",
-        f"2. {block2} — {b2_desc}",
-        f"3. {next_block} — общий обзор (3-4 предложения)",
-        f"4. ## ⚠️ Предупреждения — только если есть реальные риски. Если рисков нет — пропусти.",
-        f"5. ## 🌊 Море — температура воды, волнение, условия (1-2 предложения)",
-        f"6. {tend_block} — динамика погодного процесса: как меняется давление/циркуляция, ожидаемый температурный диапазон, когда возможна смена типа погоды. Конкретные цифры T. Если стратосфера даёт сигнал — интерпретировать явно. 2-3 предложения.",
+    struct = []
+    step = 1
+    if verification_text:
+        struct.append(f"{step}. ## 📊 Точность прогноза — кратко прокомментируй сверку прогноза с фактом ниже (1-2 предложения: насколько точен был прогноз, в чём разошёлся).")
+        step += 1
+    struct += [
+        f"{step}. {block1} — {b1_desc}",
+        f"{step+1}. {block2} — {b2_desc}",
+        f"{step+2}. {next_block} — общий обзор (3-4 предложения)",
+        f"{step+3}. ## ⚠️ Предупреждения — только если есть реальные риски. Если рисков нет — пропусти.",
+        f"{step+4}. ## 🌊 Море — температура воды, волнение, условия (1-2 предложения)",
+        f"{step+5}. {tend_block} — динамика погодного процесса: как меняется давление/циркуляция, ожидаемый температурный диапазон, когда возможна смена типа погоды. Конкретные цифры T. Если стратосфера даёт сигнал — интерпретировать явно. 2-3 предложения.",
     ]
 
     # Форматируем время данных open-meteo для промпта
@@ -706,6 +712,9 @@ def build_prompt(days, marine=None, data_time=None):
             lines.append(f"-- {label} ({dt.strftime('%d.%m')}) --")
             lines += fmt_marine(m)
         lines.append("")
+
+    if verification_text:
+        lines += [verification_text, ""]
 
     lines += [
         "СТРУКТУРА ОТВЕТА (строго, используй точные заголовки):",
@@ -1015,6 +1024,23 @@ def main(force=False, new_models=None, force_gemini=False):
         print(f"  [AI] Ошибка open-meteo: {e}")
         return
 
+    verification_text = None
+    try:
+        _verif_path = os.path.join(BASE_DIR, "data", "verification_snapshots.json")
+        _year = datetime.now(timezone.utc).strftime("%Y")
+        _synop_path = os.path.join(BASE_DIR, "data", f"synop_{_year}.txt")
+        if os.path.exists(_synop_path):
+            with open(_synop_path, "r", encoding="utf-8") as _sf:
+                _synop_text = _sf.read()
+            verification_text, _verif_store = verification.update_and_get_verification(
+                _verif_path, raw.get("hourly", {}), _synop_text
+            )
+            verification.save_verification_store(_verif_path, _verif_store)
+            import subprocess as _sp2
+            _sp2.run(["git", "-C", BASE_DIR, "add", "data/verification_snapshots.json"], capture_output=True)
+    except Exception as _e:
+        print(f"  [AI] Верификация: пропущена ({_e})")
+
     days = aggregate_days(raw)
     data_time = raw.get("data_time")
     if data_time:
@@ -1055,7 +1081,7 @@ def main(force=False, new_models=None, force_gemini=False):
             age_hours = 999
         return age_hours < STALE_HOURS
 
-    prompt = build_prompt(days, marine=marine, data_time=data_time)
+    prompt = build_prompt(days, marine=marine, data_time=data_time, verification_text=verification_text)
 
     if ok_claude and _is_fresh(existing):
         existing["last_checked"] = now_iso
