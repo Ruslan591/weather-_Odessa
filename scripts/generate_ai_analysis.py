@@ -722,7 +722,7 @@ def build_prompt(days, marine=None, data_time=None):
 def preprocess_tts(text):
     import re
     # Аббревиатуры
-    text = re.sub(r'(?i)индекс\s+LI', 'индекс неустойчивости', text)
+    text = re.sub(r'(?i)индекс(\s+неустойчивости)?\s+LI\b', 'индекс неустойчивости', text)
     text = re.sub(r'\bLI\b', 'индекс неустойчивости', text)
     text = text.replace('CAPE', 'индекс конвективной доступной энергии')
     text = text.replace('CIN', 'конвективное торможение')
