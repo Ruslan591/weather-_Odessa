@@ -646,8 +646,10 @@ def build_prompt(days, marine=None, data_time=None):
         "ПРОШЕДШИЕ ПЕРИОДЫ: если описываешь период который уже прошёл (ночь в утреннем выпуске,",
         "утро в дневном и т.д.) — используй прошедшее время без 'бы':",
         "'По прогнозу, ночью температура опускалась до X°C' (не 'опустилась бы').",
-        "ЗАПРЕЩЕНО использовать названия дней недели (понедельник, вторник и т.д.).",
-        "Вместо дня недели используй только дату: '8 июня', '9 июня' и т.п.",
+        "Для каждого дня в данных ниже указан день недели (например 'Пн', 'Вт') — "
+        "используй ЕГО, не вычисляй и не угадывай день недели сам. Можно писать "
+        "и день недели, и дату вместе ('в субботу, 21 июня') или просто день недели "
+        "('в субботу') — но всегда строго тот, что указан в данных.",
     ]
     if mode_hint:
         lines.append(mode_hint)
@@ -658,9 +660,11 @@ def build_prompt(days, marine=None, data_time=None):
     ]
 
     day_labels = ["СЕГОДНЯ", "ЗАВТРА", "День +2", "День +3", "День +4"]
+    WEEKDAY_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
 
     for i, d in enumerate(days):
         dt = datetime.strptime(d["date"], "%Y-%m-%d")
+        weekday_label = WEEKDAY_RU[dt.weekday()]
         label = day_labels[i] if i < len(day_labels) else f"День +{i}"
         wc_label = WMO_CODES.get(d.get("weathercode_dom"), f"код {d.get('weathercode_dom')}")
         tp=d.get("tp",{}); gp=d.get("gp",{}); rh=d.get("rh",{})
@@ -670,7 +674,7 @@ def build_prompt(days, marine=None, data_time=None):
             if deg is None: return "?"
             return ["С","СВ","В","ЮВ","Ю","ЮЗ","З","СЗ"][int((deg+22.5)/45)%8]
         lines += [
-            f"-- {label} ({dt.strftime('%d.%m')}) --",
+            f"-- {label} ({dt.strftime('%d.%m')}, {weekday_label}) --",
             f"  T: {d['T']['min']}..{d['T']['max']}C  ощущ {d['T']['app_min']}..{d['T']['app_max']}C  день {d['T']['day_mean']}C  ночь {d['T']['night_mean']}C",
             f"  Td={d['Td_mean']}C  RH={d['RH_mean']}%  P={d['pressure_mean']}гПа  вид.мин={d.get('vis_min')}м",
             f"  Осадки: {d['precip_mm']}мм  вер.до {d['precip_prob_max']}%  снег {d['snow_cm']}см",
