@@ -864,7 +864,7 @@ def call_gemini(prompt, api_key, model=GEMINI_MODEL):
         raise Exception(f"HTTP Error {e.code}: {e.reason} | {body[:300]}")
     return resp["candidates"][0]["content"]["parts"][0]["text"]
 
-def generate_gemini_analysis(prompt, now_iso, current_hash, days, run_key):
+def generate_gemini_analysis(prompt, now_iso, current_hash, days, run_key, mode=None):
     api_key = load_gemini_api_key()
     if not api_key:
         print("  [AI-Gemini] GEMINI_API_KEY не найден -- пропускаю")
@@ -896,7 +896,7 @@ def generate_gemini_analysis(prompt, now_iso, current_hash, days, run_key):
         "text": text,
         "last_run_key": run_key,
         "provider": "gemini",
-        "mode": _current_mode,
+        "mode": mode,
     }
     with open(OUTPUT_FILE_GEMINI, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
@@ -1131,7 +1131,7 @@ def main(force=False, new_models=None, force_gemini=False):
         print("  [AI] Claude отключён (CLAUDE_ANALYSIS_ENABLED=false) -- пропускаю")
 
     if gemini_enabled() and ok_gemini:
-        generate_gemini_analysis(prompt, now_iso, current_hash, days, run_key_gemini)
+        generate_gemini_analysis(prompt, now_iso, current_hash, days, run_key_gemini, mode=_current_mode)
 
 if __name__ == "__main__":
     import argparse
