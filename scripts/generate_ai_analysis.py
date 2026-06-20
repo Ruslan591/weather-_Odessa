@@ -896,6 +896,7 @@ def generate_gemini_analysis(prompt, now_iso, current_hash, days, run_key):
         "text": text,
         "last_run_key": run_key,
         "provider": "gemini",
+        "mode": _current_mode,
     }
     with open(OUTPUT_FILE_GEMINI, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
@@ -1081,6 +1082,7 @@ def main(force=False, new_models=None, force_gemini=False):
             age_hours = 999
         return age_hours < STALE_HOURS
 
+    _current_mode = _get_mode(datetime.now(timezone.utc).hour)
     prompt = build_prompt(days, marine=marine, data_time=data_time, verification_text=verification_text)
 
     if ok_claude and _is_fresh(existing):
@@ -1119,6 +1121,7 @@ def main(force=False, new_models=None, force_gemini=False):
             "days_count": len(days),
             "text": text,
             "last_run_key": run_key_claude,
+            "mode": _current_mode,
         }
         with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
             json.dump(result, f, ensure_ascii=False, indent=2)

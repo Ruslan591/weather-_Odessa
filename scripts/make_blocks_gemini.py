@@ -349,13 +349,17 @@ def main(force=False):
     now_local = datetime.now(timezone.utc).astimezone()
     now_utc_h = datetime.now(timezone.utc).hour
 
-    # Определяем режим по UTC часу генерации
-    gen_utc_h = base_dt.utctimetuple().tm_hour
-    if 0 <= gen_utc_h < 6:    gen_mode = "night"
-    elif 6 <= gen_utc_h < 10: gen_mode = "morning"
-    elif 10 <= gen_utc_h < 13: gen_mode = "midday"
-    elif 13 <= gen_utc_h < 16: gen_mode = "afternoon"
-    else:                       gen_mode = "evening"
+    # Режим берём напрямую из JSON (сохранён generate_ai_analysis.py в момент генерации текста) —
+    # это исключает рассинхронизацию с реальным заголовком блока1 в тексте.
+    # Фоллбэк на пересчёт по UTC-часу — только для старых файлов без поля "mode".
+    gen_mode = data.get("mode")
+    if not gen_mode:
+        gen_utc_h = base_dt.utctimetuple().tm_hour
+        if 0 <= gen_utc_h < 6:    gen_mode = "night"
+        elif 6 <= gen_utc_h < 10: gen_mode = "morning"
+        elif 10 <= gen_utc_h < 13: gen_mode = "midday"
+        elif 13 <= gen_utc_h < 16: gen_mode = "afternoon"
+        else:                       gen_mode = "evening"
 
     # Если анализ дневной но уже вечер — блок today устарел
     today_stale = (gen_mode != "evening") and (now_local.hour >= 20)
