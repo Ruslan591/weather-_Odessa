@@ -591,6 +591,9 @@ def build_prompt(days, marine=None, data_time=None, verification_text=None):
         b1_desc = "только ночь до рассвета (2-3 предложения)"
         b2_desc = "подробный дневной анализ (3-5 предложений)"
 
+    _cur_date_v, _cur_period_v, _, _ = verification.current_and_previous_period()
+    period_label_hint = verification.PERIOD_LABELS_RU.get(_cur_period_v, _cur_period_v)
+
     struct = []
     step = 1
     if verification_text:
@@ -604,6 +607,16 @@ def build_prompt(days, marine=None, data_time=None, verification_text=None):
         f"{step+4}. ## 🌊 Море — температура воды, волнение, условия (1-2 предложения)",
         f"{step+5}. {tend_block} — динамика погодного процесса: как меняется давление/циркуляция, ожидаемый температурный диапазон, когда возможна смена типа погоды. Конкретные цифры T. Если стратосфера даёт сигнал — интерпретировать явно. 2-3 предложения.",
     ]
+
+    period_summary_instruction = (
+        f"\n\nВ САМОМ КОНЦЕ ответа, ПОСЛЕ всех разделов выше, добавь ещё один служебный блок "
+        f"(он не будет показан пользователю, не используй заголовок \"##\" для него) — "
+        f"строго в таком формате:\n"
+        f"<PERIOD_SUMMARY>\n"
+        f"Краткое (1-2 предложения) описание погоды ИМЕННО на ближайшие 6 часов ({period_label_hint}): "
+        f"температура, осадки/явления, ветер. Только факты по существу, без вводных слов.\n"
+        f"</PERIOD_SUMMARY>"
+    )
 
     # Форматируем время данных open-meteo для промпта
     if data_time:
@@ -719,6 +732,8 @@ def build_prompt(days, marine=None, data_time=None, verification_text=None):
     lines += [
         "СТРУКТУРА ОТВЕТА (строго, используй точные заголовки):",
     ] + struct + [
+        period_summary_instruction,
+    ] + [
         f"N. ## 🌊 Море — температура воды, волнение, условия на море (1-2 предложения)",
         "",
         "Не используй таблицы. Не повторяй цифры из данных дословно — интерпретируй их синоптически.",
@@ -871,6 +886,12 @@ def generate_gemini_analysis(prompt, now_iso, current_hash, days, run_key, mode=
         return
     try:
         text = call_gemini(prompt, api_key)
+        text, _period_summary = verification.extract_period_summary(text)
+        if _period_summary:
+            _verif_path = os.path.join(BASE_DIR, "data", "verification_snapshots.json")
+            verification.save_current_period_summary(_verif_path, _period_summary)
+            import subprocess as _sp3
+            _sp3.run(["git", "-C", BASE_DIR, "add", "data/verification_snapshots.json"], capture_output=True)
     except Exception as e:
         print(f"  [AI-Gemini] Ошибка Gemini API: {e} -- сохраняю pending")
         _existing = {}
@@ -1026,19 +1047,15 @@ def main(force=False, new_models=None, force_gemini=False):
         return
 
     verification_text = None
+    _verif_path = os.path.join(BASE_DIR, "data", "verification_snapshots.json")
+    _year = datetime.now(timezone.utc).strftime("%Y")
+    _synop_path = os.path.join(BASE_DIR, "data", f"synop_{_year}.txt")
+    _synop_text = ""
     try:
-        _verif_path = os.path.join(BASE_DIR, "data", "verification_snapshots.json")
-        _year = datetime.now(timezone.utc).strftime("%Y")
-        _synop_path = os.path.join(BASE_DIR, "data", f"synop_{_year}.txt")
         if os.path.exists(_synop_path):
             with open(_synop_path, "r", encoding="utf-8") as _sf:
                 _synop_text = _sf.read()
-            verification_text, _verif_store = verification.update_and_get_verification(
-                _verif_path, raw.get("hourly", {}), _synop_text
-            )
-            verification.save_verification_store(_verif_path, _verif_store)
-            import subprocess as _sp2
-            _sp2.run(["git", "-C", BASE_DIR, "add", "data/verification_snapshots.json"], capture_output=True)
+            verification_text = verification.get_verification_prompt_block(_verif_path, _synop_text)
     except Exception as _e:
         print(f"  [AI] Верификация: пропущена ({_e})")
 
@@ -1109,6 +1126,11 @@ def main(force=False, new_models=None, force_gemini=False):
     if claude_enabled() and ok_claude:
         try:
             text = call_claude(prompt, api_key)
+            text, _period_summary = verification.extract_period_summary(text)
+            if _period_summary:
+                verification.save_current_period_summary(_verif_path, _period_summary)
+                import subprocess as _sp3
+                _sp3.run(["git", "-C", BASE_DIR, "add", "data/verification_snapshots.json"], capture_output=True)
         except Exception as e:
             print(f"  [AI] Ошибка Claude API: {e}")
             return
