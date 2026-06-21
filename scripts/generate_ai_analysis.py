@@ -592,7 +592,13 @@ def build_prompt(days, marine=None, data_time=None, verification_text=None):
         b2_desc = "подробный дневной анализ (3-5 предложений)"
 
     _cur_date_v, _cur_period_v, _, _ = verification.current_and_previous_period()
-    period_label_hint = verification.PERIOD_LABELS_RU.get(_cur_period_v, _cur_period_v)
+    _period_bounds = dict((p[0], (p[1], p[2])) for p in verification.PERIODS)
+    _h_start, _h_end = _period_bounds[_cur_period_v]
+    _cur_dt_v = datetime.strptime(_cur_date_v, "%Y-%m-%d")
+    period_label_hint = (
+        f"{_cur_dt_v.day:02d}.{_cur_dt_v.month:02d}, СТРОГО с {_h_start:02d}:00 до {_h_end:02d}:00 "
+        f"по местному времени"
+    )
 
     struct = []
     step = 1
@@ -613,7 +619,8 @@ def build_prompt(days, marine=None, data_time=None, verification_text=None):
         f"(он не будет показан пользователю, не используй заголовок \"##\" для него) — "
         f"строго в таком формате:\n"
         f"<PERIOD_SUMMARY>\n"
-        f"Краткое (1-2 предложения) описание погоды ИМЕННО на ближайшие 6 часов ({period_label_hint}): "
+        f"Краткое (1-2 предложения) описание погоды СТРОГО в интервале {period_label_hint} "
+        f"(НЕ раньше и НЕ позже этого интервала, даже если в остальном тексте ты пишешь про другой период): "
         f"температура, осадки/явления, ветер. Только факты по существу, без вводных слов.\n"
         f"</PERIOD_SUMMARY>"
     )
