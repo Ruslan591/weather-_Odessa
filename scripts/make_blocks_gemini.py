@@ -95,6 +95,7 @@ MODE_BLOCK2 = {
     "evening":   ("tomorrow","Завтра днём",     "block_1_tomorrow.mp3", "Завтра",         "🌤"),
 }
 BLOCK_DEFS_COMMON = [
+    ("verification", "📊 Точность", "block_v_verification.mp3", "Точность прогноза", "📊"),
     ("next3",    "Последующие", "block_2_next3.mp3",    "Ближайшие дни",  "📅"),
     ("warnings", "\u26a0",      "block_3_warnings.mp3", "Предупреждения", "⚠️"),
     ("marine",   "\U0001f30a", "block_4_marine.mp3",   "Море",           "🌊"),
@@ -389,7 +390,7 @@ def main(force=False):
         except Exception: pass
 
     # Соответствие key -> индекс дня
-    _key_to_day = {'today':0,'tonight':0,'tomorrow':1,'next3':2,'marine':None,'trend':None,'warnings':None}
+    _key_to_day = {'today':0,'tonight':0,'tomorrow':1,'next3':2,'marine':None,'trend':None,'warnings':None,'verification':None}
 
     blocks_meta = []
     for key, section_title, filename, display_title, icon in BLOCK_DEFS:
