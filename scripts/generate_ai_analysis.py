@@ -1063,6 +1063,15 @@ def main(force=False, new_models=None, force_gemini=False):
             with open(_synop_path, "r", encoding="utf-8") as _sf:
                 _synop_text = _sf.read()
             verification_text = verification.get_verification_prompt_block(_verif_path, _synop_text)
+            if verification_text:
+                from verification import get_synop_lines_for_period, current_and_previous_period
+                _, _, _prev_date, _prev_period = current_and_previous_period()
+                _synop_lines = get_synop_lines_for_period(_synop_text, _prev_date, _prev_period)
+                print(f"  [AI] SYNOP для верификации ({_prev_date} {_prev_period}):")
+                for _sl in _synop_lines:
+                    print(f"    {_sl}")
+                if not _synop_lines:
+                    print("    (данных нет)")
     except Exception as _e:
         print(f"  [AI] Верификация: пропущена ({_e})")
 
