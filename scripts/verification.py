@@ -159,29 +159,181 @@ def save_verification_store(path, store):
         json.dump(store, f, ensure_ascii=False, indent=2)
 
 
+DIRS_RU = ["С","ССВ","СВ","ВСВ","В","ВЮВ","ЮВ","ЮЮВ","Ю","ЮЮЗ","ЮЗ","ЗЮЗ","З","ЗСЗ","СЗ","ССЗ"]
+
+WW_TEXT = {
+    0:"ясно", 1:"облачность менялась", 2:"облачно (без осадков)", 3:"пыльная буря/метель",
+    4:"туман", 5:"морось", 6:"морось (замерзающая)", 7:"снежная метель",
+    8:"ливень (прошёл)", 9:"гроза (прошла)",
+    10:"туман", 11:"туман (пятнами)", 12:"туман (стал гуще)", 13:"гроза без осадков",
+    14:"гроза с осадками", 15:"ледяной дождь", 16:"гроза с градом",
+    17:"гроза с осадками", 18:"шквал", 19:"смерч",
+    20:"морось (прошла)", 21:"дождь (прошёл)", 22:"снег (прошёл)", 23:"ледяной дождь (прошёл)",
+    24:"ледяная морось (прошла)", 25:"ливень (прошёл)", 26:"снежный ливень (прошёл)",
+    27:"град (прошёл)", 28:"туман (прошёл)", 29:"гроза (прошла)",
+    30:"слабая пыльная буря (ослабевает)", 31:"слабая пыльная буря", 32:"слабая пыльная буря (усиливается)",
+    33:"умеренная пыльная буря (ослабевает)", 34:"умеренная пыльная буря", 35:"умеренная пыльная буря (усиливается)",
+    36:"слабая метель (низовая)", 37:"сильная метель (низовая)", 38:"слабая метель", 39:"сильная метель",
+    40:"туман на расстоянии", 41:"туман (пятнами)", 42:"туман (стал тоньше, небо видно)",
+    43:"туман (стал тоньше, небо не видно)", 44:"туман (без изменений, небо видно)",
+    45:"туман", 46:"туман (стал гуще, небо видно)", 47:"туман (стал гуще, небо не видно)",
+    48:"туман с изморозью (небо видно)", 49:"туман с изморозью (небо не видно)",
+    50:"слабая прерывистая морось", 51:"слабая непрерывная морось",
+    52:"умеренная прерывистая морось", 53:"умеренная непрерывная морось",
+    54:"сильная прерывистая морось", 55:"сильная непрерывная морось",
+    56:"слабая замерзающая морось", 57:"умеренная/сильная замерзающая морось",
+    58:"слабая морось с дождём", 59:"умеренная/сильная морось с дождём",
+    60:"слабый прерывистый дождь", 61:"слабый непрерывный дождь",
+    62:"умеренный прерывистый дождь", 63:"умеренный непрерывный дождь",
+    64:"сильный прерывистый дождь", 65:"сильный непрерывный дождь",
+    66:"слабый замерзающий дождь", 67:"умеренный/сильный замерзающий дождь",
+    68:"слабый дождь со снегом", 69:"умеренный/сильный дождь со снегом",
+    70:"слабый прерывистый снег", 71:"слабый непрерывный снег",
+    72:"умеренный прерывистый снег", 73:"умеренный непрерывный снег",
+    74:"сильный прерывистый снег", 75:"сильный непрерывный снег",
+    76:"ледяные иглы", 77:"снежная крупа", 78:"снежные кристаллы", 79:"ледяной дождь",
+    80:"слабый ливневый дождь", 81:"умеренный ливневый дождь", 82:"сильный ливневый дождь",
+    83:"слабый ливневый дождь со снегом", 84:"умеренный/сильный ливневый дождь со снегом",
+    85:"слабый ливневый снег", 86:"умеренный/сильный ливневый снег",
+    87:"слабая снежная крупа", 88:"умеренная/сильная снежная крупа",
+    89:"слабый град (без грозы)", 90:"умеренный/сильный град (без грозы)",
+    91:"слабый дождь, гроза в прошлом", 92:"умеренный/сильный дождь, гроза в прошлом",
+    93:"слабый снег/крупа, гроза в прошлом", 94:"умеренный снег/крупа, гроза в прошлом",
+    95:"гроза со слабым дождём или снегом", 96:"гроза с градом",
+    97:"сильная гроза со слабым дождём или снегом", 98:"гроза с пыльной бурей",
+    99:"сильная гроза с градом",
+}
+
+W_PAST_TEXT = {
+    "0":"ясно", "1":"облачность менялась", "2":"облачно",
+    "3":"пыль/туман", "4":"туман", "5":"морось",
+    "6":"дождь", "7":"снег", "8":"ливень", "9":"гроза",
+}
+
+CLOUD_N_TEXT = {
+    0:"ясно (0/8)", 1:"1/8", 2:"2/8", 3:"3/8", 4:"4/8",
+    5:"5/8", 6:"6/8", 7:"7/8", 8:"пасмурно (8/8)", 9:"небо закрыто",
+}
+
+
+def _signed_tenths(group):
+    if not group or len(group) != 5: return None
+    sign = -1 if group[1] == "1" else 1
+    try: val = int(group[2:])
+    except ValueError: return None
+    return sign * val / 10
+
+
+def _pressure_from_group(group):
+    if not group: return None
+    try: p = int(group[1:]) / 10
+    except ValueError: return None
+    return p + 1000 if p < 500 else p
+
+
+def _deg_to_text(dd):
+    if dd is None: return None
+    if dd == 0: return "штиль"
+    idx = round(((dd % 360) + 360) % 360 / 22.5) % 16
+    return DIRS_RU[idx]
+
+
+def decode_synop(raw_line):
+    """
+    Декодирует одну строку synop_YYYY.txt и возвращает читаемую строку.
+    Формат входа: СТАНЦИЯ,YYYY,MM,DD,HH,MM,AAXX ...
+    """
+    try:
+        parts = raw_line.strip().split(",", 6)
+        if len(parts) < 7: return raw_line.strip()
+        hh = parts[4].zfill(2)
+        telegram = parts[6]
+
+        tok = telegram.strip().split()
+        aaxx_idx = next((i for i,t in enumerate(tok) if t == "AAXX"), -1)
+        if aaxx_idx == -1: return f"{hh}:00 UTC: (не удалось разобрать)"
+
+        wind_group = tok[aaxx_idx + 4] if aaxx_idx + 4 < len(tok) else None
+
+        body, sec333 = [], []
+        section = "main"
+        for t in tok[aaxx_idx + 5:]:
+            g = t.rstrip("=")
+            if g == "333": section = "333"; continue
+            if g in ("444","555"): section = g; continue
+            if not g: continue
+            if section == "main": body.append(g)
+            elif section == "333": sec333.append(g)
+
+        # Nddff
+        cloud_n = wind_dir = wind_spd = None
+        if wind_group and len(wind_group) == 5 and wind_group.isdigit():
+            cloud_n = int(wind_group[0])
+            dd = int(wind_group[1:3])
+            wind_dir = None if dd == 0 else dd * 10
+            wind_spd = int(wind_group[3:5])
+
+        temp = dew = sta_pres = sea_pres = None
+        ww = w1 = w2 = None
+        import re as _re
+        for g in body:
+            if _re.match(r"^1[01/]\d{3}$", g): temp = _signed_tenths(g)
+            elif _re.match(r"^2[01/]\d{3}$", g): dew = _signed_tenths(g)
+            elif _re.match(r"^3\d{4}$", g): sta_pres = _pressure_from_group(g)
+            elif _re.match(r"^4\d{4}$", g): sea_pres = _pressure_from_group(g)
+            elif _re.match(r"^7\d{4}$", g):
+                try:
+                    ww = int(g[1:3]); w1 = g[3]; w2 = g[4]
+                except Exception: pass
+
+        temp_max = temp_min = None
+        for g in sec333:
+            c = g.rstrip("=")
+            if _re.match(r"^1[01]\d{3}$", c): temp_max = _signed_tenths(c)
+            elif _re.match(r"^2[01]\d{3}$", c): temp_min = _signed_tenths(c)
+
+        # Собираем строку
+        res = [f"{hh}:00 UTC:"]
+        if temp is not None: res.append(f"T={temp:+.1f}°C")
+        if dew is not None:
+            rh = None
+            try:
+                import math
+                es = 6.112 * math.exp(17.62 * temp / (243.12 + temp))
+                e  = 6.112 * math.exp(17.62 * dew  / (243.12 + dew))
+                rh = round(e / es * 100)
+            except Exception: pass
+            res.append(f"Td={dew:+.1f}°C" + (f" (RH~{rh}%)" if rh else ""))
+        if cloud_n is not None: res.append(f"облачность: {CLOUD_N_TEXT.get(cloud_n, str(cloud_n)+'/8')}")
+        if wind_spd is not None:
+            dir_txt = _deg_to_text(wind_dir) or "штиль"
+            res.append(f"ветер: {dir_txt} {wind_spd} м/с")
+        if sea_pres is not None: res.append(f"Pмор={sea_pres:.1f} гПа")
+        if ww is not None:
+            ww_desc = WW_TEXT.get(ww, f"ww={ww}")
+            w1_desc = W_PAST_TEXT.get(str(w1), str(w1)) if w1 else None
+            w2_desc = W_PAST_TEXT.get(str(w2), str(w2)) if w2 else None
+            res.append(f"погода: {ww_desc}" +
+                       (f" / прошлое: {w1_desc},{w2_desc}" if w1_desc else ""))
+        if temp_max is not None: res.append(f"Tмакс={temp_max:+.1f}°C")
+        if temp_min is not None: res.append(f"Tмин={temp_min:+.1f}°C")
+        return "  ".join(res)
+    except Exception as ex:
+        return f"{raw_line.strip()}  (ошибка декодирования: {ex})"
+
+
 def format_verification_prompt_block(prev_date, prev_period, prev_summary, synop_lines):
     """Текст для вставки в промпт: что говорили + сырые SYNOP-строки факта."""
     label = PERIOD_LABELS_RU.get(prev_period, prev_period)
     lines = [
         f"СВЕРКА ПРОГНОЗА С ФАКТОМ за прошедший период ({label}, {prev_date}):",
         f"  Прогнозировалось (наш текст из прошлого анализа): \"{prev_summary}\"",
-        "  Факт — сырые метеосводки SYNOP (формат AAXX, станция 33837).",
-        "  Формат строки: СТАНЦИЯ,YYYY,MM,DD,HH,MM,AAXX DDHHiw IIIII Nddff 1TTTx 2TdTdTdx 3PPPP 4PPPP 5appp [7wwW1W2] [8NhClCmCh] 333 ...",
-        "  Ключевые группы:",
-        "    Nddff: N=облачность (0-9, 9=небо закрыто), dd=направление ветра (*10°), ff=скорость ветра (м/с)",
-        "    1TTTx: температура воздуха (°C, 1xxxx→+xx.x, 11xxx→-xx.x)",
-        "    2TdTdTdx: точка росы (°C, аналогично)",
-        "    3PPPP: давление на станции (гПа, первая цифра 9=9хх.х, 0=10хх.х)",
-        "    4PPPP: давление на уровне моря (аналогично)",
-        "    5appp: характеристика изменения давления (a=0..8) и изменение за 3ч (гПа)",
-        "    7wwW1W2: текущая погода (ww) и прошедшая (W1W2). ww: 00-19 без осадков, 20-29 осадки в прошлом, 50-59 морось, 60-69 дождь, 70-79 снег, 80-89 ливни. W1W2: 0=ясно, 1=облачность менялась, 2=облачно, 3=пыль/туман, 4=туман, 5=морось, 6=дождь, 7=снег, 8=ливень, 9=гроза",
-        "    8NhClCmCh: нижний ярус (Cl), средний (Cm), верхний (Ch) облака",
-        "    333: дополнительные данные. 1SnTxTxTx=макс.T, 2SnTnTnTn=мин.T, 55HHH=влажность/высота, 6RRRt=осадки",
-        "  Расшифруй самостоятельно и сравни с прогнозом:",
+        "  Фактические данные SYNOP (станция 33837, расшифровано):",
     ]
-    for raw_line in synop_lines:
-        lines.append(f"    {raw_line}")
-    if not synop_lines:
+    if synop_lines:
+        for raw_line in synop_lines:
+            lines.append(f"    {decode_synop(raw_line)}")
+    else:
         lines.append("    (фактических данных SYNOP за этот период пока нет)")
     return "\n".join(lines)
 
