@@ -587,11 +587,18 @@ def apply_bias(value, key, bias_overall, bias_by_horizon=None, horizon_h=None):
     return result
 
 
-def build_snapshot(ensemble_hours, saved_at, run_time, mode="synop", bias=None, bias_by_horizon=None):
+def build_snapshot(ensemble_hours, saved_at, run_time, mode="synop", bias=None, bias_by_horizon=None, all_model_hours=None, succeeded=None):
     """Формирует снимок в формате совместимом с forecast.html."""
     hours_out = []
     saved_dt = parse_iso(saved_at)
     snap_dt  = saved_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # Индекс времени → индекс часа по каждой модели (для быстрого поиска)
+    model_time_index = {}
+    if all_model_hours and succeeded:
+        for mid in succeeded:
+            mh = all_model_hours.get(mid) or []
+            model_time_index[mid] = {h2["time"][:13]: i for i, h2 in enumerate(mh)}
 
     for h in ensemble_hours:
         t_str = h["time"] if "T" in h["time"] else h["time"].replace(" ", "T") + ":00"
@@ -604,7 +611,28 @@ def build_snapshot(ensemble_hours, saved_at, run_time, mode="synop", bias=None, 
                 continue
             if horizon_h > 96:
                 break
-            hours_out.append({
+
+            # Данные по отдельным моделям для этого часа
+            models_out = {}
+            if model_time_index:
+                t_key = t_str[:13]
+                for mid in succeeded:
+                    mh = all_model_hours.get(mid) or []
+                    idx = model_time_index.get(mid, {}).get(t_key)
+                    if idx is None:
+                        continue
+                    mhh = mh[idx]
+                    models_out[mid] = {
+                        "temp":       round(mhh["temperature_2m"] * 10) / 10 if mhh.get("temperature_2m") is not None else None,
+                        "pressure":   round(mhh["pressure_msl"] * 10) / 10 if mhh.get("pressure_msl") is not None else None,
+                        "wind":       round(mhh["wind_speed_10m"] * 10) / 10 if mhh.get("wind_speed_10m") is not None else None,
+                        "windDir":    round(mhh["wind_direction_10m"]) if mhh.get("wind_direction_10m") is not None else None,
+                        "humidity":   round(mhh["relative_humidity_2m"]) if mhh.get("relative_humidity_2m") is not None else None,
+                        "cloudcover": round(mhh["cloud_cover"]) if mhh.get("cloud_cover") is not None else None,
+                        "visibility": round(mhh["visibility"]) if mhh.get("visibility") is not None else None,
+                    }
+
+            entry = {
                 "time":        h["time"],
                 "temp":        round(h["temperature_2m"] * 10) / 10 if h["temperature_2m"] is not None else None,
                 "pressure":    round(h["pressure_msl"] * 10) / 10 if h["pressure_msl"] is not None else None,
@@ -616,7 +644,10 @@ def build_snapshot(ensemble_hours, saved_at, run_time, mode="synop", bias=None, 
                 "cloudcover":  round(h["cloud_cover"]) if h["cloud_cover"] is not None else None,
                 "visibility":  round(h["visibility"]) if h.get("visibility") is not None else None,
                 "weatherCode": h["weather_code"],
-            })
+            }
+            if models_out:
+                entry["models"] = models_out
+            hours_out.append(entry)
         else:  # pws — каждый час, первые 4 дня, без коррекции (применяется на клиенте)
             if horizon_h > 96:
                 break
