@@ -651,7 +651,27 @@ def build_snapshot(ensemble_hours, saved_at, run_time, mode="synop", bias=None, 
         else:  # pws — каждый час, первые 4 дня, без коррекции (применяется на клиенте)
             if horizon_h > 96:
                 break
-            hours_out.append({
+
+            # Данные по отдельным моделям для PWS
+            models_out_pws = {}
+            if model_time_index:
+                t_key_pws = t_str[:13]
+                for mid in succeeded:
+                    mh = all_model_hours.get(mid) or []
+                    idx = model_time_index.get(mid, {}).get(t_key_pws)
+                    if idx is None:
+                        continue
+                    mhh = mh[idx]
+                    models_out_pws[mid] = {
+                        "temp":       round(mhh["temperature_2m"] * 10) / 10 if mhh.get("temperature_2m") is not None else None,
+                        "pressure":   round(mhh["pressure_msl"] * 10) / 10 if mhh.get("pressure_msl") is not None else None,
+                        "wind":       round(mhh["wind_speed_10m"] * 10) / 10 if mhh.get("wind_speed_10m") is not None else None,
+                        "windGust":   round((mhh.get("wind_gusts_10m") or mhh.get("wind_speed_10m") or 0) * 10) / 10,
+                        "windDir":    round(mhh["wind_direction_10m"]) if mhh.get("wind_direction_10m") is not None else None,
+                        "humidity":   round(mhh["relative_humidity_2m"]) if mhh.get("relative_humidity_2m") is not None else None,
+                    }
+
+            entry_pws = {
                 "time":     h["time"],
                 "horizonH": round(horizon_h),
                 "temp":     round(h["temperature_2m"] * 10) / 10 if h["temperature_2m"] is not None else None,
@@ -662,7 +682,10 @@ def build_snapshot(ensemble_hours, saved_at, run_time, mode="synop", bias=None, 
                 "humidity": round(h["relative_humidity_2m"]) if h["relative_humidity_2m"] is not None else None,
                 "rain":     round(h["rain"] * 10) / 10 if h["rain"] is not None else None,
                 "visibility": round(h["visibility"]) if h.get("visibility") is not None else None,
-            })
+            }
+            if models_out_pws:
+                entry_pws["models"] = models_out_pws
+            hours_out.append(entry_pws)
 
     return {
         "savedAt": saved_at,
@@ -1335,7 +1358,8 @@ def main():
             last_run_pws = snaps_pws[-1].get("runTime") if snaps_pws else None
             same_run_pws = last_run_pws and run_time and parse_iso(last_run_pws) == parse_iso(run_time)
             if need_pws and not same_run_pws:
-                snap = build_snapshot(ensemble_hours, saved_at, run_time, mode="pws")
+                snap = build_snapshot(ensemble_hours, saved_at, run_time, mode="pws",
+                                     all_model_hours=raw_model_hours, succeeded=succeeded)
                 snaps_pws.append(snap)
                 _snaps_pws = snaps_pws
                 _snaps_pws_sha = snaps_pws_sha
