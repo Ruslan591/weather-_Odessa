@@ -1301,6 +1301,8 @@ def main():
             time.sleep(0.5)
 
         if succeeded:
+            # Сохраняем сырые данные моделей ДО дебайасинга (для верификации)
+            raw_model_hours = {mid: list(hours) for mid, hours in all_model_hours.items()}
             # Применяем per-model bias до усреднения
             if model_bias_models:
                 cur_month = now.strftime("%m")
@@ -1318,7 +1320,7 @@ def main():
             same_run = last_run and run_time and parse_iso(last_run) == parse_iso(run_time)
             if need_synop and (now.hour - synop_hour) <= 2 and not same_run:
                 snap = build_snapshot(ensemble_hours, saved_at, run_time, mode="synop",
-                                     all_model_hours=all_model_hours, succeeded=succeeded)
+                                     all_model_hours=raw_model_hours, succeeded=succeeded)
                 snaps_synop.append(snap)
                 _snaps_synop = snaps_synop
                 _snaps_synop_sha = snaps_synop_sha
