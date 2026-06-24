@@ -34,7 +34,11 @@
 <div style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:6px;">СТАНЦИЯ</div>
 <div id="stationBtns" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;"></div>
 
+<!-- ПЕРЕКЛЮЧАТЕЛЬ ИСТОЧНИКА -->
+<div id="sourceRow" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;"></div>
+
 <!-- МЕТРИКИ -->
+<div id="metricsLabel" style="font-size:11px;color:#555;font-weight:600;letter-spacing:0.06em;margin-bottom:6px;">ТОЧНОСТЬ АНСАМБЛЯ</div>
 <div id="metricsGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;"></div>
 
 <!-- ГРАФИК ПО ДНЯМ -->
@@ -151,6 +155,87 @@ var _snaps      = [];
 var _pwsRawData = [];
 var _acc        = null;
 var _currentStation = "all";
+
+/* === ИСТОЧНИК === */
+var _activeSource = "ensemble";
+var MODEL_LABELS = {
+    "ensemble":                            "Ансамбль",
+    "ecmwf_ifs":                           "ECMWF",
+    "icon_eu":                             "ICON EU",
+    "icon_global":                         "ICON GL",
+    "ukmo_global_deterministic_10km":      "UKMO",
+    "meteofrance_arpege_europe":           "ARPEGE",
+    "gfs_global":                          "GFS",
+    "gem_global":                          "GEM",
+    "cma_grapes_global":                   "GRAPES",
+};
+var MODEL_ORDER = ["ensemble","ecmwf_ifs","gfs_global","icon_global","icon_eu","gem_global","ukmo_global_deterministic_10km","meteofrance_arpege_europe","cma_grapes_global"];
+
+function getFh(fh, source) {
+    if (source === "ensemble") return fh;
+    if (!fh.models || !fh.models[source]) return null;
+    var m = fh.models[source];
+    return {
+        time:        fh.time,
+        horizonH:    fh.horizonH,
+        temp:        m.temp,
+        pressure:    m.pressure,
+        wind:        m.wind,
+        windGust:    m.windGust,
+        windDir:     m.windDir,
+        humidity:    m.humidity,
+        rain:        fh.rain,
+    };
+}
+
+function getAvailableModels() {
+    var found = {};
+    _snaps.forEach(function(s) {
+        if (!s.hours) return;
+        s.hours.forEach(function(fh) {
+            if (fh.models) Object.keys(fh.models).forEach(function(m){ found[m]=true; });
+        });
+    });
+    return found;
+}
+
+function renderSourceRow() {
+    var available = getAvailableModels();
+    var hasModels = Object.keys(available).length > 0;
+    var row = document.getElementById("sourceRow");
+    if (!hasModels) { row.style.display = "none"; return; }
+    row.style.display = "flex";
+    row.innerHTML = MODEL_ORDER.filter(function(id){
+        return id === "ensemble" || available[id];
+    }).map(function(id) {
+        var label = MODEL_LABELS[id] || id;
+        return '<button onclick="setSource('' + id + '')" ' +
+            'style="flex:1;min-width:60px;padding:5px 4px;font-size:11px;border-radius:6px;cursor:pointer;' +
+            'border:1px solid ' + (id === _activeSource ? "#ffd166" : "#333") + ';' +
+            'background:' + (id === _activeSource ? "#ffd16622" : "none") + ';' +
+            'color:' + (id === _activeSource ? "#ffd166" : "#aaa") + ';">' +
+            label + '</button>';
+    }).join("");
+}
+
+function setSource(source) {
+    _activeSource = source;
+    var label = MODEL_LABELS[source] || source;
+    document.getElementById("metricsLabel").textContent =
+        source === "ensemble" ? "ТОЧНОСТЬ АНСАМБЛЯ"
+                              : "ТОЧНОСТЬ: " + label;
+    renderSourceRow();
+    var obs = buildObsIndex();
+    var metrics = calcMetrics(obs.obsIndex);
+    _dayMetrics     = calcMetricsByDay(obs.obsIndex);
+    _horizonMetrics = calcMetricsByHorizon(obs.obsIndex);
+    _hourMetrics    = calcMetricsByHourUTC(obs.obsIndex);
+    renderMetrics(metrics);
+    renderChart(_activeChartParam);
+    renderHorizonChart(_activeHorizonParam);
+    renderHourChart(_activeHourParam);
+    renderOvfChart(_activeOvfParam);
+}
 
 function getToken() { return localStorage.getItem("ghToken") || ""; }
 
@@ -349,8 +434,10 @@ function calcMetrics(obsIndex) {
         snap.hours.forEach(function(fh) {
             var ob = obsIndex[snapTimeToHourKey(fh.time)];
             if (!ob) return;
+            var src = getFh(fh, _activeSource);
+            if (!src) return;
             matched++;
-            pushPwsErrors(errors, fh, ob);
+            pushPwsErrors(errors, src, ob);
         });
     });
 
@@ -368,9 +455,11 @@ function calcMetricsByDay(obsIndex) {
             var key = snapTimeToHourKey(fh.time);
             var ob  = obsIndex[key];
             if (!ob) return;
+            var src = getFh(fh, _activeSource);
+            if (!src) return;
             var day = key.slice(0, 10);
             if (!byDay[day]) byDay[day] = emptyErrors();
-            pushPwsErrors(byDay[day], fh, ob);
+            pushPwsErrors(byDay[day], src, ob);
         });
     });
 
@@ -392,11 +481,13 @@ function calcMetricsByHorizon(obsIndex) {
             var key = snapTimeToHourKey(fh.time);
             var ob  = obsIndex[key];
             if (!ob) return;
+            var src = getFh(fh, _activeSource);
+            if (!src) return;
             var horizonH = Math.round((new Date(fh.time) - snapStart) / 3600000);
             var bucket = Math.round(horizonH / _activeHorizonBucket) * _activeHorizonBucket;
             if (bucket < 0) return;
             if (!byH[bucket]) byH[bucket] = emptyErrors();
-            pushPwsErrors(byH[bucket], fh, ob);
+            pushPwsErrors(byH[bucket], src, ob);
         });
     });
 
@@ -416,9 +507,11 @@ function calcMetricsByHourUTC(obsIndex) {
             var key = snapTimeToHourKey(fh.time);
             var ob  = obsIndex[key];
             if (!ob) return;
+            var src = getFh(fh, _activeSource);
+            if (!src) return;
             var hourUTC = parseInt(fh.time.slice(11, 13));
             if (!byH[hourUTC]) byH[hourUTC] = emptyErrors();
-            pushPwsErrors(byH[hourUTC], fh, ob);
+            pushPwsErrors(byH[hourUTC], src, ob);
         });
     });
     var result = {};
@@ -726,11 +819,12 @@ function buildOvfSeries(paramKey) {
             var key = snapTimeToHourKey(fh.time);
             if (_ovfFrom && key < _ovfFrom) return;
             if (_ovfTo   && key > _ovfTo)   return;
-            var val = fh[fcField];
+            var src = getFh(fh, _activeSource);
+            if (!src) return;
+            var val = src[fcField];
             if (val == null) return;
-            var h = fh.horizonH != null ? fh.horizonH : 0;
+            var h = src.horizonH != null ? src.horizonH : 0;
             if (h < 0) return;
-            // Не перезаписываем если уже есть от того же дня
             if (!fcByHour[key])
                 fcByHour[key] = { val: val, horizonH: h };
         });
@@ -779,9 +873,9 @@ function buildOvfSeries(paramKey) {
         });
     });
 
-    // Линия ансамбля
+    // Линия прогноза
     datasets.push({
-        label: "Ансамбль",
+        label: MODEL_LABELS[_activeSource] || _activeSource,
         data: hours.map(function(k) {
             var fc = fcByHour[k];
             if (!fc) return null;
@@ -861,7 +955,7 @@ function renderOvfChart(paramKey) {
                             return " " + item.dataset.label + ": " + (v != null ? v.toFixed(1) + p.unit : "—");
                         },
                         afterBody: function(items) {
-                            var ensItem = items.find(function(i){ return i.dataset.label === "Ансамбль"; });
+                            var ensItem = items.find(function(i){ return i.dataset.label === (MODEL_LABELS[_activeSource] || _activeSource); });
                             if (!ensItem || ensItem.parsed.y == null) return [];
                             var ensVal = ensItem.parsed.y;
                             var lines = [];
@@ -1082,6 +1176,7 @@ async function render() {
     }
     renderCoverage(snapCount, obsCount, stationLabel);
     renderSnapshots();
+    renderSourceRow();
 }
 
 async function loadModelRuns() {
