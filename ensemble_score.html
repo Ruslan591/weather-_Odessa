@@ -18,8 +18,11 @@
 
 <div id="statusLine" class="status-line">Загрузка…</div>
 
+<!-- ПЕРЕКЛЮЧАТЕЛЬ ИСТОЧНИКА -->
+<div id="sourceRow" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;"></div>
+
 <!-- МЕТРИКИ -->
-<div class="section-label">Точность ансамбля</div>
+<div id="metricsLabel" class="section-label">Точность ансамбля</div>
 <div id="metricsGrid" class="metrics-grid"></div>
 
 <!-- ЯВЛЕНИЯ -->
@@ -126,6 +129,88 @@ var GITHUB_ACC_FILE   = "data/ensemble_accuracy_synop.json";
 var _snaps    = [];
 var _obsIndex = null;
 var _acc      = null;
+
+/* ── ИСТОЧНИК (ансамбль или id модели) ── */
+var _activeSource = "ensemble";
+var MODEL_LABELS = {
+    "ensemble":                            "Ансамбль",
+    "ecmwf_ifs":                           "ECMWF",
+    "icon_eu":                             "ICON EU",
+    "icon_global":                         "ICON GL",
+    "ukmo_global_deterministic_10km":      "UKMO",
+    "meteofrance_arpege_europe":           "ARPEGE",
+    "gfs_global":                          "GFS",
+    "gem_global":                          "GEM",
+    "cma_grapes_global":                   "GRAPES",
+};
+var MODEL_ORDER = ["ensemble","ecmwf_ifs","gfs_global","icon_global","icon_eu","gem_global","ukmo_global_deterministic_10km","meteofrance_arpege_europe","cma_grapes_global"];
+
+function getFh(fh, source) {
+    if (source === "ensemble") return fh;
+    if (!fh.models || !fh.models[source]) return null;
+    var m = fh.models[source];
+    // пробрасываем поля которых нет в models (rain, weatherCode) из ансамбля
+    return {
+        time:        fh.time,
+        temp:        m.temp,
+        pressure:    m.pressure,
+        wind:        m.wind,
+        windDir:     m.windDir,
+        humidity:    m.humidity,
+        cloudcover:  m.cloudcover,
+        visibility:  m.visibility,
+        rain:        fh.rain,
+        weatherCode: fh.weatherCode,
+    };
+}
+
+function getAvailableModels() {
+    var found = {};
+    _snaps.forEach(function(s) {
+        if (!s.hours) return;
+        s.hours.forEach(function(fh) {
+            if (fh.models) Object.keys(fh.models).forEach(function(m){ found[m]=true; });
+        });
+    });
+    return found;
+}
+
+function renderSourceRow() {
+    var available = getAvailableModels();
+    var hasModels = Object.keys(available).length > 0;
+    var row = document.getElementById("sourceRow");
+    if (!hasModels) { row.style.display = "none"; return; }
+    row.style.display = "flex";
+    row.innerHTML = MODEL_ORDER.filter(function(id){
+        return id === "ensemble" || available[id];
+    }).map(function(id) {
+        var label = MODEL_LABELS[id] || id;
+        return '<button onclick="setSource('' + id + '')" id="srcBtn_' + id + '" ' +
+            'style="flex:1;min-width:60px;padding:5px 4px;font-size:11px;border-radius:6px;cursor:pointer;' +
+            'border:1px solid ' + (id === _activeSource ? "#4aa3ff" : "#333") + ';' +
+            'background:' + (id === _activeSource ? "#4aa3ff22" : "none") + ';' +
+            'color:' + (id === _activeSource ? "#4aa3ff" : "#aaa") + ';">' +
+            label + '</button>';
+    }).join("");
+}
+
+function setSource(source) {
+    _activeSource = source;
+    var label = MODEL_LABELS[source] || source;
+    document.getElementById("metricsLabel").textContent =
+        source === "ensemble" ? "Точность ансамбля"
+                              : "Точность: " + label;
+    renderSourceRow();
+    var metrics = calcMetrics(_obsIndex);
+    _dayMetrics     = calcMetricsByDay(_obsIndex);
+    _horizonMetrics = calcMetricsByHorizon(_obsIndex);
+    _hourMetrics    = calcMetricsByHourUTC(_obsIndex);
+    renderMetrics(metrics);
+    renderChart(_activeChartParam);
+    renderHorizonChart(_activeHorizonParam);
+    renderHourChart(_activeHourParam);
+    renderObsVsFcChart(_activeObsVsFcParam);
+}
 
 function getToken() { return localStorage.getItem("ghToken") || ""; }
 
@@ -415,10 +500,10 @@ function calcMetrics(obsIndex) {
         snap.hours.forEach(function(fh) {
             var ob = obsIndex[snapTimeToHourKey(fh.time)];
             if (!ob) return;
+            var src = getFh(fh, _activeSource);
+            if (!src) return;
             matched++;
-            var horizonH = Math.round((new Date(fh.time + ":00Z") - snapStart) / 3600000);
-            var hourUTC  = parseInt(fh.time.slice(11, 13));  // ← добавить
-            pushErrors(errors, fh, ob);
+            pushErrors(errors, src, ob);
         });
     });
     return matched ? summarize(errors) : null;
@@ -429,16 +514,15 @@ function calcMetricsByDay(obsIndex) {
     var byDay = {};
     _snaps.forEach(function(snap) {
         if (!snap.hours) return;
-        var snapStart = new Date(snap.savedAt);
         snap.hours.forEach(function(fh) {
             var key = snapTimeToHourKey(fh.time);
             var ob  = obsIndex[key];
             if (!ob) return;
+            var src = getFh(fh, _activeSource);
+            if (!src) return;
             var day = key.slice(0, 10);
             if (!byDay[day]) byDay[day] = emptyErrors();
-            var horizonH = Math.round((new Date(fh.time + ":00Z") - snapStart) / 3600000);
-            var hourUTC  = parseInt(fh.time.slice(11, 13));       // ← добавить
-            pushErrors(byDay[day], fh, ob);
+            pushErrors(byDay[day], src, ob);
         });
     });
     var result = {};
@@ -456,12 +540,13 @@ function calcMetricsByHorizon(obsIndex) {
             var key = snapTimeToHourKey(fh.time);
             var ob  = obsIndex[key];
             if (!ob) return;
+            var src = getFh(fh, _activeSource);
+            if (!src) return;
             var horizonH = Math.round((new Date(fh.time + ":00Z") - snapStart) / 3600000);
             var bucket   = Math.round(horizonH / _activeHorizonBucket) * _activeHorizonBucket;
             if (bucket < 0) return;
             if (!byH[bucket]) byH[bucket] = emptyErrors();
-            var hourUTC  = parseInt(fh.time.slice(11, 13));       // ← добавить
-            pushErrors(byH[bucket], fh, ob);
+            pushErrors(byH[bucket], src, ob);
         });
     });
     var result = {};
@@ -476,15 +561,15 @@ function calcMetricsByHourUTC(obsIndex) {
     var byH = {};
     _snaps.forEach(function(snap) {
         if (!snap.hours) return;
-        var snapStart = new Date(snap.savedAt);
         snap.hours.forEach(function(fh) {
             var key = snapTimeToHourKey(fh.time);
             var ob  = obsIndex[key];
             if (!ob) return;
-            var hourUTC  = parseInt(fh.time.slice(11, 13));
-            var horizonH = Math.round((new Date(fh.time + ":00Z") - snapStart) / 3600000);
+            var src = getFh(fh, _activeSource);
+            if (!src) return;
+            var hourUTC = parseInt(fh.time.slice(11, 13));
             if (!byH[hourUTC]) byH[hourUTC] = emptyErrors();
-            pushErrors(byH[hourUTC], fh, ob);
+            pushErrors(byH[hourUTC], src, ob);
         });
     });
     var result = {};
@@ -1200,6 +1285,7 @@ async function render() {
     renderCompare(metrics);
     renderCoverage(snapCount, obsCount);
     renderSnapshots();
+    renderSourceRow();
 
     // строка 844, заменить setStatus(...)
 var updated = (_acc && _acc.updated)
