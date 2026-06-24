@@ -1317,7 +1317,8 @@ def main():
             last_run = snaps_synop[-1].get("runTime") if snaps_synop else None
             same_run = last_run and run_time and parse_iso(last_run) == parse_iso(run_time)
             if need_synop and (now.hour - synop_hour) <= 2 and not same_run:
-                snap = build_snapshot(ensemble_hours, saved_at, run_time, mode="synop")
+                snap = build_snapshot(ensemble_hours, saved_at, run_time, mode="synop",
+                                     all_model_hours=all_model_hours, succeeded=succeeded)
                 snaps_synop.append(snap)
                 _snaps_synop = snaps_synop
                 _snaps_synop_sha = snaps_synop_sha
