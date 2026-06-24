@@ -1096,7 +1096,9 @@ function buildObsVsFcSeries(paramKey) {
             if (!_obsIndex[key]) return;
             if (_ovfFrom && key < _ovfFrom) return;
             if (_ovfTo   && key > _ovfTo)   return;
-            var val = fh[paramKey];
+            var src = getFh(fh, _activeSource);
+            if (!src) return;
+            var val = src[paramKey];
             if (val == null) return;
             var horizonH = (new Date(fh.time + ":00Z") - snapStart) / 3600000;
             if (horizonH < 0) return;
@@ -1153,7 +1155,7 @@ function renderObsVsFcChart(paramKey) {
             datasets: [
                 { label: "SYNOP",    data: s.obsVals, borderColor: "#ffffff", backgroundColor: "transparent",
                   borderWidth: 2, pointRadius: 2, tension: 0.2, fill: false, spanGaps: true },
-                { label: "Ансамбль", data: s.fcVals,  borderColor: p.color,   backgroundColor: p.color + "22",
+                { label: MODEL_LABELS[_activeSource] || _activeSource, data: s.fcVals,  borderColor: p.color,   backgroundColor: p.color + "22",
                   borderWidth: 2, pointRadius: 2, tension: 0.3, fill: true,  spanGaps: true }
             ]
         },
@@ -1168,7 +1170,7 @@ function renderObsVsFcChart(paramKey) {
                     },
                     afterBody: function(items) {
                         var obs = items.find(function(i){ return i.dataset.label === "SYNOP"; });
-                        var ens = items.find(function(i){ return i.dataset.label === "Ансамбль"; });
+                        var ens = items.find(function(i){ return i.dataset.label === (MODEL_LABELS[_activeSource] || _activeSource); });
                         if (!obs || !ens || obs.parsed.y == null || ens.parsed.y == null) return [];
                         var diff = obs.parsed.y - ens.parsed.y;
                         var sign = diff >= 0 ? "+" : "";
