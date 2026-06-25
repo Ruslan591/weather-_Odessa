@@ -209,7 +209,7 @@ function renderSourceRow() {
         return id === "ensemble" || available[id];
     }).map(function(id) {
         var label = MODEL_LABELS[id] || id;
-        return '<button onclick="setSource("+ id +")" ' +
+        return '<button onclick="setSource(\'' + id + '\')" ' +
             'style="flex:1;min-width:60px;padding:5px 4px;font-size:11px;border-radius:6px;cursor:pointer;' +
             'border:1px solid ' + (id === _activeSource ? "#ffd166" : "#333") + ';' +
             'background:' + (id === _activeSource ? "#ffd16622" : "none") + ';' +
