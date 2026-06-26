@@ -388,10 +388,11 @@ function applyBiasClient(value, key, horizonH, hourUTC) {
 function pushPwsErrors(errors, fh, ob) {
     var h       = fh.horizonH != null ? fh.horizonH : null;
     var hourUTC = parseInt(fh.time.slice(11, 13));
+    var useCorrection = (_activeSource === "ensemble");
     function push(k, fv, ov) {
         if (fv == null || ov == null) return;
-        var corrected = applyBiasClient(fv, k, h, hourUTC);
-        errors[k].push(corrected - ov);
+        var val = useCorrection ? applyBiasClient(fv, k, h, hourUTC) : fv;
+        errors[k].push(val - ov);
     }
     push("temp",     fh.temp,     ob.temp);
     push("pressure", fh.pressure, ob.pressure);
@@ -399,7 +400,7 @@ function pushPwsErrors(errors, fh, ob) {
     push("windGust", fh.windGust, ob.windGust);
     push("humidity", fh.humidity, ob.humidity);
     if (fh.windDir != null && ob.windDir != null) {
-        var corrDir = applyBiasClient(fh.windDir, "windDir", h, hourUTC);
+        var corrDir = useCorrection ? applyBiasClient(fh.windDir, "windDir", h, hourUTC) : fh.windDir;
         errors.windDir.push(windDirDiff(corrDir, ob.windDir));
     }
     if (fh.rain != null && ob.precip != null)
