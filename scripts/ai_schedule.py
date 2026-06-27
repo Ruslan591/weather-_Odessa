@@ -155,6 +155,18 @@ def set_tolerance(d):
     except Exception:
         print("  Неверное значение.")
 
+def generate_now():
+    import subprocess, sys
+    print("  Провайдер: 1=claude, 2=gemini, 3=оба (Enter=оба):")
+    s = input("  > ").strip()
+    cmd = [sys.executable, os.path.join(BASE_DIR, "scripts", "generate_ai_analysis.py"), "--force"]
+    if s == "2":
+        cmd = [sys.executable, os.path.join(BASE_DIR, "scripts", "generate_ai_analysis.py"), "--force-gemini"]
+    elif s == "3":
+        cmd = [sys.executable, os.path.join(BASE_DIR, "scripts", "generate_ai_analysis.py"), "--force", "--force-gemini"]
+    print(f"  Запуск: {' '.join(cmd[1:])}")
+    subprocess.run(cmd)
+
 def main():
     d = load()
     while True:
@@ -163,12 +175,14 @@ def main():
         print("2) Удалить точку времени")
         print("3) Переключить триггеры по моделям")
         print("4) Изменить допуск (±мин)")
+        print("5) Генерировать немедленно")
         print("0) Выход")
         choice = input("> ").strip()
         if choice == "1": add_time_point(d)
         elif choice == "2": remove_time_point(d)
         elif choice == "3": toggle_model_trigger(d)
         elif choice == "4": set_tolerance(d)
+        elif choice == "5": generate_now()
         elif choice == "0": break
         else: print("  ?")
 
