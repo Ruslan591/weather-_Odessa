@@ -14,8 +14,8 @@
 
 <div class="header"></div>
 
-<div id="sourceRow" style="display:none;position:sticky;top:0;z-index:100;background:#121212;padding:8px 12px;gap:6px;flex-wrap:wrap;border-bottom:1px solid #1e1e1e;"></div>
-<div id="corrPanel" style="display:none;position:sticky;top:41px;z-index:99;background:#0e0e0e;border-bottom:1px solid #1e1e1e;padding:8px 12px;"></div>
+<div id="sourceRow" style="display:none;position:sticky;top:0;z-index:100;background:#121212;padding:8px 12px;gap:6px;flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;border-bottom:1px solid #1e1e1e;"></div>
+<div id="corrPanel" style="display:none;position:sticky;top:41px;z-index:99;background:#0e0e0e;border-bottom:1px solid #1e1e1e;padding:6px 12px;overflow-x:auto;"></div>
 
 <div class="container">
 
@@ -464,7 +464,7 @@ function buildCorrPanel() {
     var source = _activeSource;
     var cfg = getCorrSettings(source);
     var biasOn = (source === "ensemble") ? cfg.biasOn !== false : cfg.biasOn === true;
-    var html = '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">';
+    var html = '<div style="display:flex;flex-wrap:nowrap;gap:6px;align-items:center;overflow-x:auto;white-space:nowrap;">';
     html += '<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#aaa;cursor:pointer;white-space:nowrap;">'
           + '<input type="checkbox" id="corrBias"' + (biasOn ? ' checked' : '') + ' onchange="onCorrChange()"> Bias</label>';
     html += '<span style="color:#333;margin:0 2px;">|</span>';
