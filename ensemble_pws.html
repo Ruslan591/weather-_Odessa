@@ -27,6 +27,7 @@
 </div>
 
 <div id="sourceRow" style="display:none;position:sticky;top:0;z-index:100;background:#121212;padding:8px 12px;gap:6px;flex-wrap:wrap;border-bottom:1px solid #1e1e1e;"></div>
+<div id="corrPanel" style="display:none;position:sticky;top:41px;z-index:99;background:#0e0e0e;border-bottom:1px solid #1e1e1e;padding:8px 12px;"></div>
 
 <div class="container">
 
@@ -224,6 +225,7 @@ function setSource(source) {
         source === "ensemble" ? "ТОЧНОСТЬ АНСАМБЛЯ"
                               : "ТОЧНОСТЬ: " + label;
     renderSourceRow();
+    buildCorrPanel();
     var obs = buildObsIndex();
     var metrics = calcMetrics(obs.obsIndex);
     _dayMetrics     = calcMetricsByDay(obs.obsIndex);
@@ -364,23 +366,93 @@ function buildObsIndex() {
 }
 
 /* === РАСЧЁТ МЕТРИК === */
+/* ── ПАНЕЛЬ КОРРЕКЦИИ ── */
+var _CORR_NS = "corr_pws";
+function getCorrSettings(source) {
+    try { return JSON.parse(localStorage.getItem(_CORR_NS + "_" + source) || "{}"); } catch(e) { return {}; }
+}
+function saveCorrSettings(source, cfg) {
+    localStorage.setItem(_CORR_NS + "_" + source, JSON.stringify(cfg));
+}
+function isBiasEnabled() {
+    var cfg = getCorrSettings(_activeSource);
+    if (_activeSource === "ensemble") return cfg.biasOn !== false;
+    return cfg.biasOn === true;
+}
+function getManualOffset(key) {
+    var cfg = getCorrSettings(_activeSource);
+    if (!cfg.params || !cfg.params[key]) return 0;
+    var p = cfg.params[key];
+    return (p.on && p.val) ? parseFloat(p.val) || 0 : 0;
+}
+function buildCorrPanel() {
+    var panel = document.getElementById("corrPanel");
+    if (!panel) return;
+    var source = _activeSource;
+    var cfg = getCorrSettings(source);
+    var biasOn = (source === "ensemble") ? cfg.biasOn !== false : cfg.biasOn === true;
+    var html = '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">';
+    html += '<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#aaa;cursor:pointer;white-space:nowrap;">'
+          + '<input type="checkbox" id="corrBias"' + (biasOn ? ' checked' : '') + ' onchange="onCorrChange()"> Bias</label>';
+    html += '<span style="color:#333;margin:0 2px;">|</span>';
+    PARAMS.forEach(function(p) {
+        if (p.isFact) return;
+        var pc = (cfg.params && cfg.params[p.key]) ? cfg.params[p.key] : {};
+        html += '<label style="display:flex;align-items:center;gap:2px;font-size:10px;color:#777;cursor:pointer;white-space:nowrap;">'
+              + '<input type="checkbox" class="corr-param-chk" data-param="' + p.key + '"'
+              + (pc.on ? ' checked' : '') + ' onchange="onCorrChange()"> ' + p.label.slice(0,4) + '</label>'
+              + '<input type="number" step="0.1" class="corr-param-val" data-param="' + p.key + '"'
+              + ' value="' + (pc.val !== undefined ? pc.val : '') + '"'
+              + ' style="width:44px;background:#1a1a1a;border:1px solid #333;color:#ccc;border-radius:4px;padding:2px 3px;font-size:10px;"'
+              + ' oninput="onCorrChange()" placeholder="0">'
+              + '<span style="font-size:9px;color:#444;">' + p.unit.trim() + '</span>';
+    });
+    html += '</div>';
+    panel.innerHTML = html;
+    panel.style.display = "block";
+}
+function onCorrChange() {
+    var source = _activeSource;
+    var cfg = getCorrSettings(source);
+    var biasEl = document.getElementById("corrBias");
+    if (biasEl) cfg.biasOn = biasEl.checked;
+    cfg.params = cfg.params || {};
+    document.querySelectorAll(".corr-param-chk").forEach(function(chk) {
+        var k = chk.dataset.param;
+        var valEl = document.querySelector(".corr-param-val[data-param='" + k + "']");
+        cfg.params[k] = { on: chk.checked, val: valEl ? parseFloat(valEl.value) || 0 : 0 };
+    });
+    saveCorrSettings(source, cfg);
+    var obs = buildObsIndex();
+    var metrics = calcMetrics(obs.obsIndex);
+    _dayMetrics     = calcMetricsByDay(obs.obsIndex);
+    _horizonMetrics = calcMetricsByHorizon(obs.obsIndex);
+    _hourMetrics    = calcMetricsByHourUTC(obs.obsIndex);
+    renderMetrics(metrics);
+    renderChart(_activeChartParam);
+    renderHorizonChart(_activeHorizonParam);
+    renderHourChart(_activeHourParam);
+    renderOvfChart(_activeOvfParam);
+}
+
 function applyBiasClient(value, key, horizonH, hourUTC) {
-    if (value == null || !_acc) return value;
-    var overall    = (_acc.overall    || {})[key] || {};
-    var byHorizon  = _acc.byHorizon   || {};
-    var byHourUTC  = _acc.byHourUTC   || {};
+    if (value == null) return value;
     var b = null;
-    if (hourUTC != null) {
-        b = ((byHourUTC[String(hourUTC)] || {})[key] || {}).bias;
+    if (isBiasEnabled() && _acc) {
+        var overall   = (_acc.overall   || {})[key] || {};
+        var byHorizon = _acc.byHorizon  || {};
+        var byHourUTC = _acc.byHourUTC  || {};
+        if (hourUTC != null) b = ((byHourUTC[String(hourUTC)] || {})[key] || {}).bias;
+        if (b == null && horizonH != null) {
+            var hKey = String(Math.max(0, Math.round(horizonH)));
+            b = ((byHorizon[hKey] || {})[key] || {}).bias;
+        }
+        if (b == null) b = overall.bias;
     }
-    if (b == null && horizonH != null) {
-        var hKey = String(Math.max(0, Math.round(horizonH)));
-        b = ((byHorizon[hKey] || {})[key] || {}).bias;
-    }
-    if (b == null) b = overall.bias;
-    if (b == null) return value;
-    if (key === "windDir") return ((value - b) % 360 + 360) % 360;
-    var result = Math.round((value - b) * 10) / 10;
+    var totalCorr = (b || 0) + getManualOffset(key);
+    if (totalCorr === 0) return value;
+    if (key === "windDir") return ((value - totalCorr) % 360 + 360) % 360;
+    var result = Math.round((value - totalCorr) * 10) / 10;
     if (key === "wind" || key === "windGust") result = Math.max(0, result);
     return result;
 }
@@ -388,21 +460,17 @@ function applyBiasClient(value, key, horizonH, hourUTC) {
 function pushPwsErrors(errors, fh, ob) {
     var h       = fh.horizonH != null ? fh.horizonH : null;
     var hourUTC = parseInt(fh.time.slice(11, 13));
-    var useCorrection = (_activeSource === "ensemble");
     function push(k, fv, ov) {
         if (fv == null || ov == null) return;
-        var val = useCorrection ? applyBiasClient(fv, k, h, hourUTC) : fv;
-        errors[k].push(val - ov);
+        errors[k].push(applyBiasClient(fv, k, h, hourUTC) - ov);
     }
     push("temp",     fh.temp,     ob.temp);
     push("pressure", fh.pressure, ob.pressure);
     push("wind",     fh.wind,     ob.wind);
     push("windGust", fh.windGust, ob.windGust);
     push("humidity", fh.humidity, ob.humidity);
-    if (fh.windDir != null && ob.windDir != null) {
-        var corrDir = useCorrection ? applyBiasClient(fh.windDir, "windDir", h, hourUTC) : fh.windDir;
-        errors.windDir.push(windDirDiff(corrDir, ob.windDir));
-    }
+    if (fh.windDir != null && ob.windDir != null)
+        errors.windDir.push(windDirDiff(applyBiasClient(fh.windDir, "windDir", h, hourUTC), ob.windDir));
     if (fh.rain != null && ob.precip != null)
         errors.precip.push((fh.rain>0.1?1:0) - (ob.precip>0.1?1:0));
 }
@@ -1177,6 +1245,7 @@ async function render() {
     renderCoverage(snapCount, obsCount, stationLabel);
     renderSnapshots();
     renderSourceRow();
+    buildCorrPanel();
 }
 
 async function loadModelRuns() {
