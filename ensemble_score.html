@@ -15,7 +15,7 @@
 <div class="header"></div>
 
 <div id="sourceRow" style="display:none;position:sticky;top:0;z-index:100;background:#121212;padding:8px 12px;gap:6px;flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;border-bottom:1px solid #1e1e1e;"></div>
-<div id="corrPanel" style="display:none;position:sticky;top:41px;z-index:99;background:#0e0e0e;border-bottom:1px solid #1e1e1e;padding:6px 12px;overflow-x:auto;"></div>
+<div id="corrPanel" style="display:none;position:sticky;top:0;z-index:99;background:#0e0e0e;border-bottom:1px solid #1e1e1e;padding:6px 12px;overflow-x:auto;"></div>
 
 <div class="container">
 
@@ -483,6 +483,8 @@ function buildCorrPanel() {
     html += '</div>';
     panel.innerHTML = html;
     panel.style.display = "block";
+    var sr = document.getElementById("sourceRow");
+    if (sr) panel.style.top = sr.offsetHeight + "px";
 }
 function onCorrChange() {
     var source = _activeSource;
