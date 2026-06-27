@@ -159,13 +159,18 @@ def generate_now():
     import subprocess, sys
     print("  Провайдер: 1=claude, 2=gemini, 3=оба (Enter=оба):")
     s = input("  > ").strip()
-    cmd = [sys.executable, os.path.join(BASE_DIR, "scripts", "generate_ai_analysis.py"), "--force"]
+    scripts = os.path.join(BASE_DIR, "scripts")
+    py = sys.executable
     if s == "2":
-        cmd = [sys.executable, os.path.join(BASE_DIR, "scripts", "generate_ai_analysis.py"), "--force-gemini"]
+        subprocess.run([py, os.path.join(scripts, "generate_ai_analysis.py"), "--force-gemini"])
+        subprocess.run([py, os.path.join(scripts, "make_blocks_gemini.py")])
     elif s == "3":
-        cmd = [sys.executable, os.path.join(BASE_DIR, "scripts", "generate_ai_analysis.py"), "--force", "--force-gemini"]
-    print(f"  Запуск: {' '.join(cmd[1:])}")
-    subprocess.run(cmd)
+        subprocess.run([py, os.path.join(scripts, "generate_ai_analysis.py"), "--force", "--force-gemini"])
+        subprocess.run([py, os.path.join(scripts, "make_blocks.py"), "--force"])
+        subprocess.run([py, os.path.join(scripts, "make_blocks_gemini.py")])
+    else:
+        subprocess.run([py, os.path.join(scripts, "generate_ai_analysis.py"), "--force"])
+        subprocess.run([py, os.path.join(scripts, "make_blocks.py"), "--force"])
 
 def main():
     d = load()
