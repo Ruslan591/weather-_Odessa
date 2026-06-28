@@ -24,7 +24,7 @@ def fetch_html(dt: datetime.datetime) -> str:
         f"https://www.meteomanz.com/sy1?ty=hd&ind={STATION}&l=1"
         f"&d1={dt.day:02d}&m1={dt.month:02d}&y1={dt.year}"
         f"&d2={dt.day:02d}&m2={dt.month:02d}&y2={dt.year}"
-        f"&h1={dt.hour:02d}Z&h2={dt.hour:02d}Z&min=0&rt=0"
+        f"&h1={dt.hour:02d}Z&h2={dt.hour:02d}Z&min=0&rt=0&ext=1"
     )
     req = urllib.request.Request(url, headers=HEADERS)
     with urllib.request.urlopen(req, timeout=20) as r:
@@ -82,161 +82,128 @@ def parse_obs(html: str, dt: datetime.datetime) -> dict | None:
         m2 = re.search(r"\((\d+)\)\s*$", raw)
         return int(m2.group(1)) if m2 else None
 
-    # Осадки за период — два поля 013011
-    precip_matches = re.findall(
-        r'Total precipitation/total water equivalent: </i></b>\s*(.*?)<br>', html
-    )
-    def precip_val(idx):
-        if idx >= len(precip_matches): return None
-        raw = precip_matches[idx].strip()
-        if raw in ("-", ""): return None
-        m = re.search(r'\((-?[\d.]+)\)', raw)
-        return float(m.group(1)) / 10 if m else None  # Pa→mm equiv
+    # Парсинг через дескрипторы BUFR (_ext_val/_ext_txt)
+    def _ext_val(h, desc, occ=0):
+        pat = re.escape(f"<b>{desc} <i>") + r"[^<]+</i> </b>\s*(.*?)<br>"
+        ms = list(re.finditer(pat, h))
+        if occ >= len(ms): return None
+        raw = ms[occ].group(1).strip()
+        if raw in ("-", "", "\u2014"): return None
+        m2 = re.search(r"\((-?[\d.]+)\)\s*$", raw)
+        if m2:
+            try: return float(m2.group(1))
+            except ValueError: return None
+        m3 = re.match(r"^-?[\d.]+", raw)
+        if m3:
+            try: return float(m3.group())
+            except ValueError: return None
+        return None
 
-    # Радиация — два блока по 6 полей
-    rad_labels = [
-        "Long-wave radiation, integrated over period specified",
-        "Short-wave radiation, integrated over period specified",
-        "Net radiation, integrated over period specified",
-        "Global solar radiation (high accuracy), integrated over period specified",
-        "Diffuse solar radiation (high accuracy), integrated over period specified",
-        "Direct solar radiation (high accuracy), integrated over period specified",
-    ]
-    def rad_block(html, block=0):
-        """Парсим block-й блок радиации (0=первый период, 1=второй)."""
-        result = {}
-        keys = ["lw","sw","net","global","diffuse","direct"]
-        for i, lbl in enumerate(rad_labels):
-            pat = re.escape(f"<b><i>{lbl}: </i></b>") + r"\s*(.*?)<br>"
-            all_m = list(re.finditer(pat, html))
-            if block < len(all_m):
-                raw = all_m[block].group(1).strip()
-                m2 = re.search(r'\((-?[\d.]+)\)', raw)
-                result[keys[i]] = float(m2.group(1)) if m2 and raw not in ("-","") else None
-            else:
-                result[keys[i]] = None
-        return result
+    def _ext_txt(h, desc, occ=0):
+        pat = re.escape(f"<b>{desc} <i>") + r"[^<]+</i> </b>\s*(.*?)<br>"
+        ms = list(re.finditer(pat, h))
+        if occ >= len(ms): return None
+        raw = ms[occ].group(1).strip()
+        if raw in ("-", "", "\u2014"): return None
+        txt = re.sub(r"\s*\(-?[\d.]+\)\s*$", "", raw).strip()
+        return txt or None
 
-    rad1 = rad_block(html, 0)
-    rad2 = rad_block(html, 1)
-
-    # Порывы — два блока (10 мин и 180 мин)
-    gust_spd = re.findall(
-        r'Maximum wind gust speed: </i></b>\s*(.*?)<br>', html
-    )
-    gust_dir = re.findall(
-        r'Maximum wind gust direction: </i></b>\s*(.*?)<br>', html
-    )
-    def gust_v(lst, idx):
-        if idx >= len(lst): return None
-        raw = lst[idx].strip()
-        if raw in ("-", ""): return None
-        m = re.search(r'\((-?[\d.]+)\)', raw)
-        return float(m.group(1)) if m else None
-
-    # Инсоляция — два значения (разные периоды)
-    sun_matches = re.findall(
-        r'Total sunshine: </i></b>\s*(.*?)<br>', html
-    )
-    def sun_val(idx):
-        if idx >= len(sun_matches): return None
-        raw = sun_matches[idx].strip()
-        if raw in ("-", ""): return None
-        m = re.search(r'\((-?[\d.]+)\)', raw)
-        return float(m.group(1)) if m else None
-
-    wind_spd_kmh = _val(html, "Wind speed")  # в км/ч — Meteomanz показывает так
-    # Но в скобках уже м/с: "7.2 Km/h (2.0)"
     wind_spd_ms_m = re.search(
-        r'Wind speed: </i></b>\s*[\d.]+\s*Km/h\s*\((-?[\d.]+)\)', html
+        r'011002 <i>[^<]+</i> </b>\s*([\d.]+)\s*Km/h\s*\((-?[\d.]+)\)', html
     )
-    wind_spd_ms = float(wind_spd_ms_m.group(1)) if wind_spd_ms_m else (
-        round(wind_spd_kmh / 3.6, 1) if wind_spd_kmh else None
-    )
+    if wind_spd_ms_m:
+        wind_spd_kmh = float(wind_spd_ms_m.group(1))
+        wind_spd_ms  = float(wind_spd_ms_m.group(2))
+    else:
+        wind_spd_kmh = None
+        wind_spd_ms  = None
 
     obs = {
         "dt":      dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "station": STATION,
 
         # Давление
-        "station_pressure":        _val(html, "Pressure"),
-        "slp":                     _val(html, "Pressure reduced to mean sea level"),
-        "pressure_tendency_val":   _val(html, "3-hour pressure change"),
-        "pressure_tendency_code":  _val(html, "Characteristic of pressure tendency"),
-        "pressure_tendency_txt":   _txt(html, "Characteristic of pressure tendency"),
-        "pressure_change_24h":     _val(html, "24-hour pressure change"),
+        "station_pressure":       _ext_val(html, "010004"),
+        "slp":                    _ext_val(html, "010051"),
+        "pressure_tendency_val":  _ext_val(html, "010061"),
+        "pressure_tendency_code": _ext_val(html, "010063"),
+        "pressure_tendency_txt":  _ext_txt(html, "010063"),
+        "pressure_change_24h":    _ext_val(html, "010062"),
 
         # Температура и влажность
-        "temp":     _val(html, "Temperature/air temperature"),
-        "dew":      _val(html, "Dewpoint temperature"),
-        "humidity": _val(html, "Relative humidity"),
+        "temp":     _ext_val(html, "012101"),
+        "dew":      _ext_val(html, "012103"),
+        "humidity": _ext_val(html, "013003"),
 
         # Ветер
-        "wind_dir":      _val(html, "Wind direction"),
-        "wind_spd_kmh":  wind_spd_kmh,
-        "wind_spd_ms":   wind_spd_ms,
-        "wind_gust_spd_10min_ms":  gust_v(gust_spd, 0),
-        "wind_gust_dir_10min":     gust_v(gust_dir, 0),
-        "wind_gust_spd_180min_ms": gust_v(gust_spd, 1),
-        "wind_gust_dir_180min":    gust_v(gust_dir, 1),
+        "wind_dir":                _ext_val(html, "011001"),
+        "wind_spd_kmh":            wind_spd_kmh,
+        "wind_spd_ms":             wind_spd_ms,
+        "wind_gust_spd_10min_ms":  _ext_val(html, "011041", 0),
+        "wind_gust_dir_10min":     _ext_val(html, "011043", 0),
+        "wind_gust_spd_180min_ms": _ext_val(html, "011041", 1),
+        "wind_gust_dir_180min":    _ext_val(html, "011043", 1),
 
         # Видимость
-        "visibility": _val(html, "Horizontal visibility"),
+        "visibility": _ext_val(html, "020001"),
 
         # Облачность
-        "cloud_cover_pct":  _val(html, "Cloud cover (total)"),
-        "cloud_amount":     _val(html, "Cloud amount (Observing rules for base of lowest cloud and cloud types of FM 12 SYNOP and FM 13 SHIP apply)"),
-        "cloud_base_m":     _val(html, "Height of base of cloud"),
-        "cloud_type_cl":    cloud_code("Low cloud type"),
-        "cloud_type_cm":    cloud_code("Medium cloud type"),
-        "cloud_type_ch":    cloud_code("High cloud type"),
+        "cloud_cover_pct":   _ext_val(html, "020010"),
+        "cloud_amount":      _ext_val(html, "020011", 0),
+        "cloud_base_m":      _ext_val(html, "020013", 0),
+        "cloud_type_cl":     _ext_val(html, "020012", 0),
+        "cloud_type_cm":     _ext_val(html, "020012", 1),
+        "cloud_type_ch":     _ext_val(html, "020012", 2),
+        "cloud_type_cl_txt": _ext_txt(html, "020012", 0),
+        "cloud_type_cm_txt": _ext_txt(html, "020012", 1),
+        "cloud_type_ch_txt": _ext_txt(html, "020012", 2),
 
         # Погода
-        "weather_now":    _val(html, "Present weather"),
-        "weather_past1":  _val(html, "Past weather (1)"),
-        "weather_past2":  _val(html, "Past weather (2)"),
-        "weather_now_txt":   _txt(html, "Present weather"),
-        "weather_past1_txt": _txt(html, "Past weather (1)"),
-        "weather_past2_txt": _txt(html, "Past weather (2)"),
+        "weather_now":       _ext_val(html, "020003"),
+        "weather_now_txt":   _ext_txt(html, "020003"),
+        "weather_past1":     _ext_val(html, "020004"),
+        "weather_past1_txt": _ext_txt(html, "020004"),
+        "weather_past2":     _ext_val(html, "020005"),
+        "weather_past2_txt": _ext_txt(html, "020005"),
 
         # Осадки
-        "precip_period1_mm":  precip_val(0),
-        "precip_period2_mm":  precip_val(1),
-        "precip_24h_mm":      _val(html, "Total precipitation past 24 hours"),
-        "snow_depth_m":       _val(html, "Total snow depth"),
+        "precip_period1_mm": _ext_val(html, "013011", 0),
+        "precip_period2_mm": _ext_val(html, "013011", 1),
+        "precip_24h_mm":     _ext_val(html, "013023"),
+        "snow_depth_m":      _ext_val(html, "013013"),
 
         # Температура почвы
-        "ground_temp":          _val(html, "Ground temperature"),
-        "ground_min_temp_12h":  _val(html, "Ground minimum temperature, past 12 hours"),
-        "ground_state":         _val(html, "State of the ground (with or without snow)"),
+        "ground_temp":         _ext_val(html, "012120"),
+        "ground_min_temp_12h": _ext_val(html, "012113"),
+        "ground_state":        _ext_val(html, "020062"),
 
         # Экстремумы температуры
-        "temp_max_12h":  _val(html, "Maximum temperature, at height and over period specified"),
-        "temp_min_12h":  _val(html, "Minimum temperature, at height and over period specified"),
-        "temp_change":   _val(html, "Temperature change over specified period"),
+        "temp_max_12h": _ext_val(html, "012111"),
+        "temp_min_12h": _ext_val(html, "012112"),
+        "temp_change":  _ext_val(html, "012049"),
 
         # Инсоляция
-        "sunshine_period1_s":  sun_val(0),
-        "sunshine_24h_s":      sun_val(1),
+        "sunshine_period1_s": _ext_val(html, "014031", 0),
+        "sunshine_24h_s":     _ext_val(html, "014031", 1),
 
         # Испарение
-        "evaporation":  _val(html, "Evaporation/evapotranspiration"),
+        "evaporation": _ext_val(html, "013033"),
 
         # Радиация период 1
-        "rad1_lw":      rad1["lw"],
-        "rad1_sw":      rad1["sw"],
-        "rad1_net":     rad1["net"],
-        "rad1_global":  rad1["global"],
-        "rad1_diffuse": rad1["diffuse"],
-        "rad1_direct":  rad1["direct"],
+        "rad1_lw":      _ext_val(html, "014002", 0),
+        "rad1_sw":      _ext_val(html, "014004", 0),
+        "rad1_net":     _ext_val(html, "014016", 0),
+        "rad1_global":  _ext_val(html, "014028", 0),
+        "rad1_diffuse": _ext_val(html, "014029", 0),
+        "rad1_direct":  _ext_val(html, "014030", 0),
 
         # Радиация период 2
-        "rad2_lw":      rad2["lw"],
-        "rad2_sw":      rad2["sw"],
-        "rad2_net":     rad2["net"],
-        "rad2_global":  rad2["global"],
-        "rad2_diffuse": rad2["diffuse"],
-        "rad2_direct":  rad2["direct"],
+        "rad2_lw":      _ext_val(html, "014002", 1),
+        "rad2_sw":      _ext_val(html, "014004", 1),
+        "rad2_net":     _ext_val(html, "014016", 1),
+        "rad2_global":  _ext_val(html, "014028", 1),
+        "rad2_diffuse": _ext_val(html, "014029", 1),
+        "rad2_direct":  _ext_val(html, "014030", 1),
     }
     return obs
 
