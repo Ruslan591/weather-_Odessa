@@ -122,17 +122,17 @@ def parse_obs(html: str, dt: datetime.datetime) -> dict | None:
         "dt":      dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "station": STATION,
 
-        # Давление
-        "station_pressure":       _ext_val(html, "010004"),
-        "slp":                    _ext_val(html, "010051"),
-        "pressure_tendency_val":  _ext_val(html, "010061"),
+        # Давление (Па → гПа, тенденция Па*10 → гПа)
+        "station_pressure":       round(_ext_val(html, "010004") / 100, 1) if _ext_val(html, "010004") else None,
+        "slp":                    round(_ext_val(html, "010051") / 100, 1) if _ext_val(html, "010051") else None,
+        "pressure_tendency_val":  round(_ext_val(html, "010061") / 100, 1) if _ext_val(html, "010061") else None,
         "pressure_tendency_code": _ext_val(html, "010063"),
         "pressure_tendency_txt":  _ext_txt(html, "010063"),
         "pressure_change_24h":    _ext_val(html, "010062"),
 
-        # Температура и влажность
-        "temp":     _ext_val(html, "012101"),
-        "dew":      _ext_val(html, "012103"),
+        # Температура и влажность (K → °C)
+        "temp":     round(_ext_val(html, "012101") - 273.15, 1) if _ext_val(html, "012101") else None,
+        "dew":      round(_ext_val(html, "012103") - 273.15, 1) if _ext_val(html, "012103") else None,
         "humidity": _ext_val(html, "013003"),
 
         # Ветер
@@ -173,13 +173,13 @@ def parse_obs(html: str, dt: datetime.datetime) -> dict | None:
         "snow_depth_m":      _ext_val(html, "013013"),
 
         # Температура почвы
-        "ground_temp":         _ext_val(html, "012120"),
-        "ground_min_temp_12h": _ext_val(html, "012113"),
+        "ground_temp":         round(_ext_val(html, "012120") - 273.15, 1) if _ext_val(html, "012120") else None,
+        "ground_min_temp_12h": round(_ext_val(html, "012113") - 273.15, 1) if _ext_val(html, "012113") else None,
         "ground_state":        _ext_val(html, "020062"),
 
         # Экстремумы температуры
-        "temp_max_12h": _ext_val(html, "012111"),
-        "temp_min_12h": _ext_val(html, "012112"),
+        "temp_max_12h": round(_ext_val(html, "012111") - 273.15, 1) if _ext_val(html, "012111") else None,
+        "temp_min_12h": round(_ext_val(html, "012112") - 273.15, 1) if _ext_val(html, "012112") else None,
         "temp_change":  _ext_val(html, "012049"),
 
         # Инсоляция
