@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>BUFR — Одесса 33837</title>
+<link rel="stylesheet" href="current_weather.css">
+<style>
+/* ── Источник ── */
+.source-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: #1a2e1a;
+    color: #5db85d;
+    border: 1px solid #2a4a2a;
+    vertical-align: middle;
+    margin-left: 8px;
+}
+
+/* ── Выбор среза ── */
+.slice-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+}
+.slice-btn {
+    flex: 1;
+    min-width: 60px;
+    padding: 7px 4px !important;
+    font-size: 13px !important;
+    border-radius: 8px !important;
+    background: #232323 !important;
+    color: #666 !important;
+    border: 1px solid #2e2e2e !important;
+}
+.slice-btn.active {
+    background: #1e2e1e !important;
+    color: #5db85d !important;
+    border-color: #2a4a2a !important;
+}
+
+/* ── Hero температура ── */
+.bufr-hero {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+.bufr-temp-block { flex: 1; }
+.bufr-obs-label {
+    font-size: 12px;
+    color: #777;
+    margin-bottom: 4px;
+    letter-spacing: 0.03em;
+}
+.bufr-temp-val {
+    font-size: 52px;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 4px;
+}
+.bufr-feels {
+    font-size: 14px;
+    color: #bbb;
+}
+.bufr-icon-block {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    padding-top: 4px;
+}
+.bufr-weather-icon { font-size: 44px; line-height: 1; }
+.bufr-weather-txt {
+    font-size: 12px;
+    color: #888;
+    text-align: right;
+    max-width: 120px;
+}
+
+/* ── Gauge сетка ── */
+.gauge-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+.gauge-card {
+    background: #191919;
+    border: 1px solid #272727;
+    border-radius: 14px;
+    padding: 10px 8px 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.gauge-title {
+    font-size: 11px;
+    color: #666;
+    letter-spacing: 0.04em;
+    margin-bottom: 6px;
+    text-align: center;
+}
+.gauge-val {
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1;
+    text-align: center;
+}
+.gauge-unit {
+    font-size: 12px;
+    color: #888;
+    margin-top: 2px;
+    text-align: center;
+}
+.gauge-sub {
+    font-size: 11px;
+    color: #666;
+    margin-top: 4px;
+    text-align: center;
+}
+
+/* ── SVG gauge ── */
+.gauge-svg { width: 120px; height: 70px; display: block; margin: 0 auto 2px; }
+.wind-svg  { width: 100px; height: 100px; display: block; margin: 0 auto 4px; }
+
+/* ── Секции параметров ── */
+.section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #aaa;
+    letter-spacing: 0.04em;
+    margin: 14px 0 8px;
+    text-transform: uppercase;
+}
+
+/* ── Ярусы облаков ── */
+.cloud-tier {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 9px 0;
+    border-bottom: 1px solid #252525;
+    gap: 10px;
+}
+.cloud-tier:last-child { border-bottom: none; }
+.cloud-tier-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 80px;
+}
+.cloud-tier-name { font-size: 13px; color: #bbb; }
+.cloud-tier-icon { font-size: 18px; }
+.cloud-tier-val  { font-size: 13px; font-weight: 600; text-align: right; color: #ddd; max-width: 55%; }
+
+/* ── Явления ── */
+.phenomena-box {
+    text-align: center;
+    padding: 18px 0;
+    font-size: 15px;
+    color: #bbb;
+}
+.phenomena-box.empty { color: #555; font-style: italic; }
+
+/* ── Сырые данные ── */
+.raw-pre {
+    font-family: monospace;
+    font-size: 10px;
+    color: #555;
+    line-height: 1.6;
+    word-break: break-all;
+    white-space: pre-wrap;
+    margin: 0;
+    padding: 8px 0;
+}
+
+/* ── Нет данных ── */
+.no-data {
+    text-align: center;
+    padding: 40px 20px;
+    color: #555;
+}
+.no-data-icon { font-size: 36px; margin-bottom: 12px; }
+.no-data-txt  { font-size: 14px; }
+
+/* ── Спиннер ── */
+.spin-wrap {
+    text-align: center;
+    padding: 40px;
+    color: #555;
+    font-size: 24px;
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+    <div class="headerTitle">ГМЦ ЧАМ <span class="source-badge">BUFR</span></div>
+    <div class="nav">
+        <a href="index.html">SYNOP</a>
+        <a href="pws.html">PWS</a>
+        <a href="forecast.html">Прогноз</a>
+    </div>
+</div>
+
+<div class="container">
+
+    <!-- Статус -->
+    <div class="card">
+        <div id="lastUpdate" style="color:#aaa;font-size:0.9em;margin-bottom:10px;">—</div>
+        <div class="btnRow">
+            <button onclick="loadBufr()">Обновить</button>
+        </div>
+    </div>
+
+    <!-- Выбор среза -->
+    <div class="card" id="sliceCard" style="display:none">
+        <div class="subTitle" style="margin-bottom:8px;">Срок наблюдения (UTC)</div>
+        <div class="slice-row" id="sliceRow"></div>
+    </div>
+
+    <!-- Основной контент -->
+    <div id="main"><div class="spin-wrap">\u23f3</div></div>
+
+</div>
+
+<script>
+const BUFR_URL = 'data/bufr_' + new Date().getFullYear() + '.json';
+
+// ── Утилиты ────────────────────────────────────────────────────────────────
+
+function fmtDt(dtStr) {
+    const d = new Date(dtStr);
+    const dd = d.getUTCDate().toString().padStart(2,'0');
+    const mm = (d.getUTCMonth()+1).toString().padStart(2,'0');
+    const hh = d.getUTCHours().toString().padStart(2,'0');
+    // Локальное время (Europe/Kiev = UTC+3)
+    const loc = new Date(d.getTime() + 3*3600*1000);
+    const lh  = loc.getUTCHours().toString().padStart(2,'0');
+    const lm  = loc.getUTCMinutes().toString().padStart(2,'0');
+    return `${dd}.${mm} ${hh}:00 UTC (${lh}:${lm} местное)`;
+}
+
+function tempClass(t) {
+    if (t === null) return '';
+    if (t < 0)  return 'tempCold';
+    if (t < 10) return 'tempCool';
+    if (t < 20) return 'tempMild';
+    if (t < 28) return 'tempWarm';
+    return 'tempHot';
+}
+
+function windDir16(deg) {
+    if (deg === null) return '—';
+    const dirs = ['С','ССВ','СВ','ВСВ','В','ВЮВ','ЮВ','ЮЮВ','Ю','ЮЮЗ','ЮЗ','ЗЮЗ','З','ЗСЗ','СЗ','ССЗ'];
+    return dirs[Math.round(deg / 22.5) % 16];
+}
+
+function dewToRH(t, td) {
+    if (t === null || td === null) return null;
+    const es = 6.112 * Math.exp(17.62 * t  / (243.12 + t));
+    const e  = 6.112 * Math.exp(17.62 * td / (243.12 + td));
+    return Math.round(e / es * 100);
+}
+
+function feelsLike(t, rh, ws) {
+    if (t === null) return null;
+    if (t >= 27 && rh !== null) {
+        // Heat index
+        const hi = -8.78469475556 + 1.61139411*t + 2.3385489*rh
+            - 0.14611605*t*rh - 0.012308094*t*t
+            - 0.016424828*rh*rh + 0.002211732*t*t*rh
+            + 0.00072546*t*rh*rh - 0.000003582*t*t*rh*rh;
+        return Math.round(hi * 10) / 10;
+    }
+    if (t <= 10 && ws !== null && ws > 1.3) {
+        // Wind chill
+        const wc = 13.12 + 0.6215*t - 11.37*Math.pow(ws*3.6,0.16) + 0.3965*t*Math.pow(ws*3.6,0.16);
+        return Math.round(wc * 10) / 10;
+    }
+    return t;
+}
+
+// ── Иконка погоды ──────────────────────────────────────────────────────────
+
+function weatherIcon(ww, cloudPct) {
+    if (ww !== null) {
+        const c = Math.floor(ww / 100);
+        if (c === 6 || c === 7) return ['⛈️','Гроза'];
+        if (c === 5) return ['🌧️','Дождь'];
+        if (c === 3) return ['🌦️','Ливень'];
+        if (c === 4) return ['🌫️','Туман'];
+    }
+    const p = cloudPct || 0;
+    if (p <= 10)  return ['\u2600\ufe0f','Ясно'];
+    if (p <= 40)  return ['\ud83c\udf24\ufe0f','Малооблачно'];
+    if (p <= 70)  return ['\u26c5','Переменная облачность'];
+    if (p <= 90)  return ['\ud83c\udf25\ufe0f','Облачно'];
+    return ['\u2601\ufe0f','Пасмурно'];
+}
+
+// ── SVG Gauge (дуга) ───────────────────────────────────────────────────────
+
+function arcGauge(val, min, max, color, unit) {
+    const pct = Math.max(0, Math.min(1, (val - min) / (max - min)));
+    const R = 54, cx = 70, cy = 64;
+    const startA = Math.PI, endA = 2 * Math.PI;
+    const a = startA + pct * (endA - startA);
+    const x1 = cx + R * Math.cos(startA), y1 = cy + R * Math.sin(startA);
+    const x2 = cx + R * Math.cos(a),     y2 = cy + R * Math.sin(a);
+    const large = pct > 0.5 ? 1 : 0;
+    const trackX2 = cx + R, trackY2 = cy;
+    return `<svg class="gauge-svg" viewBox="0 0 140 68">
+        <path d="M${x1},${y1} A${R},${R} 0 0,1 ${trackX2},${trackY2}"
+              fill="none" stroke="#2a2a2a" stroke-width="8" stroke-linecap="round"/>
+        ${pct > 0 ? `<path d="M${x1},${y1} A${R},${R} 0 ${large},1 ${x2},${y2}"
+              fill="none" stroke="${color}" stroke-width="8" stroke-linecap="round"/>` : ''}
+        <text x="${cx}" y="${cy - 6}" text-anchor="middle" fill="${color}"
+              font-size="20" font-weight="800">${val !== null ? val : '—'}</text>
+        <text x="${cx}" y="${cy + 10}" text-anchor="middle" fill="#666" font-size="10">${unit}</text>
+    </svg>`;
+}
+
+// ── SVG Роза ветров ────────────────────────────────────────────────────────
+
+function windRose(deg, spd) {
+    const cx = 50, cy = 50, r = 36;
+    const rad = deg !== null ? (deg - 90) * Math.PI / 180 : 0;
+    const ax = cx + r * Math.cos(rad), ay = cy + r * Math.sin(rad);
+    const bx = cx - r * Math.cos(rad), by = cy - r * Math.sin(rad);
+    const dirs = [['С',50,8],['В',94,52],['Ю',50,96],['З',6,52]];
+    return `<svg class="wind-svg" viewBox="0 0 100 100">
+        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#252525" stroke-width="1"/>
+        <circle cx="${cx}" cy="${cy}" r="${r*0.5}" fill="none" stroke="#252525" stroke-width="0.5" stroke-dasharray="3,3"/>
+        ${dirs.map(([l,x,y])=>`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" fill="#444" font-size="8">${l}</text>`).join('')}
+        ${deg !== null ? `
+        <line x1="${bx}" y1="${by}" x2="${ax}" y2="${ay}" stroke="#7ec8ff" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="${ax}" cy="${ay}" r="3" fill="#7ec8ff"/>
+        ` : ''}
+        <text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle"
+              fill="#eee" font-size="13" font-weight="800">${spd !== null ? spd : '—'}</text>
+        <text x="${cx}" y="${cy + 14}" text-anchor="middle" fill="#666" font-size="7">м/с</text>
+    </svg>`;
+}
+
+// ── Иконки ярусов ─────────────────────────────────────────────────────────
+
+const CL_ICON = {30:'—', 31:'\ud83c\udf26\ufe0f', 32:'\ud83c\udf26\ufe0f', 33:'\u26c5', 34:'\u26c5', 39:'\u26a1'};
+const CM_ICON = {20:'—', 21:'\ud83c\udf25\ufe0f', 25:'\ud83c\udf25\ufe0f'};
+const CH_ICON = {10:'—', 11:'\u2601\ufe0f', 12:'\u2601\ufe0f'};
+function tierIcon(code, map) { return map[code] || '\u2601\ufe0f'; }
+
+// ── Рендер ─────────────────────────────────────────────────────────────────
+
+let allRecords = [], activeIdx = 0;
+
+function renderObs(obs) {
+    const rh   = obs.humidity !== null ? obs.humidity : dewToRH(obs.temp, obs.dew);
+    const fl   = feelsLike(obs.temp, rh, obs.wind_spd_ms);
+    const tc   = tempClass(obs.temp);
+    const [icon, iconTxt] = weatherIcon(obs.weather_now, obs.cloud_cover_pct);
+
+    // Тенденция давления
+    let tendTxt = '';
+    if (obs.pressure_tendency_val !== null) {
+        const sign = obs.pressure_tendency_val > 0 ? '+' : '';
+        tendTxt = `${sign}${obs.pressure_tendency_val} гПа`;
+    }
+
+    // Ветер
+    const wDir = obs.wind_dir !== null ? windDir16(obs.wind_dir) : null;
+    const wSub = obs.wind_dir !== null ? `${wDir} \u00b7 ${obs.wind_dir}\u00b0` : '';
+
+    // Видимость
+    const visTxt = obs.visibility !== null
+        ? (obs.visibility >= 1000 ? (obs.visibility/1000).toFixed(0)+' км' : obs.visibility+' м')
+        : '—';
+
+    // Облака по ярусам
+    function tierRow(name, icon, txt) {
+        return `<div class="cloud-tier">
+            <div class="cloud-tier-left">
+                <span class="cloud-tier-icon">${icon}</span>
+                <span class="cloud-tier-name">${name}</span>
+            </div>
+            <span class="cloud-tier-val">${txt || '—'}</span>
+        </div>`;
+    }
+
+    const clTxt = obs.cloud_type_cl_txt || (obs.cloud_type_cl !== null ? `CL ${obs.cloud_type_cl}` : null);
+    const cmTxt = obs.cloud_type_cm_txt || (obs.cloud_type_cm !== null ? `CM ${obs.cloud_type_cm}` : null);
+    const chTxt = obs.cloud_type_ch_txt || (obs.cloud_type_ch !== null ? `CH ${obs.cloud_type_ch}` : null);
+    const baseTxt = obs.cloud_base_m !== null
+        ? (obs.cloud_base_m >= 1000
+            ? Math.round(obs.cloud_base_m/100)*100 + '\u2013' + (Math.round(obs.cloud_base_m/100)*100+400) + ' м'
+            : obs.cloud_base_m + ' м')
+        : null;
+
+    // Явления
+    const wwTxt = obs.weather_now_txt || (obs.weather_now !== null ? `ww=${obs.weather_now}` : null);
+    const phenomenaHtml = wwTxt
+        ? `<div class="phenomena-box">${wwTxt}</div>`
+        : `<div class="phenomena-box empty">Нет существенных явлений</div>`;
+
+    document.getElementById('main').innerHTML = `
+
+        <!-- Hero -->
+        <div class="card">
+            <div class="subTitle">\u041d\u0430\u0431\u043b\u044e\u0434\u0435\u043d\u0438\u0435: ${fmtDt(obs.dt)}</div>
+            <div class="bufr-hero">
+                <div class="bufr-temp-block">
+                    <div class="bufr-obs-label">\u0422\u0435\u043c\u043f\u0435\u0440\u0430\u0442\u0443\u0440\u0430 \u0432\u043e\u0437\u0434\u0443\u0445\u0430</div>
+                    <div class="bufr-temp-val ${tc}">${obs.temp !== null ? obs.temp.toFixed(1) : '—'}°C</div>
+                    ${fl !== null && fl !== obs.temp
+                        ? `<div class="bufr-feels">\u041e\u0449\u0443\u0449\u0430\u0435\u0442\u0441\u044f \u043a\u0430\u043a: <b>${fl.toFixed(1)}°C</b></div>`
+                        : ''}
+                </div>
+                <div class="bufr-icon-block">
+                    <div class="bufr-weather-icon">${icon}</div>
+                    <div class="bufr-weather-txt">${iconTxt}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gauges: температура + влажность + ветер + давление -->
+        <div class="gauge-grid">
+            <div class="gauge-card">
+                <div class="gauge-title">\u0422\u0435\u043c\u043f\u0435\u0440\u0430\u0442\u0443\u0440\u0430</div>
+                ${arcGauge(obs.temp !== null ? obs.temp.toFixed(1) : null, -10, 45,
+                    obs.temp >= 28 ? '#ff6b6b' : obs.temp >= 20 ? '#ffbf66' : '#7ec8ff', '°C')}
+                ${obs.dew !== null ? `<div class="gauge-sub">\u0422\u0442.\u0440. ${obs.dew.toFixed(1)}°C</div>` : ''}
+            </div>
+            <div class="gauge-card">
+                <div class="gauge-title">\u0412\u043b\u0430\u0436\u043d\u043e\u0441\u0442\u044c</div>
+                ${arcGauge(rh, 0, 100, rh > 70 ? '#7ec8ff' : rh > 40 ? '#8ad68a' : '#ffbf66', '%')}
+                <div class="gauge-sub">\u041e\u0442\u043d. \u0432\u043b\u0430\u0436\u043d\u043e\u0441\u0442\u044c</div>
+            </div>
+            <div class="gauge-card">
+                <div class="gauge-title">\u0412\u0435\u0442\u0435\u0440</div>
+                ${windRose(obs.wind_dir, obs.wind_spd_ms)}
+                <div class="gauge-sub">${wSub}</div>
+            </div>
+            <div class="gauge-card">
+                <div class="gauge-title">\u0414\u0430\u0432\u043b\u0435\u043d\u0438\u0435</div>
+                ${arcGauge(obs.slp !== null ? obs.slp.toFixed(1) : null, 980, 1040, '#7ec8ff', '\u0433\u041f\u0430')}
+                ${tendTxt ? `<div class="gauge-sub">\u0422\u0435\u043d\u0434.: ${tendTxt}/3\u0447</div>` : ''}
+            </div>
+        </div>
+
+        <!-- Параметры -->
+        <div class="card">
+            ${obs.temp !== null      ? rowHtml('\u0422\u0435\u043c\u043f\u0435\u0440\u0430\u0442\u0443\u0440\u0430',        `<span class="${tc}">${obs.temp.toFixed(1)}°C</span>`) : ''}
+            ${obs.dew !== null       ? rowHtml('\u0422\u043e\u0447\u043a\u0430 \u0440\u043e\u0441\u044b',         `${obs.dew.toFixed(1)}°C`) : ''}
+            ${rh !== null            ? rowHtml('\u041e\u0442\u043d. \u0432\u043b\u0430\u0436\u043d\u043e\u0441\u0442\u044c',      `${rh} %`) : ''}
+            ${obs.wind_spd_ms !== null ? rowHtml('\u0412\u0435\u0442\u0435\u0440',
+                `${obs.wind_spd_ms} \u043c/\u0441 ${wDir || ''} <span class="small">\u2197</span>`) : ''}
+            ${obs.station_pressure   ? rowHtml('\u0414\u0430\u0432\u043b\u0435\u043d\u0438\u0435 (\u0441\u0442\u0430\u043d\u0446.)',  `${obs.station_pressure.toFixed(1)} \u0433\u041f\u0430`) : ''}
+            ${obs.slp                ? rowHtml('\u0414\u0430\u0432\u043b\u0435\u043d\u0438\u0435 QNH',         `${obs.slp.toFixed(1)} \u0433\u041f\u0430`) : ''}
+            ${tendTxt                ? rowHtml('\u0411\u0430\u0440\u0438\u0447. \u0442\u0435\u043d\u0434\u0435\u043d\u0446\u0438\u044f',
+                `<span style="font-weight:700">${obs.pressure_tendency_txt
+                    ? obs.pressure_tendency_txt.split(',')[0]
+                    : ''} ${tendTxt}</span>`) : ''}
+            ${obs.visibility !== null ? rowHtml('\u0412\u0438\u0434\u0438\u043c\u043e\u0441\u0442\u044c',         visTxt) : ''}
+            ${obs.ground_temp !== null ? rowHtml('\u0422\u0435\u043c\u043f. \u043f\u043e\u0447\u0432\u044b',       `${obs.ground_temp.toFixed(1)}°C`) : ''}
+        </div>
+
+        <!-- Облачность -->
+        <div class="card">
+            <div class="cardTitle" style="display:flex;justify-content:space-between;align-items:center">
+                <span>\u041e\u0431\u043b\u0430\u0447\u043d\u043e\u0441\u0442\u044c</span>
+                ${obs.cloud_cover_pct !== null
+                    ? `<span style="font-size:14px;color:#bbb">${icon} ${obs.cloud_cover_pct}%</span>`
+                    : ''}
+            </div>
+            ${tierRow('\u0412\u0435\u0440\u0445\u043d\u0438\u0439 \u044f\u0440\u0443\u0441', chTxt ? '\u2601\ufe0f' : '\u2014', chTxt)}
+            ${tierRow('\u0421\u0440\u0435\u0434\u043d\u0438\u0439 \u044f\u0440\u0443\u0441', cmTxt ? '\u26c5' : '\u2014', cmTxt)}
+            ${tierRow('\u041d\u0438\u0436\u043d\u0438\u0439 \u044f\u0440\u0443\u0441', clTxt ? '\ud83c\udf26\ufe0f' : '\u2014', clTxt)}
+            ${baseTxt ? tierRow('\u041d\u0438\u0436\u043d\u044f\u044f \u0433\u0440\u0430\u043d\u0438\u0446\u0430 \u043e\u0431\u043b\u0430\u043a\u043e\u0432', '\u2195', baseTxt) : ''}
+        </div>
+
+        <!-- Явления -->
+        <div class="card">
+            <div class="cardTitle">\u042f\u0432\u043b\u0435\u043d\u0438\u044f \u043f\u043e\u0433\u043e\u0434\u044b</div>
+            ${phenomenaHtml}
+        </div>
+
+        <!-- Дополнительно если есть -->
+        ${obs.temp_max_12h !== null || obs.temp_min_12h !== null || obs.precip_24h_mm !== null ? `
+        <div class="card">
+            <div class="cardTitle">\u0414\u043e\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c\u043d\u043e</div>
+            ${obs.temp_max_12h !== null ? rowHtml('\u0422\u043c\u0430\u043a\u0441 (12\u0447)', `${obs.temp_max_12h.toFixed(1)}°C`) : ''}
+            ${obs.temp_min_12h !== null ? rowHtml('\u0422\u043c\u0438\u043d (12\u0447)', `${obs.temp_min_12h.toFixed(1)}°C`) : ''}
+            ${obs.precip_24h_mm !== null ? rowHtml('\u041e\u0441\u0430\u0434\u043a\u0438 (24\u0447)', `${obs.precip_24h_mm} \u043c\u043c`) : ''}
+            ${obs.snow_depth_m !== null ? rowHtml('\u0421\u043d\u0435\u0436\u043d\u044b\u0439 \u043f\u043e\u043a\u0440\u043e\u0432', `${(obs.snow_depth_m*100).toFixed(0)} \u0441\u043c`) : ''}
+        </div>` : ''}
+
+        <!-- Сырые данные -->
+        <details>
+            <summary style="padding:10px 12px;cursor:pointer;color:#666;font-size:13px;">
+                \u25b6 \u0421\u044b\u0440\u044b\u0435 \u0434\u0430\u043d\u043d\u044b\u0435 BUFR
+            </summary>
+            <div class="details-body"><div>
+                <pre class="raw-pre">${JSON.stringify(obs, null, 2)}</pre>
+            </div></div>
+        </details>
+    `;
+}
+
+function rowHtml(label, val) {
+    return `<div class="row">
+        <span class="label">${label}</span>
+        <span class="value">${val}</span>
+    </div>`;
+}
+
+// ── Выбор среза ────────────────────────────────────────────────────────────
+
+function buildSliceRow(records) {
+    const row = document.getElementById('sliceRow');
+    row.innerHTML = '';
+    records.forEach((r, i) => {
+        const d = new Date(r.dt);
+        const hh = d.getUTCHours().toString().padStart(2,'0');
+        const dd = d.getUTCDate().toString().padStart(2,'0');
+        const mm = (d.getUTCMonth()+1).toString().padStart(2,'0');
+        const btn = document.createElement('button');
+        btn.className = 'slice-btn' + (i === activeIdx ? ' active' : '');
+        btn.textContent = `${dd}.${mm} ${hh}:00`;
+        btn.onclick = () => {
+            activeIdx = i;
+            document.querySelectorAll('.slice-btn').forEach((b,j) =>
+                b.classList.toggle('active', j === i));
+            renderObs(records[i]);
+        };
+        row.appendChild(btn);
+    });
+    document.getElementById('sliceCard').style.display = '';
+}
+
+// ── Загрузка ───────────────────────────────────────────────────────────────
+
+function loadBufr() {
+    document.getElementById('lastUpdate').textContent = '\u23f3 \u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430...';
+    fetch(BUFR_URL + '?t=' + Date.now())
+        .then(r => r.json())
+        .then(data => {
+            if (!data || !data.length) {
+                document.getElementById('main').innerHTML =
+                    `<div class="card no-data"><div class="no-data-icon">\ud83d\udcac</div>
+                    <div class="no-data-txt">\u041d\u0435\u0442 \u0434\u0430\u043d\u043d\u044b\u0445</div></div>`;
+                document.getElementById('lastUpdate').textContent = '\u041d\u0435\u0442 \u0434\u0430\u043d\u043d\u044b\u0445';
+                return;
+            }
+            // Сортируем по времени, берём последние 8 сроков (2 суток)
+            allRecords = data.sort((a,b) => a.dt.localeCompare(b.dt)).slice(-8);
+            activeIdx  = allRecords.length - 1;
+
+            const last = allRecords[activeIdx];
+            const d    = new Date(last.dt);
+            const dd   = d.getUTCDate().toString().padStart(2,'0');
+            const mo   = (d.getUTCMonth()+1).toString().padStart(2,'0');
+            const hh   = d.getUTCHours().toString().padStart(2,'0');
+            document.getElementById('lastUpdate').textContent =
+                `\u2705 \u041e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u043e: ${dd}.${mo}.${d.getUTCFullYear()}, ${hh}:00 UTC`;
+
+            buildSliceRow(allRecords);
+            renderObs(last);
+        })
+        .catch(e => {
+            document.getElementById('lastUpdate').textContent = '\u274c \u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438';
+            document.getElementById('main').innerHTML =
+                `<div class="card no-data"><div class="no-data-icon">\u26a0\ufe0f</div>
+                <div class="no-data-txt">${e.message}</div></div>`;
+        });
+}
+
+loadBufr();
+</script>
+
+<script src="nav.js"></script>
+</body>
+</html>
