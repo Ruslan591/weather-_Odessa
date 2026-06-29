@@ -3,6 +3,7 @@
 
 var TABS = [
     { label: "Прогноз",  icon: "📅", href: "forecast.html", match: ["forecast.html"] },
+    { label: "BUFR",     icon: "📡", href: "bufr.html",     match: ["bufr.html"] },
     { label: "По городу",icon: "🌆", href: "pws.html",      match: ["pws.html"] },
     { label: "Одесса",   icon: "🏙", href: "index.html",    match: ["index.html"] },
     { label: "Точность", icon: "📊", href: null, match: ["ensemble_pws.html", "ensemble_score.html", "verify.html", "verify_pws.html"],
