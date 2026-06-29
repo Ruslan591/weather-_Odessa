@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>BUFR — Одесса 33837</title>
 <link rel="stylesheet" href="current_weather.css">
 <style>
@@ -549,7 +551,7 @@ function buildSliceRow(records) {
 
 function loadBufr() {
     document.getElementById('lastUpdate').textContent = '\u23f3 \u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430...';
-    fetch(BUFR_URL + '?t=' + Date.now())
+    fetch(BUFR_URL + '?t=' + Date.now(), {cache: 'no-store'})
         .then(r => r.json())
         .then(data => {
             if (!data || !data.length) {
