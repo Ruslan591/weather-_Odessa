@@ -340,11 +340,59 @@ const CM_ICON = {20:'—', 21:'\ud83c\udf25\ufe0f', 25:'\ud83c\udf25\ufe0f'};
 const CH_ICON = {10:'—', 11:'\u2601\ufe0f', 12:'\u2601\ufe0f'};
 function tierIcon(code, map) { return map[code] || '\u2601\ufe0f'; }
 
+// ── Переводы BUFR-текстов ─────────────────────────────────────────────────
+
+const BUFR_TRANSLATE = {
+  // pressure_tendency_txt
+  'Decreasing (steadily or unsteadily), Atmospheric pressure now lower than three hours ago':
+    'Падает (равномерно или неравномерно), давление ниже, чем 3 ч назад',
+  'Decreasing or steady, then increasing; or increasing, then increasing more rapidly, Atmospheric pressure now higher than three hours ago':
+    'Падало или было ровным, затем ростет; давление выше, чем 3 ч назад',
+  'Increasing (steadily or unsteadily), Atmospheric pressure now higher than three hours ago':
+    'Растёт (равномерно или неравномерно), давление выше, чем 3 ч назад',
+  'Increasing, then steady; or increasing, then increasing more slowly, Atmospheric pressure now higher than three hours ago':
+    'Росло, затем выровнялось; давление выше, чем 3 ч назад',
+  'Steady or increasing, then decreasing; or decreasing, then decreasing more rapidly, Atmospheric pressure now lower than three hours ago':
+    'Ровное или росло, затем пало; давление ниже, чем 3 ч назад',
+  // cloud CL
+  'No CL clouds': 'Нижних облаков нет',
+  'Cumulus humilis or Cumulus fractus other than of bad weathe,  or both':
+    'Cumulus humilis или Cumulus fractus (хорошая погода)',
+  // cloud CM
+  'No CM clouds': 'Средних облаков нет',
+  'Altocumulus cumulogenitus (or cumulonimbogenitus)':
+    'Altocumulus cumulogenitus (из кучевых)',
+  // cloud CH
+  'No CH clouds': 'Верхних облаков нет',
+  'Cirrus fibratus, sometimes uncinus, not progressively invading the sky':
+    'Cirrus fibratus, иногда uncinus, не затягивающий небо',
+  // weather
+  'No significant phenomenon to report, present and past weather omitted':
+    'Значимых явлений нет',
+  'No significant weather observed':
+    'Значимых явлений не наблюдалось',
+};
+
+function tr(text) {
+    if (!text) return text;
+    return BUFR_TRANSLATE[text.trim()] || text;
+}
+
+function translateBufr(obs) {
+    const fields = ['pressure_tendency_txt','cloud_type_cl_txt','cloud_type_cm_txt',
+                    'cloud_type_ch_txt','weather_now_txt','weather_past1_txt','weather_past2_txt'];
+    const o = Object.assign({}, obs);
+    fields.forEach(f => { if (o[f]) o[f] = tr(o[f]); });
+    // pressure_tendency_txt: берём только первую часть до запятой после перевода
+    return o;
+}
+
 // ── Рендер ─────────────────────────────────────────────────────────────────
 
 let allRecords = [], activeIdx = 0;
 
-function renderObs(obs) {
+function renderObs(obsRaw) {
+    const obs = translateBufr(obsRaw);
     const rh   = obs.humidity !== null ? obs.humidity : dewToRH(obs.temp, obs.dew);
     const fl   = feelsLike(obs.temp, rh, obs.wind_spd_ms);
     const tc   = tempClass(obs.temp);
