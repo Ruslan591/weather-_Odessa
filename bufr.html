@@ -130,7 +130,7 @@
 }
 
 /* ── SVG gauge ── */
-.gauge-svg { width: 120px; height: 70px; display: block; margin: 0 auto 2px; }
+.gauge-svg { width: 120px; height: 68px; display: block; margin: 0 auto 2px; }
 .wind-svg  { width: 100px; height: 100px; display: block; margin: 0 auto 4px; }
 
 /* ── Секции параметров ── */
@@ -313,21 +313,23 @@ function weatherIcon(ww, cloudPct) {
 
 function arcGauge(val, min, max, color, unit) {
     const pct = Math.max(0, Math.min(1, (val - min) / (max - min)));
-    const R = 48, cx = 60, cy = 54;
-    const startA = Math.PI, endA = 2 * Math.PI;
-    const a = startA + pct * (endA - startA);
-    const x1 = cx + R * Math.cos(startA), y1 = cy + R * Math.sin(startA);
-    const x2 = cx + R * Math.cos(a),     y2 = cy + R * Math.sin(a);
+    // Центр дуги у нижнего края, дуга — верхняя полуокружность
+    const R = 44, cx = 60, cy = 58;
+    // startA = 180° (левый конец), endA = 0° (правый конец)
+    const startA = Math.PI, endA = 0;
+    const a = startA + pct * (endA - startA);  // от 180° до 0°
+    const x1 = cx + R * Math.cos(startA), y1 = cy + R * Math.sin(startA); // левый конец (cx-R, cy)
+    const x2 = cx + R * Math.cos(a),      y2 = cy + R * Math.sin(a);
     const large = pct > 0.5 ? 1 : 0;
-    const trackX2 = cx + R, trackY2 = cy;
-    return `<svg class="gauge-svg" viewBox="0 0 120 60">
+    const trackX2 = cx + R, trackY2 = cy; // правый конец (cx+R, cy)
+    return `<svg class="gauge-svg" viewBox="0 0 120 68">
         <path d="M${x1},${y1} A${R},${R} 0 0,1 ${trackX2},${trackY2}"
               fill="none" stroke="#2a2a2a" stroke-width="7" stroke-linecap="round"/>
         ${pct > 0 ? `<path d="M${x1},${y1} A${R},${R} 0 ${large},1 ${x2},${y2}"
               fill="none" stroke="${color}" stroke-width="7" stroke-linecap="round"/>` : ''}
-        <text x="${cx}" y="${cy - 4}" text-anchor="middle" fill="${color}"
+        <text x="${cx}" y="${cy - 10}" text-anchor="middle" fill="${color}"
               font-size="18" font-weight="800">${val !== null ? val : '—'}</text>
-        <text x="${cx}" y="${cy + 9}" text-anchor="middle" fill="#666" font-size="9">${unit}</text>
+        <text x="${cx}" y="${cy + 4}" text-anchor="middle" fill="#666" font-size="9">${unit}</text>
     </svg>`;
 }
 
