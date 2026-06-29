@@ -61,7 +61,7 @@
     letter-spacing: 0.03em;
 }
 .bufr-temp-val {
-    font-size: 52px;
+    font-size: 42px;
     font-weight: 800;
     line-height: 1;
     margin-bottom: 4px;
@@ -292,7 +292,7 @@ function feelsLike(t, rh, ws) {
 // ── Иконка погоды ──────────────────────────────────────────────────────────
 
 function weatherIcon(ww, cloudPct) {
-    if (ww !== null) {
+    if (ww !== null && ww !== 508 && ww !== 500) {
         const c = Math.floor(ww / 100);
         if (c === 6 || c === 7) return ['⛈️','Гроза'];
         if (c === 5) return ['🌧️','Дождь'];
@@ -311,21 +311,21 @@ function weatherIcon(ww, cloudPct) {
 
 function arcGauge(val, min, max, color, unit) {
     const pct = Math.max(0, Math.min(1, (val - min) / (max - min)));
-    const R = 54, cx = 70, cy = 64;
+    const R = 48, cx = 60, cy = 54;
     const startA = Math.PI, endA = 2 * Math.PI;
     const a = startA + pct * (endA - startA);
     const x1 = cx + R * Math.cos(startA), y1 = cy + R * Math.sin(startA);
     const x2 = cx + R * Math.cos(a),     y2 = cy + R * Math.sin(a);
     const large = pct > 0.5 ? 1 : 0;
     const trackX2 = cx + R, trackY2 = cy;
-    return `<svg class="gauge-svg" viewBox="0 0 140 68">
+    return `<svg class="gauge-svg" viewBox="0 0 120 60">
         <path d="M${x1},${y1} A${R},${R} 0 0,1 ${trackX2},${trackY2}"
-              fill="none" stroke="#2a2a2a" stroke-width="8" stroke-linecap="round"/>
+              fill="none" stroke="#2a2a2a" stroke-width="7" stroke-linecap="round"/>
         ${pct > 0 ? `<path d="M${x1},${y1} A${R},${R} 0 ${large},1 ${x2},${y2}"
-              fill="none" stroke="${color}" stroke-width="8" stroke-linecap="round"/>` : ''}
-        <text x="${cx}" y="${cy - 6}" text-anchor="middle" fill="${color}"
-              font-size="20" font-weight="800">${val !== null ? val : '—'}</text>
-        <text x="${cx}" y="${cy + 10}" text-anchor="middle" fill="#666" font-size="10">${unit}</text>
+              fill="none" stroke="${color}" stroke-width="7" stroke-linecap="round"/>` : ''}
+        <text x="${cx}" y="${cy - 4}" text-anchor="middle" fill="${color}"
+              font-size="18" font-weight="800">${val !== null ? val : '—'}</text>
+        <text x="${cx}" y="${cy + 9}" text-anchor="middle" fill="#666" font-size="9">${unit}</text>
     </svg>`;
 }
 
