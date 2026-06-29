@@ -94,44 +94,17 @@
     gap: 10px;
     margin-bottom: 14px;
 }
-.gauge-card {
+.gauge-grid .ind-card {
     background: #191919;
     border: 1px solid #272727;
     border-radius: 14px;
-    padding: 10px 8px 8px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+    padding: 4px;
+    cursor: default;
 }
-.gauge-title {
-    font-size: 11px;
-    color: #666;
-    letter-spacing: 0.04em;
-    margin-bottom: 6px;
-    text-align: center;
+.gauge-grid .ind-card svg {
+    width: 100% !important;
+    height: auto !important;
 }
-.gauge-val {
-    font-size: 28px;
-    font-weight: 800;
-    line-height: 1;
-    text-align: center;
-}
-.gauge-unit {
-    font-size: 12px;
-    color: #888;
-    margin-top: 2px;
-    text-align: center;
-}
-.gauge-sub {
-    font-size: 11px;
-    color: #666;
-    margin-top: 4px;
-    text-align: center;
-}
-
-/* ── SVG gauge ── */
-.gauge-svg { width: 120px; height: 68px; display: block; margin: 0 auto 2px; }
-.wind-svg  { width: 100px; height: 100px; display: block; margin: 0 auto 4px; }
 
 /* ── Секции параметров ── */
 .section-title {
@@ -436,27 +409,10 @@ function renderObs(obs) {
 
         <!-- Gauges: температура + влажность + ветер + давление -->
         <div class="gauge-grid">
-            <div class="gauge-card">
-                <div class="gauge-title">\u0422\u0435\u043c\u043f\u0435\u0440\u0430\u0442\u0443\u0440\u0430</div>
-                ${arcGauge(obs.temp !== null ? obs.temp.toFixed(1) : null, -10, 45,
-                    obs.temp >= 28 ? '#ff6b6b' : obs.temp >= 20 ? '#ffbf66' : '#7ec8ff', '°C')}
-                ${obs.dew !== null ? `<div class="gauge-sub">\u0422\u0442.\u0440. ${obs.dew.toFixed(1)}°C</div>` : ''}
-            </div>
-            <div class="gauge-card">
-                <div class="gauge-title">\u0412\u043b\u0430\u0436\u043d\u043e\u0441\u0442\u044c</div>
-                ${arcGauge(rh, 0, 100, rh > 70 ? '#7ec8ff' : rh > 40 ? '#8ad68a' : '#ffbf66', '%')}
-                <div class="gauge-sub">\u041e\u0442\u043d. \u0432\u043b\u0430\u0436\u043d\u043e\u0441\u0442\u044c</div>
-            </div>
-            <div class="gauge-card">
-                <div class="gauge-title">\u0412\u0435\u0442\u0435\u0440</div>
-                ${windRose(obs.wind_dir, obs.wind_spd_ms)}
-                <div class="gauge-sub">${wSub}</div>
-            </div>
-            <div class="gauge-card">
-                <div class="gauge-title">\u0414\u0430\u0432\u043b\u0435\u043d\u0438\u0435</div>
-                ${arcGauge(obs.slp !== null ? obs.slp.toFixed(1) : null, 980, 1040, '#7ec8ff', '\u0433\u041f\u0430')}
-                ${tendTxt ? `<div class="gauge-sub">\u0422\u0435\u043d\u0434.: ${tendTxt}/3\u0447</div>` : ''}
-            </div>
+            ${tempIndicatorSvg(obs.temp, fl)}
+            ${humidityIndicatorSvg(rh)}
+            ${windIndicatorSvg({windSpeed: obs.wind_spd_ms, windDir: obs.wind_dir, windGust: obs.wind_gust_spd_10min_ms})}
+            ${pressureIndicatorSvg({seaPressure: obs.slp, tendencyCode: obs.pressure_tendency_code !== null ? String(Math.round(obs.pressure_tendency_code)) : null, tendencyValue: obs.pressure_tendency_val})}
         </div>
 
         <!-- Параметры -->
@@ -589,6 +545,8 @@ function loadBufr() {
 loadBufr();
 </script>
 
+<script src="utils.js?v=3"></script>
+<script src="indicators.js"></script>
 <script src="nav.js"></script>
 </body>
 </html>
