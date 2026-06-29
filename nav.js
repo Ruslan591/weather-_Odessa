@@ -4,7 +4,12 @@
 var TABS = [
     { label: "Прогноз",  icon: "📅", href: "forecast.html", match: ["forecast.html"] },
     { label: "По городу",icon: "🌆", href: "pws.html",      match: ["pws.html"] },
-    { label: "Одесса",   icon: "🏙", href: "index.html",    match: ["index.html"] },
+    { label: "Одесса",   icon: "🏙", href: null, match: ["index.html", "bufr.html"],
+      submenu: [
+          { label: "SYNOP", href: "index.html" },
+          { label: "BUFR",  href: "bufr.html" },
+      ]
+    },
     { label: "Точность", icon: "📊", href: null, match: ["ensemble_pws.html", "ensemble_score.html", "verify.html", "verify_pws.html"],
       submenu: [
           { label: "Ensemble vs PWS",   href: "ensemble_pws.html" },
@@ -69,40 +74,42 @@ style.textContent = [
 ].join("\n");
 document.head.appendChild(style);
 
-/* Bottom sheet DOM */
+/* Bottom sheet DOM — универсальный */
 var backdrop = document.createElement("div");
 backdrop.id = "nav-sheet-backdrop";
-backdrop.innerHTML =
-    '<div id="nav-sheet">' +
-    '  <div id="nav-sheet-title">Точность</div>' +
-    '</div>';
-
+backdrop.innerHTML = '<div id="nav-sheet"><div id="nav-sheet-title"></div></div>';
 var sheet = backdrop.querySelector("#nav-sheet");
+var sheetTitle = backdrop.querySelector("#nav-sheet-title");
 
-/* Подпункты */
-var accuracyTab = TABS[3];
-accuracyTab.submenu.forEach(function(item) {
-    var a = document.createElement("a");
-    a.href = item.href;
-    a.textContent = item.label;
-    if (item.href === page) a.className = "active";
-    sheet.appendChild(a);
-});
+var activeSheet = null;
+
+function openSheet(tab) {
+    activeSheet = tab;
+    sheetTitle.textContent = tab.label;
+    /* Чистим старые ссылки */
+    Array.from(sheet.querySelectorAll("a")).forEach(function(a) { sheet.removeChild(a); });
+    tab.submenu.forEach(function(item) {
+        var a = document.createElement("a");
+        a.href = item.href;
+        a.textContent = item.label;
+        if (item.href === page) a.className = "active";
+        sheet.appendChild(a);
+    });
+    backdrop.classList.add("open");
+}
+function closeSheet() { backdrop.classList.remove("open"); }
 
 backdrop.addEventListener("click", function(e) {
     if (e.target === backdrop) closeSheet();
 });
 
-function openSheet() { backdrop.classList.add("open"); }
-function closeSheet() { backdrop.classList.remove("open"); }
-
 /* Nav */
 var nav = document.createElement("nav");
 nav.id = "app-nav";
-nav.innerHTML = TABS.map(function(t) {
+nav.innerHTML = TABS.map(function(t, i) {
     var active = t.match.indexOf(page) !== -1 ? " active" : "";
     if (t.submenu) {
-        return '<button class="nav-btn' + active + '" id="nav-accuracy-btn">' +
+        return '<button class="nav-btn' + active + '" data-tab-idx="' + i + '">' +
                '<span class="nav-icon">' + t.icon + '</span>' +
                '<span>' + t.label + '</span>' +
                '</button>';
@@ -117,7 +124,12 @@ nav.innerHTML = TABS.map(function(t) {
 function mount() {
     document.body.appendChild(backdrop);
     document.body.appendChild(nav);
-    document.getElementById("nav-accuracy-btn").addEventListener("click", openSheet);
+    nav.querySelectorAll("button.nav-btn[data-tab-idx]").forEach(function(btn) {
+        btn.addEventListener("click", function() {
+            var idx = parseInt(btn.getAttribute("data-tab-idx"));
+            openSheet(TABS[idx]);
+        });
+    });
 }
 
 if (document.body) {
