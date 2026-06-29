@@ -127,7 +127,7 @@ def parse_obs(html: str, dt: datetime.datetime) -> dict | None:
         "slp":                    round(_ext_val(html, "010051") / 100, 1) if _ext_val(html, "010051") else None,
         "pressure_tendency_val":  round(_ext_val(html, "010061") / 100, 1) if _ext_val(html, "010061") else None,
         "pressure_tendency_code": _ext_val(html, "010063"),
-        "pressure_tendency_txt":  _ext_txt(html, "010063"),
+        "pressure_tendency_txt":  _ru(_ext_val(html, "010063"), TEND_RU),
         "pressure_change_24h":    _ext_val(html, "010062"),
 
         # Температура и влажность (K → °C)
@@ -154,17 +154,17 @@ def parse_obs(html: str, dt: datetime.datetime) -> dict | None:
         "cloud_type_cl":     _ext_val(html, "020012", 0),
         "cloud_type_cm":     _ext_val(html, "020012", 1),
         "cloud_type_ch":     _ext_val(html, "020012", 2),
-        "cloud_type_cl_txt": _ext_txt(html, "020012", 0),
-        "cloud_type_cm_txt": _ext_txt(html, "020012", 1),
-        "cloud_type_ch_txt": _ext_txt(html, "020012", 2),
+        "cloud_type_cl_txt": _ru(_ext_val(html, "020012", 0), CL_RU),
+        "cloud_type_cm_txt": _ru(_ext_val(html, "020012", 1), CM_RU),
+        "cloud_type_ch_txt": _ru(_ext_val(html, "020012", 2), CH_RU),
 
         # Погода
         "weather_now":       _ext_val(html, "020003"),
-        "weather_now_txt":   _ext_txt(html, "020003"),
+        "weather_now_txt":   _ru(_ext_val(html, "020003"), WW_RU),
         "weather_past1":     _ext_val(html, "020004"),
-        "weather_past1_txt": _ext_txt(html, "020004"),
+        "weather_past1_txt": _ru(_ext_val(html, "020004"), W_PAST_RU),
         "weather_past2":     _ext_val(html, "020005"),
-        "weather_past2_txt": _ext_txt(html, "020005"),
+        "weather_past2_txt": _ru(_ext_val(html, "020005"), W_PAST_RU),
 
         # Осадки
         "precip_period1_mm": _ext_val(html, "013011", 0),
