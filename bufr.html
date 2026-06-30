@@ -506,13 +506,16 @@ function renderObs(obsRaw) {
         </div>
 
         <!-- Дополнительно если есть -->
-        ${obs.temp_max_12h !== null || obs.temp_min_12h !== null || obs.precip_24h_mm !== null ? `
+        ${obs.temp_max_12h !== null || obs.temp_min_12h !== null || obs.precip_24h_mm !== null
+            || obs.sunshine_24h_min !== null || obs.sunshine_period1_min !== null ? `
         <div class="card">
-            <div class="cardTitle">\u0414\u043e\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c\u043d\u043e</div>
-            ${obs.temp_max_12h !== null ? rowHtml('\u0422\u043c\u0430\u043a\u0441 (12\u0447)', `${obs.temp_max_12h.toFixed(1)}°C`) : ''}
-            ${obs.temp_min_12h !== null ? rowHtml('\u0422\u043c\u0438\u043d (12\u0447)', `${obs.temp_min_12h.toFixed(1)}°C`) : ''}
-            ${obs.precip_24h_mm !== null ? rowHtml('\u041e\u0441\u0430\u0434\u043a\u0438 (24\u0447)', `${obs.precip_24h_mm} \u043c\u043c`) : ''}
-            ${obs.snow_depth_m !== null ? rowHtml('\u0421\u043d\u0435\u0436\u043d\u044b\u0439 \u043f\u043e\u043a\u0440\u043e\u0432', `${(obs.snow_depth_m*100).toFixed(0)} \u0441\u043c`) : ''}
+            <div class="cardTitle">Дополнительно</div>
+            ${obs.temp_max_12h !== null ? rowHtml('Тмакс (12ч)', `${obs.temp_max_12h.toFixed(1)}°C`) : ''}
+            ${obs.temp_min_12h !== null ? rowHtml('Тмин (12ч)', `${obs.temp_min_12h.toFixed(1)}°C`) : ''}
+            ${obs.precip_24h_mm !== null ? rowHtml('Осадки (24ч)', `${obs.precip_24h_mm} мм`) : ''}
+            ${obs.snow_depth_m !== null ? rowHtml('Снежный покров', `${(obs.snow_depth_m*100).toFixed(0)} см`) : ''}
+            ${obs.sunshine_24h_min !== null ? rowHtml('Солнечное сияние (24ч)', fmtSunshine(obs.sunshine_24h_min)) : ''}
+            ${obs.sunshine_period1_min !== null ? rowHtml('Солнечное сияние (период)', fmtSunshine(obs.sunshine_period1_min)) : ''}
         </div>` : ''}
 
         <!-- Сырые данные -->
@@ -525,6 +528,12 @@ function renderObs(obsRaw) {
             </div></div>
         </details>
     `;
+}
+
+function fmtSunshine(mins) {
+    const h = Math.floor(mins / 60);
+    const m = Math.round(mins % 60);
+    return `${h}ч ${m}м`;
 }
 
 function rowHtml(label, val) {
