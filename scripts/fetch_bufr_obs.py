@@ -347,8 +347,8 @@ def parse_obs(html: str, dt: datetime.datetime) -> dict | None:
         "temp_change":  _ext_val(html, "012049"),
 
         # Инсоляция
-        "sunshine_period1_s": _ext_val(html, "014031", 0),
-        "sunshine_24h_s":     _ext_val(html, "014031", 1),
+        "sunshine_period1_min": _ext_val(html, "014031", 0),
+        "sunshine_24h_min":     _ext_val(html, "014031", 1),
 
         # Испарение
         "evaporation": _ext_val(html, "013033"),
