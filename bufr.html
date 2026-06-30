@@ -518,6 +518,8 @@ function renderObs(obsRaw) {
             ${obs.sunshine_period1_min !== null ? rowHtml('Солнечное сияние (период)', fmtSunshine(obs.sunshine_period1_min)) : ''}
         </div>` : ''}
 
+        ${renderExtraFields(obs)}
+
         <!-- Сырые данные -->
         <details>
             <summary style="padding:10px 12px;cursor:pointer;color:#666;font-size:13px;">
@@ -534,6 +536,68 @@ function fmtSunshine(mins) {
     const h = Math.floor(mins / 60);
     const m = Math.round(mins % 60);
     return `${h}ч ${m}м`;
+}
+
+// ── Прочие параметры (универсальный рендер) ─────────────────────────────────
+
+const SHOWN_FIELDS = new Set([
+    'dt','station','temp','dew','humidity','wind_dir','wind_spd_ms','wind_spd_kmh',
+    'wind_gust_spd_10min_ms','station_pressure','slp','pressure_tendency_val',
+    'pressure_tendency_code','pressure_tendency_txt','visibility','ground_temp',
+    'cloud_cover_pct','cloud_type_cl','cloud_type_cm','cloud_type_ch',
+    'cloud_type_cl_txt','cloud_type_cm_txt','cloud_type_ch_txt','cloud_base_m',
+    'weather_now','weather_now_txt','temp_max_12h','temp_min_12h','precip_24h_mm',
+    'snow_depth_m','sunshine_24h_min','sunshine_period1_min'
+]);
+
+const FIELD_LABELS = {
+    pressure_change_24h:      ['Изменение давления (24ч)', 'гПа'],
+    wind_gust_dir_10min:      ['Направление порыва (10мин)', '°'],
+    wind_gust_spd_180min_ms:  ['Порыв ветра (180мин)', 'м/с'],
+    wind_gust_dir_180min:     ['Направление порыва (180мин)', '°'],
+    cloud_amount:             ['Количество облаков (окты)', ''],
+    weather_past1:            ['Погода за период 1 (код)', ''],
+    weather_past1_txt:        ['Погода за период 1', ''],
+    weather_past2:            ['Погода за период 2 (код)', ''],
+    weather_past2_txt:        ['Погода за период 2', ''],
+    precip_period1_mm:        ['Осадки (период 1)', 'мм'],
+    precip_period2_mm:        ['Осадки (период 2)', 'мм'],
+    ground_min_temp_12h:      ['Мин. темп. почвы (12ч)', '°C'],
+    ground_state:             ['Состояние поверхности почвы (код)', ''],
+    temp_change:              ['Изменение температуры', '°C'],
+    sunshine_24h_min:         ['Солнечное сияние (24ч)', 'мин'],
+    sunshine_period1_min:     ['Солнечное сияние (период)', 'мин'],
+    evaporation:              ['Испарение', 'мм'],
+    rad1_lw:                  ['Длинноволновая радиация', 'Вт/м²'],
+};
+
+function fmtVal(key, v) {
+    if (v === null || v === undefined) return null;
+    const [, unit] = FIELD_LABELS[key] || [key, ''];
+    if (typeof v === 'number') {
+        const rounded = Number.isInteger(v) ? v : Math.round(v * 10) / 10;
+        return unit ? `${rounded} ${unit}` : `${rounded}`;
+    }
+    return String(v);
+}
+
+function renderExtraFields(obs) {
+    const rows = [];
+    for (const key of Object.keys(obs)) {
+        if (SHOWN_FIELDS.has(key)) continue;
+        const v = obs[key];
+        if (v === null || v === undefined) continue;
+        const label = (FIELD_LABELS[key] || [key])[0];
+        const valTxt = fmtVal(key, v);
+        if (valTxt === null) continue;
+        rows.push(rowHtml(label, valTxt));
+    }
+    if (!rows.length) return '';
+    return `
+        <div class="card">
+            <div class="cardTitle">Прочие параметры</div>
+            ${rows.join('')}
+        </div>`;
 }
 
 function rowHtml(label, val) {
