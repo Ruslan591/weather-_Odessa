@@ -163,27 +163,24 @@ def main():
         _upd.time.sleep = lambda s: None
         _upd.log.info("  [local] Шаг 1 (SYNOP) пропущен")
 
-    # ── Шаг 1б: BUFR с Meteomanz ─────────────────────────────────────────────
-    if not args.snap_only:
-        try:
-            from fetch_bufr_obs import fetch_and_append
-            import datetime
-            now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
-            synop_hours = [3, 9, 15, 21]
-            candidates = []
-            for d in range(2):
-                day = now - datetime.timedelta(days=d)
-                for h in synop_hours:
-                    candidates.append(day.replace(hour=h, minute=0, second=0, microsecond=0))
-            targets = sorted([c for c in candidates if c <= now], reverse=True)[:2]
-            for dt in reversed(targets):
-                added = fetch_and_append(dt)
-                if added and f'data/bufr_{dt.year}.json' not in _GIT_CHANGED:
-                    _GIT_CHANGED.append(f'data/bufr_{dt.year}.json')
-        except Exception as e:
-            _upd.log.warning("  [BUFR] ошибка: %s", e)
-    else:
-        _upd.log.info("  [local] Шаг 1б (BUFR) пропущен")
+    # ── Шаг 1б: BUFR с Meteomanz (выполняется всегда, включая --snap-only) ────
+    try:
+        from fetch_bufr_obs import fetch_and_append
+        import datetime
+        now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+        synop_hours = [3, 9, 15, 21]
+        candidates = []
+        for d in range(2):
+            day = now - datetime.timedelta(days=d)
+            for h in synop_hours:
+                candidates.append(day.replace(hour=h, minute=0, second=0, microsecond=0))
+        targets = sorted([c for c in candidates if c <= now], reverse=True)[:2]
+        for dt in reversed(targets):
+            added = fetch_and_append(dt)
+            if added and f'data/bufr_{dt.year}.json' not in _GIT_CHANGED:
+                _GIT_CHANGED.append(f'data/bufr_{dt.year}.json')
+    except Exception as e:
+        _upd.log.warning("  [BUFR] ошибка: %s", e)
 
     # ── Шаг 2: modelData (через update.py) ────────────────────────────────────
     if args.snap_only or args.no_model:
