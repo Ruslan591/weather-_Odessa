@@ -917,31 +917,67 @@ function buildOvfSeries(paramKey) {
     var datasets = [];
     var p = PARAMS.find(function(x){ return x.key === paramKey; });
 
-    // Линия каждой станции
-    Object.keys(perStation).sort().forEach(function(sid, i) {
-        var color = stColors[i % stColors.length];
-        var data = hours.map(function(k) {
-            var vals = perStation[sid][k];
-            if (!vals || !vals.length) return null;
+    // Линия(и) наблюдений: конкретная станция — своя линия;
+    // "Все станции" — одна усреднённая линия по всем доступным станциям
+    if (_currentStation !== "all") {
+        Object.keys(perStation).sort().forEach(function(sid, i) {
+            var color = stColors[i % stColors.length];
+            var data = hours.map(function(k) {
+                var vals = perStation[sid][k];
+                if (!vals || !vals.length) return null;
+                if (paramKey === "windDir") {
+                    var sx = vals.reduce(function(s,v){ return s+Math.sin(v*Math.PI/180); }, 0);
+                    var sy = vals.reduce(function(s,v){ return s+Math.cos(v*Math.PI/180); }, 0);
+                    return Math.round((Math.atan2(sx,sy)*180/Math.PI+360)%360);
+                }
+                return Math.round(vals.reduce(function(s,v){return s+v;},0) / vals.length * 10) / 10;
+            });
+            datasets.push({
+                label: stationNames[sid] || sid,
+                data: data,
+                borderColor: color,
+                backgroundColor: "transparent",
+                borderWidth: 1.5,
+                pointRadius: 1,
+                tension: 0.2,
+                fill: false,
+                spanGaps: true
+            });
+        });
+    } else {
+        var avgData = hours.map(function(k) {
+            var stationMeans = [];
+            Object.keys(perStation).forEach(function(sid) {
+                var vals = perStation[sid][k];
+                if (!vals || !vals.length) return;
+                if (paramKey === "windDir") {
+                    var sx = vals.reduce(function(s,v){ return s+Math.sin(v*Math.PI/180); }, 0);
+                    var sy = vals.reduce(function(s,v){ return s+Math.cos(v*Math.PI/180); }, 0);
+                    stationMeans.push((Math.atan2(sx,sy)*180/Math.PI+360)%360);
+                } else {
+                    stationMeans.push(vals.reduce(function(s,v){return s+v;},0) / vals.length);
+                }
+            });
+            if (!stationMeans.length) return null;
             if (paramKey === "windDir") {
-                var sx = vals.reduce(function(s,v){ return s+Math.sin(v*Math.PI/180); }, 0);
-                var sy = vals.reduce(function(s,v){ return s+Math.cos(v*Math.PI/180); }, 0);
-                return Math.round((Math.atan2(sx,sy)*180/Math.PI+360)%360);
+                var sx2 = stationMeans.reduce(function(s,v){ return s+Math.sin(v*Math.PI/180); }, 0);
+                var sy2 = stationMeans.reduce(function(s,v){ return s+Math.cos(v*Math.PI/180); }, 0);
+                return Math.round((Math.atan2(sx2,sy2)*180/Math.PI+360)%360);
             }
-            return Math.round(vals.reduce(function(s,v){return s+v;},0) / vals.length * 10) / 10;
+            return Math.round(stationMeans.reduce(function(s,v){return s+v;},0) / stationMeans.length * 10) / 10;
         });
         datasets.push({
-            label: stationNames[sid] || sid,
-            data: data,
-            borderColor: color,
+            label: "Все станции (среднее)",
+            data: avgData,
+            borderColor: "#ffd166",
             backgroundColor: "transparent",
-            borderWidth: 1.5,
-            pointRadius: 1,
+            borderWidth: 2,
+            pointRadius: 1.5,
             tension: 0.2,
             fill: false,
             spanGaps: true
         });
-    });
+    }
 
     // Линия прогноза
     datasets.push({
