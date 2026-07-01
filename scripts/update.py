@@ -1201,13 +1201,15 @@ def main():
         text = fetch_synop_ogimet(day)
         if text:
             parsed = parse_synop_text(text)
+            added_this_day = 0
             for rec in parsed:
                 if rec["synopTime"] not in existing_synop_keys:
                     new_synop_lines.append(rec["txtLine"])
                     new_synop_parsed.append(rec)
                     existing_synop_keys.add(rec["synopTime"])
                     synop_obs_by_time[rec["synopTime"]] = rec["obs"]
-            gist_log(f"    → {len([r for r in parsed if r['synopTime'] in existing_synop_keys])} новых сводок")
+                    added_this_day += 1
+            gist_log(f"    → {len(parsed)} сводок от ogimet, из них новых: {added_this_day}")
         else:
             gist_log("    ✗ SYNOP недоступен")
         time.sleep(2)
