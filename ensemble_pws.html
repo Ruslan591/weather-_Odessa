@@ -839,6 +839,8 @@ function setOvfDay(offset) {
     setOvfRange();
 }
 
+var PARAM_EXCLUDE_STATIONS = { humidity: ["IODESS44"] };
+
 function buildOvfSeries(paramKey) {
     var fcField = paramKey === "precip" ? "rain" : paramKey;
     var stationNames = {};
@@ -945,9 +947,11 @@ function buildOvfSeries(paramKey) {
             });
         });
     } else {
+        var excluded = PARAM_EXCLUDE_STATIONS[paramKey] || [];
         var avgData = hours.map(function(k) {
             var stationMeans = [];
             Object.keys(perStation).forEach(function(sid) {
+                if (excluded.indexOf(sid) !== -1) return;
                 var vals = perStation[sid][k];
                 if (!vals || !vals.length) return;
                 if (paramKey === "windDir") {
@@ -1008,7 +1012,9 @@ return applyBiasClient(fc.val, paramKey, fc.horizonH, hourUTC);
         var hourUTC = (localHour - PWS_UTC_OFFSET + 24) % 24;
         var ensVal = applyBiasClient(fc.val, paramKey, fc.horizonH, hourUTC);
         var obsVals = [];
+        var excludedBias = PARAM_EXCLUDE_STATIONS[paramKey] || [];
         Object.keys(perStation).forEach(function(sid) {
+            if (excludedBias.indexOf(sid) !== -1) return;
             var vals = perStation[sid][k];
             if (!vals || !vals.length) return;
             var v;
