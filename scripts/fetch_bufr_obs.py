@@ -6,8 +6,15 @@ fetch_bufr_obs.py — парсит BUFR-наблюдения с Meteomanz для
 Запуск:
     python3 scripts/fetch_bufr_obs.py [--hours N] [--dry-run]
 """
-import re, json, os, time, datetime
+import re, json, os, time, datetime, logging
 import urllib.request
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s  %(levelname)-7s %(message)s",
+    datefmt="%H:%M:%S"
+)
+log = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATION  = "33837"
@@ -394,24 +401,24 @@ def dt_exists(records: list, dt: datetime.datetime) -> bool:
 def fetch_and_append(dt: datetime.datetime, dry_run=False) -> bool:
     records = load_bufr_json(dt.year)
     if dt_exists(records, dt):
-        print(f"  уже есть: {dt:%Y-%m-%d %H}:00 UTC")
+        log.info(f"[BUFR] уже есть: {dt:%Y-%m-%d %H}:00 UTC")
         return False
 
     try:
         html = fetch_html(dt)
     except Exception as e:
-        print(f"  fetch ошибка {dt:%Y-%m-%d %H}:00 UTC: {e}")
+        log.warning(f"[BUFR] fetch ошибка {dt:%Y-%m-%d %H}:00 UTC: {e}")
         return False
 
     obs = parse_obs(html, dt)
     if obs is None:
-        print(f"  нет данных: {dt:%Y-%m-%d %H}:00 UTC")
+        log.info(f"[BUFR] нет данных: {dt:%Y-%m-%d %H}:00 UTC")
         return False
 
     non_null = sum(1 for v in obs.values() if v is not None and v != obs["dt"] and v != obs["station"])
-    print(f"  {dt:%Y-%m-%d %H}:00 UTC  T={obs.get('temp')}°C  "
-          f"SLP={obs.get('slp')}hPa  wind={obs.get('wind_spd_ms')}m/s  "
-          f"fields={non_null}")
+    log.info(f"[BUFR] {dt:%Y-%m-%d %H}:00 UTC  T={obs.get('temp')}°C  "
+             f"SLP={obs.get('slp')}hPa  wind={obs.get('wind_spd_ms')}m/s  "
+             f"fields={non_null}")
 
     if not dry_run:
         records.append(obs)
