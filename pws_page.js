@@ -6,6 +6,7 @@
 ========================================================= */
 
 const PWS_STATIONS = [
+    { id:"PWS_AVG",    name:"В среднем по городу" },
     { id:"IODESA137", name:"пос. Котовского"  },
     { id:"IODESA138", name:"Центр"           },
     { id:"IODESA139", name:"Чудо Город"      },
@@ -960,7 +961,11 @@ function makeMarineBlock(){
 /* =========================================================
    ЗАГРУЗКА
 ========================================================= */
+const AVG_STATION_ID = "PWS_AVG";
+const HUMIDITY_EXCLUDE_STATIONS = ["IODESS44"]; // датчик влажности установлен некорректно
+
 async function fetchStation(id){
+    if(id === AVG_STATION_ID) return await fetchStationAverage();
     const url =
         `https://api.weather.com/v2/pws/observations/current` +
         `?stationId=${encodeURIComponent(id)}` +
@@ -976,6 +981,36 @@ async function fetchStation(id){
         if(!data?.observations?.length) throw new Error("Нет данных");
         return parsePWSOne(data.observations[0]);
     } finally { clearTimeout(timer); }
+}
+
+async function fetchStationAverage(){
+    const ids = PWS_STATIONS.map(s=>s.id).filter(id=>id!==AVG_STATION_ID);
+    const results = await Promise.allSettled(ids.map(id=>fetchStation(id)));
+    const ok = results
+        .filter(r=>r.status==="fulfilled" && r.value && !r.value.error)
+        .map(r=>r.value);
+    if(!ok.length) throw new Error("Нет данных ни по одной станции");
+
+    const avg = arr => {
+        const vals = arr.filter(v=>v!=null && !isNaN(v));
+        return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
+    };
+    const humidityVals = ok
+        .filter(p=>!HUMIDITY_EXCLUDE_STATIONS.includes(p.stationID))
+        .map(p=>p.humidity);
+
+    return {
+        stationID: AVG_STATION_ID, softwareType:null,
+        obsTimeLocal:new Date().toISOString().slice(0,19).replace("T"," "),
+        lat:null, lon:null, elev:null,
+        temp:avg(ok.map(p=>p.temp)), dewpt:avg(ok.map(p=>p.dewpt)),
+        heatIndex:avg(ok.map(p=>p.heatIndex)), windChill:avg(ok.map(p=>p.windChill)),
+        pressure:avg(ok.map(p=>p.pressure)), precipRate:avg(ok.map(p=>p.precipRate)),
+        precipTotal:avg(ok.map(p=>p.precipTotal)), windDir:avg(ok.map(p=>p.windDir)),
+        humidity:avg(humidityVals), uv:avg(ok.map(p=>p.uv)),
+        solarRad:avg(ok.map(p=>p.solarRad)), windSpeedMs:avg(ok.map(p=>p.windSpeedMs)),
+        windGustMs:avg(ok.map(p=>p.windGustMs)),
+    };
 }
 
 /* =========================================================
