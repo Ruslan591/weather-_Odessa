@@ -24,6 +24,8 @@ const CALIB_KEY   = "pwsCalib2";
 const SEL_KEY     = "pwsLastStation";
 
 let _timer     = null;
+let _nextRefreshAt   = 0;   // время (мс) следующего автообновления
+let _countdownTimer  = null;
 let _currentId = null;
 let _lastData  = null;
 let _ensembleCloudPct = null;  // % из последнего снимка
@@ -1081,6 +1083,7 @@ function renderPWSStation(p){
                             color:${timeAgeColor(p.obsTimeLocal)};">
                     ${escapeHtml(timeStr)}
                     ${(()=>{const d=new Date((p.obsTimeLocal||"").replace(" ","T")); const m=Math.round((Date.now()-d)/60000); return isNaN(m)?"":`· ${m} мин назад`;})()}
+                    · обновление через <span id="pwsCountdown">${PWS_REFRESH}</span>с
                 </div>
             </div>
             <div style="font-size:28px;font-weight:800;color:${tempColorExact(p.temp)};">${fmt1(p.temp,"°C")}</div>
@@ -1150,6 +1153,7 @@ function onStationChange(id){
     document.getElementById("pwsContent").innerHTML = `<div style="padding:20px;color:#888;text-align:center;">Загрузка...</div>`;
     loadAndRender();
     histLoad();
+    scheduleNextRefresh();   // при ручной смене станции — заново отсчитываем полный цикл
 }
 
 /* =========================================================
@@ -1170,9 +1174,26 @@ async function loadAndRender(){
     if(ts) ts.textContent = new Date().toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
 }
 
+function scheduleNextRefresh(){
+    if(_timer) clearTimeout(_timer);
+    _nextRefreshAt = Date.now() + PWS_REFRESH * 1000;
+    _timer = setTimeout(() => {
+        loadAndRender();
+        scheduleNextRefresh();
+    }, PWS_REFRESH * 1000);
+}
+
+function updateCountdownDisplay(){
+    const el = document.getElementById("pwsCountdown");
+    if(!el || !_nextRefreshAt) return;
+    const remain = Math.max(0, Math.round((_nextRefreshAt - Date.now()) / 1000));
+    el.textContent = remain;
+}
+
 function startRefresh(){
-    if(_timer) clearInterval(_timer);
-    _timer = setInterval(loadAndRender, PWS_REFRESH * 1000);
+    scheduleNextRefresh();
+    if(_countdownTimer) clearInterval(_countdownTimer);
+    _countdownTimer = setInterval(updateCountdownDisplay, 1000);
 }
 
 /* =========================================================
