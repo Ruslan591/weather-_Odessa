@@ -983,6 +983,11 @@ async function fetchStation(id){
     } finally { clearTimeout(timer); }
 }
 
+function pwsLocalTimeStr(d){
+    const pad = n => String(n).padStart(2,"0");
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 async function fetchStationAverage(){
     const ids = PWS_STATIONS.map(s=>s.id).filter(id=>id!==AVG_STATION_ID);
     const results = await Promise.allSettled(ids.map(id=>fetchStation(id)));
@@ -995,21 +1000,24 @@ async function fetchStationAverage(){
         const vals = arr.filter(v=>v!=null && !isNaN(v));
         return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
     };
+    const round1 = v => v!=null ? Math.round(v*10)/10 : null;
     const humidityVals = ok
         .filter(p=>!HUMIDITY_EXCLUDE_STATIONS.includes(p.stationID))
         .map(p=>p.humidity);
+    // давление усредняем с учётом персональной калибровки каждой станции
+    const pressureVals = ok.map(p=>p.pressure!=null ? p.pressure + getOffset(p.stationID) : null);
 
     return {
         stationID: AVG_STATION_ID, softwareType:null,
-        obsTimeLocal:new Date().toISOString().slice(0,19).replace("T"," "),
+        obsTimeLocal: pwsLocalTimeStr(new Date()),
         lat:null, lon:null, elev:null,
         temp:avg(ok.map(p=>p.temp)), dewpt:avg(ok.map(p=>p.dewpt)),
         heatIndex:avg(ok.map(p=>p.heatIndex)), windChill:avg(ok.map(p=>p.windChill)),
-        pressure:avg(ok.map(p=>p.pressure)), precipRate:avg(ok.map(p=>p.precipRate)),
-        precipTotal:avg(ok.map(p=>p.precipTotal)), windDir:avg(ok.map(p=>p.windDir)),
+        pressure:round1(avg(pressureVals)), precipRate:round1(avg(ok.map(p=>p.precipRate))),
+        precipTotal:round1(avg(ok.map(p=>p.precipTotal))), windDir:avg(ok.map(p=>p.windDir)),
         humidity:avg(humidityVals), uv:avg(ok.map(p=>p.uv)),
-        solarRad:avg(ok.map(p=>p.solarRad)), windSpeedMs:avg(ok.map(p=>p.windSpeedMs)),
-        windGustMs:avg(ok.map(p=>p.windGustMs)),
+        solarRad:avg(ok.map(p=>p.solarRad)), windSpeedMs:round1(avg(ok.map(p=>p.windSpeedMs))),
+        windGustMs:round1(avg(ok.map(p=>p.windGustMs))),
     };
 }
 

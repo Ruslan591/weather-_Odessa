@@ -28,10 +28,11 @@ const HIST_PERIODS = [
 /* ==============≠==========================================
 
 ========================================================= */
-function histParseObs(o){
+function histParseObs(o, offOverride){
     const m   = o.metric || {};
     const km  = v => v != null ? Math.round(v / 3.6 * 10) / 10 : null;
-    const off = (typeof getOffset === "function" && typeof _currentId !== "undefined")
+    const off = offOverride != null ? offOverride
+        : (typeof getOffset === "function" && typeof _currentId !== "undefined")
         ? getOffset(_currentId) : 0;
     const rawP = m.pressureMax ?? m.pressureAvg ?? m.pressure ?? null;
     return {
@@ -77,7 +78,7 @@ async function histFetch(stationId, period){
     let d;
     try { d = JSON.parse(text); } catch(e) { throw new Error("Нет данных за сегодня"); }
     if(!d?.observations?.length) throw new Error("Нет данных");
-    return d.observations.map(histParseObs);
+    return d.observations.map(o => histParseObs(o, typeof getOffset==="function" ? getOffset(stationId) : 0));
 }
 
 if(period === "7day"){
@@ -87,7 +88,7 @@ if(period === "7day"){
     if(!r.ok) throw new Error("HTTP " + r.status);
     const d = await r.json();
     if(!d?.observations?.length) throw new Error("Нет данных");
-    return d.observations.map(histParseObs);
+    return d.observations.map(o => histParseObs(o, typeof getOffset==="function" ? getOffset(stationId) : 0));
 }
 
     if(period === "month"){
@@ -139,13 +140,76 @@ if(period === "7day"){
             const r = await fetch(url, {cache:"no-store"});
             if(!r.ok) continue;
             const d2 = await r.json();
-            if(d2?.observations?.length) allObs.push(...d2.observations.map(histParseObs));
+            if(d2?.observations?.length) allObs.push(...d2.observations.map(o => histParseObs(o, typeof getOffset==="function" ? getOffset(stationId) : 0)));
         } catch(e){ continue; }
     }
 
     if(!allObs.length) throw new Error("Нет данных за выбранный период");
     return allObs;
 }
+}
+
+/* =========================================================
+   АГРЕГИРОВАННАЯ ИСТОРИЯ ДЛЯ "В СРЕДНЕМ ПО ГОРОДУ"
+========================================================= */
+async function histFetchAverage(period){
+    const ids = (typeof PWS_STATIONS !== "undefined" ? PWS_STATIONS : [])
+        .map(s=>s.id)
+        .filter(id=>typeof AVG_STATION_ID === "undefined" || id!==AVG_STATION_ID);
+    const results = await Promise.allSettled(ids.map(id=>histFetch(id, period)));
+    const perStation = results
+        .map((r,i)=> r.status==="fulfilled" ? {id:ids[i], obs:r.value} : null)
+        .filter(Boolean);
+    if(!perStation.length) throw new Error("Нет данных ни по одной станции");
+
+    const bucketMs = period === "today" ? 10*60*1000
+                    : period === "7day" ? 60*60*1000
+                    : 24*60*60*1000;
+
+    const numFields = ["temp","pressure","windSpeedMs","windGustMs","windDir","precip","precipRate","solarRad","uv"];
+    const buckets = new Map();
+
+    for(const st of perStation){
+        const excludeHumidity = typeof HUMIDITY_EXCLUDE_STATIONS !== "undefined"
+            && HUMIDITY_EXCLUDE_STATIONS.includes(st.id);
+        for(const o of st.obs){
+            const raw = o.obsTimeLocal || o.obsTimeUtc;
+            if(!raw) continue;
+            const d = new Date(String(raw).trim().replace(" ","T"));
+            if(isNaN(d.getTime())) continue;
+            const key = Math.round(d.getTime()/bucketMs)*bucketMs;
+            let b = buckets.get(key);
+            if(!b){ b = { time:key, sums:{}, counts:{} }; buckets.set(key,b); }
+            for(const f of numFields){
+                const v = o[f];
+                if(v==null || isNaN(v)) continue;
+                b.sums[f] = (b.sums[f]||0) + Number(v);
+                b.counts[f] = (b.counts[f]||0) + 1;
+            }
+            if(!excludeHumidity && o.humidity!=null && !isNaN(o.humidity)){
+                b.sums.humidity = (b.sums.humidity||0) + Number(o.humidity);
+                b.counts.humidity = (b.counts.humidity||0) + 1;
+            }
+        }
+    }
+
+    const localTimeStr = typeof pwsLocalTimeStr === "function" ? pwsLocalTimeStr : (d => {
+        const pad = n => String(n).padStart(2,"0");
+        return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    });
+
+    const merged = Array.from(buckets.values())
+        .sort((a,b)=>a.time-b.time)
+        .map(b=>{
+            const rec = { obsTimeLocal: localTimeStr(new Date(b.time)) };
+            for(const f of [...numFields, "humidity"]){
+                rec[f] = b.counts[f] ? Math.round((b.sums[f]/b.counts[f])*10)/10 : null;
+            }
+            return rec;
+        });
+
+    if(!merged.length) throw new Error("Нет данных");
+    return merged;
 }
 
 /* =========================================================
@@ -1173,9 +1237,9 @@ async function histLoad(){
     histHideTooltip();
 
     try {
-        const obs  = await histFetch(stationId, _histPeriod);
-        console.log("obs[0]:", JSON.stringify(obs[0]));
-console.log("obs sample precip fields:", obs.slice(0,5).map(o => ({ precip: o.precip, precipRate: o.precipRate })));
+        const obs  = (typeof AVG_STATION_ID !== "undefined" && stationId === AVG_STATION_ID)
+            ? await histFetchAverage(_histPeriod)
+            : await histFetch(stationId, _histPeriod);
         _histData  = histPrepare(obs, _histParam);
         histRenderChart(_histData, _histParam);
         histRenderStats(_histData, _histParam);
