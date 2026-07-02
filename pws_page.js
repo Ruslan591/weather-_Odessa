@@ -1083,7 +1083,9 @@ function renderPWSStation(p){
                             color:${timeAgeColor(p.obsTimeLocal)};">
                     ${escapeHtml(timeStr)}
                     ${(()=>{const d=new Date((p.obsTimeLocal||"").replace(" ","T")); const m=Math.round((Date.now()-d)/60000); return isNaN(m)?"":`· ${m} мин назад`;})()}
-                    · обновление через <span id="pwsCountdown">${PWS_REFRESH}</span>с
+                </div>
+                <div style="margin-top:3px;font-size:10.5px;color:#555;">
+                    обновление через <span id="pwsCountdown">${PWS_REFRESH}</span>с
                 </div>
             </div>
             <div style="font-size:28px;font-weight:800;color:${tempColorExact(p.temp)};">${fmt1(p.temp,"°C")}</div>
