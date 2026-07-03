@@ -2,7 +2,7 @@ import requests, re, json, os
 from datetime import datetime, timezone
 
 DATA_FILE = 'data/sst_compare.json'
-LAT, LON = 46.44, 30.76
+LAT, LON = 46.35, 30.90  # та же точка, что и loadMarine() в pws_page.js
 
 def fetch_openmeteo():
     try:
