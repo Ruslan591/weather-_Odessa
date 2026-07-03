@@ -36,12 +36,13 @@ def fetch_seatemp():
                 'Accept-Language': 'uk,ru;q=0.9,en;q=0.8',
             },
             allow_redirects=True)
+        r.encoding = 'utf-8'
         html = r.text
         if not html or r.status_code != 200:
             return f'ERR:status={r.status_code} len={len(html)} url={r.url}'
-        m = re.search(r'(\d{1,2}[.,]\d)\s*°C\s*</[^>]+>\s*Сьогодні', html)
-        if not m:
-            m = re.search(r'сьогодні\s+становить\s*(\d{1,2}[.,]\d)\s*°C', html)
+        m = re.search(
+            r'<div class="temp-value">(\d{1,2}[.,]\d)<span>°C</span></div>'
+            r'<div class="temp-label">Сьогодні</div>', html)
         if not m:
             snippet = re.sub(r'\s+', ' ', html)[:300]
             return f'ERR:pattern_not_found (len={len(html)}) snippet={snippet}'
