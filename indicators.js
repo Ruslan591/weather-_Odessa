@@ -197,7 +197,7 @@ function windIndicatorSvg(d){
                 ${fmt1(gust,"")}
             </text>` : ""}
             <text x="80" y="155" text-anchor="middle" font-size="12" fill="currentColor" fill-opacity="0.65">
-            ${escapeHtml(degToText(d.windDir))}${d.windDir != null ? ` · ${d.windDir}°` : ""}</text>
+            ${escapeHtml(degToText(d.windDir))}${d.windDir != null ? ` · ${Math.round(d.windDir)}°` : ""}</text>
         </svg>
     </div>`;
 }
