@@ -251,6 +251,16 @@ def check_pws_sync():
         except Exception as e:
             print(f"  [WARN] sync_state: {e}")
 
+def check_pws_calibration():
+    """Автокалибровка pressureOffset PWS-станций по SYNOP/BUFR (±30 мин)."""
+    try:
+        subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "calibrate_pws_pressure.py")],
+            cwd=BASE_DIR, capture_output=False, timeout=180
+        )
+    except Exception as e:
+        print(f"  [WARN] calibrate_pws_pressure.py: {e}")
+
 # ── основная логика ───────────────────────────────────────────────────────────
 
 def main():
@@ -396,6 +406,7 @@ def main():
         git_push_history()   # пушим synop даже без новых моделей
 
     check_pws_sync()
+    check_pws_calibration()
 
 
 

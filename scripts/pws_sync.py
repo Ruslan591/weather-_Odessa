@@ -36,6 +36,20 @@ PWS_STATIONS = [
     {"id": "IKRASN91",  "name": "пос. Степовое",     "pressureOffset": -1.5 },
 ]
 
+# ── Автокалибровка давления (data/pws_pressure_offsets.json) ────────────────
+OFFSETS_FILE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "data", "pws_pressure_offsets.json"
+)
+
+def load_pressure_offsets():
+    try:
+        with open(OFFSETS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return {sid: v.get("offset", 0) for sid, v in data.items() if isinstance(v, dict)}
+    except Exception:
+        return {}
+
 WU_KEYS = [
     "6532d6454b8aa370768e63d6ba5a832e",
     "e1f10a1e78da46f5b10a1e78da96f525",
@@ -221,10 +235,12 @@ def main():
 
     today_ymd = now.strftime("%Y%m%d")
 
+    offsets_override = load_pressure_offsets()
+
     new_recs = []
     for station in PWS_STATIONS:
         sid    = station["id"]
-        offset = station.get("pressureOffset", 0)
+        offset = offsets_override.get(sid, station.get("pressureOffset", 0))
         log.info("  Станция %s (%s)...", sid, station["name"])
         for date_ymd in dates:
             is_current = date_ymd == today_ymd
