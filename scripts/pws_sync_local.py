@@ -71,7 +71,8 @@ def git_commit_push(no_push=False):
             return
 
         push = subprocess.run(
-            ["git", "-C", BASE_DIR, "push", "--force-with-lease"],
+            ["flock", "-w", "60", os.path.join(BASE_DIR, ".git_push.lock"),
+             "git", "-C", BASE_DIR, "push", "--force-with-lease"],
             capture_output=True, text=True
         )
         if push.returncode == 0:
