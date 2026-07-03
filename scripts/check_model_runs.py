@@ -127,7 +127,8 @@ def git_push_history():
         _delays = [15, 30]
         for _attempt in range(3):
             push = subprocess.run(
-                ["git", "-C", BASE_DIR, "push", "--force-with-lease"],
+                ["flock", "-w", "60", os.path.join(BASE_DIR, ".git_push.lock"),
+                 "git", "-C", BASE_DIR, "push", "--force-with-lease"],
                 capture_output=True, text=True)
             if push.returncode == 0:
                 suffix = f" (attempt {_attempt+1})" if _attempt > 0 else ""
