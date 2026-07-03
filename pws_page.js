@@ -785,7 +785,7 @@ const srHtml = p.solarRad != null ? `
     const uvHtml  = uvLevel ? `
         <div class="districtLine">
             <span>УФ-индекс</span>
-            <span style="color:${uvLevel.color};font-weight:600;">${p.uv} · ${uvLevel.label}</span>
+            <span style="color:${uvLevel.color};font-weight:600;">${p.uv.toFixed(1)} · ${uvLevel.label}</span>
         </div>
         ${burnMin != null ? `<div class="districtLine"><span>Время до ожога (I тип кожи)</span><span>~${burnMin} мин</span></div>` : ""}` : "";
 
