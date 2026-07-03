@@ -33,6 +33,8 @@ let _ensembleCloudFetchedAt = 0;
 let _ktOcData    = null;
 let _marineData  = null;
 let _marineFetchedAt = 0;
+let _sstCompareData    = null;
+let _sstCompareFetchedAt = 0;
 
 async function fetchEnsembleCloud(){
     if(Date.now() - _ensembleCloudFetchedAt < 1200000) return; // обновляем раз в час
@@ -157,6 +159,22 @@ async function loadMarine(){
     } catch(e){
         console.warn("Marine API:", e.message);
         _marineFetchedAt = 0;
+    }
+}
+
+async function loadSstCompare(){
+    if(Date.now() - _sstCompareFetchedAt < 30 * 60000) return; // раз в 30 мин
+    _sstCompareFetchedAt = Date.now();
+    try {
+        const r = await fetch(
+            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/sst_compare.json",
+            { cache: "no-store" }
+        );
+        if(!r.ok) return;
+        const arr = await r.json();
+        if(Array.isArray(arr) && arr.length) _sstCompareData = arr[arr.length - 1];
+    } catch(e){
+        _sstCompareFetchedAt = 0;
     }
 }
 
@@ -942,6 +960,26 @@ function makeMarineBlock(){
             " · " + d.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
     })() : "";
 
+    const sstCompareHtml = _sstCompareData ? (() => {
+        const fS = v => (typeof v === "number") ? v.toFixed(1) + "°C" : "—";
+        const t  = _sstCompareData.time ? (() => {
+            const d = new Date(_sstCompareData.time);
+            return isNaN(d) ? "" : d.toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+        })() : "";
+        return `
+        <div style="margin-top:10px;padding-top:8px;border-top:1px dashed #2a2a2a;">
+            <div style="font-size:10px;color:#555;margin-bottom:6px;
+                        text-transform:uppercase;letter-spacing:.5px;">
+                Сравнение источников SST (эксп.)${t ? ` · ${t}` : ""}
+            </div>
+            <div class="pws-fields">
+                <div class="districtLine"><span>Open-Meteo (CMEMS)</span><span>${fS(_sstCompareData.open_meteo)}</span></div>
+                <div class="districtLine"><span>NOAA OISST</span><span>${fS(_sstCompareData.oisst_nrt)}</span></div>
+                <div class="districtLine"><span>seatemperature.net</span><span>${fS(_sstCompareData.seatemperature_net)}</span></div>
+            </div>
+        </div>`;
+    })() : "";
+
     return `
     <div style="margin-top:12px;border-top:1px solid #2a2a2a;padding-top:10px;">
         <div style="font-size:11px;color:#555;margin-bottom:8px;
@@ -957,6 +995,7 @@ function makeMarineBlock(){
                 `<div class="districtLine"><span>${k}</span><span>${v}</span></div>`
             ).join("")}
         </div>
+        ${sstCompareHtml}
     </div>`;
 }
 
@@ -1166,7 +1205,8 @@ async function loadAndRender(){
     fetchStation(_currentId),
     fetchEnsembleCloud(),
     fetchSynopCloud(),
-    loadMarine()
+    loadMarine(),
+    loadSstCompare()
 ]);
     const p = stationResult.status === "fulfilled"
         ? stationResult.value
