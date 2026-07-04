@@ -6,9 +6,9 @@
    offset = +1.5
 ========================================================= */
 var PWS_SYNC_STATIONS = [
-    { id: "IODESA137", name: "пос. Котовского",  pressureOffset: -5.1 },
-    { id: "IODESA138", name: "Центр",  pressureOffset: 9.8 },
-    { id: "IODESA139", name: "Чудо Город",  pressureOffset: 1.2 },
+    { id: "IODESA137", name: "пос. Котовского",  pressureOffset: -5.2 },
+    { id: "IODESA138", name: "Центр",  pressureOffset: 9.9 },
+    { id: "IODESA139", name: "Чудо Город",  pressureOffset: 1.3 },
     { id: "IODESS41", name: "Судостроительная",  pressureOffset: 4.2 },
     { id: "IODESS44", name: "Аркадия",  pressureOffset: -1.4 },
     { id: "IODESS16", name: "Таирова",  pressureOffset: 0.6 },
