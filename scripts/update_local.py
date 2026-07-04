@@ -121,8 +121,7 @@ def git_commit_push(no_push=False):
                 print(f"  git stash pop ✗: {pop.stderr.strip()}")
 
         push = subprocess.run(
-            ["flock", "-w", "60", os.path.join(BASE_DIR, ".git_push.lock"),
-             "git", "-C", BASE_DIR, "push", "--force-with-lease"],
+            ["bash", os.path.join(BASE_DIR, "scripts", "git_push_locked.sh"), BASE_DIR],
             capture_output=True, text=True
         )
         if push.returncode == 0:
