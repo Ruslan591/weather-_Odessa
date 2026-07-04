@@ -215,8 +215,10 @@ function setSstPeriod(period){
 
 function applySstCustomDays(){
     const inp = document.getElementById("sstDaysInput");
-    const n = parseInt(inp && inp.value);
-    if(!n || n < 1) return;
+    let n = parseInt(inp && inp.value);
+    if(isNaN(n) || n < 1) n = 1;
+    if(n > 90) n = 90;
+    if(inp) inp.value = n;
     _sstChartPeriod = "n" + n;
     renderSstHistChart();
 }
