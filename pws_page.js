@@ -36,6 +36,7 @@ let _marineFetchedAt = 0;
 let _sstCompareData    = null;
 let _sstCompareFetchedAt = 0;
 let _sstHistoryArr     = null;
+let _sstChartPeriod   = "24h";
 
 async function fetchEnsembleCloud(){
     if(Date.now() - _ensembleCloudFetchedAt < 1200000) return; // обновляем раз в час
@@ -175,22 +176,96 @@ async function loadSstCompare(){
         const arr = await r.json();
         if(Array.isArray(arr) && arr.length){
             _sstCompareData = arr[arr.length - 1];
-            _sstHistoryArr  = arr.slice(-300);
+            _sstHistoryArr  = arr.slice(-5000);
+            renderSstHistChart();
         }
     } catch(e){
         _sstCompareFetchedAt = 0;
     }
 }
 
+function getSstFilteredData(){
+    if(!_sstHistoryArr || !_sstHistoryArr.length) return [];
+    const now = Date.now();
+    const period = _sstChartPeriod;
+    let fromTs, toTs = now;
+    if(period === "today"){
+        const d = new Date(); d.setHours(0,0,0,0);
+        fromTs = d.getTime();
+    } else if(period === "yesterday"){
+        const d = new Date(); d.setHours(0,0,0,0);
+        toTs   = d.getTime();
+        fromTs = toTs - 24*3600*1000;
+    } else if(period.startsWith("n")){
+        const days = parseInt(period.slice(1)) || 7;
+        fromTs = now - days*24*3600*1000;
+    } else { // "24h" и запасной вариант
+        fromTs = now - 24*3600*1000;
+    }
+    return _sstHistoryArr.filter(o => {
+        const t = Date.parse(o.time);
+        return !isNaN(t) && t >= fromTs && t <= toTs;
+    });
+}
+
+function setSstPeriod(period){
+    _sstChartPeriod = period;
+    renderSstHistChart();
+}
+
+function applySstCustomDays(){
+    const inp = document.getElementById("sstDaysInput");
+    const n = parseInt(inp && inp.value);
+    if(!n || n < 1) return;
+    _sstChartPeriod = "n" + n;
+    renderSstHistChart();
+}
+
 function renderSstHistChart(){
-    const div = document.getElementById("sstHistChart");
-    if(!div || !_sstHistoryArr || _sstHistoryArr.length < 2) return;
+    const card = document.getElementById("sstChartCard");
+    if(!card) return;
+    if(!_sstHistoryArr || _sstHistoryArr.length < 2){ card.innerHTML = ""; return; }
     if(typeof echarts === "undefined") return;
+
+    const periods = [
+        { id:"24h",       label:"24 часа" },
+        { id:"today",     label:"Сегодня" },
+        { id:"yesterday", label:"Вчера"   },
+    ];
+    const btnStyle = active =>
+        `width:auto;padding:4px 10px;font-size:11px;border-radius:6px;cursor:pointer;` +
+        `border:1px solid ${active ? "#72c8ff" : "#333"};` +
+        `background:${active ? "#1c3a4d" : "#252525"};` +
+        `color:${active ? "#72c8ff" : "#ccc"};`;
+
+    const isCustom   = _sstChartPeriod.startsWith("n");
+    const customDays = isCustom ? (parseInt(_sstChartPeriod.slice(1)) || 7) : 7;
+
+    const buttonsHtml = periods.map(p =>
+        `<button onclick="setSstPeriod('${p.id}')" style="${btnStyle(_sstChartPeriod===p.id)}">${p.label}</button>`
+    ).join("") + `
+        <input id="sstDaysInput" type="number" min="1" max="90" value="${customDays}"
+               style="width:44px;background:#232323;border:1px solid #333;border-radius:6px;
+                      color:#eee;font-size:11px;padding:4px 6px;text-align:center;">
+        <button onclick="applySstCustomDays()" style="${btnStyle(isCustom)}">N дней</button>`;
+
+    card.innerHTML = `
+        <div class="cardTitle">Температура воды — график</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 4px;align-items:center;">${buttonsHtml}</div>
+        <div id="sstHistChart" style="height:180px;margin-top:6px;"></div>`;
+
+    const div = document.getElementById("sstHistChart");
+    if(!div) return;
+    const filtered = getSstFilteredData();
+    if(filtered.length < 2){
+        div.innerHTML = `<div style="color:#666;text-align:center;padding:30px;font-size:12px;">Нет данных за выбранный период</div>`;
+        return;
+    }
 
     const chart = echarts.init(div, null, { backgroundColor: "transparent" });
 
     function toSeries(key){
-        return _sstHistoryArr
+        return filtered
             .map(o => {
                 const v = o[key];
                 const t = Date.parse(o.time);
@@ -201,6 +276,7 @@ function renderSstHistChart(){
 
     const omData = toSeries("open_meteo");
     const oiData = toSeries("oisst_nrt");
+    const stData = toSeries("seatemperature_net");
 
     chart.setOption({
         backgroundColor: "transparent",
@@ -264,9 +340,20 @@ function renderSstHistChart(){
                 connectNulls: true,
                 z: 1,
             },
+            {
+                name: "seatemperature.net",
+                type: "line",
+                data: stData,
+                smooth: 0.2,
+                symbol: "none",
+                lineStyle: { color: "#ff6b9d", width: 2, type: "dotted" },
+                itemStyle: { color: "#ff6b9d" },
+                connectNulls: true,
+                z: 1,
+            },
         ],
         legend: {
-            data: ["Open-Meteo", "NOAA OISST"],
+            data: ["Open-Meteo", "NOAA OISST", "seatemperature.net"],
             top: 0, right: 0,
             textStyle: { color: "#888", fontSize: 10 },
             itemWidth: 14, itemHeight: 8,
@@ -1015,9 +1102,7 @@ function makeMarineBlock(){
             <span style="font-size:26px;font-weight:800;color:${sstColor};">${m.sst.toFixed(1)}°C</span>
         </div>` : "";
 
-    const sstChartHtml = (_sstHistoryArr && _sstHistoryArr.length > 1)
-        ? `<div id="sstHistChart" style="height:160px;margin:4px 0 10px;"></div>`
-        : "";
+
         
 
     const seaLevelHtml = m.seaLevel != null ? (() => {
@@ -1089,7 +1174,6 @@ function makeMarineBlock(){
         </div>
         ${warnHtml}
         ${sstHtml}
-        ${sstChartHtml}
         <div class="pws-fields">
             ${seaLevelHtml}
             ${rows.map(([k,v]) =>
@@ -1268,7 +1352,6 @@ function renderPWSStation(p){
             ${off !== 0 ? `<span style="color:#72c8ff;">поправка: ${off>0?"+":""}${off} гПа</span>` : ""}
         </div>
     </div>`;
-    if(typeof renderSstHistChart === "function") renderSstHistChart();
 }
 
 /* =========================================================
