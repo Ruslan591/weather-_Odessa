@@ -35,6 +35,7 @@ let _marineData  = null;
 let _marineFetchedAt = 0;
 let _sstCompareData    = null;
 let _sstCompareFetchedAt = 0;
+let _sstHistoryArr     = null;
 
 async function fetchEnsembleCloud(){
     if(Date.now() - _ensembleCloudFetchedAt < 1200000) return; // обновляем раз в час
@@ -172,10 +173,105 @@ async function loadSstCompare(){
         );
         if(!r.ok) return;
         const arr = await r.json();
-        if(Array.isArray(arr) && arr.length) _sstCompareData = arr[arr.length - 1];
+        if(Array.isArray(arr) && arr.length){
+            _sstCompareData = arr[arr.length - 1];
+            _sstHistoryArr  = arr.slice(-300);
+        }
     } catch(e){
         _sstCompareFetchedAt = 0;
     }
+}
+
+function renderSstHistChart(){
+    const div = document.getElementById("sstHistChart");
+    if(!div || !_sstHistoryArr || _sstHistoryArr.length < 2) return;
+    if(typeof echarts === "undefined") return;
+
+    const chart = echarts.init(div, null, { backgroundColor: "transparent" });
+
+    function toSeries(key){
+        return _sstHistoryArr
+            .map(o => {
+                const v = o[key];
+                const t = Date.parse(o.time);
+                return (typeof v === "number" && !isNaN(t)) ? [t, v] : null;
+            })
+            .filter(Boolean);
+    }
+
+    const omData = toSeries("open_meteo");
+    const oiData = toSeries("oisst_nrt");
+
+    chart.setOption({
+        backgroundColor: "transparent",
+        animation: false,
+        grid: { top: 22, right: 12, bottom: 30, left: 40, containLabel: false },
+        tooltip: {
+            trigger: "axis",
+            backgroundColor: "rgba(20,20,20,0.97)",
+            borderColor: "#333",
+            borderWidth: 1,
+            textStyle: { color: "#eee", fontSize: 12 },
+            formatter(params){
+                const d = new Date(params[0].value[0]);
+                const timeStr = d.toLocaleString("ru-RU", {
+                    day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit"
+                });
+                const lines = params.map(p =>
+                    `<div style="font-size:12px;color:${p.color};">${p.seriesName}: ${p.value[1].toFixed(1)}°C</div>`
+                ).join("");
+                return `<div style="font-size:11px;color:#888;margin-bottom:4px;">${timeStr}</div>${lines}`;
+            },
+        },
+        xAxis: {
+            type: "time",
+            axisLine:  { lineStyle: { color: "#333" } },
+            axisTick:  { lineStyle: { color: "#333" } },
+            axisLabel: {
+                color: "#555", fontSize: 10,
+                formatter: val => new Date(val).toLocaleDateString("ru-RU", {day:"2-digit", month:"2-digit"}),
+            },
+            splitLine: { lineStyle: { color: "#252525" } },
+        },
+        yAxis: {
+            type: "value",
+            scale: true,
+            axisLine:  { show: false },
+            axisTick:  { show: false },
+            axisLabel: { color: "#555", fontSize: 10, formatter: v => v + "°C" },
+            splitLine: { lineStyle: { color: "#252525" } },
+        },
+        series: [
+            {
+                name: "Open-Meteo",
+                type: "line",
+                data: omData,
+                smooth: 0.4,
+                symbol: "none",
+                lineStyle: { color: "#ffd166", width: 2 },
+                itemStyle: { color: "#ffd166" },
+                connectNulls: true,
+                z: 2,
+            },
+            {
+                name: "NOAA OISST",
+                type: "line",
+                data: oiData,
+                smooth: 0.2,
+                symbol: "none",
+                lineStyle: { color: "#00cec9", width: 2, type: "dashed" },
+                itemStyle: { color: "#00cec9" },
+                connectNulls: true,
+                z: 1,
+            },
+        ],
+        legend: {
+            data: ["Open-Meteo", "NOAA OISST"],
+            top: 0, right: 0,
+            textStyle: { color: "#888", fontSize: 10 },
+            itemWidth: 14, itemHeight: 8,
+        },
+    });
 }
 
 /* =========================================================
@@ -918,6 +1014,10 @@ function makeMarineBlock(){
             <span style="font-size:14px;color:#888;">🌡️ Температура воды</span>
             <span style="font-size:26px;font-weight:800;color:${sstColor};">${m.sst.toFixed(1)}°C</span>
         </div>` : "";
+
+    const sstChartHtml = (_sstHistoryArr && _sstHistoryArr.length > 1)
+        ? `<div id="sstHistChart" style="height:160px;margin:4px 0 10px;"></div>`
+        : "";
         
 
     const seaLevelHtml = m.seaLevel != null ? (() => {
@@ -989,6 +1089,7 @@ function makeMarineBlock(){
         </div>
         ${warnHtml}
         ${sstHtml}
+        ${sstChartHtml}
         <div class="pws-fields">
             ${seaLevelHtml}
             ${rows.map(([k,v]) =>
@@ -1167,6 +1268,7 @@ function renderPWSStation(p){
             ${off !== 0 ? `<span style="color:#72c8ff;">поправка: ${off>0?"+":""}${off} гПа</span>` : ""}
         </div>
     </div>`;
+    if(typeof renderSstHistChart === "function") renderSstHistChart();
 }
 
 /* =========================================================
