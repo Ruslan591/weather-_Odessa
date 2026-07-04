@@ -23,4 +23,6 @@ done
 
 trap 'rmdir "$LOCKDIR" 2>/dev/null' EXIT
 git -C "$BASE_DIR" push --force-with-lease
-exit $?
+RC=$?
+sleep 20
+exit $RC
