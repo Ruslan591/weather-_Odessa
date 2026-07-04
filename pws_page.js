@@ -244,10 +244,13 @@ function renderSstHistChart(){
     const buttonsHtml = periods.map(p =>
         `<button onclick="setSstPeriod('${p.id}')" style="${btnStyle(_sstChartPeriod===p.id)}">${p.label}</button>`
     ).join("") + `
+        <span style="font-size:11px;color:#555;margin-left:2px;">·</span>
         <input id="sstDaysInput" type="number" min="1" max="90" value="${customDays}"
-               style="width:44px;background:#232323;border:1px solid #333;border-radius:6px;
-                      color:#eee;font-size:11px;padding:4px 6px;text-align:center;">
-        <button onclick="applySstCustomDays()" style="${btnStyle(isCustom)}">N дней</button>`;
+               onchange="applySstCustomDays()"
+               style="width:48px;background:#232323;
+                      border:1px solid ${isCustom ? "#72c8ff" : "#333"};border-radius:6px;
+                      color:${isCustom ? "#72c8ff" : "#eee"};font-size:11px;padding:4px 6px;text-align:center;">
+        <span style="font-size:11px;color:${isCustom ? "#72c8ff" : "#888"};">дней</span>`;
 
     card.innerHTML = `
         <div class="cardTitle">Температура воды — график</div>
