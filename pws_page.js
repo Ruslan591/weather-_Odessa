@@ -995,55 +995,63 @@ const srHtml = p.solarRad != null ? `
         </div>
         ${burnMin != null ? `<div class="districtLine"><span>Время до ожога (I тип кожи)</span><span>~${burnMin} мин</span></div>` : ""}` : "";
 
-    // WBGT
+    // WBGT: для PWS_AVG используем precomputed (усреднённые по станциям результаты),
+    // для отдельной станции считаем как раньше, из её собственных параметров
     let wbgtHtml = "";
-    if(p.temp != null && p.dewpt != null && sun != null){
+    let heatCalc = null;
+    if(p.wbgtPrecomputed != null && p.tgPrecomputed != null){
+        heatCalc = { tg: p.tgPrecomputed, wbgt: p.wbgtPrecomputed, tw: p.twPrecomputed };
+    } else if(p.temp != null && p.dewpt != null && sun != null){
         const rh   = calcRelativeHumidity(p.temp, p.dewpt);
         const wind = p.windSpeedMs ?? 0.5;
         const tg   = calcGlobeTemp(p.temp, p.solarRad, wind, sun.elev, rh);
         if(tg != null){
             const res = calcWBGT(p.temp, tg, p.dewpt);
-            if(res){
-                const { wbgt, tw } = res;
-                const iso = wbgt < 28 ? { label:"Комфортно",    color:"#4caf50" }
-                          : wbgt < 32 ? { label:"Осторожно",    color:"#ff9800" }
-                          : wbgt < 35 ? { label:"Опасно",       color:"#f44336" }
-                          :             { label:"Очень опасно", color:"#9c27b0" };
-                const zones = [[0,0],[28,25],[32,50],[35,75],[40,100]];
-const pct = (() => {
-    if(wbgt <= 0)  return 0;
-    if(wbgt >= 40) return 100;
-    for(let i = 1; i < zones.length; i++){
-        const [v0,p0] = zones[i-1], [v1,p1] = zones[i];
-        if(wbgt <= v1) return p0 + (wbgt-v0)/(v1-v0)*(p1-p0);
-    }
-    return 100;
-})();
-                wbgtHtml = `
-                <div style="margin-top:8px;border-top:1px solid #1e1e1e;padding-top:8px;">
-                    <div class="districtLine"><span>Tw (влажный термометр)</span><span>${fmt1(tw,"°C")}</span></div>
-                    <div class="districtLine"><span>Tg (шар, расчётный)</span><span>${fmt1(tg,"°C")}</span></div>
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0 4px;">
-                        <span style="font-size:13px;font-weight:600;color:#888;">WBGT</span>
-                        <span style="font-size:26px;font-weight:800;color:${iso.color};">${wbgt.toFixed(1)}°C</span>
-                    </div>
-                    <div style="position:relative;height:8px;border-radius:4px;
-                                background:linear-gradient(to right,#4caf50,#ffd166,#ff9800,#f44336,#9c27b0);
-                                margin-bottom:4px;">
-                        <div style="position:absolute;top:-3px;left:calc(${pct}% - 7px);
-                                    width:14px;height:14px;border-radius:50%;
-                                    background:${iso.color};border:2px solid #111;"></div>
-                    </div>
-                    <div style="display:flex;justify-content:space-between;font-size:10px;color:#444;margin-bottom:8px;">
-                        <span>0°</span><span>28°</span><span>32°</span><span>35°</span><span>40°+</span>
-                    </div>
-                    <div style="text-align:center;padding:6px 10px;border-radius:8px;
-                                background:${iso.color}22;border:1px solid ${iso.color}55;">
-                        <span style="color:${iso.color};font-weight:700;font-size:14px;">ISO 7243 · ${iso.label}</span>
-                    </div>
-                </div>`;
-            }
+            if(res) heatCalc = { tg, wbgt: res.wbgt, tw: res.tw };
         }
+    }
+    if(heatCalc){
+        const { wbgt, tg, tw } = heatCalc;
+        const iso = wbgt < 28 ? { label:"Комфортно",    color:"#4caf50" }
+                  : wbgt < 32 ? { label:"Осторожно",    color:"#ff9800" }
+                  : wbgt < 35 ? { label:"Опасно",       color:"#f44336" }
+                  :             { label:"Очень опасно", color:"#9c27b0" };
+        const zones = [[0,0],[28,25],[32,50],[35,75],[40,100]];
+        const pct = (() => {
+            if(wbgt <= 0)  return 0;
+            if(wbgt >= 40) return 100;
+            for(let i = 1; i < zones.length; i++){
+                const [v0,p0] = zones[i-1], [v1,p1] = zones[i];
+                if(wbgt <= v1) return p0 + (wbgt-v0)/(v1-v0)*(p1-p0);
+            }
+            return 100;
+        })();
+        const avgNote = p.stationID === AVG_STATION_ID
+            ? '<div style="font-size:10px;color:#666;margin-top:4px;">Среднее по станциям города</div>' : "";
+        wbgtHtml = `
+        <div style="margin-top:8px;border-top:1px solid #1e1e1e;padding-top:8px;">
+            <div class="districtLine"><span>Tw (влажный термометр)</span><span>${fmt1(tw,"°C")}</span></div>
+            <div class="districtLine"><span>Tg (шар, расчётный)</span><span>${fmt1(tg,"°C")}</span></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0 4px;">
+                <span style="font-size:13px;font-weight:600;color:#888;">WBGT</span>
+                <span style="font-size:26px;font-weight:800;color:${iso.color};">${wbgt.toFixed(1)}°C</span>
+            </div>
+            <div style="position:relative;height:8px;border-radius:4px;
+                        background:linear-gradient(to right,#4caf50,#ffd166,#ff9800,#f44336,#9c27b0);
+                        margin-bottom:4px;">
+                <div style="position:absolute;top:-3px;left:calc(${pct}% - 7px);
+                            width:14px;height:14px;border-radius:50%;
+                            background:${iso.color};border:2px solid #111;"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:#444;margin-bottom:8px;">
+                <span>0°</span><span>28°</span><span>32°</span><span>35°</span><span>40°+</span>
+            </div>
+            <div style="text-align:center;padding:6px 10px;border-radius:8px;
+                        background:${iso.color}22;border:1px solid ${iso.color}55;">
+                <span style="color:${iso.color};font-weight:700;font-size:14px;">ISO 7243 · ${iso.label}</span>
+            </div>
+            ${avgNote}
+        </div>`;
     }
 
     return `
@@ -1238,10 +1246,24 @@ async function fetchStationAverage(){
     // давление усредняем с учётом персональной калибровки каждой станции
     const pressureVals = ok.map(p=>p.pressure!=null ? p.pressure + getOffset(p.stationID) : null);
 
+    // Tg/WBGT нелинейны (kt от радиации, sin(elev), поправка на ветер, экспонента в Td)
+    // усреднять сырые параметры до расчёта некорректно (неравенство Дженсена) —
+    // считаем по каждой станции отдельно и усредняем уже готовые результаты
+    const heatResults = ok.map(p => {
+        if(p.temp == null || p.dewpt == null || p.lat == null) return null;
+        const sun  = solarPosition(p.lat, p.lon, new Date());
+        const rh   = calcRelativeHumidity(p.temp, p.dewpt);
+        const wind = p.windSpeedMs ?? 0.5;
+        const tg   = calcGlobeTemp(p.temp, p.solarRad, wind, sun.elev, rh);
+        if(tg == null) return null;
+        const res = calcWBGT(p.temp, tg, p.dewpt);
+        return res ? { tg, wbgt: res.wbgt, tw: res.tw } : null;
+    }).filter(Boolean);
+
     return {
         stationID: AVG_STATION_ID, softwareType:null,
         obsTimeLocal: pwsLocalTimeStr(new Date()),
-        lat:null, lon:null, elev:null,
+        lat:avg(ok.map(p=>p.lat)), lon:avg(ok.map(p=>p.lon)), elev:null,
         temp:avg(ok.map(p=>p.temp)), dewpt:avg(ok.map(p=>p.dewpt)),
         heatIndex:avg(ok.map(p=>p.heatIndex)), windChill:avg(ok.map(p=>p.windChill)),
         pressure:round1(avg(pressureVals)), precipRate:round1(avg(ok.map(p=>p.precipRate))),
@@ -1249,6 +1271,9 @@ async function fetchStationAverage(){
         humidity:avg(humidityVals), uv:avg(ok.map(p=>p.uv)),
         solarRad:avg(ok.map(p=>p.solarRad)), windSpeedMs:round1(avg(ok.map(p=>p.windSpeedMs))),
         windGustMs:round1(avg(ok.map(p=>p.windGustMs))),
+        tgPrecomputed:   heatResults.length ? round1(avg(heatResults.map(h=>h.tg)))   : null,
+        wbgtPrecomputed: heatResults.length ? round1(avg(heatResults.map(h=>h.wbgt))) : null,
+        twPrecomputed:   heatResults.length ? round1(avg(heatResults.map(h=>h.tw)))   : null,
     };
 }
 
