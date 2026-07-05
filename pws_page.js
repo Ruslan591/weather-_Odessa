@@ -22,6 +22,8 @@ const PWS_STATIONS = [
 const PWS_REFRESH = 15;
 const CALIB_KEY   = "pwsCalib2";
 const SEL_KEY     = "pwsLastStation";
+const PRESSURE_OFFSETS_URL = "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/pws_pressure_offsets.json";
+let _autoPressureOffsets = {}; // авто-офсеты давления (SYNOP/BUFR), data/pws_pressure_offsets.json
 
 let _timer     = null;
 let _nextRefreshAt   = 0;   // время (мс) следующего автообновления
@@ -386,9 +388,26 @@ function toggleDetails(e){
 /* =========================================================
    КОРРЕКЦИЯ ДАВЛЕНИЯ
 ========================================================= */
+async function loadPressureOffsets(){
+    try{
+        const r = await fetch(PRESSURE_OFFSETS_URL + "?t=" + Date.now(), { cache:"no-store" });
+        if(!r.ok) return;
+        const data = await r.json();
+        const map = {};
+        Object.keys(data).forEach(id => {
+            if(id === "_processedRefs") return;
+            const v = data[id];
+            if(v && typeof v.offset === "number") map[id] = v.offset;
+        });
+        _autoPressureOffsets = map;
+    } catch(e){ /* нет сети/файла — остаётся только ручная поправка */ }
+}
 function getOffset(id){
-    try{ return parseFloat(JSON.parse(localStorage.getItem(CALIB_KEY)||"{}")[id] ?? 0) || 0; }
-    catch(e){ return 0; }
+    let manual = 0;
+    try{ manual = parseFloat(JSON.parse(localStorage.getItem(CALIB_KEY)||"{}")[id] ?? 0) || 0; }
+    catch(e){}
+    const auto = typeof _autoPressureOffsets[id] === "number" ? _autoPressureOffsets[id] : 0;
+    return auto + manual;
 }
 function setOffset(id, val){
     const c = JSON.parse(localStorage.getItem(CALIB_KEY)||"{}");
@@ -1469,6 +1488,7 @@ async function initPWSPage(){
     buildSelect();
     const box = document.getElementById("pwsContent");
     if(box) box.innerHTML = `<div style="padding:20px;color:#888;text-align:center;">Загрузка...</div>`;
+    await loadPressureOffsets();
     await loadKtOcTable();
     await loadAndRender();
     startRefresh();
