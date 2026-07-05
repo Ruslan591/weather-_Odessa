@@ -1031,7 +1031,7 @@ const srHtml = p.solarRad != null ? `
         wbgtHtml = `
         <div style="margin-top:8px;border-top:1px solid #1e1e1e;padding-top:8px;">
             <div class="districtLine"><span>Tw (влажный термометр)</span><span>${fmt1(tw,"°C")}</span></div>
-            <div class="districtLine"><span>Tg (шар, расчётный)</span><span>${fmt1(tg,"°C")}</span></div>
+            <div class="districtLine"><span>Температура чёрного шара</span><span>${fmt1(tg,"°C")}</span></div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0 4px;">
                 <span style="font-size:13px;font-weight:600;color:#888;">WBGT</span>
                 <span style="font-size:26px;font-weight:800;color:${iso.color};">${wbgt.toFixed(1)}°C</span>
