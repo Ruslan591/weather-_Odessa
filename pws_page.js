@@ -1239,6 +1239,15 @@ async function fetchStationAverage(){
         const vals = arr.filter(v=>v!=null && !isNaN(v));
         return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
     };
+    // направление ветра — циркулярная величина, обычное арифметическое среднее
+    // даёт неверный результат (напр. 350° и 10° -> 180° вместо ~0°)
+    const avgDir = arr => {
+        const vals = arr.filter(v=>v!=null && !isNaN(v));
+        if(!vals.length) return null;
+        const sx = vals.reduce((s,v)=>s+Math.sin(v*Math.PI/180),0);
+        const sy = vals.reduce((s,v)=>s+Math.cos(v*Math.PI/180),0);
+        return Math.round((Math.atan2(sx,sy)*180/Math.PI+360)%360);
+    };
     const round1 = v => v!=null ? Math.round(v*10)/10 : null;
     const humidityVals = ok
         .filter(p=>!HUMIDITY_EXCLUDE_STATIONS.includes(p.stationID))
@@ -1267,7 +1276,7 @@ async function fetchStationAverage(){
         temp:avg(ok.map(p=>p.temp)), dewpt:avg(ok.map(p=>p.dewpt)),
         heatIndex:avg(ok.map(p=>p.heatIndex)), windChill:avg(ok.map(p=>p.windChill)),
         pressure:round1(avg(pressureVals)), precipRate:round1(avg(ok.map(p=>p.precipRate))),
-        precipTotal:round1(avg(ok.map(p=>p.precipTotal))), windDir:avg(ok.map(p=>p.windDir)),
+        precipTotal:round1(avg(ok.map(p=>p.precipTotal))), windDir:avgDir(ok.map(p=>p.windDir)),
         humidity:avg(humidityVals), uv:avg(ok.map(p=>p.uv)),
         solarRad:avg(ok.map(p=>p.solarRad)), windSpeedMs:round1(avg(ok.map(p=>p.windSpeedMs))),
         windGustMs:round1(avg(ok.map(p=>p.windGustMs))),
