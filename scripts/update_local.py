@@ -47,7 +47,8 @@ def _local_gh_put(path, content, sha, message):
     with open(full, "w", encoding="utf-8") as f:
         f.write(content)
     if path not in _GIT_CHANGED:
-        _GIT_CHANGED.append(path)
+        if not path.startswith(".github/"):
+            _GIT_CHANGED.append(path)
     _upd.log.info("  💾 %s", path)
     return "local"
 
