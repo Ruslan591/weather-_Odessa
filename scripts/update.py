@@ -710,6 +710,10 @@ PARAM_MAP = {
     "visibility": ("visibility", "visibility"),
 }
 
+# поля, которые build_snapshot() реально сохраняет ПО КАЖДОЙ МОДЕЛИ отдельно
+# для PWS (models{} в entry_pws) — precip/cloudcover/visibility там нет
+MODEL_PARAM_KEYS = ["temp", "pressure", "wind", "windGust", "windDir", "humidity"]
+
 # Для совместимости с update_accuracy (список числовых параметров)
 ACCURACY_PARAMS = list(PARAM_MAP.keys())
 
@@ -762,13 +766,16 @@ def squeeze_snapshots(snaps, obs_by_time, mode="synop", processed_keys=None):
     Выжимает снимки:
     - считает ошибки для часов у которых есть наблюдения
     - пропускает уже обработанные пары (дедупликация)
-    - возвращает (accuracy_records, remaining_snaps, new_processed_keys)
+    - для mode="pws" попутно вытаскивает ошибки ПО КАЖДОЙ МОДЕЛИ отдельно
+      (данные уже есть в снимке в h["models"], просто раньше не читались)
+    - возвращает (accuracy_records, remaining_snaps, new_processed_keys, model_records)
     """
     now = utcnow()
     if processed_keys is None:
         processed_keys = set()
 
     accuracy_records = []
+    model_records = []
     remaining = []
     new_processed = set()
 
@@ -824,6 +831,21 @@ def squeeze_snapshots(snaps, obs_by_time, mode="synop", processed_keys=None):
                     rec["wx"] = {"hit": 1 if fg == og else 0}
 
             accuracy_records.append(rec)
+
+            if mode == "pws":
+                for mid, mdata in (h.get("models") or {}).items():
+                    mrec = {"dayKey": day_key, "horizonH": horizon_h, "hourUTC": hour_utc, "model": mid}
+                    has_any = False
+                    for param in MODEL_PARAM_KEYS:
+                        obs_val = obs.get(param)
+                        fc_val  = mdata.get(param)
+                        err = calc_errors(fc_val, obs_val, param)
+                        if err is not None:
+                            mrec[param] = {"err": round(err[0], 2), "ae": round(err[1], 2)}
+                            has_any = True
+                    if has_any:
+                        model_records.append(mrec)
+
             new_processed.add(pair_key)
 
         if not expired:
@@ -831,7 +853,88 @@ def squeeze_snapshots(snaps, obs_by_time, mode="synop", processed_keys=None):
         else:
             log.info("  Удалён снимок %s (%d часов)", snap["savedAt"][:16], len(hours))
 
-    return accuracy_records, remaining, new_processed
+    return accuracy_records, remaining, new_processed, model_records
+
+
+def update_model_bias_pws(existing, new_model_records):
+    """
+    Копит bias/MAE/RMSE ПО КАЖДОЙ МОДЕЛИ ОТДЕЛЬНО относительно PWS.
+    Аналог calc_model_bias.py (тот считает то же самое, но относительно SYNOP,
+    отдельным fetch через data/modeldata/*.json) — здесь же используются данные,
+    уже присутствующие в ensemble_snapshots_pws.json (models{} в build_snapshot),
+    без единого лишнего запроса к API.
+    Структура: { updated, records, models: { model_id: { overall, bySeason, byMonth, byHourUTC } } }
+    Как и в update_accuracy() — каждый bucket хранит и финализированные bias/mae/rmse,
+    и сырые sum_*, чтобы продолжать копить инкрементально без пересчёта с нуля.
+    """
+    acc = existing or {"updated": None, "records": 0, "models": {}}
+    models = acc.setdefault("models", {})
+
+    def ensure_sums(bucket):
+        for s in bucket.values():
+            if "sum_ae" not in s and "mae" in s:
+                n = s.get("n", 0)
+                s["sum_ae"]  = s["mae"]  * n
+                s["sum_sq"]  = (s.get("rmse", 0) ** 2) * n
+                s["sum_err"] = s.get("bias", 0) * n
+
+    for m in models.values():
+        ensure_sums(m.get("overall", {}))
+        for params in m.get("bySeason", {}).values():  ensure_sums(params)
+        for params in m.get("byMonth", {}).values():   ensure_sums(params)
+        for params in m.get("byHourUTC", {}).values(): ensure_sums(params)
+
+    def add(bucket, param, err, ae):
+        if param not in bucket or "sum_ae" not in bucket[param]:
+            bucket[param] = {"sum_err": 0.0, "sum_ae": 0.0, "sum_sq": 0.0, "n": 0}
+        b = bucket[param]
+        b["sum_err"] += err
+        b["sum_ae"]  += ae
+        b["sum_sq"]  += ae * ae
+        b["n"]       += 1
+
+    for rec in new_model_records:
+        mid = rec["model"]
+        m = models.setdefault(mid, {"overall": {}, "bySeason": {}, "byMonth": {}, "byHourUTC": {}})
+        month_key = rec["dayKey"][5:7]
+        season    = SEASON_MAP.get(int(month_key))
+        hour_key  = str(rec["hourUTC"])
+        for param in MODEL_PARAM_KEYS:
+            if param not in rec:
+                continue
+            err = rec[param]["err"]; ae = rec[param]["ae"]
+            add(m["overall"], param, err, ae)
+            if season:
+                add(m["bySeason"].setdefault(season, {}), param, err, ae)
+            add(m["byMonth"].setdefault(month_key, {}), param, err, ae)
+            add(m["byHourUTC"].setdefault(hour_key, {}), param, err, ae)
+        acc["records"] = acc.get("records", 0) + 1
+
+    def finalize(bucket):
+        for param in list(bucket.keys()):
+            s = bucket[param]
+            n = s.get("n", 0)
+            if n == 0:
+                del bucket[param]
+                continue
+            bucket[param] = {
+                "bias": round(s["sum_err"] / n, 3),
+                "mae":  round(s["sum_ae"]  / n, 3),
+                "rmse": round(math.sqrt(s["sum_sq"] / n), 3),
+                "n": n,
+                "sum_err": round(s["sum_err"], 4),
+                "sum_ae":  round(s["sum_ae"], 4),
+                "sum_sq":  round(s["sum_sq"], 4),
+            }
+
+    for m in models.values():
+        finalize(m["overall"])
+        for params in m["bySeason"].values():  finalize(params)
+        for params in m["byMonth"].values():   finalize(params)
+        for params in m["byHourUTC"].values(): finalize(params)
+
+    acc["updated"] = utcnow().isoformat()
+    return acc
 
 
 def update_accuracy(existing_acc, new_records, new_processed_keys=None, mode="synop"):
@@ -1385,7 +1488,7 @@ def main():
 
     # SYNOP
     processed_synop = set(acc_synop.get("squeezed", [])) if acc_synop else set()
-    new_recs_synop, remaining_synop, new_processed_synop = squeeze_snapshots(
+    new_recs_synop, remaining_synop, new_processed_synop, _unused_model_recs_synop = squeeze_snapshots(
         snaps_synop, synop_obs_by_time, mode="synop", processed_keys=processed_synop)
     gist_log(f"  SYNOP: выжато {len(new_recs_synop)} записей, осталось {len(remaining_synop)} снимков")
 
@@ -1482,7 +1585,7 @@ def main():
 
     # PWS
     processed_pws = set(acc_pws.get("squeezed", [])) if acc_pws else set()
-    new_recs_pws, remaining_pws, new_processed_pws = squeeze_snapshots(
+    new_recs_pws, remaining_pws, new_processed_pws, new_model_recs_pws = squeeze_snapshots(
         snaps_pws, pws_obs_by_time, mode="pws", processed_keys=processed_pws)
     gist_log(f"  PWS: выжато {len(new_recs_pws)} записей, осталось {len(remaining_pws)} снимков")
 
@@ -1495,6 +1598,18 @@ def main():
             lambda: gh_save_json(acc_pws_path, _acc_pws, _acc_pws_sha,
                                   "ensemble accuracy pws update"),
             gh_path=acc_pws_path)
+
+    if new_model_recs_pws:
+        model_bias_pws_path = "data/model_bias_pws.json"
+        model_bias_pws, model_bias_pws_sha = gh_load_json(model_bias_pws_path, default=None)
+        model_bias_pws = update_model_bias_pws(model_bias_pws, new_model_recs_pws)
+        _model_bias_pws     = model_bias_pws
+        _model_bias_pws_sha = model_bias_pws_sha
+        gist_log_save(
+            f"model_bias_pws.json обновлён (+{len(new_model_recs_pws)} записей по моделям)",
+            lambda: gh_save_json(model_bias_pws_path, _model_bias_pws, _model_bias_pws_sha,
+                                  "model bias pws update"),
+            gh_path=model_bias_pws_path)
 
     # Обрезаем если вдруг превысили лимит после добавления нового снимка
     if len(remaining_pws) > MAX_PWS_SNAPS:
