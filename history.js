@@ -16,6 +16,8 @@ const HIST_PARAMS = {
     precip:   { label:"Осадки",       unit:" мм",   color:"#448aff", field:"precip",      stroke:"#448aff", fill:"rgba(68,138,255,0.15)",  bar:true },
     solar:    { label:"Радиация",     unit:" Вт/м²",color:"#ff9f43", field:"solarRad",    stroke:"#ff9f43", fill:"rgba(255,159,67,0.10)"   },
     uv:       { label:"УФ-индекс",    unit:"",      color:"#a29bfe", field:"uv",          stroke:"#a29bfe", fill:"rgba(162,155,254,0.10)"  },
+    wbgt:     { label:"WBGT",         unit:"°C",    color:"#f4511e", field:"wbgt",        stroke:"#f4511e", fill:"rgba(244,81,30,0.10)"    },
+    tg:       { label:"Темп. чёрного шара", unit:"°C", color:"#ffb300", field:"tg",       stroke:"#ffb300", fill:"rgba(255,179,0,0.10)"    },
 };
 
 const HIST_PERIODS = [
@@ -40,6 +42,7 @@ function histParseObs(o, offOverride){
         temp:         m.tempAvg     ?? m.temp     ?? null,
         tempHigh:     m.tempHigh    ?? null,
         tempLow:      m.tempLow     ?? null,
+        dewpt:        m.dewptAvg    ?? m.dewpt     ?? null,
         pressure:     rawP != null ? Math.round((rawP + off) * 10) / 10 : null,
         humidity:     o.humidityAvg ?? o.humidity ?? null,
         windSpeedMs:     km(m.windspeedAvg  ?? m.windSpeed ?? null),
@@ -56,6 +59,31 @@ function histParseObs(o, offOverride){
 /* =========================================================
    СОСТОЯНИЕ
 ========================================================= */
+// для расчёта положения солнца в истории — разница в пределах города
+// пренебрежимо мала для угла возвышения солнца, одной точки достаточно
+const HIST_CITY_LAT = 46.4825, HIST_CITY_LON = 30.7233;
+
+function histEnrichHeat(obsArr){
+    for(const o of obsArr){
+        o.wbgt = null; o.tg = null;
+        if(o.temp == null || o.dewpt == null) continue;
+        const raw = o.obsTimeLocal || o.obsTimeUtc;
+        if(!raw) continue;
+        const d = new Date(String(raw).trim().replace(" ", "T"));
+        if(isNaN(d.getTime())) continue;
+        const sun  = solarPosition(HIST_CITY_LAT, HIST_CITY_LON, d);
+        const rh   = calcRelativeHumidity(o.temp, o.dewpt);
+        const wind = o.windSpeedMs ?? 0.5;
+        const tg   = calcGlobeTemp(o.temp, o.solarRad, wind, sun.elev, rh);
+        if(tg == null) continue;
+        const res = calcWBGT(o.temp, tg, o.dewpt);
+        if(!res) continue;
+        o.tg   = Math.round(tg * 10) / 10;
+        o.wbgt = Math.round(res.wbgt * 10) / 10;
+    }
+    return obsArr;
+}
+
 let _histChart   = null;
 let _histParam   = "temp";
 let _histPeriod  = "today";
@@ -110,6 +138,7 @@ if(period === "7day"){
             temp:         o.metric?.tempAvg    ?? null,
             tempHigh:     o.metric?.tempHigh   ?? null,
             tempLow:      o.metric?.tempLow    ?? null,
+            dewpt:        o.metric?.dewptAvg   ?? null,
             pressure:     o.metric?.pressureMax?? null,
             humidity:     o.humidityAvg        ?? null,
             windSpeedMs:     o.metric?.windspeedAvg  != null ? Math.round(o.metric.windspeedAvg /3.6*10)/10 : null,
@@ -166,12 +195,17 @@ async function histFetchAverage(period){
                     : period === "7day" ? 60*60*1000
                     : 24*60*60*1000;
 
-    const numFields = ["temp","pressure","windSpeedMs","windGustMs","windDir","precip","precipRate","solarRad","uv"];
+    const numFields = ["temp","pressure","windSpeedMs","windGustMs","windDir","precip","precipRate","solarRad","uv","dewpt"];
     const buckets = new Map();
 
     for(const st of perStation){
         const excludeHumidity = typeof HUMIDITY_EXCLUDE_STATIONS !== "undefined"
             && HUMIDITY_EXCLUDE_STATIONS.includes(st.id);
+
+        // локальные бакеты этой станции — нужны только для Tg/WBGT, чтобы считать
+        // их из СОБСТВЕННЫХ temp/dewpt/radiation/wind станции, а не из смеси со всеми
+        const stBuckets = new Map();
+
         for(const o of st.obs){
             const raw = o.obsTimeLocal || o.obsTimeUtc;
             if(!raw) continue;
@@ -190,6 +224,38 @@ async function histFetchAverage(period){
                 b.sums.humidity = (b.sums.humidity||0) + Number(o.humidity);
                 b.counts.humidity = (b.counts.humidity||0) + 1;
             }
+
+            let sb = stBuckets.get(key);
+            if(!sb){ sb = { sums:{}, counts:{} }; stBuckets.set(key,sb); }
+            for(const f of ["temp","dewpt","solarRad","windSpeedMs"]){
+                const v = o[f];
+                if(v==null || isNaN(v)) continue;
+                sb.sums[f] = (sb.sums[f]||0) + Number(v);
+                sb.counts[f] = (sb.counts[f]||0) + 1;
+            }
+        }
+
+        // Tg/WBGT для каждого интервала — из усреднённых по времени, но ещё
+        // "родных" для этой станции temp/dewpt/radiation/wind
+        for(const [key, sb] of stBuckets){
+            const temp  = sb.counts.temp  ? sb.sums.temp /sb.counts.temp  : null;
+            const dewpt = sb.counts.dewpt ? sb.sums.dewpt/sb.counts.dewpt : null;
+            if(temp == null || dewpt == null) continue;
+            const solarRad = sb.counts.solarRad     ? sb.sums.solarRad/sb.counts.solarRad         : null;
+            const wind     = sb.counts.windSpeedMs  ? sb.sums.windSpeedMs/sb.counts.windSpeedMs   : 0.5;
+            const sun = solarPosition(HIST_CITY_LAT, HIST_CITY_LON, new Date(key));
+            const rh  = calcRelativeHumidity(temp, dewpt);
+            const tg  = calcGlobeTemp(temp, solarRad, wind, sun.elev, rh);
+            if(tg == null) continue;
+            const res = calcWBGT(temp, tg, dewpt);
+            if(!res) continue;
+
+            let b = buckets.get(key);
+            if(!b){ b = { time:key, sums:{}, counts:{} }; buckets.set(key,b); }
+            b.sums.tg     = (b.sums.tg||0)     + tg;
+            b.counts.tg   = (b.counts.tg||0)   + 1;
+            b.sums.wbgt   = (b.sums.wbgt||0)   + res.wbgt;
+            b.counts.wbgt = (b.counts.wbgt||0) + 1;
         }
     }
 
@@ -202,7 +268,7 @@ async function histFetchAverage(period){
         .sort((a,b)=>a.time-b.time)
         .map(b=>{
             const rec = { obsTimeLocal: localTimeStr(new Date(b.time)) };
-            for(const f of [...numFields, "humidity"]){
+            for(const f of [...numFields, "humidity", "tg", "wbgt"]){
                 rec[f] = b.counts[f] ? Math.round((b.sums[f]/b.counts[f])*10)/10 : null;
             }
             return rec;
@@ -1237,9 +1303,11 @@ async function histLoad(){
     histHideTooltip();
 
     try {
-        const obs  = (typeof AVG_STATION_ID !== "undefined" && stationId === AVG_STATION_ID)
+        const isAvg = typeof AVG_STATION_ID !== "undefined" && stationId === AVG_STATION_ID;
+        const obs  = isAvg
             ? await histFetchAverage(_histPeriod)
             : await histFetch(stationId, _histPeriod);
+        if(!isAvg) histEnrichHeat(obs);
         _histData  = histPrepare(obs, _histParam);
         histRenderChart(_histData, _histParam);
         histRenderStats(_histData, _histParam);
