@@ -10,10 +10,11 @@ var TABS = [
           { label: "BUFR",  href: "bufr.html" },
       ]
     },
-    { label: "Точность", icon: "📊", href: null, match: ["ensemble_pws.html", "ensemble_score.html", "verify.html", "verify_pws.html"],
+    { label: "Точность", icon: "📊", href: null, match: ["ensemble_pws.html", "ensemble_score.html", "verify.html", "verify_pws.html", "model_bias.html"],
       submenu: [
           { label: "Ensemble vs PWS",   href: "ensemble_pws.html" },
           { label: "Ensemble vs SYNOP", href: "ensemble_score.html" },
+          { label: "Точность моделей",  href: "model_bias.html" },
           { label: "Ensemble history", href: "ensemble_history.html" },
           { label: "Update history", href: "buildHistory.html" },
           { label: "Verify PWS",        href: "verify_pws.html" },
