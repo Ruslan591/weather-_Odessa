@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Точность моделей</title>
+<link rel="stylesheet" href="verify.css">
+<style>
+.mb-controls{
+    display:flex; flex-direction:column; gap:10px;
+    margin-bottom:14px;
+}
+.mb-source{
+    display:flex; gap:8px; justify-content:center;
+}
+.mb-source button{
+    margin-top:0; flex:1; max-width:220px;
+    background:#1a1a1a; border:1px solid #333; color:#999;
+    padding:9px 12px; border-radius:8px; font-size:13px; font-weight:600;
+    cursor:pointer;
+}
+.mb-source button.active{
+    background:#2a2a2a; border-color:#666; color:#fff;
+}
+.mb-params{
+    display:flex; flex-wrap:wrap; gap:6px; justify-content:center;
+}
+.mb-params button{
+    margin-top:0; background:none; border:1px solid #333; color:#888;
+    padding:7px 14px; border-radius:16px; font-size:12.5px; cursor:pointer;
+}
+.mb-params button.active{
+    background:#333; border-color:#777; color:#fff;
+}
+.mb-period select{
+    background:#1a1a1a; color:#eee; border:1px solid #333;
+    padding:7px 12px; border-radius:8px; font-size:13px;
+    display:block; margin:0 auto;
+}
+.mb-note{
+    text-align:center; font-size:11px; color:#555; margin-top:6px;
+}
+.mb-table{
+    background:#161616; border-radius:10px; overflow:hidden; margin-bottom:16px;
+}
+.mb-row{
+    display:grid;
+    grid-template-columns: 1fr 62px 62px 62px 54px;
+    align-items:center;
+    gap:6px;
+    padding:10px 12px;
+    border-bottom:1px solid #232323;
+    font-size:13px;
+}
+.mb-row:last-child{ border-bottom:none; }
+.mb-row.head{
+    color:#666; font-size:10.5px; text-transform:uppercase; letter-spacing:0.05em;
+    padding:8px 12px; border-bottom:1px solid #2b2b2b;
+}
+.mb-model{
+    font-weight:600; color:#ddd;
+    display:flex; align-items:center; gap:8px;
+}
+.mb-rank{
+    color:#555; font-size:11px; width:16px; text-align:right; flex-shrink:0;
+}
+.mb-val{ text-align:right; font-variant-numeric:tabular-nums; }
+.mb-mae{
+    text-align:right; font-weight:700; font-variant-numeric:tabular-nums;
+    padding:3px 6px; border-radius:5px;
+}
+.mb-n{ text-align:right; color:#666; font-size:11.5px; }
+.mb-row.lowdata .mb-model{ color:#666; }
+.mb-row.lowdata .mb-mae{ background:none !important; color:#555 !important; }
+.mb-empty{
+    text-align:center; color:#555; font-size:13px; padding:30px 10px;
+}
+.mb-updated{
+    text-align:center; font-size:11px; color:#555; margin:-8px 0 16px;
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+    <div class="nav"><a href="forecast.html">← Прогноз</a></div>
+    <div class="headerTitle">Точность моделей</div>
+    <div class="nav"></div>
+</div>
+
+<div class="container">
+
+<div class="mb-controls">
+    <div class="mb-source">
+        <button id="srcSynopBtn" class="active" onclick="mbSetSource('synop')">SYNOP (33837)</button>
+        <button id="srcPwsBtn" onclick="mbSetSource('pws')">PWS (по городу)</button>
+    </div>
+    <div class="mb-params" id="mbParams"></div>
+    <div class="mb-period">
+        <select id="mbPeriodSel" onchange="mbRender()"></select>
+    </div>
+    <div class="mb-note" id="mbNote"></div>
+</div>
+
+<div class="mb-updated" id="mbUpdated"></div>
+
+<div class="mb-table" id="mbTable"></div>
+
+</div>
+
+<script>
+var GITHUB_OWNER = "ruslan591";
+var GITHUB_REPO  = "weather-_Odessa";
+var RAW_BASE = "https://raw.githubusercontent.com/" + GITHUB_OWNER + "/" + GITHUB_REPO + "/main/";
+
+// параметры, доступные в model_bias.json (SYNOP) и model_bias_pws.json (PWS,
+// без precip/cloudcover/visibility — их build_snapshot не сохраняет по каждой модели)
+var MB_PARAMS_SYNOP = [
+    { key:"temp",     label:"Температура", unit:"°C",  good:1.5, bad:3.0 },
+    { key:"pressure", label:"Давление",    unit:"гПа", good:1.0, bad:2.5 },
+    { key:"wind",     label:"Ветер",       unit:"м/с", good:1.5, bad:3.0 },
+    { key:"windGust", label:"Порывы",      unit:"м/с", good:2.0, bad:4.0 },
+    { key:"windDir",  label:"Направление", unit:"°",   good:30,  bad:60  },
+    { key:"humidity", label:"Влажность",   unit:"%",   good:8,   bad:15  },
+];
+var MB_PARAMS_PWS = MB_PARAMS_SYNOP; // одинаковый набор полей в обоих файлах
+
+// человекочитаемые имена моделей
+var MODEL_NAMES = {
+    ecmwf_ifs:                      "ECMWF IFS",
+    gfs_global:                     "GFS",
+    icon_global:                    "ICON Global",
+    icon_eu:                        "ICON EU",
+    gem_global:                     "GEM",
+    ukmo_global_deterministic_10km: "UKMO",
+    meteofrance_arpege_europe:      "Arpège",
+    cma_grapes_global:              "GRAPES",
+};
+
+var mbData = { synop: null, pws: null };
+var mbSource = "synop";
+var mbParam  = "temp";
+var mbPeriod = "overall"; // overall | DJF | MAM | JJA | SON
+
+async function mbFetch(path) {
+    var r = await fetch(RAW_BASE + path + "?t=" + Date.now(), { cache: "no-store" });
+    if (!r.ok) return null;
+    return await r.json();
+}
+
+function mbBuildParamTabs() {
+    var params = mbSource === "synop" ? MB_PARAMS_SYNOP : MB_PARAMS_PWS;
+    var el = document.getElementById("mbParams");
+    el.innerHTML = params.map(function(p) {
+        return '<button data-key="' + p.key + '" class="' + (p.key === mbParam ? "active" : "") +
+               '" onclick="mbSetParam(\'' + p.key + '\')">' + p.label + '</button>';
+    }).join("");
+}
+
+function mbSetSource(src) {
+    mbSource = src;
+    document.getElementById("srcSynopBtn").classList.toggle("active", src === "synop");
+    document.getElementById("srcPwsBtn").classList.toggle("active", src === "pws");
+    mbBuildParamTabs();
+    mbRender();
+}
+
+function mbSetParam(key) {
+    mbParam = key;
+    mbBuildParamTabs();
+    mbRender();
+}
+
+function mbColorForMae(mae, good, bad) {
+    if (mae == null) return { bg: "transparent", fg: "#666" };
+    var t = (mae - good) / (bad - good);
+    t = Math.max(0, Math.min(1, t));
+    var stops = [
+        [76, 175, 80],
+        [255, 193, 7],
+        [244, 67, 54],
+    ];
+    var seg = t < 0.5 ? 0 : 1;
+    var lt  = t < 0.5 ? t / 0.5 : (t - 0.5) / 0.5;
+    var c0 = stops[seg], c1 = stops[seg + 1];
+    var r = Math.round(c0[0] + (c1[0]-c0[0])*lt);
+    var g = Math.round(c0[1] + (c1[1]-c0[1])*lt);
+    var b = Math.round(c0[2] + (c1[2]-c0[2])*lt);
+    return { bg: "rgba(" + r + "," + g + "," + b + ",0.16)", fg: "rgb(" + r + "," + g + "," + b + ")" };
+}
+
+function mbGetBucket(modelRec, period) {
+    if (!modelRec) return null;
+    if (period === "overall") return modelRec.overall || null;
+    return (modelRec.bySeason || {})[period] || null;
+}
+
+function mbFormatUpdated(iso) {
+    if (!iso) return "";
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleString("ru-RU", { day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit" });
+}
+
+function mbRender() {
+    var file = mbSource === "synop" ? mbData.synop : mbData.pws;
+    var params = mbSource === "synop" ? MB_PARAMS_SYNOP : MB_PARAMS_PWS;
+    var paramCfg = params.find(function(p) { return p.key === mbParam; });
+    var tableEl  = document.getElementById("mbTable");
+    var noteEl   = document.getElementById("mbNote");
+    var updEl    = document.getElementById("mbUpdated");
+
+    if (!file || !file.models) {
+        tableEl.innerHTML = '<div class="mb-empty">Файл ' +
+            (mbSource === "synop" ? "data/model_bias.json" : "data/model_bias_pws.json") +
+            ' пока недоступен или пуст.</div>';
+        updEl.textContent = "";
+        noteEl.textContent = "";
+        return;
+    }
+
+    updEl.textContent = "Обновлено: " + mbFormatUpdated(file.updated) +
+        (file.records != null ? " · записей: " + file.records.toLocaleString("ru-RU") : "");
+
+    var rows = [];
+    Object.keys(file.models).forEach(function(mid) {
+        var bucket = mbGetBucket(file.models[mid], mbPeriod);
+        var stat = bucket ? bucket[mbParam] : null;
+        rows.push({ mid: mid, stat: stat });
+    });
+
+    rows.sort(function(a, b) {
+        if (a.stat && b.stat) return a.stat.mae - b.stat.mae;
+        if (a.stat) return -1;
+        if (b.stat) return 1;
+        return 0;
+    });
+
+    var minN = Infinity;
+    rows.forEach(function(r) { if (r.stat) minN = Math.min(minN, r.stat.n); });
+    if (mbSource === "pws" && minN < 200) {
+        noteEl.textContent = "Накопление статистики только началось — при малом числе наблюдений (n) цифры могут сильно меняться день ото дня.";
+    } else {
+        noteEl.textContent = "";
+    }
+
+    var html = '<div class="mb-row head">' +
+        '<div>Модель</div><div class="mb-val">Bias</div><div class="mb-val">MAE</div><div class="mb-val">RMSE</div><div class="mb-val">n</div>' +
+        '</div>';
+
+    rows.forEach(function(r, i) {
+        var name = MODEL_NAMES[r.mid] || r.mid;
+        if (!r.stat) {
+            html += '<div class="mb-row lowdata">' +
+                '<div class="mb-model"><span class="mb-rank">' + (i+1) + '</span>' + name + '</div>' +
+                '<div class="mb-val">—</div><div class="mb-mae">—</div><div class="mb-val">—</div><div class="mb-n">—</div>' +
+                '</div>';
+            return;
+        }
+        var col = mbColorForMae(r.stat.mae, paramCfg.good, paramCfg.bad);
+        var signBias = r.stat.bias > 0 ? "+" : "";
+        html += '<div class="mb-row">' +
+            '<div class="mb-model"><span class="mb-rank">' + (i+1) + '</span>' + name + '</div>' +
+            '<div class="mb-val">' + signBias + r.stat.bias.toFixed(2) + '</div>' +
+            '<div class="mb-mae" style="background:' + col.bg + ';color:' + col.fg + ';">' + r.stat.mae.toFixed(2) + '</div>' +
+            '<div class="mb-val">' + r.stat.rmse.toFixed(2) + '</div>' +
+            '<div class="mb-n">' + r.stat.n.toLocaleString("ru-RU") + '</div>' +
+            '</div>';
+    });
+
+    tableEl.innerHTML = html;
+}
+
+function mbBuildPeriodSelect() {
+    var sel = document.getElementById("mbPeriodSel");
+    sel.innerHTML =
+        '<option value="overall">Всё время</option>' +
+        '<option value="DJF">Зима (дек-фев)</option>' +
+        '<option value="MAM">Весна (мар-май)</option>' +
+        '<option value="JJA">Лето (июн-авг)</option>' +
+        '<option value="SON">Осень (сен-ноя)</option>';
+}
+
+async function mbInit() {
+    mbBuildPeriodSelect();
+    mbBuildParamTabs();
+    document.getElementById("mbTable").innerHTML = '<div class="mb-empty">Загрузка…</div>';
+
+    var results = await Promise.all([
+        mbFetch("data/model_bias.json"),
+        mbFetch("data/model_bias_pws.json"),
+    ]);
+    mbData.synop = results[0];
+    mbData.pws   = results[1];
+
+    mbRender();
+}
+
+mbInit();
+</script>
+
+</body>
+</html>
