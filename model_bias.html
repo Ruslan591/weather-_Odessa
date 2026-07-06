@@ -44,34 +44,31 @@
     background:#161616; border-radius:10px; overflow:hidden; margin-bottom:16px;
 }
 .mb-row{
-    display:grid;
-    grid-template-columns: 1fr 62px 62px 62px 54px;
-    align-items:center;
-    gap:6px;
     padding:10px 12px;
     border-bottom:1px solid #232323;
-    font-size:13px;
 }
 .mb-row:last-child{ border-bottom:none; }
-.mb-row.head{
-    color:#666; font-size:10.5px; text-transform:uppercase; letter-spacing:0.05em;
-    padding:8px 12px; border-bottom:1px solid #2b2b2b;
+.mb-row-top{
+    display:flex; align-items:baseline; gap:8px; margin-bottom:7px;
 }
-.mb-model{
-    font-weight:600; color:#ddd;
-    display:flex; align-items:center; gap:8px;
+.mb-rank{ color:#555; font-size:11px; width:14px; flex-shrink:0; }
+.mb-model{ font-weight:600; color:#ddd; font-size:14px; flex:1; }
+.mb-n{ color:#666; font-size:10.5px; white-space:nowrap; flex-shrink:0; }
+.mb-row-stats{ display:flex; gap:6px; }
+.mb-stat{
+    flex:1; text-align:center; background:#1d1d1d; border-radius:6px; padding:6px 4px;
+    min-width:0;
 }
-.mb-rank{
-    color:#555; font-size:11px; width:16px; text-align:right; flex-shrink:0;
+.mb-stat-label{
+    display:block; font-size:9.5px; color:#666; text-transform:uppercase;
+    letter-spacing:0.04em; margin-bottom:2px;
 }
-.mb-val{ text-align:right; font-variant-numeric:tabular-nums; }
-.mb-mae{
-    text-align:right; font-weight:700; font-variant-numeric:tabular-nums;
-    padding:3px 6px; border-radius:5px;
+.mb-stat-val{
+    display:block; font-size:15px; font-weight:700;
+    font-variant-numeric:tabular-nums; color:#ddd;
 }
-.mb-n{ text-align:right; color:#666; font-size:11.5px; }
 .mb-row.lowdata .mb-model{ color:#666; }
-.mb-row.lowdata .mb-mae{ background:none !important; color:#555 !important; }
+.mb-row.lowdata .mb-stat-val{ color:#555; }
 .mb-empty{
     text-align:center; color:#555; font-size:13px; padding:30px 10px;
 }
@@ -244,27 +241,30 @@ function mbRender() {
         noteEl.textContent = "";
     }
 
-    var html = '<div class="mb-row head">' +
-        '<div>Модель</div><div class="mb-val">Bias</div><div class="mb-val">MAE</div><div class="mb-val">RMSE</div><div class="mb-val">n</div>' +
-        '</div>';
+    var html = "";
 
     rows.forEach(function(r, i) {
         var name = MODEL_NAMES[r.mid] || r.mid;
         if (!r.stat) {
             html += '<div class="mb-row lowdata">' +
-                '<div class="mb-model"><span class="mb-rank">' + (i+1) + '</span>' + name + '</div>' +
-                '<div class="mb-val">—</div><div class="mb-mae">—</div><div class="mb-val">—</div><div class="mb-n">—</div>' +
+                '<div class="mb-row-top"><span class="mb-rank">' + (i+1) + '</span>' +
+                '<span class="mb-model">' + name + '</span><span class="mb-n">нет данных</span></div>' +
                 '</div>';
             return;
         }
         var col = mbColorForMae(r.stat.mae, paramCfg.good, paramCfg.bad);
         var signBias = r.stat.bias > 0 ? "+" : "";
         html += '<div class="mb-row">' +
-            '<div class="mb-model"><span class="mb-rank">' + (i+1) + '</span>' + name + '</div>' +
-            '<div class="mb-val">' + signBias + r.stat.bias.toFixed(2) + '</div>' +
-            '<div class="mb-mae" style="background:' + col.bg + ';color:' + col.fg + ';">' + r.stat.mae.toFixed(2) + '</div>' +
-            '<div class="mb-val">' + r.stat.rmse.toFixed(2) + '</div>' +
-            '<div class="mb-n">' + r.stat.n.toLocaleString("ru-RU") + '</div>' +
+            '<div class="mb-row-top">' +
+                '<span class="mb-rank">' + (i+1) + '</span>' +
+                '<span class="mb-model">' + name + '</span>' +
+                '<span class="mb-n">n=' + r.stat.n.toLocaleString("ru-RU") + '</span>' +
+            '</div>' +
+            '<div class="mb-row-stats">' +
+                '<div class="mb-stat"><span class="mb-stat-label">Bias</span><span class="mb-stat-val">' + signBias + r.stat.bias.toFixed(2) + '</span></div>' +
+                '<div class="mb-stat" style="background:' + col.bg + ';"><span class="mb-stat-label" style="color:' + col.fg + ';opacity:0.85;">MAE</span><span class="mb-stat-val" style="color:' + col.fg + ';">' + r.stat.mae.toFixed(2) + '</span></div>' +
+                '<div class="mb-stat"><span class="mb-stat-label">RMSE</span><span class="mb-stat-val">' + r.stat.rmse.toFixed(2) + '</span></div>' +
+            '</div>' +
             '</div>';
     });
 
@@ -299,5 +299,6 @@ async function mbInit() {
 mbInit();
 </script>
 
+<script src="nav.js"></script>
 </body>
 </html>
