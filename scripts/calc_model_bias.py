@@ -143,9 +143,16 @@ def compute_bias(all_records):
             skipped += 1
             continue
 
-        season    = SEASON_MAP.get(mo)
-        month_key = f"{mo:02d}"
-        hour_key  = str(hh)
+        try:
+            dd = int(st[6:8])
+        except Exception:
+            dd = None
+
+        season     = SEASON_MAP.get(mo)
+        month_key  = f"{mo:02d}"
+        hour_key   = str(hh)
+        day_key    = f"{dd:02d}" if dd else None
+        decade_key = (str(min((dd - 1) // 10 + 1, 3)) if dd else None)
 
         obs    = rec.get("obs", {})
         models = rec.get("models", {})
@@ -157,6 +164,8 @@ def compute_bias(all_records):
                     "bySeason": {},
                     "byMonth":  {},
                     "byHour":   {},
+                    "byDecade": {},
+                    "byDay":    {},
                 }
             m = accum[mid]
 
@@ -190,6 +199,16 @@ def compute_bias(all_records):
                 m["byHour"].setdefault(hour_key, {}).setdefault(param, empty_stats())
                 add_to(m["byHour"][hour_key][param], err, ae)
 
+                # byDecade (1: 1-10, 2: 11-20, 3: 21-конец месяца)
+                if decade_key:
+                    m["byDecade"].setdefault(decade_key, {}).setdefault(param, empty_stats())
+                    add_to(m["byDecade"][decade_key][param], err, ae)
+
+                # byDay (день месяца, все месяцы/годы вместе)
+                if day_key:
+                    m["byDay"].setdefault(day_key, {}).setdefault(param, empty_stats())
+                    add_to(m["byDay"][day_key][param], err, ae)
+
         total += 1
 
     log.info("Обработано: %d записей, пропущено: %d", total, skipped)
@@ -214,6 +233,16 @@ def compute_bias(all_records):
                 hk: {p: finalize_stats(s) for p, s in params.items()
                      if finalize_stats(s)}
                 for hk, params in sorted(m["byHour"].items(), key=lambda x: int(x[0]))
+            },
+            "byDecade": {
+                dk: {p: finalize_stats(s) for p, s in params.items()
+                     if finalize_stats(s)}
+                for dk, params in sorted(m["byDecade"].items(), key=lambda x: int(x[0]))
+            },
+            "byDay": {
+                dayk: {p: finalize_stats(s) for p, s in params.items()
+                       if finalize_stats(s)}
+                for dayk, params in sorted(m["byDay"].items())
             },
         }
 
