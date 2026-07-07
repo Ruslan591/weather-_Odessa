@@ -95,7 +95,7 @@
     <div class="mb-params" id="mbParams"></div>
     <div class="mb-period">
         <select id="mbPeriodTypeSel" onchange="mbSetPeriodType(this.value)"></select>
-        <select id="mbPeriodValSel" onchange="mbPeriodKey=this.value;mbRender()"></select>
+        <select id="mbPeriodValSel" onchange="mbPeriodKey=this.value;mbPeriodKeyByType[mbPeriodType]=this.value;mbRender()"></select>
     </div>
     <div class="mb-note" id="mbNote"></div>
 </div>
@@ -140,6 +140,7 @@ var mbSource = "synop";
 var mbParam  = "temp";
 var mbPeriodType = "overall"; // overall | season | month | decade | day
 var mbPeriodKey  = "overall"; // "DJF", "06", "2", "15" и т.п.
+var mbPeriodKeyByType = {}; // запоминает последний выбор для каждого типа периода
 
 var MB_MONTH_NAMES = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
 var MB_DECADE_NAMES = {
@@ -320,10 +321,14 @@ function mbBuildPeriodValueSelect(type) {
     } else if (type === "day") {
         for (var d = 1; d <= 31; d++) opts.push([String(d).padStart(2,"0"), String(d) + " число"]);
     }
+    var remembered = mbPeriodKeyByType[type];
+    var hasRemembered = remembered != null && opts.some(function(o) { return o[0] === remembered; });
     sel.innerHTML = opts.map(function(o) {
-        return '<option value="' + o[0] + '">' + o[1] + '</option>';
+        var selAttr = (hasRemembered ? o[0] === remembered : o === opts[0]) ? " selected" : "";
+        return '<option value="' + o[0] + '"' + selAttr + '>' + o[1] + '</option>';
     }).join("");
-    mbPeriodKey = opts.length ? opts[0][0] : "overall";
+    mbPeriodKey = hasRemembered ? remembered : (opts.length ? opts[0][0] : "overall");
+    mbPeriodKeyByType[type] = mbPeriodKey;
 }
 
 function mbSetPeriodType(type) {
