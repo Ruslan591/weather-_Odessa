@@ -97,6 +97,7 @@
         <select id="mbPeriodTypeSel" onchange="mbSetPeriodType(this.value)"></select>
         <select id="mbPeriodValSel" onchange="mbPeriodKey=this.value;mbPeriodKeyByType[mbPeriodType]=this.value;mbRender()"></select>
     </div>
+    <div class="mb-period-desc" id="mbPeriodDesc"></div>
     <div class="mb-note" id="mbNote"></div>
 </div>
 
@@ -196,6 +197,26 @@ function mbColorForMae(mae, good, bad) {
     return { bg: "rgba(" + r + "," + g + "," + b + ",0.16)", fg: "rgb(" + r + "," + g + "," + b + ")" };
 }
 
+function mbPeriodLabel(type, key) {
+    if (type === "overall") return "Показана статистика: за всё время";
+    if (type === "season") {
+        var seasonNames = { DJF:"Зима (дек-фев)", MAM:"Весна (мар-май)", JJA:"Лето (июн-авг)", SON:"Осень (сен-ноя)" };
+        return "Показана статистика: " + (seasonNames[key] || key) + " (все годы)";
+    }
+    if (type === "month") {
+        var idx = parseInt(key, 10) - 1;
+        var name = MB_MONTH_NAMES[idx] || key;
+        return "Показана статистика: " + name + " (все годы)";
+    }
+    if (type === "decade") {
+        return "Показана статистика: " + (MB_DECADE_NAMES[key] || key) + " (все месяцы, все годы)";
+    }
+    if (type === "day") {
+        return "Показана статистика: " + parseInt(key, 10) + " число (все месяцы, все годы)";
+    }
+    return "";
+}
+
 function mbGetBucket(modelRec, periodType, periodKey) {
     if (!modelRec) return null;
     if (periodType === "overall") return modelRec.overall || null;
@@ -232,6 +253,9 @@ function mbRender() {
 
     updEl.textContent = "Обновлено: " + mbFormatUpdated(file.updated) +
         (file.records != null ? " · записей: " + file.records.toLocaleString("ru-RU") : "");
+
+    var descEl = document.getElementById("mbPeriodDesc");
+    if (descEl) descEl.textContent = mbPeriodLabel(mbPeriodType, mbPeriodKey);
 
     var rows = [];
     Object.keys(file.models).forEach(function(mid) {
