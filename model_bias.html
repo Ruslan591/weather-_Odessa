@@ -94,7 +94,8 @@
     </div>
     <div class="mb-params" id="mbParams"></div>
     <div class="mb-period">
-        <select id="mbPeriodSel" onchange="mbPeriod=this.value;mbRender()"></select>
+        <select id="mbPeriodTypeSel" onchange="mbSetPeriodType(this.value)"></select>
+        <select id="mbPeriodValSel" onchange="mbPeriodKey=this.value;mbRender()"></select>
     </div>
     <div class="mb-note" id="mbNote"></div>
 </div>
@@ -137,7 +138,15 @@ var MODEL_NAMES = {
 var mbData = { synop: null, pws: null };
 var mbSource = "synop";
 var mbParam  = "temp";
-var mbPeriod = "overall"; // overall | DJF | MAM | JJA | SON
+var mbPeriodType = "overall"; // overall | season | month | decade | day
+var mbPeriodKey  = "overall"; // "DJF", "06", "2", "15" и т.п.
+
+var MB_MONTH_NAMES = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+var MB_DECADE_NAMES = {
+    "1": "1–10 число",
+    "2": "11–20 число",
+    "3": "21–конец месяца",
+};
 
 async function mbFetch(path) {
     var r = await fetch(RAW_BASE + path + "?t=" + Date.now(), { cache: "no-store" });
@@ -186,10 +195,14 @@ function mbColorForMae(mae, good, bad) {
     return { bg: "rgba(" + r + "," + g + "," + b + ",0.16)", fg: "rgb(" + r + "," + g + "," + b + ")" };
 }
 
-function mbGetBucket(modelRec, period) {
+function mbGetBucket(modelRec, periodType, periodKey) {
     if (!modelRec) return null;
-    if (period === "overall") return modelRec.overall || null;
-    return (modelRec.bySeason || {})[period] || null;
+    if (periodType === "overall") return modelRec.overall || null;
+    if (periodType === "season")  return (modelRec.bySeason || {})[periodKey] || null;
+    if (periodType === "month")   return (modelRec.byMonth  || {})[periodKey] || null;
+    if (periodType === "decade")  return (modelRec.byDecade || {})[periodKey] || null;
+    if (periodType === "day")     return (modelRec.byDay    || {})[periodKey] || null;
+    return null;
 }
 
 function mbFormatUpdated(iso) {
@@ -221,7 +234,7 @@ function mbRender() {
 
     var rows = [];
     Object.keys(file.models).forEach(function(mid) {
-        var bucket = mbGetBucket(file.models[mid], mbPeriod);
+        var bucket = mbGetBucket(file.models[mid], mbPeriodType, mbPeriodKey);
         var stat = bucket ? bucket[mbParam] : null;
         rows.push({ mid: mid, stat: stat });
     });
@@ -271,18 +284,57 @@ function mbRender() {
     tableEl.innerHTML = html;
 }
 
-function mbBuildPeriodSelect() {
-    var sel = document.getElementById("mbPeriodSel");
+function mbBuildPeriodTypeSelect() {
+    var sel = document.getElementById("mbPeriodTypeSel");
     sel.innerHTML =
         '<option value="overall">Всё время</option>' +
-        '<option value="DJF">Зима (дек-фев)</option>' +
-        '<option value="MAM">Весна (мар-май)</option>' +
-        '<option value="JJA">Лето (июн-авг)</option>' +
-        '<option value="SON">Осень (сен-ноя)</option>';
+        '<option value="season">Сезон</option>' +
+        '<option value="month">Месяц</option>' +
+        '<option value="decade">Декада месяца</option>' +
+        '<option value="day">День месяца</option>';
+}
+
+function mbBuildPeriodValueSelect(type) {
+    var sel = document.getElementById("mbPeriodValSel");
+    if (type === "overall") {
+        sel.innerHTML = "";
+        sel.style.display = "none";
+        mbPeriodKey = "overall";
+        return;
+    }
+    sel.style.display = "";
+    var opts = [];
+    if (type === "season") {
+        opts = [
+            ["DJF", "Зима (дек-фев)"],
+            ["MAM", "Весна (мар-май)"],
+            ["JJA", "Лето (июн-авг)"],
+            ["SON", "Осень (сен-ноя)"],
+        ];
+    } else if (type === "month") {
+        opts = MB_MONTH_NAMES.map(function(name, i) {
+            return [String(i+1).padStart(2,"0"), name];
+        });
+    } else if (type === "decade") {
+        opts = [["1", MB_DECADE_NAMES["1"]], ["2", MB_DECADE_NAMES["2"]], ["3", MB_DECADE_NAMES["3"]]];
+    } else if (type === "day") {
+        for (var d = 1; d <= 31; d++) opts.push([String(d).padStart(2,"0"), String(d) + " число"]);
+    }
+    sel.innerHTML = opts.map(function(o) {
+        return '<option value="' + o[0] + '">' + o[1] + '</option>';
+    }).join("");
+    mbPeriodKey = opts.length ? opts[0][0] : "overall";
+}
+
+function mbSetPeriodType(type) {
+    mbPeriodType = type;
+    mbBuildPeriodValueSelect(type);
+    mbRender();
 }
 
 async function mbInit() {
-    mbBuildPeriodSelect();
+    mbBuildPeriodTypeSelect();
+    mbBuildPeriodValueSelect("overall");
     mbBuildParamTabs();
     document.getElementById("mbTable").innerHTML = '<div class="mb-empty">Загрузка…</div>';
 
