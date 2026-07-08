@@ -282,8 +282,6 @@ function renderSstHistChart(){
     }
 
     const omData = toSeries("open_meteo");
-    const oiData = toSeries("oisst_nrt");
-    const stData = toSeries("seatemperature_net");
 
     chart.setOption({
         backgroundColor: "transparent",
@@ -336,35 +334,7 @@ function renderSstHistChart(){
                 connectNulls: true,
                 z: 2,
             },
-            {
-                name: "NOAA OISST",
-                type: "line",
-                data: oiData,
-                smooth: 0.2,
-                symbol: "none",
-                lineStyle: { color: "#00cec9", width: 2, type: "dashed" },
-                itemStyle: { color: "#00cec9" },
-                connectNulls: true,
-                z: 1,
-            },
-            {
-                name: "seatemperature.net",
-                type: "line",
-                data: stData,
-                smooth: 0.2,
-                symbol: "none",
-                lineStyle: { color: "#ff6b9d", width: 2, type: "dotted" },
-                itemStyle: { color: "#ff6b9d" },
-                connectNulls: true,
-                z: 1,
-            },
         ],
-        legend: {
-            data: ["Open-Meteo", "NOAA OISST", "seatemperature.net"],
-            top: 0, right: 0,
-            textStyle: { color: "#888", fontSize: 10 },
-            itemWidth: 14, itemHeight: 8,
-        },
     });
 }
 
@@ -1177,26 +1147,6 @@ function makeMarineBlock(){
             " · " + d.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
     })() : "";
 
-    const sstCompareHtml = _sstCompareData ? (() => {
-        const fS = v => (typeof v === "number") ? v.toFixed(1) + "°C" : "—";
-        const t  = _sstCompareData.time ? (() => {
-            const d = new Date(_sstCompareData.time);
-            return isNaN(d) ? "" : d.toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
-        })() : "";
-        return `
-        <div style="margin-top:10px;padding-top:8px;border-top:1px dashed #2a2a2a;">
-            <div style="font-size:10px;color:#555;margin-bottom:6px;
-                        text-transform:uppercase;letter-spacing:.5px;">
-                Сравнение источников SST (эксп.)${t ? ` · ${t}` : ""}
-            </div>
-            <div class="pws-fields">
-                <div class="districtLine"><span>Open-Meteo (CMEMS)</span><span>${fS(_sstCompareData.open_meteo)}</span></div>
-                <div class="districtLine"><span>NOAA OISST</span><span>${fS(_sstCompareData.oisst_nrt)}</span></div>
-                <div class="districtLine"><span>seatemperature.net</span><span>${fS(_sstCompareData.seatemperature_net)}</span></div>
-            </div>
-        </div>`;
-    })() : "";
-
     return `
     <div style="margin-top:12px;border-top:1px solid #2a2a2a;padding-top:10px;">
         <div style="font-size:11px;color:#555;margin-bottom:8px;
@@ -1212,7 +1162,6 @@ function makeMarineBlock(){
                 `<div class="districtLine"><span>${k}</span><span>${v}</span></div>`
             ).join("")}
         </div>
-        ${sstCompareHtml}
     </div>`;
 }
 
