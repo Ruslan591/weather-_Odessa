@@ -20,7 +20,8 @@ check_model_runs.py на телефоне НЕ используется и не 
   5. make_blocks_cloud.py / make_blocks_gemini_cloud.py (если изменилось)
   6. git commit + push (без force, без лока — единственный писатель)
 
-Плюс каждый цикл: PWS-синк (pws_sync.py), калибровка давления PWS.
+Плюс каждый цикл: PWS-синк (pws_sync.py), калибровка давления PWS,
+график температуры воды (Open-Meteo).
 
 Расписание: .github/workflows/full_pipeline.yml, schedule */15 * * * *
 """
@@ -123,6 +124,7 @@ def git_push_history():
                         "data/blocks_gemini",
                         "data/ai_schedule.json",
                         "data/ai_schedule_gemini.json",
+                        "data/sst_compare.json",
                         "data/pws_sync_state.json",
                         ]
         _to_add = [p for p in _candidates if os.path.exists(os.path.join(BASE_DIR, p))]
@@ -261,6 +263,27 @@ def check_pws_calibration():
     except Exception as e:
         print(f"  [WARN] calibrate_pws_pressure.py: {e}")
 
+def check_sst_compare():
+    sst_file = os.path.join(BASE_DIR, "data", "sst_compare.json")
+    now_utc = datetime.now(timezone.utc)
+    try:
+        if os.path.exists(sst_file):
+            with open(sst_file, "r", encoding="utf-8") as f:
+                records = json.load(f)
+            if records:
+                last_time = datetime.fromisoformat(records[-1]["time"])
+                if (now_utc - last_time).total_seconds() < 3600:
+                    return
+    except Exception:
+        pass
+    try:
+        subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "sst_compare.py")],
+            cwd=BASE_DIR, capture_output=False, timeout=60
+        )
+    except Exception as e:
+        print(f"  [WARN] sst_compare.py: {e}")
+
 # ── основная логика ───────────────────────────────────────────────────────────
 
 def main():
@@ -377,9 +400,10 @@ def main():
 
     check_pws_sync()
     check_pws_calibration()
+    check_sst_compare()
 
-    # calibrate_pws_pressure.py пишет только в локальный checkout раннера —
-    # без этого push его изменения терялись при завершении job'а.
+    # calibrate_pws_pressure.py и sst_compare.py пишут только в локальный
+    # checkout раннера — без этого push их изменения терялись при завершении job'а.
     git_push_history()
 
 
