@@ -402,6 +402,11 @@ def main():
     check_pws_calibration()
     check_sst_compare()
 
+    # calibrate_pws_pressure.py и sst_compare.py пишут только в локальный
+    # checkout раннера — без этого push их изменения терялись при завершении
+    # job'а (см. инцидент: data/sst_compare.json не коммитился с 2026-07-08 03:31).
+    git_push_history()
+
 
 if __name__ == "__main__":
     main()
