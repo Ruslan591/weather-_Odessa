@@ -35,6 +35,10 @@ let _ensembleCloudFetchedAt = 0;
 let _ktOcData    = null;
 let _marineData  = null;
 let _marineFetchedAt = 0;
+let _sstCompareData    = null;
+let _sstCompareFetchedAt = 0;
+let _sstHistoryArr     = null;
+let _sstChartPeriod   = "24h";
 
 async function fetchEnsembleCloud(){
     if(Date.now() - _ensembleCloudFetchedAt < 1200000) return; // обновляем раз в час
@@ -160,6 +164,178 @@ async function loadMarine(){
         console.warn("Marine API:", e.message);
         _marineFetchedAt = 0;
     }
+}
+
+async function loadSstCompare(){
+    if(Date.now() - _sstCompareFetchedAt < 30 * 60000) return; // раз в 30 мин
+    _sstCompareFetchedAt = Date.now();
+    try {
+        const r = await fetch(
+            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/sst_compare.json",
+            { cache: "no-store" }
+        );
+        if(!r.ok) return;
+        const arr = await r.json();
+        if(Array.isArray(arr) && arr.length){
+            _sstCompareData = arr[arr.length - 1];
+            _sstHistoryArr  = arr.slice(-5000);
+            renderSstHistChart();
+        }
+    } catch(e){
+        _sstCompareFetchedAt = 0;
+    }
+}
+
+function getSstFilteredData(){
+    if(!_sstHistoryArr || !_sstHistoryArr.length) return [];
+    const now = Date.now();
+    const period = _sstChartPeriod;
+    let fromTs, toTs = now;
+    if(period === "today"){
+        const d = new Date(); d.setHours(0,0,0,0);
+        fromTs = d.getTime();
+    } else if(period === "yesterday"){
+        const d = new Date(); d.setHours(0,0,0,0);
+        toTs   = d.getTime();
+        fromTs = toTs - 24*3600*1000;
+    } else if(period.startsWith("n")){
+        const days = parseInt(period.slice(1)) || 7;
+        fromTs = now - days*24*3600*1000;
+    } else { // "24h" и запасной вариант
+        fromTs = now - 24*3600*1000;
+    }
+    return _sstHistoryArr.filter(o => {
+        const t = Date.parse(o.time);
+        return !isNaN(t) && t >= fromTs && t <= toTs;
+    });
+}
+
+function setSstPeriod(period){
+    _sstChartPeriod = period;
+    renderSstHistChart();
+}
+
+function applySstCustomDays(){
+    const inp = document.getElementById("sstDaysInput");
+    let n = parseInt(inp && inp.value);
+    if(isNaN(n) || n < 1) n = 1;
+    if(n > 90) n = 90;
+    if(inp) inp.value = n;
+    _sstChartPeriod = "n" + n;
+    renderSstHistChart();
+}
+
+function renderSstHistChart(){
+    const card = document.getElementById("sstChartCard");
+    if(!card) return;
+    if(!_sstHistoryArr || _sstHistoryArr.length < 2){ card.innerHTML = ""; return; }
+    if(typeof echarts === "undefined") return;
+
+    const periods = [
+        { id:"24h",       label:"24 часа" },
+        { id:"today",     label:"Сегодня" },
+        { id:"yesterday", label:"Вчера"   },
+    ];
+    const btnStyle = active =>
+        `width:auto;padding:4px 10px;font-size:11px;border-radius:6px;cursor:pointer;` +
+        `border:1px solid ${active ? "#72c8ff" : "#333"};` +
+        `background:${active ? "#1c3a4d" : "#252525"};` +
+        `color:${active ? "#72c8ff" : "#ccc"};`;
+
+    const isCustom   = _sstChartPeriod.startsWith("n");
+    const customDays = isCustom ? (parseInt(_sstChartPeriod.slice(1)) || 7) : 7;
+
+    const buttonsHtml = periods.map(p =>
+        `<button onclick="setSstPeriod('${p.id}')" style="${btnStyle(_sstChartPeriod===p.id)}">${p.label}</button>`
+    ).join("") + `
+        <span style="font-size:11px;color:#555;margin-left:2px;">·</span>
+        <input id="sstDaysInput" type="number" min="1" max="90" value="${customDays}"
+               onchange="applySstCustomDays()"
+               style="width:48px;background:#232323;
+                      border:1px solid ${isCustom ? "#72c8ff" : "#333"};border-radius:6px;
+                      color:${isCustom ? "#72c8ff" : "#eee"};font-size:11px;padding:4px 6px;text-align:center;">
+        <span style="font-size:11px;color:${isCustom ? "#72c8ff" : "#888"};">дней</span>`;
+
+    card.innerHTML = `
+        <div class="cardTitle">Температура воды — график</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 4px;align-items:center;">${buttonsHtml}</div>
+        <div id="sstHistChart" style="height:180px;margin-top:6px;"></div>`;
+
+    const div = document.getElementById("sstHistChart");
+    if(!div) return;
+    const filtered = getSstFilteredData();
+    if(filtered.length < 2){
+        div.innerHTML = `<div style="color:#666;text-align:center;padding:30px;font-size:12px;">Нет данных за выбранный период</div>`;
+        return;
+    }
+
+    const chart = echarts.init(div, null, { backgroundColor: "transparent" });
+
+    function toSeries(key){
+        return filtered
+            .map(o => {
+                const v = o[key];
+                const t = Date.parse(o.time);
+                return (typeof v === "number" && !isNaN(t)) ? [t, v] : null;
+            })
+            .filter(Boolean);
+    }
+
+    const omData = toSeries("open_meteo");
+
+    chart.setOption({
+        backgroundColor: "transparent",
+        animation: false,
+        grid: { top: 22, right: 12, bottom: 30, left: 40, containLabel: false },
+        tooltip: {
+            trigger: "axis",
+            backgroundColor: "rgba(20,20,20,0.97)",
+            borderColor: "#333",
+            borderWidth: 1,
+            textStyle: { color: "#eee", fontSize: 12 },
+            formatter(params){
+                const d = new Date(params[0].value[0]);
+                const timeStr = d.toLocaleString("ru-RU", {
+                    day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit"
+                });
+                const lines = params.map(p =>
+                    `<div style="font-size:12px;color:${p.color};">${p.seriesName}: ${p.value[1].toFixed(1)}°C</div>`
+                ).join("");
+                return `<div style="font-size:11px;color:#888;margin-bottom:4px;">${timeStr}</div>${lines}`;
+            },
+        },
+        xAxis: {
+            type: "time",
+            axisLine:  { lineStyle: { color: "#333" } },
+            axisTick:  { lineStyle: { color: "#333" } },
+            axisLabel: {
+                color: "#555", fontSize: 10,
+                formatter: val => new Date(val).toLocaleDateString("ru-RU", {day:"2-digit", month:"2-digit"}),
+            },
+            splitLine: { lineStyle: { color: "#252525" } },
+        },
+        yAxis: {
+            type: "value",
+            scale: true,
+            axisLine:  { show: false },
+            axisTick:  { show: false },
+            axisLabel: { color: "#555", fontSize: 10, formatter: v => v + "°C" },
+            splitLine: { lineStyle: { color: "#252525" } },
+        },
+        series: [
+            {
+                name: "Open-Meteo",
+                type: "line",
+                data: omData,
+                smooth: 0.4,
+                symbol: "none",
+                lineStyle: { color: "#ffd166", width: 2 },
+                itemStyle: { color: "#ffd166" },
+                connectNulls: true,
+                z: 2,
+            },
+        ],
+    });
 }
 
 /* =========================================================
@@ -1221,7 +1397,8 @@ async function loadAndRender(){
     fetchStation(_currentId),
     fetchEnsembleCloud(),
     fetchSynopCloud(),
-    loadMarine()
+    loadMarine(),
+    loadSstCompare()
 ]);
     const p = stationResult.status === "fulfilled"
         ? stationResult.value
