@@ -20,8 +20,7 @@ check_model_runs.py на телефоне НЕ используется и не 
   5. make_blocks_cloud.py / make_blocks_gemini_cloud.py (если изменилось)
   6. git commit + push (без force, без лока — единственный писатель)
 
-Плюс каждый цикл: PWS-синк (pws_sync.py), калибровка давления PWS,
-SST-сравнение.
+Плюс каждый цикл: PWS-синк (pws_sync.py), калибровка давления PWS.
 
 Расписание: .github/workflows/full_pipeline.yml, schedule */15 * * * *
 """
