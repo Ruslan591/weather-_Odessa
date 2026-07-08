@@ -42,23 +42,29 @@ def load_gemini_api_key():
     return os.environ.get("GEMINI_API_KEY")
 
 def claude_enabled():
-    """Проверяет флаг CLAUDE_ANALYSIS_ENABLED в .env (default: true)."""
+    """Проверяет флаг CLAUDE_ANALYSIS_ENABLED в .env, затем в os.environ (default: true)."""
     if os.path.exists(ENV_FILE):
         with open(ENV_FILE, "r") as f:
             for line in f:
                 if line.startswith("CLAUDE_ANALYSIS_ENABLED="):
                     val = line.strip().split("=", 1)[1].lower()
                     return val not in ("0", "false", "no", "off")
+    env_val = os.environ.get("CLAUDE_ANALYSIS_ENABLED")
+    if env_val is not None:
+        return env_val.strip().lower() not in ("0", "false", "no", "off")
     return True
 
 def gemini_enabled():
-    """Проверяет флаг GEMINI_ANALYSIS_ENABLED в .env (default: false)."""
+    """Проверяет флаг GEMINI_ANALYSIS_ENABLED в .env, затем в os.environ (default: false)."""
     if os.path.exists(ENV_FILE):
         with open(ENV_FILE, "r") as f:
             for line in f:
                 if line.startswith("GEMINI_ANALYSIS_ENABLED="):
                     val = line.strip().split("=", 1)[1].lower()
                     return val not in ("0", "false", "no", "off")
+    env_val = os.environ.get("GEMINI_ANALYSIS_ENABLED")
+    if env_val is not None:
+        return env_val.strip().lower() not in ("0", "false", "no", "off")
     return False
 
 def ai_enabled():
