@@ -1,0 +1,47 @@
+name: Полный облачный пайплайн (verification + AI + PWS)
+
+on:
+  workflow_dispatch:   # запускается ТОЛЬКО по триггеру с телефона (точное время),
+                        # собственного schedule здесь нет специально
+
+concurrency:
+  group: full-pipeline
+  cancel-in-progress: false
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Установка системных зависимостей (ffmpeg, шрифт)
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+
+      - name: Установка Python-зависимостей
+        run: pip install edge-tts Pillow requests
+
+      - name: Настройка git для коммитов
+        run: |
+          git config user.name "gh-pipeline-bot"
+          git config user.email "actions@users.noreply.github.com"
+
+      - name: Запуск облачного пайплайна
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GIST_TOKEN: ${{ secrets.GH_PAT }}
+          GIST_ID: ${{ secrets.GIST_ID }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          CLAUDE_ANALYSIS_ENABLED: "true"
+          GEMINI_ANALYSIS_ENABLED: "true"
+        run: python scripts/gh_pipeline.py
