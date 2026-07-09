@@ -191,9 +191,26 @@ async function histFetchAverage(period){
         .filter(Boolean);
     if(!perStation.length) throw new Error("Нет данных ни по одной станции");
 
-    const bucketMs = period === "today" ? 10*60*1000
-                    : period === "7day" ? 60*60*1000
-                    : 24*60*60*1000;
+    // Для "custom" исходные данные — сырые 5-минутные наблюдения (как у "today"),
+    // а не суточные агрегаты (это только у "month"). Бакет должен зависеть от
+    // реально выбранного диапазона дат, иначе короткий период (напр. 1 день)
+    // схлопывается в 1-2 суточные точки вместо детального графика.
+    let bucketMs;
+    if(period === "today"){
+        bucketMs = 10*60*1000;
+    } else if(period === "7day"){
+        bucketMs = 60*60*1000;
+    } else if(period === "custom"){
+        const s = document.getElementById("histDateStart")?.value;
+        const e = document.getElementById("histDateEnd")?.value;
+        const spanDays = (s && e) ? Math.max(1, (new Date(e) - new Date(s)) / 86400000 + 1) : 1;
+        bucketMs = spanDays <= 2  ? 10*60*1000
+                 : spanDays <= 14 ? 30*60*1000
+                 : spanDays <= 45 ? 60*60*1000
+                 : 24*60*60*1000;
+    } else {
+        bucketMs = 24*60*60*1000;
+    }
 
     const numFields = ["temp","pressure","windSpeedMs","windGustMs","windDir","precip","precipRate","solarRad","uv","dewpt"];
     const buckets = new Map();
