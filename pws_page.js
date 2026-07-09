@@ -35,10 +35,22 @@ let _ensembleCloudFetchedAt = 0;
 let _ktOcData    = null;
 let _marineData  = null;
 let _marineFetchedAt = 0;
-let _sstCompareData    = null;
-let _sstCompareFetchedAt = 0;
-let _sstHistoryArr     = null;
-let _sstChartPeriod   = "24h";
+let _marineHistLast    = null;
+let _marineHistFetchedAt = 0;
+let _marineHistArr     = null;
+let _marineChartPeriod = "24h";
+let _marineChartParam  = "sst";
+
+const MARINE_PARAMS = {
+    sst:          { label:"Температура воды",  unit:"°C",  color:"#ffd166" },
+    waveH:        { label:"Высота волны",      unit:"м",   color:"#74b9ff" },
+    windWaveH:    { label:"Ветровая волна",    unit:"м",   color:"#81ecec" },
+    swellH:       { label:"Зыбь",              unit:"м",   color:"#a29bfe" },
+    seaWindSpeed: { label:"Ветер над морем",   unit:"м/с", color:"#55efc4" },
+    seaPressure:  { label:"Давление (море)",   unit:"гПа", color:"#fab1a0" },
+    seaLevel:     { label:"Уровень моря",      unit:"м",   color:"#00cec9" },
+    currentV:     { label:"Течение",           unit:"м/с", color:"#ff7675" },
+};
 
 async function fetchEnsembleCloud(){
     if(Date.now() - _ensembleCloudFetchedAt < 1200000) return; // обновляем раз в час
@@ -166,30 +178,30 @@ async function loadMarine(){
     }
 }
 
-async function loadSstCompare(){
-    if(Date.now() - _sstCompareFetchedAt < 30 * 60000) return; // раз в 30 мин
-    _sstCompareFetchedAt = Date.now();
+async function loadMarineHistory(){
+    if(Date.now() - _marineHistFetchedAt < 30 * 60000) return; // раз в 30 мин
+    _marineHistFetchedAt = Date.now();
     try {
         const r = await fetch(
-            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/sst_compare.json",
+            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/marine_history.json",
             { cache: "no-store" }
         );
         if(!r.ok) return;
         const arr = await r.json();
         if(Array.isArray(arr) && arr.length){
-            _sstCompareData = arr[arr.length - 1];
-            _sstHistoryArr  = arr.slice(-5000);
-            renderSstHistChart();
+            _marineHistLast = arr[arr.length - 1];
+            _marineHistArr  = arr.slice(-20000);
+            renderMarineHistChart();
         }
     } catch(e){
-        _sstCompareFetchedAt = 0;
+        _marineHistFetchedAt = 0;
     }
 }
 
-function getSstFilteredData(){
-    if(!_sstHistoryArr || !_sstHistoryArr.length) return [];
+function getMarineFilteredData(){
+    if(!_marineHistArr || !_marineHistArr.length) return [];
     const now = Date.now();
-    const period = _sstChartPeriod;
+    const period = _marineChartPeriod;
     let fromTs, toTs = now;
     if(period === "today"){
         const d = new Date(); d.setHours(0,0,0,0);
@@ -204,32 +216,40 @@ function getSstFilteredData(){
     } else { // "24h" и запасной вариант
         fromTs = now - 24*3600*1000;
     }
-    return _sstHistoryArr.filter(o => {
+    return _marineHistArr.filter(o => {
         const t = Date.parse(o.time);
         return !isNaN(t) && t >= fromTs && t <= toTs;
     });
 }
 
-function setSstPeriod(period){
-    _sstChartPeriod = period;
-    renderSstHistChart();
+function setMarinePeriod(period){
+    _marineChartPeriod = period;
+    renderMarineHistChart();
 }
 
-function applySstCustomDays(){
-    const inp = document.getElementById("sstDaysInput");
+function applyMarineCustomDays(){
+    const inp = document.getElementById("marineDaysInput");
     let n = parseInt(inp && inp.value);
     if(isNaN(n) || n < 1) n = 1;
     if(n > 90) n = 90;
     if(inp) inp.value = n;
-    _sstChartPeriod = "n" + n;
-    renderSstHistChart();
+    _marineChartPeriod = "n" + n;
+    renderMarineHistChart();
 }
 
-function renderSstHistChart(){
+function setMarineParam(key){
+    if(!MARINE_PARAMS[key]) return;
+    _marineChartParam = key;
+    renderMarineHistChart();
+}
+
+function renderMarineHistChart(){
     const card = document.getElementById("sstChartCard");
     if(!card) return;
-    if(!_sstHistoryArr || _sstHistoryArr.length < 2){ card.innerHTML = ""; return; }
+    if(!_marineHistArr || _marineHistArr.length < 2){ card.innerHTML = ""; return; }
     if(typeof echarts === "undefined") return;
+
+    const cfg = MARINE_PARAMS[_marineChartParam] || MARINE_PARAMS.sst;
 
     const periods = [
         { id:"24h",       label:"24 часа" },
@@ -242,28 +262,38 @@ function renderSstHistChart(){
         `background:${active ? "#1c3a4d" : "#252525"};` +
         `color:${active ? "#72c8ff" : "#ccc"};`;
 
-    const isCustom   = _sstChartPeriod.startsWith("n");
-    const customDays = isCustom ? (parseInt(_sstChartPeriod.slice(1)) || 7) : 7;
+    const isCustom   = _marineChartPeriod.startsWith("n");
+    const customDays = isCustom ? (parseInt(_marineChartPeriod.slice(1)) || 7) : 7;
 
-    const buttonsHtml = periods.map(p =>
-        `<button onclick="setSstPeriod('${p.id}')" style="${btnStyle(_sstChartPeriod===p.id)}">${p.label}</button>`
+    const periodButtonsHtml = periods.map(p =>
+        `<button onclick="setMarinePeriod('${p.id}')" style="${btnStyle(_marineChartPeriod===p.id)}">${p.label}</button>`
     ).join("") + `
         <span style="font-size:11px;color:#555;margin-left:2px;">·</span>
-        <input id="sstDaysInput" type="number" min="1" max="90" value="${customDays}"
-               onchange="applySstCustomDays()"
+        <input id="marineDaysInput" type="number" min="1" max="90" value="${customDays}"
+               onchange="applyMarineCustomDays()"
                style="width:48px;background:#232323;
                       border:1px solid ${isCustom ? "#72c8ff" : "#333"};border-radius:6px;
                       color:${isCustom ? "#72c8ff" : "#eee"};font-size:11px;padding:4px 6px;text-align:center;">
         <span style="font-size:11px;color:${isCustom ? "#72c8ff" : "#888"};">дней</span>`;
 
+    const paramSelectHtml = `
+        <select onchange="setMarineParam(this.value)"
+                style="background:#232323;border:1px solid #333;border-radius:6px;color:#eee;
+                       font-size:12px;padding:5px 8px;margin:4px 0 8px;">
+            ${Object.keys(MARINE_PARAMS).map(k =>
+                `<option value="${k}" ${k===_marineChartParam ? "selected" : ""}>${MARINE_PARAMS[k].label}</option>`
+            ).join("")}
+        </select>`;
+
     card.innerHTML = `
-        <div class="cardTitle">Температура воды — график</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 4px;align-items:center;">${buttonsHtml}</div>
+        <div class="cardTitle">История моря — график</div>
+        ${paramSelectHtml}
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 4px;align-items:center;">${periodButtonsHtml}</div>
         <div id="sstHistChart" style="height:180px;margin-top:6px;"></div>`;
 
     const div = document.getElementById("sstHistChart");
     if(!div) return;
-    const filtered = getSstFilteredData();
+    const filtered = getMarineFilteredData();
     if(filtered.length < 2){
         div.innerHTML = `<div style="color:#666;text-align:center;padding:30px;font-size:12px;">Нет данных за выбранный период</div>`;
         return;
@@ -271,17 +301,13 @@ function renderSstHistChart(){
 
     const chart = echarts.init(div, null, { backgroundColor: "transparent" });
 
-    function toSeries(key){
-        return filtered
-            .map(o => {
-                const v = o[key];
-                const t = Date.parse(o.time);
-                return (typeof v === "number" && !isNaN(t)) ? [t, v] : null;
-            })
-            .filter(Boolean);
-    }
-
-    const omData = toSeries("open_meteo");
+    const seriesData = filtered
+        .map(o => {
+            const v = o[_marineChartParam];
+            const t = Date.parse(o.time);
+            return (typeof v === "number" && !isNaN(t)) ? [t, v] : null;
+        })
+        .filter(Boolean);
 
     chart.setOption({
         backgroundColor: "transparent",
@@ -299,7 +325,7 @@ function renderSstHistChart(){
                     day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit"
                 });
                 const lines = params.map(p =>
-                    `<div style="font-size:12px;color:${p.color};">${p.seriesName}: ${p.value[1].toFixed(1)}°C</div>`
+                    `<div style="font-size:12px;color:${p.color};">${cfg.label}: ${p.value[1].toFixed(1)} ${cfg.unit}</div>`
                 ).join("");
                 return `<div style="font-size:11px;color:#888;margin-bottom:4px;">${timeStr}</div>${lines}`;
             },
@@ -319,18 +345,18 @@ function renderSstHistChart(){
             scale: true,
             axisLine:  { show: false },
             axisTick:  { show: false },
-            axisLabel: { color: "#555", fontSize: 10, formatter: v => v + "°C" },
+            axisLabel: { color: "#555", fontSize: 10, formatter: v => v + " " + cfg.unit },
             splitLine: { lineStyle: { color: "#252525" } },
         },
         series: [
             {
-                name: "Open-Meteo",
+                name: cfg.label,
                 type: "line",
-                data: omData,
+                data: seriesData,
                 smooth: 0.4,
                 symbol: "none",
-                lineStyle: { color: "#ffd166", width: 2 },
-                itemStyle: { color: "#ffd166" },
+                lineStyle: { color: cfg.color, width: 2 },
+                itemStyle: { color: cfg.color },
                 connectNulls: true,
                 z: 2,
             },
@@ -1398,7 +1424,7 @@ async function loadAndRender(){
     fetchEnsembleCloud(),
     fetchSynopCloud(),
     loadMarine(),
-    loadSstCompare()
+    loadMarineHistory()
 ]);
     const p = stationResult.status === "fulfilled"
         ? stationResult.value
