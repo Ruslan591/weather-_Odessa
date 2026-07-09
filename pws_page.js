@@ -276,14 +276,19 @@ function renderMarineHistChart(){
                       color:${isCustom ? "#72c8ff" : "#eee"};font-size:11px;padding:4px 6px;text-align:center;">
         <span style="font-size:11px;color:${isCustom ? "#72c8ff" : "#888"};">дней</span>`;
 
+    const paramBtnStyle = active =>
+        `width:auto;flex:0 0 auto;padding:5px 12px;font-size:12px;border-radius:16px;cursor:pointer;` +
+        `border:1px solid ${active ? "#72c8ff" : "#333"};` +
+        `background:${active ? "#1c3a4d" : "#252525"};` +
+        `color:${active ? "#72c8ff" : "#ccc"};white-space:nowrap;`;
+
     const paramSelectHtml = `
-        <select onchange="setMarineParam(this.value)"
-                style="background:#232323;border:1px solid #333;border-radius:6px;color:#eee;
-                       font-size:12px;padding:5px 8px;margin:4px 0 8px;">
+        <div style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;
+                    padding:2px 0 8px;margin:4px 0 4px;scrollbar-width:none;">
             ${Object.keys(MARINE_PARAMS).map(k =>
-                `<option value="${k}" ${k===_marineChartParam ? "selected" : ""}>${MARINE_PARAMS[k].label}</option>`
+                `<button onclick="setMarineParam('${k}')" style="${paramBtnStyle(k===_marineChartParam)}">${MARINE_PARAMS[k].label}</button>`
             ).join("")}
-        </select>`;
+        </div>`;
 
     card.innerHTML = `
         <div class="cardTitle">История моря — график</div>
