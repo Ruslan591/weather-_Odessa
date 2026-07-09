@@ -419,11 +419,13 @@
 </div>
 
 <div class="container">
-  <div id="videoWrap" style="display:none;margin-bottom:12px">
-    <video controls playsinline preload="none"
-      style="width:100%;max-width:340px;border-radius:14px;display:block;margin:0 auto;box-shadow:0 4px 24px rgba(0,0,0,0.6)">
-      <source id="videoSrc" src="" type="video/mp4">
-    </video>
+  <div style="display:flex;gap:10px;margin-bottom:16px">
+    <a href="video_claude.html" style="flex:1;text-align:center;padding:10px 8px;border-radius:12px;
+       background:var(--btn-bg,#1a1a1a);border:1px solid var(--border,#222);color:var(--accent,#4fc3f7);
+       font-size:13px;font-weight:600;text-decoration:none">🎬 Видео (Claude)</a>
+    <a href="video_gemini.html" style="flex:1;text-align:center;padding:10px 8px;border-radius:12px;
+       background:var(--btn-bg,#1a1a1a);border:1px solid var(--border,#222);color:var(--accent,#4fc3f7);
+       font-size:13px;font-weight:600;text-decoration:none">🎬 Видео (Gemini)</a>
   </div>
   <button class="pres-btn hidden" id="presBtnTop" onclick="openPresentation()" style="margin-bottom:16px">
     ▶ Презентация
@@ -1215,14 +1217,7 @@ function startBgAnim() {
 
 // Загружаем мета блоков сразу
 loadBlocksMeta();
-(function(){
-  var url='https://ruslan591.github.io/weather-_Odessa/data/forecast_video.mp4?v='+Date.now();
-  var vid = document.getElementById('videoSrc');
-  var wrap = document.getElementById('videoWrap');
-  vid.src = url;
-  vid.parentElement.load();
-  wrap.style.display='block';
-})();
 </script>
 </body>
 </html>
+
