@@ -59,9 +59,9 @@
 </div>
 
 <script>
-var BASE = "https://ruslan591.github.io/weather-_Odessa/";
-var VIDEO_URL = BASE + "data/forecast_video.mp4";
-var META_URL  = BASE + "data/blocks/blocks_meta.json?v=" + Date.now();
+var RAW_BASE = "https://raw.githubusercontent.com/Ruslan591/weather-_Odessa/main/";
+var VIDEO_URL = RAW_BASE + "data/forecast_video.mp4";
+var META_URL  = RAW_BASE + "data/blocks/blocks_meta.json?_=" + Date.now();
 
 function fmtDate(iso) {
   try {
@@ -70,7 +70,7 @@ function fmtDate(iso) {
   } catch(e) { return iso || '—'; }
 }
 
-fetch(META_URL).then(function(r){ return r.ok ? r.json() : null; }).then(function(meta){
+fetch(META_URL, {cache:'no-store'}).then(function(r){ return r.ok ? r.json() : null; }).then(function(meta){
   var card = document.getElementById('videoCard');
   card.innerHTML =
     '<video controls playsinline preload="metadata">' +
