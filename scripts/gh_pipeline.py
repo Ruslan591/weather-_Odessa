@@ -126,6 +126,8 @@ def git_push_history():
                         "data/ai_schedule_gemini.json",
                         "data/marine_history.json",
                         "data/pws_sync_state.json",
+                        "data/forecast_video.mp4",
+                        "data/forecast_video_gemini.mp4",
                         ]
         _to_add = [p for p in _candidates if os.path.exists(os.path.join(BASE_DIR, p))]
         subprocess.run(["git", "-C", BASE_DIR, "add"] + _to_add,
@@ -364,6 +366,13 @@ def main():
                     )
                     if _blocks_result_g.returncode != 0:
                         print("  [AI-Gemini] make_blocks_gemini_cloud упал")
+                    else:
+                        _video_result_g = subprocess.run(
+                            [PYTHON, os.path.join(SCRIPTS_DIR, "make_video.py"), "gemini"],
+                            cwd=BASE_DIR, capture_output=False
+                        )
+                        if _video_result_g.returncode != 0:
+                            print("  [AI-Gemini] make_video.py (gemini) упал")
 
         git_push_history()
     else:
@@ -389,10 +398,15 @@ def main():
                     with open(_gemini_file, encoding="utf-8") as _fg2:
                         _gd2 = json.load(_fg2)
                     if _gd2.get("changed") and not _gd2.get("pending"):
-                        subprocess.run(
+                        _blocks_r = subprocess.run(
                             [PYTHON, os.path.join(SCRIPTS_DIR, "make_blocks_gemini_cloud.py")],
                             cwd=BASE_DIR, capture_output=False
                         )
+                        if _blocks_r.returncode == 0:
+                            subprocess.run(
+                                [PYTHON, os.path.join(SCRIPTS_DIR, "make_video.py"), "gemini"],
+                                cwd=BASE_DIR, capture_output=False
+                            )
                 except Exception:
                     pass
 
