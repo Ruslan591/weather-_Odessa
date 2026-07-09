@@ -10,8 +10,13 @@ calibrate_pws_pressure.py — автокалибровка pressureOffset PWS-с
 архивируется тоже с привязкой к целому часу (pick_hourly уже гарантирует ≤10 мин
 разброс) — так что 30 мин с запасом покрывает реальную разницу.
 
-Офсет — скользящее среднее по последним 5 сверкам на станцию (не перезапись одним
-замером), чтобы шум одного момента не улетал прямиком в постоянную коррекцию.
+Офсет считается КОНСТАНТОЙ (компенсация неверно введённой пользователем высоты
+станции), а не скользящим средним. Он переписывается только когда сверка с эталоном
+показывает СИЛЬНОЕ расхождение (>PRESSURE_DIFF_THRESHOLD гПа) в одну и ту же сторону
+подряд PRESSURE_CONSEC_REQUIRED раз — это отсекает шум одиночных замеров/приборной
+погрешности и реагирует только на устойчивый систематический сдвиг (например, PWS
+переставили, сменили высоту в настройках и т.п.). Одна сверка с небольшим (≤порога)
+расхождением офсет не трогает и сбрасывает счётчик "подряд".
 
 Запуск (из check_model_runs.py, в конце main(), после check_pws_sync()):
     python3 scripts/calibrate_pws_pressure.py
@@ -24,7 +29,8 @@ BASE_DIR      = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OFFSETS_FILE  = os.path.join(BASE_DIR, "data", "pws_pressure_offsets.json")
 STATIONS_JS   = os.path.join(BASE_DIR, "pws_stations.js")
 WINDOW_MIN    = 30
-MAX_SAMPLES   = 5
+PRESSURE_DIFF_THRESHOLD = 1.0   # гПа — расхождение сильнее этого считается "не шум"
+PRESSURE_CONSEC_REQUIRED = 2    # столько сверок подряд в одну сторону переписывают офсет
 MAX_PROCESSED = 60
 MAX_PER_RUN   = 4    # не более N новых сверок за один прогон — не забиваем WU API разом
 REF_LOOKBACK_H = 48
@@ -192,12 +198,32 @@ def main():
             entry = offsets.setdefault(
                 sid, {"offset": s.get("pressureOffset", 0), "samples": [], "updatedAt": None}
             )
-            entry["samples"].append({"ts": dt.isoformat(), "diff": diff})
-            entry["samples"] = entry["samples"][-MAX_SAMPLES:]
-            entry["offset"] = round(sum(x["diff"] for x in entry["samples"]) / len(entry["samples"]) * 10) / 10
-            entry["updatedAt"] = now.isoformat()
-            print(f"    {sid}: diff={diff:+.1f} → offset={entry['offset']:+.1f} "
-                  f"(по {len(entry['samples'])} посл. сверкам)")
+            current_offset = entry.get("offset", 0)
+            delta = round((diff - current_offset) * 10) / 10
+
+            if abs(delta) <= PRESSURE_DIFF_THRESHOLD:
+                if entry.get("samples"):
+                    print(f"    {sid}: diff={diff:+.1f}, Δ={delta:+.1f} — в пределах допуска, "
+                          f"серия расхождений сброшена")
+                entry["samples"] = []
+                continue
+
+            pending = entry.get("samples", [])
+            if pending and (delta > 0) != (pending[-1]["delta"] > 0):
+                pending = []  # расхождение сменило знак — начинаем серию заново
+            pending.append({"ts": dt.isoformat(), "diff": diff, "delta": delta})
+            entry["samples"] = pending
+
+            if len(pending) >= PRESSURE_CONSEC_REQUIRED:
+                new_offset = round(sum(x["diff"] for x in pending) / len(pending) * 10) / 10
+                print(f"    {sid}: {len(pending)} сверки подряд с Δ={delta:+.1f} гПа → "
+                      f"offset {current_offset:+.1f} → {new_offset:+.1f}")
+                entry["offset"] = new_offset
+                entry["updatedAt"] = now.isoformat()
+                entry["samples"] = []
+            else:
+                print(f"    {sid}: diff={diff:+.1f}, Δ={delta:+.1f} — сильное расхождение "
+                      f"({len(pending)}/{PRESSURE_CONSEC_REQUIRED} подряд), офсет пока не меняю")
         processed.add(rid)
 
     offsets["_processedRefs"] = sorted(processed)[-MAX_PROCESSED:]
