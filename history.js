@@ -217,6 +217,12 @@ async function histFetchAverage(period){
             for(const f of numFields){
                 const v = o[f];
                 if(v==null || isNaN(v)) continue;
+                if(f === "windDir"){
+                    b.sums.windDirSin = (b.sums.windDirSin||0) + Math.sin(v*Math.PI/180);
+                    b.sums.windDirCos = (b.sums.windDirCos||0) + Math.cos(v*Math.PI/180);
+                    b.counts.windDir  = (b.counts.windDir||0) + 1;
+                    continue;
+                }
                 b.sums[f] = (b.sums[f]||0) + Number(v);
                 b.counts[f] = (b.counts[f]||0) + 1;
             }
@@ -269,6 +275,12 @@ async function histFetchAverage(period){
         .map(b=>{
             const rec = { obsTimeLocal: localTimeStr(new Date(b.time)) };
             for(const f of [...numFields, "humidity", "tg", "wbgt"]){
+                if(f === "windDir"){
+                    rec.windDir = b.counts.windDir
+                        ? Math.round(((Math.atan2(b.sums.windDirSin, b.sums.windDirCos) * 180/Math.PI) + 360) % 360)
+                        : null;
+                    continue;
+                }
                 rec[f] = b.counts[f] ? Math.round((b.sums[f]/b.counts[f])*10)/10 : null;
             }
             return rec;
