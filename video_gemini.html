@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Видео-обзор прогноза — Gemini</title>
+<link rel="stylesheet" href="verify.css">
+<style>
+  :root { --accent: #81c995; }
+  .badge {
+    display:inline-block; font-size:11px; font-weight:700; letter-spacing:.04em;
+    color: var(--accent); background: rgba(129,201,149,0.12);
+    border: 1px solid rgba(129,201,149,0.35); border-radius:20px; padding:4px 12px; margin-bottom:14px;
+  }
+  .video-card {
+    background:#161616; border-radius:16px; padding:14px; margin-bottom:16px;
+    box-shadow:0 4px 24px rgba(0,0,0,0.5);
+  }
+  video {
+    width:100%; max-width:380px; display:block; margin:0 auto;
+    border-radius:12px; background:#000;
+  }
+  .meta-row {
+    display:flex; justify-content:space-between; font-size:12px; color:#777;
+    max-width:380px; margin:10px auto 0; padding:0 4px;
+  }
+  .meta-row span.val { color:#bbb; }
+  .empty-state {
+    text-align:center; padding:40px 16px; color:#666; font-size:14px; line-height:1.6;
+  }
+  .switch-link {
+    display:block; text-align:center; margin-top:18px; font-size:13px; color:#666;
+  }
+  .switch-link a { color: var(--accent); font-weight:600; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="nav"><a href="ai_analysis_gemini.html">← Анализ ИИ</a></div>
+  <div class="headerTitle">🎬 Видео-обзор</div>
+  <div class="nav"></div>
+</div>
+
+<div class="container">
+  <div style="text-align:center">
+    <span class="badge">GEMINI 2.5 FLASH</span>
+  </div>
+
+  <div class="video-card" id="videoCard">
+    <div class="empty-state" id="loadingState">Загрузка видео…</div>
+  </div>
+
+  <div class="switch-link">Есть также <a href="video_claude.html">видео-обзор от Claude</a></div>
+</div>
+
+<script>
+var BASE = "https://ruslan591.github.io/weather-_Odessa/";
+var VIDEO_URL = BASE + "data/forecast_video_gemini.mp4";
+var META_URL  = BASE + "data/blocks_gemini/blocks_meta.json?v=" + Date.now();
+
+function fmtDate(iso) {
+  try {
+    var d = new Date(iso);
+    return d.toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+  } catch(e) { return iso || '—'; }
+}
+
+fetch(META_URL).then(function(r){ return r.ok ? r.json() : null; }).then(function(meta){
+  var card = document.getElementById('videoCard');
+  card.innerHTML =
+    '<video controls playsinline preload="metadata">' +
+      '<source src="' + VIDEO_URL + '?v=' + Date.now() + '" type="video/mp4">' +
+    '</video>' +
+    '<div class="meta-row">' +
+      '<span>Обновлено</span><span class="val" id="metaDate">' + (meta ? fmtDate(meta.generated_at) : '—') + '</span>' +
+    '</div>' +
+    '<div class="meta-row">' +
+      '<span>Блоков</span><span class="val">' + (meta ? meta.blocks_count : '—') + '</span>' +
+    '</div>';
+
+  var v = card.querySelector('video');
+  v.addEventListener('error', function(){
+    card.innerHTML = '<div class="empty-state">Видео пока не сгенерировано.<br>Оно появится после следующего цикла анализа Gemini.</div>';
+  });
+}).catch(function(){
+  document.getElementById('videoCard').innerHTML =
+    '<video controls playsinline preload="metadata">' +
+      '<source src="' + VIDEO_URL + '?v=' + Date.now() + '" type="video/mp4">' +
+    '</video>';
+});
+</script>
+</body>
+</html>
