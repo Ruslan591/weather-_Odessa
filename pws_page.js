@@ -1321,8 +1321,9 @@ function renderPWSStation(p){
         p.temp!=null&&p.temp<=10&&p.windChill!=null  ? p.windChill : p.temp;
 
     const rows = [];
+    const isAvgStation = _currentId === AVG_STATION_ID;
 
-    const rowsAbout = [
+    const rowsAbout = isAvgStation ? [] : [
         p.elev         != null ? ["Высота над уровнем моря", fmt0(p.elev," м")]                               : null,
         p.softwareType != null ? ["ПО станции",              escapeHtml(p.softwareType)]                       : null,
         p.lat          != null ? ["Координаты",              `${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}`]      : null,
@@ -1371,6 +1372,7 @@ function renderPWSStation(p){
             </div></div>
         </details>` : ""}
 
+        ${isAvgStation ? "" : `
         <div class="pws-calib">
             <span class="small" style="color:#666;">Коррекция давления:</span>
             <input id="calibInput" type="number" step="0.1" value="${off}"
@@ -1383,7 +1385,7 @@ function renderPWSStation(p){
         </div>
         <div id="calibMsg" style="font-size:11px;margin-top:4px;min-height:14px;padding:0 2px;">
             ${off !== 0 ? `<span style="color:#72c8ff;">поправка: ${off>0?"+":""}${off} гПа</span>` : ""}
-        </div>
+        </div>`}
     </div>`;
 }
 
