@@ -21,7 +21,7 @@ check_model_runs.py на телефоне НЕ используется и не 
   6. git commit + push (без force, без лока — единственный писатель)
 
 Плюс каждый цикл: PWS-синк (pws_sync.py), калибровка давления PWS,
-график температуры воды (Open-Meteo).
+полная морская история — SST/волны/ветер/давление/течение (marine_history.py).
 
 Расписание: .github/workflows/full_pipeline.yml, schedule */15 * * * *
 """
@@ -124,7 +124,7 @@ def git_push_history():
                         "data/blocks_gemini",
                         "data/ai_schedule.json",
                         "data/ai_schedule_gemini.json",
-                        "data/sst_compare.json",
+                        "data/marine_history.json",
                         "data/pws_sync_state.json",
                         ]
         _to_add = [p for p in _candidates if os.path.exists(os.path.join(BASE_DIR, p))]
@@ -263,26 +263,30 @@ def check_pws_calibration():
     except Exception as e:
         print(f"  [WARN] calibrate_pws_pressure.py: {e}")
 
-def check_sst_compare():
-    sst_file = os.path.join(BASE_DIR, "data", "sst_compare.json")
+def check_marine_history():
+    # marine_history.py пишет каждый прогон пайплайна (~15 мин) — все параметры моря,
+    # а не только SST раз в час, как было раньше в sst_compare.py.
+    # Небольшой гейт (5 мин) — только защита от случайного дублирующего запуска,
+    # а не намеренное прореживание.
+    marine_file = os.path.join(BASE_DIR, "data", "marine_history.json")
     now_utc = datetime.now(timezone.utc)
     try:
-        if os.path.exists(sst_file):
-            with open(sst_file, "r", encoding="utf-8") as f:
+        if os.path.exists(marine_file):
+            with open(marine_file, "r", encoding="utf-8") as f:
                 records = json.load(f)
             if records:
                 last_time = datetime.fromisoformat(records[-1]["time"])
-                if (now_utc - last_time).total_seconds() < 3600:
+                if (now_utc - last_time).total_seconds() < 300:
                     return
     except Exception:
         pass
     try:
         subprocess.run(
-            [PYTHON, os.path.join(SCRIPTS_DIR, "sst_compare.py")],
+            [PYTHON, os.path.join(SCRIPTS_DIR, "marine_history.py")],
             cwd=BASE_DIR, capture_output=False, timeout=60
         )
     except Exception as e:
-        print(f"  [WARN] sst_compare.py: {e}")
+        print(f"  [WARN] marine_history.py: {e}")
 
 # ── основная логика ───────────────────────────────────────────────────────────
 
@@ -400,9 +404,9 @@ def main():
 
     check_pws_sync()
     check_pws_calibration()
-    check_sst_compare()
+    check_marine_history()
 
-    # calibrate_pws_pressure.py и sst_compare.py пишут только в локальный
+    # calibrate_pws_pressure.py и marine_history.py пишут только в локальный
     # checkout раннера — без этого push их изменения терялись при завершении job'а.
     git_push_history()
 
