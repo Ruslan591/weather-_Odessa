@@ -1,23 +1,15 @@
 #!/usr/bin/env python3
 """
 make_video.py — вертикальное видео 9:16 для TikTok/Reels из блоков blocks_meta.json.
-Текст блока делится на страницы, каждая страница = отдельный слайд.
-Аудио блока делится пропорционально по страницам через ffmpeg trim.
+Текст блока не режется на страницы: он рендерится в высокую ленту и плавно
+прокручивается снизу вверх (караоке-стиль) синхронно с длительностью озвучки блока.
+Хедер (бейдж, прогресс, карточка с иконкой/датой/диапазоном температур) статичен.
 """
 
-import json, os, re, math, time, sys, subprocess
+import json, os, re, math, sys, subprocess
+import numpy as np
 from datetime import datetime, timezone, timedelta
-from PIL import Image, ImageDraw, ImageFont
-
-def load_snap_hours(date_str):
-    snap_file = os.path.join(BASE_DIR, "data", "ensemble_snapshots_pws.json")
-    if not os.path.exists(snap_file): return []
-    try:
-        d = json.load(open(snap_file, encoding="utf-8"))
-        if not d: return []
-        snap = d[-1]
-        return [h for h in snap.get("hours", []) if h["time"][:10] == date_str]
-    except: return []
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 # ── Источник блоков: "claude" (по умолчанию) или "gemini" ────────────────────
 SOURCE = sys.argv[1] if len(sys.argv) > 1 else "claude"
@@ -34,58 +26,60 @@ MP4_FILE   = os.path.join(BASE_DIR, "data",
 
 W, H = 1080, 1920
 
-FONT_CANDIDATES = [
-    "/system/fonts/Roboto-Regular.ttf",
-    "/system/fonts/NotoSans-Regular.ttf",
-    "/data/data/com.termux/files/usr/share/fonts/TTF/DejaVuSans.ttf",
-    "/data/data/com.termux/files/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-]
-FONT_BOLD_CANDIDATES = [
-    "/system/fonts/Roboto-Bold.ttf",
-    "/system/fonts/NotoSans-Bold.ttf",
-    "/data/data/com.termux/files/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
-    "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+# ── Шрифт: Carlito (аналог Calibri), проверенная поддержка кириллицы ─────────
+FONT_CANDIDATES_DIR = [
+    "/usr/share/fonts/truetype/crosextra/",                                    # Ubuntu/Debian (CI)
+    "/data/data/com.termux/files/usr/share/fonts/truetype/crosextra/",         # Termux (запасной путь)
 ]
 
-def find_font(candidates):
-    for p in candidates:
-        if os.path.exists(p): return p
+def _find_font_dir():
+    for d in FONT_CANDIDATES_DIR:
+        if os.path.exists(os.path.join(d, "Carlito-Regular.ttf")):
+            return d
     return None
 
-FONT_REG_PATH  = find_font(FONT_CANDIDATES)
-FONT_BOLD_PATH = find_font(FONT_BOLD_CANDIDATES) or FONT_REG_PATH
+FONT_DIR = _find_font_dir()
 
-def F(size, bold=False):
-    path = FONT_BOLD_PATH if bold else FONT_REG_PATH
-    if path:
-        try: return ImageFont.truetype(path, size)
-        except: pass
-    return ImageFont.load_default()
+def F(size, weight="regular"):
+    if not FONT_DIR:
+        return ImageFont.load_default()
+    fname = "Carlito-Bold.ttf" if weight in ("bold", "semibold") else "Carlito-Regular.ttf"
+    return ImageFont.truetype(os.path.join(FONT_DIR, fname), size)
+
+def _verify_font_renders_cyrillic():
+    """Защита от повтора инцидента с Poppins: убеждаемся, что шрифт реально
+    рисует разные глифы для разных кириллических букв, а не одну и ту же
+    заглушку (тофу) для всех символов."""
+    if not FONT_DIR:
+        print("  ПРЕДУПРЕЖДЕНИЕ: шрифт Carlito не найден, использую PIL default (кириллица не отрендерится!)")
+        return
+    font = ImageFont.truetype(os.path.join(FONT_DIR, "Carlito-Bold.ttf"), 60)
+    chars = "АБВГДЖЗИЙКЛМНОПРСТУФХЦЧШЩЭЮЯ"
+    shapes = set(np.array(font.getmask(ch)).tobytes() for ch in chars)
+    if len(shapes) < len(chars) * 0.8:
+        raise RuntimeError("Шрифт не поддерживает кириллицу (обнаружены тофу-глифы)!")
 
 THEMES = {
-    "today":    {"top": (8, 20, 55),  "bot": (15, 45, 90),  "accent": (79, 195, 247),  "glow": (30, 100, 200)},
-    "tomorrow": {"top": (8, 30, 18),  "bot": (15, 55, 28),  "accent": (129, 199, 132), "glow": (20, 120, 40)},
-    "next3":    {"top": (35, 22, 5),  "bot": (60, 38, 10),  "accent": (255, 183, 77),  "glow": (180, 80, 0)},
-    "warnings": {"top": (45, 10, 5),  "bot": (75, 18, 8),   "accent": (255, 112, 67),  "glow": (200, 40, 10)},
-    "trend":    {"top": (15, 12, 38), "bot": (28, 20, 65),  "accent": (206, 147, 216), "glow": (100, 40, 180)},
+    "today":        {"top": (10, 22, 48), "bot": (18, 40, 78),  "accent": (86, 176, 255),  "glow": (50, 120, 220)},
+    "tomorrow":     {"top": (8, 32, 30),  "bot": (14, 56, 50),  "accent": (110, 224, 180), "glow": (30, 140, 100)},
+    "next3":        {"top": (34, 24, 8),  "bot": (58, 42, 12),  "accent": (255, 179, 71),  "glow": (200, 110, 20)},
+    "warnings":     {"top": (42, 12, 10), "bot": (72, 20, 16),  "accent": (255, 99, 81),   "glow": (200, 40, 20)},
+    "trend":        {"top": (24, 14, 44), "bot": (40, 22, 72),  "accent": (196, 140, 255), "glow": (110, 50, 190)},
+    "marine":       {"top": (6, 26, 42),  "bot": (10, 46, 70),  "accent": (76, 210, 235),  "glow": (20, 130, 170)},
+    "verification": {"top": (16, 20, 30), "bot": (26, 32, 48),  "accent": (150, 190, 255), "glow": (70, 90, 160)},
 }
 DEFAULT_THEME = THEMES["today"]
 
-# ── Иконки блоков — ASCII/Unicode вместо эмодзи ───────────────────────────────
-BLOCK_ICONS = {
-    "today":    "\u2600",   # ☀ солнце
-    "tomorrow": "\u26c5",   # ⛅ солнце с облаком
-    "next3":    "\u25a6",   # ▦ сетка (календарь)
-    "warnings": "\u26a0",   # ⚠ предупреждение
-    "trend":    "\u2197",   # ↗ стрелка вверх
-}
+# ── Геометрия окна прокрутки текста ──────────────────────────────────────────
+TEXT_TOP, TEXT_BOTTOM = 700, 1790
+TEXT_X0, TEXT_X1 = 96, W - 96
+CARD_X, CARD_Y, CARD_W, CARD_H = 44, 150, W - 88, 250
 
-FONT_BODY_SIZE = 52   # крупнее для читаемости
-LINE_H         = 72   # межстрочный интервал
-LINES_PER_PAGE = 15   # строк на страницу (реально влезает 17, с отступами ~15)
+def clean_text(text):
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+    text = re.sub(r'\*(.+?)\*', r'\1', text)
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
 
 def wrap_text(text, font, maxw, draw):
     words = text.split()
@@ -99,112 +93,19 @@ def wrap_text(text, font, maxw, draw):
     if cur: lines.append(' '.join(cur))
     return lines
 
-def clean_text(text):
-    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
-    text = re.sub(r'\*(.+?)\*', r'\1', text)
-    text = re.sub(r'\s+', ' ', text)
-    return text.strip()
-
-def split_into_pages(text, font, maxw, draw):
-    """Разбивает текст на страницы по LINES_PER_PAGE строк."""
-    raw = clean_text(text)
-    paragraphs = [p.strip() for p in raw.split('\n') if p.strip()]
-    all_lines = []
-    for para in paragraphs:
-        all_lines.extend(wrap_text(para, font, maxw, draw))
-        all_lines.append('')  # пустая строка между абзацами
-
-    # Убираем лишние пустые строки в конце
-    while all_lines and all_lines[-1] == '':
-        all_lines.pop()
-
-    pages = []
-    i = 0
-    while i < len(all_lines):
-        page = all_lines[i:i + LINES_PER_PAGE]
-        pages.append(page)
-        i += LINES_PER_PAGE
-    return pages
-
-def draw_gradient(draw, top, bot):
-    for y in range(H):
-        t = y / H
-        r = int(top[0] + (bot[0]-top[0])*t)
-        g = int(top[1] + (bot[1]-top[1])*t)
-        b = int(top[2] + (bot[2]-top[2])*t)
-        draw.line([(0, y), (W, y)], fill=(r, g, b))
-
-def draw_stars(draw, seed=42):
-    import random; rng = random.Random(seed)
-    for _ in range(180):
-        x = rng.randint(0, W); y = rng.randint(0, H//2)
-        sz = rng.choice([1, 1, 2, 2, 3])
-        a  = rng.randint(60, 200)
-        draw.ellipse([x, y, x+sz, y+sz], fill=(a, min(a+30, 255), 255))
-
-def draw_glow_circle(img, cx, cy, radius, color, alpha_max=60):
-    from PIL import Image as PILImage
-    overlay = PILImage.new('RGBA', img.size, (0, 0, 0, 0))
-    d = ImageDraw.Draw(overlay)
-    steps = 8
-    for i in range(steps, 0, -1):
-        r = radius * i // steps
-        a = alpha_max * (steps - i + 1) // steps
-        d.ellipse([cx-r, cy-r, cx+r, cy+r], fill=(*color, a))
-    img.paste(overlay, mask=overlay)
-
-def draw_corner_marks(draw, accent, size=24, margin=40):
-    corners = [
-        (margin, margin, 1, 0), (margin, margin, 0, 1),
-        (W-margin, margin, -1, 0), (W-margin, margin, 0, 1),
-        (margin, H-margin, 1, 0), (margin, H-margin, 0, -1),
-        (W-margin, H-margin, -1, 0), (W-margin, H-margin, 0, -1),
-    ]
-    for px, py, dx, dy in corners:
-        draw.line([px, py, px+dx*size, py+dy*size], fill=accent, width=3)
-
-
-def draw_temp_chart(img, hours, acc, card_x, card_y, card_w, card_h):
-    from PIL import Image as PILImage
-    temps = [(int(h["time"][11:13]), h["temp"]) for h in hours if h.get("temp") is not None]
-    if len(temps) < 3: return
-    overlay = PILImage.new("RGBA", img.size, (0,0,0,0))
-    d = ImageDraw.Draw(overlay)
-    pad_l, pad_r, pad_t, pad_b = 20, 20, 20, 35
-    gw = card_w - pad_l - pad_r
-    gh = card_h - pad_t - pad_b
-    t_vals = [t for _,t in temps]
-    t_min_v = min(t_vals) - 1; t_max_v = max(t_vals) + 1
-    t_range = t_max_v - t_min_v or 1
-    def px(hr, tv):
-        x = card_x + pad_l + int(hr / 23 * gw)
-        y = card_y + pad_t + int((1 - (tv - t_min_v) / t_range) * gh)
-        return x, y
-    pts = [px(hr, tv) for hr, tv in temps]
-    poly = pts + [(pts[-1][0], card_y+card_h-pad_b+5), (pts[0][0], card_y+card_h-pad_b+5)]
-    d.polygon(poly, fill=(*acc, 35))
-    for i in range(len(pts)-1):
-        d.line([pts[i], pts[i+1]], fill=(*acc, 220), width=5)
-    for hr in [0, 6, 12, 18, 23]:
-        x = card_x + pad_l + int(hr / 23 * gw)
-        y_base = card_y + card_h - pad_b
-        d.line([(x, y_base), (x, y_base+4)], fill=(*acc, 80), width=1)
-        d.text((x, y_base+18), f"{hr:02d}", font=F(22), fill=(*acc, 130), anchor="mm")
-    min_hr, min_t = min(temps, key=lambda x: x[1])
-    max_hr, max_t = max(temps, key=lambda x: x[1])
-    mx, my = px(min_hr, min_t)
-    xx, xy = px(max_hr, max_t)
-    d.ellipse([mx-7,my-7,mx+7,my+7], fill=(100,180,255,255))
-    d.ellipse([xx-7,xy-7,xx+7,xy+7], fill=(255,120,80,255))
-    d.text((mx, my+22), f"{round(min_t)}\u00b0", font=F(26,True), fill=(100,200,255,255), anchor="mm")
-    d.text((xx, xy-24), f"{round(max_t)}\u00b0", font=F(26,True), fill=(255,140,80,255), anchor="mm")
-    img.paste(overlay, mask=overlay)
+def extract_temp_range(text):
+    short = text[:350]
+    nums = [int(m) for m in re.findall(r'(-?\d{1,2})°C', short)]
+    nums = [n for n in nums if -20 <= n <= 45]
+    if not nums: return None, None
+    return min(nums), max(nums)
 
 def weather_icon_path(text, key):
     t = text.lower()
     if key == 'marine': return os.path.join(ICONS_DIR, 'wave.png')
     if key == 'trend':  return os.path.join(ICONS_DIR, 'trend.png')
     if key == 'next3':  return os.path.join(ICONS_DIR, 'calendar.png')
+    if key == 'verification': return os.path.join(ICONS_DIR, 'trend.png')
     if 'гроза' in t or 'молния' in t: return os.path.join(ICONS_DIR, 'thunder.png')
     if 'дождь' in t or 'осадки' in t: return os.path.join(ICONS_DIR, 'rain.png')
     if 'облачно' in t or 'облака' in t: return os.path.join(ICONS_DIR, 'cloudy.png')
@@ -213,133 +114,213 @@ def weather_icon_path(text, key):
 
 def paste_icon(img, icon_path, cx, cy, size=180):
     if not os.path.exists(icon_path): return
-    icon = Image.open(icon_path).convert('RGBA')
-    icon = icon.resize((size, size), Image.LANCZOS)
+    icon = Image.open(icon_path).convert('RGBA').resize((size, size), Image.LANCZOS)
     img.paste(icon, (cx - size//2, cy - size//2), icon)
 
-def extract_temp_range(text):
-    import re
-    short = text[:350]
-    nums = [int(m) for m in re.findall(r'(-?\d{1,2})°C', short)]
-    nums = [n for n in nums if -20 <= n <= 45]
-    if not nums: return None, None
-    return min(nums), max(nums)
+def gradient_color_at(y_frac, top, bot):
+    t = max(0, min(1, y_frac)) ** 0.92
+    return tuple(int(top[i] + (bot[i]-top[i])*t) for i in range(3))
 
-def draw_info_card(img, block, acc):
-    from PIL import Image as PILImage
-    key = block.get("key", "today")
-    title = block.get("title", "").upper()
-    t_min = block.get("t_min"); t_max = block.get("t_max")
+def draw_gradient(draw, top, bot):
+    for y in range(H):
+        draw.line([(0, y), (W, y)], fill=gradient_color_at(y/H, top, bot))
+
+def draw_soft_blob(img, cx, cy, radius, color, alpha_max=70):
+    overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(overlay)
+    d.ellipse([cx-radius, cy-radius, cx+radius, cy+radius], fill=(*color, alpha_max))
+    overlay = overlay.filter(ImageFilter.GaussianBlur(radius * 0.55))
+    img.alpha_composite(overlay)
+
+def rounded_glass_card(img, x, y, w, h, radius, accent, fill_alpha=52, border_alpha=70):
+    overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(overlay)
+    d.rounded_rectangle([x, y, x+w, y+h], radius=radius, fill=(255, 255, 255, fill_alpha))
+    d.rounded_rectangle([x, y, x+w, y+h], radius=radius, outline=(*accent, border_alpha), width=2)
+    img.alpha_composite(overlay)
+
+def block_date_str(key):
     now_utc = datetime.now(timezone.utc)
     if key == "tomorrow":
-        date_str = (now_utc + timedelta(days=1)).strftime("%Y-%m-%d")
+        dt = now_utc + timedelta(days=1)
     elif key == "next3":
-        date_str = (now_utc + timedelta(days=2)).strftime("%Y-%m-%d")
+        dt = now_utc + timedelta(days=2)
     else:
-        date_str = now_utc.strftime("%Y-%m-%d")
-    dt = datetime.strptime(date_str, "%Y-%m-%d")
-    MONTHS = ["\u044f\u043d\u0432","\u0444\u0435\u0432","\u043c\u0430\u0440","\u0430\u043f\u0440","\u043c\u0430\u044f","\u0438\u044e\u043d","\u0438\u044e\u043b","\u0430\u0432\u0433","\u0441\u0435\u043d","\u043e\u043a\u0442","\u043d\u043e\u044f","\u0434\u0435\u043a"]
-    date_label = f"{dt.day} {MONTHS[dt.month-1]}"
-    draw = ImageDraw.Draw(img)
-    card_x, card_y, card_w, card_h = 40, 125, W-80, 480
-    overlay = PILImage.new("RGBA", img.size, (0,0,0,0))
-    od = ImageDraw.Draw(overlay)
-    od.rounded_rectangle([card_x, card_y, card_x+card_w, card_y+card_h],
-                          radius=24, fill=(0,0,0,80), outline=(*acc,60), width=2)
-    img.paste(overlay, mask=overlay)
-    draw = ImageDraw.Draw(img)
-    icon_path = weather_icon_path(block.get("text",""), key)
-    paste_icon(img, icon_path, card_x+55, card_y+58, size=75)
-    draw = ImageDraw.Draw(img)
-    draw.text((card_x+115, card_y+35), title, font=F(52,True), fill=(255,255,255), anchor="lm")
-    draw.text((card_x+117, card_y+78), date_label, font=F(30), fill=(*acc,180), anchor="lm")
-    if t_min is not None and t_max is not None and t_min != t_max:
-        temp_str = f"{round(t_min)}\u00b0..{round(t_max)}\u00b0C"
-    elif t_max is not None:
-        temp_str = f"{round(t_max)}\u00b0C"
-    else:
-        temp_str = ""
-    if temp_str:
-        draw.text((W-card_x-20, card_y+55), temp_str, font=F(46,True), fill=(*acc,240), anchor="rm")
-    if key in ("today","tomorrow","next3"):
-        hours = load_snap_hours(date_str)
-        if hours:
-            draw_temp_chart(img, hours, acc, card_x+15, card_y+105, card_w-30, 355)
-            draw = ImageDraw.Draw(img)
-    elif key == "marine":
-        sst = re.search(r'(\d+[.,]\d+)\u00b0C', block.get("text",""))
-        if sst:
-            draw.text((W//2, card_y+300), f"\u0422\u0432\u043e\u0434\u044b {sst.group(1)}\u00b0C",
-                      font=F(52,True), fill=(*acc,240), anchor="mm")
-        paste_icon(img, weather_icon_path("","marine"), W//2, card_y+180, size=120)
-        draw = ImageDraw.Draw(img)
-    return card_y + card_h
+        dt = now_utc
+    return dt.strftime("%d.%m"), dt.strftime("%Y-%m-%d")
 
-def render_slide(block, slide_idx, total_slides, page_lines, page_num, total_pages, out_png):
-    key   = block.get("key", "today")
+def build_chrome(block, total_blocks, block_idx, out_path):
+    """Статичная часть кадра: фон, свечения, прогресс, бейдж, карточка.
+    Окно под текст (TEXT_TOP..TEXT_BOTTOM) вырезается прозрачным в самом конце."""
+    key = block.get("key", "today")
     theme = THEMES.get(key, DEFAULT_THEME)
-    acc   = theme["accent"]; glow = theme["glow"]
-    img  = Image.new('RGBA', (W, H), (0, 0, 0, 255))
+    acc, glow = theme["accent"], theme["glow"]
+    text = block.get("text", "")
+    title = block.get("title", "")
+
+    img = Image.new('RGBA', (W, H), (0, 0, 0, 255))
     draw = ImageDraw.Draw(img)
     draw_gradient(draw, theme["top"], theme["bot"])
-    draw_stars(draw, seed=slide_idx * 7 + page_num + 1)
-    draw_glow_circle(img, W//2, H//2, 600, glow, alpha_max=45)
+    draw_soft_blob(img, int(W*0.82), 260, 420, glow, alpha_max=55)
+    draw_soft_blob(img, int(W*0.1), int(H*0.75), 520, glow, alpha_max=35)
     draw = ImageDraw.Draw(img)
-    draw_corner_marks(draw, acc)
-    draw.text((W//2, 72), "\u041e\u0414\u0415\u0421\u0421\u0410 \u00b7 \u041f\u041e\u0413\u041e\u0414\u0410",
-              font=F(32, True), fill=(*acc, 180), anchor='mm')
-    seg_w = (W - 120) // total_slides
-    for i in range(total_slides):
-        sx = 60 + i * (seg_w + 4)
-        color_seg = acc if i <= slide_idx else (80, 80, 100)
-        draw.rounded_rectangle([sx, 105, sx+seg_w, 110], radius=3, fill=color_seg)
-    card_bottom = draw_info_card(img, block, acc)
+
+    # прогресс-сегменты (по числу блоков в видео) + бейдж локации
+    total = max(1, total_blocks)
+    margin, gap, seg_h = 48, 8, 6
+    seg_w = (W - margin*2 - gap*(total-1)) / total
+    for i in range(total):
+        x = margin + i * (seg_w + gap)
+        color = (*acc, 235) if i <= block_idx else (255, 255, 255, 55)
+        draw.rounded_rectangle([x, 64, x+seg_w, 64+seg_h], radius=seg_h//2, fill=color)
+    draw.text((W//2, 108), "ОДЕССА", font=F(26, "semibold"), fill=(*acc, 200), anchor="mm")
+
+    # карточка
+    rounded_glass_card(img, CARD_X, CARD_Y, CARD_W, CARD_H, radius=36, accent=acc)
     draw = ImageDraw.Draw(img)
-    div_y = card_bottom + 15
-    if total_pages > 1:
-        draw.text((W//2, div_y), f"{page_num + 1} / {total_pages}",
-                  font=F(28), fill=(*acc, 150), anchor='mm')
-        div_y += 35
-    draw.rectangle([80, div_y, W-80, div_y+3], fill=(*acc, 120))
-    font_body = F(FONT_BODY_SIZE)
-    y = div_y + 40
-    for line in page_lines:
-        if not line: y += LINE_H // 2; continue
-        draw.text((65, y), line, font=font_body, fill=(215, 238, 255))
-        y += LINE_H
-    now_str = datetime.now().strftime("%d.%m.%Y")
-    draw.text((W//2, H-80), f"\u0421\u0438\u043d\u043e\u043f\u0442\u0438\u0447\u0435\u0441\u043a\u0438\u0439 \u043f\u0440\u043e\u0433\u043d\u043e\u0437 \u00b7 {now_str}",
-              font=F(28), fill=(120, 150, 200), anchor='mm')
-    draw.rectangle([W//2-120, H-50, W//2+120, H-47], fill=(*acc, 100))
-    img = img.convert('RGB')
-    img.save(out_png, 'PNG')
+    icon_cx, icon_cy, icon_r = CARD_X+95, CARD_Y+95, 62
+    draw_soft_blob(img, icon_cx, icon_cy, icon_r+30, acc, alpha_max=90)
+    draw = ImageDraw.Draw(img)
+    draw.ellipse([icon_cx-icon_r, icon_cy-icon_r, icon_cx+icon_r, icon_cy+icon_r], fill=(255, 255, 255, 235))
+    paste_icon(img, weather_icon_path(text, key), icon_cx, icon_cy, size=78)
+    draw = ImageDraw.Draw(img)
 
-def trim_audio(mp3_path, out_path, start_sec, duration_sec):
-    cmd = ["ffmpeg", "-y", "-i", mp3_path, "-ss", str(round(start_sec, 3)),
-           "-t", str(round(duration_sec, 3)), "-c:a", "aac", "-b:a", "96k", out_path]
-    return subprocess.run(cmd, capture_output=True).returncode == 0
+    date_label, _ = block_date_str(key)
+    draw.text((CARD_X+185, CARD_Y+62), title, font=F(50, "bold"), fill=(255, 255, 255, 255), anchor="lm")
+    draw.text((CARD_X+187, CARD_Y+108), date_label, font=F(28, "medium"), fill=(*acc, 220), anchor="lm")
 
-def make_slide_video(png_path, audio_path, out_mp4, duration):
-    if audio_path and os.path.exists(audio_path):
-        cmd = ["ffmpeg", "-y", "-loop", "1", "-i", png_path, "-i", audio_path,
-               "-c:v", "libx264", "-preset", "veryfast", "-tune", "stillimage",
-               "-c:a", "aac", "-b:a", "96k", "-pix_fmt", "yuv420p",
-               "-shortest", "-vf", f"scale={W}:{H}", out_mp4]
+    t_min, t_max = extract_temp_range(text)
+    if t_min is not None and t_max is not None and t_min != t_max:
+        temp_str = f"{round(t_min)}°–{round(t_max)}°"
+    elif t_max is not None:
+        temp_str = f"{round(t_max)}°"
     else:
-        cmd = ["ffmpeg", "-y", "-loop", "1", "-i", png_path, "-t", str(max(int(duration),5)),
-               "-c:v", "libx264", "-preset", "veryfast", "-tune", "stillimage",
-               "-pix_fmt", "yuv420p", "-vf", f"scale={W}:{H}", "-an", out_mp4]
+        temp_str = ""
+    if key == "marine":
+        sst = re.search(r'(\d+[.,]\d+)°C', text)
+        temp_str = f"{sst.group(1)}°C" if sst else ""
+    if temp_str:
+        draw.text((CARD_X+CARD_W-30, CARD_Y+85), temp_str, font=F(52, "bold"), fill=(*acc, 255), anchor="rm")
+
+    # разделитель — затухание ЦВЕТОМ (не альфой!), чтобы не пробивать окно прозрачности
+    div_y = CARD_Y + CARD_H + 34
+    bg_row = gradient_color_at(div_y/H, theme["top"], theme["bot"])
+    for i in range(W - 88):
+        factor = math.sin(math.pi * i / (W - 88))
+        r = int(bg_row[0] + (acc[0]-bg_row[0])*factor)
+        g = int(bg_row[1] + (acc[1]-bg_row[1])*factor)
+        b = int(bg_row[2] + (acc[2]-bg_row[2])*factor)
+        draw.point((44+i, div_y), fill=(r, g, b, 255))
+
+    # футер
+    now_str = datetime.now().strftime("%d.%m.%Y")
+    draw.text((W//2, H-64), f"Синоптический прогноз  ·  {now_str}",
+              font=F(26, "medium"), fill=(255, 255, 255, 130), anchor="mm")
+
+    # ── вырезаем окно под текст ──
+    # Сначала принудительно полная непрозрачность ВЕЗДЕ (защита от случайных
+    # частично-прозрачных пикселей декоративных элементов), затем — реальная дыра.
+    arr = np.array(img)
+    arr[:, :, 3] = 255
+    arr[TEXT_TOP:TEXT_BOTTOM, :, 3] = 0
+    img = Image.fromarray(arr, 'RGBA')
+    img.save(out_path, 'PNG')
+
+def build_textstrip(text, theme, out_path):
+    """Длинная лента текста на сплошном фоне, соответствующем цвету окна."""
+    font = F(58, "regular")
+    dummy = Image.new("RGB", (10, 10))
+    dd = ImageDraw.Draw(dummy)
+    maxw = TEXT_X1 - TEXT_X0
+    clean = clean_text(text)
+    paragraphs = [p.strip() for p in clean.replace('\n\n', '\n').split('\n') if p.strip()]
+    lines = []
+    for p in paragraphs:
+        lines.extend(wrap_text(p, font, maxw, dd))
+        lines.append('')
+    while lines and lines[-1] == '': lines.pop()
+
+    LINE_H = 92
+    PAD_TOP = 40
+    PAD_BOTTOM = 400
+    strip_h = PAD_TOP + len(lines)*LINE_H + PAD_BOTTOM
+
+    bg_color = gradient_color_at((TEXT_TOP+TEXT_BOTTOM)/2/H, theme["top"], theme["bot"])
+    strip = Image.new("RGB", (W, strip_h), bg_color)
+    d = ImageDraw.Draw(strip)
+    y = PAD_TOP
+    for line in lines:
+        if not line:
+            y += LINE_H//2; continue
+        d.text((TEXT_X0, y), line, font=font, fill=(228, 238, 248))
+        y += LINE_H
+    strip.save(out_path, "PNG")
+    return strip_h
+
+def ffprobe_duration(path):
+    r = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", path],
+        capture_output=True, text=True)
+    try:
+        return float(r.stdout.strip())
+    except (ValueError, TypeError):
+        return None
+
+def render_block_video(block, theme, chrome_png, textstrip_png, strip_h, audio_path, out_mp4):
+    window_h = TEXT_BOTTOM - TEXT_TOP
+    max_scroll = max(0, strip_h - window_h)
+
+    has_audio = audio_path and os.path.exists(audio_path)
+    dur = ffprobe_duration(audio_path) if has_audio else None
+    if not dur or dur <= 0:
+        dur = max(6.0, strip_h / 140)  # запасной вариант без аудио
+        has_audio = False
+
+    # адаптивные тайминги: на коротких блоках (warnings и т.п.) не тратим
+    # почти всё время на неподвижную задержку
+    start_delay = 15.0 if dur > 22 else max(1.0, dur * 0.3)
+    end_hold = 1.5 if dur > 6 else max(0.3, dur * 0.15)
+    fade_dur = min(1.2, max(0.4, dur * 0.15))
+    scroll_time = max(0.3, dur - start_delay - end_hold)
+
+    bg_color = gradient_color_at((TEXT_TOP+TEXT_BOTTOM)/2/H, theme["top"], theme["bot"])
+    hexcolor = '0x%02x%02x%02x' % bg_color
+    fade_start = max(0, dur - fade_dur)
+
+    y_expr = f"{TEXT_TOP}-min(max(t-{start_delay},0)/{scroll_time}*{max_scroll},{max_scroll})"
+
+    filter_complex = (
+        f"[1:v]fade=t=out:st={fade_start}:d={fade_dur}:color={hexcolor}[txtfade];"
+        f"[0:v][txtfade]overlay=x=0:y='{y_expr}':shortest=0[bg1];"
+        f"[bg1][2:v]overlay=x=0:y=0:shortest=1[v]"
+    )
+
+    cmd = [
+        "ffmpeg", "-y",
+        "-f", "lavfi", "-i", f"color=size={W}x{H}:color={hexcolor}",
+        "-loop", "1", "-i", textstrip_png,
+        "-loop", "1", "-i", chrome_png,
+    ]
+    if has_audio:
+        cmd += ["-i", audio_path, "-filter_complex", filter_complex,
+                "-map", "[v]", "-map", "3:a", "-c:a", "aac"]
+    else:
+        cmd += ["-filter_complex", filter_complex, "-map", "[v]", "-an"]
+    cmd += ["-c:v", "libx264", "-preset", "fast", "-pix_fmt", "yuv420p",
+            "-t", str(dur), out_mp4]
+
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        print(f"  [FFM] Ошибка:\n{result.stderr[-400:]}")
+        print(f"  [FFM] Ошибка:\n{result.stderr[-800:]}")
         return False
-    print(f"  [FFM] готов ({os.path.getsize(out_mp4)//1024} кб)")
+    print(f"  [FFM] готов, {dur:.1f} сек ({os.path.getsize(out_mp4)//1024} кб)")
     return True
 
-def concat_videos(slide_mp4s, out_mp4):
+def concat_videos(mp4s, out_mp4):
     list_file = os.path.join(TMP_DIR, "concat_list.txt")
     with open(list_file, 'w') as f:
-        for p in slide_mp4s:
+        for p in mp4s:
             f.write(f"file '{p}'\n")
     cmd = ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_file, "-c", "copy", out_mp4]
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -350,7 +331,7 @@ def concat_videos(slide_mp4s, out_mp4):
     return True
 
 def main():
-    print(f"\n  Генерация вертикального видео (9:16) для TikTok... [источник: {SOURCE}]")
+    print(f"\n  Генерация вертикального видео (9:16, прокрутка текста) [источник: {SOURCE}]")
     if not os.path.exists(META_FILE):
         print(f"  Файл не найден: {META_FILE}"); return
     with open(META_FILE, 'r', encoding='utf-8') as f:
@@ -358,57 +339,36 @@ def main():
     blocks = meta.get("blocks", [])
     if not blocks:
         print("  Нет блоков"); return
-    if not FONT_REG_PATH:
-        print("  ОШИБКА: шрифт не найден!"); return
-    print(f"  Шрифт: {FONT_REG_PATH}\n  Блоков: {len(blocks)}")
+
+    _verify_font_renders_cyrillic()
+    print(f"  Шрифт: {FONT_DIR}\n  Блоков: {len(blocks)}")
     os.makedirs(TMP_DIR, exist_ok=True)
-    dummy_img = Image.new('RGB', (W, H))
-    dummy_draw = ImageDraw.Draw(dummy_img)
-    font_body = F(FONT_BODY_SIZE)
-    text_maxw = W - 130
-    block_pages = [split_into_pages(b.get("text",""), font_body, text_maxw, dummy_draw) for b in blocks]
-    total_slides = len(blocks)
-    all_mp4s = []; slide_counter = 0
-    for block_idx, block in enumerate(blocks):
-        key = block.get("key", f"block_{block_idx}")
-        filename = block.get("filename", f"block_{block_idx}.mp3")
+
+    all_mp4s = []
+    for idx, block in enumerate(blocks):
+        key = block.get("key", f"block_{idx}")
+        theme = THEMES.get(key, DEFAULT_THEME)
+        filename = block.get("filename", f"block_{idx}.mp3")
         mp3_path = os.path.join(BLOCKS_DIR, filename)
-        duration = block.get("duration", 15)
-        pages = block_pages[block_idx]
-        n_pages = len(pages)
-        print(f"\n  [BLOCK] '{block.get('title','')}' -> {n_pages} стр., ~{duration:.0f} сек")
-        chars_per_page = [sum(len(l) for l in pg) for pg in pages]
-        total_chars = sum(chars_per_page) or 1
-        page_meta = block.get("pages", [])
-        for page_num, page_lines in enumerate(pages):
-            png_path = os.path.join(TMP_DIR, f"slide_{slide_counter:03d}.png")
-            mp4_path = os.path.join(TMP_DIR, f"slide_{slide_counter:03d}.mp4")
-            render_slide(block, block_idx, total_slides, page_lines, page_num, n_pages, png_path)
-            print(f"  [SLIDE] стр.{page_num+1}/{n_pages}", end=" ")
-            audio_for_slide = None; page_dur = 10
-            if page_num < len(page_meta):
-                pm = page_meta[page_num]
-                candidate = os.path.join(BLOCKS_DIR, pm["filename"])
-                if os.path.exists(candidate):
-                    audio_for_slide = candidate
-                    page_dur = pm.get("duration", 10)
-            else:
-                aac_path = os.path.join(TMP_DIR, f"audio_{slide_counter:03d}.aac")
-                page_dur = duration * chars_per_page[page_num] / total_chars
-                start_sec = duration * sum(chars_per_page[:page_num]) / total_chars
-                if os.path.exists(mp3_path):
-                    if trim_audio(mp3_path, aac_path, start_sec, page_dur):
-                        audio_for_slide = aac_path
-            if make_slide_video(png_path, audio_for_slide, mp4_path, page_dur):
-                all_mp4s.append(mp4_path)
-            slide_counter += 1
+        print(f"\n  [BLOCK] '{block.get('title','')}' ({key})")
+
+        chrome_png = os.path.join(TMP_DIR, f"chrome_{idx:02d}.png")
+        strip_png  = os.path.join(TMP_DIR, f"strip_{idx:02d}.png")
+        mp4_path   = os.path.join(TMP_DIR, f"block_{idx:02d}.mp4")
+
+        build_chrome(block, len(blocks), idx, chrome_png)
+        strip_h = build_textstrip(block.get("text", ""), theme, strip_png)
+
+        if render_block_video(block, theme, chrome_png, strip_png, strip_h, mp3_path, mp4_path):
+            all_mp4s.append(mp4_path)
+
     if not all_mp4s:
-        print("  Не удалось создать ни одного слайда"); return
-    print(f"\n  [FFM] Склеиваю {len(all_mp4s)} слайдов...")
+        print("  Не удалось создать ни одного блока"); return
+    print(f"\n  [FFM] Склеиваю {len(all_mp4s)} блоков...")
     ok = concat_videos(all_mp4s, MP4_FILE)
     if ok:
         for fname in os.listdir(TMP_DIR):
-            if fname.endswith(('.png','.aac')) or (fname.endswith('.mp4') and fname.startswith('slide_')):
+            if fname.endswith(('.png',)) or (fname.endswith('.mp4') and fname.startswith('block_')):
                 try: os.remove(os.path.join(TMP_DIR, fname))
                 except: pass
     print("  Готово!" if ok else "  Завершено с ошибками.")
