@@ -10,11 +10,11 @@ calc_weights.py — пересчёт model_weights.json из месячных ф
 Локально читает из LOCAL_DATA_DIR и пишет в LOCAL_OUT.
 """
 
-import os, json, base64, logging
+import os, json, base64, logging, time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from urllib.request import urlopen, Request
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 import threading, queue as _queue
 
 # ── Логирование ───────────────────────────────────────────────────────────────
@@ -94,10 +94,34 @@ def gh_headers():
         h["Authorization"] = f"Bearer {token}"
     return h
 
-def http_get(url, headers=None, timeout=60):
-    req = Request(url, headers=headers or {})
-    with urlopen(req, timeout=timeout) as r:
-        return r.read().decode("utf-8", errors="replace")
+def http_get(url, headers=None, timeout=60, retries=4):
+    """GET с повторными попытками при транзиентных ошибках GitHub API
+    (502/503/504 — временные сбои, не связаны с самим запросом)."""
+    last_err = None
+    for attempt in range(retries):
+        try:
+            req = Request(url, headers=headers or {})
+            with urlopen(req, timeout=timeout) as r:
+                return r.read().decode("utf-8", errors="replace")
+        except HTTPError as e:
+            if e.code in (502, 503, 504) and attempt < retries - 1:
+                wait = 2 ** attempt  # 1, 2, 4, 8 сек
+                log.warning("HTTP %s от GitHub API (попытка %d/%d), повтор через %dс: %s",
+                            e.code, attempt + 1, retries, wait, url)
+                time.sleep(wait)
+                last_err = e
+                continue
+            raise
+        except URLError as e:
+            if attempt < retries - 1:
+                wait = 2 ** attempt
+                log.warning("Сетевая ошибка (попытка %d/%d), повтор через %dс: %s",
+                            attempt + 1, retries, wait, e)
+                time.sleep(wait)
+                last_err = e
+                continue
+            raise
+    raise last_err
 
 def gh_list_dir(path):
     """Возвращает список имён файлов в папке репозитория."""
