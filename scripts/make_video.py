@@ -76,7 +76,8 @@ TEXT_X0, TEXT_X1 = 96, W - 96
 
 START_DELAY = 15.0   # сек — статичная пауза перед началом прокрутки
 END_HOLD    = 1.5    # сек — последняя часть текста остаётся видимой
-FADE_DUR    = 1.2    # сек — плавное затухание текста в самом конце
+FADE_IN_DUR  = 1.2   # сек — плавное появление текста в начале
+FADE_OUT_DUR = 1.2   # сек — плавное затухание текста в самом конце
 
 def clean_text(text):
     text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
@@ -263,10 +264,11 @@ def render_block_video(chrome_png, textstrip_png, strip_h, audio_path, theme, ou
     bg_color = gradient_color_at((TEXT_TOP+TEXT_BOTTOM)/2/H, theme["top"], theme["bot"])
     hexcolor = '0x%02x%02x%02x' % bg_color
     y_expr = f"{TEXT_TOP}-min(max(t-{START_DELAY},0)/{scroll_time}*{max_scroll},{max_scroll})"
-    fade_start = max(0, dur - FADE_DUR)
+    fade_start = max(0, dur - FADE_OUT_DUR)
 
     filter_complex = (
-        f"[1:v]fade=t=out:st={fade_start}:d={FADE_DUR}:color={hexcolor}[txtfade];"
+        f"[1:v]fade=t=in:st=0:d={FADE_IN_DUR}:color={hexcolor},"
+        f"fade=t=out:st={fade_start}:d={FADE_OUT_DUR}:color={hexcolor}[txtfade];"
         f"[0:v][txtfade]overlay=x=0:y='{y_expr}':shortest=0[bg1];"
         f"[bg1][2:v]overlay=x=0:y=0:shortest=1[v]"
     )
