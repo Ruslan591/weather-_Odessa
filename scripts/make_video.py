@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """
 make_video.py — вертикальное видео 9:16 для TikTok/Reels из блоков blocks_meta.json.
-Текст блока не режется на страницы: он рендерится в высокую ленту и плавно
-прокручивается снизу вверх (караоке-стиль) синхронно с длительностью озвучки блока.
-Хедер (бейдж, прогресс, карточка с иконкой/датой/диапазоном температур) статичен.
+Хедер с карточкой статичен, текст блока плавно прокручивается снизу вверх
+(караоке-стиль), синхронизирован с длительностью озвучки блока целиком —
+без разбивки на страницы и без разрывов по предложениям.
 """
 
-import json, os, re, math, sys, subprocess
-import numpy as np
-from datetime import datetime, timezone, timedelta
+import json, os, re, math, glob, sys, subprocess
+from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 # ── Источник блоков: "claude" (по умолчанию) или "gemini" ────────────────────
@@ -26,54 +25,58 @@ MP4_FILE   = os.path.join(BASE_DIR, "data",
 
 W, H = 1080, 1920
 
-# ── Шрифт: Carlito (аналог Calibri), проверенная поддержка кириллицы ─────────
-FONT_CANDIDATES_DIR = [
-    "/usr/share/fonts/truetype/crosextra/",                                    # Ubuntu/Debian (CI)
-    "/data/data/com.termux/files/usr/share/fonts/truetype/crosextra/",         # Termux (запасной путь)
-]
-
+# ── Шрифт: Carlito (метрически совместим с Calibri), проверенная кириллица ──
 def _find_font_dir():
-    for d in FONT_CANDIDATES_DIR:
-        if os.path.exists(os.path.join(d, "Carlito-Regular.ttf")):
-            return d
+    candidates = [
+        "/usr/share/fonts/truetype/crosextra",
+        "/usr/share/fonts/crosextra-carlito",
+    ]
+    for c in candidates:
+        if os.path.exists(os.path.join(c, "Carlito-Regular.ttf")):
+            return c
+    found = glob.glob("/usr/share/fonts/**/Carlito-Regular.ttf", recursive=True)
+    if found:
+        return os.path.dirname(found[0])
     return None
 
 FONT_DIR = _find_font_dir()
+if not FONT_DIR:
+    print("  ОШИБКА: шрифт Carlito не найден (нужен пакет fonts-crosextra-carlito)")
+    sys.exit(1)
 
 def F(size, weight="regular"):
-    if not FONT_DIR:
-        return ImageFont.load_default()
     fname = "Carlito-Bold.ttf" if weight in ("bold", "semibold") else "Carlito-Regular.ttf"
     return ImageFont.truetype(os.path.join(FONT_DIR, fname), size)
 
 def _verify_font_renders_cyrillic():
-    """Защита от повтора инцидента с Poppins: убеждаемся, что шрифт реально
-    рисует разные глифы для разных кириллических букв, а не одну и ту же
-    заглушку (тофу) для всех символов."""
-    if not FONT_DIR:
-        print("  ПРЕДУПРЕЖДЕНИЕ: шрифт Carlito не найден, использую PIL default (кириллица не отрендерится!)")
-        return
+    """Защита от повторения истории с Poppins: убеждаемся, что шрифт реально
+    рисует разные глифы для разных кириллических букв, а не однотипный тофу-бокс."""
+    import numpy as np
     font = ImageFont.truetype(os.path.join(FONT_DIR, "Carlito-Bold.ttf"), 60)
     chars = "АБВГДЖЗИЙКЛМНОПРСТУФХЦЧШЩЭЮЯ"
     shapes = set(np.array(font.getmask(ch)).tobytes() for ch in chars)
     if len(shapes) < len(chars) * 0.8:
-        raise RuntimeError("Шрифт не поддерживает кириллицу (обнаружены тофу-глифы)!")
+        raise RuntimeError("Шрифт не поддерживает кириллицу (тофу-глифы)! Проверь FONT_DIR.")
+_verify_font_renders_cyrillic()
 
 THEMES = {
-    "today":        {"top": (10, 22, 48), "bot": (18, 40, 78),  "accent": (86, 176, 255),  "glow": (50, 120, 220)},
-    "tomorrow":     {"top": (8, 32, 30),  "bot": (14, 56, 50),  "accent": (110, 224, 180), "glow": (30, 140, 100)},
-    "next3":        {"top": (34, 24, 8),  "bot": (58, 42, 12),  "accent": (255, 179, 71),  "glow": (200, 110, 20)},
-    "warnings":     {"top": (42, 12, 10), "bot": (72, 20, 16),  "accent": (255, 99, 81),   "glow": (200, 40, 20)},
-    "trend":        {"top": (24, 14, 44), "bot": (40, 22, 72),  "accent": (196, 140, 255), "glow": (110, 50, 190)},
-    "marine":       {"top": (6, 26, 42),  "bot": (10, 46, 70),  "accent": (76, 210, 235),  "glow": (20, 130, 170)},
-    "verification": {"top": (16, 20, 30), "bot": (26, 32, 48),  "accent": (150, 190, 255), "glow": (70, 90, 160)},
+    "today":        {"top": (10, 22, 48),  "bot": (18, 40, 78),  "accent": (86, 176, 255),  "glow": (50, 120, 220)},
+    "tomorrow":     {"top": (8, 32, 30),   "bot": (14, 56, 50),  "accent": (110, 224, 180), "glow": (30, 140, 100)},
+    "next3":        {"top": (34, 24, 8),   "bot": (58, 42, 12),  "accent": (255, 179, 71),  "glow": (200, 110, 20)},
+    "warnings":     {"top": (42, 12, 10),  "bot": (72, 20, 16),  "accent": (255, 99, 81),   "glow": (200, 40, 20)},
+    "trend":        {"top": (24, 14, 44),  "bot": (40, 22, 72),  "accent": (196, 140, 255), "glow": (110, 50, 190)},
+    "marine":       {"top": (6, 26, 42),   "bot": (10, 46, 70),  "accent": (76, 210, 235),  "glow": (20, 130, 170)},
+    "verification": {"top": (16, 20, 30),  "bot": (26, 32, 48),  "accent": (150, 190, 255), "glow": (70, 90, 160)},
 }
 DEFAULT_THEME = THEMES["today"]
 
-# ── Геометрия окна прокрутки текста ──────────────────────────────────────────
+# ── Окно прокрутки текста (фиксированные координаты кадра) ──────────────────
 TEXT_TOP, TEXT_BOTTOM = 700, 1790
 TEXT_X0, TEXT_X1 = 96, W - 96
-CARD_X, CARD_Y, CARD_W, CARD_H = 44, 150, W - 88, 250
+
+START_DELAY = 15.0   # сек — статичная пауза перед началом прокрутки
+END_HOLD    = 1.5    # сек — последняя часть текста остаётся видимой
+FADE_DUR    = 1.2    # сек — плавное затухание текста в самом конце
 
 def clean_text(text):
     text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
@@ -139,24 +142,15 @@ def rounded_glass_card(img, x, y, w, h, radius, accent, fill_alpha=52, border_al
     d.rounded_rectangle([x, y, x+w, y+h], radius=radius, outline=(*accent, border_alpha), width=2)
     img.alpha_composite(overlay)
 
-def block_date_str(key):
-    now_utc = datetime.now(timezone.utc)
-    if key == "tomorrow":
-        dt = now_utc + timedelta(days=1)
-    elif key == "next3":
-        dt = now_utc + timedelta(days=2)
-    else:
-        dt = now_utc
-    return dt.strftime("%d.%m"), dt.strftime("%Y-%m-%d")
-
-def build_chrome(block, total_blocks, block_idx, out_path):
-    """Статичная часть кадра: фон, свечения, прогресс, бейдж, карточка.
-    Окно под текст (TEXT_TOP..TEXT_BOTTOM) вырезается прозрачным в самом конце."""
+def build_chrome(block, theme, out_path):
+    """Статичная часть кадра: фон + карточка + хедер, с прозрачным окном под
+    прокручивающийся текст. Все декоративные элементы рисуются с alpha=255,
+    а после отрисовки альфа принудительно нормализуется — это защита от
+    случайных полупрозрачных «дыр» (см. историю багов с разделителем)."""
     key = block.get("key", "today")
-    theme = THEMES.get(key, DEFAULT_THEME)
-    acc, glow = theme["accent"], theme["glow"]
-    text = block.get("text", "")
     title = block.get("title", "")
+    text = block.get("text", "")
+    acc, glow = theme["accent"], theme["glow"]
 
     img = Image.new('RGBA', (W, H), (0, 0, 0, 255))
     draw = ImageDraw.Draw(img)
@@ -165,61 +159,53 @@ def build_chrome(block, total_blocks, block_idx, out_path):
     draw_soft_blob(img, int(W*0.1), int(H*0.75), 520, glow, alpha_max=35)
     draw = ImageDraw.Draw(img)
 
-    # прогресс-сегменты (по числу блоков в видео) + бейдж локации
-    total = max(1, total_blocks)
-    margin, gap, seg_h = 48, 8, 6
-    seg_w = (W - margin*2 - gap*(total-1)) / total
-    for i in range(total):
-        x = margin + i * (seg_w + gap)
-        color = (*acc, 235) if i <= block_idx else (255, 255, 255, 55)
-        draw.rounded_rectangle([x, 64, x+seg_w, 64+seg_h], radius=seg_h//2, fill=color)
+    draw.rounded_rectangle([48, 64, W-48, 70], radius=3, fill=(*acc, 235))
     draw.text((W//2, 108), "ОДЕССА", font=F(26, "semibold"), fill=(*acc, 200), anchor="mm")
 
-    # карточка
-    rounded_glass_card(img, CARD_X, CARD_Y, CARD_W, CARD_H, radius=36, accent=acc)
+    card_x, card_y, card_w, card_h = 44, 150, W-88, 250
+    rounded_glass_card(img, card_x, card_y, card_w, card_h, radius=36, accent=acc)
     draw = ImageDraw.Draw(img)
-    icon_cx, icon_cy, icon_r = CARD_X+95, CARD_Y+95, 62
+
+    icon_cx, icon_cy, icon_r = card_x+95, card_y+95, 62
     draw_soft_blob(img, icon_cx, icon_cy, icon_r+30, acc, alpha_max=90)
     draw = ImageDraw.Draw(img)
     draw.ellipse([icon_cx-icon_r, icon_cy-icon_r, icon_cx+icon_r, icon_cy+icon_r], fill=(255, 255, 255, 235))
     paste_icon(img, weather_icon_path(text, key), icon_cx, icon_cy, size=78)
     draw = ImageDraw.Draw(img)
 
-    date_label, _ = block_date_str(key)
-    draw.text((CARD_X+185, CARD_Y+62), title, font=F(50, "bold"), fill=(255, 255, 255, 255), anchor="lm")
-    draw.text((CARD_X+187, CARD_Y+108), date_label, font=F(28, "medium"), fill=(*acc, 220), anchor="lm")
+    draw.text((card_x+185, card_y+62), title, font=F(50, "bold"), fill=(255, 255, 255, 255), anchor="lm")
+    draw.text((card_x+187, card_y+108), datetime.now().strftime("%d.%m"), font=F(28, "medium"), fill=(*acc, 220), anchor="lm")
 
     t_min, t_max = extract_temp_range(text)
+    temp_str = ""
     if t_min is not None and t_max is not None and t_min != t_max:
         temp_str = f"{round(t_min)}°–{round(t_max)}°"
     elif t_max is not None:
         temp_str = f"{round(t_max)}°"
-    else:
-        temp_str = ""
+    if temp_str:
+        draw.text((card_x+card_w-30, card_y+85), temp_str, font=F(58, "bold"), fill=(*acc, 255), anchor="rm")
+
     if key == "marine":
         sst = re.search(r'(\d+[.,]\d+)°C', text)
-        temp_str = f"{sst.group(1)}°C" if sst else ""
-    if temp_str:
-        draw.text((CARD_X+CARD_W-30, CARD_Y+85), temp_str, font=F(52, "bold"), fill=(*acc, 255), anchor="rm")
+        if sst:
+            draw.text((card_x+card_w/2, card_y+card_h-40), f"Вода {sst.group(1)}°C",
+                      font=F(34, "bold"), fill=(*acc, 255), anchor="mm")
 
-    # разделитель — затухание ЦВЕТОМ (не альфой!), чтобы не пробивать окно прозрачности
-    div_y = CARD_Y + CARD_H + 34
+    div_y = card_y+card_h+34
     bg_row = gradient_color_at(div_y/H, theme["top"], theme["bot"])
-    for i in range(W - 88):
-        factor = math.sin(math.pi * i / (W - 88))
+    for i in range(W-88):
+        factor = math.sin(math.pi*i/(W-88))
         r = int(bg_row[0] + (acc[0]-bg_row[0])*factor)
         g = int(bg_row[1] + (acc[1]-bg_row[1])*factor)
         b = int(bg_row[2] + (acc[2]-bg_row[2])*factor)
         draw.point((44+i, div_y), fill=(r, g, b, 255))
 
-    # футер
     now_str = datetime.now().strftime("%d.%m.%Y")
     draw.text((W//2, H-64), f"Синоптический прогноз  ·  {now_str}",
               font=F(26, "medium"), fill=(255, 255, 255, 130), anchor="mm")
 
-    # ── вырезаем окно под текст ──
-    # Сначала принудительно полная непрозрачность ВЕЗДЕ (защита от случайных
-    # частично-прозрачных пикселей декоративных элементов), затем — реальная дыра.
+    # ── нормализация альфы: полная непрозрачность везде, кроме окна текста ──
+    import numpy as np
     arr = np.array(img)
     arr[:, :, 3] = 255
     arr[TEXT_TOP:TEXT_BOTTOM, :, 3] = 0
@@ -238,7 +224,8 @@ def build_textstrip(text, theme, out_path):
     for p in paragraphs:
         lines.extend(wrap_text(p, font, maxw, dd))
         lines.append('')
-    while lines and lines[-1] == '': lines.pop()
+    while lines and lines[-1] == '':
+        lines.pop()
 
     LINE_H = 92
     PAD_TOP = 40
@@ -251,47 +238,35 @@ def build_textstrip(text, theme, out_path):
     y = PAD_TOP
     for line in lines:
         if not line:
-            y += LINE_H//2; continue
+            y += LINE_H//2
+            continue
         d.text((TEXT_X0, y), line, font=font, fill=(228, 238, 248))
         y += LINE_H
     strip.save(out_path, "PNG")
     return strip_h
 
-def ffprobe_duration(path):
-    r = subprocess.run(
-        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-         "-of", "default=noprint_wrappers=1:nokey=1", path],
-        capture_output=True, text=True)
-    try:
-        return float(r.stdout.strip())
-    except (ValueError, TypeError):
-        return None
-
-def render_block_video(block, theme, chrome_png, textstrip_png, strip_h, audio_path, out_mp4):
+def render_block_video(chrome_png, textstrip_png, strip_h, audio_path, theme, out_mp4, min_duration=6.0):
     window_h = TEXT_BOTTOM - TEXT_TOP
     max_scroll = max(0, strip_h - window_h)
 
-    has_audio = audio_path and os.path.exists(audio_path)
-    dur = ffprobe_duration(audio_path) if has_audio else None
-    if not dur or dur <= 0:
-        dur = max(6.0, strip_h / 140)  # запасной вариант без аудио
-        has_audio = False
+    if audio_path and os.path.exists(audio_path):
+        dur_str = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", audio_path],
+            capture_output=True, text=True).stdout.strip()
+        dur = float(dur_str) if dur_str else min_duration
+    else:
+        dur = min_duration
+    dur = max(dur, min_duration)
 
-    # адаптивные тайминги: на коротких блоках (warnings и т.п.) не тратим
-    # почти всё время на неподвижную задержку
-    start_delay = 15.0 if dur > 22 else max(1.0, dur * 0.3)
-    end_hold = 1.5 if dur > 6 else max(0.3, dur * 0.15)
-    fade_dur = min(1.2, max(0.4, dur * 0.15))
-    scroll_time = max(0.3, dur - start_delay - end_hold)
-
+    scroll_time = max(0.1, dur - START_DELAY - END_HOLD)
     bg_color = gradient_color_at((TEXT_TOP+TEXT_BOTTOM)/2/H, theme["top"], theme["bot"])
     hexcolor = '0x%02x%02x%02x' % bg_color
-    fade_start = max(0, dur - fade_dur)
-
-    y_expr = f"{TEXT_TOP}-min(max(t-{start_delay},0)/{scroll_time}*{max_scroll},{max_scroll})"
+    y_expr = f"{TEXT_TOP}-min(max(t-{START_DELAY},0)/{scroll_time}*{max_scroll},{max_scroll})"
+    fade_start = max(0, dur - FADE_DUR)
 
     filter_complex = (
-        f"[1:v]fade=t=out:st={fade_start}:d={fade_dur}:color={hexcolor}[txtfade];"
+        f"[1:v]fade=t=out:st={fade_start}:d={FADE_DUR}:color={hexcolor}[txtfade];"
         f"[0:v][txtfade]overlay=x=0:y='{y_expr}':shortest=0[bg1];"
         f"[bg1][2:v]overlay=x=0:y=0:shortest=1[v]"
     )
@@ -302,19 +277,19 @@ def render_block_video(block, theme, chrome_png, textstrip_png, strip_h, audio_p
         "-loop", "1", "-i", textstrip_png,
         "-loop", "1", "-i", chrome_png,
     ]
-    if has_audio:
+    if audio_path and os.path.exists(audio_path):
         cmd += ["-i", audio_path, "-filter_complex", filter_complex,
                 "-map", "[v]", "-map", "3:a", "-c:a", "aac"]
     else:
         cmd += ["-filter_complex", filter_complex, "-map", "[v]", "-an"]
     cmd += ["-c:v", "libx264", "-preset", "fast", "-pix_fmt", "yuv420p",
-            "-t", str(dur), out_mp4]
+            "-shortest", "-t", str(dur), out_mp4]
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        print(f"  [FFM] Ошибка:\n{result.stderr[-800:]}")
+        print(f"  [FFM] Ошибка:\n{result.stderr[-600:]}")
         return False
-    print(f"  [FFM] готов, {dur:.1f} сек ({os.path.getsize(out_mp4)//1024} кб)")
+    print(f"  [FFM] готов ({os.path.getsize(out_mp4)//1024} кб, {dur:.1f} сек)")
     return True
 
 def concat_videos(mp4s, out_mp4):
@@ -331,7 +306,7 @@ def concat_videos(mp4s, out_mp4):
     return True
 
 def main():
-    print(f"\n  Генерация вертикального видео (9:16, прокрутка текста) [источник: {SOURCE}]")
+    print(f"\n  Генерация вертикального видео (9:16), стиль — прокрутка текста. [источник: {SOURCE}]")
     if not os.path.exists(META_FILE):
         print(f"  Файл не найден: {META_FILE}"); return
     with open(META_FILE, 'r', encoding='utf-8') as f:
@@ -339,8 +314,6 @@ def main():
     blocks = meta.get("blocks", [])
     if not blocks:
         print("  Нет блоков"); return
-
-    _verify_font_renders_cyrillic()
     print(f"  Шрифт: {FONT_DIR}\n  Блоков: {len(blocks)}")
     os.makedirs(TMP_DIR, exist_ok=True)
 
@@ -348,19 +321,20 @@ def main():
     for idx, block in enumerate(blocks):
         key = block.get("key", f"block_{idx}")
         theme = THEMES.get(key, DEFAULT_THEME)
+        title = block.get("title", "")
         filename = block.get("filename", f"block_{idx}.mp3")
         mp3_path = os.path.join(BLOCKS_DIR, filename)
-        print(f"\n  [BLOCK] '{block.get('title','')}' ({key})")
+        print(f"\n  [BLOCK] '{title}' (key={key})")
 
         chrome_png = os.path.join(TMP_DIR, f"chrome_{idx:02d}.png")
         strip_png  = os.path.join(TMP_DIR, f"strip_{idx:02d}.png")
-        mp4_path   = os.path.join(TMP_DIR, f"block_{idx:02d}.mp4")
+        block_mp4  = os.path.join(TMP_DIR, f"block_{idx:02d}.mp4")
 
-        build_chrome(block, len(blocks), idx, chrome_png)
+        build_chrome(block, theme, chrome_png)
         strip_h = build_textstrip(block.get("text", ""), theme, strip_png)
-
-        if render_block_video(block, theme, chrome_png, strip_png, strip_h, mp3_path, mp4_path):
-            all_mp4s.append(mp4_path)
+        audio_path = mp3_path if os.path.exists(mp3_path) else None
+        if render_block_video(chrome_png, strip_png, strip_h, audio_path, theme, block_mp4):
+            all_mp4s.append(block_mp4)
 
     if not all_mp4s:
         print("  Не удалось создать ни одного блока"); return
@@ -368,7 +342,7 @@ def main():
     ok = concat_videos(all_mp4s, MP4_FILE)
     if ok:
         for fname in os.listdir(TMP_DIR):
-            if fname.endswith(('.png',)) or (fname.endswith('.mp4') and fname.startswith('block_')):
+            if fname.startswith(('chrome_', 'strip_', 'block_')) or fname == 'concat_list.txt':
                 try: os.remove(os.path.join(TMP_DIR, fname))
                 except: pass
     print("  Готово!" if ok else "  Завершено с ошибками.")
