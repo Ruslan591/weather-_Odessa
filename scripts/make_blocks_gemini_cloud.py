@@ -131,6 +131,57 @@ def find_section(sections, *prefixes):
                 return val
     return ''
 
+# Порядковые числительные для диапазонов дат (родительный после "с", именительный/винительный после "по")
+_ORDINAL_GEN = {
+    1:'первого',2:'второго',3:'третьего',4:'четвёртого',5:'пятого',
+    6:'шестого',7:'седьмого',8:'восьмого',9:'девятого',10:'десятого',
+    11:'одиннадцатого',12:'двенадцатого',13:'тринадцатого',14:'четырнадцатого',
+    15:'пятнадцатого',16:'шестнадцатого',17:'семнадцатого',18:'восемнадцатого',
+    19:'девятнадцатого',20:'двадцатого',30:'тридцатого',31:'тридцать первого',
+}
+for _u, _w in {1:'первого',2:'второго',3:'третьего',4:'четвёртого',5:'пятого',
+               6:'шестого',7:'седьмого',8:'восьмого',9:'девятого'}.items():
+    _ORDINAL_GEN[20+_u] = f'двадцать {_w}'
+
+_ORDINAL_NOM = {
+    1:'первое',2:'второе',3:'третье',4:'четвёртое',5:'пятое',
+    6:'шестое',7:'седьмое',8:'восьмое',9:'девятое',10:'десятое',
+    11:'одиннадцатое',12:'двенадцатое',13:'тринадцатое',14:'четырнадцатое',
+    15:'пятнадцатое',16:'шестнадцатое',17:'семнадцатое',18:'восемнадцатое',
+    19:'девятнадцатое',20:'двадцатое',30:'тридцатое',31:'тридцать первое',
+}
+for _u, _w in {1:'первое',2:'второе',3:'третье',4:'четвёртое',5:'пятое',
+               6:'шестое',7:'седьмое',8:'восьмое',9:'девятое'}.items():
+    _ORDINAL_NOM[20+_u] = f'двадцать {_w}'
+
+_MONTHS_RE = r'(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)'
+
+def _decline(n, one, few, many):
+    """Склонение числительных: 1->one, 2-4->few, 5-20->many (кроме 11-19->many)."""
+    n = abs(int(round(n)))
+    last2 = n % 100
+    last1 = n % 10
+    if 11 <= last2 <= 19: return many
+    if last1 == 1: return one
+    if 2 <= last1 <= 4: return few
+    return many
+
+def _range_sub(text, unit_pattern, unit_word, allow_decimal=False):
+    """Диапазон "X-Y{unit}" -> "от X до Y {unit_word}". Если перед диапазоном
+    уже стоит предлог "от"/"до" (частая формулировка вроде "опускалась до
+    15-16°C"), не дублирует предлог, а просто вставляет "до" между числами."""
+    num_pat = r'-?\d+(?:[.,]\d+)?' if allow_decimal else r'-?\d+'
+    pattern = re.compile(
+        r'(?:(от|до)\s+)?(' + num_pat + r')\s*[-\u2013\u2014]\s*(' + num_pat + r')\s*' + unit_pattern,
+        re.IGNORECASE
+    )
+    def repl(m):
+        prep, n1, n2 = m.group(1), m.group(2), m.group(3)
+        if prep:
+            return f'{prep} {n1} до {n2} {unit_word}'
+        return f'от {n1} до {n2} {unit_word}'
+    return pattern.sub(repl, text)
+
 def preprocess_tts(text):
     # Предупреждения
     text = text.replace('\u26a0\ufe0f', 'Внимание!')
@@ -140,35 +191,36 @@ def preprocess_tts(text):
     text = text.replace('\u00b0\u0421', '\u00b0C')
     text = text.replace('\u00b0\u0441', '\u00b0C')
 
-    # Защищаем диапазоны дат (9-10 июня, 7-8 июля и т.п.) — временная замена
+    # Диапазоны дат вида "11-12 июля" -> "с одиннадцатого по двенадцатое июля"
+    def _date_range(m):
+        n1, n2 = int(m.group(1)), int(m.group(2))
+        g1 = _ORDINAL_GEN.get(n1, str(n1))
+        g2 = _ORDINAL_NOM.get(n2, str(n2))
+        return f'с {g1} по {g2} {m.group(3)}'
     text = re.sub(
-        r'(\d{1,2})\s*[-\u2013\u2014]\s*(\d{1,2})\s+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)',
-        lambda m: f'с {m.group(1)} по {m.group(2)} {m.group(3)}',
-        text
+        r'(\d{1,2})\s*[-\u2013\u2014]\s*(\d{1,2})\s+' + _MONTHS_RE,
+        _date_range, text
+    )
+    # Уже готовые "с X по Y месяца" (без дефиса) — та же проблема:
+    # edge-tts иначе читает оба числа в родительном падеже ("по двенадцатого")
+    def _date_spo(m):
+        n1, n2 = int(m.group(1)), int(m.group(2))
+        g1 = _ORDINAL_GEN.get(n1, str(n1))
+        g2 = _ORDINAL_NOM.get(n2, str(n2))
+        return f'с {g1} по {g2} {m.group(3)}'
+    text = re.sub(
+        r'\bс\s+(\d{1,2})\s+по\s+(\d{1,2})\s+' + _MONTHS_RE,
+        _date_spo, text, flags=re.IGNORECASE
     )
 
-    # Диапазоны температур: 18–19°C → "18 19 градусов" (для TTS, в тексте слайда остаётся оригинал)
-    text = re.sub(
-        r'(-?\d+)\s*[-\u2013\u2014]\s*(-?\d+)\s*\u00b0C',
-        lambda m: f'{m.group(1)} {m.group(2)} градусов',
-        text
-    )
+    # Диапазоны температур: "15-16°C" -> "от 15 до 16 градусов"
+    text = _range_sub(text, r'\u00b0C', 'градусов')
 
     # Одиночные температуры со склонением (без слова Цельсия)
     def temp_word(m):
-        n = abs(int(m.group(1)))
-        last2 = n % 100
-        last1 = n % 10
-        if 11 <= last2 <= 19:
-            w = 'градусов'
-        elif last1 == 1:
-            w = 'градус'
-        elif 2 <= last1 <= 4:
-            w = 'градуса'
-        else:
-            w = 'градусов'
+        n = int(m.group(1))
+        w = _decline(n, 'градус', 'градуса', 'градусов')
         return f'{m.group(1)} {w}'
-
     text = re.sub(r'(-?\d+)\s*\u00b0C', temp_word, text)
     text = text.replace('\u00b0C', 'градусов')
     text = text.replace('\u00b0', ' градусов')
@@ -176,8 +228,13 @@ def preprocess_tts(text):
     # Давление
     text = text.replace('гПа', 'гектопаскалей')
 
-    # Скорость ветра
-    text = re.sub(r'(\d+(?:\.\d+)?)\s*м/с', r'\1 метров в секунду', text)
+    # Диапазоны скорости ветра: "2-5 м/с" -> "от 2 до 5 метров в секунду"
+    text = _range_sub(text, r'м/с', 'метров в секунду', allow_decimal=True)
+    def wind_word(m):
+        n = float(m.group(1).replace(',', '.'))
+        w = _decline(n, 'метр', 'метра', 'метров')
+        return f'{m.group(1)} {w} в секунду'
+    text = re.sub(r'(\d+(?:[.,]\d+)?)\s*м/с', wind_word, text)
 
     # Осадки
     text = re.sub(r'(\d+(?:\.\d+)?)\s*мм', r'\1 миллиметра', text)
@@ -198,8 +255,18 @@ def preprocess_tts(text):
     text = re.sub(r'(\w+(?:ла|ло|ли|лся|лась))\s+бы\b', r'\1', text)
     text = re.sub(r'\bKI\b', 'индекс Кельтса', text)
 
+    # УФ-индекс -> развёрнуто (аббревиатура звучит коряво)
+    text = re.sub(r'\bУФ[\s-]*индекс', 'ультрафиолетовый индекс', text, flags=re.IGNORECASE)
+
     # Ударения
     text = text.replace('малооблачн', 'малоо\u0301блачн')
+    _stress_forms = {'а':'а\u0301', 'е':'е\u0301', 'у':'у\u0301', 'ы':'ы\u0301', 'ой':'о\u0301й'}
+    text = re.sub(r'\bжар([аеуы]|ой)\b', lambda m: 'жар' + _stress_forms[m.group(1)], text)
+    text = re.sub(r'\bЖар([аеуы]|ой)\b', lambda m: 'Жар' + _stress_forms[m.group(1)], text)
+
+    # "о чем" -> "о чём" (частый пропуск ё в исходном тексте; не трогаем
+    # обычное "чем" без "о" — там ё не нужна, напр. "теплее, чем вчера")
+    text = re.sub(r'\b([оО]) чем\b', r'\1 чём', text)
 
     # Десятичные дроби
     def decimal_to_words(m):
@@ -216,8 +283,13 @@ def preprocess_tts(text):
 
     text = re.sub(r'(\d+)\.(\d{1,2})', decimal_to_words, text)
 
-    # Проценты
-    text = re.sub(r'(\d+)\s*%', r'\1 процентов', text)
+    # Диапазоны процентов: "20-25%" -> "от 20 до 25 процентов"
+    text = _range_sub(text, r'%', 'процентов')
+    def percent_word(m):
+        n = int(m.group(1))
+        w = _decline(n, 'процент', 'процента', 'процентов')
+        return f'{m.group(1)} {w}'
+    text = re.sub(r'(\d+)\s*%', percent_word, text)
 
     # Убираем markdown
     text = re.sub(r'#+\s*', '', text)
@@ -244,14 +316,18 @@ async def _tts_async(text, out_path, collect_boundaries=False):
     return boundaries
 
 def strip_silence(path):
-    """Убирает тишину в начале/конце и сжимает длинные внутренние паузы
-    между предложениями до комфортных ~0.35с (вместо естественных для
-    edge-tts пауз, которые могут доходить до 1-1.2с и звучат как заминки)."""
+    """Убирает тишину в начале, сжимает длинные внутренние паузы между
+    предложениями до ~0.35с, и добавляет фиксированную паузу 0.5с в самом
+    конце — чтобы между блоками при склейке видео была заметная, но не
+    случайная пауза (просто обрезка тишины в 0 давала полное отсутствие
+    паузы между блоками, а нерегулируемая natural-tail тишина от edge-tts
+    была нестабильной от 0 до 1.2с)."""
     tmp = path + ".tmp.mp3"
     cmd = [
         "ffmpeg", "-y", "-i", path,
         "-af", "silenceremove=start_periods=1:start_silence=0.05:start_threshold=-45dB"
-               ":stop_periods=-1:stop_silence=0.35:stop_threshold=-45dB",
+               ":stop_periods=-1:stop_silence=0.35:stop_threshold=-45dB,"
+               "apad=pad_dur=0.5",
         "-c:a", "libmp3lame", "-q:a", "4",
         tmp
     ]
