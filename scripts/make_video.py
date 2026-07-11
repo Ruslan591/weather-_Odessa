@@ -97,10 +97,21 @@ def wrap_text(text, font, maxw, draw):
     if cur: lines.append(' '.join(cur))
     return lines
 
+_TEMP_RE = re.compile(
+    r'(-?\d{1,2}(?:[.,]\d)?)\s*(?:[-–—]\s*(-?\d{1,2}(?:[.,]\d)?))?\s*°C'
+)
+
 def extract_temp_range(text):
-    short = text[:350]
-    nums = [int(m) for m in re.findall(r'(-?\d{1,2})°C', short)]
-    nums = [n for n in nums if -20 <= n <= 45]
+    """Ищет упоминания температуры вида "16°C" и диапазоны вида "15-16°C"
+    или "23–25°C". Дефис/тире между двумя числами — это разделитель диапазона,
+    а не знак минуса (что раньше приводило к ложным отрицательным значениям)."""
+    nums = []
+    for m in _TEMP_RE.finditer(text):
+        for g in (m.group(1), m.group(2)):
+            if g:
+                v = float(g.replace(',', '.'))
+                if -20 <= v <= 45:
+                    nums.append(v)
     if not nums: return None, None
     return min(nums), max(nums)
 
@@ -160,7 +171,15 @@ def build_chrome(block, theme, out_path):
     draw_soft_blob(img, int(W*0.1), int(H*0.75), 520, glow, alpha_max=35)
     draw = ImageDraw.Draw(img)
 
-    draw.rounded_rectangle([48, 64, W-48, 70], radius=3, fill=(*acc, 235))
+    bar_x0, bar_x1, bar_y0, bar_y1 = 48, W-48, 64, 70
+    bar_bg = gradient_color_at((bar_y0+bar_y1)/2/H, theme["top"], theme["bot"])
+    bar_w = bar_x1 - bar_x0
+    for i in range(bar_w):
+        factor = math.sin(math.pi*i/bar_w)
+        r = int(bar_bg[0] + (acc[0]-bar_bg[0])*factor)
+        g = int(bar_bg[1] + (acc[1]-bar_bg[1])*factor)
+        b = int(bar_bg[2] + (acc[2]-bar_bg[2])*factor)
+        draw.line([(bar_x0+i, bar_y0), (bar_x0+i, bar_y1)], fill=(r, g, b, 255))
     draw.text((W//2, 108), "ОДЕССА", font=F(26, "semibold"), fill=(*acc, 200), anchor="mm")
 
     card_x, card_y, card_w, card_h = 44, 150, W-88, 250
