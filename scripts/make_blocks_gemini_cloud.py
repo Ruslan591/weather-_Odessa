@@ -178,8 +178,8 @@ def _range_sub(text, unit_pattern, unit_word, allow_decimal=False):
     def repl(m):
         prep, n1, n2 = m.group(1), m.group(2), m.group(3)
         if prep:
-            return f'{prep} {n1} до {n2} {unit_word}'
-        return f'от {n1} до {n2} {unit_word}'
+            return f'{prep} {n1}, {n2} {unit_word}'
+        return f'{n1}, {n2} {unit_word}'
     return pattern.sub(repl, text)
 
 def preprocess_tts(text):
@@ -227,6 +227,8 @@ def preprocess_tts(text):
 
     # Давление
     text = text.replace('гПа', 'гектопаскалей')
+    # "700 гектопаскалей 3095 м" -> "700 гектопаскалей" (высота избыточна и режет слух)
+    text = re.sub(r'(гектопаскалей)\s+\d+(?:[.,]\d+)?\s*м\b(?!/с)', r'\1', text)
 
     # Диапазоны скорости ветра: "2-5 м/с" -> "от 2 до 5 метров в секунду"
     text = _range_sub(text, r'м/с', 'метров в секунду', allow_decimal=True)
@@ -239,11 +241,15 @@ def preprocess_tts(text):
     # Осадки
     text = re.sub(r'(\d+(?:\.\d+)?)\s*мм', r'\1 миллиметра', text)
 
+    # Диапазоны в сантиметрах: "10-20 см" -> "10, 20 см"
+    text = _range_sub(text, r'см\b', 'см')
+
     # Энергия
     text = text.replace('Дж/кг', 'джоулей на килограмм')
 
     # Аббревиатуры — T-Td заменяем БЕЗ слова «дефицит» чтобы не дублировать
     text = re.sub(r'\bT-Td\b', 'точки росы', text)
+    text = re.sub(r'конвективной энергии\s*\(CAPE\)', 'индекса конвективной энергии', text, flags=re.IGNORECASE)
     text = re.sub(r'\bCAPE\b', 'индекс конвективной энергии', text)
     text = re.sub(r'\bLI\b', 'индекс неустойчивости', text)
     # CIN с падежными формами
@@ -260,6 +266,10 @@ def preprocess_tts(text):
 
     # Ударения
     text = text.replace('малооблачн', 'малоо\u0301блачн')
+    text = re.sub(r'Одесс', 'Оде\u0301сс', text)
+    text = re.sub(r'([Пп])о-летнему', lambda m: m.group(1) + 'о-ле\u0301тнему', text)
+    text = re.sub(r'\b(юго|северо)-(западн\w*|восточн\w*)', lambda m: f'{m.group(1)}\u2011{m.group(2)}', text)
+    text = re.sub(r'(высотой)\s+волны\b', lambda m: m.group(1) + ' волны\u0301', text)
     _stress_forms = {'а':'а\u0301', 'е':'е\u0301', 'у':'у\u0301', 'ы':'ы\u0301', 'ой':'о\u0301й'}
     text = re.sub(r'\bжар([аеуы]|ой)\b', lambda m: 'жар' + _stress_forms[m.group(1)], text)
     text = re.sub(r'\bЖар([аеуы]|ой)\b', lambda m: 'Жар' + _stress_forms[m.group(1)], text)
@@ -290,6 +300,10 @@ def preprocess_tts(text):
         w = _decline(n, 'процент', 'процента', 'процентов')
         return f'{m.group(1)} {w}'
     text = re.sub(r'(\d+)\s*%', percent_word, text)
+
+    # Схлопываем дублирующиеся единицы при связке двух диапазонов через "до"
+    text = re.sub(r'(\d+,\s*\d+)\s*градусов\s+до\s+(\d+,\s*\d+)\s*градусов', r'\1 до \2 градусов', text)
+    text = re.sub(r'\s*метров в секунду(,\s*с порывами до)', r'\1', text)
 
     # Убираем markdown
     text = re.sub(r'#+\s*', '', text)
