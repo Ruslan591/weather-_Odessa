@@ -310,14 +310,18 @@ async def _tts_async(text, out_path, collect_boundaries=False):
     return boundaries
 
 def strip_silence(path):
-    """Убирает тишину в начале/конце и сжимает длинные внутренние паузы
-    между предложениями до комфортных ~0.35с (вместо естественных для
-    edge-tts пауз, которые могут доходить до 1-1.2с и звучат как заминки)."""
+    """Убирает тишину в начале, сжимает длинные внутренние паузы между
+    предложениями до ~0.35с, и добавляет фиксированную паузу 0.5с в самом
+    конце — чтобы между блоками при склейке видео была заметная, но не
+    случайная пауза (просто обрезка тишины в 0 давала полное отсутствие
+    паузы между блоками, а нерегулируемая natural-tail тишина от edge-tts
+    была нестабильной от 0 до 1.2с)."""
     tmp = path + ".tmp.mp3"
     cmd = [
         "ffmpeg", "-y", "-i", path,
         "-af", "silenceremove=start_periods=1:start_silence=0.05:start_threshold=-45dB"
-               ":stop_periods=-1:stop_silence=0.35:stop_threshold=-45dB",
+               ":stop_periods=-1:stop_silence=0.35:stop_threshold=-45dB,"
+               "apad=pad_dur=0.5",
         "-c:a", "libmp3lame", "-q:a", "4",
         tmp
     ]
