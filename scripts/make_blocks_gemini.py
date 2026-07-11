@@ -238,12 +238,14 @@ async def _tts_async(text, out_path, collect_boundaries=False):
     return boundaries
 
 def strip_silence(path):
-    """Убирает тишину в начале и конце mp3 через ffmpeg."""
+    """Убирает тишину в начале/конце и сжимает длинные внутренние паузы
+    между предложениями до комфортных ~0.35с (вместо естественных для
+    edge-tts пауз, которые могут доходить до 1-1.2с и звучат как заминки)."""
     tmp = path + ".tmp.mp3"
     cmd = [
         "ffmpeg", "-y", "-i", path,
-        "-af", "silenceremove=start_periods=1:start_silence=0.05:start_threshold=-50dB"
-               ":stop_periods=1:stop_silence=0.05:stop_threshold=-50dB",
+        "-af", "silenceremove=start_periods=1:start_silence=0.05:start_threshold=-45dB"
+               ":stop_periods=-1:stop_silence=0.35:stop_threshold=-45dB",
         "-c:a", "libmp3lame", "-q:a", "4",
         tmp
     ]
@@ -412,7 +414,7 @@ def main(force=False):
 
         tts_text = DATE_PREFIX.get(key, '') + section_text
         out_path = os.path.join(BLOCKS_DIR, filename)
-        size_kb, _boundaries = generate_block_tts(tts_text, out_path, collect_boundaries=True)
+        size_kb, _boundaries = generate_block_tts(tts_text, out_path, trim_silence=True, collect_boundaries=True)
         text_segments = build_text_segments(section_text, DATE_PREFIX.get(key, ''), _boundaries)
 
         if size_kb > 0:
