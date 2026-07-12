@@ -505,6 +505,7 @@ def main(force=False):
         'today':    f"{date_label(base_dt)}. ",
         'tonight':  "Сегодня ночью. ",
         'tomorrow': f"Завтра, {date_label(base_dt + timedelta(days=1))}. ",
+        'warnings': "Внимание! Предупреждение о значительных изменениях погоды. ",
     }
 
     b1 = MODE_BLOCK1[gen_mode]
