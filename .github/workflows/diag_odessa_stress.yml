@@ -1,0 +1,26 @@
+name: Diagnose Odessa stress
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+
+      - name: Install dependencies
+        run: |
+          pip install edge-tts
+
+      - name: Generate test samples
+        run: python3 scripts/diag_odessa_stress.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: diag-odessa-stress
+          path: diag_odessa_out/*.mp3
+          retention-days: 7
