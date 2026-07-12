@@ -33,8 +33,10 @@ from datetime import datetime, timezone
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_FILE = os.path.join(BASE_DIR, "data", "tiktok_sea_temp.json")
 
+# Число может идти с десятичной запятой/точкой (например "20,2 градуса"),
+# перед числом могут стоять уточняющие слова вроде "в Одессе" — окно расширено.
 TEMP_RE = re.compile(
-    r'температур[а-яіїєґ]*\s+(?:вод[а-яіїєґ]*\s+)?(?:[а-яіїєґ\s]{0,15}?)(\d{1,2})\s*(?:градус|°)',
+    r'температур[а-яіїєґ]*\s+(?:вод[а-яіїєґ]*\s+)?(?:[а-яіїєґ\s]{0,25}?)(\d{1,2}(?:[.,]\d)?)\s*градус',
     re.IGNORECASE
 )
 
@@ -63,7 +65,7 @@ def parse_sea_temp(text):
     if not m:
         return None
     try:
-        val = float(m.group(1))
+        val = float(m.group(1).replace(",", "."))
     except ValueError:
         return None
     if val < 3 or val > 32:
