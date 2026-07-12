@@ -1,0 +1,37 @@
+name: TikTok Sea Temp (test)
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'TikTok video URL'
+        required: true
+        default: 'https://vt.tiktok.com/ZSXY59J4y/'
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: pip install yt-dlp openai-whisper
+
+      - name: Run fetch script
+        run: python3 scripts/fetch_tiktok_sea_temp.py "${{ github.event.inputs.url }}"
+
+      - name: Commit results
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add data/tiktok_sea_temp.json
+          git commit -m "TikTok sea temp: test run" || echo "No changes"
+          git push
