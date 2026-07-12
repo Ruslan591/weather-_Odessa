@@ -40,6 +40,8 @@ let _marineHistFetchedAt = 0;
 let _marineHistArr     = null;
 let _marineChartPeriod = "24h";
 let _marineChartParam  = "sst";
+let _hmcbasSeaTemp    = null;
+let _hmcbasFetchedAt  = 0;
 
 const MARINE_PARAMS = {
     sst:          { label:"Температура воды",  unit:"°C",  color:"#ffd166" },
@@ -195,6 +197,24 @@ async function loadMarineHistory(){
         }
     } catch(e){
         _marineHistFetchedAt = 0;
+    }
+}
+
+async function loadHmcbasSeaTemp(){
+    // Реальная (не прогнозная) температура воды с виджета ГМЦ ЧАМ —
+    // независимый референс для сверки с моделью CMEMS.
+    if(Date.now() - _hmcbasFetchedAt < 20 * 60000) return; // раз в 20 мин
+    _hmcbasFetchedAt = Date.now();
+    try {
+        const r = await fetch(
+            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/hmcbas_sea_temp_realtime.json",
+            { cache: "no-store" }
+        );
+        if(!r.ok) return;
+        const j = await r.json();
+        if(j && j.sea_temp != null) _hmcbasSeaTemp = j;
+    } catch(e){
+        _hmcbasFetchedAt = 0;
     }
 }
 
@@ -1135,6 +1155,21 @@ function makeMarineBlock(){
             <span style="font-size:26px;font-weight:800;color:${sstColor};">${m.sst.toFixed(1)}°C</span>
         </div>` : "";
 
+    const hmcbasHtml = (_hmcbasSeaTemp && _hmcbasSeaTemp.sea_temp != null) ? (() => {
+        const factT   = _hmcbasSeaTemp.sea_temp;
+        const diff    = (m.sst != null) ? (m.sst - factT) : null;
+        const diffCol = diff != null && Math.abs(diff) >= 1 ? "#ff9f5c" : "#888";
+        const diffHtml = diff != null
+            ? ` <span style="font-size:12px;color:${diffCol};">(CMEMS ${diff >= 0 ? "+" : ""}${diff.toFixed(1)}°)</span>`
+            : "";
+        const staleTxt = _hmcbasSeaTemp.stale ? " · устар." : "";
+        return `<div style="display:flex;justify-content:space-between;align-items:center;
+                    padding:6px 0 10px;border-bottom:1px solid #1e1e1e;margin-bottom:6px;">
+            <span style="font-size:13px;color:#888;">📡 ГМЦ ЧАМ, факт${staleTxt}</span>
+            <span style="font-size:16px;font-weight:700;color:#eee;">${factT.toFixed(1)}°C${diffHtml}</span>
+        </div>`;
+    })() : "";
+
 
         
 
@@ -1187,6 +1222,7 @@ function makeMarineBlock(){
         </div>
         ${warnHtml}
         ${sstHtml}
+        ${hmcbasHtml}
         <div class="pws-fields">
             ${seaLevelHtml}
             ${rows.map(([k,v]) =>
@@ -1431,7 +1467,8 @@ async function loadAndRender(){
     fetchEnsembleCloud(),
     fetchSynopCloud(),
     loadMarine(),
-    loadMarineHistory()
+    loadMarineHistory(),
+    loadHmcbasSeaTemp()
 ]);
     const p = stationResult.status === "fulfilled"
         ? stationResult.value
