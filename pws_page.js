@@ -42,6 +42,8 @@ let _marineChartPeriod = "24h";
 let _marineChartParam  = "sst";
 let _hmcbasSeaTemp    = null;
 let _hmcbasFetchedAt  = 0;
+let _hmcbasTelegram   = null;
+let _hmcbasTgFetchedAt = 0;
 
 const MARINE_PARAMS = {
     sst:          { label:"Температура воды",  unit:"°C",  color:"#ffd166" },
@@ -215,6 +217,24 @@ async function loadHmcbasSeaTemp(){
         if(j && j.sea_temp != null) _hmcbasSeaTemp = j;
     } catch(e){
         _hmcbasFetchedAt = 0;
+    }
+}
+
+async function loadHmcbasTelegram(){
+    // Утренний факт из t.me/HMC_Odesa — самый надёжный референс (раз в сутки),
+    // накапливается в hmcbas_telegram_sea_temp.json, берём последнюю запись.
+    if(Date.now() - _hmcbasTgFetchedAt < 30 * 60000) return; // раз в 30 мин
+    _hmcbasTgFetchedAt = Date.now();
+    try {
+        const r = await fetch(
+            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/hmcbas_telegram_sea_temp.json",
+            { cache: "no-store" }
+        );
+        if(!r.ok) return;
+        const arr = await r.json();
+        if(Array.isArray(arr) && arr.length) _hmcbasTelegram = arr[arr.length - 1];
+    } catch(e){
+        _hmcbasTgFetchedAt = 0;
     }
 }
 
@@ -1170,6 +1190,25 @@ function makeMarineBlock(){
         </div>`;
     })() : "";
 
+    const hmcbasTgHtml = (_hmcbasTelegram && _hmcbasTelegram.sea_temp != null) ? (() => {
+        const factT   = _hmcbasTelegram.sea_temp;
+        const diff    = (m.sst != null) ? (m.sst - factT) : null;
+        const diffCol = diff != null && Math.abs(diff) >= 1 ? "#ff9f5c" : "#888";
+        const diffHtml = diff != null
+            ? ` <span style="font-size:12px;color:${diffCol};">(CMEMS ${diff >= 0 ? "+" : ""}${diff.toFixed(1)}°)</span>`
+            : "";
+        let dateTxt = "";
+        try {
+            const dt = new Date(_hmcbasTelegram.timestamp);
+            if(!isNaN(dt)) dateTxt = " · " + dt.toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit"});
+        } catch(e){}
+        return `<div style="display:flex;justify-content:space-between;align-items:center;
+                    padding:6px 0 10px;border-bottom:1px solid #1e1e1e;margin-bottom:6px;">
+            <span style="font-size:13px;color:#888;">📨 ГМЦ ЧАМ, Telegram${dateTxt}</span>
+            <span style="font-size:16px;font-weight:700;color:#eee;">${factT.toFixed(1)}°C${diffHtml}</span>
+        </div>`;
+    })() : "";
+
 
         
 
@@ -1223,6 +1262,7 @@ function makeMarineBlock(){
         ${warnHtml}
         ${sstHtml}
         ${hmcbasHtml}
+        ${hmcbasTgHtml}
         <div class="pws-fields">
             ${seaLevelHtml}
             ${rows.map(([k,v]) =>
@@ -1468,7 +1508,8 @@ async function loadAndRender(){
     fetchSynopCloud(),
     loadMarine(),
     loadMarineHistory(),
-    loadHmcbasSeaTemp()
+    loadHmcbasSeaTemp(),
+    loadHmcbasTelegram()
 ]);
     const p = stationResult.status === "fulfilled"
         ? stationResult.value
