@@ -126,6 +126,7 @@ def git_push_history():
                         "data/ai_schedule_gemini.json",
                         "data/marine_history.json",
                         "data/hmcbas_sea_temp_realtime.json",
+                        "data/hmcbas_telegram_sea_temp.json",
                         "data/pws_sync_state.json",
                         "data/forecast_video.mp4",
                         "data/forecast_video_gemini.mp4",
@@ -288,6 +289,29 @@ def check_hmcbas_sea_temp():
     except Exception as e:
         print(f"  [WARN] fetch_hmcbas_sea_temp.py: {e}")
 
+def check_hmcbas_telegram():
+    # Раз в сутки: реальный замер температуры воды из утреннего поста
+    # t.me/HMC_Odesa. Гейт — если в истории уже есть запись за сегодня
+    # (UTC), не дёргаем канал зря; иначе пробуем каждый цикл, пока пост
+    # не появится (дешёвый фетч одной страницы).
+    hist_file = os.path.join(BASE_DIR, "data", "hmcbas_telegram_sea_temp.json")
+    today_utc = datetime.now(timezone.utc).date().isoformat()
+    try:
+        if os.path.exists(hist_file):
+            with open(hist_file, "r", encoding="utf-8") as f:
+                hist = json.load(f)
+            if hist and hist[-1].get("timestamp", "").startswith(today_utc):
+                return
+    except Exception:
+        pass
+    try:
+        subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "fetch_hmcbas_telegram.py")],
+            cwd=BASE_DIR, capture_output=False, timeout=60
+        )
+    except Exception as e:
+        print(f"  [WARN] fetch_hmcbas_telegram.py: {e}")
+
 def check_marine_history():
     # marine_history.py пишет каждый прогон пайплайна (~15 мин) — все параметры моря,
     # а не только SST раз в час, как было раньше в sst_compare.py.
@@ -443,6 +467,7 @@ def main():
     check_pws_calibration()
     check_marine_history()
     check_hmcbas_sea_temp()
+    check_hmcbas_telegram()
 
     # calibrate_pws_pressure.py и marine_history.py пишут только в локальный
     # checkout раннера — без этого push их изменения терялись при завершении job'а.
