@@ -125,6 +125,7 @@ def git_push_history():
                         "data/ai_schedule.json",
                         "data/ai_schedule_gemini.json",
                         "data/marine_history.json",
+                        "data/hmcbas_sea_temp_realtime.json",
                         "data/pws_sync_state.json",
                         "data/forecast_video.mp4",
                         "data/forecast_video_gemini.mp4",
@@ -264,6 +265,28 @@ def check_pws_calibration():
         )
     except Exception as e:
         print(f"  [WARN] calibrate_pws_pressure.py: {e}")
+
+def check_hmcbas_sea_temp():
+    # Раз в ~20 мин: реальная (не прогнозная) температура воды с виджета
+    # ГМЦ ЧАМ (hmcbas.od.ua), с фоллбэком через r.jina.ai при 421.
+    out_file = os.path.join(BASE_DIR, "data", "hmcbas_sea_temp_realtime.json")
+    now_utc = datetime.now(timezone.utc)
+    try:
+        if os.path.exists(out_file):
+            with open(out_file, "r", encoding="utf-8") as f:
+                prev = json.load(f)
+            last_time = datetime.strptime(prev["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            if (now_utc - last_time).total_seconds() < 20 * 60:
+                return
+    except Exception:
+        pass
+    try:
+        subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "fetch_hmcbas_sea_temp.py")],
+            cwd=BASE_DIR, capture_output=False, timeout=60
+        )
+    except Exception as e:
+        print(f"  [WARN] fetch_hmcbas_sea_temp.py: {e}")
 
 def check_marine_history():
     # marine_history.py пишет каждый прогон пайплайна (~15 мин) — все параметры моря,
@@ -419,6 +442,7 @@ def main():
     check_pws_sync()
     check_pws_calibration()
     check_marine_history()
+    check_hmcbas_sea_temp()
 
     # calibrate_pws_pressure.py и marine_history.py пишут только в локальный
     # checkout раннера — без этого push их изменения терялись при завершении job'а.
