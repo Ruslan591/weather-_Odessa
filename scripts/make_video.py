@@ -7,7 +7,7 @@ make_video.py — вертикальное видео 9:16 для TikTok/Reels �
 """
 
 import json, os, re, math, glob, sys, subprocess
-from datetime import datetime
+from datetime import datetime, timedelta
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 # ── Источник блоков: "claude" (по умолчанию) или "gemini" ────────────────────
@@ -22,6 +22,8 @@ META_FILE  = os.path.join(BLOCKS_DIR, "blocks_meta.json")
 TMP_DIR    = os.path.join(BLOCKS_DIR, "tmp")
 MP4_FILE   = os.path.join(BASE_DIR, "data",
                            "forecast_video.mp4" if SOURCE == "claude" else "forecast_video_gemini.mp4")
+ENSEMBLE_PWS_FILE = os.path.join(BASE_DIR, "data", "ensemble_snapshots_pws.json")
+LOCAL_OFFSET_H = 3  # Одесса летом = UTC+3 (сверено с реальным сайтом: 06:00 UTC+3 = минимум суток)
 
 W, H = 1080, 1920
 
@@ -115,6 +117,68 @@ def extract_temp_range(text):
     if not nums: return None, None
     return min(nums), max(nums)
 
+def ease_in_out_cubic(x):
+    """Плавный разгон в начале и плавное торможение в конце (0..1 → 0..1)."""
+    x = max(0.0, min(1.0, x))
+    return 4*x**3 if x < 0.5 else 1 - pow(-2*x + 2, 3) / 2
+
+_ensemble_cache = None
+
+def _load_ensemble_hours():
+    global _ensemble_cache
+    if _ensemble_cache is not None:
+        return _ensemble_cache
+    try:
+        with open(ENSEMBLE_PWS_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        snap = data[-1]
+        by_time_utc = {h['time']: h.get('temp') for h in snap['hours'] if h.get('temp') is not None}
+        _ensemble_cache = by_time_utc
+    except Exception as e:
+        print(f"  [CHART] ensemble_snapshots_pws.json не загружен: {e}")
+        _ensemble_cache = {}
+    return _ensemble_cache
+
+def get_temp_curve(key):
+    """Почасовая кривая температуры (локальное время) для графика под карточкой.
+    Возвращает список [(local_hour_label, temp), ...] или None, если для этого
+    блока график не нужен (недостаточно данных / блок не про почасовую температуру)."""
+    by_time_utc = _load_ensemble_hours()
+    if not by_time_utc:
+        return None
+
+    now_utc = datetime.utcnow()
+    now_local = now_utc + timedelta(hours=LOCAL_OFFSET_H)
+
+    def utc_key(dt_local):
+        dt_utc = dt_local - timedelta(hours=LOCAL_OFFSET_H)
+        return dt_utc.strftime("%Y-%m-%dT%H:00")
+
+    if key == "today":
+        start = now_local.replace(minute=0, second=0, microsecond=0)
+        end_hour = min(23, start.hour + 15)
+        hours = [start.replace(hour=h) for h in range(start.hour, end_hour+1)]
+    elif key == "tonight":
+        start = now_local.replace(minute=0, second=0, microsecond=0)
+        hours = [start + timedelta(hours=i) for i in range(0, 13)]
+    elif key == "tomorrow":
+        tmr = (now_local + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        hours = [tmr.replace(hour=h) for h in range(0, 24, 2)]
+    else:
+        # next3 / marine / trend / verification / warnings — почасовой график
+        # температуры для них пока не строим (нужна другая визуализация:
+        # по-дневные min/max, волны, текстовая тенденция — это отдельная задача)
+        return None
+
+    pts = []
+    for dt in hours:
+        k = utc_key(dt)
+        if k in by_time_utc:
+            pts.append((dt.strftime("%H:%M"), by_time_utc[k]))
+    if len(pts) < 3:
+        return None
+    return pts
+
 def weather_icon_path(text, key):
     t = text.lower()
     if key == 'marine': return os.path.join(ICONS_DIR, 'wave.png')
@@ -154,11 +218,14 @@ def rounded_glass_card(img, x, y, w, h, radius, accent, fill_alpha=52, border_al
     d.rounded_rectangle([x, y, x+w, y+h], radius=radius, outline=(*accent, border_alpha), width=2)
     img.alpha_composite(overlay)
 
-def build_chrome(block, theme, out_path):
+def build_chrome(block, theme, out_path, reveal_frac=1.0):
     """Статичная часть кадра: фон + карточка + хедер, с прозрачным окном под
     прокручивающийся текст. Все декоративные элементы рисуются с alpha=255,
     а после отрисовки альфа принудительно нормализуется — это защита от
-    случайных полупрозрачных «дыр» (см. историю багов с разделителем)."""
+    случайных полупрозрачных «дыр» (см. историю багов с разделителем).
+    reveal_frac (0..1) управляет прогрессивной прорисовкой графика температуры
+    и счётчиком мин/макс в шапке — используется только для нескольких первых
+    кадров интро; для финального статичного кадра передаётся 1.0."""
     key = block.get("key", "today")
     title = block.get("title", "")
     text = block.get("text", "")
@@ -199,11 +266,14 @@ def build_chrome(block, theme, out_path):
     t_min, t_max = extract_temp_range(text)
     temp_str = ""
     if t_min is not None and t_max is not None and t_min != t_max:
-        temp_str = f"{round(t_min)}°–{round(t_max)}°"
+        shown_min = t_min * min(reveal_frac*1.3, 1.0) if reveal_frac < 1.0 else t_min
+        shown_max = t_max * min(reveal_frac*1.3, 1.0) if reveal_frac < 1.0 else t_max
+        temp_str = f"{round(shown_min)}°–{round(shown_max)}°"
     elif t_max is not None:
-        temp_str = f"{round(t_max)}°"
+        shown_max = t_max * min(reveal_frac*1.3, 1.0) if reveal_frac < 1.0 else t_max
+        temp_str = f"{round(shown_max)}°"
     if temp_str:
-        draw.text((card_x+card_w-30, card_y+85), temp_str, font=F(58, "bold"), fill=(*acc, 255), anchor="rm")
+        draw.text((card_x+card_w-30, card_y+85), temp_str, font=F(74, "bold"), fill=(*acc, 255), anchor="rm")
 
     if key == "marine":
         sst = re.search(r'(\d+[.,]\d+)°C', text)
@@ -219,6 +289,65 @@ def build_chrome(block, theme, out_path):
         g = int(bg_row[1] + (acc[1]-bg_row[1])*factor)
         b = int(bg_row[2] + (acc[2]-bg_row[2])*factor)
         draw.point((44+i, div_y), fill=(r, g, b, 255))
+
+    # ── график температуры в зазоре между карточкой и окном текста ──
+    # (не для всех блоков есть смысл — get_temp_curve возвращает None,
+    # если это, например, блок предупреждений/точности/тенденции)
+    curve = get_temp_curve(key)
+    if curve:
+        chart_x0, chart_x1 = TEXT_X0, TEXT_X1
+        chart_y0, chart_y1 = div_y + 55, TEXT_TOP - 55
+        label_pad = 40
+        c_temps = [p[1] for p in curve]
+        n_pts = len(c_temps)
+        xs_full = [chart_x0 + (chart_x1-chart_x0) * i/(n_pts-1) for i in range(n_pts)]
+        c_min, c_max = min(c_temps), max(c_temps)
+        span = max(c_max - c_min, 3)
+        def y_of(t):
+            frac = (t - c_min) / span
+            return chart_y1 - label_pad - frac * (chart_y1 - chart_y0 - 2*label_pad)
+        ys_full = [y_of(t) for t in c_temps]
+
+        exact_pos = reveal_frac * (n_pts - 1)
+        full_idx = int(math.floor(exact_pos))
+        frac_last = exact_pos - full_idx
+        xs = xs_full[:full_idx+1]
+        ys = ys_full[:full_idx+1]
+        if full_idx < n_pts - 1:
+            x0, y0 = xs_full[full_idx], ys_full[full_idx]
+            x1, y1 = xs_full[full_idx+1], ys_full[full_idx+1]
+            xs.append(x0 + (x1-x0)*frac_last)
+            ys.append(y0 + (y1-y0)*frac_last)
+
+        if len(xs) >= 2:
+            fill_overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
+            fd = ImageDraw.Draw(fill_overlay)
+            poly = list(zip(xs, ys)) + [(xs[-1], chart_y1), (chart_x0, chart_y1)]
+            fd.polygon(poly, fill=(*acc, 70))
+            fill_overlay = fill_overlay.filter(ImageFilter.GaussianBlur(2))
+            img.alpha_composite(fill_overlay)
+            draw = ImageDraw.Draw(img)
+
+            glow_overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
+            gd = ImageDraw.Draw(glow_overlay)
+            gd.line(list(zip(xs, ys)), fill=(*acc, 255), width=14, joint="curve")
+            glow_overlay = glow_overlay.filter(ImageFilter.GaussianBlur(6))
+            img.alpha_composite(glow_overlay)
+            draw = ImageDraw.Draw(img)
+
+            draw.line(list(zip(xs, ys)), fill=(*acc, 255), width=8, joint="curve")
+            core = tuple(min(255, c+70) for c in acc)
+            draw.line(list(zip(xs, ys)), fill=(*core, 200), width=3, joint="curve")
+
+        imin, imax = c_temps.index(min(c_temps)), c_temps.index(max(c_temps))
+        for idx, label_above in ((imax, True), (imin, False)):
+            if idx <= exact_pos:
+                px, py = xs_full[idx], ys_full[idx]
+                draw.ellipse([px-9, py-9, px+9, py+9], fill=(255, 255, 255, 255))
+                draw.ellipse([px-9, py-9, px+9, py+9], outline=(*acc, 255), width=3)
+                ty = py - 30 if label_above else py + 30
+                draw.text((px, ty), f"{round(c_temps[idx])}°", font=F(32, "bold"),
+                          fill=(255, 255, 255, 255), anchor="mm")
 
     now_str = datetime.now().strftime("%d.%m.%Y")
     draw.text((W//2, H-64), f"Синоптический прогноз  ·  {now_str}",
@@ -265,7 +394,8 @@ def build_textstrip(text, theme, out_path):
     strip.save(out_path, "PNG")
     return strip_h
 
-def render_block_video(chrome_png, textstrip_png, strip_h, audio_path, theme, out_mp4, min_duration=6.0):
+def render_block_video(chrome_png, textstrip_png, strip_h, audio_path, theme, out_mp4,
+                        intro_pattern=None, intro_fps=25, intro_dur=0.0, min_duration=6.0):
     window_h = TEXT_BOTTOM - TEXT_TOP
     max_scroll = max(0, strip_h - window_h)
 
@@ -285,24 +415,38 @@ def render_block_video(chrome_png, textstrip_png, strip_h, audio_path, theme, ou
     y_expr = f"{TEXT_TOP}-min(max(t-{START_DELAY},0)/{scroll_time}*{max_scroll},{max_scroll})"
     fade_start = max(0, dur - FADE_OUT_DUR)
 
-    filter_complex = (
-        f"[1:v]fade=t=in:st=0:d={FADE_IN_DUR}:color={hexcolor},"
-        f"fade=t=out:st={fade_start}:d={FADE_OUT_DUR}:color={hexcolor}[txtfade];"
-        f"[0:v][txtfade]overlay=x=0:y='{y_expr}':shortest=0[bg1];"
-        f"[bg1][2:v]overlay=x=0:y=0:shortest=1[v]"
-    )
-
     cmd = [
         "ffmpeg", "-y",
         "-f", "lavfi", "-i", f"color=size={W}x{H}:color={hexcolor}",
         "-loop", "1", "-i", textstrip_png,
         "-loop", "1", "-i", chrome_png,
     ]
-    if audio_path and os.path.exists(audio_path):
-        cmd += ["-i", audio_path, "-filter_complex", filter_complex,
-                "-map", "[v]", "-map", "3:a", "-c:a", "aac"]
+
+    use_intro = bool(intro_pattern)
+    if use_intro:
+        cmd += ["-framerate", str(intro_fps), "-i", intro_pattern]
+        base_filter = (
+            f"[1:v]fade=t=in:st=0:d={FADE_IN_DUR}:color={hexcolor},"
+            f"fade=t=out:st={fade_start}:d={FADE_OUT_DUR}:color={hexcolor}[txtfade];"
+            f"[0:v][txtfade]overlay=x=0:y='{y_expr}':shortest=0[bg1];"
+            f"[bg1][2:v]overlay=x=0:y=0:shortest=1[bg2];"
+            f"[bg2][3:v]overlay=x=0:y=0:enable='lt(t,{intro_dur})'[v]"
+        )
+        next_input_idx = 4
     else:
-        cmd += ["-filter_complex", filter_complex, "-map", "[v]", "-an"]
+        base_filter = (
+            f"[1:v]fade=t=in:st=0:d={FADE_IN_DUR}:color={hexcolor},"
+            f"fade=t=out:st={fade_start}:d={FADE_OUT_DUR}:color={hexcolor}[txtfade];"
+            f"[0:v][txtfade]overlay=x=0:y='{y_expr}':shortest=0[bg1];"
+            f"[bg1][2:v]overlay=x=0:y=0:shortest=1[v]"
+        )
+        next_input_idx = 3
+
+    if audio_path and os.path.exists(audio_path):
+        cmd += ["-i", audio_path, "-filter_complex", base_filter,
+                "-map", "[v]", "-map", f"{next_input_idx}:a", "-c:a", "aac"]
+    else:
+        cmd += ["-filter_complex", base_filter, "-map", "[v]", "-an"]
     cmd += ["-c:v", "libx264", "-preset", "fast", "-pix_fmt", "yuv420p",
             "-shortest", "-t", str(dur), out_mp4]
 
@@ -338,6 +482,10 @@ def main():
     print(f"  Шрифт: {FONT_DIR}\n  Блоков: {len(blocks)}")
     os.makedirs(TMP_DIR, exist_ok=True)
 
+    INTRO_FPS = 25
+    INTRO_DUR = 1.6
+    n_intro = int(INTRO_FPS * INTRO_DUR)
+
     all_mp4s = []
     for idx, block in enumerate(blocks):
         key = block.get("key", f"block_{idx}")
@@ -351,10 +499,24 @@ def main():
         strip_png  = os.path.join(TMP_DIR, f"strip_{idx:02d}.png")
         block_mp4  = os.path.join(TMP_DIR, f"block_{idx:02d}.mp4")
 
-        build_chrome(block, theme, chrome_png)
+        build_chrome(block, theme, chrome_png, reveal_frac=1.0)
         strip_h = build_textstrip(block.get("text", ""), theme, strip_png)
         audio_path = mp3_path if os.path.exists(mp3_path) else None
-        if render_block_video(chrome_png, strip_png, strip_h, audio_path, theme, block_mp4):
+
+        # интро-анимация (прорисовка графика + счётчик) — только если для
+        # этого блока вообще есть график (get_temp_curve вернул данные)
+        intro_pattern = None
+        if get_temp_curve(key):
+            intro_dir = os.path.join(TMP_DIR, f"intro_{idx:02d}")
+            os.makedirs(intro_dir, exist_ok=True)
+            for i in range(n_intro):
+                linear = (i+1)/n_intro
+                reveal = ease_in_out_cubic(linear)
+                build_chrome(block, theme, os.path.join(intro_dir, f"f{i:04d}.png"), reveal_frac=reveal)
+            intro_pattern = os.path.join(intro_dir, "f%04d.png")
+
+        if render_block_video(chrome_png, strip_png, strip_h, audio_path, theme, block_mp4,
+                               intro_pattern=intro_pattern, intro_fps=INTRO_FPS, intro_dur=INTRO_DUR):
             all_mp4s.append(block_mp4)
 
     if not all_mp4s:
@@ -363,8 +525,15 @@ def main():
     ok = concat_videos(all_mp4s, MP4_FILE)
     if ok:
         for fname in os.listdir(TMP_DIR):
+            full = os.path.join(TMP_DIR, fname)
             if fname.startswith(('chrome_', 'strip_', 'block_')) or fname == 'concat_list.txt':
-                try: os.remove(os.path.join(TMP_DIR, fname))
+                try: os.remove(full)
+                except: pass
+            elif fname.startswith('intro_') and os.path.isdir(full):
+                try:
+                    for sub in os.listdir(full):
+                        os.remove(os.path.join(full, sub))
+                    os.rmdir(full)
                 except: pass
     print("  Готово!" if ok else "  Завершено с ошибками.")
 
