@@ -182,6 +182,34 @@ def _range_sub(text, unit_pattern, unit_word, allow_decimal=False):
         return f'{n1}, {n2} {unit_word}'
     return pattern.sub(repl, text)
 
+def _dedupe_repeated_units(text, forms):
+    """Если в одном предложении несколько отдельных чисел с одной и той же
+    словесной единицей измерения (напр. "с 26 градусов до 19 градусов" или
+    "18 градусов ... 19 градусов ... 22 градуса"), убираем единицу у всех
+    вхождений, кроме последнего в предложении — она проговаривается один раз
+    в конце, а не после каждого числа."""
+    unit_alt = '|'.join(sorted(forms, key=len, reverse=True))
+    pattern = re.compile(r'(-?\d+(?:[.,]\d+)?)(\s+)(' + unit_alt + r')\b')
+
+    def process_sentence(sent):
+        matches = list(pattern.finditer(sent))
+        if len(matches) < 2:
+            return sent
+        last_idx = len(matches) - 1
+        out = []
+        pos = 0
+        for i, m in enumerate(matches):
+            out.append(sent[pos:m.start()])
+            out.append(m.group(0) if i == last_idx else m.group(1))
+            pos = m.end()
+        out.append(sent[pos:])
+        return ''.join(out)
+
+    parts = re.split(r'([.!?]\s+)', text)
+    for i in range(0, len(parts), 2):
+        parts[i] = process_sentence(parts[i])
+    return ''.join(parts)
+
 def preprocess_tts(text):
     # Предупреждения
     text = text.replace('\u26a0\ufe0f', 'Внимание!')
@@ -251,6 +279,8 @@ def preprocess_tts(text):
     text = re.sub(r'\bT-Td\b', 'точки росы', text)
     text = re.sub(r'конвективной энергии\s*\(CAPE\)', 'индекса конвективной энергии', text, flags=re.IGNORECASE)
     text = re.sub(r'\bCAPE\b', 'индекс конвективной энергии', text)
+    # Если перед LI уже стоит слово "индекс"/"индекса" и т.п. — не дублируем его
+    text = re.sub(r'(?i)(\bиндекс[а-я]*)\s+LI\b', r'\1 неустойчивости', text)
     text = re.sub(r'\bLI\b', 'индекс неустойчивости', text)
     # CIN с падежными формами
     text = re.sub(r'(?i)(\bотрицательном|\bвысоком|\bнизком|\bсильном|\bслабом|\bувеличенном)\s+CIN\b', r'\1 конвективном торможении', text)
@@ -304,9 +334,11 @@ def preprocess_tts(text):
         return f'{m.group(1)} {w}'
     text = re.sub(r'(\d+)\s*%', percent_word, text)
 
-    # Схлопываем дублирующиеся единицы при связке двух диапазонов через "до"
-    text = re.sub(r'(\d+,\s*\d+)\s*градусов\s+до\s+(\d+,\s*\d+)\s*градусов', r'\1 до \2 градусов', text)
-    text = re.sub(r'\s*метров в секунду(,\s*с порывами до)', r'\1', text)
+    # Схлопываем дублирующиеся единицы измерения, если в одном предложении
+    # несколько отдельных чисел подряд (температура, ветер, проценты)
+    text = _dedupe_repeated_units(text, ['градус', 'градуса', 'градусов'])
+    text = _dedupe_repeated_units(text, ['метр в секунду', 'метра в секунду', 'метров в секунду'])
+    text = _dedupe_repeated_units(text, ['процент', 'процента', 'процентов'])
 
     # Убираем markdown
     text = re.sub(r'#+\s*', '', text)
