@@ -44,6 +44,8 @@ let _hmcbasSeaTemp    = null;
 let _hmcbasFetchedAt  = 0;
 let _hmcbasTelegram   = null;
 let _hmcbasTgFetchedAt = 0;
+let _tiktokSeaTemp    = [];
+let _tiktokFetchedAt  = 0;
 
 const MARINE_PARAMS = {
     sst:          { label:"Температура воды",  unit:"°C",  color:"#ffd166" },
@@ -235,6 +237,25 @@ async function loadHmcbasTelegram(){
         if(Array.isArray(arr) && arr.length) _hmcbasTelegram = arr[arr.length - 1];
     } catch(e){
         _hmcbasTgFetchedAt = 0;
+    }
+}
+
+async function loadTiktokSeaTemp(){
+    // Речевой факт из TikTok-роликов (2 канала), накапливается в
+    // tiktok_sea_temp.json; на странице показываем последнюю запись по
+    // каждому каналу.
+    if(Date.now() - _tiktokFetchedAt < 30 * 60000) return; // раз в 30 мин
+    _tiktokFetchedAt = Date.now();
+    try {
+        const r = await fetch(
+            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/tiktok_sea_temp.json",
+            { cache: "no-store" }
+        );
+        if(!r.ok) return;
+        const arr = await r.json();
+        if(Array.isArray(arr)) _tiktokSeaTemp = arr;
+    } catch(e){
+        _tiktokFetchedAt = 0;
     }
 }
 
@@ -1239,7 +1260,6 @@ function makeMarineBlock(){
 function makeHmcbasVerifyBlock(){
     const hasSite = _hmcbasSeaTemp   && _hmcbasSeaTemp.sea_temp   != null;
     const hasTg   = _hmcbasTelegram  && _hmcbasTelegram.sea_temp  != null;
-    if(!hasSite && !hasTg) return "";
 
     const modelSst = _marineData && _marineData.sst != null ? _marineData.sst : null;
 
@@ -1273,6 +1293,24 @@ function makeHmcbasVerifyBlock(){
         return factRow("📨 ГМЦ ЧАМ, Telegram", _hmcbasTelegram.sea_temp, diffSpan(_hmcbasTelegram.sea_temp), dateTxt);
     })() : "";
 
+    // последняя валидная запись по каждому TikTok-каналу
+    const tiktokLatest = {};
+    for(const e of _tiktokSeaTemp){
+        if(e.sea_temp == null) continue;
+        const key = e.channel || e.url;
+        if(!tiktokLatest[key] || e.timestamp > tiktokLatest[key].timestamp) tiktokLatest[key] = e;
+    }
+    const tiktokRows = Object.values(tiktokLatest).map(e => {
+        const dateTxt = e.date ? " · " + e.date.split("-").slice(1).reverse().join(".") : "";
+        const extras = [];
+        if(e.beach) extras.push(e.beach.charAt(0).toUpperCase() + e.beach.slice(1));
+        if(e.time)  extras.push(e.time);
+        const extraTxt = extras.length ? ` (${extras.join(", ")})` : "";
+        return factRow("🎵 TikTok" + dateTxt, e.sea_temp, diffSpan(e.sea_temp), extraTxt);
+    }).join("");
+
+    if(!hasSite && !hasTg && !tiktokRows) return "";
+
     return `
     <div style="margin-top:12px;border-top:1px solid #2a2a2a;padding-top:10px;">
         <div style="font-size:11px;color:#555;margin-bottom:8px;
@@ -1282,6 +1320,7 @@ function makeHmcbasVerifyBlock(){
         <div class="pws-fields">
             ${siteRow}
             ${tgRow}
+            ${tiktokRows}
         </div>
     </div>`;
 }
@@ -1524,7 +1563,8 @@ async function loadAndRender(){
     loadMarine(),
     loadMarineHistory(),
     loadHmcbasSeaTemp(),
-    loadHmcbasTelegram()
+    loadHmcbasTelegram(),
+    loadTiktokSeaTemp()
 ]);
     const p = stationResult.status === "fulfilled"
         ? stationResult.value
