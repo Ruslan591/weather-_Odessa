@@ -1175,43 +1175,6 @@ function makeMarineBlock(){
             <span style="font-size:26px;font-weight:800;color:${sstColor};">${m.sst.toFixed(1)}°C</span>
         </div>` : "";
 
-    const hmcbasHtml = (_hmcbasSeaTemp && _hmcbasSeaTemp.sea_temp != null) ? (() => {
-        const factT   = _hmcbasSeaTemp.sea_temp;
-        const diff    = (m.sst != null) ? (m.sst - factT) : null;
-        const diffCol = diff != null && Math.abs(diff) >= 1 ? "#ff9f5c" : "#888";
-        const diffHtml = diff != null
-            ? ` <span style="font-size:12px;color:${diffCol};">(CMEMS ${diff >= 0 ? "+" : ""}${diff.toFixed(1)}°)</span>`
-            : "";
-        const staleTxt = _hmcbasSeaTemp.stale ? " · устар." : "";
-        return `<div style="display:flex;justify-content:space-between;align-items:center;
-                    padding:6px 0 10px;border-bottom:1px solid #1e1e1e;margin-bottom:6px;">
-            <span style="font-size:13px;color:#888;">📡 ГМЦ ЧАМ, факт${staleTxt}</span>
-            <span style="font-size:16px;font-weight:700;color:#eee;">${factT.toFixed(1)}°C${diffHtml}</span>
-        </div>`;
-    })() : "";
-
-    const hmcbasTgHtml = (_hmcbasTelegram && _hmcbasTelegram.sea_temp != null) ? (() => {
-        const factT   = _hmcbasTelegram.sea_temp;
-        const diff    = (m.sst != null) ? (m.sst - factT) : null;
-        const diffCol = diff != null && Math.abs(diff) >= 1 ? "#ff9f5c" : "#888";
-        const diffHtml = diff != null
-            ? ` <span style="font-size:12px;color:${diffCol};">(CMEMS ${diff >= 0 ? "+" : ""}${diff.toFixed(1)}°)</span>`
-            : "";
-        let dateTxt = "";
-        try {
-            const dt = new Date(_hmcbasTelegram.timestamp);
-            if(!isNaN(dt)) dateTxt = " · " + dt.toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit"});
-        } catch(e){}
-        return `<div style="display:flex;justify-content:space-between;align-items:center;
-                    padding:6px 0 10px;border-bottom:1px solid #1e1e1e;margin-bottom:6px;">
-            <span style="font-size:13px;color:#888;">📨 ГМЦ ЧАМ, Telegram${dateTxt}</span>
-            <span style="font-size:16px;font-weight:700;color:#eee;">${factT.toFixed(1)}°C${diffHtml}</span>
-        </div>`;
-    })() : "";
-
-
-        
-
     const seaLevelHtml = m.seaLevel != null ? (() => {
         const cm  = m.seaLevel;
         const arr = cm > 5 ? " ↑" : cm < -5 ? " ↓" : " →";
@@ -1261,13 +1224,64 @@ function makeMarineBlock(){
         </div>
         ${warnHtml}
         ${sstHtml}
-        ${hmcbasHtml}
-        ${hmcbasTgHtml}
         <div class="pws-fields">
             ${seaLevelHtml}
             ${rows.map(([k,v]) =>
                 `<div class="districtLine"><span>${k}</span><span>${v}</span></div>`
             ).join("")}
+        </div>
+    </div>`;
+}
+
+/* =========================================================
+   БЛОК: СВЕРКА С РЕАЛЬНЫМИ ЗАМЕРАМИ (ГМЦ ЧАМ)
+========================================================= */
+function makeHmcbasVerifyBlock(){
+    const hasSite = _hmcbasSeaTemp   && _hmcbasSeaTemp.sea_temp   != null;
+    const hasTg   = _hmcbasTelegram  && _hmcbasTelegram.sea_temp  != null;
+    if(!hasSite && !hasTg) return "";
+
+    const modelSst = _marineData && _marineData.sst != null ? _marineData.sst : null;
+
+    function factRow(label, factT, diffHtml, extraTxt){
+        return `<div class="districtLine">
+            <span>${label}${extraTxt || ""}</span>
+            <span style="font-weight:700;color:#eee;">${factT.toFixed(1)}°C${diffHtml}</span>
+        </div>`;
+    }
+
+    function diffSpan(factT){
+        if(modelSst == null) return "";
+        const diff = modelSst - factT;
+        const col  = Math.abs(diff) >= 1 ? "#ff9f5c" : "#888";
+        return ` <span style="font-size:12px;color:${col};">(CMEMS ${diff >= 0 ? "+" : ""}${diff.toFixed(1)}°)</span>`;
+    }
+
+    const siteRow = hasSite ? factRow(
+        "📡 ГМЦ ЧАМ, сайт",
+        _hmcbasSeaTemp.sea_temp,
+        diffSpan(_hmcbasSeaTemp.sea_temp),
+        _hmcbasSeaTemp.stale ? " · устар." : ""
+    ) : "";
+
+    const tgRow = hasTg ? (() => {
+        let dateTxt = "";
+        try {
+            const dt = new Date(_hmcbasTelegram.timestamp);
+            if(!isNaN(dt)) dateTxt = " · " + dt.toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit"});
+        } catch(e){}
+        return factRow("📨 ГМЦ ЧАМ, Telegram", _hmcbasTelegram.sea_temp, diffSpan(_hmcbasTelegram.sea_temp), dateTxt);
+    })() : "";
+
+    return `
+    <div style="margin-top:12px;border-top:1px solid #2a2a2a;padding-top:10px;">
+        <div style="font-size:11px;color:#555;margin-bottom:8px;
+                    text-transform:uppercase;letter-spacing:.5px;">
+            Сверка с реальными замерами
+        </div>
+        <div class="pws-fields">
+            ${siteRow}
+            ${tgRow}
         </div>
     </div>`;
 }
@@ -1443,6 +1457,7 @@ function renderPWSStation(p){
 
         ${makeSolarWbgtBlock(p)}
         ${makeMarineBlock()}
+        ${makeHmcbasVerifyBlock()}
 
         ${rowsAbout.length ? `<details style="margin-top:8px;">
             <summary onclick="toggleDetails(event)">О станции</summary>
