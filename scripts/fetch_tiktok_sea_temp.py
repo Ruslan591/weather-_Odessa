@@ -21,6 +21,7 @@ import os
 import re
 import subprocess
 import tempfile
+import time
 from datetime import datetime, timezone
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -79,22 +80,34 @@ def latest_video_info(channel_url):
 
 def download_video(url, workdir):
     out_tmpl = os.path.join(workdir, "video.%(ext)s")
-    subprocess.run(
-        ["yt-dlp", "-f", "mp4/best", "-o", out_tmpl, url],
-        check=True, cwd=workdir, timeout=180
-    )
+    try:
+        subprocess.run(
+            ["yt-dlp", "-f", "mp4/best", "-o", out_tmpl, url],
+            check=True, cwd=workdir, timeout=180,
+            capture_output=True, text=True
+        )
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"yt-dlp exit={e.returncode}: {e.stderr[-400:]}")
+
     for name in os.listdir(workdir):
         if name.startswith("video."):
-            return os.path.join(workdir, name)
+            path = os.path.join(workdir, name)
+            size = os.path.getsize(path)
+            if size < 1024:
+                raise RuntimeError(f"скачанный файл подозрительно маленький ({size} байт) — возможен rate-limit/бан TikTok")
+            return path
     raise RuntimeError("yt-dlp не создал видеофайл")
 
 
 def extract_audio(video_path, workdir):
     audio_path = os.path.join(workdir, "audio.mp3")
-    subprocess.run(
-        ["ffmpeg", "-y", "-i", video_path, "-vn", "-acodec", "mp3", audio_path],
-        check=True, capture_output=True, timeout=60
-    )
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", video_path, "-vn", "-acodec", "mp3", audio_path],
+            check=True, capture_output=True, timeout=60, text=True
+        )
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"ffmpeg exit={e.returncode}: {e.stderr[-400:]}")
     return audio_path
 
 
@@ -334,7 +347,10 @@ def main():
         print("  [WARN] data/tiktok_channels.json пуст — нечего обрабатывать")
         return
 
-    for entry in channels:
+    for i, entry in enumerate(channels):
+        if i > 0:
+            print("  пауза 20с между каналами (снизить риск rate-limit TikTok)...")
+            time.sleep(20)
         process_channel(entry, history)
 
     save_json(CHANNELS_FILE, channels)
