@@ -278,19 +278,31 @@ def process_channel(entry, history):
         try:
             print(f"  [{label}] скачиваю видео: {video_url}")
             video_path = download_video(video_url, workdir)
+        except Exception as e:
+            err = f"download_video: {e}"
+            print(f"  [WARN][{label}] скачивание не удалось: {e}")
+            entry["last_error"] = err[-500:]
+            return
 
+        # Речь и OCR — независимо друг от друга: у ролика может не быть
+        # звуковой дорожки (слайд-шоу/muted), но при этом текст на кадре
+        # всё равно можно распознать, и наоборот.
+        try:
             audio_path = extract_audio(video_path, workdir)
             print(f"  [{label}] распознаю речь...")
             speech_text = transcribe(audio_path)
+        except Exception as e:
+            print(f"  [WARN][{label}] речь недоступна/не распозналась: {e}")
 
+        try:
             frames = extract_frames(video_path, workdir)
             print(f"  [{label}] OCR по {len(frames)} кадрам...")
             ocr_text = ocr_frames(frames)
         except Exception as e:
-            err = f"download/transcribe/ocr: {e}"
-            print(f"  [WARN][{label}] обработка не удалась: {e}")
-            entry["last_error"] = err[-500:]
-            return
+            print(f"  [WARN][{label}] OCR не удался: {e}")
+
+        if not speech_text and not ocr_text:
+            entry["last_error"] = "ни речь, ни OCR не дали результата (видео без звука и без читаемого оверлея?)"
 
     now = datetime.now(timezone.utc)
 
