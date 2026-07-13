@@ -237,18 +237,24 @@ def process_channel(entry, history):
     seed = entry["seed_video"]
     label = entry.get("label") or seed
 
+    def _record_error(msg):
+        entry["last_error"]    = msg[-800:]
+        entry["last_error_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
     if not entry.get("channel_url"):
         try:
             entry["channel_url"] = resolve_channel_url(seed)
             print(f"  [{label}] резолвнут канал: {entry['channel_url']}")
         except Exception as e:
             print(f"  [WARN][{label}] не удалось резолвнуть канал: {e}")
+            _record_error(f"resolve_channel_url: {e}")
             return
 
     try:
         info = latest_video_info(entry["channel_url"])
     except Exception as e:
         print(f"  [WARN][{label}] не удалось получить последний ролик: {e}")
+        _record_error(f"latest_video_info: {e}")
         return
 
     video_id = info.get("id")
@@ -274,8 +280,11 @@ def process_channel(entry, history):
             ocr_text = ocr_frames(frames)
         except Exception as e:
             print(f"  [WARN][{label}] обработка не удалась: {e}")
+            _record_error(f"process: {e}")
             return
 
+    entry.pop("last_error", None)
+    entry.pop("last_error_at", None)
     now = datetime.now(timezone.utc)
 
     temp_speech = parse_temp_from_speech(speech_text)
