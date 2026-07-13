@@ -15,8 +15,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install ffmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install ffmpeg + tesseract
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg tesseract-ocr tesseract-ocr-rus
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -24,7 +24,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install deps
-        run: pip install yt-dlp openai-whisper
+        run: pip install yt-dlp openai-whisper pytesseract Pillow
 
       - name: Run fetch script
         run: python3 scripts/fetch_tiktok_sea_temp.py
