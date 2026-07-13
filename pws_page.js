@@ -1288,9 +1288,13 @@ function makeHmcbasVerifyBlock(){
         let dateTxt = "";
         try {
             const dt = new Date(_hmcbasTelegram.timestamp);
-            if(!isNaN(dt)) dateTxt = " · " + dt.toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit"});
+            if(!isNaN(dt)){
+                const d = dt.toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit",timeZone:"Europe/Kyiv"});
+                const t = dt.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit",timeZone:"Europe/Kyiv"});
+                dateTxt = ` · ${d} ${t}`;
+            }
         } catch(e){}
-        return factRow("📨 ГМЦ ЧАМ, Telegram", _hmcbasTelegram.sea_temp, diffSpan(_hmcbasTelegram.sea_temp), dateTxt);
+        return factRow("📨 ГМЦ ЧАМ", _hmcbasTelegram.sea_temp, diffSpan(_hmcbasTelegram.sea_temp), dateTxt);
     })() : "";
 
     // последняя валидная запись по каждому TikTok-каналу
@@ -1301,10 +1305,10 @@ function makeHmcbasVerifyBlock(){
         if(!tiktokLatest[key] || e.timestamp > tiktokLatest[key].timestamp) tiktokLatest[key] = e;
     }
     const tiktokRows = Object.values(tiktokLatest).map(e => {
-        const dateTxt = e.date ? " · " + e.date.split("-").slice(1).reverse().join(".") : "";
+        let dateTxt = e.date ? " · " + e.date.split("-").slice(1).reverse().join(".") : "";
+        if(e.time) dateTxt += " " + e.time;
         const extras = [];
         if(e.beach) extras.push(e.beach.charAt(0).toUpperCase() + e.beach.slice(1));
-        if(e.time)  extras.push(e.time);
         const extraTxt = extras.length ? ` (${extras.join(", ")})` : "";
         return factRow("🎵 TikTok" + dateTxt, e.sea_temp, diffSpan(e.sea_temp), extraTxt);
     }).join("");
