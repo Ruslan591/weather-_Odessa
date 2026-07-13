@@ -35,4 +35,8 @@ jobs:
           git config user.email "actions@github.com"
           git add data/tiktok_sea_temp.json data/tiktok_channels.json
           git commit -m "TikTok sea temp: scheduled update" || echo "No changes"
-          git push
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push && break
+            echo "push failed (race with другой workflow), retry $i..."
+            sleep $(( (RANDOM % 10) + 5 ))
+          done
