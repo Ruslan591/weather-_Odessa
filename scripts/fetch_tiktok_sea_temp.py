@@ -1,21 +1,31 @@
 """
-Постоянный (не разовый) парсер температуры воды из TikTok-роликов.
-Работает по КАНАЛАМ, а не по разовым ссылкам на видео: при первом запуске
-резолвит сам канал из seed-ссылки на видео через `yt-dlp -j` (поле
-channel_url/uploader_url), дальше на каждом запуске проверяет последний
+Постоянный парсер температуры воды из TikTok-роликов.
+
+Работает по КАНАЛАМ: при первом запуске резолвит канал из seed-ссылки на
+видео через `yt-dlp -j`, дальше на каждом запуске проверяет последний
 ролик канала и обрабатывает только НОВЫЙ (дедуп по video_id).
 
-Из речи (Whisper, ru) вытаскивает:
-  - дату замера ("12 июля" -> ISO, год берётся текущий на момент обработки)
-  - температуру воды (учитывает десятичную запятую/точку: "20,2 градуса")
-  - место/пляж — по списку известных пляжей Одессы (best-effort, подстрокой
-    по транскрипту; список можно расширять по мере появления промахов)
-  - время — ТОЛЬКО если произнесено голосом ("в 9:15", "в 8 часов").
-    Точное время, которое у них подаётся текстом на кадре, сюда не входит —
-    для этого нужен отдельный OCR-пайплайн по кадрам, здесь его нет.
+Два независимых источника данных из одного и того же видео:
+
+1) РЕЧЬ (Whisper, ru) — дата ("12 июля" -> ISO), температура (озвученная),
+   упоминание пляжа (best-effort по списку известных мест Одессы).
+
+2) НАЛОЖЕННЫЙ НА КАДР ТЕКСТ (OCR, Tesseract, rus) — у некоторых каналов
+   поверх видео печатают точные "14.9 градусов" и "Время 7:15" — этого
+   в речи нет, только на картинке. Кадры вытаскиваются через ffmpeg
+   (несколько fps на первые ~40 секунд ролика), каждый прогоняется через
+   Tesseract, тексты со всех кадров склеиваются и парсятся.
+
+Итоговое значение sea_temp: если OCR нашёл число — используем его
+(точный печатный текст надёжнее распознанной речи), иначе — из речи.
+Время (time) — только из OCR, в речи оно не озвучивается.
 
 Состояние по каналам (channel_url, last_video_id) — data/tiktok_channels.json
 История наблюдений (накопительно, все каналы) — data/tiktok_sea_temp.json
+
+Доп. зависимости (не входят в основной пайплайн, только в workflow этого скрипта):
+    pip install yt-dlp openai-whisper pytesseract Pillow
+    apt-get install ffmpeg tesseract-ocr tesseract-ocr-rus
 """
 
 import json
@@ -35,7 +45,6 @@ MONTHS_RU = {
 }
 
 # Best-effort список известных пляжей/точек Одессы для сопоставления подстрокой.
-# Расширять по мере появления непойманных названий в транскриптах.
 BEACHES = [
     "ланжерон", "аркадия", "аркадію", "отрада", "золотой берег", "дельфин",
     "чайка", "куяльник", "лузановка", "черноморка", "санта-барбара",
@@ -43,15 +52,17 @@ BEACHES = [
     "16 фонтана", "трасса здоровья", "бугаз", "затока", "ревьера", "ревьере",
 ]
 
-# Ищем число перед "градус" и отдельно проверяем, что где-то РАНЬШЕ (в пределах
-# 100 символов) встречалось слово "температура" — без ограничения на то, что
-# может стоять между ними (Whisper часто вставляет мусорные цифры/пунктуацию
-# в паузах речи, например "воды в 10. 14,9 градусов").
-NUMBER_BEFORE_GRADUS_RE = re.compile(r'(\d{1,2}(?:[.,]\d)?)\s*градус', re.IGNORECASE)
+# Число перед "градус" — ищем везде, потом проверяем контекст (слово
+# "температур" где-то раньше в пределах 100 символов) отдельно в parse_temp.
+NUMBER_BEFORE_GRADUS_RE = re.compile(r'(\d{1,2}(?:[.,]\d)?)\s*град', re.IGNORECASE)
 DATE_RE = re.compile(
     r'(\d{1,2})\s+(' + "|".join(MONTHS_RU.keys()) + r')',
     re.IGNORECASE,
 )
+# OCR-версия времени: "Время 7:15" / "Время 07.15" — Tesseract может
+# ошибиться в отдельных буквах слова "Время", поэтому матчим по обрубку "рем".
+OCR_TIME_RE = re.compile(r'[Вв]рем[а-яА-Я]*\W{0,4}(\d{1,2})[:.\s](\d{2})')
+# Устный вариант времени (на случай, если где-то всё же озвучат) — прежнее поведение.
 TIME_COLON_RE = re.compile(r'\b(\d{1,2}):(\d{2})\b')
 TIME_HOUR_RE  = re.compile(r'\bв\s+(\d{1,2})\s+час', re.IGNORECASE)
 
@@ -81,16 +92,50 @@ def latest_video_info(channel_url):
     return json.loads(out.stdout.splitlines()[0])
 
 
-def download_audio(url, workdir):
-    out_tmpl = os.path.join(workdir, "audio.%(ext)s")
+def download_video(url, workdir):
+    out_tmpl = os.path.join(workdir, "video.%(ext)s")
     subprocess.run(
-        ["yt-dlp", "-x", "--audio-format", "mp3", "-o", out_tmpl, url],
+        ["yt-dlp", "-f", "mp4/best", "-o", out_tmpl, url],
         check=True, cwd=workdir, timeout=180
     )
     for name in os.listdir(workdir):
-        if name.startswith("audio."):
+        if name.startswith("video."):
             return os.path.join(workdir, name)
-    raise RuntimeError("yt-dlp не создал аудиофайл")
+    raise RuntimeError("yt-dlp не создал видеофайл")
+
+
+def extract_audio(video_path, workdir):
+    audio_path = os.path.join(workdir, "audio.mp3")
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", video_path, "-vn", "-q:a", "2", audio_path],
+        check=True, capture_output=True, timeout=60
+    )
+    return audio_path
+
+
+def extract_frames(video_path, workdir, fps=2, max_seconds=40):
+    frames_dir = os.path.join(workdir, "frames")
+    os.makedirs(frames_dir, exist_ok=True)
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", video_path, "-t", str(max_seconds),
+         "-vf", f"fps={fps}", os.path.join(frames_dir, "f_%04d.png")],
+        check=True, capture_output=True, timeout=90
+    )
+    return sorted(
+        os.path.join(frames_dir, f) for f in os.listdir(frames_dir) if f.endswith(".png")
+    )
+
+
+def ocr_frames(frame_paths):
+    import pytesseract
+    from PIL import Image
+    texts = []
+    for fp in frame_paths:
+        try:
+            texts.append(pytesseract.image_to_string(Image.open(fp), lang="rus"))
+        except Exception as e:
+            print(f"  [WARN] OCR кадра {fp} не удался: {e}")
+    return "\n".join(texts)
 
 
 _whisper_model = None
@@ -105,7 +150,7 @@ def transcribe(audio_path):
     return result.get("text", "")
 
 
-def parse_temp(text):
+def parse_temp_from_speech(text):
     best = None
     for m in NUMBER_BEFORE_GRADUS_RE.finditer(text):
         window_before = text[max(0, m.start() - 100):m.start()]
@@ -116,7 +161,21 @@ def parse_temp(text):
         except ValueError:
             continue
         if 3 <= val <= 32:
-            best = val  # берём последнее по тексту подходящее упоминание
+            best = val
+    return best
+
+
+def parse_temp_from_ocr(text):
+    # На кадре формат обычно простой: "14.9 градусов" без лишнего текста
+    # рядом — контекстную проверку на "температур" не требуем.
+    best = None
+    for m in NUMBER_BEFORE_GRADUS_RE.finditer(text):
+        try:
+            val = float(m.group(1).replace(",", "."))
+        except ValueError:
+            continue
+        if 3 <= val <= 32:
+            best = val
     return best
 
 
@@ -141,7 +200,14 @@ def parse_beach(text):
     return None
 
 
-def parse_time(text):
+def parse_time_ocr(text):
+    m = OCR_TIME_RE.search(text)
+    if m:
+        return f"{int(m.group(1)):02d}:{m.group(2)}"
+    return None
+
+
+def parse_time_speech(text):
     m = TIME_COLON_RE.search(text)
     if m:
         return f"{int(m.group(1)):02d}:{m.group(2)}"
@@ -192,31 +258,47 @@ def process_channel(entry, history):
         print(f"  [{label}] новых роликов нет (последний уже обработан)")
         return
 
-    text = ""
+    speech_text = ""
+    ocr_text = ""
     with tempfile.TemporaryDirectory() as workdir:
         try:
-            print(f"  [{label}] скачиваю аудио: {video_url}")
-            audio_path = download_audio(video_url, workdir)
-            print(f"  [{label}] распознаю речь...")
-            text = transcribe(audio_path)
+            print(f"  [{label}] скачиваю видео: {video_url}")
+            video_path = download_video(video_url, workdir)
+
+            print(f"  [{label}] извлекаю аудио и распознаю речь...")
+            audio_path = extract_audio(video_path, workdir)
+            speech_text = transcribe(audio_path)
+
+            print(f"  [{label}] извлекаю кадры и распознаю наложенный текст (OCR)...")
+            frames = extract_frames(video_path, workdir)
+            ocr_text = ocr_frames(frames)
         except Exception as e:
             print(f"  [WARN][{label}] обработка не удалась: {e}")
             return
 
     now = datetime.now(timezone.utc)
+
+    temp_speech = parse_temp_from_speech(speech_text)
+    temp_ocr    = parse_temp_from_ocr(ocr_text)
+    time_ocr    = parse_time_ocr(ocr_text)
+    time_speech = parse_time_speech(speech_text)
+
     result = {
-        "channel":    label,
-        "video_id":   video_id,
-        "url":        video_url,
-        "timestamp":  now.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "transcript": text,
-        "date":       parse_date(text, now),
-        "sea_temp":   parse_temp(text),
-        "beach":      parse_beach(text),
-        "time":       parse_time(text),
+        "channel":       label,
+        "video_id":      video_id,
+        "url":           video_url,
+        "timestamp":     now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "transcript":    speech_text,
+        "ocr_text":      ocr_text,
+        "date":          parse_date(speech_text, now),
+        "sea_temp":      temp_ocr if temp_ocr is not None else temp_speech,
+        "sea_temp_ocr":  temp_ocr,
+        "sea_temp_speech": temp_speech,
+        "beach":         parse_beach(speech_text),
+        "time":          time_ocr if time_ocr is not None else time_speech,
     }
     print(f"  [{label}] дата={result['date']} темп={result['sea_temp']}°C "
-          f"пляж={result['beach']} время={result['time']}")
+          f"(ocr={temp_ocr}, речь={temp_speech}) пляж={result['beach']} время={result['time']}")
 
     history.append(result)
     entry["last_video_id"] = video_id
