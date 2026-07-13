@@ -304,6 +304,17 @@ def process_channel(entry, history):
           f"({result['sea_temp_source']}) время={result['time']}({result['time_source']}) "
           f"пляж={result['beach']}")
 
+    # Если не нашлось ни температуры, ни даты — это, скорее всего, не ролик
+    # с замером (например, случайный тренд/аудио-клип в ленте канала).
+    # Отмечаем ролик просмотренным (чтобы не гонять Whisper повторно), но
+    # НЕ засоряем историю бесполезной записью.
+    if result["sea_temp"] is None and result["date"] is None:
+        print(f"  [{label}] похоже, это не ролик с замером — пропускаю запись в историю")
+        entry["last_video_id"] = video_id
+        entry["last_skipped_reason"] = "no temp/date parsed (вероятно нерелевантный ролик)"
+        return
+
+    entry.pop("last_skipped_reason", None)
     history.append(result)
     entry["last_video_id"] = video_id
 
