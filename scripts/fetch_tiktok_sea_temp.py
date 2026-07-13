@@ -65,6 +65,9 @@ TIME_HOUR_RE  = re.compile(r'\bв\s+(\d{1,2})\s+час', re.IGNORECASE)
 # --- наложенный текст на кадре (OCR) ---
 OCR_TEMP_RE = re.compile(r'(\d{1,2}[.,]?\d?)\s*(?:°|град)', re.IGNORECASE)
 OCR_TIME_RE = re.compile(r'[Вв]рем[яи]\D{0,5}(\d{1,2})[:.](\d{2})')
+# запасной вариант: голое "ЧЧ:ММ" без подписи "Время" — так тоже бывает в оверлее
+# (например, время идёт отдельной строкой сразу после даты)
+OCR_BARE_TIME_RE = re.compile(r'\b([01]?\d|2[0-3]):([0-5]\d)\b')
 # числовая дата на кадре вида "13.07.2026"
 OCR_DATE_RE = re.compile(r'\b(\d{1,2})\.(\d{1,2})\.(20\d{2})\b')
 
@@ -194,11 +197,20 @@ def parse_temp_ocr(text):
 
 def parse_time_ocr(text):
     m = OCR_TIME_RE.search(text)
-    if not m:
-        return None
-    h, mm = int(m.group(1)), m.group(2)
-    if 0 <= h <= 23:
-        return f"{h:02d}:{mm}"
+    if m:
+        h, mm = int(m.group(1)), m.group(2)
+        if 0 <= h <= 23:
+            return f"{h:02d}:{mm}"
+    # фоллбэк: ищем голое "ЧЧ:ММ" рядом с датой (в пределах ~40 симв. после неё),
+    # чтобы не хватать случайные цифры из другого места оверлея/шума OCR
+    date_m = OCR_DATE_RE.search(text)
+    if date_m:
+        window = text[date_m.end(): date_m.end() + 40]
+        m2 = OCR_BARE_TIME_RE.search(window)
+        if m2:
+            h, mm = int(m2.group(1)), m2.group(2)
+            if 0 <= h <= 23:
+                return f"{h:02d}:{mm}"
     return None
 
 
