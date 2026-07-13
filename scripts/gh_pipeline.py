@@ -466,7 +466,7 @@ def main():
     check_pws_sync()
     check_pws_calibration()
     check_marine_history()
-    check_hmcbas_sea_temp()
+    # check_hmcbas_sea_temp()  # отключено: виджет сайта стабильно отдаёт 0°C (брак), Telegram надёжнее
     check_hmcbas_telegram()
 
     # calibrate_pws_pressure.py и marine_history.py пишут только в локальный
