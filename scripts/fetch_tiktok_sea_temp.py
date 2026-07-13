@@ -40,13 +40,14 @@ BEACHES = [
     "ланжерон", "аркадия", "аркадію", "отрада", "золотой берег", "дельфин",
     "чайка", "куяльник", "лузановка", "черноморка", "санта-барбара",
     "вилла медичи", "большой фонтан", "малый фонтан", "средний фонтан",
-    "16 фонтана", "трасса здоровья", "бугаз", "затока",
+    "16 фонтана", "трасса здоровья", "бугаз", "затока", "ревьера", "ревьере",
 ]
 
-TEMP_RE = re.compile(
-    r'температур[а-яіїєґ]*\s+(?:вод[а-яіїєґ]*\s+)?(?:[а-яіїєґ\s]{0,25}?)(\d{1,2}(?:[.,]\d)?)\s*градус',
-    re.IGNORECASE,
-)
+# Ищем число перед "градус" и отдельно проверяем, что где-то РАНЬШЕ (в пределах
+# 100 символов) встречалось слово "температура" — без ограничения на то, что
+# может стоять между ними (Whisper часто вставляет мусорные цифры/пунктуацию
+# в паузах речи, например "воды в 10. 14,9 градусов").
+NUMBER_BEFORE_GRADUS_RE = re.compile(r'(\d{1,2}(?:[.,]\d)?)\s*градус', re.IGNORECASE)
 DATE_RE = re.compile(
     r'(\d{1,2})\s+(' + "|".join(MONTHS_RU.keys()) + r')',
     re.IGNORECASE,
@@ -105,16 +106,18 @@ def transcribe(audio_path):
 
 
 def parse_temp(text):
-    m = TEMP_RE.search(text)
-    if not m:
-        return None
-    try:
-        val = float(m.group(1).replace(",", "."))
-    except ValueError:
-        return None
-    if val < 3 or val > 32:
-        return None
-    return val
+    best = None
+    for m in NUMBER_BEFORE_GRADUS_RE.finditer(text):
+        window_before = text[max(0, m.start() - 100):m.start()]
+        if not re.search(r'температур', window_before, re.IGNORECASE):
+            continue
+        try:
+            val = float(m.group(1).replace(",", "."))
+        except ValueError:
+            continue
+        if 3 <= val <= 32:
+            best = val  # берём последнее по тексту подходящее упоминание
+    return best
 
 
 def parse_date(text, fallback_dt):
