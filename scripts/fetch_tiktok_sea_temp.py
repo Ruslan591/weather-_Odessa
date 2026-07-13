@@ -240,13 +240,17 @@ def process_channel(entry, history):
             entry["channel_url"] = resolve_channel_url(seed)
             print(f"  [{label}] резолвнут канал: {entry['channel_url']}")
         except Exception as e:
+            err = f"resolve_channel_url: {e}"
             print(f"  [WARN][{label}] не удалось резолвнуть канал: {e}")
+            entry["last_error"] = err[-500:]
             return
 
     try:
         info = latest_video_info(entry["channel_url"])
     except Exception as e:
+        err = f"latest_video_info: {e}"
         print(f"  [WARN][{label}] не удалось получить последний ролик: {e}")
+        entry["last_error"] = err[-500:]
         return
 
     video_id = info.get("id")
@@ -270,7 +274,9 @@ def process_channel(entry, history):
             print(f"  [{label}] OCR по {len(frames)} кадрам...")
             ocr_text = ocr_frames(frames)
         except Exception as e:
+            err = f"download/transcribe/ocr: {e}"
             print(f"  [WARN][{label}] обработка не удалась: {e}")
+            entry["last_error"] = err[-500:]
             return
 
     now = datetime.now(timezone.utc)
@@ -315,6 +321,7 @@ def process_channel(entry, history):
         return
 
     entry.pop("last_skipped_reason", None)
+    entry.pop("last_error", None)
     history.append(result)
     entry["last_video_id"] = video_id
 
