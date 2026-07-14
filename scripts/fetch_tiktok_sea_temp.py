@@ -116,7 +116,11 @@ def latest_video_info(channel_url):
         return (info.get("timestamp") or 0, info.get("upload_date") or "")
 
     candidates.sort(key=sort_key, reverse=True)
-    return candidates[0]
+    debug_info = [
+        {"id": c.get("id"), "timestamp": c.get("timestamp"), "upload_date": c.get("upload_date")}
+        for c in candidates
+    ]
+    return candidates[0], debug_info
 
 
 def download_video(url, workdir):
@@ -309,7 +313,8 @@ def process_channel(entry, history):
             return
 
     try:
-        info = latest_video_info(entry["channel_url"])
+        info, playlist_debug = latest_video_info(entry["channel_url"])
+        entry["last_playlist_debug"] = playlist_debug
     except Exception as e:
         err = f"latest_video_info: {e}"
         print(f"  [WARN][{label}] не удалось получить последний ролик: {e}")
