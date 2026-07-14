@@ -88,13 +88,35 @@ def resolve_channel_url(seed_video_url):
 
 
 def latest_video_info(channel_url):
+    # ВАЖНО: --playlist-items 1 не годится — у аккаунта может быть закреплённый
+    # (pinned) ролик, который TikTok всегда показывает первым в списке профиля
+    # независимо от даты публикации. Берём несколько первых позиций и выбираем
+    # реально самый новый по timestamp/upload_date, игнорируя порядок в списке.
     out = subprocess.run(
-        ["yt-dlp", "-j", "--no-warnings", "--playlist-items", "1", channel_url],
-        capture_output=True, text=True, timeout=60
+        ["yt-dlp", "-j", "--no-warnings", "--playlist-items", "1-5", channel_url],
+        capture_output=True, text=True, timeout=90
     )
     if out.returncode != 0:
         raise RuntimeError(out.stderr[-500:])
-    return json.loads(out.stdout.splitlines()[0])
+
+    candidates = []
+    for line in out.stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            candidates.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    if not candidates:
+        raise RuntimeError("yt-dlp не вернул ни одного видео для канала")
+
+    def sort_key(info):
+        # timestamp (unix, точнее) приоритетнее upload_date (только дата)
+        return (info.get("timestamp") or 0, info.get("upload_date") or "")
+
+    candidates.sort(key=sort_key, reverse=True)
+    return candidates[0]
 
 
 def download_video(url, workdir):
