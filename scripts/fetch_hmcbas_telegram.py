@@ -24,11 +24,29 @@ import json
 import os
 import re
 import urllib.request
+from datetime import datetime, timezone
 
 URL = "https://t.me/s/HMC_Odesa"
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_FILE = os.path.join(BASE_DIR, "data", "hmcbas_telegram_sea_temp.json")
+DEBUG_FILE = os.path.join(BASE_DIR, "data", "hmcbas_telegram_debug.json")
+
+
+def _write_debug(status, note, raw_matches=None):
+    # Лёгкая диагностика без доступа к логам Actions: видно прямо в репозитории,
+    # что произошло на последнем запуске (fetch ok/fail, сколько блоков
+    # "Поточна погода" вообще нашлось на странице, и т.д.)
+    try:
+        with open(DEBUG_FILE, "w", encoding="utf-8") as f:
+            json.dump({
+                "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "status": status,
+                "note": note,
+                "raw_matches_on_page": raw_matches,
+            }, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
@@ -73,11 +91,20 @@ def main():
         html = _fetch(URL)
     except Exception as e:
         print(f"  [WARN] t.me/s/HMC_Odesa фетч не удался: {e}")
+        _write_debug("fetch_failed", str(e))
         return
 
+    raw_matches = len(re.findall(r'Поточна погода в Одесі', html))
     new_posts = _parse_posts(html)
     if not new_posts:
         print("  [INFO] на текущей странице канала не найдено постов 'Поточна погода'")
+        _write_debug(
+            "no_valid_posts",
+            f"блоков 'Поточна погода' на странице: {raw_matches} "
+            "(0 = сегодняшний пост ещё не вышел или структура страницы изменилась; "
+            ">0 = пост есть, но не распарсились дата/температура — возможно, поменялся формат)",
+            raw_matches,
+        )
         return
 
     history = []
@@ -104,6 +131,7 @@ def main():
         json.dump(history, f, ensure_ascii=False, indent=2)
 
     print(f"  ✓ ГМЦ ЧАМ Telegram: {added} новых записей, всего в истории {len(history)}")
+    _write_debug("ok", f"добавлено {added}, всего в истории {len(history)}", raw_matches)
 
 
 if __name__ == "__main__":
