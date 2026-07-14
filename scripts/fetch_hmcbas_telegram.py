@@ -55,10 +55,21 @@ DATE_RE = re.compile(r'<time datetime="([^"]+)"')
 SEA_RE  = re.compile(r'Температура морсь?кої? води\s*(-?\d+)\s*°')
 
 
-def _fetch(url, timeout=15):
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return r.read().decode("utf-8", errors="ignore")
+def _fetch(url, timeout=15, retries=3, delay=5):
+    # DNS/сеть на раннере GitHub Actions иногда глючит на секунды-другие —
+    # ретраим, прежде чем считать это реальной ошибкой.
+    import time
+    last_err = None
+    for attempt in range(1, retries + 1):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": UA})
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return r.read().decode("utf-8", errors="ignore")
+        except Exception as e:
+            last_err = e
+            if attempt < retries:
+                time.sleep(delay)
+    raise last_err
 
 
 def _parse_posts(html):
