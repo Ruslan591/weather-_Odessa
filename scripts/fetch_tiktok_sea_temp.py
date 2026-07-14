@@ -156,7 +156,7 @@ def extract_audio(video_path, workdir):
             check=True, capture_output=True, timeout=60, text=True
         )
     except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"ffmpeg exit={e.returncode}: {e.stderr[-400:]}")
+        raise RuntimeError(f"ffmpeg exit={e.returncode}: {e.stderr[-1500:]}")
     return audio_path
 
 
