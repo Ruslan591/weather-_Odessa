@@ -346,19 +346,34 @@ def process_channel(entry, history):
         # Речь и OCR — независимо друг от друга: у ролика может не быть
         # звуковой дорожки (слайд-шоу/muted), но при этом текст на кадре
         # всё равно можно распознать, и наоборот.
+        diag = {"video_size": None, "audio_size": None, "n_frames": None,
+                "speech_len": 0, "ocr_len": 0}
+        try:
+            diag["video_size"] = os.path.getsize(video_path)
+        except Exception:
+            pass
+
         try:
             audio_path = extract_audio(video_path, workdir)
-            print(f"  [{label}] распознаю речь...")
+            diag["audio_size"] = os.path.getsize(audio_path)
+            print(f"  [{label}] распознаю речь... (аудио {diag['audio_size']} байт)")
             speech_text = transcribe(audio_path)
+            diag["speech_len"] = len(speech_text)
         except Exception as e:
             print(f"  [WARN][{label}] речь недоступна/не распозналась: {e}")
+            diag["speech_error"] = str(e)[:200]
 
         try:
             frames = extract_frames(video_path, workdir)
+            diag["n_frames"] = len(frames)
             print(f"  [{label}] OCR по {len(frames)} кадрам...")
             ocr_text = ocr_frames(frames)
+            diag["ocr_len"] = len(ocr_text)
         except Exception as e:
             print(f"  [WARN][{label}] OCR не удался: {e}")
+            diag["ocr_error"] = str(e)[:200]
+
+        entry["last_run_diag"] = diag
 
         if not speech_text and not ocr_text:
             entry["last_error"] = "ни речь, ни OCR не дали результата (видео без звука и без читаемого оверлея?)"
