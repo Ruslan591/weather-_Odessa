@@ -124,10 +124,14 @@ def latest_video_info(channel_url):
 
 
 def download_video(url, workdir):
+    # ВАЖНО: у TikTok видео и аудио нередко идут раздельными потоками —
+    # формат "mp4/best" иногда отдаёт video-only поток без звука.
+    # Явно просим слияние video+audio через ffmpeg (уже установлен в workflow).
     out_tmpl = os.path.join(workdir, "video.%(ext)s")
     try:
         subprocess.run(
-            ["yt-dlp", "-f", "mp4/best", "-o", out_tmpl, url],
+            ["yt-dlp", "-f", "bestvideo+bestaudio/best",
+             "--merge-output-format", "mp4", "-o", out_tmpl, url],
             check=True, cwd=workdir, timeout=180,
             capture_output=True, text=True
         )
