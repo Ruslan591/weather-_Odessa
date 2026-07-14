@@ -127,6 +127,7 @@ def git_push_history():
                         "data/marine_history.json",
                         "data/hmcbas_sea_temp_realtime.json",
                         "data/hmcbas_telegram_sea_temp.json",
+                        "data/hmcbas_telegram_debug.json",
                         "data/pws_sync_state.json",
                         "data/forecast_video.mp4",
                         "data/forecast_video_gemini.mp4",
