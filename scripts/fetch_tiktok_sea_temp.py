@@ -469,6 +469,11 @@ def process_channel(entry, history):
             print(f"  [{label}] OCR по {len(frames)} кадрам...")
             ocr_text = ocr_frames(frames)
             diag["ocr_len"] = len(ocr_text)
+            # Сам текст (обрезанный) — чтобы видеть реальный OCR-мусор и
+            # подгонять регексы дат/времени/температуры под то, что тессеракт
+            # реально распознаёт (например, точки-разделители в дате часто
+            # пропадают: "15.07.2026" -> "151072026").
+            diag["ocr_text_sample"] = ocr_text[:600]
         except Exception as e:
             print(f"  [WARN][{label}] OCR не удался: {e}")
             diag["ocr_error"] = str(e)[:800]
