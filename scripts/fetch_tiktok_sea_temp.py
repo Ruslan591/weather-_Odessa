@@ -148,6 +148,16 @@ def download_video(url, workdir):
     raise RuntimeError("yt-dlp не создал видеофайл")
 
 
+def _last_lines(text, n=15):
+    """Последние N строк вывода ffmpeg, а не последние N символов.
+    Баннер сборки ffmpeg — это одна гигантская строка (список --enable-...
+    флагов) на несколько тысяч символов, поэтому срез по символам почти
+    всегда попадает внутрь баннера, а не на реальное сообщение об ошибке,
+    которое идёт отдельными строками ПОСЛЕ него."""
+    lines = [l for l in text.splitlines() if l.strip()]
+    return "\n".join(lines[-n:])
+
+
 def probe_video(video_path):
     """Диагностика контейнера/кодека входного файла через ffprobe —
     нужна, когда ffmpeg падает с невнятным exit-кодом (например 234 =
@@ -180,9 +190,7 @@ def extract_audio(video_path, workdir):
             check=True, capture_output=True, timeout=60, text=True
         )
     except subprocess.CalledProcessError as e:
-        # Полный stderr (не обрезанный до баннера сборки ffmpeg) —
-        # реальная причина обычно в последних строках, не в первых 1500.
-        raise RuntimeError(f"ffmpeg exit={e.returncode}: {e.stderr[-3000:]}")
+        raise RuntimeError(f"ffmpeg exit={e.returncode}: {_last_lines(e.stderr)}")
     return audio_path
 
 
@@ -195,7 +203,7 @@ def extract_frames(video_path, workdir, n=6):
             check=True, capture_output=True, timeout=60, text=True
         )
     except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"ffmpeg exit={e.returncode}: {e.stderr[-3000:]}")
+        raise RuntimeError(f"ffmpeg exit={e.returncode}: {_last_lines(e.stderr)}")
     frames = sorted(
         os.path.join(workdir, f) for f in os.listdir(workdir) if f.startswith("frame_")
     )
