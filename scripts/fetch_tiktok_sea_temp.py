@@ -222,20 +222,48 @@ def _probe_duration(video_path):
 
 
 def extract_frames(video_path, workdir, n=6):
-    pattern = os.path.join(workdir, "frame_%03d.png")
+    # ВАЖНО: интро-плашка с локацией/датой/временем у этих каналов обычно
+    # видна всего 2-5 секунд В САМОМ НАЧАЛЕ ролика. Раньше кадры брались
+    # равномерно по всей длительности (fps=n/duration) — на длинных видео
+    # (несколько минут) шаг между кадрами мог быть ~30-40 сек, и окно
+    # с текстом легко проскакивало мимо, либо попадало смазанным кадром
+    # ровно на стыке перехода.
+    #
+    # Теперь берём кадры точными сиквенами по времени (-ss), не через
+    # общий fps-фильтр: плотно по 1 кадру в секунду первые 8 секунд
+    # (гарантированно ловим интро-плашку целиком), плюс несколько кадров
+    # дальше по видео на случай повторной плашки с показанием термометра
+    # ближе к концу.
     duration = _probe_duration(video_path)
-    fps = n / max(1.0, duration)
-    try:
-        subprocess.run(
-            ["ffmpeg", "-y", "-i", video_path, "-vf", f"fps={fps}",
-             "-frames:v", str(n), pattern],
-            check=True, capture_output=True, timeout=60, text=True
-        )
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"ffmpeg exit={e.returncode}: {_last_lines(e.stderr)}")
-    frames = sorted(
-        os.path.join(workdir, f) for f in os.listdir(workdir) if f.startswith("frame_")
-    )
+    intro_times = [t for t in range(1, 9) if t < duration]
+    tail_fracs = [0.3, 0.5, 0.7, 0.9]
+    intro_end = intro_times[-1] if intro_times else 0
+    tail_times = [
+        round(duration * f, 2) for f in tail_fracs
+        if duration * f > intro_end + 1
+    ]
+    timestamps = intro_times + tail_times
+    if not timestamps:
+        timestamps = [round(max(0.5, duration / 2), 2)]
+
+    frames = []
+    for i, t in enumerate(timestamps):
+        out_path = os.path.join(workdir, f"frame_{i:03d}.png")
+        try:
+            subprocess.run(
+                ["ffmpeg", "-y", "-ss", str(t), "-i", video_path,
+                 "-frames:v", "1", out_path],
+                check=True, capture_output=True, timeout=20, text=True
+            )
+        except subprocess.CalledProcessError:
+            # один неудачный кадр (например seek за пределы потока) не
+            # должен рушить остальные — просто пропускаем его
+            continue
+        if os.path.exists(out_path):
+            frames.append(out_path)
+
+    if not frames:
+        raise RuntimeError("ни один кадр не извлёкся ни по одному из timestamp'ов")
     return frames
 
 
