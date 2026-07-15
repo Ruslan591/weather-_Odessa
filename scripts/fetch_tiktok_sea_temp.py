@@ -459,6 +459,7 @@ def process_channel(entry, history):
             print(f"  [{label}] распознаю речь... (аудио {diag['audio_size']} байт)")
             speech_text = transcribe(audio_path)
             diag["speech_len"] = len(speech_text)
+            diag["speech_text_sample"] = speech_text[:600]
         except Exception as e:
             print(f"  [WARN][{label}] речь недоступна/не распозналась: {e}")
             diag["speech_error"] = str(e)[:800]
