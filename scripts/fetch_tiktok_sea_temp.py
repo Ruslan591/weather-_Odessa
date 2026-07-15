@@ -148,6 +148,30 @@ def download_video(url, workdir):
     raise RuntimeError("yt-dlp не создал видеофайл")
 
 
+def probe_video(video_path):
+    """Диагностика контейнера/кодека входного файла через ffprobe —
+    нужна, когда ffmpeg падает с невнятным exit-кодом (например 234 =
+    -22 & 0xff, EINVAL), чтобы понять, ЧТО именно не так с файлом."""
+    try:
+        out = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries",
+             "format=format_name,duration,size:stream=codec_name,codec_type,width,height,pix_fmt",
+             "-of", "json", video_path],
+            capture_output=True, text=True, timeout=30
+        )
+        info = {}
+        if out.stdout.strip():
+            try:
+                info = json.loads(out.stdout)
+            except json.JSONDecodeError:
+                info = {"raw_stdout": out.stdout[-500:]}
+        if out.returncode != 0:
+            info["ffprobe_stderr"] = out.stderr[-500:]
+        return info
+    except Exception as e:
+        return {"probe_error": str(e)[:300]}
+
+
 def extract_audio(video_path, workdir):
     audio_path = os.path.join(workdir, "audio.mp3")
     try:
@@ -156,17 +180,22 @@ def extract_audio(video_path, workdir):
             check=True, capture_output=True, timeout=60, text=True
         )
     except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"ffmpeg exit={e.returncode}: {e.stderr[-1500:]}")
+        # Полный stderr (не обрезанный до баннера сборки ffmpeg) —
+        # реальная причина обычно в последних строках, не в первых 1500.
+        raise RuntimeError(f"ffmpeg exit={e.returncode}: {e.stderr[-3000:]}")
     return audio_path
 
 
 def extract_frames(video_path, workdir, n=6):
     pattern = os.path.join(workdir, "frame_%03d.png")
-    subprocess.run(
-        ["ffmpeg", "-y", "-i", video_path, "-vf", f"fps={n}/max(1\\,duration)",
-         "-frames:v", str(n), pattern],
-        capture_output=True, timeout=60
-    )
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", video_path, "-vf", f"fps={n}/max(1\\,duration)",
+             "-frames:v", str(n), pattern],
+            check=True, capture_output=True, timeout=60, text=True
+        )
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"ffmpeg exit={e.returncode}: {e.stderr[-3000:]}")
     frames = sorted(
         os.path.join(workdir, f) for f in os.listdir(workdir) if f.startswith("frame_")
     )
@@ -353,6 +382,8 @@ def process_channel(entry, history):
         except Exception:
             pass
 
+        diag["probe"] = probe_video(video_path)
+
         try:
             audio_path = extract_audio(video_path, workdir)
             diag["audio_size"] = os.path.getsize(audio_path)
@@ -361,7 +392,7 @@ def process_channel(entry, history):
             diag["speech_len"] = len(speech_text)
         except Exception as e:
             print(f"  [WARN][{label}] речь недоступна/не распозналась: {e}")
-            diag["speech_error"] = str(e)[:200]
+            diag["speech_error"] = str(e)[:800]
 
         try:
             frames = extract_frames(video_path, workdir)
@@ -371,7 +402,7 @@ def process_channel(entry, history):
             diag["ocr_len"] = len(ocr_text)
         except Exception as e:
             print(f"  [WARN][{label}] OCR не удался: {e}")
-            diag["ocr_error"] = str(e)[:200]
+            diag["ocr_error"] = str(e)[:800]
 
         entry["last_run_diag"] = diag
 
