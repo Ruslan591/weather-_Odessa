@@ -96,9 +96,12 @@ def latest_video_info(channel_url):
         ["yt-dlp", "-j", "--no-warnings", "--playlist-items", "1-5", channel_url],
         capture_output=True, text=True, timeout=90
     )
-    if out.returncode != 0:
-        raise RuntimeError(out.stderr[-500:])
-
+    # ВАЖНО: если хотя бы ОДИН из 5 роликов в диапазоне не извлёкся (например
+    # временная ошибка TikTok на конкретном старом видео), yt-dlp вернёт
+    # ненулевой код возврата — но JSON остальных, успешно извлечённых роликов
+    # всё равно приходит в stdout. Раньше здесь падали сразу по returncode,
+    # выбрасывая эти уже полученные данные. Теперь сначала парсим всё, что
+    # реально пришло, и считаем ошибкой только полное отсутствие результата.
     candidates = []
     for line in out.stdout.splitlines():
         line = line.strip()
@@ -109,6 +112,8 @@ def latest_video_info(channel_url):
         except json.JSONDecodeError:
             continue
     if not candidates:
+        if out.returncode != 0:
+            raise RuntimeError(out.stderr[-500:])
         raise RuntimeError("yt-dlp не вернул ни одного видео для канала")
 
     def sort_key(info):
