@@ -194,11 +194,31 @@ def extract_audio(video_path, workdir):
     return audio_path
 
 
+def _probe_duration(video_path):
+    """Длительность видео в секундах через ffprobe. Раньше длительность
+    пытались подставить как eval-переменную 'duration' прямо внутрь
+    ffmpeg-фильтра fps=... — но fps-фильтр такую переменную не поддерживает
+    (отсюда 'Undefined constant ... duration' и 0 кадров на ЛЮБОМ видео).
+    Поэтому считаем fps самостоятельно, в Python, и передаём в ffmpeg уже
+    готовое число."""
+    try:
+        out = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", video_path],
+            capture_output=True, text=True, timeout=30
+        )
+        return float(out.stdout.strip())
+    except Exception:
+        return 0.0
+
+
 def extract_frames(video_path, workdir, n=6):
     pattern = os.path.join(workdir, "frame_%03d.png")
+    duration = _probe_duration(video_path)
+    fps = n / max(1.0, duration)
     try:
         subprocess.run(
-            ["ffmpeg", "-y", "-i", video_path, "-vf", f"fps={n}/max(1\\,duration)",
+            ["ffmpeg", "-y", "-i", video_path, "-vf", f"fps={fps}",
              "-frames:v", str(n), pattern],
             check=True, capture_output=True, timeout=60, text=True
         )
