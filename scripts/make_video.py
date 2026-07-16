@@ -486,6 +486,45 @@ def build_chrome(block, theme, out_path, reveal_frac=1.0):
     img = Image.fromarray(arr, 'RGBA')
     img.save(out_path, 'PNG')
 
+NUM_HIGHLIGHT_RE = re.compile(
+    r'-?\d{1,3}(?:[.,]\d+)?\s?°C'
+    r'|-?\d{1,3}(?:[.,]\d+)?\s?%'
+    r'|\d{1,3}(?:[.,]\d+)?\s?(?:м/с|км/ч)'
+    r'|\d{3,4}\s?(?:гПа|мм\s?рт\.?\s?ст\.?)'
+    r'|\d{1,2}(?:[.,]\d+)?\s?балл(?:а|ов)?'
+)
+
+def _blend(c1, c2, t):
+    return tuple(int(c1[i] + (c2[i]-c1[i])*t) for i in range(3))
+
+def draw_line_with_highlights(draw, x, y, line, font, font_bold, accent, bg_color):
+    """Рисует строку, выделяя ключевые числовые значения (температура, %,
+    ветер, давление, волнение) жирным акцентным цветом на плашке. Подсветка
+    встроена прямо в кадр текстовой ленты, поэтому автоматически синхронна
+    с озвучкой — отдельная тайм-синхронизация через ffmpeg не нужна.
+    Никаких рейтингов/точности моделей тут нет — только значения из текста."""
+    cursor = x
+    pos = 0
+    pill_color = _blend(bg_color, accent, 0.30)
+    for m in NUM_HIGHLIGHT_RE.finditer(line):
+        if m.start() > pos:
+            seg = line[pos:m.start()]
+            draw.text((cursor, y), seg, font=font, fill=(228, 238, 248))
+            cursor += draw.textlength(seg, font=font)
+        seg = m.group(0)
+        bbox = draw.textbbox((0, 0), seg, font=font_bold)
+        seg_w = bbox[2] - bbox[0]
+        pad_x, pad_y = 14, 8
+        draw.rounded_rectangle(
+            [cursor - pad_x, y + bbox[1] - pad_y, cursor + seg_w + pad_x, y + bbox[3] + pad_y],
+            radius=14, fill=pill_color)
+        draw.text((cursor, y), seg, font=font_bold, fill=accent)
+        cursor += draw.textlength(seg, font=font_bold)
+        pos = m.end()
+    if pos < len(line):
+        seg = line[pos:]
+        draw.text((cursor, y), seg, font=font, fill=(228, 238, 248))
+
 def build_textstrip(text, theme, out_path):
     """Длинная лента текста на сплошном фоне, соответствующем цвету окна."""
     font = F(58, "regular")
@@ -509,12 +548,13 @@ def build_textstrip(text, theme, out_path):
     bg_color = gradient_color_at((TEXT_TOP+TEXT_BOTTOM)/2/H, theme["top"], theme["bot"])
     strip = Image.new("RGB", (W, strip_h), bg_color)
     d = ImageDraw.Draw(strip)
+    font_bold = F(58, "bold")
     y = PAD_TOP
     for line in lines:
         if not line:
             y += LINE_H//2
             continue
-        d.text((TEXT_X0, y), line, font=font, fill=(228, 238, 248))
+        draw_line_with_highlights(d, TEXT_X0, y, line, font, font_bold, theme["accent"], bg_color)
         y += LINE_H
     strip.save(out_path, "PNG")
     return strip_h
