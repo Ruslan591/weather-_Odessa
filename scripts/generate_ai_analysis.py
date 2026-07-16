@@ -237,6 +237,69 @@ def fmt_marine(m, today_str=None):
         lines.append(f"  Зыбь: {m['swell_height_max']}м, период {m.get('swell_period')}с")
     return lines
 
+def load_real_sea_temp():
+    """Реальные замеры температуры воды: ГМЦ ЧАМ (Telegram) + TikTok-каналы. Берём последние записи."""
+    sources = []
+    try:
+        path = os.path.join(BASE_DIR, "data", "hmcbas_telegram_sea_temp.json")
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if data:
+            last = data[-1]
+            sources.append({
+                "source": "ГМЦ ЧАМ (Telegram)",
+                "date": (last.get("timestamp") or "")[:10],
+                "temp": last.get("sea_temp"),
+            })
+    except Exception as e:
+        print(f"  [AI] Реальные замеры (ГМЦ ЧАМ) недоступны: {e}")
+    try:
+        path = os.path.join(BASE_DIR, "data", "tiktok_sea_temp.json")
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if data:
+            last = data[-1]
+            beach = last.get("beach") or "пляж не указан"
+            sources.append({
+                "source": f"TikTok ({last.get('channel', '?')}, {beach})",
+                "date": last.get("date") or (last.get("timestamp") or "")[:10],
+                "temp": last.get("sea_temp"),
+            })
+    except Exception as e:
+        print(f"  [AI] Реальные замеры (TikTok) недоступны: {e}")
+    return sources
+
+def fmt_real_sea_temp(sources, forecast_sst=None):
+    """Строки промпта: реальные замеры температуры воды + сравнение с прогнозом модели.
+    Если реальные замеры ниже прогноза — явно просим модель занизить прогноз на след. дни."""
+    temps = [s["temp"] for s in sources if s.get("temp") is not None]
+    if not temps:
+        return []
+    lines = ["РЕАЛЬНЫЕ ЗАМЕРЫ ТЕМПЕРАТУРЫ ВОДЫ (последние доступные, не модельные):"]
+    for s in sources:
+        if s.get("temp") is not None:
+            lines.append(f"  {s['source']}, {s['date']}: {s['temp']}°C")
+    real_avg = round(sum(temps) / len(temps), 1)
+    if forecast_sst is not None:
+        diff = round(real_avg - forecast_sst, 1)
+        lines.append(f"  Модельный прогноз (Open-Meteo) на сегодня: {forecast_sst}°C")
+        if diff <= -0.3:
+            lines.append(
+                f"  ВАЖНО: реальные замеры ниже модельного прогноза на {abs(diff)}°C. "
+                f"Модель Open-Meteo систематически завышает температуру воды в такие периоды. "
+                f"При описании ближайших дней делай поправку ВНИЗ примерно на эту величину "
+                f"относительно прогнозных цифр ниже — не озвучивай прогноз модели буквально."
+            )
+        elif diff >= 0.3:
+            lines.append(
+                f"  Реальные замеры выше модельного прогноза на {diff}°C — "
+                f"расхождение в другую сторону, но тоже учти при описании ближайших дней."
+            )
+        else:
+            lines.append("  Реальные замеры согласуются с прогнозом модели — расхождений нет.")
+    lines.append("")
+    return lines
+
 def fetch_one_model(model):
     url = (
         f"https://api.open-meteo.com/v1/forecast"
@@ -537,7 +600,7 @@ def _get_mode(now_utc_hour):
     if 16 <= now_utc_hour < 18: return "evening"
     return "evening"  # 18-23 UTC
 
-def build_prompt(days, marine=None, data_time=None, verification_text=None):
+def build_prompt(days, marine=None, data_time=None, verification_text=None, real_sea_temp=None):
     now_local = datetime.now(timezone.utc).astimezone()
     now_utc   = datetime.now(timezone.utc)
     now_str   = now_local.strftime("%d.%m.%Y %H:%M местного")
@@ -757,6 +820,15 @@ def build_prompt(days, marine=None, data_time=None, verification_text=None):
             f"  ВЕТЕР: 925={wp.get('925',{}).get('s')}км/ч {wdir(wp.get('925',{}).get('d'))}  850={wp.get('850',{}).get('s')} {wdir(wp.get('850',{}).get('d'))}  700={wp.get('700',{}).get('s')} {wdir(wp.get('700',{}).get('d'))}  500={wp.get('500',{}).get('s')} {wdir(wp.get('500',{}).get('d'))}  300={wp.get('300',{}).get('s')} {wdir(wp.get('300',{}).get('d'))}  200={wp.get('200',{}).get('s')} {wdir(wp.get('200',{}).get('d'))}  100={wp.get('100',{}).get('s')} {wdir(wp.get('100',{}).get('d'))}  50={wp.get('50',{}).get('s')} {wdir(wp.get('50',{}).get('d'))}  10={wp.get('10',{}).get('s')} {wdir(wp.get('10',{}).get('d'))}",
             "",
         ]
+
+    # Реальные замеры температуры воды (не модельные) — перед прогнозом по дням
+    if real_sea_temp:
+        forecast_sst_today = None
+        if marine and days:
+            m0 = marine.get(days[0]["date"])
+            if m0:
+                forecast_sst_today = m0.get("sst")
+        lines += fmt_real_sea_temp(real_sea_temp, forecast_sst_today)
 
     # Marine данные в промпт (по дням, как и суша)
     if marine:
@@ -1131,6 +1203,12 @@ def main(force=False, new_models=None, force_gemini=False):
         if first:
             print(f"  [AI] Marine: SST={first.get('sst')}°C wave={first.get('wave_height_max')}м")
 
+    # Реальные замеры температуры воды (ГМЦ ЧАМ Telegram + TikTok)
+    real_sea_temp = load_real_sea_temp()
+    if real_sea_temp:
+        for s in real_sea_temp:
+            print(f"  [AI] Real SST: {s['source']} {s['date']}: {s.get('temp')}°C")
+
     # Проверяем изменились ли данные
     current_hash = data_hash(days)
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -1147,7 +1225,7 @@ def main(force=False, new_models=None, force_gemini=False):
         return age_hours < STALE_HOURS
 
     _current_mode = _get_mode(datetime.now(timezone.utc).hour)
-    prompt = build_prompt(days, marine=marine, data_time=data_time, verification_text=verification_text)
+    prompt = build_prompt(days, marine=marine, data_time=data_time, verification_text=verification_text, real_sea_temp=real_sea_temp)
 
     if ok_claude and _is_fresh(existing):
         existing["last_checked"] = now_iso
