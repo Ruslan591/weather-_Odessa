@@ -23,6 +23,8 @@ TMP_DIR    = os.path.join(BLOCKS_DIR, "tmp")
 MP4_FILE   = os.path.join(BASE_DIR, "data",
                            "forecast_video.mp4" if SOURCE == "claude" else "forecast_video_gemini.mp4")
 ENSEMBLE_PWS_FILE = os.path.join(BASE_DIR, "data", "ensemble_snapshots_pws.json")
+BG_MUSIC_FILE = os.path.join(BASE_DIR, "data", "audio", "bg_ambient.mp3")
+BG_MUSIC_VOLUME = 0.10  # тихая подложка под озвучку, не должна конкурировать с речью
 LOCAL_OFFSET_H = 3  # Одесса летом = UTC+3 (сверено с реальным сайтом: 06:00 UTC+3 = минимум суток)
 
 W, H = 1080, 1920
@@ -442,9 +444,40 @@ def render_block_video(chrome_png, textstrip_png, strip_h, audio_path, theme, ou
         )
         next_input_idx = 3
 
-    if audio_path and os.path.exists(audio_path):
-        cmd += ["-i", audio_path, "-filter_complex", base_filter,
-                "-map", "[v]", "-map", f"{next_input_idx}:a", "-c:a", "aac"]
+    has_voice = bool(audio_path and os.path.exists(audio_path))
+    has_bg_music = os.path.exists(BG_MUSIC_FILE)
+
+    if has_voice:
+        cmd += ["-i", audio_path]
+        voice_idx = next_input_idx
+        next_input_idx += 1
+    if has_bg_music:
+        # -stream_loop -1 зацикливает 20-секундный эмбиент-трек на всю
+        # длительность блока; трек сгенерирован как чистые синусоиды без
+        # огибающей/фейдов, поэтому переход между повторами не даёт щелчка.
+        cmd += ["-stream_loop", "-1", "-i", BG_MUSIC_FILE]
+        bg_idx = next_input_idx
+        next_input_idx += 1
+
+    audio_filter = ""
+    audio_map = None
+    if has_voice and has_bg_music:
+        audio_filter = (
+            f";[{voice_idx}:a]volume=1.0[voice];"
+            f"[{bg_idx}:a]volume={BG_MUSIC_VOLUME}[bgm];"
+            f"[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+        )
+        audio_map = "[aout]"
+    elif has_voice:
+        audio_filter = ""
+        audio_map = f"{voice_idx}:a"
+    elif has_bg_music:
+        audio_filter = f";[{bg_idx}:a]volume={BG_MUSIC_VOLUME * 1.6}[aout]"
+        audio_map = "[aout]"
+
+    if audio_map:
+        cmd += ["-filter_complex", base_filter + audio_filter,
+                "-map", "[v]", "-map", audio_map, "-c:a", "aac"]
     else:
         cmd += ["-filter_complex", base_filter, "-map", "[v]", "-an"]
     cmd += ["-c:v", "libx264", "-preset", "fast", "-pix_fmt", "yuv420p",
