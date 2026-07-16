@@ -495,6 +495,20 @@ def process_channel(entry, history):
     speech_date  = parse_date_speech(speech_text, now)
     speech_beach = parse_beach(speech_text)
 
+    # Если ни OCR, ни речь не назвали пляж явно — берём default_beach из
+    # конфига канала (например, у tiktok_1 обычно снимают на Ревьере, но
+    # название не всегда звучит/читается). Если пляж РЕАЛЬНО распознан —
+    # он всегда важнее дефолта.
+    detected_beach = ocr_beach if ocr_beach is not None else speech_beach
+    default_beach = entry.get("default_beach")
+    final_beach = detected_beach if detected_beach is not None else default_beach
+    if detected_beach is not None:
+        beach_source = "ocr" if ocr_beach is not None else "speech"
+    elif default_beach is not None:
+        beach_source = "default"
+    else:
+        beach_source = None
+
     result = {
         "channel":       label,
         "video_id":      video_id,
@@ -506,8 +520,8 @@ def process_channel(entry, history):
         "date_source":   "ocr" if ocr_date  is not None else ("speech" if speech_date  is not None else None),
         "sea_temp":      ocr_temp  if ocr_temp  is not None else speech_temp,
         "sea_temp_source": "ocr" if ocr_temp  is not None else ("speech" if speech_temp  is not None else None),
-        "beach":         ocr_beach if ocr_beach is not None else speech_beach,
-        "beach_source":  "ocr" if ocr_beach is not None else ("speech" if speech_beach is not None else None),
+        "beach":         final_beach,
+        "beach_source":  beach_source,
         "time":          ocr_time  if ocr_time  is not None else speech_time,
         "time_source":   "ocr" if ocr_time  is not None else ("speech" if speech_time  is not None else None),
     }
