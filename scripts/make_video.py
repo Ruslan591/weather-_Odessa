@@ -220,6 +220,127 @@ def rounded_glass_card(img, x, y, w, h, radius, accent, fill_alpha=52, border_al
     d.rounded_rectangle([x, y, x+w, y+h], radius=radius, outline=(*accent, border_alpha), width=2)
     img.alpha_composite(overlay)
 
+DECORATIVE_INTRO_KEYS = {"next3", "warnings", "trend", "marine", "verification"}
+
+def draw_intro_decoration(img, theme, key, x0, x1, y0, y1, reveal_frac):
+    """Декоративная интро-анимация для блоков без почасового графика
+    температуры. Чисто визуальный акцент под тему блока — никаких цифр
+    рейтинга/точности/bias моделей (даже в verification это просто образ
+    "проверено", без конкретных значений)."""
+    acc = theme["accent"]
+    overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(overlay)
+
+    if key == "next3":
+        n = 3
+        gap = 36
+        chip_w = (x1 - x0 - (n-1)*gap) / n
+        chip_h = y1 - y0
+        for i in range(n):
+            local = max(0.0, min(1.0, reveal_frac*n - i))
+            if local <= 0:
+                continue
+            ease = ease_in_out_cubic(local)
+            cx0 = x0 + i*(chip_w+gap)
+            offset_y = (1-ease) * 36
+            alpha = int(255*ease)
+            top = y0 + offset_y
+            d.rounded_rectangle([cx0, top, cx0+chip_w, top+chip_h], radius=22,
+                                 fill=(255, 255, 255, int(38*ease)),
+                                 outline=(*acc, alpha), width=2)
+            d.text((cx0+chip_w/2, top+chip_h*0.42), f"ДЕНЬ {i+1}",
+                    font=F(26, "bold"), fill=(*acc, alpha), anchor="mm")
+            dots_y = top + chip_h*0.68
+            for k in range(3):
+                dk = max(0.0, min(1.0, local*3 - k))
+                if dk <= 0:
+                    continue
+                dot_x = cx0 + chip_w/2 + (k-1)*22
+                r = 6
+                d.ellipse([dot_x-r, dots_y-r, dot_x+r, dots_y+r],
+                          fill=(*acc, int(255*dk)))
+
+    elif key == "warnings":
+        cx, cy = (x0+x1)/2, (y0+y1)/2
+        max_r = min(x1-x0, y1-y0) * 0.42
+        for ring_i in range(2):
+            phase = (reveal_frac*1.8 - ring_i*0.5) % 1.0
+            r = phase * max_r
+            alpha = int(180 * (1-phase))
+            if alpha <= 2 or r < 4:
+                continue
+            d.ellipse([cx-r, cy-r, cx+r, cy+r], outline=(*acc, alpha), width=6)
+        pulse = 0.5 + 0.5*math.sin(reveal_frac*math.pi*8)
+        core_r = 16 + 5*pulse
+        d.ellipse([cx-core_r, cy-core_r, cx+core_r, cy+core_r], fill=(*acc, 230))
+
+    elif key == "trend":
+        pts_n = 6
+        xs = [x0 + (x1-x0)*i/(pts_n-1) for i in range(pts_n)]
+        rel = [0.72, 0.52, 0.62, 0.34, 0.44, 0.16]
+        ys = [y1 - r*(y1-y0) for r in rel]
+        exact = reveal_frac * (pts_n-1)
+        full_i = int(math.floor(exact))
+        frac_l = exact - full_i
+        dxs, dys = xs[:full_i+1], ys[:full_i+1]
+        if full_i < pts_n-1:
+            ax, ay = xs[full_i], ys[full_i]
+            bx, by = xs[full_i+1], ys[full_i+1]
+            dxs.append(ax+(bx-ax)*frac_l)
+            dys.append(ay+(by-ay)*frac_l)
+        if len(dxs) >= 2:
+            d.line(list(zip(dxs, dys)), fill=(*acc, 255), width=8, joint="curve")
+            if reveal_frac > 0.04:
+                tx, ty = dxs[-1], dys[-1]
+                px, py = dxs[-2], dys[-2]
+                ang = math.atan2(ty-py, tx-px)
+                al = 22
+                a1, a2 = ang+math.radians(150), ang-math.radians(150)
+                p1 = (tx+al*math.cos(a1), ty+al*math.sin(a1))
+                p2 = (tx+al*math.cos(a2), ty+al*math.sin(a2))
+                d.polygon([(tx, ty), p1, p2], fill=(*acc, 255))
+
+    elif key == "marine":
+        for amp_frac, freq, alpha, speed, y_bias in (
+            (0.30, 2.0, 150, 2.6, 0.5), (0.18, 3.0, 95, 4.0, 0.68)
+        ):
+            amp = (y1-y0) * amp_frac / 2
+            mid_y = y0 + (y1-y0)*y_bias
+            phase = reveal_frac * speed * 2*math.pi
+            n_pts = 60
+            pts = []
+            for i in range(n_pts+1):
+                xf = i/n_pts
+                xx = x0 + (x1-x0)*xf
+                yy = mid_y + amp * math.sin(xf*freq*2*math.pi + phase)
+                pts.append((xx, yy))
+            d.line(pts, fill=(*acc, alpha), width=6, joint="curve")
+
+    elif key == "verification":
+        d.rounded_rectangle([x0, y0, x1, y1], radius=20, outline=(*acc, 90), width=2)
+        if reveal_frac < 0.7:
+            scan_y = y0 + (y1-y0) * min(reveal_frac/0.7, 1.0)
+            d.line([(x0, scan_y), (x1, scan_y)], fill=(*acc, 235), width=5)
+        else:
+            prog = max(0.0, min(1.0, (reveal_frac-0.7)/0.3))
+            ccx, ccy = (x0+x1)/2, (y0+y1)/2
+            size = min(x1-x0, y1-y0) * 0.34
+            p1 = (ccx-size*0.5, ccy)
+            p2 = (ccx-size*0.12, ccy+size*0.4)
+            p3 = (ccx+size*0.55, ccy-size*0.45)
+            seg1 = 0.4
+            if prog <= seg1:
+                t = prog/seg1
+                mx, my = p1[0]+(p2[0]-p1[0])*t, p1[1]+(p2[1]-p1[1])*t
+                d.line([p1, (mx, my)], fill=(*acc, 255), width=14, joint="curve")
+            else:
+                d.line([p1, p2], fill=(*acc, 255), width=14, joint="curve")
+                t = (prog-seg1)/(1-seg1)
+                mx, my = p2[0]+(p3[0]-p2[0])*t, p2[1]+(p3[1]-p2[1])*t
+                d.line([p2, (mx, my)], fill=(*acc, 255), width=14, joint="curve")
+
+    img.alpha_composite(overlay)
+
 def build_chrome(block, theme, out_path, reveal_frac=1.0):
     """Статичная часть кадра: фон + карточка + хедер, с прозрачным окном под
     прокручивающийся текст. Все декоративные элементы рисуются с alpha=255,
@@ -292,13 +413,12 @@ def build_chrome(block, theme, out_path, reveal_frac=1.0):
         b = int(bg_row[2] + (acc[2]-bg_row[2])*factor)
         draw.point((44+i, div_y), fill=(r, g, b, 255))
 
-    # ── график температуры в зазоре между карточкой и окном текста ──
-    # (не для всех блоков есть смысл — get_temp_curve возвращает None,
-    # если это, например, блок предупреждений/точности/тенденции)
+    # ── график температуры / декоративная интро-анимация в зазоре между
+    # карточкой и окном текста ──
+    chart_x0, chart_x1 = TEXT_X0, TEXT_X1
+    chart_y0, chart_y1 = div_y + 55, TEXT_TOP - 55
     curve = get_temp_curve(key)
     if curve:
-        chart_x0, chart_x1 = TEXT_X0, TEXT_X1
-        chart_y0, chart_y1 = div_y + 55, TEXT_TOP - 55
         label_pad = 40
         c_temps = [p[1] for p in curve]
         n_pts = len(c_temps)
@@ -350,6 +470,9 @@ def build_chrome(block, theme, out_path, reveal_frac=1.0):
                 ty = py - 30 if label_above else py + 30
                 draw.text((px, ty), f"{round(c_temps[idx])}°", font=F(32, "bold"),
                           fill=(255, 255, 255, 255), anchor="mm")
+    elif key in DECORATIVE_INTRO_KEYS:
+        draw_intro_decoration(img, theme, key, chart_x0, chart_x1, chart_y0, chart_y1, reveal_frac)
+        draw = ImageDraw.Draw(img)
 
     now_str = datetime.now().strftime("%d.%m.%Y")
     draw.text((W//2, H-64), f"Синоптический прогноз  ·  {now_str}",
@@ -539,7 +662,7 @@ def main():
         # интро-анимация (прорисовка графика + счётчик) — только если для
         # этого блока вообще есть график (get_temp_curve вернул данные)
         intro_pattern = None
-        if get_temp_curve(key):
+        if get_temp_curve(key) or key in DECORATIVE_INTRO_KEYS:
             intro_dir = os.path.join(TMP_DIR, f"intro_{idx:02d}")
             os.makedirs(intro_dir, exist_ok=True)
             for i in range(n_intro):
