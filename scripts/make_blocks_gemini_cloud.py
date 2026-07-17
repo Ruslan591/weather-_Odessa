@@ -166,6 +166,22 @@ def _decline(n, one, few, many):
     if 2 <= last1 <= 4: return few
     return many
 
+_TENTH_WORDS = {
+    '1': 'одна', '2': 'две', '3': 'три', '4': 'четыре',
+    '5': 'пять', '6': 'шесть', '7': 'семь',
+    '8': 'восемь', '9': 'девять', '0': 'ноль'
+}
+
+def _frac_word(dec_part):
+    """Дробная часть числа словами: '5' -> 'пять десятых', '25' -> '25 сотых'.
+    Используется везде, где дробное число само по себе должно проговариваться
+    (проценты, температура, скорость ветра, осадки) — для нецелых чисел в
+    русском единица измерения всегда стоит в род.п. ЕД.ч., независимо от
+    того, на какую цифру заканчивается дробная часть."""
+    if len(dec_part) == 1:
+        return f"{_TENTH_WORDS.get(dec_part, dec_part)} десятых"
+    return f"{dec_part} сотых"
+
 def _range_sub(text, unit_pattern, unit_word, allow_decimal=False):
     """Диапазон "X-Y{unit}" -> "от X до Y {unit_word}". Ведущий предлог
     "от"/"до" перед диапазоном в исходном тексте (частая формулировка вроде
@@ -247,6 +263,15 @@ def preprocess_tts(text):
     # Диапазоны температур: "15-16°C" -> "от 15 до 16 градусов"
     text = _range_sub(text, r'\u00b0C', 'градусов')
 
+    # Дробные температуры ("23.5°C") нужно ловить ДО целочисленной обработки
+    # ниже — иначе regex для целых чисел их не матчит, и они уходят в общий
+    # replace() как сырые цифры с неверным "градусов" (всегда мн.ч.). Для
+    # нецелых чисел в русском правильно только "градуса" (род.п. ед.ч.).
+    def decimal_temp_to_words(m):
+        int_part, dec_part = m.group(1), m.group(2)
+        return f"{int_part} целых {_frac_word(dec_part)} градуса"
+    text = re.sub(r'(-?\d+)\.(\d{1,2})\s*\u00b0C', decimal_temp_to_words, text)
+
     # Одиночные температуры со склонением (без слова Цельсия)
     def temp_word(m):
         n = int(m.group(1))
@@ -263,14 +288,32 @@ def preprocess_tts(text):
 
     # Диапазоны скорости ветра: "2-5 м/с" -> "от 2 до 5 метров в секунду"
     text = _range_sub(text, r'м/с', 'метров в секунду', allow_decimal=True)
+
+    # Дробная скорость ветра ("3.5 м/с") — та же проблема и тот же принцип
+    # решения, что и для температуры/процентов выше.
+    def decimal_wind_to_words(m):
+        int_part, dec_part = m.group(1), m.group(2)
+        return f"{int_part} целых {_frac_word(dec_part)} метра в секунду"
+    text = re.sub(r'(\d+)[.,](\d{1,2})\s*м/с', decimal_wind_to_words, text)
+
     def wind_word(m):
-        n = float(m.group(1).replace(',', '.'))
+        n = int(m.group(1))
         w = _decline(n, 'метр', 'метра', 'метров')
         return f'{m.group(1)} {w} в секунду'
-    text = re.sub(r'(\d+(?:[.,]\d+)?)\s*м/с', wind_word, text)
+    text = re.sub(r'(\d+)\s*м/с', wind_word, text)
 
-    # Осадки
-    text = re.sub(r'(\d+(?:\.\d+)?)\s*мм', r'\1 миллиметра', text)
+    # Осадки: раньше слово "миллиметра" было жёстко зашито независимо от
+    # числа ("1 мм" -> "1 миллиметра" — неверно; должно быть "1 миллиметр").
+    # Дробные значения ("2.5 мм") тоже не разбирались словами.
+    def decimal_mm_to_words(m):
+        int_part, dec_part = m.group(1), m.group(2)
+        return f"{int_part} целых {_frac_word(dec_part)} миллиметра"
+    text = re.sub(r'(\d+)\.(\d+)\s*мм', decimal_mm_to_words, text)
+    def mm_word(m):
+        n = int(m.group(1))
+        w = _decline(n, 'миллиметр', 'миллиметра', 'миллиметров')
+        return f'{m.group(1)} {w}'
+    text = re.sub(r'(\d+)\s*мм', mm_word, text)
 
     # Диапазоны в сантиметрах: "10-20 см" -> "10, 20 см"
     text = _range_sub(text, r'см\b', 'см')
@@ -334,16 +377,7 @@ def preprocess_tts(text):
     # а не "процентов"), независимо от последней цифры дробной части.
     def decimal_percent_to_words(m):
         int_part, dec_part = m.group(1), m.group(2)
-        if len(dec_part) == 1:
-            tenth = {
-                '1': 'одна', '2': 'две', '3': 'три', '4': 'четыре',
-                '5': 'пять', '6': 'шесть', '7': 'семь',
-                '8': 'восемь', '9': 'девять', '0': 'ноль'
-            }
-            frac_word = f"{tenth.get(dec_part, dec_part)} десятых"
-        else:
-            frac_word = f"{dec_part} сотых"
-        return f"{int_part} целых {frac_word} процента"
+        return f"{int_part} целых {_frac_word(dec_part)} процента"
     text = re.sub(r'(\d+)\.(\d{1,2})\s*%', decimal_percent_to_words, text)
 
     text = re.sub(r'(\d+)\.(\d{1,2})', decimal_to_words, text)
