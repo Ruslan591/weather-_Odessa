@@ -178,8 +178,8 @@ def _range_sub(text, unit_pattern, unit_word, allow_decimal=False):
     def repl(m):
         prep, n1, n2 = m.group(1), m.group(2), m.group(3)
         if prep:
-            return f'{prep} {n1}, {n2} {unit_word}'
-        return f'{n1}, {n2} {unit_word}'
+            return f'{prep} {n1} до {n2} {unit_word}'
+        return f'от {n1} до {n2} {unit_word}'
     return pattern.sub(repl, text)
 
 def _dedupe_repeated_units(text, forms):
@@ -600,3 +600,4 @@ if __name__ == "__main__":
     p.add_argument("--force", action="store_true")
     a = p.parse_args()
     main(force=a.force)
+
