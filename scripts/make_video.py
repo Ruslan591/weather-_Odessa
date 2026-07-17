@@ -23,8 +23,9 @@ TMP_DIR    = os.path.join(BLOCKS_DIR, "tmp")
 MP4_FILE   = os.path.join(BASE_DIR, "data",
                            "forecast_video.mp4" if SOURCE == "claude" else "forecast_video_gemini.mp4")
 ENSEMBLE_PWS_FILE = os.path.join(BASE_DIR, "data", "ensemble_snapshots_pws.json")
-BG_MUSIC_FILE = os.path.join(BASE_DIR, "data", "audio", "bg_ambient.mp3")
-BG_MUSIC_VOLUME = 0.10  # тихая подложка под озвучку, не должна конкурировать с речью
+BG_MUSIC_FILE = os.path.join(BASE_DIR, "data", "audio", "Paper Cup Afternoon.mp3")
+BG_MUSIC_VOLUME = 0.15  # тихая подложка под озвучку, не должна конкурировать с речью
+BG_MUSIC_DURATION = None  # определяется в main() через ffprobe при старте
 LOCAL_OFFSET_H = 3  # Одесса летом = UTC+3 (сверено с реальным сайтом: 06:00 UTC+3 = минимум суток)
 
 W, H = 1080, 1920
@@ -583,7 +584,7 @@ def build_textstrip(text, theme, out_path):
 
 def render_block_video(chrome_png, textstrip_png, strip_h, audio_path, theme, out_mp4,
                         intro_pattern=None, intro_fps=25, intro_dur=0.0, min_duration=6.0,
-                        loop_intro=False):
+                        loop_intro=False, bg_music_offset=0.0):
     window_h = TEXT_BOTTOM - TEXT_TOP
     max_scroll = max(0, strip_h - window_h)
 
@@ -646,10 +647,12 @@ def render_block_video(chrome_png, textstrip_png, strip_h, audio_path, theme, ou
         voice_idx = next_input_idx
         next_input_idx += 1
     if has_bg_music:
-        # -stream_loop -1 зацикливает 20-секундный эмбиент-трек на всю
-        # длительность блока; трек сгенерирован как чистые синусоиды без
-        # огибающей/фейдов, поэтому переход между повторами не даёт щелчка.
-        cmd += ["-stream_loop", "-1", "-i", BG_MUSIC_FILE]
+        # -ss позиционирует начало трека для ЭТОГО блока — в main() смещение
+        # прирастает на длительность предыдущих блоков, чтобы песня
+        # продолжалась по всему ролику, а не перезапускалась с начала в
+        # каждом блоке. -stream_loop -1 — подстраховка на случай, если блок
+        # окажется длиннее оставшегося хвоста трека.
+        cmd += ["-ss", f"{bg_music_offset:.2f}", "-stream_loop", "-1", "-i", BG_MUSIC_FILE]
         bg_idx = next_input_idx
         next_input_idx += 1
 
@@ -659,7 +662,11 @@ def render_block_video(chrome_png, textstrip_png, strip_h, audio_path, theme, ou
         audio_filter = (
             f";[{voice_idx}:a]volume=1.0[voice];"
             f"[{bg_idx}:a]volume={BG_MUSIC_VOLUME}[bgm];"
-            f"[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+            # normalize=0 — иначе amix по умолчанию делит громкость обоих
+            # потоков пополам, и подложка становится еле слышной вне
+            # зависимости от того, насколько громко мы её выставили выше.
+            f"[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2:normalize=0[premix];"
+            f"[premix]alimiter=limit=0.95[aout]"
         )
         audio_map = "[aout]"
     elif has_voice:
@@ -682,7 +689,7 @@ def render_block_video(chrome_png, textstrip_png, strip_h, audio_path, theme, ou
         print(f"  [FFM] Ошибка:\n{result.stderr[-600:]}")
         return False
     print(f"  [FFM] готов ({os.path.getsize(out_mp4)//1024} кб, {dur:.1f} сек)")
-    return True
+    return dur
 
 def concat_videos(mp4s, out_mp4):
     list_file = os.path.join(TMP_DIR, "concat_list.txt")
@@ -712,6 +719,20 @@ def main():
     INTRO_FPS = 25
     INTRO_DUR = 1.6
     n_intro = int(INTRO_FPS * INTRO_DUR)
+
+    # длительность фонового трека — чтобы позиция для следующего блока не
+    # вылезла за пределы файла (оставляем запас MUSIC_SAFETY секунд, чтобы
+    # даже последнему блоку хватило музыки без опоры на дозацикливание)
+    music_track_dur = 0.0
+    if os.path.exists(BG_MUSIC_FILE):
+        d_str = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", BG_MUSIC_FILE],
+            capture_output=True, text=True).stdout.strip()
+        music_track_dur = float(d_str) if d_str else 0.0
+    MUSIC_SAFETY = 20.0
+    music_span = max(1.0, music_track_dur - MUSIC_SAFETY)
+    music_offset = 0.0
 
     all_mp4s = []
     for idx, block in enumerate(blocks):
@@ -753,10 +774,13 @@ def main():
                     build_chrome(block, theme, os.path.join(intro_dir, f"f{i:04d}.png"), reveal_frac=reveal)
             intro_pattern = os.path.join(intro_dir, "f%04d.png")
 
-        if render_block_video(chrome_png, strip_png, strip_h, audio_path, theme, block_mp4,
-                               intro_pattern=intro_pattern, intro_fps=INTRO_FPS, intro_dur=INTRO_DUR,
-                               loop_intro=loop_intro):
+        bg_offset = music_offset % music_span if music_track_dur > MUSIC_SAFETY else 0.0
+        block_dur = render_block_video(chrome_png, strip_png, strip_h, audio_path, theme, block_mp4,
+                                        intro_pattern=intro_pattern, intro_fps=INTRO_FPS, intro_dur=INTRO_DUR,
+                                        loop_intro=loop_intro, bg_music_offset=bg_offset)
+        if block_dur:
             all_mp4s.append(block_mp4)
+            music_offset += block_dur
 
     if not all_mp4s:
         print("  Не удалось создать ни одного блока"); return
