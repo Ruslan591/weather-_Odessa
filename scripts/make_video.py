@@ -221,6 +221,10 @@ def rounded_glass_card(img, x, y, w, h, radius, accent, fill_alpha=52, border_al
     img.alpha_composite(overlay)
 
 DECORATIVE_INTRO_KEYS = {"next3", "warnings", "trend", "marine", "verification"}
+# Эти два блока не просто "показать интро один раз и заморозить" — им нужна
+# непрерывная пульсация на всю длительность блока (радар-кольца / волны).
+CONTINUOUS_LOOP_KEYS = {"warnings", "marine"}
+LOOP_DURATIONS = {"warnings": 2.0, "marine": 4.0}  # секунд на один бесшовный период
 
 def draw_intro_decoration(img, theme, key, x0, x1, y0, y1, reveal_frac):
     """Декоративная интро-анимация для блоков без почасового графика
@@ -236,6 +240,7 @@ def draw_intro_decoration(img, theme, key, x0, x1, y0, y1, reveal_frac):
         gap = 36
         chip_w = (x1 - x0 - (n-1)*gap) / n
         chip_h = y1 - y0
+        WEEKDAYS_RU = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"]
         for i in range(n):
             local = max(0.0, min(1.0, reveal_frac*n - i))
             if local <= 0:
@@ -248,9 +253,14 @@ def draw_intro_decoration(img, theme, key, x0, x1, y0, y1, reveal_frac):
             d.rounded_rectangle([cx0, top, cx0+chip_w, top+chip_h], radius=22,
                                  fill=(255, 255, 255, int(38*ease)),
                                  outline=(*acc, alpha), width=2)
-            d.text((cx0+chip_w/2, top+chip_h*0.42), f"ДЕНЬ {i+1}",
-                    font=F(26, "bold"), fill=(*acc, alpha), anchor="mm")
-            dots_y = top + chip_h*0.68
+            # блок "Ближайшие дни" в текстах начинается с послезавтра
+            # (сегодня/завтра покрыты другими блоками), поэтому смещение +2
+            day_dt = datetime.now() + timedelta(days=i+2)
+            d.text((cx0+chip_w/2, top+chip_h*0.34), WEEKDAYS_RU[day_dt.weekday()],
+                    font=F(24, "bold"), fill=(*acc, alpha), anchor="mm")
+            d.text((cx0+chip_w/2, top+chip_h*0.58), day_dt.strftime("%d.%m"),
+                    font=F(28, "bold"), fill=(255, 255, 255, alpha), anchor="mm")
+            dots_y = top + chip_h*0.82
             for k in range(3):
                 dk = max(0.0, min(1.0, local*3 - k))
                 if dk <= 0:
@@ -261,16 +271,20 @@ def draw_intro_decoration(img, theme, key, x0, x1, y0, y1, reveal_frac):
                           fill=(*acc, int(255*dk)))
 
     elif key == "warnings":
+        # ЗАЦИКЛЕНО: reveal_frac здесь — не разовая интро-рампа, а фаза 0..1
+        # внутри бесшовно повторяющегося периода (см. CONTINUOUS_LOOP_KEYS в
+        # main()). Множители должны быть целыми — иначе на стыке цикла будет
+        # видимый скачок фазы.
         cx, cy = (x0+x1)/2, (y0+y1)/2
         max_r = min(x1-x0, y1-y0) * 0.42
         for ring_i in range(2):
-            phase = (reveal_frac*1.8 - ring_i*0.5) % 1.0
+            phase = (reveal_frac*1.0 - ring_i*0.5) % 1.0
             r = phase * max_r
             alpha = int(180 * (1-phase))
             if alpha <= 2 or r < 4:
                 continue
             d.ellipse([cx-r, cy-r, cx+r, cy+r], outline=(*acc, alpha), width=6)
-        pulse = 0.5 + 0.5*math.sin(reveal_frac*math.pi*8)
+        pulse = 0.5 + 0.5*math.sin(reveal_frac*math.pi*8)  # 4 полных пульса за цикл (целое)
         core_r = 16 + 5*pulse
         d.ellipse([cx-core_r, cy-core_r, cx+core_r, cy+core_r], fill=(*acc, 230))
 
@@ -301,8 +315,10 @@ def draw_intro_decoration(img, theme, key, x0, x1, y0, y1, reveal_frac):
                 d.polygon([(tx, ty), p1, p2], fill=(*acc, 255))
 
     elif key == "marine":
+        # ЗАЦИКЛЕНО: speed должен быть целым числом циклов за период —
+        # иначе волна "прыгает" в момент склейки повтора.
         for amp_frac, freq, alpha, speed, y_bias in (
-            (0.30, 2.0, 150, 2.6, 0.5), (0.18, 3.0, 95, 4.0, 0.68)
+            (0.30, 2.0, 150, 2.0, 0.5), (0.18, 3.0, 95, 4.0, 0.68)
         ):
             amp = (y1-y0) * amp_frac / 2
             mid_y = y0 + (y1-y0)*y_bias
@@ -486,12 +502,18 @@ def build_chrome(block, theme, out_path, reveal_frac=1.0):
     img = Image.fromarray(arr, 'RGBA')
     img.save(out_path, 'PNG')
 
+# базовое число (может быть отрицательным) + опциональный диапазон "N-N"
+# (например "25-26°C") — без этого regex цеплял только "-26°C" как якобы
+# отдельное отрицательное число, оставляя "25" незакрашенным (баг "замазывания").
+_NUM = r'-?\d{1,3}(?:[.,]\d+)?'
+_RANGE = rf'{_NUM}(?:\s?-\s?{_NUM})?'
+
 NUM_HIGHLIGHT_RE = re.compile(
-    r'-?\d{1,3}(?:[.,]\d+)?\s?°C'
-    r'|-?\d{1,3}(?:[.,]\d+)?\s?%'
-    r'|\d{1,3}(?:[.,]\d+)?\s?(?:м/с|км/ч)'
-    r'|\d{3,4}\s?(?:гПа|мм\s?рт\.?\s?ст\.?)'
-    r'|\d{1,2}(?:[.,]\d+)?\s?балл(?:а|ов)?'
+    rf'{_RANGE}\s?°C'
+    rf'|{_RANGE}\s?%'
+    rf'|{_RANGE}\s?(?:м/с|км/ч)'
+    rf'|\d{{3,4}}\s?(?:гПа|мм\s?рт\.?\s?ст\.?)'
+    rf'|{_RANGE}\s?балл(?:а|ов)?'
 )
 
 def _blend(c1, c2, t):
@@ -560,7 +582,8 @@ def build_textstrip(text, theme, out_path):
     return strip_h
 
 def render_block_video(chrome_png, textstrip_png, strip_h, audio_path, theme, out_mp4,
-                        intro_pattern=None, intro_fps=25, intro_dur=0.0, min_duration=6.0):
+                        intro_pattern=None, intro_fps=25, intro_dur=0.0, min_duration=6.0,
+                        loop_intro=False):
     window_h = TEXT_BOTTOM - TEXT_TOP
     max_scroll = max(0, strip_h - window_h)
 
@@ -589,13 +612,21 @@ def render_block_video(chrome_png, textstrip_png, strip_h, audio_path, theme, ou
 
     use_intro = bool(intro_pattern)
     if use_intro:
-        cmd += ["-framerate", str(intro_fps), "-i", intro_pattern]
+        if loop_intro:
+            # непрерывная пульсация: зацикливаем короткую бесшовную
+            # последовательность кадров на всю длительность блока —
+            # никогда не откатываемся к статичному chrome_png.
+            cmd += ["-stream_loop", "-1", "-framerate", str(intro_fps), "-i", intro_pattern]
+            intro_overlay = f"[bg2][3:v]overlay=x=0:y=0:shortest=1[v]"
+        else:
+            cmd += ["-framerate", str(intro_fps), "-i", intro_pattern]
+            intro_overlay = f"[bg2][3:v]overlay=x=0:y=0:enable='lt(t,{intro_dur})'[v]"
         base_filter = (
             f"[1:v]fade=t=in:st=0:d={FADE_IN_DUR}:color={hexcolor},"
             f"fade=t=out:st={fade_start}:d={FADE_OUT_DUR}:color={hexcolor}[txtfade];"
             f"[0:v][txtfade]overlay=x=0:y='{y_expr}':shortest=0[bg1];"
             f"[bg1][2:v]overlay=x=0:y=0:shortest=1[bg2];"
-            f"[bg2][3:v]overlay=x=0:y=0:enable='lt(t,{intro_dur})'[v]"
+            f"{intro_overlay}"
         )
         next_input_idx = 4
     else:
@@ -702,17 +733,29 @@ def main():
         # интро-анимация (прорисовка графика + счётчик) — только если для
         # этого блока вообще есть график (get_temp_curve вернул данные)
         intro_pattern = None
+        loop_intro = key in CONTINUOUS_LOOP_KEYS
         if get_temp_curve(key) or key in DECORATIVE_INTRO_KEYS:
             intro_dir = os.path.join(TMP_DIR, f"intro_{idx:02d}")
             os.makedirs(intro_dir, exist_ok=True)
-            for i in range(n_intro):
-                linear = (i+1)/n_intro
-                reveal = ease_in_out_cubic(linear)
-                build_chrome(block, theme, os.path.join(intro_dir, f"f{i:04d}.png"), reveal_frac=reveal)
+            if loop_intro:
+                loop_dur = LOOP_DURATIONS[key]
+                n_loop = int(INTRO_FPS * loop_dur)
+                for i in range(n_loop):
+                    # линейная фаза 0..1, БЕЗ eased-рампы и БЕЗ повтора
+                    # граничного кадра (i идёт до n_loop-1) — это критично
+                    # для бесшовного зацикливания через -stream_loop -1.
+                    reveal = i / n_loop
+                    build_chrome(block, theme, os.path.join(intro_dir, f"f{i:04d}.png"), reveal_frac=reveal)
+            else:
+                for i in range(n_intro):
+                    linear = (i+1)/n_intro
+                    reveal = ease_in_out_cubic(linear)
+                    build_chrome(block, theme, os.path.join(intro_dir, f"f{i:04d}.png"), reveal_frac=reveal)
             intro_pattern = os.path.join(intro_dir, "f%04d.png")
 
         if render_block_video(chrome_png, strip_png, strip_h, audio_path, theme, block_mp4,
-                               intro_pattern=intro_pattern, intro_fps=INTRO_FPS, intro_dur=INTRO_DUR):
+                               intro_pattern=intro_pattern, intro_fps=INTRO_FPS, intro_dur=INTRO_DUR,
+                               loop_intro=loop_intro):
             all_mp4s.append(block_mp4)
 
     if not all_mp4s:
