@@ -24,7 +24,10 @@ MP4_FILE   = os.path.join(BASE_DIR, "data",
                            "forecast_video.mp4" if SOURCE == "claude" else "forecast_video_gemini.mp4")
 ENSEMBLE_PWS_FILE = os.path.join(BASE_DIR, "data", "ensemble_snapshots_pws.json")
 BG_MUSIC_FILE = os.path.join(BASE_DIR, "data", "audio", "Paper Cup Afternoon.mp3")
-BG_MUSIC_VOLUME = 0.15  # тихая подложка под озвучку, не должна конкурировать с речью
+BG_MUSIC_VOLUME = 0.11  # чуть тише, по просьбе (было 0.15)
+MUSIC_PRE_ROLL = 0.6    # музыка начинается чуть раньше диктора — только в первом блоке ролика
+MUSIC_POST_ROLL = 1.8   # музыка продолжается ещё немного после диктора — только в последнем блоке
+MUSIC_TAIL_FADE = 1.3   # плавное затухание музыки в конце (укладывается внутрь post-roll)
 BG_MUSIC_DURATION = None  # определяется в main() через ffprobe при старте
 LOCAL_OFFSET_H = 3  # Одесса летом = UTC+3 (сверено с реальным сайтом: 06:00 UTC+3 = минимум суток)
 
@@ -358,7 +361,7 @@ def draw_intro_decoration(img, theme, key, x0, x1, y0, y1, reveal_frac):
 
     img.alpha_composite(overlay)
 
-def build_chrome(block, theme, out_path, reveal_frac=1.0):
+def build_chrome(block, theme, out_path, reveal_frac=1.0, counter_reveal=None):
     """Статичная часть кадра: фон + карточка + хедер, с прозрачным окном под
     прокручивающийся текст. Все декоративные элементы рисуются с alpha=255,
     а после отрисовки альфа принудительно нормализуется — это защита от
@@ -405,12 +408,17 @@ def build_chrome(block, theme, out_path, reveal_frac=1.0):
 
     t_min, t_max = extract_temp_range(text)
     temp_str = ""
+    # counter_reveal — как и reveal_frac, но НЕ зацикленный: для
+    # непрерывно-пульсирующих блоков (warnings/marine) reveal_frac крутится
+    # по кругу вечно, а счётчик в шапке должен посчитать один раз и застыть
+    # на финальном значении (см. вызовы build_chrome в main()).
+    cr = counter_reveal if counter_reveal is not None else reveal_frac
     if t_min is not None and t_max is not None and t_min != t_max:
-        shown_min = t_min * min(reveal_frac*1.3, 1.0) if reveal_frac < 1.0 else t_min
-        shown_max = t_max * min(reveal_frac*1.3, 1.0) if reveal_frac < 1.0 else t_max
+        shown_min = t_min * min(cr*1.05, 1.0) if cr < 1.0 else t_min
+        shown_max = t_max * min(cr*1.05, 1.0) if cr < 1.0 else t_max
         temp_str = f"{round(shown_min)}°–{round(shown_max)}°"
     elif t_max is not None:
-        shown_max = t_max * min(reveal_frac*1.3, 1.0) if reveal_frac < 1.0 else t_max
+        shown_max = t_max * min(cr*1.05, 1.0) if cr < 1.0 else t_max
         temp_str = f"{round(shown_max)}°"
     if temp_str:
         draw.text((card_x+card_w-30, card_y+85), temp_str, font=F(74, "bold"), fill=(*acc, 255), anchor="rm")
@@ -522,13 +530,15 @@ def _blend(c1, c2, t):
 
 def draw_line_with_highlights(draw, x, y, line, font, font_bold, accent, bg_color):
     """Рисует строку, выделяя ключевые числовые значения (температура, %,
-    ветер, давление, волнение) жирным акцентным цветом на плашке. Подсветка
-    встроена прямо в кадр текстовой ленты, поэтому автоматически синхронна
-    с озвучкой — отдельная тайм-синхронизация через ffmpeg не нужна.
+    ветер, давление, волнение) на сплошной акцентной плашке-«чипе» с белым
+    текстом — это даёт контраст "текст НА плашке", а не смешение оттенков
+    (было: полупрозрачная плашка + текст того же акцентного цвета = мазня).
+    Подсветка встроена прямо в кадр текстовой ленты, поэтому автоматически
+    синхронна с озвучкой — отдельная тайм-синхронизация через ffmpeg не нужна.
     Никаких рейтингов/точности моделей тут нет — только значения из текста."""
     cursor = x
     pos = 0
-    pill_color = _blend(bg_color, accent, 0.30)
+    pill_color = _blend(bg_color, accent, 0.88)  # почти сплошной акцент, не мутный микс
     for m in NUM_HIGHLIGHT_RE.finditer(line):
         if m.start() > pos:
             seg = line[pos:m.start()]
@@ -541,7 +551,7 @@ def draw_line_with_highlights(draw, x, y, line, font, font_bold, accent, bg_colo
         draw.rounded_rectangle(
             [cursor - pad_x, y + bbox[1] - pad_y, cursor + seg_w + pad_x, y + bbox[3] + pad_y],
             radius=14, fill=pill_color)
-        draw.text((cursor, y), seg, font=font_bold, fill=accent)
+        draw.text((cursor, y), seg, font=font_bold, fill=(255, 255, 255))
         cursor += draw.textlength(seg, font=font_bold)
         pos = m.end()
     if pos < len(line):
@@ -584,11 +594,15 @@ def build_textstrip(text, theme, out_path):
 
 def render_block_video(chrome_png, textstrip_png, strip_h, audio_path, theme, out_mp4,
                         intro_pattern=None, intro_fps=25, intro_dur=0.0, min_duration=6.0,
-                        loop_intro=False, bg_music_offset=0.0):
+                        loop_intro=False, bg_music_offset=0.0,
+                        is_first_block=False, is_last_block=False):
     window_h = TEXT_BOTTOM - TEXT_TOP
     max_scroll = max(0, strip_h - window_h)
 
-    if audio_path and os.path.exists(audio_path):
+    has_voice = bool(audio_path and os.path.exists(audio_path))
+    has_bg_music = os.path.exists(BG_MUSIC_FILE)
+
+    if has_voice:
         dur_str = subprocess.run(
             ["ffprobe", "-v", "error", "-show_entries", "format=duration",
              "-of", "default=noprint_wrappers=1:nokey=1", audio_path],
@@ -598,11 +612,19 @@ def render_block_video(chrome_png, textstrip_png, strip_h, audio_path, theme, ou
         dur = min_duration
     dur = max(dur, min_duration)
 
-    scroll_time = max(0.1, dur - START_DELAY - END_HOLD)
+    # pre/post-roll — только на первом/последнем блоке всего ролика и только
+    # если вообще есть музыка. Голос при этом НЕ трогаем по длительности —
+    # музыка просто "выглядывает" чуть раньше/дольше вокруг него.
+    pre_roll = MUSIC_PRE_ROLL if (is_first_block and has_bg_music) else 0.0
+    post_roll = MUSIC_POST_ROLL if (is_last_block and has_bg_music) else 0.0
+    dur_total = dur + pre_roll + post_roll
+
+    scroll_time = max(0.1, dur - START_DELAY - END_HOLD)  # темп текста — по чистой длине озвучки
     bg_color = gradient_color_at((TEXT_TOP+TEXT_BOTTOM)/2/H, theme["top"], theme["bot"])
     hexcolor = '0x%02x%02x%02x' % bg_color
-    y_expr = f"{TEXT_TOP}-min(max(t-{START_DELAY},0)/{scroll_time}*{max_scroll},{max_scroll})"
-    fade_start = max(0, dur - FADE_OUT_DUR)
+    effective_start_delay = START_DELAY + pre_roll
+    y_expr = f"{TEXT_TOP}-min(max(t-{effective_start_delay},0)/{scroll_time}*{max_scroll},{max_scroll})"
+    fade_start = max(0, dur_total - FADE_OUT_DUR)  # визуальное затухание — у истинного конца блока
 
     cmd = [
         "ffmpeg", "-y",
@@ -639,9 +661,6 @@ def render_block_video(chrome_png, textstrip_png, strip_h, audio_path, theme, ou
         )
         next_input_idx = 3
 
-    has_voice = bool(audio_path and os.path.exists(audio_path))
-    has_bg_music = os.path.exists(BG_MUSIC_FILE)
-
     if has_voice:
         cmd += ["-i", audio_path]
         voice_idx = next_input_idx
@@ -656,24 +675,37 @@ def render_block_video(chrome_png, textstrip_png, strip_h, audio_path, theme, ou
         bg_idx = next_input_idx
         next_input_idx += 1
 
+    # pre_roll>0 (только первый блок): голос стартует чуть позже музыки —
+    # музыка "уже играет", когда диктор начинает говорить.
+    voice_delay = f"adelay=delays={int(pre_roll*1000)}:all=1," if pre_roll > 0 else ""
+    # post_roll>0 (только последний блок): музыка тянется дольше голоса и
+    # плавно затухает у самого конца ролика, а не обрывается со звуком "щёлк".
+    tail_fade = (f",afade=t=out:st={max(0, dur_total-MUSIC_TAIL_FADE):.2f}:d={MUSIC_TAIL_FADE}"
+                 if post_roll > 0 else "")
+
     audio_filter = ""
     audio_map = None
     if has_voice and has_bg_music:
         audio_filter = (
-            f";[{voice_idx}:a]volume=1.0[voice];"
+            f";[{voice_idx}:a]{voice_delay}volume=1.0[voice];"
             f"[{bg_idx}:a]volume={BG_MUSIC_VOLUME}[bgm];"
             # normalize=0 — иначе amix по умолчанию делит громкость обоих
             # потоков пополам, и подложка становится еле слышной вне
             # зависимости от того, насколько громко мы её выставили выше.
-            f"[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2:normalize=0[premix];"
-            f"[premix]alimiter=limit=0.95[aout]"
+            # duration=longest (не first!) — иначе микс обрывается вместе с
+            # голосом и post-roll музыка после диктора просто не звучит.
+            f"[voice][bgm]amix=inputs=2:duration=longest:dropout_transition=2:normalize=0[premix];"
+            f"[premix]alimiter=limit=0.95{tail_fade}[aout]"
         )
         audio_map = "[aout]"
     elif has_voice:
-        audio_filter = ""
-        audio_map = f"{voice_idx}:a"
+        if pre_roll > 0:
+            audio_filter = f";[{voice_idx}:a]{voice_delay}anull[aout]"
+            audio_map = "[aout]"
+        else:
+            audio_map = f"{voice_idx}:a"
     elif has_bg_music:
-        audio_filter = f";[{bg_idx}:a]volume={BG_MUSIC_VOLUME * 1.6}[aout]"
+        audio_filter = f";[{bg_idx}:a]volume={BG_MUSIC_VOLUME * 1.6}{tail_fade}[aout]"
         audio_map = "[aout]"
 
     if audio_map:
@@ -682,14 +714,14 @@ def render_block_video(chrome_png, textstrip_png, strip_h, audio_path, theme, ou
     else:
         cmd += ["-filter_complex", base_filter, "-map", "[v]", "-an"]
     cmd += ["-c:v", "libx264", "-preset", "fast", "-pix_fmt", "yuv420p",
-            "-shortest", "-t", str(dur), out_mp4]
+            "-shortest", "-t", str(dur_total), out_mp4]
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         print(f"  [FFM] Ошибка:\n{result.stderr[-600:]}")
         return False
-    print(f"  [FFM] готов ({os.path.getsize(out_mp4)//1024} кб, {dur:.1f} сек)")
-    return dur
+    print(f"  [FFM] готов ({os.path.getsize(out_mp4)//1024} кб, {dur_total:.1f} сек)")
+    return dur_total
 
 def concat_videos(mp4s, out_mp4):
     list_file = os.path.join(TMP_DIR, "concat_list.txt")
@@ -766,7 +798,8 @@ def main():
                     # граничного кадра (i идёт до n_loop-1) — это критично
                     # для бесшовного зацикливания через -stream_loop -1.
                     reveal = i / n_loop
-                    build_chrome(block, theme, os.path.join(intro_dir, f"f{i:04d}.png"), reveal_frac=reveal)
+                    build_chrome(block, theme, os.path.join(intro_dir, f"f{i:04d}.png"),
+                                 reveal_frac=reveal, counter_reveal=1.0)
             else:
                 for i in range(n_intro):
                     linear = (i+1)/n_intro
@@ -777,7 +810,8 @@ def main():
         bg_offset = music_offset % music_span if music_track_dur > MUSIC_SAFETY else 0.0
         block_dur = render_block_video(chrome_png, strip_png, strip_h, audio_path, theme, block_mp4,
                                         intro_pattern=intro_pattern, intro_fps=INTRO_FPS, intro_dur=INTRO_DUR,
-                                        loop_intro=loop_intro, bg_music_offset=bg_offset)
+                                        loop_intro=loop_intro, bg_music_offset=bg_offset,
+                                        is_first_block=(idx == 0), is_last_block=(idx == len(blocks)-1))
         if block_dur:
             all_mp4s.append(block_mp4)
             music_offset += block_dur
