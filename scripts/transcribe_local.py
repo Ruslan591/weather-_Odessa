@@ -1,93 +1,68 @@
 #!/usr/bin/env python3
 """
-Локальная транскрипция mp3 -> текст через Vosk (офлайн, для Termux).
-Используется для проверки произношения TTS-блоков (Claude/Gemini озвучка).
+Транскрипция mp3 -> текст для проверки произношения TTS-блоков (Claude/Gemini озвучка).
+
+Использует SpeechRecognition + бесплатное Google Web Speech API (нужен интернет,
+но НЕ нужна локальная модель — это важно, т.к. vosk не ставится в Termux
+из-за отсутствия совместимого wheel под архитектуру Android).
 
 Установка (один раз в Termux):
     pkg install ffmpeg
-    pip install vosk
-
-Модель (один раз, ~50 МБ):
-    cd ~/storage/shared/Documents/weather/
-    curl -LO https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip
-    unzip vosk-model-small-ru-0.22.zip
+    pip install SpeechRecognition pydub
 
 Использование:
     python scripts/transcribe_local.py input.mp3
-    python scripts/transcribe_local.py input.mp3 --model vosk-model-small-ru-0.22
+    python scripts/transcribe_local.py input.mp3 --lang ru-RU
 """
 
 import argparse
-import json
 import os
-import subprocess
 import sys
 import tempfile
-import wave
 
 try:
-    from vosk import Model, KaldiRecognizer
+    import speech_recognition as sr
 except ImportError:
-    print("Ошибка: не установлен пакет vosk. Установите: pip install vosk", file=sys.stderr)
+    print("Ошибка: не установлен пакет SpeechRecognition.", file=sys.stderr)
+    print("Установите: pip install SpeechRecognition pydub", file=sys.stderr)
+    sys.exit(1)
+
+try:
+    from pydub import AudioSegment
+except ImportError:
+    print("Ошибка: не установлен пакет pydub.", file=sys.stderr)
+    print("Установите: pip install pydub", file=sys.stderr)
     sys.exit(1)
 
 
 def convert_to_wav(mp3_path: str, wav_path: str) -> None:
-    """Конвертирует mp3 в wav 16kHz mono через ffmpeg."""
-    result = subprocess.run(
-        [
-            "ffmpeg", "-y", "-i", mp3_path,
-            "-ar", "16000", "-ac", "1", "-f", "wav", wav_path,
-        ],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        print("Ошибка ffmpeg:", result.stderr, file=sys.stderr)
+    """Конвертирует mp3 в wav 16kHz mono через pydub (требует ffmpeg в PATH)."""
+    try:
+        audio = AudioSegment.from_mp3(mp3_path)
+    except Exception as e:
+        print(f"Ошибка конвертации (проверьте, что установлен ffmpeg: pkg install ffmpeg): {e}", file=sys.stderr)
         sys.exit(1)
+    audio = audio.set_frame_rate(16000).set_channels(1)
+    audio.export(wav_path, format="wav")
 
 
-def transcribe(wav_path: str, model_path: str) -> str:
-    if not os.path.isdir(model_path):
-        print(f"Ошибка: модель не найдена по пути '{model_path}'.", file=sys.stderr)
-        print("Скачайте: https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip", file=sys.stderr)
+def transcribe(wav_path: str, language: str) -> str:
+    r = sr.Recognizer()
+    with sr.AudioFile(wav_path) as source:
+        audio = r.record(source)
+    try:
+        return r.recognize_google(audio, language=language)
+    except sr.UnknownValueError:
+        return "[не удалось распознать речь — возможно, тишина или сильный шум]"
+    except sr.RequestError as e:
+        print(f"Ошибка запроса к сервису распознавания (нужен интернет): {e}", file=sys.stderr)
         sys.exit(1)
-
-    model = Model(model_path)
-    wf = wave.open(wav_path, "rb")
-
-    if wf.getnchannels() != 1 or wf.getsampwidth() != 2:
-        print("Ошибка: ожидается WAV mono 16-bit (конвертация должна была это обеспечить).", file=sys.stderr)
-        sys.exit(1)
-
-    rec = KaldiRecognizer(model, wf.getframerate())
-    rec.SetWords(True)
-
-    full_text = []
-    while True:
-        data = wf.readframes(4000)
-        if len(data) == 0:
-            break
-        if rec.AcceptWaveform(data):
-            part = json.loads(rec.Result()).get("text", "")
-            if part:
-                full_text.append(part)
-
-    final_part = json.loads(rec.FinalResult()).get("text", "")
-    if final_part:
-        full_text.append(final_part)
-
-    return " ".join(full_text).strip()
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Транскрипция mp3 в текст (офлайн, Vosk)")
+    parser = argparse.ArgumentParser(description="Транскрипция mp3 в текст (Google Web Speech API)")
     parser.add_argument("mp3", help="Путь к mp3-файлу")
-    parser.add_argument(
-        "--model",
-        default="vosk-model-small-ru-0.22",
-        help="Путь к папке с моделью Vosk (по умолчанию: vosk-model-small-ru-0.22)",
-    )
+    parser.add_argument("--lang", default="ru-RU", help="Код языка (по умолчанию: ru-RU)")
     args = parser.parse_args()
 
     if not os.path.isfile(args.mp3):
@@ -99,7 +74,7 @@ def main():
 
     try:
         convert_to_wav(args.mp3, wav_path)
-        text = transcribe(wav_path, args.model)
+        text = transcribe(wav_path, args.lang)
         print(text)
     finally:
         if os.path.exists(wav_path):
