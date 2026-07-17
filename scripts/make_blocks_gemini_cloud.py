@@ -167,18 +167,21 @@ def _decline(n, one, few, many):
     return many
 
 def _range_sub(text, unit_pattern, unit_word, allow_decimal=False):
-    """Диапазон "X-Y{unit}" -> "от X до Y {unit_word}". Если перед диапазоном
-    уже стоит предлог "от"/"до" (частая формулировка вроде "опускалась до
-    15-16°C"), не дублирует предлог, а просто вставляет "до" между числами."""
+    """Диапазон "X-Y{unit}" -> "от X до Y {unit_word}". Ведущий предлог
+    "от"/"до" перед диапазоном в исходном тексте (частая формулировка вроде
+    "опускалась до 15-16°C") поглощается и не дублируется в результате —
+    итог всегда единообразный оборот "от X до Y", без повтора предлога."""
     num_pat = r'-?\d+(?:[.,]\d+)?' if allow_decimal else r'-?\d+'
     pattern = re.compile(
         r'(?:(от|до)\s+)?(' + num_pat + r')\s*[-\u2013\u2014]\s*(' + num_pat + r')\s*' + unit_pattern,
         re.IGNORECASE
     )
     def repl(m):
-        prep, n1, n2 = m.group(1), m.group(2), m.group(3)
-        if prep:
-            return f'{prep} {n1} до {n2} {unit_word}'
+        n1, n2 = m.group(2), m.group(3)
+        # Всегда произносим полным оборотом "от X до Y", независимо от того,
+        # какой предлог (если вообще) стоял перед диапазоном в исходном тексте.
+        # Раньше при наличии предлога "до" перед диапазоном (напр. "опустится
+        # до 22-25°C") получалось дублирование: "до 22 до 25 градусов".
         return f'от {n1} до {n2} {unit_word}'
     return pattern.sub(repl, text)
 
@@ -600,4 +603,5 @@ if __name__ == "__main__":
     p.add_argument("--force", action="store_true")
     a = p.parse_args()
     main(force=a.force)
+
 
