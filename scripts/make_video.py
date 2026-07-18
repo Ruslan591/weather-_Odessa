@@ -252,7 +252,31 @@ DECORATIVE_INTRO_KEYS = {"next3", "warnings", "trend", "marine", "verification"}
 CONTINUOUS_LOOP_KEYS = {"warnings", "marine"}
 LOOP_DURATIONS = {"warnings": 2.0, "marine": 4.0}  # секунд на один бесшовный период
 
-def draw_intro_decoration(img, theme, key, x0, x1, y0, y1, reveal_frac):
+def detect_trend_direction(text):
+    """Определяет направление для линии в блоке 'Тенденция' по тексту —
+    раньше линия была фиксированным зигзагом вниз независимо от содержания.
+    Считаем вхождения корней потепления/похолодания/стабильности; при явном
+    перевесе одной стороны — берём её, при ничьей или отсутствии ключевых
+    слов — нейтральный (плоский) вариант, чтобы не выдумывать тренд."""
+    t = text.lower()
+    warm_stems = ('потепл', 'теплее', 'жарче', 'рост температур', 'повышение температур',
+                  'повысится температур', 'подниметс')
+    cool_stems = ('похолодан', 'холоднее', 'снижение температур', 'понижение температур',
+                  'понизится температур', 'похолодает', 'опустится температур')
+    stable_stems = ('без существенных изменен', 'практически не изменится',
+                     'сохранится', 'останется прежн', 'существенно не изменится')
+    warm_score = sum(t.count(s) for s in warm_stems)
+    cool_score = sum(t.count(s) for s in cool_stems)
+    stable_score = sum(t.count(s) for s in stable_stems)
+    if stable_score > 0 and warm_score == 0 and cool_score == 0:
+        return "flat"
+    if warm_score > cool_score:
+        return "up"
+    if cool_score > warm_score:
+        return "down"
+    return "flat"  # ничья или ключевых слов нет вовсе — не гадаем
+
+def draw_intro_decoration(img, theme, key, x0, x1, y0, y1, reveal_frac, trend_direction="down"):
     """Декоративная интро-анимация для блоков без почасового графика
     температуры. Чисто визуальный акцент под тему блока — никаких цифр
     рейтинга/точности/bias моделей (даже в verification это просто образ
@@ -317,7 +341,15 @@ def draw_intro_decoration(img, theme, key, x0, x1, y0, y1, reveal_frac):
     elif key == "trend":
         pts_n = 6
         xs = [x0 + (x1-x0)*i/(pts_n-1) for i in range(pts_n)]
-        rel = [0.72, 0.52, 0.62, 0.34, 0.44, 0.16]
+        # три варианта зигзага под реальное направление тренда из текста —
+        # раньше линия была всегда одинаковой (вниз), независимо от того,
+        # о потеплении или похолодании шла речь.
+        REL_PRESETS = {
+            "down": [0.72, 0.52, 0.62, 0.34, 0.44, 0.16],
+            "up":   [0.16, 0.44, 0.34, 0.62, 0.52, 0.72],
+            "flat": [0.50, 0.58, 0.46, 0.54, 0.44, 0.52],
+        }
+        rel = REL_PRESETS.get(trend_direction, REL_PRESETS["flat"])
         ys = [y1 - r*(y1-y0) for r in rel]
         exact = reveal_frac * (pts_n-1)
         full_i = int(math.floor(exact))
@@ -518,7 +550,9 @@ def build_chrome(block, theme, out_path, reveal_frac=1.0, counter_reveal=None):
                 draw.text((px, ty), f"{round(c_temps[idx])}°", font=F(32, "bold"),
                           fill=(255, 255, 255, 255), anchor="mm")
     elif key in DECORATIVE_INTRO_KEYS:
-        draw_intro_decoration(img, theme, key, chart_x0, chart_x1, chart_y0, chart_y1, reveal_frac)
+        trend_dir = detect_trend_direction(text) if key == "trend" else "down"
+        draw_intro_decoration(img, theme, key, chart_x0, chart_x1, chart_y0, chart_y1, reveal_frac,
+                               trend_direction=trend_dir)
         draw = ImageDraw.Draw(img)
 
     now_str = datetime.now().strftime("%d.%m.%Y")
