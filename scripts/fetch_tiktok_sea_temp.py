@@ -177,10 +177,18 @@ def download_video(url, workdir):
     # файл оставался без звука, хотя в оригинале звук есть).
     # Поэтому сначала пробуем уже смешанный формат с аудио+видео, и только
     # если такого нет — падаем на раздельное слияние как раньше.
+    #
+    # ДОБАВЛЕНО: даже когда формат метаданными заявляет acodec=aac, у части
+    # play-addr вариантов CDN (format_id вида bytevc1_*/h264_*) TikTok реально
+    # отдаёт файл без звуковой дорожки (подтверждено через ffprobe скачанного
+    # файла + formats_probe с полным списком форматов ролика — все заявляли
+    # aac, но именно у play-addr его не было по факту). format_id "download"
+    # — это обычно тот же вариант, что отдаётся кнопкой "Сохранить видео" в
+    # самом приложении, у него звук чаще цел. Поэтому пробуем его первым.
     out_tmpl = os.path.join(workdir, "video.%(ext)s")
     try:
         subprocess.run(
-            ["yt-dlp", "-f", "best[acodec!=none][vcodec!=none]/bestvideo+bestaudio/best",
+            ["yt-dlp", "-f", "download/best[acodec!=none][vcodec!=none]/bestvideo+bestaudio/best",
              "--merge-output-format", "mp4", "-o", out_tmpl, url],
             check=True, cwd=workdir, timeout=180,
             capture_output=True, text=True
