@@ -25,8 +25,14 @@ import time
 from datetime import datetime, timezone
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CHANNELS_FILE = os.path.join(BASE_DIR, "data", "tiktok_channels.json")
-HISTORY_FILE  = os.path.join(BASE_DIR, "data", "tiktok_sea_temp.json")
+# Переопределяемо через env — для тестового прогона одного канала локально
+# (Termux), не трогая боевые файлы истории/состояния.
+CHANNELS_FILE = os.environ.get(
+    "TIKTOK_CHANNELS_FILE", os.path.join(BASE_DIR, "data", "tiktok_channels.json")
+)
+HISTORY_FILE = os.environ.get(
+    "TIKTOK_HISTORY_FILE", os.path.join(BASE_DIR, "data", "tiktok_sea_temp.json")
+)
 
 MONTHS_RU = {
     "января": 1, "февраля": 2, "марта": 3, "апреля": 4, "мая": 5, "июня": 6,
