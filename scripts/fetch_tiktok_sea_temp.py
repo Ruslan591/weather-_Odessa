@@ -133,6 +133,36 @@ def latest_video_info(channel_url):
     return candidates[0], debug_info
 
 
+def probe_formats(url):
+    """Список форматов конкретного видео (не плейлиста) с acodec/vcodec —
+    нужен, чтобы понять, был ли у ролика вообще доступен формат со звуком,
+    ДО того как yt-dlp выберет и смёрджит финальный файл. Раньше единственной
+    диагностикой был ffprobe УЖЕ СКАЧАННОГО файла, который не показывает,
+    что было доступно на источнике и почему выбор мог не включить audio."""
+    try:
+        out = subprocess.run(
+            ["yt-dlp", "-j", "--no-warnings", url],
+            capture_output=True, text=True, timeout=60
+        )
+        if out.returncode != 0 or not out.stdout.strip():
+            return {"probe_formats_error": out.stderr[-500:]}
+        info = json.loads(out.stdout.splitlines()[0])
+        formats = info.get("formats") or []
+        summary = [
+            {
+                "format_id": f.get("format_id"),
+                "acodec": f.get("acodec"),
+                "vcodec": f.get("vcodec"),
+                "ext": f.get("ext"),
+                "filesize": f.get("filesize") or f.get("filesize_approx"),
+            }
+            for f in formats
+        ]
+        return {"n_formats": len(summary), "formats": summary}
+    except Exception as e:
+        return {"probe_formats_error": str(e)[:500]}
+
+
 def download_video(url, workdir):
     # ВАЖНО: у TikTok обычно есть ГОТОВЫЙ комбинированный поток (видео+аудио
     # уже смешаны). Раньше здесь стояло "bestvideo+bestaudio/best" — принудительное
@@ -433,6 +463,15 @@ def process_channel(entry, history):
 
     speech_text, ocr_text = "", ""
     with tempfile.TemporaryDirectory() as workdir:
+        # Речь и OCR — независимо друг от друга: у ролика может не быть
+        # звуковой дорожки (слайд-шоу/muted), но при этом текст на кадре
+        # всё равно можно распознать, и наоборот.
+        diag = {"video_size": None, "audio_size": None, "n_frames": None,
+                "speech_len": 0, "ocr_len": 0}
+
+        print(f"  [{label}] проверяю доступные форматы (acodec/vcodec)...")
+        diag["formats_probe"] = probe_formats(video_url)
+
         try:
             print(f"  [{label}] скачиваю видео: {video_url}")
             video_path = download_video(video_url, workdir)
@@ -440,13 +479,8 @@ def process_channel(entry, history):
             err = f"download_video: {e}"
             print(f"  [WARN][{label}] скачивание не удалось: {e}")
             entry["last_error"] = err[-500:]
+            entry["last_run_diag"] = diag
             return
-
-        # Речь и OCR — независимо друг от друга: у ролика может не быть
-        # звуковой дорожки (слайд-шоу/muted), но при этом текст на кадре
-        # всё равно можно распознать, и наоборот.
-        diag = {"video_size": None, "audio_size": None, "n_frames": None,
-                "speech_len": 0, "ocr_len": 0}
         try:
             diag["video_size"] = os.path.getsize(video_path)
         except Exception:
