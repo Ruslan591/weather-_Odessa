@@ -326,11 +326,22 @@ def extract_frames(video_path, workdir, n=6):
 
 def ocr_frames(frames):
     import pytesseract
-    from PIL import Image
+    from PIL import Image, ImageOps
     texts = []
     for fp in frames:
         try:
-            texts.append(pytesseract.image_to_string(Image.open(fp), lang="rus"))
+            img = Image.open(fp)
+            # ВАЖНО: стилизованный текст (неон с чёрной обводкой поверх
+            # фото, у части каналов вроде tiktok_2) tesseract на нативном
+            # разрешении читает плохо — проверено на 1080p и 540p одинаково
+            # плохо ("УАТС) РАМ" вместо "18.07.2026"). Grayscale + апскейл
+            # 2x + autocontrast обычно достаточно, чтобы разделить текст
+            # и фон чётче для OCR.
+            img = img.convert("L")
+            w, h = img.size
+            img = img.resize((w * 2, h * 2), Image.LANCZOS)
+            img = ImageOps.autocontrast(img)
+            texts.append(pytesseract.image_to_string(img, lang="rus"))
         except Exception as e:
             print(f"    [WARN] OCR кадра не удался: {e}")
     return "\n".join(texts)
