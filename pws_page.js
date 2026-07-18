@@ -1310,7 +1310,7 @@ function makeHmcbasVerifyBlock(){
         const extras = [];
         if(e.beach) extras.push(e.beach.charAt(0).toUpperCase() + e.beach.slice(1));
         const extraTxt = extras.length ? ` (${extras.join(", ")})` : "";
-        return factRow("🎵 TikTok" + dateTxt, e.sea_temp, diffSpan(e.sea_temp), extraTxt);
+        return factRow("🎵" + dateTxt, e.sea_temp, diffSpan(e.sea_temp), extraTxt);
     }).join("");
 
     if(!hasSite && !hasTg && !tiktokRows) return "";
