@@ -191,11 +191,33 @@ def weather_icon_path(text, key):
     if key == 'trend':  return os.path.join(ICONS_DIR, 'trend.png')
     if key == 'next3':  return os.path.join(ICONS_DIR, 'calendar.png')
     if key == 'verification': return os.path.join(ICONS_DIR, 'trend.png')
+    if key == 'warnings':
+        return warning_icon_path(t)
     if 'гроза' in t or 'молния' in t: return os.path.join(ICONS_DIR, 'thunder.png')
     if 'дождь' in t or 'осадки' in t: return os.path.join(ICONS_DIR, 'rain.png')
     if 'облачно' in t or 'облака' in t: return os.path.join(ICONS_DIR, 'cloudy.png')
     if 'ясно' in t or 'солнечно' in t: return os.path.join(ICONS_DIR, 'sunny.png')
     return os.path.join(ICONS_DIR, 'partly_cloudy.png')
+
+def warning_icon_path(t):
+    """Иконка для блока 'Предупреждения' — по корням слов (а не точным
+    словоформам: текст часто содержит "гроз", "дожд" в разных падежах, а не
+    ровно "гроза"/"дождь"). Своего набора иконок под конкретные явления
+    (УФ/ветер/туман/мороз) в репо нет, поэтому берём ближайшую по смыслу из
+    имеющихся, и вместо нейтрального дефолта используем thunder.png — он
+    читается как "внимание/предупреждение" в любом случае, а не как обычная
+    хорошая погода."""
+    if any(w in t for w in ('гроз', 'молни', 'шторм')):
+        return os.path.join(ICONS_DIR, 'thunder.png')
+    if any(w in t for w in ('дожд', 'ливен', 'осадк', 'потоп', 'подтопл')):
+        return os.path.join(ICONS_DIR, 'rain.png')
+    if any(w in t for w in ('уф-индекс', 'ультрафиолет', ' уф ', 'жар', 'зно', 'пекл', 'перегрев')):
+        return os.path.join(ICONS_DIR, 'sunny.png')
+    if any(w in t for w in ('туман', 'дымк', 'смог')):
+        return os.path.join(ICONS_DIR, 'cloudy.png')
+    if any(w in t for w in ('волнени', 'прибо', 'шторм на мор')):
+        return os.path.join(ICONS_DIR, 'wave.png')
+    return os.path.join(ICONS_DIR, 'thunder.png')
 
 def paste_icon(img, icon_path, cx, cy, size=180):
     if not os.path.exists(icon_path): return
@@ -261,9 +283,9 @@ def draw_intro_decoration(img, theme, key, x0, x1, y0, y1, reveal_frac):
             # (сегодня/завтра покрыты другими блоками), поэтому смещение +2
             day_dt = datetime.now() + timedelta(days=i+2)
             d.text((cx0+chip_w/2, top+chip_h*0.34), WEEKDAYS_RU[day_dt.weekday()],
-                    font=F(24, "bold"), fill=(*acc, alpha), anchor="mm")
-            d.text((cx0+chip_w/2, top+chip_h*0.58), day_dt.strftime("%d.%m"),
-                    font=F(28, "bold"), fill=(255, 255, 255, alpha), anchor="mm")
+                    font=F(32, "bold"), fill=(*acc, alpha), anchor="mm")
+            d.text((cx0+chip_w/2, top+chip_h*0.60), day_dt.strftime("%d.%m"),
+                    font=F(38, "bold"), fill=(255, 255, 255, alpha), anchor="mm")
             dots_y = top + chip_h*0.82
             for k in range(3):
                 dk = max(0.0, min(1.0, local*3 - k))
@@ -414,11 +436,11 @@ def build_chrome(block, theme, out_path, reveal_frac=1.0, counter_reveal=None):
     # на финальном значении (см. вызовы build_chrome в main()).
     cr = counter_reveal if counter_reveal is not None else reveal_frac
     if t_min is not None and t_max is not None and t_min != t_max:
-        shown_min = t_min * min(cr*1.05, 1.0) if cr < 1.0 else t_min
-        shown_max = t_max * min(cr*1.05, 1.0) if cr < 1.0 else t_max
+        shown_min = t_min * min(cr*1.0, 1.0) if cr < 1.0 else t_min
+        shown_max = t_max * min(cr*1.0, 1.0) if cr < 1.0 else t_max
         temp_str = f"{round(shown_min)}°–{round(shown_max)}°"
     elif t_max is not None:
-        shown_max = t_max * min(cr*1.05, 1.0) if cr < 1.0 else t_max
+        shown_max = t_max * min(cr*1.0, 1.0) if cr < 1.0 else t_max
         temp_str = f"{round(shown_max)}°"
     if temp_str:
         draw.text((card_x+card_w-30, card_y+85), temp_str, font=F(74, "bold"), fill=(*acc, 255), anchor="rm")
@@ -594,7 +616,7 @@ def build_textstrip(text, theme, out_path):
 
 def render_block_video(chrome_png, textstrip_png, strip_h, audio_path, theme, out_mp4,
                         intro_pattern=None, intro_fps=25, intro_dur=0.0, min_duration=6.0,
-                        loop_intro=False, bg_music_offset=0.0,
+                        chrome_is_pattern=False, bg_music_offset=0.0,
                         is_first_block=False, is_last_block=False):
     window_h = TEXT_BOTTOM - TEXT_TOP
     max_scroll = max(0, strip_h - window_h)
@@ -630,20 +652,23 @@ def render_block_video(chrome_png, textstrip_png, strip_h, audio_path, theme, ou
         "ffmpeg", "-y",
         "-f", "lavfi", "-i", f"color=size={W}x{H}:color={hexcolor}",
         "-loop", "1", "-i", textstrip_png,
-        "-loop", "1", "-i", chrome_png,
     ]
+    if chrome_is_pattern:
+        # ВЕЧНЫЙ пост-интро луп (декорация крутится, счётчик уже застыл на
+        # цели) — играет с t=0 непрерывно, независимо от того, скрыт ли он
+        # сейчас одноразовым интро-слоем сверху. Именно поэтому стык на
+        # границе intro_dur получается бесшовным: этот слой никогда не
+        # "останавливался", просто был закрыт.
+        cmd += ["-stream_loop", "-1", "-framerate", str(intro_fps), "-i", chrome_png]
+    else:
+        cmd += ["-loop", "1", "-i", chrome_png]
 
     use_intro = bool(intro_pattern)
     if use_intro:
-        if loop_intro:
-            # непрерывная пульсация: зацикливаем короткую бесшовную
-            # последовательность кадров на всю длительность блока —
-            # никогда не откатываемся к статичному chrome_png.
-            cmd += ["-stream_loop", "-1", "-framerate", str(intro_fps), "-i", intro_pattern]
-            intro_overlay = f"[bg2][3:v]overlay=x=0:y=0:shortest=1[v]"
-        else:
-            cmd += ["-framerate", str(intro_fps), "-i", intro_pattern]
-            intro_overlay = f"[bg2][3:v]overlay=x=0:y=0:enable='lt(t,{intro_dur})'[v]"
+        # интро всегда одноразовое и жёстко ограничено по времени — даже для
+        # блоков с вечным лупом декорации (см. chrome_is_pattern выше).
+        cmd += ["-framerate", str(intro_fps), "-i", intro_pattern]
+        intro_overlay = f"[bg2][3:v]overlay=x=0:y=0:enable='lt(t,{intro_dur})'[v]"
         base_filter = (
             f"[1:v]fade=t=in:st=0:d={FADE_IN_DUR}:color={hexcolor},"
             f"fade=t=out:st={fade_start}:d={FADE_OUT_DUR}:color={hexcolor}[txtfade];"
@@ -749,7 +774,7 @@ def main():
     os.makedirs(TMP_DIR, exist_ok=True)
 
     INTRO_FPS = 25
-    INTRO_DUR = 1.6
+    INTRO_DUR = 2.1
     n_intro = int(INTRO_FPS * INTRO_DUR)
 
     # длительность фонового трека — чтобы позиция для следующего блока не
@@ -779,38 +804,61 @@ def main():
         strip_png  = os.path.join(TMP_DIR, f"strip_{idx:02d}.png")
         block_mp4  = os.path.join(TMP_DIR, f"block_{idx:02d}.mp4")
 
-        build_chrome(block, theme, chrome_png, reveal_frac=1.0)
         strip_h = build_textstrip(block.get("text", ""), theme, strip_png)
         audio_path = mp3_path if os.path.exists(mp3_path) else None
 
-        # интро-анимация (прорисовка графика + счётчик) — только если для
-        # этого блока вообще есть график (get_temp_curve вернул данные)
         intro_pattern = None
-        loop_intro = key in CONTINUOUS_LOOP_KEYS
-        if get_temp_curve(key) or key in DECORATIVE_INTRO_KEYS:
+        is_loop_key = key in CONTINUOUS_LOOP_KEYS
+        chrome_is_pattern = False
+
+        if is_loop_key:
+            # ВЕЧНЫЙ пост-интро луп: декорация (кольца/волны) крутится не
+            # переставая на всю длительность блока, а счётчик в шапке уже
+            # застыл на финальном значении (counter_reveal=1.0) — иначе он
+            # бы пересчитывал по кругу вместе с декорацией на каждом повторе
+            # цикла (тот самый баг "температура крутится по кругу").
+            loop_dur = LOOP_DURATIONS[key]
+            n_loop = int(INTRO_FPS * loop_dur)
+            loop_dir = os.path.join(TMP_DIR, f"loop_{idx:02d}")
+            os.makedirs(loop_dir, exist_ok=True)
+            for i in range(n_loop):
+                # линейная фаза 0..1, БЕЗ eased-рампы и БЕЗ повтора граничного
+                # кадра (i идёт до n_loop-1) — критично для бесшовной склейки.
+                reveal = i / n_loop
+                build_chrome(block, theme, os.path.join(loop_dir, f"f{i:04d}.png"),
+                             reveal_frac=reveal, counter_reveal=1.0)
+            chrome_png = os.path.join(loop_dir, "f%04d.png")
+            chrome_is_pattern = True
+
+            # ОДНОРАЗОВОЕ интро поверх него первые INTRO_DUR сек: декорация
+            # замерла в стартовой позе (reveal_frac=0.0 — она в любом случае
+            # не видна отдельно, зритель видит только то, что сверху), а
+            # счётчик считает вверх один раз и на этом интро-слое заканчивается.
             intro_dir = os.path.join(TMP_DIR, f"intro_{idx:02d}")
             os.makedirs(intro_dir, exist_ok=True)
-            if loop_intro:
-                loop_dur = LOOP_DURATIONS[key]
-                n_loop = int(INTRO_FPS * loop_dur)
-                for i in range(n_loop):
-                    # линейная фаза 0..1, БЕЗ eased-рампы и БЕЗ повтора
-                    # граничного кадра (i идёт до n_loop-1) — это критично
-                    # для бесшовного зацикливания через -stream_loop -1.
-                    reveal = i / n_loop
-                    build_chrome(block, theme, os.path.join(intro_dir, f"f{i:04d}.png"),
-                                 reveal_frac=reveal, counter_reveal=1.0)
-            else:
+            for i in range(n_intro):
+                linear = (i+1)/n_intro
+                counter_progress = ease_in_out_cubic(linear)
+                build_chrome(block, theme, os.path.join(intro_dir, f"f{i:04d}.png"),
+                             reveal_frac=0.0, counter_reveal=counter_progress)
+            intro_pattern = os.path.join(intro_dir, "f%04d.png")
+        else:
+            build_chrome(block, theme, chrome_png, reveal_frac=1.0)
+            # интро-анимация (прорисовка графика + счётчик) — только если для
+            # этого блока вообще есть график (get_temp_curve вернул данные)
+            if get_temp_curve(key) or key in DECORATIVE_INTRO_KEYS:
+                intro_dir = os.path.join(TMP_DIR, f"intro_{idx:02d}")
+                os.makedirs(intro_dir, exist_ok=True)
                 for i in range(n_intro):
                     linear = (i+1)/n_intro
                     reveal = ease_in_out_cubic(linear)
                     build_chrome(block, theme, os.path.join(intro_dir, f"f{i:04d}.png"), reveal_frac=reveal)
-            intro_pattern = os.path.join(intro_dir, "f%04d.png")
+                intro_pattern = os.path.join(intro_dir, "f%04d.png")
 
         bg_offset = music_offset % music_span if music_track_dur > MUSIC_SAFETY else 0.0
         block_dur = render_block_video(chrome_png, strip_png, strip_h, audio_path, theme, block_mp4,
                                         intro_pattern=intro_pattern, intro_fps=INTRO_FPS, intro_dur=INTRO_DUR,
-                                        loop_intro=loop_intro, bg_music_offset=bg_offset,
+                                        chrome_is_pattern=chrome_is_pattern, bg_music_offset=bg_offset,
                                         is_first_block=(idx == 0), is_last_block=(idx == len(blocks)-1))
         if block_dur:
             all_mp4s.append(block_mp4)
