@@ -22,7 +22,9 @@ import re
 import subprocess
 import tempfile
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+
+ODESSA_TZ = timezone(timedelta(hours=3))
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Переопределяемо через env — для тестового прогона одного канала локально
@@ -68,6 +70,12 @@ NUMBER_BEFORE_GRADUS_RE = re.compile(r'(\d{1,2}(?:[.,]\d)?)\s*градус', re.
 DATE_RE = re.compile(r'(\d{1,2})\s+(' + "|".join(MONTHS_RU.keys()) + r')', re.IGNORECASE)
 TIME_COLON_RE = re.compile(r'\b(\d{1,2}):(\d{2})\b')
 TIME_HOUR_RE  = re.compile(r'\bв\s+(\d{1,2})\s+час', re.IGNORECASE)
+# ВАЖНО: Whisper часто транскрибирует "11:00" как "11.00" (точка вместо
+# двоеточия) — TIME_COLON_RE такое не ловил, и время терялось целиком
+# (примеры: "Время сейчас 11.00", "Время сейчас 8.40" — в history время
+# осталось null). Требуем слово "время"/"времи" рядом, чтобы не хватать
+# случайные "22.5 градуса" и т.п. как время.
+TIME_NEAR_WORD_RE = re.compile(r'[Вв]рем[яи]\D{0,20}(\d{1,2})[:.](\d{2})\b')
 
 # --- наложенный текст на кадре (OCR) ---
 OCR_TEMP_RE = re.compile(r'(\d{1,2}[.,]?\d?)\s*(?:°\s*[CС]?|град|[CС])\*?', re.IGNORECASE)
@@ -420,6 +428,11 @@ def parse_beach(text):
 
 
 def parse_time_speech(text):
+    m = TIME_NEAR_WORD_RE.search(text)
+    if m:
+        h = int(m.group(1))
+        if 0 <= h <= 23:
+            return f"{h:02d}:{m.group(2)}"
     m = TIME_COLON_RE.search(text)
     if m:
         return f"{int(m.group(1)):02d}:{m.group(2)}"
@@ -558,6 +571,26 @@ def process_channel(entry, history):
     else:
         beach_source = None
 
+    # Аналогично пляжу: если ни OCR, ни речь не дали время замера явно —
+    # берём время публикации самого ролика (в TikTok это обычно совпадает
+    # с временем съёмки/замера с точностью до нескольких минут). Реально
+    # распознанное время из оверлея/речи всегда важнее.
+    detected_time = ocr_time if ocr_time is not None else speech_time
+    default_time = None
+    upload_ts = info.get("timestamp")
+    if upload_ts:
+        try:
+            default_time = datetime.fromtimestamp(upload_ts, tz=ODESSA_TZ).strftime("%H:%M")
+        except (OSError, OverflowError, ValueError):
+            default_time = None
+    final_time = detected_time if detected_time is not None else default_time
+    if detected_time is not None:
+        time_source = "ocr" if ocr_time is not None else "speech"
+    elif default_time is not None:
+        time_source = "upload"
+    else:
+        time_source = None
+
     result = {
         "channel":       label,
         "video_id":      video_id,
@@ -571,8 +604,8 @@ def process_channel(entry, history):
         "sea_temp_source": "ocr" if ocr_temp  is not None else ("speech" if speech_temp  is not None else None),
         "beach":         final_beach,
         "beach_source":  beach_source,
-        "time":          ocr_time  if ocr_time  is not None else speech_time,
-        "time_source":   "ocr" if ocr_time  is not None else ("speech" if speech_time  is not None else None),
+        "time":          final_time,
+        "time_source":   time_source,
     }
     print(f"  [{label}] дата={result['date']} темп={result['sea_temp']}°C"
           f"({result['sea_temp_source']}) время={result['time']}({result['time_source']}) "
