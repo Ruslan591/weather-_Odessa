@@ -4,6 +4,7 @@
 var TABS = [
     { label: "Прогноз",  icon: "📅", href: "forecast.html", match: ["forecast.html"] },
     { label: "По городу",icon: "🌆", href: "pws.html",      match: ["pws.html"] },
+    { label: "Море",     icon: "🌊", href: "marine.html",   match: ["marine.html"] },
     { label: "Одесса",   icon: "🏙", href: null, match: ["index.html", "bufr.html"],
       submenu: [
           { label: "SYNOP", href: "index.html" },
