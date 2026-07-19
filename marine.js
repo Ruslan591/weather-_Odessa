@@ -679,13 +679,13 @@ function buildMarineIndicatorCards(m){
             windSpeed: Math.round(m.seaWindSpeed),
             windGustMs: m.seaWindGust != null ? Math.round(m.seaWindGust) : null,
             windDir: m.seaWindDir,
-        }));
+        }).replace(' onclick="indExpand(this)"', ""));
     }
     if(m.seaPressure != null){
         cards.push(pressureIndicatorSvg({
             seaPressure: Math.round(m.seaPressure * 10) / 10,
             tendencyCode: null, tendencyValue: null,
-        }));
+        }).replace(' onclick="indExpand(this)"', ""));
     }
     if(m.currentV != null && m.currentV > 0.05){
         cards.push(seaCompassIndicatorSvg({
@@ -707,14 +707,80 @@ function makeMarineIndicatorsGrid(m){
 /* =========================================================
    БЛОК: МОРЕ (карточка "Море · Чёрное море")
 ========================================================= */
+function makeMarineTextRows(m){
+    const sstColor = m.sst == null ? "#aaa"
+        : m.sst < 12 ? "#74b9ff"
+        : m.sst < 20 ? "#00cec9"
+        : m.sst < 26 ? "#55efc4"
+        :               "#ffd166";
+
+    const fV    = v => v != null ? v.toFixed(1) : "—";
+    const fWind = v => v != null ? Math.round(v) : "—";
+    const fHeightTxt = v => {
+        if(v == null) return "—";
+        const hp = marineHeightParts(v);
+        return `${hp.value} ${hp.unit}`;
+    };
+
+    const sstHtml = m.sst != null ? `
+        <div style="display:flex;justify-content:space-between;align-items:center;
+                    padding:8px 0 10px;border-bottom:1px solid #1e1e1e;margin-bottom:6px;">
+            <span style="font-size:14px;color:#888;">🌡️ Температура воды</span>
+            <span style="font-size:26px;font-weight:800;color:${sstColor};">${m.sst.toFixed(1)}°C</span>
+        </div>` : "";
+
+    const seaLevelHtml = m.seaLevel != null ? (() => {
+        const cm  = m.seaLevel;
+        const arr = cm > 5 ? " ↑" : cm < -5 ? " ↓" : " →";
+        const col = cm > 5 ? "#74b9ff" : cm < -5 ? "#ff9f5c" : "#888";
+        return `<div class="seaFactRow">
+            <span class="sfLabel">📏 Нагон/сгон</span>
+            <span class="sfValue" style="color:${col};">${cm >= 0 ? "+" : ""}${cm} см${arr}</span>
+        </div>`;
+    })() : "";
+
+    const rows = [
+        m.waveH      != null ? ["🌊 Волна",
+            `${fHeightTxt(m.waveH)} · ${marineDirText(m.waveDir)}`
+            + (m.wavePeakPer != null ? ` · Tп=${m.wavePeakPer.toFixed(0)} с`
+               : m.wavePer   != null ? ` · T=${m.wavePer.toFixed(0)} с` : "")
+        ] : null,
+        m.swellH     != null ? ["〰️ Зыбь",
+            `${fHeightTxt(m.swellH)} · ${marineDirText(m.swellDir)}`
+            + (m.swellPer != null ? ` · T=${m.swellPer.toFixed(0)} с` : "")
+        ] : null,
+        m.windWaveH  != null ? ["💨 Ветровая волна",
+            `${fHeightTxt(m.windWaveH)} · ${marineDirText(m.windWaveDir)}`
+        ] : null,
+        m.seaWindSpeed != null ? ["🌬️ Ветер над морем",
+            `${fWind(m.seaWindSpeed)} м/с · порывы ${fWind(m.seaWindGust)} · ${marineDirText(m.seaWindDir)}`
+        ] : null,
+        m.seaPressure != null ? ["🔵 Давление (море)", `${m.seaPressure.toFixed(1)} гПа`] : null,
+        m.currentV   != null && m.currentV > 0.05 ? ["🔄 Течение",
+            `${fV(m.currentV)} м/с · ${marineDirText(m.currentDir)}`
+        ] : null,
+    ].filter(Boolean);
+
+    if(!sstHtml && !rows.length) return "";
+
+    return `
+        ${sstHtml}
+        <div class="pws-fields">
+            ${seaLevelHtml}
+            ${rows.map(([k,v]) =>
+                `<div class="seaFactRow"><span class="sfLabel">${k}</span><span class="sfValue">${v}</span></div>`
+            ).join("")}
+        </div>`;
+}
+
 function makeMarineBlock(opts){
     opts = opts || {};
     const m = _marineData;
     if(!m) return "";
 
     const state    = marineSeaStateLabel(m.waveH);
-    const gridHtml = makeMarineIndicatorsGrid(m);
-    if(!gridHtml) return "";
+    const bodyHtml = opts.mode === "grid" ? makeMarineIndicatorsGrid(m) : makeMarineTextRows(m);
+    if(!bodyHtml) return "";
 
     const warnHtml = state && m.waveH >= 1.25 ? `
         <div style="margin-bottom:8px;padding:7px 10px;border-radius:8px;
@@ -740,7 +806,7 @@ function makeMarineBlock(opts){
             ${titleText}
         </div>
         ${warnHtml}
-        ${gridHtml}
+        ${bodyHtml}
     </div>`;
 }
 
