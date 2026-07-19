@@ -61,7 +61,7 @@ function fillCard(id, html, emptyTitle, emptyMsg){
 }
 
 function renderMarinePage(){
-    fillCard("marineFactsCard",    makeMarineBlock(),        "Море · Чёрное море",         "Нет данных");
+    fillCard("marineFactsCard",    makeMarineBlock({hideTitlePrefix:true}), "Море · Чёрное море",         "Нет данных");
     fillCard("marineVerifyCard",   makeHmcbasVerifyBlock(),  "Сверка с реальными замерами","Пока нет данных");
     fillCard("marineAccuracyCard", makeMarineAccuracyBlock(),"Точность модели CMEMS",       "Недостаточно данных для оценки точности");
 }
