@@ -1200,9 +1200,9 @@ function makeMarineBlock(){
         const cm  = m.seaLevel;
         const arr = cm > 5 ? " ↑" : cm < -5 ? " ↓" : " →";
         const col = cm > 5 ? "#74b9ff" : cm < -5 ? "#ff9f5c" : "#888";
-        return `<div class="districtLine">
-            <span>📏 Нагон/сгон</span>
-            <span style="color:${col};font-weight:600;">${cm >= 0 ? "+" : ""}${cm} см${arr}</span>
+        return `<div class="seaFactRow">
+            <span class="sfLabel">📏 Нагон/сгон</span>
+            <span class="sfValue" style="color:${col};">${cm >= 0 ? "+" : ""}${cm} см${arr}</span>
         </div>`;
     })() : "";
 
@@ -1248,7 +1248,7 @@ function makeMarineBlock(){
         <div class="pws-fields">
             ${seaLevelHtml}
             ${rows.map(([k,v]) =>
-                `<div class="districtLine"><span>${k}</span><span>${v}</span></div>`
+                `<div class="seaFactRow"><span class="sfLabel">${k}</span><span class="sfValue">${v}</span></div>`
             ).join("")}
         </div>
     </div>`;
@@ -1264,9 +1264,9 @@ function makeHmcbasVerifyBlock(){
     const modelSst = _marineData && _marineData.sst != null ? _marineData.sst : null;
 
     function factRow(label, factT, diffHtml, extraTxt){
-        return `<div class="districtLine">
-            <span>${label}${extraTxt || ""}</span>
-            <span style="font-weight:700;color:#eee;">${factT.toFixed(1)}°C${diffHtml}</span>
+        return `<div class="seaFactRow">
+            <span class="sfLabel">${label}${extraTxt || ""}</span>
+            <span class="sfValue">${factT.toFixed(1)}°C${diffHtml}</span>
         </div>`;
     }
 
