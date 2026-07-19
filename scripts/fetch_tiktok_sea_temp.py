@@ -67,6 +67,11 @@ BEACHES = {
 
 # --- речь (Whisper) ---
 NUMBER_BEFORE_GRADUS_RE = re.compile(r'(\d{1,2}(?:[.,]\d)?)\s*градус', re.IGNORECASE)
+# Устное произношение десятичных: "22 и 4 градуса" = 22.4 (без точки/запятой,
+# обычный способ проговаривать дробные числа в русской речи). Раньше это
+# ловилось старым regex'ом только по хвосту ("4 градус"), и в history уходила
+# только дробная часть вместо целого числа.
+TEMP_AND_DECIMAL_RE = re.compile(r'(\d{1,2})\s+и\s+(\d)(?:\s*десят\w*)?\s*градус', re.IGNORECASE)
 DATE_RE = re.compile(r'(\d{1,2})\s+(' + "|".join(MONTHS_RU.keys()) + r')', re.IGNORECASE)
 TIME_COLON_RE = re.compile(r'\b(\d{1,2}):(\d{2})\b')
 TIME_HOUR_RE  = re.compile(r'\bв\s+(\d{1,2})\s+час', re.IGNORECASE)
@@ -368,7 +373,25 @@ def transcribe(audio_path):
 
 def parse_temp_speech(text):
     best = None
+    handled_spans = []
+
+    for m in TEMP_AND_DECIMAL_RE.finditer(text):
+        window_before = text[max(0, m.start() - 100):m.start()]
+        if not re.search(r'температур', window_before, re.IGNORECASE):
+            continue
+        try:
+            val = float(f"{m.group(1)}.{m.group(2)}")
+        except ValueError:
+            continue
+        if 3 <= val <= 32:
+            best = val
+        handled_spans.append(m.span())
+
     for m in NUMBER_BEFORE_GRADUS_RE.finditer(text):
+        # Пропускаем "градус", уже обработанный выше как часть "X и Y" —
+        # иначе старый regex перезапишет правильное 22.4 хвостовой цифрой "4".
+        if any(s <= m.start() < e for s, e in handled_spans):
+            continue
         window_before = text[max(0, m.start() - 100):m.start()]
         if not re.search(r'температур', window_before, re.IGNORECASE):
             continue
