@@ -236,6 +236,11 @@ function renderMarineHistChart(){
     if(!_marineHistArr || _marineHistArr.length < 2){ card.innerHTML = ""; return; }
     if(typeof echarts === "undefined") return;
 
+    // сохраняем позицию горизонтальной прокрутки строки параметров,
+    // иначе клик по кнопке за пределами видимой области сбрасывает её в начало
+    const prevParamRow = document.getElementById("marineParamRow");
+    const prevScrollLeft = prevParamRow ? prevParamRow.scrollLeft : null;
+
     const cfg = MARINE_PARAMS[_marineChartParam] || MARINE_PARAMS.sst;
 
     const periods = [
@@ -270,7 +275,7 @@ function renderMarineHistChart(){
         `color:${active ? "#72c8ff" : "#ccc"};white-space:nowrap;`;
 
     const paramSelectHtml = `
-        <div style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;
+        <div id="marineParamRow" style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;
                     padding:2px 0 8px;margin:4px 0 4px;scrollbar-width:none;">
             ${Object.keys(MARINE_PARAMS).map(k =>
                 `<button onclick="setMarineParam('${k}')" style="${paramBtnStyle(k===_marineChartParam)}">${MARINE_PARAMS[k].label}</button>`
@@ -285,6 +290,10 @@ function renderMarineHistChart(){
 
     const div = document.getElementById("sstHistChart");
     if(!div) return;
+
+    const paramRow = document.getElementById("marineParamRow");
+    if(paramRow && prevScrollLeft != null) paramRow.scrollLeft = prevScrollLeft;
+
     const filtered = getMarineFilteredData();
     if(filtered.length < 2){
         div.innerHTML = `<div style="color:#666;text-align:center;padding:30px;font-size:12px;">Нет данных за выбранный период</div>`;
@@ -359,7 +368,8 @@ function renderMarineHistChart(){
 /* =========================================================
    ТЕКУЩИЕ ФАКТЫ (карточка "Море · Чёрное море")
 ========================================================= */
-function makeMarineBlock(){
+function makeMarineBlock(opts){
+    opts = opts || {};
     const m = _marineData;
     if(!m) return "";
 
@@ -445,15 +455,18 @@ function makeMarineBlock(){
     const sourceTime = m.time ? (() => {
         const d = new Date(m.time);
         return isNaN(d) ? "" :
-            " · " + d.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
+            d.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
     })() : "";
+
+    const titleText = opts.hideTitlePrefix
+        ? `${sourceTime ? sourceTime + " · " : ""}модель CMEMS`
+        : `Море · Чёрное море${sourceTime ? " · " + sourceTime : ""} · модель CMEMS`;
 
     return `
     <div style="margin-top:12px;border-top:1px solid #2a2a2a;padding-top:10px;">
-        <div style="font-size:11px;color:#555;margin-bottom:8px;
+        <div style="font-size:11px;color:#666;margin-bottom:8px;
                     text-transform:uppercase;letter-spacing:.5px;">
-            Море · Чёрное море<span style="font-weight:400;letter-spacing:0;
-            color:#333;">${sourceTime} · модель CMEMS</span>
+            ${titleText}
         </div>
         ${warnHtml}
         ${sstHtml}
