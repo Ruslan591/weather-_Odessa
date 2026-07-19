@@ -1175,6 +1175,11 @@ function makeMarineBlock(){
         :               "#ffd166";
 
     const fV   = v   => v != null ? v.toFixed(1) : "—";
+    const fWind = v  => v != null ? Math.round(v) : "—";
+    const fHeight = v => {
+        if(v == null) return "—";
+        return v < 1 ? `${Math.round(v * 100)} см` : `${v.toFixed(1)} м`;
+    };
     const fDir = deg => {
         if(deg == null) return "—";
         const dirs = ["С","ССВ","СВ","ВСВ","В","ВЮВ","ЮВ","ЮЮВ",
@@ -1208,19 +1213,19 @@ function makeMarineBlock(){
 
     const rows = [
         m.waveH      != null ? ["🌊 Волна",
-            `${fV(m.waveH)} м · ${fDir(m.waveDir)}`
+            `${fHeight(m.waveH)} · ${fDir(m.waveDir)}`
             + (m.wavePeakPer != null ? ` · Tп=${m.wavePeakPer.toFixed(0)} с`
                : m.wavePer   != null ? ` · T=${m.wavePer.toFixed(0)} с` : "")
         ] : null,
         m.swellH     != null ? ["〰️ Зыбь",
-            `${fV(m.swellH)} м · ${fDir(m.swellDir)}`
+            `${fHeight(m.swellH)} · ${fDir(m.swellDir)}`
             + (m.swellPer != null ? ` · T=${m.swellPer.toFixed(0)} с` : "")
         ] : null,
         m.windWaveH  != null ? ["💨 Ветровая волна",
-            `${fV(m.windWaveH)} м · ${fDir(m.windWaveDir)}`
+            `${fHeight(m.windWaveH)} · ${fDir(m.windWaveDir)}`
         ] : null,
         m.seaWindSpeed != null ? ["🌬️ Ветер над морем",
-            `${fV(m.seaWindSpeed)} м/с · порывы ${fV(m.seaWindGust)} · ${fDir(m.seaWindDir)}`
+            `${fWind(m.seaWindSpeed)} м/с · порывы ${fWind(m.seaWindGust)} · ${fDir(m.seaWindDir)}`
         ] : null,
         m.seaPressure != null ? ["🔵 Давление (море)", `${m.seaPressure.toFixed(1)} гПа`] : null,
         m.currentV   != null && m.currentV > 0.05 ? ["🔄 Течение",
@@ -1307,10 +1312,13 @@ function makeHmcbasVerifyBlock(){
     const tiktokRows = Object.values(tiktokLatest).map(e => {
         let dateTxt = e.date ? " · " + e.date.split("-").slice(1).reverse().join(".") : "";
         if(e.time) dateTxt += " " + e.time;
-        const extras = [];
-        if(e.beach) extras.push(e.beach.charAt(0).toUpperCase() + e.beach.slice(1));
-        const extraTxt = extras.length ? ` (${extras.join(", ")})` : "";
-        return factRow("🎵" + dateTxt, e.sea_temp, diffSpan(e.sea_temp), extraTxt);
+        let beachTxt = "";
+        if(e.beach){
+            let b = e.beach.charAt(0).toUpperCase() + e.beach.slice(1);
+            b = b.replace(/станция/gi, "ст.");
+            beachTxt = " " + b;
+        }
+        return factRow("🎵" + beachTxt + dateTxt, e.sea_temp, diffSpan(e.sea_temp), "");
     }).join("");
 
     if(!hasSite && !hasTg && !tiktokRows) return "";
@@ -1321,7 +1329,7 @@ function makeHmcbasVerifyBlock(){
                     text-transform:uppercase;letter-spacing:.5px;">
             Сверка с реальными замерами
         </div>
-        <div class="pws-fields">
+        <div class="pws-fields seaVerifyList">
             ${siteRow}
             ${tgRow}
             ${tiktokRows}
