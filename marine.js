@@ -503,9 +503,10 @@ function seaCompassIndicatorSvg(o){
     const dir  = o.dir;
     const rot  = (dir != null ? dir : 0) + 180;
     const ring = o.color || "rgba(255,255,255,0.35)";
+    const clickAttr = o.toggleKey ? ` onclick="toggleMarineVariant('${o.toggleKey}')"` : "";
 
     return `
-    <div class="ind-card">
+    <div class="ind-card"${clickAttr}>
         <div class="ind-title">${o.title}</div>
         <svg viewBox="0 0 160 160" width="${IND_W}" height="${IND_W}" aria-label="${o.title}">
             <line x1="80.0" y1="13.0" x2="80.0" y2="20.0" stroke="currentColor" stroke-opacity="0.55" stroke-width="2.2" stroke-linecap="round"/>
@@ -542,10 +543,99 @@ function seaCompassIndicatorSvg(o){
 }
 
 /* =========================================================
-   СЕТКА ИНДИКАТОРОВ (заменяет текстовый список)
+   ИНДИКАТОР: ВЫСОТА ВОЛНЫ КАК ДУГА (альтернативный вариант —
+   приоритет высоте, направление/период — подписью снизу)
 ========================================================= */
-function makeMarineIndicatorsGrid(m){
+let _waveArcIdSeq = 0;
+function seaWaveArcSvg(o){
+    const vMax  = 3; // м — шкала дуги
+    const hRaw  = o.height;
+    const hC    = hRaw != null ? Math.max(0, Math.min(vMax, hRaw)) : null;
+    const angle = hC != null ? (hC - vMax/2) / (vMax/2) * 90 : 0;
+
+    const W_STOPS = [
+        {offset:0,    color:"#55efc4"},
+        {offset:0.17, color:"#00cec9"},
+        {offset:0.42, color:"#74b9ff"},
+        {offset:0.83, color:"#ffd166"},
+        {offset:1,    color:"#ff6b6b"},
+    ];
+    const wT = hC != null ? hC / vMax : null;
+    const vc = wT != null ? gradientColor(W_STOPS, wT) : "#aaa";
+    const hp = marineHeightParts(hRaw);
+    const gid = "waveArc" + (_waveArcIdSeq++);
+    const clickAttr = o.toggleKey ? ` onclick="toggleMarineVariant('${o.toggleKey}')"` : "";
+
+    const subParts = [];
+    if(o.dir != null) subParts.push(marineDirText(o.dir));
+    if(o.period != null) subParts.push(o.period.toFixed(1) + " с");
+
+    return `
+    <div class="ind-card"${clickAttr}>
+        <div class="ind-title">${o.title}</div>
+        <svg viewBox="${IND_VB}" width="${IND_W}" height="${IND_H}" aria-label="${o.title}" style="overflow:visible;">
+            <defs>
+                <linearGradient id="${gid}" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%"   stop-color="#55efc4"/>
+                    <stop offset="17%"  stop-color="#00cec9"/>
+                    <stop offset="42%"  stop-color="#74b9ff"/>
+                    <stop offset="83%"  stop-color="#ffd166"/>
+                    <stop offset="100%" stop-color="#ff6b6b"/>
+                </linearGradient>
+            </defs>
+            <path d="M 15 85 A 65 65 0 0 1 145 85"
+                  fill="none" stroke="currentColor" stroke-opacity="0.10" stroke-width="8" stroke-linecap="round"/>
+            <path d="M 15 85 A 65 65 0 0 1 145 85"
+                  fill="none" stroke="url(#${gid})" stroke-width="7" stroke-linecap="round"/>
+            <text x="1.0" y="86.5" text-anchor="end" font-size="8" fill="currentColor" fill-opacity="0.60">0</text>
+            <text x="11.6" y="47.0" text-anchor="end" font-size="8" fill="currentColor" fill-opacity="0.60">0.5</text>
+            <text x="40.5" y="18.1" text-anchor="middle" font-size="8" fill="currentColor" fill-opacity="0.60">1</text>
+            <text x="80.0" y="7.5" text-anchor="middle" font-size="8" fill="currentColor" fill-opacity="0.60">1.5</text>
+            <text x="119.5" y="18.1" text-anchor="middle" font-size="8" fill="currentColor" fill-opacity="0.60">2</text>
+            <text x="148.4" y="47.0" text-anchor="start" font-size="8" fill="currentColor" fill-opacity="0.60">2.5</text>
+            <text x="159.0" y="86.5" text-anchor="start" font-size="8" fill="currentColor" fill-opacity="0.60">3м</text>
+            <g style="transform-origin:80px 85px;transform:rotate(${angle}deg);transition:transform 0.8s ease;">
+                <polygon points="80,28 73,42 87,42" fill="currentColor" opacity="0.92"/>
+            </g>
+            <text x="80" y="85" text-anchor="middle" font-size="21" font-weight="800" fill="${vc}">${hp.value}</text>
+            <text x="80" y="65" text-anchor="middle" font-size="9" fill="currentColor" fill-opacity="0.50">${hp.unit}</text>
+        </svg>
+        ${subParts.length ? `<div class="ind-sub">${subParts.join(" · ")}</div>` : ""}
+    </div>`;
+}
+
+/* =========================================================
+   ВЫБОР ВАРИАНТА ОТОБРАЖЕНИЯ (компас / дуга) — по тапу,
+   хранится в localStorage, отдельно на волну/зыбь/ветр. волну
+========================================================= */
+const MARINE_VARIANT_KEY = "marineIndVariants";
+const MARINE_VARIANT_DEFAULTS = { wave:"compass", swell:"compass", windWave:"compass" };
+
+function getMarineVariants(){
+    try {
+        return Object.assign({}, MARINE_VARIANT_DEFAULTS,
+            JSON.parse(localStorage.getItem(MARINE_VARIANT_KEY) || "{}"));
+    } catch(e){
+        return Object.assign({}, MARINE_VARIANT_DEFAULTS);
+    }
+}
+
+function toggleMarineVariant(key){
+    const v = getMarineVariants();
+    v[key] = v[key] === "arc" ? "compass" : "arc";
+    try { localStorage.setItem(MARINE_VARIANT_KEY, JSON.stringify(v)); } catch(e){}
+    refreshMarineIndGrid();
+}
+
+function refreshMarineIndGrid(){
+    const el = document.getElementById("marineIndGrid");
+    if(!el || !_marineData) return;
+    el.innerHTML = buildMarineIndicatorCards(_marineData);
+}
+
+function buildMarineIndicatorCards(m){
     const cards = [];
+    const variants = getMarineVariants();
 
     if(m.sst != null) cards.push(seaTempIndicatorSvg(m.sst));
     if(m.seaLevel != null) cards.push(seaLevelIndicatorSvg(m.seaLevel));
@@ -554,29 +644,35 @@ function makeMarineIndicatorsGrid(m){
         const hp = marineHeightParts(m.waveH);
         const per = m.wavePeakPer ?? m.wavePer;
         const state = marineSeaStateLabel(m.waveH);
-        cards.push(seaCompassIndicatorSvg({
-            title: "Волна", dir: m.waveDir,
-            mainValue: hp.value, mainUnit: hp.unit,
-            secondaryLabel: "период", secondaryValue: per != null ? per.toFixed(1) + " с" : null,
-            color: state ? state.color : null,
-        }));
+        cards.push(variants.wave === "arc"
+            ? seaWaveArcSvg({ title:"Волна", height:m.waveH, dir:m.waveDir, period:per, toggleKey:"wave" })
+            : seaCompassIndicatorSvg({
+                title: "Волна", dir: m.waveDir,
+                mainValue: hp.value, mainUnit: hp.unit,
+                secondaryLabel: "период", secondaryValue: per != null ? per.toFixed(1) + " с" : null,
+                color: state ? state.color : null, toggleKey: "wave",
+            }));
     }
     if(m.swellH != null){
         const hp = marineHeightParts(m.swellH);
-        cards.push(seaCompassIndicatorSvg({
-            title: "Зыбь", dir: m.swellDir,
-            mainValue: hp.value, mainUnit: hp.unit,
-            secondaryLabel: "период", secondaryValue: m.swellPer != null ? m.swellPer.toFixed(1) + " с" : null,
-            color: "#a29bfe",
-        }));
+        cards.push(variants.swell === "arc"
+            ? seaWaveArcSvg({ title:"Зыбь", height:m.swellH, dir:m.swellDir, period:m.swellPer, toggleKey:"swell" })
+            : seaCompassIndicatorSvg({
+                title: "Зыбь", dir: m.swellDir,
+                mainValue: hp.value, mainUnit: hp.unit,
+                secondaryLabel: "период", secondaryValue: m.swellPer != null ? m.swellPer.toFixed(1) + " с" : null,
+                color: "#a29bfe", toggleKey: "swell",
+            }));
     }
     if(m.windWaveH != null){
         const hp = marineHeightParts(m.windWaveH);
-        cards.push(seaCompassIndicatorSvg({
-            title: "Ветровая волна", dir: m.windWaveDir,
-            mainValue: hp.value, mainUnit: hp.unit,
-            color: "#81ecec",
-        }));
+        cards.push(variants.windWave === "arc"
+            ? seaWaveArcSvg({ title:"Ветровая волна", height:m.windWaveH, dir:m.windWaveDir, period:null, toggleKey:"windWave" })
+            : seaCompassIndicatorSvg({
+                title: "Ветровая волна", dir: m.windWaveDir,
+                mainValue: hp.value, mainUnit: hp.unit,
+                color: "#81ecec", toggleKey: "windWave",
+            }));
     }
     if(m.seaWindSpeed != null){
         cards.push(windIndicatorSvg({
@@ -599,8 +695,13 @@ function makeMarineIndicatorsGrid(m){
         }));
     }
 
-    if(!cards.length) return "";
-    return `<div class="ind-grid-2x2">${cards.join("")}</div>`;
+    return cards.join("");
+}
+
+function makeMarineIndicatorsGrid(m){
+    const cards = buildMarineIndicatorCards(m);
+    if(!cards) return "";
+    return `<div class="ind-grid-2x2" id="marineIndGrid">${cards}</div>`;
 }
 
 /* =========================================================
