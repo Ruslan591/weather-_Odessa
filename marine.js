@@ -368,41 +368,252 @@ function renderMarineHistChart(){
 /* =========================================================
    ТЕКУЩИЕ ФАКТЫ (карточка "Море · Чёрное море")
 ========================================================= */
+/* =========================================================
+   ОБЩИЕ ФОРМАТТЕРЫ (используются и в тексте, и в индикаторах)
+========================================================= */
+const MARINE_DIR_NAMES = ["С","ССВ","СВ","ВСВ","В","ВЮВ","ЮВ","ЮЮВ",
+                           "Ю","ЮЮЗ","ЮЗ","ЗЮЗ","З","ЗСЗ","СЗ","ССЗ"];
+function marineDirText(deg){
+    if(deg == null) return "—";
+    return MARINE_DIR_NAMES[Math.round(deg/22.5)%16] + " " + Math.round(deg) + "°";
+}
+function marineHeightParts(v){
+    if(v == null) return { value:"—", unit:"" };
+    return v < 1
+        ? { value: String(Math.round(v * 100)), unit:"см" }
+        : { value: v.toFixed(1),                unit:"м" };
+}
+function marineSeaStateLabel(h){
+    if(h == null) return null;
+    if(h < 0.10) return { label:"Штиль (0 баллов)",         color:"#55efc4" };
+    if(h < 0.50) return { label:"Рябь (1 балл)",            color:"#00cec9" };
+    if(h < 1.25) return { label:"Лёгкое волнение (2)",      color:"#74b9ff" };
+    if(h < 2.50) return { label:"Умеренное волнение (3–4)", color:"#ffd166" };
+    if(h < 4.00) return { label:"Значительное (5)",         color:"#ff9f5c" };
+    if(h < 6.00) return { label:"Сильное (6–7)",            color:"#ff6b6b" };
+    return              { label:"Очень сильное (8–9)",       color:"#d63031" };
+}
+
+/* =========================================================
+   ИНДИКАТОР: ТЕМПЕРАТУРА ВОДЫ (дуга, 0..30°C)
+========================================================= */
+function seaTempIndicatorSvg(sst){
+    const tMin = 0, tMax = 30, tMid = 15;
+    const tC    = sst != null ? Math.max(tMin, Math.min(tMax, sst)) : null;
+    const angle = tC != null ? (tC - tMid) / tMid * 90 : 0;
+
+    const T_STOPS = [
+        {offset:0,    color:"#3a8fff"},
+        {offset:0.33, color:"#72c8ff"},
+        {offset:0.5,  color:"#5fe08f"},
+        {offset:0.75, color:"#ffd166"},
+        {offset:1,    color:"#ff9f5c"},
+    ];
+    const tT = tC != null ? (tC - tMin) / (tMax - tMin) : null;
+    const vc = tT != null ? gradientColor(T_STOPS, tT) : "#aaa";
+
+    return `
+    <div class="ind-card">
+        <div class="ind-title">Температура воды</div>
+        <svg viewBox="${IND_VB}" width="${IND_W}" height="${IND_H}" aria-label="Температура воды" style="overflow:visible;">
+            <defs>
+                <linearGradient id="stArc" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%"   stop-color="#3a8fff"/>
+                    <stop offset="33%"  stop-color="#72c8ff"/>
+                    <stop offset="50%"  stop-color="#5fe08f"/>
+                    <stop offset="75%"  stop-color="#ffd166"/>
+                    <stop offset="100%" stop-color="#ff9f5c"/>
+                </linearGradient>
+            </defs>
+            <path d="M 15 85 A 65 65 0 0 1 145 85"
+                  fill="none" stroke="currentColor" stroke-opacity="0.10" stroke-width="8" stroke-linecap="round"/>
+            <path d="M 15 85 A 65 65 0 0 1 145 85"
+                  fill="none" stroke="url(#stArc)" stroke-width="7" stroke-linecap="round"/>
+            <text x="1.0" y="86.5" text-anchor="end" font-size="8" fill="currentColor" fill-opacity="0.60">0</text>
+            <text x="11.6" y="47.0" text-anchor="end" font-size="8" fill="currentColor" fill-opacity="0.60">5</text>
+            <text x="40.5" y="18.1" text-anchor="middle" font-size="8" fill="currentColor" fill-opacity="0.60">10</text>
+            <text x="80.0" y="7.5" text-anchor="middle" font-size="8" fill="currentColor" fill-opacity="0.60">15</text>
+            <text x="119.5" y="18.1" text-anchor="middle" font-size="8" fill="currentColor" fill-opacity="0.60">20</text>
+            <text x="148.4" y="47.0" text-anchor="start" font-size="8" fill="currentColor" fill-opacity="0.60">25</text>
+            <text x="159.0" y="86.5" text-anchor="start" font-size="8" fill="currentColor" fill-opacity="0.60">30</text>
+            <g style="transform-origin:80px 85px;transform:rotate(${angle}deg);transition:transform 0.8s ease;">
+                <polygon points="80,28 73,42 87,42" fill="currentColor" opacity="0.92"/>
+            </g>
+            <text x="80" y="85" text-anchor="middle" font-size="21" font-weight="800" fill="${vc}">
+                ${sst != null ? sst.toFixed(1) : "-"}
+            </text>
+            <text x="80" y="65" text-anchor="middle" font-size="9" fill="currentColor" fill-opacity="0.50">°C</text>
+        </svg>
+    </div>`;
+}
+
+/* =========================================================
+   ИНДИКАТОР: НАГОН/СГОН (дуга, -30..+30 см)
+========================================================= */
+function seaLevelIndicatorSvg(cm){
+    const vMin = -30, vMax = 30;
+    const vC    = cm != null ? Math.max(vMin, Math.min(vMax, cm)) : null;
+    const angle = vC != null ? vC / vMax * 90 : 0;
+
+    const L_STOPS = [
+        {offset:0,    color:"#ff9f5c"},
+        {offset:0.5,  color:"#999999"},
+        {offset:1,    color:"#74b9ff"},
+    ];
+    const lT = vC != null ? (vC - vMin) / (vMax - vMin) : null;
+    const vc = lT != null ? gradientColor(L_STOPS, lT) : "#aaa";
+
+    return `
+    <div class="ind-card">
+        <div class="ind-title">Нагон/сгон</div>
+        <svg viewBox="${IND_VB}" width="${IND_W}" height="${IND_H}" aria-label="Нагон/сгон" style="overflow:visible;">
+            <defs>
+                <linearGradient id="slArc" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%"   stop-color="#ff9f5c"/>
+                    <stop offset="50%"  stop-color="#999999"/>
+                    <stop offset="100%" stop-color="#74b9ff"/>
+                </linearGradient>
+            </defs>
+            <path d="M 15 85 A 65 65 0 0 1 145 85"
+                  fill="none" stroke="currentColor" stroke-opacity="0.10" stroke-width="8" stroke-linecap="round"/>
+            <path d="M 15 85 A 65 65 0 0 1 145 85"
+                  fill="none" stroke="url(#slArc)" stroke-width="7" stroke-linecap="round"/>
+            <text x="1.0" y="86.5" text-anchor="end" font-size="8" fill="currentColor" fill-opacity="0.60">-30</text>
+            <text x="11.6" y="47.0" text-anchor="end" font-size="8" fill="currentColor" fill-opacity="0.60">-20</text>
+            <text x="40.5" y="18.1" text-anchor="middle" font-size="8" fill="currentColor" fill-opacity="0.60">-10</text>
+            <text x="80.0" y="7.5" text-anchor="middle" font-size="8" fill="currentColor" fill-opacity="0.60">0</text>
+            <text x="119.5" y="18.1" text-anchor="middle" font-size="8" fill="currentColor" fill-opacity="0.60">10</text>
+            <text x="148.4" y="47.0" text-anchor="start" font-size="8" fill="currentColor" fill-opacity="0.60">20</text>
+            <text x="159.0" y="86.5" text-anchor="start" font-size="8" fill="currentColor" fill-opacity="0.60">30</text>
+            <g style="transform-origin:80px 85px;transform:rotate(${angle}deg);transition:transform 0.8s ease;">
+                <polygon points="80,28 73,42 87,42" fill="currentColor" opacity="0.92"/>
+            </g>
+            <text x="80" y="85" text-anchor="middle" font-size="21" font-weight="800" fill="${vc}">
+                ${cm != null ? (cm >= 0 ? "+" : "") + cm : "-"}
+            </text>
+            <text x="80" y="65" text-anchor="middle" font-size="9" fill="currentColor" fill-opacity="0.50">см</text>
+        </svg>
+    </div>`;
+}
+
+/* =========================================================
+   ИНДИКАТОР: РОЗА НАПРАВЛЕНИЯ (волна/зыбь/ветровая волна/течение)
+========================================================= */
+function seaCompassIndicatorSvg(o){
+    const dir  = o.dir;
+    const rot  = (dir != null ? dir : 0) + 180;
+    const ring = o.color || "rgba(255,255,255,0.35)";
+
+    return `
+    <div class="ind-card">
+        <div class="ind-title">${o.title}</div>
+        <svg viewBox="0 0 160 160" width="${IND_W}" height="${IND_W}" aria-label="${o.title}">
+            <line x1="80.0" y1="13.0" x2="80.0" y2="20.0" stroke="currentColor" stroke-opacity="0.55" stroke-width="2.2" stroke-linecap="round"/>
+            <line x1="120.3" y1="29.7" x2="115.4" y2="34.6" stroke="currentColor" stroke-opacity="0.55" stroke-width="2.2" stroke-linecap="round"/>
+            <line x1="137.0" y1="70.0" x2="130.0" y2="70.0" stroke="currentColor" stroke-opacity="0.55" stroke-width="2.2" stroke-linecap="round"/>
+            <line x1="120.3" y1="110.3" x2="115.4" y2="105.4" stroke="currentColor" stroke-opacity="0.55" stroke-width="2.2" stroke-linecap="round"/>
+            <line x1="80.0" y1="127.0" x2="80.0" y2="120.0" stroke="currentColor" stroke-opacity="0.55" stroke-width="2.2" stroke-linecap="round"/>
+            <line x1="39.7" y1="110.3" x2="44.6" y2="105.4" stroke="currentColor" stroke-opacity="0.55" stroke-width="2.2" stroke-linecap="round"/>
+            <line x1="23.0" y1="70.0" x2="30.0" y2="70.0" stroke="currentColor" stroke-opacity="0.55" stroke-width="2.2" stroke-linecap="round"/>
+            <line x1="39.7" y1="29.7" x2="44.6" y2="34.6" stroke="currentColor" stroke-opacity="0.55" stroke-width="2.2" stroke-linecap="round"/>
+            <text x="80"  y="10"  text-anchor="middle" font-size="10" fill="currentColor" fill-opacity="0.8">С</text>
+            <text x="143" y="73"  text-anchor="middle" font-size="10" fill="currentColor" fill-opacity="0.8">В</text>
+            <text x="80"  y="137" text-anchor="middle" font-size="10" fill="currentColor" fill-opacity="0.8">Ю</text>
+            <text x="16"  y="73"  text-anchor="middle" font-size="10" fill="currentColor" fill-opacity="0.8">З</text>
+            <circle cx="80" cy="70" r="43" fill="none" stroke="${ring}" stroke-opacity="0.75" stroke-width="3.5"/>
+            ${dir != null ? `
+            <g style="transform-origin:80px 70px;transform:rotate(${rot}deg);transition:transform 0.8s cubic-bezier(0.34,1.56,0.64,1);">
+                <polygon points="80,95 76,114.5 84,114.5" fill="currentColor" opacity="0.85"/>
+            </g>` : ""}
+            <text x="80" y="73.5" text-anchor="middle" font-size="22" font-weight="800" fill="currentColor">
+                ${o.mainValue ?? "-"}
+            </text>
+            <text x="80" y="52" text-anchor="middle" font-size="9.5" fill="currentColor" fill-opacity="0.65">${o.mainUnit || ""}</text>
+            ${o.secondaryValue != null ? `
+            <text x="80" y="100" text-anchor="middle" font-size="9" fill="currentColor" fill-opacity="0.40">${o.secondaryLabel || ""}</text>
+            <text x="80" y="88" text-anchor="middle" font-size="13" font-weight="700" fill="currentColor" fill-opacity="0.85">
+                ${o.secondaryValue}
+            </text>` : ""}
+            <text x="80" y="155" text-anchor="middle" font-size="12" fill="currentColor" fill-opacity="0.65">
+                ${dir != null ? marineDirText(dir) : "—"}
+            </text>
+        </svg>
+    </div>`;
+}
+
+/* =========================================================
+   СЕТКА ИНДИКАТОРОВ (заменяет текстовый список)
+========================================================= */
+function makeMarineIndicatorsGrid(m){
+    const cards = [];
+
+    if(m.sst != null) cards.push(seaTempIndicatorSvg(m.sst));
+    if(m.seaLevel != null) cards.push(seaLevelIndicatorSvg(m.seaLevel));
+
+    if(m.waveH != null){
+        const hp = marineHeightParts(m.waveH);
+        const per = m.wavePeakPer ?? m.wavePer;
+        const state = marineSeaStateLabel(m.waveH);
+        cards.push(seaCompassIndicatorSvg({
+            title: "Волна", dir: m.waveDir,
+            mainValue: hp.value, mainUnit: hp.unit,
+            secondaryLabel: "период", secondaryValue: per != null ? per.toFixed(1) + " с" : null,
+            color: state ? state.color : null,
+        }));
+    }
+    if(m.swellH != null){
+        const hp = marineHeightParts(m.swellH);
+        cards.push(seaCompassIndicatorSvg({
+            title: "Зыбь", dir: m.swellDir,
+            mainValue: hp.value, mainUnit: hp.unit,
+            secondaryLabel: "период", secondaryValue: m.swellPer != null ? m.swellPer.toFixed(1) + " с" : null,
+            color: "#a29bfe",
+        }));
+    }
+    if(m.windWaveH != null){
+        const hp = marineHeightParts(m.windWaveH);
+        cards.push(seaCompassIndicatorSvg({
+            title: "Ветровая волна", dir: m.windWaveDir,
+            mainValue: hp.value, mainUnit: hp.unit,
+            color: "#81ecec",
+        }));
+    }
+    if(m.seaWindSpeed != null){
+        cards.push(windIndicatorSvg({
+            windSpeed: Math.round(m.seaWindSpeed),
+            windGustMs: m.seaWindGust != null ? Math.round(m.seaWindGust) : null,
+            windDir: m.seaWindDir,
+        }));
+    }
+    if(m.seaPressure != null){
+        cards.push(pressureIndicatorSvg({
+            seaPressure: Math.round(m.seaPressure * 10) / 10,
+            tendencyCode: null, tendencyValue: null,
+        }));
+    }
+    if(m.currentV != null && m.currentV > 0.05){
+        cards.push(seaCompassIndicatorSvg({
+            title: "Течение", dir: m.currentDir,
+            mainValue: m.currentV.toFixed(1), mainUnit: "м/с",
+            color: "#ff7675",
+        }));
+    }
+
+    if(!cards.length) return "";
+    return `<div class="ind-grid-2x2">${cards.join("")}</div>`;
+}
+
+/* =========================================================
+   БЛОК: МОРЕ (карточка "Море · Чёрное море")
+========================================================= */
 function makeMarineBlock(opts){
     opts = opts || {};
     const m = _marineData;
     if(!m) return "";
 
-    function seaStateLabel(h){
-        if(h == null) return null;
-        if(h < 0.10) return { label:"Штиль (0 баллов)",         color:"#55efc4" };
-        if(h < 0.50) return { label:"Рябь (1 балл)",            color:"#00cec9" };
-        if(h < 1.25) return { label:"Лёгкое волнение (2)",      color:"#74b9ff" };
-        if(h < 2.50) return { label:"Умеренное волнение (3–4)", color:"#ffd166" };
-        if(h < 4.00) return { label:"Значительное (5)",         color:"#ff9f5c" };
-        if(h < 6.00) return { label:"Сильное (6–7)",            color:"#ff6b6b" };
-        return              { label:"Очень сильное (8–9)",       color:"#d63031" };
-    }
-
-    const state    = seaStateLabel(m.waveH);
-    const sstColor = m.sst == null ? "#aaa"
-        : m.sst < 12 ? "#74b9ff"
-        : m.sst < 20 ? "#00cec9"
-        : m.sst < 26 ? "#55efc4"
-        :               "#ffd166";
-
-    const fV   = v   => v != null ? v.toFixed(1) : "—";
-    const fWind = v  => v != null ? Math.round(v) : "—";
-    const fHeight = v => {
-        if(v == null) return "—";
-        return v < 1 ? `${Math.round(v * 100)} см` : `${v.toFixed(1)} м`;
-    };
-    const fDir = deg => {
-        if(deg == null) return "—";
-        const dirs = ["С","ССВ","СВ","ВСВ","В","ВЮВ","ЮВ","ЮЮВ",
-                      "Ю","ЮЮЗ","ЮЗ","ЗЮЗ","З","ЗСЗ","СЗ","ССЗ"];
-        return dirs[Math.round(deg/22.5)%16] + " " + Math.round(deg) + "°";
-    };
+    const state    = marineSeaStateLabel(m.waveH);
+    const gridHtml = makeMarineIndicatorsGrid(m);
+    if(!gridHtml) return "";
 
     const warnHtml = state && m.waveH >= 1.25 ? `
         <div style="margin-bottom:8px;padding:7px 10px;border-radius:8px;
@@ -410,47 +621,6 @@ function makeMarineBlock(opts){
              font-size:13px;font-weight:700;color:${state.color};">
             🌊 ${state.label}
         </div>` : "";
-
-    const sstHtml = m.sst != null ? `
-        <div style="display:flex;justify-content:space-between;align-items:center;
-                    padding:8px 0 10px;border-bottom:1px solid #1e1e1e;margin-bottom:6px;">
-            <span style="font-size:14px;color:#888;">🌡️ Температура воды</span>
-            <span style="font-size:26px;font-weight:800;color:${sstColor};">${m.sst.toFixed(1)}°C</span>
-        </div>` : "";
-
-    const seaLevelHtml = m.seaLevel != null ? (() => {
-        const cm  = m.seaLevel;
-        const arr = cm > 5 ? " ↑" : cm < -5 ? " ↓" : " →";
-        const col = cm > 5 ? "#74b9ff" : cm < -5 ? "#ff9f5c" : "#888";
-        return `<div class="seaFactRow">
-            <span class="sfLabel">📏 Нагон/сгон</span>
-            <span class="sfValue" style="color:${col};">${cm >= 0 ? "+" : ""}${cm} см${arr}</span>
-        </div>`;
-    })() : "";
-
-    const rows = [
-        m.waveH      != null ? ["🌊 Волна",
-            `${fHeight(m.waveH)} · ${fDir(m.waveDir)}`
-            + (m.wavePeakPer != null ? ` · Tп=${m.wavePeakPer.toFixed(0)} с`
-               : m.wavePer   != null ? ` · T=${m.wavePer.toFixed(0)} с` : "")
-        ] : null,
-        m.swellH     != null ? ["〰️ Зыбь",
-            `${fHeight(m.swellH)} · ${fDir(m.swellDir)}`
-            + (m.swellPer != null ? ` · T=${m.swellPer.toFixed(0)} с` : "")
-        ] : null,
-        m.windWaveH  != null ? ["💨 Ветровая волна",
-            `${fHeight(m.windWaveH)} · ${fDir(m.windWaveDir)}`
-        ] : null,
-        m.seaWindSpeed != null ? ["🌬️ Ветер над морем",
-            `${fWind(m.seaWindSpeed)} м/с · порывы ${fWind(m.seaWindGust)} · ${fDir(m.seaWindDir)}`
-        ] : null,
-        m.seaPressure != null ? ["🔵 Давление (море)", `${m.seaPressure.toFixed(1)} гПа`] : null,
-        m.currentV   != null && m.currentV > 0.05 ? ["🔄 Течение",
-            `${fV(m.currentV)} м/с · ${fDir(m.currentDir)}`
-        ] : null,
-    ].filter(Boolean);
-
-    if(!sstHtml && !rows.length) return "";
 
     const sourceTime = m.time ? (() => {
         const d = new Date(m.time);
@@ -469,15 +639,11 @@ function makeMarineBlock(opts){
             ${titleText}
         </div>
         ${warnHtml}
-        ${sstHtml}
-        <div class="pws-fields">
-            ${seaLevelHtml}
-            ${rows.map(([k,v]) =>
-                `<div class="seaFactRow"><span class="sfLabel">${k}</span><span class="sfValue">${v}</span></div>`
-            ).join("")}
-        </div>
+        ${gridHtml}
     </div>`;
 }
+
+
 
 /* =========================================================
    БЛОК: СВЕРКА С РЕАЛЬНЫМИ ЗАМЕРАМИ (ГМЦ ЧАМ)
