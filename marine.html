@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Море — Одесса</title>
+<link rel="stylesheet" href="current_weather.css">
+</head>
+<body>
+
+<div class="header">
+    <div class="nav">
+        <a href="index.html">ГМЦ ЧАМ</a>
+    </div>
+    <div class="headerTitle">Море</div>
+    <div class="nav">
+        <a href="pws.html">PWS</a>
+    </div>
+</div>
+
+<div class="container">
+
+    <div id="marineStatusLine" style="color:#aaa;font-size:0.85em;margin-bottom:12px;">Загрузка...</div>
+
+    <!-- Текущие факты -->
+    <div class="card" id="marineFactsCard"></div>
+
+    <!-- Сверка с реальными замерами -->
+    <div class="card" id="marineVerifyCard" style="margin-top:14px;"></div>
+
+    <!-- История -->
+    <div class="card" id="sstChartCard" style="margin-top:14px;"></div>
+
+    <!-- Точность модели -->
+    <div class="card" id="marineAccuracyCard" style="margin-top:14px;"></div>
+
+</div>
+
+<style>
+.es-card { background:#1c1c1c; border-radius:10px; padding:12px 14px; }
+.es-card-label { font-size:11px; color:#888; margin-bottom:6px; font-weight:600; letter-spacing:0.04em; }
+.es-card-mae { font-size:22px; font-weight:800; line-height:1; margin-bottom:4px; }
+.es-card-sub { font-size:11px; color:#777; line-height:1.6; }
+</style>
+
+<script src="utils.js?v=3"></script>
+<script src="marine.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<script>
+const MARINE_CARD_STRIP = 'style="margin-top:12px;border-top:1px solid #2a2a2a;padding-top:10px;"';
+
+function fillCard(id, html, emptyTitle, emptyMsg){
+    const el = document.getElementById(id);
+    if(!el) return;
+    if(html){
+        el.innerHTML = html.replace(MARINE_CARD_STRIP, 'style="padding-top:0;"');
+    } else {
+        el.innerHTML = `<div class="cardTitle">${emptyTitle}</div>
+            <div style="color:#666;font-size:13px;margin-top:6px;">${emptyMsg}</div>`;
+    }
+}
+
+function renderMarinePage(){
+    fillCard("marineFactsCard",    makeMarineBlock(),        "Море · Чёрное море",         "Нет данных");
+    fillCard("marineVerifyCard",   makeHmcbasVerifyBlock(),  "Сверка с реальными замерами","Пока нет данных");
+    fillCard("marineAccuracyCard", makeMarineAccuracyBlock(),"Точность модели CMEMS",       "Недостаточно данных для оценки точности");
+}
+
+async function loadAndRenderMarine(){
+    await Promise.allSettled([
+        loadMarine(),
+        loadMarineHistory(),
+        loadHmcbasSeaTemp(),
+        loadHmcbasTelegram(),
+        loadTiktokSeaTemp(),
+    ]);
+    renderMarinePage();
+    const status = document.getElementById("marineStatusLine");
+    if(status) status.textContent = "Обновлено: " +
+        new Date().toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+}
+
+loadAndRenderMarine();
+setInterval(loadAndRenderMarine, 5 * 60000);
+</script>
+
+<script src="nav.js"></script>
+</body>
+</html>
