@@ -444,6 +444,93 @@ function waveDangerColorFor(stops, h){
 }
 
 /* =========================================================
+   ШКАЛА ОПАСНОСТИ: ВЕТЕР НАД МОРЕМ (для купающихся, Одесса)
+   🟢 0–6 м/с · 🟡 7–11 м/с · 🔴 от 12 м/с.
+   Направление важно не меньше скорости: нажимной ветер
+   (Ю/ЮВ/В — дует с открытого моря на пляж) при той же
+   скорости разгоняет прибойную волну и тягун быстрее, чем
+   отжимной (С/СЗ/З). Поэтому при нажимном направлении цвет
+   «утяжеляется» — эффективная скорость для цвета выше реальной.
+========================================================= */
+function marineAngleDiff(a, b){
+    if(a == null || b == null) return 999;
+    const d = ((a - b + 540) % 360) - 180;
+    return Math.abs(d);
+}
+function isOnshoreWindDir(deg){       // Ю/ЮВ/В — самое опасное для одесских пляжей
+    return marineAngleDiff(deg, 135) <= 67.5;
+}
+function isRipCurrentDir(deg){        // течение «на» В/ЮВ — разрывное (тягун)
+    return marineAngleDiff(deg, 112.5) <= 45;
+}
+function isAlongshoreCurrentDir(deg){ // течение «на» Ю/ЮЗ — сносит вдоль пляжа на траверсы
+    return marineAngleDiff(deg, 202.5) <= 45;
+}
+
+const WIND_ARC_MAX = 20; // м/с — шкала для цвета (реальный диапазон значений не ограничен)
+const WIND_DANGER_STOPS = [
+    {offset:0,      color:"#55efc4"}, // 0 м/с
+    {offset:6/20,   color:"#ffd166"}, // 6 м/с — граница жёлтой зоны
+    {offset:12/20,  color:"#ff6b6b"}, // 12 м/с — граница красной зоны
+    {offset:18/20,  color:"#d63031"},
+    {offset:1,      color:"#7f1d1d"},
+];
+function seaWindDangerColor(speed, dir){
+    if(speed == null) return "#aaa";
+    const bump = isOnshoreWindDir(dir) ? 3 : 0; // нажимной ветер «утяжеляет» цвет
+    const eff = Math.max(0, Math.min(WIND_ARC_MAX, speed + bump));
+    return gradientColor(WIND_DANGER_STOPS, eff / WIND_ARC_MAX);
+}
+
+/* =========================================================
+   ШКАЛА ОПАСНОСТИ: ТЕЧЕНИЕ (для купающихся, Одесса)
+   🟢 0–0.15 м/с · 🟡 0.16–0.35 м/с · 🔴 от 0.35 м/с.
+   Отжимное (на В/ЮВ, разрывное — тягун) — самое опасное,
+   вдольбереговое (на Ю/ЮЗ, сносит на траверсы) — опасно чуть
+   меньше. Оба «утяжеляют» цвет по той же логике, что и ветер.
+========================================================= */
+const CURRENT_ARC_MAX = 0.6; // м/с — шкала для цвета
+const CURRENT_DANGER_STOPS = [
+    {offset:0,          color:"#55efc4"}, // 0 м/с
+    {offset:0.15/0.6,   color:"#ffd166"}, // 0.15 м/с — граница жёлтой зоны
+    {offset:0.35/0.6,   color:"#ff6b6b"}, // 0.35 м/с — граница красной зоны
+    {offset:0.50/0.6,   color:"#d63031"},
+    {offset:1,          color:"#7f1d1d"},
+];
+function seaCurrentDangerColor(speed, dir){
+    if(speed == null) return "#aaa";
+    let bump = 0;
+    if(isRipCurrentDir(dir))            bump = 0.08; // тягун — самое опасное
+    else if(isAlongshoreCurrentDir(dir)) bump = 0.04; // снос на траверсы
+    const eff = Math.max(0, Math.min(CURRENT_ARC_MAX, speed + bump));
+    return gradientColor(CURRENT_DANGER_STOPS, eff / CURRENT_ARC_MAX);
+}
+
+/* =========================================================
+   ШКАЛА ОПАСНОСТИ: УРОВЕНЬ МОРЯ / НАГОН-СГОН (для купающихся)
+   Ассиметрично: нагон (+) и сгон (–) опасны по-разному.
+   Нагон:  🟢 0…+30 см · 🟡 +30…+60 · 🔴 от +60 см
+           (топит волнорезы — о них ранятся; у стен — обратный прибой)
+   Сгон:   🟢 0…-30 см · 🟡 -30…-50 · 🔴 ниже -50 см
+           (мель у пирсов — травмы при прыжках; предвестник апвеллинга)
+========================================================= */
+const SEALEVEL_ARC_MIN = -100, SEALEVEL_ARC_MAX = 100; // см
+const SEALEVEL_DANGER_STOPS = [
+    {offset:0,    color:"#7f1d1d"}, // -100 см — экстремальный сгон
+    {offset:0.25, color:"#ff6b6b"}, //  -50 см — опасный сгон
+    {offset:0.35, color:"#ffd166"}, //  -30 см — граница жёлтой зоны (сгон)
+    {offset:0.50, color:"#55efc4"}, //    0 см — норма
+    {offset:0.65, color:"#ffd166"}, //  +30 см — граница жёлтой зоны (нагон)
+    {offset:0.80, color:"#ff6b6b"}, //  +60 см — опасный нагон
+    {offset:1.00, color:"#7f1d1d"}, // +100 см — экстремальный нагон
+];
+function seaLevelDangerColor(cm){
+    if(cm == null) return "#aaa";
+    const c = Math.max(SEALEVEL_ARC_MIN, Math.min(SEALEVEL_ARC_MAX, cm));
+    return gradientColor(SEALEVEL_DANGER_STOPS, (c - SEALEVEL_ARC_MIN) / (SEALEVEL_ARC_MAX - SEALEVEL_ARC_MIN));
+}
+
+/* =========================================================
    ИНДИКАТОР: ТЕМПЕРАТУРА ВОДЫ (дуга, 0..30°C)
 ========================================================= */
 function seaTempIndicatorSvg(sst){
@@ -500,17 +587,12 @@ function seaTempIndicatorSvg(sst){
    ИНДИКАТОР: НАГОН/СГОН (дуга, -30..+30 см)
 ========================================================= */
 function seaLevelIndicatorSvg(cm){
-    const vMin = -30, vMax = 30;
+    const vMin = SEALEVEL_ARC_MIN, vMax = SEALEVEL_ARC_MAX;
     const vC    = cm != null ? Math.max(vMin, Math.min(vMax, cm)) : null;
     const angle = vC != null ? vC / vMax * 90 : 0;
-
-    const L_STOPS = [
-        {offset:0,    color:"#ff9f5c"},
-        {offset:0.5,  color:"#999999"},
-        {offset:1,    color:"#74b9ff"},
-    ];
-    const lT = vC != null ? (vC - vMin) / (vMax - vMin) : null;
-    const vc = lT != null ? gradientColor(L_STOPS, lT) : "#aaa";
+    const vc    = cm != null ? seaLevelDangerColor(cm) : "#aaa";
+    const gradStops = SEALEVEL_DANGER_STOPS
+        .map(s => `<stop offset="${(s.offset*100).toFixed(1)}%" stop-color="${s.color}"/>`).join("");
 
     return `
     <div class="ind-card" onclick="toggleMarineVariant('seaLevel')">
@@ -518,22 +600,18 @@ function seaLevelIndicatorSvg(cm){
         <svg viewBox="${IND_VB}" width="${IND_W}" height="${IND_H}" aria-label="Нагон/сгон" style="overflow:visible;">
             <defs>
                 <linearGradient id="slArc" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%"   stop-color="#ff9f5c"/>
-                    <stop offset="50%"  stop-color="#999999"/>
-                    <stop offset="100%" stop-color="#74b9ff"/>
+                    ${gradStops}
                 </linearGradient>
             </defs>
             <path d="M 15 85 A 65 65 0 0 1 145 85"
                   fill="none" stroke="currentColor" stroke-opacity="0.10" stroke-width="8" stroke-linecap="round"/>
             <path d="M 15 85 A 65 65 0 0 1 145 85"
                   fill="none" stroke="url(#slArc)" stroke-width="7" stroke-linecap="round"/>
-            <text x="1.0" y="86.5" text-anchor="end" font-size="8" fill="currentColor" fill-opacity="0.60">-30</text>
-            <text x="11.6" y="47.0" text-anchor="end" font-size="8" fill="currentColor" fill-opacity="0.60">-20</text>
-            <text x="40.5" y="18.1" text-anchor="middle" font-size="8" fill="currentColor" fill-opacity="0.60">-10</text>
+            <text x="1.0" y="86.5" text-anchor="end" font-size="8" fill="currentColor" fill-opacity="0.60">-100</text>
+            <text x="11.6" y="47.0" text-anchor="end" font-size="8" fill="currentColor" fill-opacity="0.60">-50</text>
             <text x="80.0" y="7.5" text-anchor="middle" font-size="8" fill="currentColor" fill-opacity="0.60">0</text>
-            <text x="119.5" y="18.1" text-anchor="middle" font-size="8" fill="currentColor" fill-opacity="0.60">10</text>
-            <text x="148.4" y="47.0" text-anchor="start" font-size="8" fill="currentColor" fill-opacity="0.60">20</text>
-            <text x="159.0" y="86.5" text-anchor="start" font-size="8" fill="currentColor" fill-opacity="0.60">30</text>
+            <text x="148.4" y="47.0" text-anchor="start" font-size="8" fill="currentColor" fill-opacity="0.60">+50</text>
+            <text x="159.0" y="86.5" text-anchor="start" font-size="8" fill="currentColor" fill-opacity="0.60">+100</text>
             <g style="transform-origin:80px 85px;transform:rotate(${angle}deg);transition:transform 0.8s ease;">
                 <polygon points="80,28 73,42 87,42" fill="currentColor" opacity="0.92"/>
             </g>
@@ -769,11 +847,12 @@ function buildMarineIndicatorCards(m){
             }));
     }
     if(m.seaWindSpeed != null){
-        cards.push(windIndicatorSvg({
-            windSpeed: Math.round(m.seaWindSpeed),
-            windGustMs: m.seaWindGust != null ? Math.round(m.seaWindGust) : null,
-            windDir: m.seaWindDir,
-        }).replace(' onclick="indExpand(this)"', ""));
+        cards.push(seaCompassIndicatorSvg({
+            title: "Ветер над морем", dir: m.seaWindDir,
+            mainValue: Math.round(m.seaWindSpeed), mainUnit: "м/с",
+            secondaryLabel: "порывы", secondaryValue: m.seaWindGust != null ? Math.round(m.seaWindGust) + " м/с" : null,
+            color: seaWindDangerColor(m.seaWindSpeed, m.seaWindDir),
+        }));
     }
     if(m.seaPressure != null){
         cards.push(pressureIndicatorSvg({
@@ -785,7 +864,7 @@ function buildMarineIndicatorCards(m){
         cards.push(seaCompassIndicatorSvg({
             title: "Течение", dir: m.currentDir,
             mainValue: m.currentV.toFixed(1), mainUnit: "м/с",
-            color: "#ff7675",
+            color: seaCurrentDangerColor(m.currentV, m.currentDir),
         }));
     }
 
