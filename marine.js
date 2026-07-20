@@ -629,17 +629,13 @@ function seaLevelIndicatorSvg(cm){
    альтернатива плитке «Нагон/сгон», переключение по тапу
 ========================================================= */
 function seaLevelAbsIndicatorSvg(m){
-    const vMin = -1, vMax = 1;
-    const vC    = m != null ? Math.max(vMin, Math.min(vMax, m)) : null;
+    const cm    = m != null ? Math.round(m * 100) : null; // отображаем в см, как просили
+    const vMin  = SEALEVEL_ARC_MIN, vMax = SEALEVEL_ARC_MAX;
+    const vC    = cm != null ? Math.max(vMin, Math.min(vMax, cm)) : null;
     const angle = vC != null ? vC / vMax * 90 : 0;
-
-    const A_STOPS = [
-        {offset:0,    color:"#ff9f5c"},
-        {offset:0.5,  color:"#999999"},
-        {offset:1,    color:"#74b9ff"},
-    ];
-    const aT = vC != null ? (vC - vMin) / (vMax - vMin) : null;
-    const vc = aT != null ? gradientColor(A_STOPS, aT) : "#aaa";
+    const vc    = cm != null ? seaLevelDangerColor(cm) : "#aaa";
+    const gradStops = SEALEVEL_DANGER_STOPS
+        .map(s => `<stop offset="${(s.offset*100).toFixed(1)}%" stop-color="${s.color}"/>`).join("");
 
     return `
     <div class="ind-card" onclick="toggleMarineVariant('seaLevel')">
@@ -647,27 +643,25 @@ function seaLevelAbsIndicatorSvg(m){
         <svg viewBox="${IND_VB}" width="${IND_W}" height="${IND_H}" aria-label="Уровень моря" style="overflow:visible;">
             <defs>
                 <linearGradient id="slAbsArc" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%"   stop-color="#ff9f5c"/>
-                    <stop offset="50%"  stop-color="#999999"/>
-                    <stop offset="100%" stop-color="#74b9ff"/>
+                    ${gradStops}
                 </linearGradient>
             </defs>
             <path d="M 15 85 A 65 65 0 0 1 145 85"
                   fill="none" stroke="currentColor" stroke-opacity="0.10" stroke-width="8" stroke-linecap="round"/>
             <path d="M 15 85 A 65 65 0 0 1 145 85"
                   fill="none" stroke="url(#slAbsArc)" stroke-width="7" stroke-linecap="round"/>
-            <text x="1.0" y="86.5" text-anchor="end" font-size="8" fill="currentColor" fill-opacity="0.60">-1</text>
-            <text x="11.6" y="47.0" text-anchor="end" font-size="8" fill="currentColor" fill-opacity="0.60">-0.5</text>
+            <text x="1.0" y="86.5" text-anchor="end" font-size="8" fill="currentColor" fill-opacity="0.60">-100</text>
+            <text x="11.6" y="47.0" text-anchor="end" font-size="8" fill="currentColor" fill-opacity="0.60">-50</text>
             <text x="80.0" y="7.5" text-anchor="middle" font-size="8" fill="currentColor" fill-opacity="0.60">0</text>
-            <text x="148.4" y="47.0" text-anchor="start" font-size="8" fill="currentColor" fill-opacity="0.60">0.5</text>
-            <text x="159.0" y="86.5" text-anchor="start" font-size="8" fill="currentColor" fill-opacity="0.60">1</text>
+            <text x="148.4" y="47.0" text-anchor="start" font-size="8" fill="currentColor" fill-opacity="0.60">+50</text>
+            <text x="159.0" y="86.5" text-anchor="start" font-size="8" fill="currentColor" fill-opacity="0.60">+100</text>
             <g style="transform-origin:80px 85px;transform:rotate(${angle}deg);transition:transform 0.8s ease;">
                 <polygon points="80,28 73,42 87,42" fill="currentColor" opacity="0.92"/>
             </g>
             <text x="80" y="85" text-anchor="middle" font-size="21" font-weight="800" fill="${vc}">
-                ${m != null ? (m >= 0 ? "+" : "") + m.toFixed(2) : "-"}
+                ${cm != null ? (cm >= 0 ? "+" : "") + cm : "-"}
             </text>
-            <text x="80" y="65" text-anchor="middle" font-size="9" fill="currentColor" fill-opacity="0.50">м</text>
+            <text x="80" y="65" text-anchor="middle" font-size="9" fill="currentColor" fill-opacity="0.50">см</text>
         </svg>
     </div>`;
 }
