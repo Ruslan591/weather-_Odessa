@@ -46,7 +46,8 @@ async function loadMarine(){
 ",swell_wave_height,swell_wave_period,swell_wave_direction" +
 ",sea_surface_temperature" +
 ",ocean_current_velocity,ocean_current_direction" +
-"&hourly=sea_level_height_msl&timezone=auto&forecast_days=1";
+        "&hourly=sea_level_height_msl&timezone=auto&forecast_days=1" +
+        "&wind_speed_unit=ms";
     const windUrl =
         "https://api.open-meteo.com/v1/forecast" +
         "?latitude=46.35&longitude=30.90" +
