@@ -60,6 +60,7 @@ async function loadMarine(){
         const marineJson = mr.ok ? await mr.json() : {};
         const c = marineJson.current || {};
         let seaLevelCm = null;
+        let seaLevelAbs = null;
         try {
             const htimes = marineJson.hourly?.time || [];
             const hvals  = marineJson.hourly?.sea_level_height_msl || [];
@@ -70,6 +71,7 @@ async function loadMarine(){
                     const diff = Math.abs(new Date(htimes[i]).getTime() - now);
                     if(diff < bestDiff){ bestDiff = diff; bestI = i; }
                 }
+                seaLevelAbs = hvals[bestI];
                 const mean = hvals.reduce((a,b)=>a+b,0) / hvals.length;
                 seaLevelCm = Math.round((hvals[bestI] - mean) * 100);
             }
@@ -77,6 +79,7 @@ async function loadMarine(){
         _marineData = {
             sst:        c.sea_surface_temperature    ?? null,
             seaLevel:   seaLevelCm,
+            seaLevelAbs:seaLevelAbs,
             waveH:      c.wave_height                ?? null,
             waveDir:    c.wave_direction             ?? null,
             wavePer:    c.wave_period                ?? null,
@@ -464,7 +467,7 @@ function seaLevelIndicatorSvg(cm){
     const vc = lT != null ? gradientColor(L_STOPS, lT) : "#aaa";
 
     return `
-    <div class="ind-card">
+    <div class="ind-card" onclick="toggleMarineVariant('seaLevel')">
         <div class="ind-title">Нагон/сгон</div>
         <svg viewBox="${IND_VB}" width="${IND_W}" height="${IND_H}" aria-label="Нагон/сгон" style="overflow:visible;">
             <defs>
@@ -492,6 +495,54 @@ function seaLevelIndicatorSvg(cm){
                 ${cm != null ? (cm >= 0 ? "+" : "") + cm : "-"}
             </text>
             <text x="80" y="65" text-anchor="middle" font-size="9" fill="currentColor" fill-opacity="0.50">см</text>
+        </svg>
+    </div>`;
+}
+
+/* =========================================================
+   ИНДИКАТОР: УРОВЕНЬ МОРЯ, АБСОЛЮТНЫЙ (дуга, -1..+1 м MSL) —
+   альтернатива плитке «Нагон/сгон», переключение по тапу
+========================================================= */
+function seaLevelAbsIndicatorSvg(m){
+    const vMin = -1, vMax = 1;
+    const vC    = m != null ? Math.max(vMin, Math.min(vMax, m)) : null;
+    const angle = vC != null ? vC / vMax * 90 : 0;
+
+    const A_STOPS = [
+        {offset:0,    color:"#ff9f5c"},
+        {offset:0.5,  color:"#999999"},
+        {offset:1,    color:"#74b9ff"},
+    ];
+    const aT = vC != null ? (vC - vMin) / (vMax - vMin) : null;
+    const vc = aT != null ? gradientColor(A_STOPS, aT) : "#aaa";
+
+    return `
+    <div class="ind-card" onclick="toggleMarineVariant('seaLevel')">
+        <div class="ind-title">Уровень моря</div>
+        <svg viewBox="${IND_VB}" width="${IND_W}" height="${IND_H}" aria-label="Уровень моря" style="overflow:visible;">
+            <defs>
+                <linearGradient id="slAbsArc" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%"   stop-color="#ff9f5c"/>
+                    <stop offset="50%"  stop-color="#999999"/>
+                    <stop offset="100%" stop-color="#74b9ff"/>
+                </linearGradient>
+            </defs>
+            <path d="M 15 85 A 65 65 0 0 1 145 85"
+                  fill="none" stroke="currentColor" stroke-opacity="0.10" stroke-width="8" stroke-linecap="round"/>
+            <path d="M 15 85 A 65 65 0 0 1 145 85"
+                  fill="none" stroke="url(#slAbsArc)" stroke-width="7" stroke-linecap="round"/>
+            <text x="1.0" y="86.5" text-anchor="end" font-size="8" fill="currentColor" fill-opacity="0.60">-1</text>
+            <text x="11.6" y="47.0" text-anchor="end" font-size="8" fill="currentColor" fill-opacity="0.60">-0.5</text>
+            <text x="80.0" y="7.5" text-anchor="middle" font-size="8" fill="currentColor" fill-opacity="0.60">0</text>
+            <text x="148.4" y="47.0" text-anchor="start" font-size="8" fill="currentColor" fill-opacity="0.60">0.5</text>
+            <text x="159.0" y="86.5" text-anchor="start" font-size="8" fill="currentColor" fill-opacity="0.60">1</text>
+            <g style="transform-origin:80px 85px;transform:rotate(${angle}deg);transition:transform 0.8s ease;">
+                <polygon points="80,28 73,42 87,42" fill="currentColor" opacity="0.92"/>
+            </g>
+            <text x="80" y="85" text-anchor="middle" font-size="21" font-weight="800" fill="${vc}">
+                ${m != null ? (m >= 0 ? "+" : "") + m.toFixed(2) : "-"}
+            </text>
+            <text x="80" y="65" text-anchor="middle" font-size="9" fill="currentColor" fill-opacity="0.50">м</text>
         </svg>
     </div>`;
 }
@@ -609,7 +660,7 @@ function seaWaveArcSvg(o){
    хранится в localStorage, отдельно на волну/зыбь/ветр. волну
 ========================================================= */
 const MARINE_VARIANT_KEY = "marineIndVariants";
-const MARINE_VARIANT_DEFAULTS = { wave:"compass", swell:"compass", windWave:"compass" };
+const MARINE_VARIANT_DEFAULTS = { wave:"compass", swell:"compass", windWave:"compass", seaLevel:"surge" };
 
 function getMarineVariants(){
     try {
@@ -622,7 +673,11 @@ function getMarineVariants(){
 
 function toggleMarineVariant(key){
     const v = getMarineVariants();
-    v[key] = v[key] === "arc" ? "compass" : "arc";
+    if(key === "seaLevel"){
+        v.seaLevel = v.seaLevel === "abs" ? "surge" : "abs";
+    } else {
+        v[key] = v[key] === "arc" ? "compass" : "arc";
+    }
     try { localStorage.setItem(MARINE_VARIANT_KEY, JSON.stringify(v)); } catch(e){}
     refreshMarineIndGrid();
 }
@@ -638,7 +693,11 @@ function buildMarineIndicatorCards(m){
     const variants = getMarineVariants();
 
     if(m.sst != null) cards.push(seaTempIndicatorSvg(m.sst));
-    if(m.seaLevel != null) cards.push(seaLevelIndicatorSvg(m.seaLevel));
+    if(m.seaLevel != null || m.seaLevelAbs != null){
+        cards.push(variants.seaLevel === "abs"
+            ? seaLevelAbsIndicatorSvg(m.seaLevelAbs)
+            : seaLevelIndicatorSvg(m.seaLevel));
+    }
 
     if(m.waveH != null){
         const hp = marineHeightParts(m.waveH);
