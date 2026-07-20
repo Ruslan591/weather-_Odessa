@@ -60,7 +60,6 @@ async function loadMarine(){
         const marineJson = mr.ok ? await mr.json() : {};
         const c = marineJson.current || {};
         let seaLevelCm = null;
-        let seaLevelAbs = null;
         try {
             const htimes = marineJson.hourly?.time || [];
             const hvals  = marineJson.hourly?.sea_level_height_msl || [];
@@ -71,7 +70,6 @@ async function loadMarine(){
                     const diff = Math.abs(new Date(htimes[i]).getTime() - now);
                     if(diff < bestDiff){ bestDiff = diff; bestI = i; }
                 }
-                seaLevelAbs = hvals[bestI];
                 const mean = hvals.reduce((a,b)=>a+b,0) / hvals.length;
                 seaLevelCm = Math.round((hvals[bestI] - mean) * 100);
             }
@@ -79,7 +77,6 @@ async function loadMarine(){
         _marineData = {
             sst:        c.sea_surface_temperature    ?? null,
             seaLevel:   seaLevelCm,
-            seaLevelAbs:seaLevelAbs,
             waveH:      c.wave_height                ?? null,
             waveDir:    c.wave_direction             ?? null,
             wavePer:    c.wave_period                ?? null,
@@ -398,6 +395,29 @@ function marineSeaStateLabel(h){
 }
 
 /* =========================================================
+   ШКАЛА ОПАСНОСТИ ДЛЯ КУПАЮЩИХСЯ (волна / зыбь / ветровая
+   волна) — калибровка под мелководный СЗ шельф у Одессы,
+   не путать с баллами Дугласа (marineSeaStateLabel выше,
+   это общая океанографическая шкала состояния моря).
+   Плавный градиент, только «сжатый»: жёлтый/оранжевый/красный
+   зоны начинаются гораздо раньше, чем в шкале Дугласа.
+========================================================= */
+const WAVE_DANGER_STOPS = [
+    {offset:0/3,    color:"#55efc4"}, // 0.0 м — комфортно
+    {offset:0.3/3,  color:"#00cec9"}, // 0.3 м — ещё безопасно
+    {offset:0.6/3,  color:"#ffd166"}, // 0.6 м — осторожно (детям/слабым пловцам)
+    {offset:1.0/3,  color:"#ff9f5c"}, // 1.0 м — опасно для среднего пловца
+    {offset:1.5/3,  color:"#ff6b6b"}, // 1.5 м — красный флаг
+    {offset:2.5/3,  color:"#d63031"}, // 2.5 м — купание исключено
+    {offset:3.0/3,  color:"#7f1d1d"}, // 3.0 м — шторм, размывает пляж
+];
+function waveDangerColor(h){
+    if(h == null) return "#aaa";
+    const hc = Math.max(0, Math.min(3, h));
+    return gradientColor(WAVE_DANGER_STOPS, hc / 3);
+}
+
+/* =========================================================
    ИНДИКАТОР: ТЕМПЕРАТУРА ВОДЫ (дуга, 0..30°C)
 ========================================================= */
 function seaTempIndicatorSvg(sst){
@@ -467,7 +487,7 @@ function seaLevelIndicatorSvg(cm){
     const vc = lT != null ? gradientColor(L_STOPS, lT) : "#aaa";
 
     return `
-    <div class="ind-card" onclick="toggleMarineVariant('seaLevel')">
+    <div class="ind-card">
         <div class="ind-title">Нагон/сгон</div>
         <svg viewBox="${IND_VB}" width="${IND_W}" height="${IND_H}" aria-label="Нагон/сгон" style="overflow:visible;">
             <defs>
@@ -495,54 +515,6 @@ function seaLevelIndicatorSvg(cm){
                 ${cm != null ? (cm >= 0 ? "+" : "") + cm : "-"}
             </text>
             <text x="80" y="65" text-anchor="middle" font-size="9" fill="currentColor" fill-opacity="0.50">см</text>
-        </svg>
-    </div>`;
-}
-
-/* =========================================================
-   ИНДИКАТОР: УРОВЕНЬ МОРЯ, АБСОЛЮТНЫЙ (дуга, -1..+1 м MSL) —
-   альтернатива плитке «Нагон/сгон», переключение по тапу
-========================================================= */
-function seaLevelAbsIndicatorSvg(m){
-    const vMin = -1, vMax = 1;
-    const vC    = m != null ? Math.max(vMin, Math.min(vMax, m)) : null;
-    const angle = vC != null ? vC / vMax * 90 : 0;
-
-    const A_STOPS = [
-        {offset:0,    color:"#ff9f5c"},
-        {offset:0.5,  color:"#999999"},
-        {offset:1,    color:"#74b9ff"},
-    ];
-    const aT = vC != null ? (vC - vMin) / (vMax - vMin) : null;
-    const vc = aT != null ? gradientColor(A_STOPS, aT) : "#aaa";
-
-    return `
-    <div class="ind-card" onclick="toggleMarineVariant('seaLevel')">
-        <div class="ind-title">Уровень моря</div>
-        <svg viewBox="${IND_VB}" width="${IND_W}" height="${IND_H}" aria-label="Уровень моря" style="overflow:visible;">
-            <defs>
-                <linearGradient id="slAbsArc" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%"   stop-color="#ff9f5c"/>
-                    <stop offset="50%"  stop-color="#999999"/>
-                    <stop offset="100%" stop-color="#74b9ff"/>
-                </linearGradient>
-            </defs>
-            <path d="M 15 85 A 65 65 0 0 1 145 85"
-                  fill="none" stroke="currentColor" stroke-opacity="0.10" stroke-width="8" stroke-linecap="round"/>
-            <path d="M 15 85 A 65 65 0 0 1 145 85"
-                  fill="none" stroke="url(#slAbsArc)" stroke-width="7" stroke-linecap="round"/>
-            <text x="1.0" y="86.5" text-anchor="end" font-size="8" fill="currentColor" fill-opacity="0.60">-1</text>
-            <text x="11.6" y="47.0" text-anchor="end" font-size="8" fill="currentColor" fill-opacity="0.60">-0.5</text>
-            <text x="80.0" y="7.5" text-anchor="middle" font-size="8" fill="currentColor" fill-opacity="0.60">0</text>
-            <text x="148.4" y="47.0" text-anchor="start" font-size="8" fill="currentColor" fill-opacity="0.60">0.5</text>
-            <text x="159.0" y="86.5" text-anchor="start" font-size="8" fill="currentColor" fill-opacity="0.60">1</text>
-            <g style="transform-origin:80px 85px;transform:rotate(${angle}deg);transition:transform 0.8s ease;">
-                <polygon points="80,28 73,42 87,42" fill="currentColor" opacity="0.92"/>
-            </g>
-            <text x="80" y="85" text-anchor="middle" font-size="21" font-weight="800" fill="${vc}">
-                ${m != null ? (m >= 0 ? "+" : "") + m.toFixed(2) : "-"}
-            </text>
-            <text x="80" y="65" text-anchor="middle" font-size="9" fill="currentColor" fill-opacity="0.50">м</text>
         </svg>
     </div>`;
 }
@@ -604,15 +576,7 @@ function seaWaveArcSvg(o){
     const hC    = hRaw != null ? Math.max(0, Math.min(vMax, hRaw)) : null;
     const angle = hC != null ? (hC - vMax/2) / (vMax/2) * 90 : 0;
 
-    const W_STOPS = [
-        {offset:0,    color:"#55efc4"},
-        {offset:0.17, color:"#00cec9"},
-        {offset:0.42, color:"#74b9ff"},
-        {offset:0.83, color:"#ffd166"},
-        {offset:1,    color:"#ff6b6b"},
-    ];
-    const wT = hC != null ? hC / vMax : null;
-    const vc = wT != null ? gradientColor(W_STOPS, wT) : "#aaa";
+    const vc = hRaw != null ? waveDangerColor(hRaw) : "#aaa";
     const hp = marineHeightParts(hRaw);
     const gid = "waveArc" + (_waveArcIdSeq++);
     const clickAttr = o.toggleKey ? ` onclick="toggleMarineVariant('${o.toggleKey}')"` : "";
@@ -628,10 +592,12 @@ function seaWaveArcSvg(o){
             <defs>
                 <linearGradient id="${gid}" x1="0%" y1="0%" x2="100%" y2="0%">
                     <stop offset="0%"   stop-color="#55efc4"/>
-                    <stop offset="17%"  stop-color="#00cec9"/>
-                    <stop offset="42%"  stop-color="#74b9ff"/>
-                    <stop offset="83%"  stop-color="#ffd166"/>
-                    <stop offset="100%" stop-color="#ff6b6b"/>
+                    <stop offset="10%"  stop-color="#00cec9"/>
+                    <stop offset="20%"  stop-color="#ffd166"/>
+                    <stop offset="33%"  stop-color="#ff9f5c"/>
+                    <stop offset="50%"  stop-color="#ff6b6b"/>
+                    <stop offset="83%"  stop-color="#d63031"/>
+                    <stop offset="100%" stop-color="#7f1d1d"/>
                 </linearGradient>
             </defs>
             <path d="M 15 85 A 65 65 0 0 1 145 85"
@@ -660,7 +626,7 @@ function seaWaveArcSvg(o){
    хранится в localStorage, отдельно на волну/зыбь/ветр. волну
 ========================================================= */
 const MARINE_VARIANT_KEY = "marineIndVariants";
-const MARINE_VARIANT_DEFAULTS = { wave:"compass", swell:"compass", windWave:"compass", seaLevel:"surge" };
+const MARINE_VARIANT_DEFAULTS = { wave:"compass", swell:"compass", windWave:"compass" };
 
 function getMarineVariants(){
     try {
@@ -673,11 +639,7 @@ function getMarineVariants(){
 
 function toggleMarineVariant(key){
     const v = getMarineVariants();
-    if(key === "seaLevel"){
-        v.seaLevel = v.seaLevel === "abs" ? "surge" : "abs";
-    } else {
-        v[key] = v[key] === "arc" ? "compass" : "arc";
-    }
+    v[key] = v[key] === "arc" ? "compass" : "arc";
     try { localStorage.setItem(MARINE_VARIANT_KEY, JSON.stringify(v)); } catch(e){}
     refreshMarineIndGrid();
 }
@@ -693,23 +655,18 @@ function buildMarineIndicatorCards(m){
     const variants = getMarineVariants();
 
     if(m.sst != null) cards.push(seaTempIndicatorSvg(m.sst));
-    if(m.seaLevel != null || m.seaLevelAbs != null){
-        cards.push(variants.seaLevel === "abs"
-            ? seaLevelAbsIndicatorSvg(m.seaLevelAbs)
-            : seaLevelIndicatorSvg(m.seaLevel));
-    }
+    if(m.seaLevel != null) cards.push(seaLevelIndicatorSvg(m.seaLevel));
 
     if(m.waveH != null){
         const hp = marineHeightParts(m.waveH);
         const per = m.wavePeakPer ?? m.wavePer;
-        const state = marineSeaStateLabel(m.waveH);
         cards.push(variants.wave === "arc"
             ? seaWaveArcSvg({ title:"Волна", height:m.waveH, dir:m.waveDir, period:per, toggleKey:"wave" })
             : seaCompassIndicatorSvg({
                 title: "Волна", dir: m.waveDir,
                 mainValue: hp.value, mainUnit: hp.unit,
                 secondaryLabel: "период", secondaryValue: per != null ? per.toFixed(1) + " с" : null,
-                color: state ? state.color : null, toggleKey: "wave",
+                color: waveDangerColor(m.waveH), toggleKey: "wave",
             }));
     }
     if(m.swellH != null){
@@ -720,7 +677,7 @@ function buildMarineIndicatorCards(m){
                 title: "Зыбь", dir: m.swellDir,
                 mainValue: hp.value, mainUnit: hp.unit,
                 secondaryLabel: "период", secondaryValue: m.swellPer != null ? m.swellPer.toFixed(1) + " с" : null,
-                color: "#a29bfe", toggleKey: "swell",
+                color: waveDangerColor(m.swellH), toggleKey: "swell",
             }));
     }
     if(m.windWaveH != null){
@@ -730,7 +687,7 @@ function buildMarineIndicatorCards(m){
             : seaCompassIndicatorSvg({
                 title: "Ветровая волна", dir: m.windWaveDir,
                 mainValue: hp.value, mainUnit: hp.unit,
-                color: "#81ecec", toggleKey: "windWave",
+                color: waveDangerColor(m.windWaveH), toggleKey: "windWave",
             }));
     }
     if(m.seaWindSpeed != null){
