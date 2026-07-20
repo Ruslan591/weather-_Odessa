@@ -781,7 +781,7 @@ function seaWaveArcSvg(o){
 
     const dangerStops = o.dangerStops || WAVE_DANGER_STOPS;
     const vc = hRaw != null ? waveDangerColorFor(dangerStops, hRaw) : "#aaa";
-    const hp = marineHeightParts(hRaw);
+    const dispValue = hRaw != null ? hRaw.toFixed(2) : "—"; // те же единицы (м), что и ось дуги — без переключения на см
     const gid = "waveArc" + (_waveArcIdSeq++);
     const clickAttr = o.toggleKey ? ` onclick="toggleMarineVariant('${o.toggleKey}')"` : "";
     const gradStops = dangerStops.map(s => `<stop offset="${(s.offset*100).toFixed(1)}%" stop-color="${s.color}"/>`).join("");
@@ -813,8 +813,8 @@ function seaWaveArcSvg(o){
             <g style="transform-origin:80px 85px;transform:rotate(${angle}deg);transition:transform 0.8s ease;">
                 <polygon points="80,28 73,42 87,42" fill="currentColor" opacity="0.92"/>
             </g>
-            <text x="80" y="85" text-anchor="middle" font-size="21" font-weight="800" fill="${vc}">${hp.value}</text>
-            <text x="80" y="65" text-anchor="middle" font-size="9" fill="currentColor" fill-opacity="0.50">${hp.unit}</text>
+            <text x="80" y="85" text-anchor="middle" font-size="21" font-weight="800" fill="${vc}">${dispValue}</text>
+            <text x="80" y="65" text-anchor="middle" font-size="9" fill="currentColor" fill-opacity="0.50">м</text>
         </svg>
         ${subParts.length ? `<div class="ind-sub">${subParts.join(" · ")}</div>` : ""}
     </div>`;
