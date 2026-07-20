@@ -464,7 +464,7 @@ function seaLevelIndicatorSvg(cm){
     const vc = lT != null ? gradientColor(L_STOPS, lT) : "#aaa";
 
     return `
-    <div class="ind-card" onclick="toggleMarineVariant('seaLevel')">
+    <div class="ind-card">
         <div class="ind-title">Нагон/сгон</div>
         <svg viewBox="${IND_VB}" width="${IND_W}" height="${IND_H}" aria-label="Нагон/сгон" style="overflow:visible;">
             <defs>
@@ -493,77 +493,6 @@ function seaLevelIndicatorSvg(cm){
             </text>
             <text x="80" y="65" text-anchor="middle" font-size="9" fill="currentColor" fill-opacity="0.50">см</text>
         </svg>
-    </div>`;
-}
-
-/* =========================================================
-   ИНДИКАТОР: УРОВЕНЬ МОРЯ КАК ГРАФИК ИСТОРИИ (альтернатива
-   плитке «Нагон/сгон» — переключение по тапу, как у волны)
-========================================================= */
-let _seaLevelChartIdSeq = 0;
-function seaLevelHistChartSvg(cm){
-    const clickAttr = ` onclick="toggleMarineVariant('seaLevel')"`;
-    const now = Date.now();
-    const fromTs = now - 24 * 3600000;
-
-    const raw = (_marineHistArr || [])
-        .filter(o => o.seaLevel != null)
-        .map(o => ({ t: Date.parse(o.time), v: o.seaLevel }))
-        .filter(o => !isNaN(o.t) && o.t >= fromTs)
-        .sort((a, b) => a.t - b.t);
-
-    if(raw.length < 2){
-        return `
-        <div class="ind-card"${clickAttr}>
-            <div class="ind-title">Нагон/сгон</div>
-            <div style="height:88px;display:flex;align-items:center;justify-content:center;
-                        color:currentColor;opacity:0.35;font-size:11px;">Нет истории</div>
-        </div>`;
-    }
-
-    const mean = raw.reduce((a, o) => a + o.v, 0) / raw.length;
-    const pts  = raw.map(o => ({ t: o.t, cm: (o.v - mean) * 100 }));
-    let vMin = Math.min(...pts.map(p => p.cm));
-    let vMax = Math.max(...pts.map(p => p.cm));
-    if(vMax - vMin < 1){ const mid = (vMax + vMin) / 2; vMin = mid - 1; vMax = mid + 1; }
-
-    const padL = 8, padR = 8, padT = 22, padB = 26;
-    const plotW = 160 - padL - padR, plotH = 110 - padT - padB;
-    const tMin = pts[0].t, tMax = pts[pts.length - 1].t;
-    const x = t => padL + (tMax === tMin ? plotW / 2 : (t - tMin) / (tMax - tMin) * plotW);
-    const y = v => padT + (1 - (v - vMin) / (vMax - vMin)) * plotH;
-
-    const pathD = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${x(p.t).toFixed(1)} ${y(p.cm).toFixed(1)}`).join(" ");
-    const baseY = (padT + plotH).toFixed(1);
-    const areaD = `${pathD} L ${x(tMax).toFixed(1)} ${baseY} L ${x(tMin).toFixed(1)} ${baseY} Z`;
-
-    const last = pts[pts.length - 1];
-    const col  = cm != null ? (cm > 5 ? "#74b9ff" : cm < -5 ? "#ff9f5c" : "#999999") : "#aaa";
-    const gid  = "slHist" + (_seaLevelChartIdSeq++);
-    const fmtT = t => new Date(t).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
-
-    return `
-    <div class="ind-card"${clickAttr}>
-        <div class="ind-title">Нагон/сгон</div>
-        <svg viewBox="${IND_VB}" width="${IND_W}" height="${IND_H}" aria-label="Нагон/сгон — история" style="overflow:visible;">
-            <defs>
-                <linearGradient id="${gid}" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%"   stop-color="${col}" stop-opacity="0.32"/>
-                    <stop offset="100%" stop-color="${col}" stop-opacity="0"/>
-                </linearGradient>
-            </defs>
-            <line x1="${padL}" y1="${(padT + plotH / 2).toFixed(1)}" x2="${160 - padR}" y2="${(padT + plotH / 2).toFixed(1)}"
-                  stroke="currentColor" stroke-opacity="0.10" stroke-width="1"/>
-            <path d="${areaD}" fill="url(#${gid})" stroke="none"/>
-            <path d="${pathD}" fill="none" stroke="${col}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            <circle cx="${x(last.t).toFixed(1)}" cy="${y(last.cm).toFixed(1)}" r="3" fill="${col}"/>
-            <text x="${padL}" y="${padT - 6}" text-anchor="start" font-size="7.5" fill="currentColor" fill-opacity="0.5">${vMax >= 0 ? "+" : ""}${vMax.toFixed(0)} см</text>
-            <text x="${padL}" y="${(padT + plotH + 10).toFixed(1)}" text-anchor="start" font-size="7.5" fill="currentColor" fill-opacity="0.5">${vMin >= 0 ? "+" : ""}${vMin.toFixed(0)} см</text>
-            <text x="${padL}" y="${(padT + plotH + 20).toFixed(1)}" text-anchor="start" font-size="7.5" fill="currentColor" fill-opacity="0.4">${fmtT(tMin)}</text>
-            <text x="${160 - padR}" y="${(padT + plotH + 20).toFixed(1)}" text-anchor="end" font-size="7.5" fill="currentColor" fill-opacity="0.4">${fmtT(tMax)}</text>
-            <text x="${160 - padR}" y="${padT - 6}" text-anchor="end" font-size="15" font-weight="800" fill="${col}">${cm != null ? (cm >= 0 ? "+" : "") + cm : "-"}</text>
-        </svg>
-        <div class="ind-sub">24 часа · см</div>
     </div>`;
 }
 
@@ -680,7 +609,7 @@ function seaWaveArcSvg(o){
    хранится в localStorage, отдельно на волну/зыбь/ветр. волну
 ========================================================= */
 const MARINE_VARIANT_KEY = "marineIndVariants";
-const MARINE_VARIANT_DEFAULTS = { wave:"compass", swell:"compass", windWave:"compass", seaLevel:"arc" };
+const MARINE_VARIANT_DEFAULTS = { wave:"compass", swell:"compass", windWave:"compass" };
 
 function getMarineVariants(){
     try {
@@ -693,11 +622,7 @@ function getMarineVariants(){
 
 function toggleMarineVariant(key){
     const v = getMarineVariants();
-    if(key === "seaLevel"){
-        v.seaLevel = v.seaLevel === "chart" ? "arc" : "chart";
-    } else {
-        v[key] = v[key] === "arc" ? "compass" : "arc";
-    }
+    v[key] = v[key] === "arc" ? "compass" : "arc";
     try { localStorage.setItem(MARINE_VARIANT_KEY, JSON.stringify(v)); } catch(e){}
     refreshMarineIndGrid();
 }
@@ -713,11 +638,7 @@ function buildMarineIndicatorCards(m){
     const variants = getMarineVariants();
 
     if(m.sst != null) cards.push(seaTempIndicatorSvg(m.sst));
-    if(m.seaLevel != null){
-        cards.push(variants.seaLevel === "chart"
-            ? seaLevelHistChartSvg(m.seaLevel)
-            : seaLevelIndicatorSvg(m.seaLevel));
-    }
+    if(m.seaLevel != null) cards.push(seaLevelIndicatorSvg(m.seaLevel));
 
     if(m.waveH != null){
         const hp = marineHeightParts(m.waveH);
