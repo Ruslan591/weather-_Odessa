@@ -394,8 +394,8 @@ function marineSeaStateLabel(h){
     if(h < 1.25) return { label:"Лёгкое волнение (2)",      color:"#74b9ff" };
     if(h < 2.50) return { label:"Умеренное волнение (3–4)", color:"#ffd166" };
     if(h < 4.00) return { label:"Значительное (5)",         color:"#ff9f5c" };
-    if(h < 6.00) return { label:"Сильное (6–7)",            color:"#ff6b6b" };
-    return              { label:"Очень сильное (8–9)",       color:"#d63031" };
+    if(h < 6.00) return { label:"Сильное (6–7)",            color:"#ef4444" };
+    return              { label:"Очень сильное (8–9)",       color:"#b91c1c" };
 }
 
 /* =========================================================
@@ -423,9 +423,9 @@ function buildDangerStops(arcMax, greenMax, redMin){
         {offset: cyanPt   / arcMax,      color:"#00cec9"}, // голубой переход
         {offset: greenMax / arcMax,      color:"#ffd166"}, // граница комфорта
         {offset: orangePt / arcMax,      color:"#ff9f5c"}, // оранжевый переход
-        {offset: redMin   / arcMax,      color:"#ff6b6b"}, // купание опасно
-        {offset: deepRed  / arcMax,      color:"#d63031"}, // купание исключено
-        {offset: 1,                      color:"#7f1d1d"}, // шторм
+        {offset: redMin   / arcMax,      color:"#ef4444"}, // купание опасно
+        {offset: deepRed  / arcMax,      color:"#b91c1c"}, // купание исключено
+        {offset: 1,                      color:"#450a0a"}, // шторм
     ];
 }
 
@@ -511,9 +511,9 @@ function seaCurrentDangerColor(speed, dir){
 ========================================================= */
 const SEALEVEL_ARC_MIN = -100, SEALEVEL_ARC_MAX = 100; // см
 const SEALEVEL_DANGER_STOPS = [
-    {offset:0.000, color:"#7f1d1d"}, // -100 см — экстремальный сгон
-    {offset:0.125, color:"#d63031"}, //  -75 см
-    {offset:0.250, color:"#ff6b6b"}, //  -50 см — опасный сгон
+    {offset:0.000, color:"#450a0a"}, // -100 см — экстремальный сгон
+    {offset:0.125, color:"#b91c1c"}, //  -75 см
+    {offset:0.250, color:"#ef4444"}, //  -50 см — опасный сгон
     {offset:0.300, color:"#ff9f5c"}, //  -40 см — оранжевый переход
     {offset:0.350, color:"#ffd166"}, //  -30 см — граница жёлтой зоны (сгон)
     {offset:0.425, color:"#00cec9"}, //  -15 см — голубой переход
@@ -521,9 +521,9 @@ const SEALEVEL_DANGER_STOPS = [
     {offset:0.575, color:"#00cec9"}, //  +15 см — голубой переход
     {offset:0.650, color:"#ffd166"}, //  +30 см — граница жёлтой зоны (нагон)
     {offset:0.725, color:"#ff9f5c"}, //  +45 см — оранжевый переход
-    {offset:0.800, color:"#ff6b6b"}, //  +60 см — опасный нагон
-    {offset:0.900, color:"#d63031"}, //  +80 см
-    {offset:1.000, color:"#7f1d1d"}, // +100 см — экстремальный нагон
+    {offset:0.800, color:"#ef4444"}, //  +60 см — опасный нагон
+    {offset:0.900, color:"#b91c1c"}, //  +80 см
+    {offset:1.000, color:"#450a0a"}, // +100 см — экстремальный нагон
 ];
 function seaLevelDangerColor(cm){
     if(cm == null) return "#aaa";
