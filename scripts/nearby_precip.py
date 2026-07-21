@@ -1,45 +1,50 @@
 """
-nearby_precip.py — расстояние до ближайших осадков/грозы от Одессы.
+nearby_precip.py — расстояние до ближайших осадков и признаков грозы от Одессы.
 
-Источник: Open-Meteo forecast API (уже используется в проекте, отдельного
-ключа не нужно). Строим кольцевую сетку точек вокруг станции 33837
-(46.4406, 30.7703 — та же точка, что и update.py) на нескольких радиусах
-и по 8 направлениям, одним запросом (Open-Meteo поддерживает несколько
-locations через запятую в latitude/longitude), current=precipitation,
-rain, showers, weather_code.
+Источник: RainViewer Weather Maps API (радар, реальное наблюдение, НЕ модель) —
+https://api.rainviewer.com/public/weather-maps.json, бесплатно для
+персонального/образовательного использования, без API-ключа. ToS RainViewer
+требует атрибуцию "Weather data by RainViewer" там, где эти данные показываются
+человеку — это забота фронтенда (страница с индикатором), не этого скрипта.
 
-Это НЕ радар (в отличие от RainViewer) — координаты и осадки берутся
-из ансамблевой модели open-meteo (обычно ECMWF/GFS blend), с шагом сетки
-~11км и часовым разрешением у current. Погрешность оценки расстояния —
-порядка размера ячейки модели (5-15 км), для радара понадобится
-отдельный источник (RainViewer/Blitzortung — см. "on the horizon").
-Для быстрой оценки "далеко/близко" этого достаточно.
+Тянем один тайл радара, центрированный на СИНОП 33837 (46.4406, 30.7703):
+цветовая схема "Universal Blue" (color=2), БЕЗ сглаживания (options=0_0) —
+это важно, сглаживание интерполирует цвета между dBZ-ступенями и портит
+обратное сопоставление цвет→dBZ. zoom=6, size=512px:
+  ground_width ≈ 40075016.686 / 2**zoom * cos(lat) ≈ 432 км (радиус ~216 км)
+  ~0.84 км/пиксель — с запасом покрывает те же 200 км, что и в прежней
+  Open-Meteo-версии, но это уже фактическое наблюдение, а не модель.
 
-Определяем два расстояния:
-  - nearest_precip       — ближайшая точка сетки с precipitation > 0.1 мм
-  - nearest_thunderstorm — ближайшая точка с weather_code грозы (95/96/99)
+Про Blitzortung (сознательно НЕ используется): их правила ограничивают
+использование данных участниками сети (кто держит свой приёмник) или теми,
+кому явно разрешили — это отдельно от и шире, чем просто запрет
+коммерческого использования. Наш случай (личный проект, не участник,
+разрешения не спрашивали) под их условия не попадает, даже без всякой
+коммерции.
 
-Пишет один снимок (не историю) в data/nearby_precip.json:
-  {
-    "timestamp": ISO8601,
-    "center": {"lat":.., "lon":.., "label": "Одесса (СИНОП 33837)"},
-    "nearest_precip": {"distance_km":.., "lat":.., "lon":.., "bearing_deg":..,
-                        "compass": "СЗ", "precipitation_mm": ..} | null,
-    "nearest_thunderstorm": {...той же формы, "weather_code": 95} | null,
-    "grid": {"radii_km": [...], "directions": 8, "points_checked": N},
-    "source": "open-meteo forecast (модельная сетка, не радар)"
-  }
+"Гроза" здесь — ПРОКСИ по отражаемости (>=45 dBZ, эмпирический порог
+конвективного ядра), а НЕ детекция реального разряда молнии. У порога есть
+и ложные срабатывания (сильный ливень без грозы даёт те же dBZ), и пропуски
+(отдельные грозы с более низкой отражаемостью). Настоящая детекция молний
+(EUMETSAT MTG Lightning Imager — спутник, легально и бесплатно после
+регистрации) — вариант на будущее, сильно дороже по интеграции (netCDF
+через EUMETSAT Data Store, а не JSON), см. "on the horizon" в памяти проекта.
 
-Отладка — data/nearby_precip_debug.json (статус последнего запуска, видно
-прямо в репозитории без доступа к логам Actions).
+Пишет один снимок (не историю) в data/nearby_precip.json — та же форма
+полей, что и в предыдущей Open-Meteo-версии (nearest_precip,
+nearest_thunderstorm), плюс radar_time/radar_age_min для видимости
+свежести радарного кадра. Отладка — data/nearby_precip_debug.json.
 """
 
+import io
 import json
 import math
 import os
 from datetime import datetime, timezone
 
+import numpy as np
 import requests
+from PIL import Image
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_FILE = os.path.join(BASE_DIR, "data", "nearby_precip.json")
@@ -50,17 +55,43 @@ CENTER_LAT = 46.4406
 CENTER_LON = 30.7703
 CENTER_LABEL = "Одесса (СИНОП 33837)"
 
-RADII_KM = [10, 20, 35, 50, 75, 100, 150, 200]
-N_DIRECTIONS = 8  # каждые 45°
-EARTH_R_KM = 6371.0
-
-PRECIP_THRESHOLD_MM = 0.1
-THUNDER_CODES = {95, 96, 99}  # WMO weather_code: гроза
-
-FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
+WEATHER_MAPS_URL = "https://api.rainviewer.com/public/weather-maps.json"
+TILE_COLOR = 2       # Universal Blue — единственная актуальная схема API
+TILE_SIZE = 512
+TILE_ZOOM = 6         # ground width ~432км при этой широте, radius ~216км
+TILE_OPTIONS = "0_0"  # без сглаживания (smooth=0), без снега (snow=0)
 TIMEOUT = 20
 
+EARTH_R_KM = 6371.0
+EARTH_CIRCUMFERENCE_M = 40075016.686
+
+PRECIP_ALPHA_THRESHOLD = 200   # ~dBZ>=15 в таблице ниже — граница "значимый сигнал" vs фоновый шум
+THUNDER_DBZ_THRESHOLD = 45     # эмпирический порог конвективного ядра (прокси грозы, не факт молнии)
+
 COMPASS = ["С", "СВ", "В", "ЮВ", "Ю", "ЮЗ", "З", "СЗ"]
+
+# Таблица цвет→dBZ схемы "Universal Blue" (color=2), только dBZ>=15, где
+# пиксели полностью непрозрачны (alpha=255) — см. докстринг про PRECIP_ALPHA_THRESHOLD.
+# Источник: https://www.rainviewer.com/files/rainviewer_api_colors_table.csv
+_DBZ_COLOR_HEX = {
+    15: "88ddee", 16: "6cd1eb", 17: "51c5e8", 18: "36bae5", 19: "1baee2",
+    20: "00a3e0", 21: "009ad5", 22: "0091ca", 23: "0088bf", 24: "007fb4",
+    25: "0077aa", 26: "0070a3", 27: "00699c", 28: "006295", 29: "005b8e",
+    30: "005588", 31: "005180", 32: "004e78", 33: "004a70", 34: "004768",
+    35: "ffee00", 36: "ffe000", 37: "ffd200", 38: "ffc500", 39: "ffb700",
+    40: "ffaa00", 41: "ff9f00", 42: "ff9500", 43: "ff8b00", 44: "ff8100",
+    45: "ff4400", 46: "f23600", 47: "e62800", 48: "d91b00", 49: "cd0d00",
+    50: "c10000", 51: "a80000", 52: "8f0000", 53: "760000", 54: "5d0000",
+    55: "ffaaff", 56: "ff9fff", 57: "ff95ff", 58: "ff8bff", 59: "ff81ff",
+    60: "ff77ff", 61: "ff6cff", 62: "ff62ff", 63: "ff58ff", 64: "ff4eff",
+    65: "ffffff", 66: "ffffff", 67: "ffffff", 68: "ffffff", 69: "ffffff",
+    70: "ffffff",
+}
+_DBZ_VALUES = np.array(sorted(_DBZ_COLOR_HEX.keys()))
+_DBZ_RGB = np.array([
+    [int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)]
+    for _, h in sorted(_DBZ_COLOR_HEX.items())
+], dtype=np.float32)
 
 
 def _write_debug(status, note, extra=None):
@@ -76,23 +107,6 @@ def _write_debug(status, note, extra=None):
             json.dump(payload, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
-
-
-def _destination_point(lat, lon, bearing_deg, distance_km):
-    """Точка на сфере на distance_km от (lat, lon) по азимуту bearing_deg."""
-    lat1 = math.radians(lat)
-    lon1 = math.radians(lon)
-    brg = math.radians(bearing_deg)
-    d_r = distance_km / EARTH_R_KM
-
-    lat2 = math.asin(
-        math.sin(lat1) * math.cos(d_r) + math.cos(lat1) * math.sin(d_r) * math.cos(brg)
-    )
-    lon2 = lon1 + math.atan2(
-        math.sin(brg) * math.sin(d_r) * math.cos(lat1),
-        math.cos(d_r) - math.sin(lat1) * math.sin(lat2),
-    )
-    return math.degrees(lat2), math.degrees(lon2)
 
 
 def _haversine_km(lat1, lon1, lat2, lon2):
@@ -116,36 +130,14 @@ def _compass(bearing_deg):
     return COMPASS[idx]
 
 
-def _build_grid():
-    """Точки сетки: центр + кольца (radius, bearing)."""
-    points = [(CENTER_LAT, CENTER_LON, 0.0, 0.0)]  # lat, lon, dist_km, bearing_deg
-    for radius in RADII_KM:
-        for i in range(N_DIRECTIONS):
-            bearing = i * (360.0 / N_DIRECTIONS)
-            plat, plon = _destination_point(CENTER_LAT, CENTER_LON, bearing, radius)
-            points.append((plat, plon, radius, bearing))
-    return points
-
-
-def _fetch_grid(points, retries=3, delay=5):
+def _fetch_weather_maps(retries=3, delay=5):
     import time
-
-    lats = ",".join(f"{p[0]:.4f}" for p in points)
-    lons = ",".join(f"{p[1]:.4f}" for p in points)
-    url = (
-        f"{FORECAST_URL}?latitude={lats}&longitude={lons}"
-        "&current=precipitation,rain,showers,weather_code&timezone=UTC"
-    )
     last_err = None
     for attempt in range(1, retries + 1):
         try:
-            r = requests.get(url, timeout=TIMEOUT)
+            r = requests.get(WEATHER_MAPS_URL, timeout=TIMEOUT)
             r.raise_for_status()
-            data = r.json()
-            # при одной точке open-meteo вернёт dict, а не list — приводим к списку
-            if isinstance(data, dict):
-                data = [data]
-            return data
+            return r.json()
         except Exception as e:
             last_err = e
             if attempt < retries:
@@ -153,90 +145,149 @@ def _fetch_grid(points, retries=3, delay=5):
     raise last_err
 
 
-def _nearest(points, results, predicate):
-    best = None
-    for (lat, lon, dist_km, bearing), res in zip(points, results):
-        cur = (res or {}).get("current", {})
-        if cur is None:
-            continue
-        if not predicate(cur):
-            continue
-        # расстояние — реальное haversine от центра (точнее, чем номинальный dist_km сетки)
-        d = _haversine_km(CENTER_LAT, CENTER_LON, lat, lon)
-        if best is None or d < best["distance_km"]:
-            b = _bearing_km(CENTER_LAT, CENTER_LON, lat, lon)
-            best = {
-                "distance_km": round(d, 1),
-                "lat": round(lat, 4),
-                "lon": round(lon, 4),
-                "bearing_deg": round(b, 0),
-                "compass": _compass(b),
-                "precipitation_mm": cur.get("precipitation"),
-                "weather_code": cur.get("weather_code"),
-            }
-    return best
+def _fetch_tile(host, path, retries=3, delay=5):
+    import time
+    url = (
+        f"{host}{path}/{TILE_SIZE}/{TILE_ZOOM}/{CENTER_LAT}/{CENTER_LON}/"
+        f"{TILE_COLOR}/{TILE_OPTIONS}.png"
+    )
+    last_err = None
+    for attempt in range(1, retries + 1):
+        try:
+            r = requests.get(url, timeout=TIMEOUT)
+            r.raise_for_status()
+            img = Image.open(io.BytesIO(r.content)).convert("RGBA")
+            return np.array(img), url
+        except Exception as e:
+            last_err = e
+            if attempt < retries:
+                time.sleep(delay)
+    raise last_err
+
+
+def _meters_per_pixel():
+    ground_width_m = (EARTH_CIRCUMFERENCE_M / (2 ** TILE_ZOOM)) * math.cos(math.radians(CENTER_LAT))
+    return ground_width_m / TILE_SIZE
+
+
+def _pixel_to_latlon(row, col, meters_per_px):
+    dx_px = col - TILE_SIZE / 2.0
+    dy_px = row - TILE_SIZE / 2.0  # растёт вниз по изображению = на юг
+    dx_m = dx_px * meters_per_px
+    dy_m = -dy_px * meters_per_px
+    dlat = dy_m / 111320.0
+    dlon = dx_m / (111320.0 * math.cos(math.radians(CENTER_LAT)))
+    return CENTER_LAT + dlat, CENTER_LON + dlon
+
+
+def _classify(arr):
+    """arr: (H,W,4) uint8. Возвращает (mask_precip, dbz_est) обеих формы (H,W)."""
+    alpha = arr[:, :, 3].astype(np.int16)
+    mask_precip = alpha >= PRECIP_ALPHA_THRESHOLD
+
+    dbz_est = np.full(arr.shape[:2], -99, dtype=np.int16)
+    ys, xs = np.where(mask_precip)
+    if len(ys) > 0:
+        rgb = arr[ys, xs, :3].astype(np.float32)
+        # nearest-neighbor по RGB-таблице dBZ>=15 (все непрозрачные значения)
+        dists = np.sum((rgb[:, None, :] - _DBZ_RGB[None, :, :]) ** 2, axis=2)
+        nearest_idx = np.argmin(dists, axis=1)
+        dbz_est[ys, xs] = _DBZ_VALUES[nearest_idx]
+    return mask_precip, dbz_est
+
+
+def _nearest_point(mask, meters_per_px):
+    """Находит ближайший к центру пиксель, где mask=True. Возвращает dict или None."""
+    ys, xs = np.where(mask)
+    if len(ys) == 0:
+        return None
+    dx_px = xs - TILE_SIZE / 2.0
+    dy_px = ys - TILE_SIZE / 2.0
+    dist_px = np.sqrt(dx_px ** 2 + dy_px ** 2)
+    best_i = np.argmin(dist_px)
+    row, col = int(ys[best_i]), int(xs[best_i])
+    lat, lon = _pixel_to_latlon(row, col, meters_per_px)
+    dist_km = _haversine_km(CENTER_LAT, CENTER_LON, lat, lon)
+    bearing = _bearing_km(CENTER_LAT, CENTER_LON, lat, lon)
+    return {
+        "distance_km": round(dist_km, 1),
+        "lat": round(lat, 4),
+        "lon": round(lon, 4),
+        "bearing_deg": round(bearing, 0),
+        "compass": _compass(bearing),
+    }
 
 
 def main():
-    points = _build_grid()
     try:
-        results = _fetch_grid(points)
+        wm = _fetch_weather_maps()
     except Exception as e:
-        _write_debug("error", f"fetch failed: {e}")
-        print(f"  [WARN] nearby_precip.py: fetch failed: {e}")
+        _write_debug("error", f"weather-maps.json fetch failed: {e}")
+        print(f"  [WARN] nearby_precip.py: weather-maps.json fetch failed: {e}")
         return
 
-    if len(results) != len(points):
-        _write_debug(
-            "warn",
-            f"mismatch: {len(points)} points sent, {len(results)} results received",
-        )
-        print("  [WARN] nearby_precip.py: количество точек и ответов не совпадает")
+    past = (wm.get("radar") or {}).get("past") or []
+    if not past:
+        _write_debug("error", "no radar.past frames in weather-maps.json")
+        print("  [WARN] nearby_precip.py: нет кадров radar.past")
         return
 
-    nearest_precip = _nearest(
-        points, results,
-        lambda cur: (cur.get("precipitation") or 0) >= PRECIP_THRESHOLD_MM,
-    )
-    nearest_thunder = _nearest(
-        points, results,
-        lambda cur: cur.get("weather_code") in THUNDER_CODES,
-    )
-    # у грозовой точки precipitation_mm не нужен в выводе — убираем лишнее поле
-    if nearest_precip:
-        nearest_precip.pop("weather_code", None)
-    if nearest_thunder:
-        nearest_thunder.pop("precipitation_mm", None)
+    frame = past[-1]
+    host = wm.get("host", "")
+    radar_time = frame.get("time")
+
+    try:
+        arr, tile_url = _fetch_tile(host, frame["path"])
+    except Exception as e:
+        _write_debug("error", f"tile fetch failed: {e}", {"tile_url_attempted": True})
+        print(f"  [WARN] nearby_precip.py: tile fetch failed: {e}")
+        return
+
+    meters_per_px = _meters_per_pixel()
+    mask_precip, dbz_est = _classify(arr)
+    mask_thunder = mask_precip & (dbz_est >= THUNDER_DBZ_THRESHOLD)
+
+    nearest_precip = _nearest_point(mask_precip, meters_per_px)
+    nearest_thunder = _nearest_point(mask_thunder, meters_per_px)
+
+    radar_dt = datetime.fromtimestamp(radar_time, tz=timezone.utc) if radar_time else None
+    radar_age_min = None
+    if radar_dt:
+        radar_age_min = round((datetime.now(timezone.utc) - radar_dt).total_seconds() / 60, 1)
 
     out = {
         "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "center": {"lat": CENTER_LAT, "lon": CENTER_LON, "label": CENTER_LABEL},
         "nearest_precip": nearest_precip,
         "nearest_thunderstorm": nearest_thunder,
-        "grid": {
-            "radii_km": RADII_KM,
-            "directions": N_DIRECTIONS,
-            "points_checked": len(points),
-        },
-        "source": "open-meteo forecast (модельная сетка, не радар)",
+        "radar_time": radar_dt.strftime("%Y-%m-%dT%H:%M:%SZ") if radar_dt else None,
+        "radar_age_min": radar_age_min,
+        "coverage_radius_km": round(meters_per_px * TILE_SIZE / 2 / 1000, 0),
+        "resolution_km_per_px": round(meters_per_px / 1000, 2),
+        "source": "RainViewer радар (реальное наблюдение); гроза — прокси по отражаемости "
+                  f">={THUNDER_DBZ_THRESHOLD}dBZ, не детекция молнии",
+        "attribution": "Weather data by RainViewer (https://www.rainviewer.com/) — "
+                       "обязательна на странице, где эти данные показываются пользователю",
     }
 
     os.makedirs(os.path.dirname(OUT_FILE), exist_ok=True)
     with open(OUT_FILE, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
 
+    precip_desc = (
+        f"{nearest_precip['distance_km']}km {nearest_precip['compass']}"
+        if nearest_precip else "none"
+    )
+    thunder_desc = (
+        f"{nearest_thunder['distance_km']}km {nearest_thunder['compass']}"
+        if nearest_thunder else "none"
+    )
     _write_debug(
         "ok",
-        f"precip={'нет в радиусе' if not nearest_precip else str(nearest_precip['distance_km'])+'км'}, "
-        f"thunder={'нет в радиусе' if not nearest_thunder else str(nearest_thunder['distance_km'])+'км'}",
-        {"points_checked": len(points)},
+        f"precip={precip_desc}, thunder(proxy)={thunder_desc}, radar_age={radar_age_min}min",
+        {"tile_url": tile_url},
     )
-    if nearest_precip:
-        precip_desc = f"{nearest_precip['distance_km']}km {nearest_precip['compass']}"
-    else:
-        precip_desc = "none"
-    thunder_desc = f"{nearest_thunder['distance_km']}km" if nearest_thunder else "none"
-    print(f"  [OK] nearby_precip.py: precip={precip_desc}, thunder={thunder_desc}")
+    print(f"  [OK] nearby_precip.py: precip={precip_desc}, thunder(proxy)={thunder_desc}")
 
 
 if __name__ == "__main__":
