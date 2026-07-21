@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Радар осадков — Одесса</title>
+<link rel="stylesheet" href="current_weather.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+    body{ margin:0; padding-bottom:0 !important; background:#0d0d0d; }
+    #radarControls{
+        position:fixed; top:0; left:0; right:0; z-index:900;
+        display:flex; align-items:center; justify-content:space-between;
+        height:50px; padding:0 12px; background:#161616; border-bottom:1px solid #262626;
+        box-sizing:border-box;
+    }
+    #radarControls .title{ font-size:14px; font-weight:700; color:#eee; }
+    #radarTimestamp{ font-size:13px; color:#72c8ff; font-weight:600; }
+    #radarControls .buttons{ display:flex; gap:6px; }
+    #radarControls button{
+        width:34px; height:34px; border-radius:8px; border:1px solid #333;
+        background:#232323; color:#eee; font-size:15px; cursor:pointer;
+    }
+    #radarControls button:active{ background:#2c2c2c; }
+    #mapid{ position:fixed; top:50px; left:0; right:0; bottom:130px; z-index:1; }
+    #radarSliderWrap{
+        position:fixed; left:0; right:0; bottom:56px; z-index:900;
+        background:#161616; border-top:1px solid #262626;
+        padding:8px 14px 10px;
+        box-sizing:border-box;
+    }
+    #radarSlider{ width:100%; }
+    #radarSliderLabels{
+        display:flex; justify-content:space-between; font-size:10px; color:#888; margin-top:2px;
+    }
+    #radarLegend{
+        position:fixed; top:58px; left:8px; z-index:800;
+        background:rgba(22,22,22,0.9); border:1px solid #262626; border-radius:8px;
+        padding:6px 8px; font-size:10px; color:#bbb; line-height:1.5;
+    }
+    #radarLegend .sw{ display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px; vertical-align:middle; }
+    #radarAttribution{
+        position:fixed; bottom:138px; right:8px; z-index:800;
+        font-size:10px; color:#888; background:rgba(22,22,22,0.85);
+        padding:3px 6px; border-radius:6px;
+    }
+    #radarAttribution a{ color:#72c8ff; }
+    .leaflet-control-attribution{ font-size:9px !important; }
+</style>
+</head>
+<body>
+
+<div id="radarControls">
+    <span class="title">Радар осадков</span>
+    <span id="radarTimestamp">Загрузка…</span>
+    <div class="buttons">
+        <button id="radarPrevBtn">‹</button>
+        <button id="radarPlayBtn">▶</button>
+        <button id="radarNextBtn">›</button>
+    </div>
+</div>
+
+<div id="mapid"></div>
+
+<div id="radarLegend">
+    <div><span class="sw" style="background:#00a3e0;"></span>слабый (15-30 dBZ)</div>
+    <div><span class="sw" style="background:#ffee00;"></span>умеренный (35-40)</div>
+    <div><span class="sw" style="background:#ff4400;"></span>сильный (45-50)</div>
+    <div><span class="sw" style="background:#c10000;"></span>очень сильный (50+)</div>
+</div>
+
+<div id="radarAttribution">Weather data by <a href="https://www.rainviewer.com/" target="_blank" rel="noopener">RainViewer</a></div>
+
+<div id="radarSliderWrap">
+    <input id="radarSlider" type="range" min="0" max="0" value="0" step="1">
+    <div id="radarSliderLabels">
+        <span>Прошлое (-2ч)</span>
+        <span id="radarNowLabel">Сейчас</span>
+        <span>Прогноз (+1ч)</span>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="radar.js"></script>
+<script src="nav.js"></script>
+</body>
+</html>
