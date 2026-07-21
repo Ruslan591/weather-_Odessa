@@ -6,10 +6,18 @@
    ВАЖНО: RainViewer ToS требует видимую атрибуцию "Weather data by
    RainViewer" там, где эти данные показываются пользователю — она есть
    в футере карточки ниже, не убирать при рефакторинге.
+
+   Ниже, для сравнения, добавлен блок EUMETSAT (data/eumetsat_point.json,
+   пишет scripts/eumetsat_point.py). ЭТО СЫРЫЕ ЗНАЧЕНИЯ — расшифровка
+   (категория облачности/метры/число вспышек) ещё не откалибрована по
+   живому ответу сервера, см. докстринг eumetsat_point.py. Показываем как
+   диагностику "для сравнения", а не как готовую метрику.
 ========================================================= */
 
 let _nearbyPrecipData      = null;
 let _nearbyPrecipFetchedAt = 0;
+let _eumetsatPointData      = null;
+let _eumetsatPointFetchedAt = 0;
 
 async function loadNearbyPrecip(){
     if(Date.now() - _nearbyPrecipFetchedAt < 10 * 60000) return; // раз в 10 мин
@@ -28,10 +36,34 @@ async function loadNearbyPrecip(){
     }
 }
 
+async function loadEumetsatPoint(){
+    if(Date.now() - _eumetsatPointFetchedAt < 10 * 60000) return; // раз в 10 мин
+    _eumetsatPointFetchedAt = Date.now();
+    try {
+        const r = await fetch(
+            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_point.json",
+            { cache: "no-store" }
+        );
+        if(!r.ok) return;
+        const j = await r.json();
+        if(j && j.timestamp) _eumetsatPointData = j;
+        renderNearbyPrecipCard();
+    } catch(e){
+        _eumetsatPointFetchedAt = 0;
+    }
+}
+
 function _nearbyFmt(o){
     if(!o) return null;
     const km = Number(o.distance_km).toLocaleString("ru-RU");
     return `${km} км (${o.compass})`;
+}
+
+function _eumetsatRow(label, layerData){
+    if(!layerData) return `<div class="row"><div class="label">${label}</div><div class="value">—</div></div>`;
+    const val = layerData.value_raw;
+    const shown = (val === null || val === undefined) ? "нет данных" : `сырое значение: ${val}`;
+    return `<div class="row"><div class="label">${label}</div><div class="value">${shown}</div></div>`;
 }
 
 function renderNearbyPrecipCard(){
@@ -51,6 +83,21 @@ function renderNearbyPrecipCard(){
         ageStr = d.radar_age_min < 1 ? "меньше минуты назад" : `${Math.round(d.radar_age_min)} мин назад`;
     }
 
+    let eumetsatBlock = "";
+    const e = _eumetsatPointData;
+    if(e && e.layers){
+        eumetsatBlock = `
+        <div class="small muted" style="margin-top:12px; border-top:1px solid #333; padding-top:8px;">
+            Спутник EUMETSAT в точке Одессы — для сравнения (сырые значения, расшифровка ещё не откалибрована):
+        </div>
+        ${_eumetsatRow("Облачность (Cloud Mask)", e.layers.clm)}
+        ${_eumetsatRow("Высота облаков (CTH)", e.layers.cth)}
+        ${_eumetsatRow("Молнии (Flash Area/5мин)", e.layers.li_afa)}
+        <div class="small muted" style="margin-top:4px;">
+            Data: <a href="https://www.eumetsat.int/" target="_blank" rel="noopener" style="color:#72c8ff;">EUMETSAT</a>
+        </div>`;
+    }
+
     card.innerHTML = `
         <div class="cardTitle">Осадки и гроза поблизости</div>
         <div class="row">
@@ -68,5 +115,6 @@ function renderNearbyPrecipCard(){
         <div class="small muted" style="margin-top:4px;">
             Weather data by
             <a href="https://www.rainviewer.com/" target="_blank" rel="noopener" style="color:#72c8ff;">RainViewer</a>
-        </div>`;
+        </div>
+        ${eumetsatBlock}`;
 }
