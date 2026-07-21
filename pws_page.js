@@ -1050,7 +1050,8 @@ async function loadAndRender(){
     loadHmcbasSeaTemp(),
     loadHmcbasTelegram(),
     loadTiktokSeaTemp(),
-    loadNearbyPrecip()
+    loadNearbyPrecip(),
+    loadEumetsatPoint()
 ]);
     const p = stationResult.status === "fulfilled"
         ? stationResult.value
