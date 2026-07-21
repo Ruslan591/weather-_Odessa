@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Спутник EUMETSAT — Одесса</title>
+<link rel="stylesheet" href="current_weather.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+    body{ margin:0; padding-bottom:0 !important; background:#0d0d0d; }
+    #eumControls{
+        position:fixed; top:0; left:0; right:0; z-index:900;
+        background:#161616; border-bottom:1px solid #262626;
+        box-sizing:border-box; padding:6px 10px;
+    }
+    #eumControls .titleRow{
+        display:flex; align-items:center; justify-content:space-between; height:32px;
+    }
+    #eumControls .title{ font-size:14px; font-weight:700; color:#eee; }
+    #eumTimestamp{ font-size:12px; color:#72c8ff; font-weight:600; }
+    #eumLayerTabs{ display:flex; gap:6px; margin-top:4px; }
+    #eumLayerTabs button{
+        flex:1; padding:6px 4px; border-radius:8px; border:1px solid #333;
+        background:#1d1d1d; color:#bbb; font-size:12px; cursor:pointer;
+    }
+    #eumLayerTabs button.active{ background:#2a4d63; color:#fff; border-color:#3d7ca6; }
+    #mapid{ position:fixed; top:88px; left:0; right:0; bottom:150px; z-index:1; }
+    #eumSliderWrap{
+        position:fixed; left:0; right:0; bottom:56px; z-index:900;
+        background:#161616; border-top:1px solid #262626;
+        padding:8px 14px 6px;
+        box-sizing:border-box;
+    }
+    #eumSlider{ width:100%; }
+    #eumSliderLabels{
+        display:flex; justify-content:space-between; font-size:10px; color:#888; margin-top:2px;
+    }
+    #eumControlsBtns{ display:flex; justify-content:center; gap:8px; margin-top:4px; }
+    #eumControlsBtns button{
+        width:34px; height:28px; border-radius:8px; border:1px solid #333;
+        background:#232323; color:#eee; font-size:14px; cursor:pointer;
+    }
+    #eumLegendWrap{
+        position:fixed; top:92px; left:8px; z-index:800;
+        background:rgba(22,22,22,0.92); border:1px solid #262626; border-radius:8px;
+        padding:4px; max-width:70vw; overflow-x:auto;
+    }
+    #eumLegendWrap img{ display:block; max-width:100%; height:auto; }
+    #eumAttribution{
+        position:fixed; bottom:160px; right:8px; z-index:800;
+        font-size:10px; color:#888; background:rgba(22,22,22,0.85);
+        padding:3px 6px; border-radius:6px;
+    }
+    #eumAttribution a{ color:#72c8ff; }
+    .leaflet-control-attribution{ font-size:9px !important; }
+</style>
+</head>
+<body>
+
+<div id="eumControls">
+    <div class="titleRow">
+        <span class="title">Спутник EUMETSAT</span>
+        <span id="eumTimestamp">Загрузка…</span>
+    </div>
+    <div id="eumLayerTabs">
+        <button data-layer="clm" class="active">Облачность</button>
+        <button data-layer="cth">Высота облаков</button>
+        <button data-layer="li_afa">Молнии</button>
+    </div>
+</div>
+
+<div id="mapid"></div>
+
+<div id="eumLegendWrap"><img id="eumLegendImg" alt="легенда"></div>
+
+<div id="eumAttribution">Data: <a href="https://www.eumetsat.int/" target="_blank" rel="noopener">EUMETSAT</a></div>
+
+<div id="eumSliderWrap">
+    <input id="eumSlider" type="range" min="0" max="0" value="0" step="1">
+    <div id="eumSliderLabels">
+        <span>-2ч</span>
+        <span id="eumNowLabel">сейчас</span>
+    </div>
+    <div id="eumControlsBtns">
+        <button id="eumPrevBtn">‹</button>
+        <button id="eumPlayBtn">▶</button>
+        <button id="eumNextBtn">›</button>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="eumetsat.js"></script>
+<script src="nav.js"></script>
+</body>
+</html>
