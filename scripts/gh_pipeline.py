@@ -125,6 +125,8 @@ def git_push_history():
                         "data/ai_schedule.json",
                         "data/ai_schedule_gemini.json",
                         "data/marine_history.json",
+                        "data/nearby_precip.json",
+                        "data/nearby_precip_debug.json",
                         "data/hmcbas_sea_temp_realtime.json",
                         "data/hmcbas_telegram_sea_temp.json",
                         "data/hmcbas_telegram_debug.json",
@@ -313,6 +315,28 @@ def check_hmcbas_telegram():
     except Exception as e:
         print(f"  [WARN] fetch_hmcbas_telegram.py: {e}")
 
+def check_nearby_precip():
+    # Расстояние до ближайших осадков/грозы (open-meteo сетка вокруг Одессы).
+    # Гейт 10 мин — защита от дублирующего запуска в рамках одного цикла.
+    out_file = os.path.join(BASE_DIR, "data", "nearby_precip.json")
+    now_utc = datetime.now(timezone.utc)
+    try:
+        if os.path.exists(out_file):
+            with open(out_file, "r", encoding="utf-8") as f:
+                prev = json.load(f)
+            last_time = datetime.strptime(prev["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            if (now_utc - last_time).total_seconds() < 10 * 60:
+                return
+    except Exception:
+        pass
+    try:
+        subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "nearby_precip.py")],
+            cwd=BASE_DIR, capture_output=False, timeout=60
+        )
+    except Exception as e:
+        print(f"  [WARN] nearby_precip.py: {e}")
+
 def check_marine_history():
     # marine_history.py пишет каждый прогон пайплайна (~15 мин) — все параметры моря,
     # а не только SST раз в час, как было раньше в sst_compare.py.
@@ -467,6 +491,7 @@ def main():
     check_pws_sync()
     check_pws_calibration()
     check_marine_history()
+    check_nearby_precip()
     # check_hmcbas_sea_temp()  # отключено: виджет сайта стабильно отдаёт 0°C (брак), Telegram надёжнее
     check_hmcbas_telegram()
 
