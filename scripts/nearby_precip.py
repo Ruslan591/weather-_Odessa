@@ -225,11 +225,12 @@ def _nearest_point(mask, meters_per_px):
 
 
 def _phase_shift_px(mask_prev, mask_curr):
-    """Сдвиг (dy_px, dx_px) поля от prev к curr через FFT phase correlation."""
-    a = mask_prev.astype(np.float64)
-    b = mask_curr.astype(np.float64)
-    a = a - a.mean()
-    b = b - b.mean()
+    """Сдвиг (dy_px, dx_px) поля от prev к curr через FFT phase correlation.
+    Окно Ханнинга перед FFT — защита от вырожденных случаев (поле однородное
+    вдоль одной оси, например узкая линия ливня через весь тайл)."""
+    win = np.outer(np.hanning(mask_prev.shape[0]), np.hanning(mask_prev.shape[1]))
+    a = (mask_prev.astype(np.float64) - mask_prev.mean()) * win
+    b = (mask_curr.astype(np.float64) - mask_curr.mean()) * win
     fa = np.fft.fft2(a)
     fb = np.fft.fft2(b)
     r = fb * np.conj(fa)
