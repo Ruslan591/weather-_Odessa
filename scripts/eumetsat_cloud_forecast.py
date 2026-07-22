@@ -1,28 +1,41 @@
 """
-eumetsat_cloud_forecast.py — мини-прогноз облачности для Одессы: движется ли
-облачность/просвет к городу, с какой скоростью, когда дойдёт (или пройдёт
-мимо на каком расстоянии).
+eumetsat_cloud_forecast.py — мини-прогноз облачности для Одессы:
+  1) движение области облачности/просвета (приближается/пройдёт мимо/ETA)
+  2) тренд ПЛОТНОСТИ (уплотняется/рассеивается) — доля облачных пикселей
+     в локальной области вокруг города за последние кадры
+  3) тренд ВЫСОТЫ (растут/опускаются вершины) — по Cloud Top Height,
+     усреднённой ТОЛЬКО по облачным пикселям локальной области
+  4) тренд ФОРМЫ (вытягивается/остаётся компактной) — аспект-рейшо
+     bounding box крупнейшего облачного пятна в локальной области
 
-МЕТОД (обновлено после обратной связи "2 кадра / 30 мин — слишком грубо"):
-берём N_FRAMES кадров msg_fes:clm (Cloud Mask) с шагом PAST_STEP_MINUTES
-(сейчас, -15, -30, -45 мин), классифицируем пиксели по 3 цветам легенды.
-Между КАЖДОЙ парой соседних кадров считаем сдвиг ВСЕГО облачного поля через
-FFT phase correlation (кросс-корреляция всей картинки, устойчивая к шуму
-одного пикселя — та же техника, что теперь в nearby_precip.py для радара),
-скорости по всем парам усредняем. Если в каком-то кадре поле однородное
-(сплошная облачность/сплошное ясно — корреляция бессмысленна) — эта пара
-пропускается.
+МЕТОД ДВИЖЕНИЯ: N_FRAMES кадров msg_fes:clm (Cloud Mask) с шагом
+PAST_STEP_MINUTES, классификация по 3 цветам легенды, сдвиг поля между
+каждой парой кадров через FFT phase correlation (окно Ханнинга — защита от
+вырожденных случаев вроде почти прямой линии фронта через весь тайл),
+скорости усреднены по всем парам. Позиция ближайшей "противоположной" точки
+(просвет, если сейчас облачно; облако, если ясно) берётся с самого свежего
+кадра.
 
-Позицию ближайшей "противоположной" точки (просвет, если сейчас облачно;
-облако, если сейчас ясно) берём с САМОГО СВЕЖЕГО кадра (это не изменилось —
-там и раньше было точно), а вот скорость теперь усреднённая и устойчивая, а
-не посчитанная по одной точке между двумя кадрами.
+МЕТОД ПЛОТНОСТИ/ВЫСОТЫ/ФОРМЫ: сравниваем ПЕРВЫЙ и ПОСЛЕДНИЙ из N_FRAMES
+кадров в локальной области (круг радиуса LOCAL_RADIUS_KM вокруг Одессы):
+  - плотность = доля облачных пикселей в круге
+  - высота = средний "ординальный индекс" по цветовой шкале CTH (НЕ метры —
+    официальной таблицы цвет→высота у нас, в отличие от RainViewer, нет;
+    анкеры цветов подобраны по виду легенды по возрастанию, только для
+    ОТНОСИТЕЛЬНОГО тренда роста/понижения, не для абсолютных чисел),
+    усреднённый ТОЛЬКО по пикселям, которые Cloud Mask в тот же момент
+    считает облачными (иначе "нет данных/прозрачно" перепутается с "низкие
+    облака", у обоих чёрный/тёмный цвет)
+  - форма = aspect ratio (макс.сторона/мин.сторона bounding box) крупнейшей
+    связной облачной области в круге (scipy.ndimage.label)
 
-ВАЖНО — по-прежнему ограничения метода:
-  - Линейная экстраполяция усреднённой скорости — всё ещё линейная модель,
-    не учитывает вращение/деформацию/усиление конвекции. Годится на ~1 час.
-  - Разрешение Cloud Mask ~8-10км/пиксель — мельче не увидеть.
-  - CTH/li_afa сюда не входят, только Cloud Mask.
+ВАЖНО — ограничения:
+  - Линейная экстраполяция скорости, разрешение Cloud Mask/CTH ~8-10км/px.
+  - Тренды плотности/высоты/формы — сравнение первого и последнего кадра
+    (45 минут), не полноценная регрессия. Пороги для "существенно
+    изменилось" подобраны эмпирически, не откалиброваны по историческим
+    данным.
+  - Высота — ординальный индекс по приближённым анкерам цвета, не метры.
 
 Пишет data/eumetsat_cloud_forecast.json.
 """
@@ -36,13 +49,15 @@ from datetime import datetime, timedelta, timezone
 import numpy as np
 import requests
 from PIL import Image
+from scipy import ndimage
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_cloud_forecast.json")
 DEBUG_FILE = os.path.join(BASE_DIR, "data", "eumetsat_cloud_forecast_debug.json")
 
 WMS_BASE = "https://view.eumetsat.int/geoserver/wms"
-LAYER = "msg_fes:clm"
+LAYER_CLM = "msg_fes:clm"
+LAYER_CTH = "msg_fes:cth"
 
 CENTER_LAT = 46.4406
 CENTER_LON = 30.7703
@@ -56,10 +71,15 @@ KM_PER_PX_X = (2 * HALF_WINDOW_DEG * KM_PER_DEG_LON) / TILE_SIZE
 KM_PER_PX_Y = (2 * HALF_WINDOW_DEG * KM_PER_DEG_LAT) / TILE_SIZE
 
 N_FRAMES = 4
-PAST_STEP_MINUTES = 15   # шаг реальных данных EUMETSAT для этого слоя
+PAST_STEP_MINUTES = 15
 AFFECT_THRESHOLD_KM = 15.0
 STATIONARY_SPEED_KMH = 3.0
-MIN_FRACTION_FOR_CORR = 0.02  # доля пикселей "меньшего" класса, иначе поле однородное
+MIN_FRACTION_FOR_CORR = 0.02
+
+LOCAL_RADIUS_KM = 50.0           # область вокруг города для плотности/высоты/формы
+DENSITY_CHANGE_THRESHOLD = 0.10  # 10 п.п. — считаем существенным изменением
+HEIGHT_CHANGE_THRESHOLD = 0.6    # изменение среднего ординального индекса
+ASPECT_CHANGE_THRESHOLD = 0.5    # изменение aspect ratio bounding box
 
 TIMEOUT = 25
 
@@ -68,6 +88,23 @@ CLM_ANCHORS = {
     "clear_land": (0, 170, 0),
     "cloud": (255, 255, 255),
 }
+
+# Ординальные анкеры для CTH-рампы (приближённо, по виду легенды: чёрный
+# внизу шкалы -> ... -> белый вверху). НЕ официальная таблица, только для
+# относительного тренда роста/понижения индекса.
+CTH_ORDINAL_ANCHORS = [
+    (0, (0, 0, 0)),
+    (1, (75, 0, 130)),
+    (2, (0, 0, 255)),
+    (3, (0, 255, 255)),
+    (4, (0, 200, 0)),
+    (5, (255, 255, 0)),
+    (6, (255, 0, 0)),
+    (7, (255, 255, 255)),
+]
+_CTH_IDX = np.array([a[0] for a in CTH_ORDINAL_ANCHORS], dtype=np.float32)
+_CTH_RGB = np.array([a[1] for a in CTH_ORDINAL_ANCHORS], dtype=np.float32)
+
 COMPASS = ["С", "СВ", "В", "ЮВ", "Ю", "ЮЗ", "З", "СЗ"]
 
 
@@ -85,7 +122,12 @@ def _bearing_compass(dx_km, dy_km):
     return bearing, COMPASS[idx]
 
 
-def _fetch_tile(time_iso, retries=2, delay=4):
+def _compass(bearing_deg):
+    idx = int(((bearing_deg + 22.5) % 360) // 45)
+    return COMPASS[idx]
+
+
+def _fetch_tile(layer_name, time_iso, retries=2, delay=4):
     import time as _time
 
     min_lon = CENTER_LON - HALF_WINDOW_DEG
@@ -96,7 +138,7 @@ def _fetch_tile(time_iso, retries=2, delay=4):
         "service": "WMS",
         "version": "1.3.0",
         "request": "GetMap",
-        "layers": LAYER,
+        "layers": layer_name,
         "styles": "",
         "crs": "CRS:84",
         "bbox": f"{min_lon},{min_lat},{max_lon},{max_lat}",
@@ -123,7 +165,6 @@ def _fetch_tile(time_iso, retries=2, delay=4):
 
 
 def _classify_cloud_mask(arr):
-    """arr: (H,W,3) uint8 -> boolean mask где True = облако."""
     h, w, _ = arr.shape
     pixels = arr.reshape(-1, 3).astype(np.float32)
     anchors = np.array(list(CLM_ANCHORS.values()), dtype=np.float32)
@@ -134,6 +175,15 @@ def _classify_cloud_mask(arr):
     return is_cloud
 
 
+def _cth_ordinal_index(arr):
+    """arr: (H,W,3) -> (H,W) float, ординальный индекс 0..7 (не метры)."""
+    h, w, _ = arr.shape
+    pixels = arr.reshape(-1, 3).astype(np.float32)
+    dists = np.sum((pixels[:, None, :] - _CTH_RGB[None, :, :]) ** 2, axis=2)
+    nearest_idx = np.argmin(dists, axis=1)
+    return _CTH_IDX[nearest_idx].reshape(h, w)
+
+
 def _pixel_to_km_offset(row, col):
     frac_x = col / (TILE_SIZE - 1)
     frac_y = row / (TILE_SIZE - 1)
@@ -142,6 +192,16 @@ def _pixel_to_km_offset(row, col):
     dx_km = (lon - CENTER_LON) * KM_PER_DEG_LON
     dy_km = (lat - CENTER_LAT) * KM_PER_DEG_LAT
     return dx_km, dy_km
+
+
+def _local_area_mask():
+    """Булев (H,W) — True внутри LOCAL_RADIUS_KM от центра тайла."""
+    rows, cols = np.meshgrid(np.arange(TILE_SIZE), np.arange(TILE_SIZE), indexing="ij")
+    center = (TILE_SIZE - 1) / 2
+    dx_km = (cols - center) * KM_PER_PX_X
+    dy_km = (rows - center) * KM_PER_PX_Y
+    dist_km = np.sqrt(dx_km ** 2 + dy_km ** 2)
+    return dist_km <= LOCAL_RADIUS_KM
 
 
 def _nearest_of_type(is_cloud_mask, want_cloud):
@@ -156,9 +216,6 @@ def _nearest_of_type(is_cloud_mask, want_cloud):
 
 
 def _phase_shift_px(mask_prev, mask_curr):
-    """Сдвиг (dy_px, dx_px) поля от prev к curr через FFT phase correlation.
-    Окно Ханнинга перед FFT — защита от вырожденных случаев (поле однородное
-    вдоль одной оси, например почти прямая линия фронта через весь тайл)."""
     win = np.outer(np.hanning(mask_prev.shape[0]), np.hanning(mask_prev.shape[1]))
     a = (mask_prev.astype(np.float64) - mask_prev.mean()) * win
     b = (mask_curr.astype(np.float64) - mask_curr.mean()) * win
@@ -182,8 +239,6 @@ def _is_uniform(mask):
 
 
 def _estimate_motion(masks, dt_minutes):
-    """masks: список bool-массивов (от старых к новым), одинаковый шаг dt_minutes.
-    Возвращает (vx_kmh, vy_kmh, n_pairs) или (None, None, 0)."""
     vx_list, vy_list = [], []
     dt_h = dt_minutes / 60.0
     for i in range(len(masks) - 1):
@@ -198,31 +253,101 @@ def _estimate_motion(masks, dt_minutes):
     return float(np.mean(vx_list)), float(np.mean(vy_list)), len(vx_list)
 
 
+def _largest_component_aspect(mask):
+    """Aspect ratio (>=1) bounding box крупнейшей связной области True в mask, или None."""
+    labeled, n = ndimage.label(mask)
+    if n == 0:
+        return None
+    sizes = ndimage.sum(mask, labeled, range(1, n + 1))
+    biggest_label = int(np.argmax(sizes)) + 1
+    ys, xs = np.where(labeled == biggest_label)
+    h = ys.max() - ys.min() + 1
+    w = xs.max() - xs.min() + 1
+    return max(h, w) / max(1, min(h, w))
+
+
+def _density_height_shape_trend(is_cloud_frames, cth_index_frames, local_mask):
+    first_cloud, last_cloud = is_cloud_frames[0], is_cloud_frames[-1]
+    local_first = first_cloud & local_mask
+    local_last = last_cloud & local_mask
+
+    frac_first = local_first.sum() / max(1, local_mask.sum())
+    frac_last = local_last.sum() / max(1, local_mask.sum())
+    density_delta = frac_last - frac_first
+
+    if density_delta > DENSITY_CHANGE_THRESHOLD:
+        density_verdict = "уплотняется"
+    elif density_delta < -DENSITY_CHANGE_THRESHOLD:
+        density_verdict = "рассеивается"
+    else:
+        density_verdict = "без существенных изменений"
+
+    # высота: средний ординальный индекс ТОЛЬКО по облачным пикселям локальной области
+    height_verdict = None
+    height_delta = None
+    if local_first.sum() > 5 and local_last.sum() > 5:
+        h_first = float(cth_index_frames[0][local_first].mean())
+        h_last = float(cth_index_frames[-1][local_last].mean())
+        height_delta = h_last - h_first
+        if height_delta > HEIGHT_CHANGE_THRESHOLD:
+            height_verdict = "вершины растут (возможно усиление)"
+        elif height_delta < -HEIGHT_CHANGE_THRESHOLD:
+            height_verdict = "вершины опускаются (возможно ослабление)"
+        else:
+            height_verdict = "без существенных изменений"
+
+    # форма: aspect ratio крупнейшего пятна в локальной области
+    shape_verdict = None
+    aspect_delta = None
+    aspect_first = _largest_component_aspect(local_first)
+    aspect_last = _largest_component_aspect(local_last)
+    if aspect_first is not None and aspect_last is not None:
+        aspect_delta = aspect_last - aspect_first
+        if aspect_delta > ASPECT_CHANGE_THRESHOLD:
+            shape_verdict = "вытягивается (возможно формирование линии/фронта)"
+        elif aspect_delta < -ASPECT_CHANGE_THRESHOLD:
+            shape_verdict = "становится компактнее"
+        else:
+            shape_verdict = "форма существенно не меняется"
+
+    return {
+        "density_fraction_now": round(float(frac_last), 2),
+        "density_delta": round(float(density_delta), 2),
+        "density_verdict": density_verdict,
+        "height_ordinal_delta": round(height_delta, 2) if height_delta is not None else None,
+        "height_verdict": height_verdict,
+        "shape_aspect_ratio_now": round(aspect_last, 2) if aspect_last is not None else None,
+        "shape_aspect_delta": round(aspect_delta, 2) if aspect_delta is not None else None,
+        "shape_verdict": shape_verdict,
+    }
+
+
 def main():
     debug = {}
-    times_iso = []
     now = datetime.now(timezone.utc)
+    times_iso = []
     for i in range(N_FRAMES - 1, -1, -1):
         if i == 0:
-            times_iso.append(None)  # самый свежий кадр — без time (server default)
+            times_iso.append(None)
         else:
             t = now - timedelta(minutes=PAST_STEP_MINUTES * i)
             times_iso.append(t.strftime("%Y-%m-%dT%H:%M:00.000Z"))
 
-    arrs = []
+    clm_arrs, cth_arrs = [], []
     for t_iso in times_iso:
         try:
-            arr = _fetch_tile(t_iso)
-            arrs.append(arr)
+            clm_arrs.append(_fetch_tile(LAYER_CLM, t_iso))
+            cth_arrs.append(_fetch_tile(LAYER_CTH, t_iso))
         except Exception as e:
             _write_debug({"status": "error", "stage": f"fetch {t_iso}", "error": str(e)})
             print(f"  [WARN] eumetsat_cloud_forecast.py: fetch failed ({t_iso}): {e}")
             return
 
-    debug["frames_fetched"] = len(arrs)
+    debug["frames_fetched"] = len(clm_arrs)
     debug["times_requested"] = times_iso
 
-    is_cloud_frames = [_classify_cloud_mask(a) for a in arrs]
+    is_cloud_frames = [_classify_cloud_mask(a) for a in clm_arrs]
+    cth_index_frames = [_cth_ordinal_index(a) for a in cth_arrs]
     is_cloud_now = is_cloud_frames[-1]
 
     center_idx = int((TILE_SIZE - 1) / 2)
@@ -232,6 +357,9 @@ def main():
 
     p_now = _nearest_of_type(is_cloud_now, want_cloud_target)
     vx, vy, n_pairs = _estimate_motion(is_cloud_frames, PAST_STEP_MINUTES)
+
+    local_mask = _local_area_mask()
+    trend = _density_height_shape_trend(is_cloud_frames, cth_index_frames, local_mask)
 
     if p_now is None:
         out = {
@@ -276,6 +404,8 @@ def main():
             else:
                 verdict = "пройдёт мимо, город, скорее всего, не заденет"
 
+            bearing_v = (math.degrees(math.atan2(vx, vy)) + 360) % 360
+
             out = {
                 "timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "current_state": "cloud" if currently_cloudy else "clear",
@@ -284,16 +414,19 @@ def main():
                 "bearing_deg": round(bearing_now, 0),
                 "compass": compass_now,
                 "speed_kmh": round(speed_kmh, 1),
+                "direction_compass": _compass(bearing_v),
                 "cpa_km": round(cpa_km, 1),
                 "eta_min": eta_min if verdict in ("приближается", "уже у города") else None,
                 "verdict": verdict,
                 "frame_pairs_used": n_pairs,
             }
 
+    out["trend"] = trend
     out["method_note"] = (
         f"Скорость усреднена по {N_FRAMES} кадрам Cloud Mask (шаг {PAST_STEP_MINUTES} мин, "
-        "phase correlation всего поля, не трекинг одной точки). Линейная экстраполяция, "
-        "годится на ~1 час вперёд."
+        "phase correlation всего поля). Тренды плотности/высоты/формы — сравнение первого и "
+        f"последнего кадра в радиусе {round(LOCAL_RADIUS_KM)}км. Высота — ординальный индекс "
+        "по цвету (не метры, официальной таблицы нет). Линейная экстраполяция, годится на ~1 час."
     )
 
     os.makedirs(os.path.dirname(OUT_FILE), exist_ok=True)
@@ -301,7 +434,7 @@ def main():
         json.dump(out, f, ensure_ascii=False, indent=2)
 
     _write_debug({"status": "ok", **debug, "result": out})
-    print(f"  [OK] eumetsat_cloud_forecast.py: {out.get('verdict')}")
+    print(f"  [OK] eumetsat_cloud_forecast.py: {out.get('verdict')}, trend={trend}")
 
 
 if __name__ == "__main__":
