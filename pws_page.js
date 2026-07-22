@@ -1051,7 +1051,8 @@ async function loadAndRender(){
     loadHmcbasTelegram(),
     loadTiktokSeaTemp(),
     loadNearbyPrecip(),
-    loadEumetsatPoint()
+    loadEumetsatPoint(),
+    loadEumetsatCloudForecast()
 ]);
     const p = stationResult.status === "fulfilled"
         ? stationResult.value
