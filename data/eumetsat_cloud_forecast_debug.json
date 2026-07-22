@@ -1,5 +1,30 @@
 {
-  "status": "error",
-  "stage": "fetch 2026-07-22T21:46:00.000Z",
-  "error": "cannot identify image file <_io.BytesIO object at 0x7f28601c4130>"
+  "status": "ok",
+  "frames_fetched": 4,
+  "times_requested": [
+    "2026-07-22T21:37:00.000Z",
+    "2026-07-22T21:52:00.000Z",
+    "2026-07-22T22:07:00.000Z",
+    null
+  ],
+  "result": {
+    "timestamp": "2026-07-22T22:22:24Z",
+    "current_state": "cloud",
+    "target_type": "clearing",
+    "distance_km_now": 261.2,
+    "bearing_deg": 355.0,
+    "compass": "С",
+    "verdict": "скорость посчитать не удалось (поле слишком однородно во всех кадрах)",
+    "trend": {
+      "density_fraction_now": 1.0,
+      "density_delta": 0.0,
+      "density_verdict": "без существенных изменений",
+      "height_ordinal_delta": 0.36,
+      "height_verdict": "без существенных изменений",
+      "shape_aspect_ratio_now": 1.44,
+      "shape_aspect_delta": 0.0,
+      "shape_verdict": "форма существенно не меняется"
+    },
+    "method_note": "Скорость усреднена по 4 кадрам Cloud Mask (шаг 15 мин, phase correlation всего поля). Тренды плотности/высоты/формы — сравнение первого и последнего кадра в радиусе 50км. Высота — ординальный индекс по цвету (не метры, официальной таблицы нет). Линейная экстраполяция, годится на ~1 час."
+  }
 }
