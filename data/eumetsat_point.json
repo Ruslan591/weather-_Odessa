@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-07-22T05:25:33Z",
+  "timestamp": "2026-07-22T05:47:32Z",
   "point": {
     "lat": 46.4406,
     "lon": 30.7703,
@@ -7,21 +7,33 @@
   },
   "layers": {
     "clm": {
-      "value_raw": 255.0,
-      "time_requested": "2026-07-22T05:15:00.000Z",
-      "calibrated": false
+      "rgb": [
+        255,
+        255,
+        255
+      ],
+      "calibrated": true,
+      "category": "cloud"
     },
     "cth": {
-      "value_raw": 63.0,
-      "time_requested": "2026-07-22T05:15:00.000Z",
-      "calibrated": false
+      "rgb": [
+        141,
+        32,
+        24
+      ],
+      "calibrated": false,
+      "hue_bucket": "красный/бордовый (высокая часть шкалы)"
     },
     "li_afa": {
-      "value_raw": 0.0,
-      "time_requested": "2026-07-22T05:25:00.000Z",
-      "calibrated": false
+      "rgb": [
+        0,
+        0,
+        0
+      ],
+      "calibrated": false,
+      "hue_bucket": "серый/чёрный (низ шкалы или нет сигнала)"
     }
   },
-  "note": "Сырые значения GetFeatureInfo, расшифровка (категория/метры/число вспышек) ещё не откалибрована по реальному ответу сервера — сверить с debug-файлом.",
+  "note": "Cloud Mask (clm) откалиброван по 3 цветам легенды. Высота облаков (cth) и молнии (li_afa) — только RGB + грубая позиция на шкале, точных чисел (метры/кол-во вспышек) без официальной цветовой таблицы нет.",
   "source": "EUMETSAT EUMETView WMS (view.eumetsat.int)"
 }
