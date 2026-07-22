@@ -18,6 +18,8 @@ let _nearbyPrecipData      = null;
 let _nearbyPrecipFetchedAt = 0;
 let _eumetsatPointData      = null;
 let _eumetsatPointFetchedAt = 0;
+let _eumetsatForecastData      = null;
+let _eumetsatForecastFetchedAt = 0;
 
 async function loadNearbyPrecip(){
     if(Date.now() - _nearbyPrecipFetchedAt < 10 * 60000) return; // раз в 10 мин
@@ -53,6 +55,23 @@ async function loadEumetsatPoint(){
     }
 }
 
+async function loadEumetsatCloudForecast(){
+    if(Date.now() - _eumetsatForecastFetchedAt < 12 * 60000) return; // раз в 12 мин
+    _eumetsatForecastFetchedAt = Date.now();
+    try {
+        const r = await fetch(
+            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_cloud_forecast.json",
+            { cache: "no-store" }
+        );
+        if(!r.ok) return;
+        const j = await r.json();
+        if(j && j.timestamp) _eumetsatForecastData = j;
+        renderNearbyPrecipCard();
+    } catch(e){
+        _eumetsatForecastFetchedAt = 0;
+    }
+}
+
 function _nearbyFmt(o){
     if(!o) return null;
     const km = Number(o.distance_km).toLocaleString("ru-RU");
@@ -79,6 +98,40 @@ function _eumetsatRow(label, layerData){
         shown = `RGB(${layerData.rgb.join(",")})`;
     }
     return `<div class="row"><div class="label">${label}</div><div class="value">${shown}</div></div>`;
+}
+
+function _renderCloudForecast(f){
+    if(!f) return "";
+    const stateStr = f.current_state === "cloud" ? "сейчас облачно" : "сейчас ясно";
+    const targetStr = f.target_type === "cloud_mass" ? "ближайшее облако" : "ближайший просвет";
+
+    if(f.distance_km_now == null){
+        return `<div class="small muted" style="margin-top:8px;">Прогноз облачности: ${stateStr}, ${f.verdict || "недостаточно данных для оценки"}.</div>`;
+    }
+
+    const distStr = `${Number(f.distance_km_now).toLocaleString("ru-RU")} км (${f.compass})`;
+    let verdictLine;
+    if(f.verdict === "приближается" || f.verdict === "уже у города"){
+        const etaStr = f.eta_min != null ? `~${Math.round(f.eta_min)} мин` : "скоро";
+        verdictLine = `${targetStr} приближается, ${etaStr} до города`;
+    } else if(f.verdict === "пройдёт мимо, город, скорее всего, не заденет"){
+        verdictLine = `${targetStr} пройдёт мимо на расстоянии ~${Math.round(f.cpa_km)} км, город, скорее всего, не заденет`;
+    } else if(f.verdict === "удаляется"){
+        verdictLine = `${targetStr} удаляется`;
+    } else if(f.verdict === "почти стоит на месте"){
+        verdictLine = `${targetStr} почти не движется`;
+    } else {
+        verdictLine = f.verdict || "";
+    }
+
+    return `
+        <div class="row">
+            <div class="label">Прогноз облачности</div>
+            <div class="value">${stateStr}</div>
+        </div>
+        <div class="small muted" style="margin-top:4px;">
+            ${targetStr}: ${distStr}${f.speed_kmh != null ? `, скорость ~${Math.round(f.speed_kmh)} км/ч` : ""}. ${verdictLine}.
+        </div>`;
 }
 
 function renderNearbyPrecipCard(){
@@ -108,6 +161,7 @@ function renderNearbyPrecipCard(){
         ${_eumetsatRow("Облачность (Cloud Mask)", e.layers.clm)}
         ${_eumetsatRow("Высота облаков (CTH)", e.layers.cth)}
         ${_eumetsatRow("Молнии (Flash Area/5мин)", e.layers.li_afa)}
+        ${_renderCloudForecast(_eumetsatForecastData)}
         <div class="small muted" style="margin-top:4px;">
             Data: <a href="https://www.eumetsat.int/" target="_blank" rel="noopener" style="color:#72c8ff;">EUMETSAT</a>
         </div>`;
