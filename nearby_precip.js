@@ -134,6 +134,26 @@ function _renderCloudForecast(f){
         </div>`;
 }
 
+function _renderRadarMotion(label, m){
+    if(!m) return "";
+    let verdictLine;
+    if(m.verdict === "приближается" || m.verdict === "уже у города"){
+        const etaStr = m.eta_min != null ? `~${Math.round(m.eta_min)} мин до города` : "скоро у города";
+        verdictLine = etaStr;
+    } else if(m.verdict === "пройдёт мимо, город, скорее всего, не заденет"){
+        verdictLine = `пройдёт мимо на ~${Math.round(m.cpa_km)} км, город, скорее всего, не заденет`;
+    } else if(m.verdict === "удаляется"){
+        verdictLine = "удаляется";
+    } else if(m.verdict === "почти стоит на месте"){
+        verdictLine = "почти не движется";
+    } else {
+        verdictLine = m.verdict || "";
+    }
+    return `<div class="small muted" style="margin-top:2px;">
+        ${label}: ~${Math.round(m.speed_kmh)} км/ч на ${m.direction_compass}. ${verdictLine}.
+    </div>`;
+}
+
 function renderNearbyPrecipCard(){
     const card = document.getElementById("nearbyPrecipCard");
     if(!card) return;
@@ -177,9 +197,12 @@ function renderNearbyPrecipCard(){
             <div class="label">Гроза (прокси по радару)</div>
             <div class="value">${thunderStr}</div>
         </div>
+        ${_renderRadarMotion("Движение осадков", d.precip_motion)}
+        ${_renderRadarMotion("Движение грозового ядра", d.thunderstorm_motion)}
         <div class="small muted" style="margin-top:8px;">
             Радар обновлён: ${ageStr}. Признак грозы — отражаемость ≥45 dBZ на радаре,
-            это НЕ детекция реальной молнии, а эвристика по силе осадков.
+            это НЕ детекция реальной молнии, а эвристика по силе осадков. Скорость —
+            усреднённая кросс-корреляция нескольких кадров, не трекинг одной точки.
         </div>
         <div class="small muted" style="margin-top:4px;">
             Weather data by
