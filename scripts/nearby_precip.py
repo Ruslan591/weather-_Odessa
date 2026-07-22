@@ -1,5 +1,6 @@
 """
-nearby_precip.py — расстояние до ближайших осадков и признаков грозы от Одессы.
+nearby_precip.py — расстояние до ближайших осадков/грозы от Одессы + прогноз
+движения (приближается/пройдёт мимо/ETA), на основе RainViewer радара.
 
 Источник: RainViewer Weather Maps API (радар, реальное наблюдение, НЕ модель) —
 https://api.rainviewer.com/public/weather-maps.json, бесплатно для
@@ -7,33 +8,38 @@ https://api.rainviewer.com/public/weather-maps.json, бесплатно для
 требует атрибуцию "Weather data by RainViewer" там, где эти данные показываются
 человеку — это забота фронтенда (страница с индикатором), не этого скрипта.
 
-Тянем один тайл радара, центрированный на СИНОП 33837 (46.4406, 30.7703):
+Тайл радара, центрированный на СИНОП 33837 (46.4406, 30.7703):
 цветовая схема "Universal Blue" (color=2), БЕЗ сглаживания (options=0_0) —
 это важно, сглаживание интерполирует цвета между dBZ-ступенями и портит
 обратное сопоставление цвет→dBZ. zoom=6, size=512px:
   ground_width ≈ 40075016.686 / 2**zoom * cos(lat) ≈ 432 км (радиус ~216 км)
-  ~0.84 км/пиксель — с запасом покрывает те же 200 км, что и в прежней
-  Open-Meteo-версии, но это уже фактическое наблюдение, а не модель.
+  ~0.84 км/пиксель.
+
+ПРОГНОЗ ДВИЖЕНИЯ (по мотивам обратной связи: "2 кадра — слишком грубо"):
+берём N_FRAMES последних кадров radar.past (обычно шаг 10 мин, но реальный
+интервал считаем по факту из их же timestamp, не предполагаем фиксированным),
+между каждой парой соседних кадров считаем сдвиг ВСЕГО поля через phase
+correlation (FFT кросс-корреляция) — это устойчивая оценка сдвига всей
+картинки целиком, а не шумный трекинг одной ближайшей точки между двумя
+кадрами. Скорости по всем парам усредняем. Отдельно считаем для поля осадков
+(mask_precip) и отдельно для поля грозового ядра (mask_thunder) — они могут
+двигаться с разной скоростью/направлением (ядро часто быстрее общего фронта).
+Если в каком-то кадре пикселей грозового ядра слишком мало для надёжной
+корреляции — скорость грозы не считаем (null), но осадки считаем отдельно.
+
+Даёт устойчивую скорость → экстраполируем ближайшую точку (уже найденную на
+самом свежем кадре) вперёд по времени: строим CPA (closest point of approach)
+и ETA, как и в eumetsat_cloud_forecast.py — то же уравнение движения.
 
 Про Blitzortung (сознательно НЕ используется): их правила ограничивают
 использование данных участниками сети (кто держит свой приёмник) или теми,
 кому явно разрешили — это отдельно от и шире, чем просто запрет
-коммерческого использования. Наш случай (личный проект, не участник,
-разрешения не спрашивали) под их условия не попадает, даже без всякой
-коммерции.
+коммерческого использования.
 
-"Гроза" здесь — ПРОКСИ по отражаемости (>=45 dBZ, эмпирический порог
-конвективного ядра), а НЕ детекция реального разряда молнии. У порога есть
-и ложные срабатывания (сильный ливень без грозы даёт те же dBZ), и пропуски
-(отдельные грозы с более низкой отражаемостью). Настоящая детекция молний
-(EUMETSAT MTG Lightning Imager — спутник, легально и бесплатно после
-регистрации) — вариант на будущее, сильно дороже по интеграции (netCDF
-через EUMETSAT Data Store, а не JSON), см. "on the horizon" в памяти проекта.
+"Гроза" здесь — ПРОКСИ по отражаемости (>=45 dBZ), а НЕ детекция реального
+разряда молнии.
 
-Пишет один снимок (не историю) в data/nearby_precip.json — та же форма
-полей, что и в предыдущей Open-Meteo-версии (nearest_precip,
-nearest_thunderstorm), плюс radar_time/radar_age_min для видимости
-свежести радарного кадра. Отладка — data/nearby_precip_debug.json.
+Пишет data/nearby_precip.json + data/nearby_precip_debug.json.
 """
 
 import io
@@ -65,14 +71,17 @@ TIMEOUT = 20
 EARTH_R_KM = 6371.0
 EARTH_CIRCUMFERENCE_M = 40075016.686
 
-PRECIP_ALPHA_THRESHOLD = 200   # ~dBZ>=15 в таблице ниже — граница "значимый сигнал" vs фоновый шум
-THUNDER_DBZ_THRESHOLD = 45     # эмпирический порог конвективного ядра (прокси грозы, не факт молнии)
+PRECIP_ALPHA_THRESHOLD = 200   # ~dBZ>=15 — граница "значимый сигнал" vs фоновый шум
+THUNDER_DBZ_THRESHOLD = 45     # эмпирический порог конвективного ядра (прокси грозы)
+
+N_FRAMES = 4              # сколько последних кадров past брать для оценки скорости
+MIN_PIXELS_FOR_CORR = 20  # меньше — корреляция на почти пустом поле не считается надёжной
+AFFECT_THRESHOLD_KM = 15.0
+STATIONARY_SPEED_KMH = 3.0
 
 COMPASS = ["С", "СВ", "В", "ЮВ", "Ю", "ЮЗ", "З", "СЗ"]
 
-# Таблица цвет→dBZ схемы "Universal Blue" (color=2), только dBZ>=15, где
-# пиксели полностью непрозрачны (alpha=255) — см. докстринг про PRECIP_ALPHA_THRESHOLD.
-# Источник: https://www.rainviewer.com/files/rainviewer_api_colors_table.csv
+# Таблица цвет→dBZ схемы "Universal Blue" (color=2), только dBZ>=15
 _DBZ_COLOR_HEX = {
     15: "88ddee", 16: "6cd1eb", 17: "51c5e8", 18: "36bae5", 19: "1baee2",
     20: "00a3e0", 21: "009ad5", 22: "0091ca", 23: "0088bf", 24: "007fb4",
@@ -94,15 +103,8 @@ _DBZ_RGB = np.array([
 ], dtype=np.float32)
 
 
-def _write_debug(status, note, extra=None):
+def _write_debug(payload):
     try:
-        payload = {
-            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "status": status,
-            "note": note,
-        }
-        if extra:
-            payload.update(extra)
         with open(DEBUG_FILE, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
     except Exception:
@@ -145,7 +147,7 @@ def _fetch_weather_maps(retries=3, delay=5):
     raise last_err
 
 
-def _fetch_tile(host, path, retries=3, delay=5):
+def _fetch_tile(host, path, retries=3, delay=4):
     import time
     url = (
         f"{host}{path}/{TILE_SIZE}/{TILE_ZOOM}/{CENTER_LAT}/{CENTER_LON}/"
@@ -181,7 +183,7 @@ def _pixel_to_latlon(row, col, meters_per_px):
 
 
 def _classify(arr):
-    """arr: (H,W,4) uint8. Возвращает (mask_precip, dbz_est) обеих формы (H,W)."""
+    """arr: (H,W,4) uint8. Возвращает (mask_precip, dbz_est) формы (H,W)."""
     alpha = arr[:, :, 3].astype(np.int16)
     mask_precip = alpha >= PRECIP_ALPHA_THRESHOLD
 
@@ -189,7 +191,6 @@ def _classify(arr):
     ys, xs = np.where(mask_precip)
     if len(ys) > 0:
         rgb = arr[ys, xs, :3].astype(np.float32)
-        # nearest-neighbor по RGB-таблице dBZ>=15 (все непрозрачные значения)
         dists = np.sum((rgb[:, None, :] - _DBZ_RGB[None, :, :]) ** 2, axis=2)
         nearest_idx = np.argmin(dists, axis=1)
         dbz_est[ys, xs] = _DBZ_VALUES[nearest_idx]
@@ -197,7 +198,7 @@ def _classify(arr):
 
 
 def _nearest_point(mask, meters_per_px):
-    """Находит ближайший к центру пиксель, где mask=True. Возвращает dict или None."""
+    """Ближайший к центру пиксель, где mask=True. dict с lat/lon/dx_km/dy_km или None."""
     ys, xs = np.where(mask)
     if len(ys) == 0:
         return None
@@ -209,12 +210,92 @@ def _nearest_point(mask, meters_per_px):
     lat, lon = _pixel_to_latlon(row, col, meters_per_px)
     dist_km = _haversine_km(CENTER_LAT, CENTER_LON, lat, lon)
     bearing = _bearing_km(CENTER_LAT, CENTER_LON, lat, lon)
+    # dx_km/dy_km в локальных плоских координатах (для CPA-экстраполяции)
+    dx_km = float(dx_px[best_i]) * meters_per_px / 1000.0
+    dy_km = -float(dy_px[best_i]) * meters_per_px / 1000.0
     return {
         "distance_km": round(dist_km, 1),
         "lat": round(lat, 4),
         "lon": round(lon, 4),
         "bearing_deg": round(bearing, 0),
         "compass": _compass(bearing),
+        "_dx_km": dx_km,
+        "_dy_km": dy_km,
+    }
+
+
+def _phase_shift_px(mask_prev, mask_curr):
+    """Сдвиг (dy_px, dx_px) поля от prev к curr через FFT phase correlation."""
+    a = mask_prev.astype(np.float64)
+    b = mask_curr.astype(np.float64)
+    a = a - a.mean()
+    b = b - b.mean()
+    fa = np.fft.fft2(a)
+    fb = np.fft.fft2(b)
+    r = fb * np.conj(fa)
+    denom = np.abs(r)
+    denom[denom < 1e-10] = 1e-10
+    r = r / denom
+    corr = np.fft.ifft2(r).real
+    corr = np.fft.fftshift(corr)
+    peak = np.unravel_index(np.argmax(corr), corr.shape)
+    center = np.array(corr.shape) // 2
+    dy_px, dx_px = (np.array(peak) - center).tolist()
+    return dy_px, dx_px
+
+
+def _estimate_motion(masks, times_unix, meters_per_px):
+    """masks: список bool-массивов (от старых к новым), times_unix: их таймстемпы.
+    Возвращает (vx_kmh, vy_kmh, n_pairs_used) или (None, None, 0)."""
+    vx_list, vy_list = [], []
+    for i in range(len(masks) - 1):
+        m_prev, m_curr = masks[i], masks[i + 1]
+        if m_prev.sum() < MIN_PIXELS_FOR_CORR or m_curr.sum() < MIN_PIXELS_FOR_CORR:
+            continue
+        dt_h = (times_unix[i + 1] - times_unix[i]) / 3600.0
+        if dt_h <= 0:
+            continue
+        dy_px, dx_px = _phase_shift_px(m_prev, m_curr)
+        dx_km = dx_px * meters_per_px / 1000.0
+        dy_km = -dy_px * meters_per_px / 1000.0
+        vx_list.append(dx_km / dt_h)
+        vy_list.append(dy_km / dt_h)
+    if not vx_list:
+        return None, None, 0
+    return float(np.mean(vx_list)), float(np.mean(vy_list)), len(vx_list)
+
+
+def _motion_forecast(point, vx_kmh, vy_kmh):
+    """CPA/ETA для точки point (с _dx_km/_dy_km) при скорости (vx,vy) км/ч."""
+    if point is None or vx_kmh is None:
+        return None
+    px, py = point["_dx_km"], point["_dy_km"]
+    speed_kmh = math.hypot(vx_kmh, vy_kmh)
+
+    dot_pv = px * vx_kmh + py * vy_kmh
+    dot_vv = vx_kmh * vx_kmh + vy_kmh * vy_kmh
+    t_cpa = max(0.0, -dot_pv / dot_vv) if dot_vv > 1e-6 else 0.0
+    cpa_x = px + vx_kmh * t_cpa
+    cpa_y = py + vy_kmh * t_cpa
+    cpa_km = math.hypot(cpa_x, cpa_y)
+    eta_min = round(t_cpa * 60, 0)
+
+    if speed_kmh < STATIONARY_SPEED_KMH:
+        verdict = "почти стоит на месте"
+    elif cpa_km <= AFFECT_THRESHOLD_KM:
+        verdict = "приближается" if eta_min > 5 else "уже у города"
+    elif t_cpa <= 1e-6:
+        verdict = "удаляется"
+    else:
+        verdict = "пройдёт мимо, город, скорее всего, не заденет"
+
+    bearing_v = (math.degrees(math.atan2(vx_kmh, vy_kmh)) + 360) % 360
+    return {
+        "speed_kmh": round(speed_kmh, 1),
+        "direction_compass": _compass(bearing_v),
+        "cpa_km": round(cpa_km, 1),
+        "eta_min": eta_min if verdict in ("приближается", "уже у города") else None,
+        "verdict": verdict,
     }
 
 
@@ -222,34 +303,63 @@ def main():
     try:
         wm = _fetch_weather_maps()
     except Exception as e:
-        _write_debug("error", f"weather-maps.json fetch failed: {e}")
+        _write_debug({"status": "error", "note": f"weather-maps.json fetch failed: {e}"})
         print(f"  [WARN] nearby_precip.py: weather-maps.json fetch failed: {e}")
         return
 
     past = (wm.get("radar") or {}).get("past") or []
     if not past:
-        _write_debug("error", "no radar.past frames in weather-maps.json")
+        _write_debug({"status": "error", "note": "no radar.past frames"})
         print("  [WARN] nearby_precip.py: нет кадров radar.past")
         return
 
-    frame = past[-1]
+    frames_to_fetch = past[-N_FRAMES:] if len(past) >= N_FRAMES else past
     host = wm.get("host", "")
-    radar_time = frame.get("time")
 
-    try:
-        arr, tile_url = _fetch_tile(host, frame["path"])
-    except Exception as e:
-        _write_debug("error", f"tile fetch failed: {e}", {"tile_url_attempted": True})
-        print(f"  [WARN] nearby_precip.py: tile fetch failed: {e}")
-        return
+    arrs, times_unix, tile_urls = [], [], []
+    for fr in frames_to_fetch:
+        try:
+            arr, url = _fetch_tile(host, fr["path"])
+            arrs.append(arr)
+            times_unix.append(fr["time"])
+            tile_urls.append(url)
+        except Exception as e:
+            _write_debug({"status": "error", "note": f"tile fetch failed for frame {fr.get('time')}: {e}"})
+            print(f"  [WARN] nearby_precip.py: tile fetch failed: {e}")
+            return
 
     meters_per_px = _meters_per_pixel()
-    mask_precip, dbz_est = _classify(arr)
-    mask_thunder = mask_precip & (dbz_est >= THUNDER_DBZ_THRESHOLD)
 
-    nearest_precip = _nearest_point(mask_precip, meters_per_px)
-    nearest_thunder = _nearest_point(mask_thunder, meters_per_px)
+    masks_precip, masks_thunder, dbz_est_last = [], [], None
+    for arr in arrs:
+        mp, dbz = _classify(arr)
+        masks_precip.append(mp)
+        masks_thunder.append(mp & (dbz >= THUNDER_DBZ_THRESHOLD))
+        dbz_est_last = dbz  # последний (самый свежий) кадр пригодится ниже
 
+    mask_precip_now = masks_precip[-1]
+    mask_thunder_now = masks_thunder[-1]
+
+    nearest_precip = _nearest_point(mask_precip_now, meters_per_px)
+    nearest_thunder = _nearest_point(mask_thunder_now, meters_per_px)
+
+    vx_p, vy_p, n_pairs_p = _estimate_motion(masks_precip, times_unix, meters_per_px)
+    vx_t, vy_t, n_pairs_t = _estimate_motion(masks_thunder, times_unix, meters_per_px)
+
+    precip_motion = _motion_forecast(nearest_precip, vx_p, vy_p)
+    thunder_motion = _motion_forecast(nearest_thunder, vx_t, vy_t)
+    if precip_motion is not None:
+        precip_motion["frame_pairs_used"] = n_pairs_p
+    if thunder_motion is not None:
+        thunder_motion["frame_pairs_used"] = n_pairs_t
+
+    # служебные поля _dx_km/_dy_km наружу не отдаём
+    for p in (nearest_precip, nearest_thunder):
+        if p:
+            p.pop("_dx_km", None)
+            p.pop("_dy_km", None)
+
+    radar_time = times_unix[-1]
     radar_dt = datetime.fromtimestamp(radar_time, tz=timezone.utc) if radar_time else None
     radar_age_min = None
     if radar_dt:
@@ -260,12 +370,16 @@ def main():
         "center": {"lat": CENTER_LAT, "lon": CENTER_LON, "label": CENTER_LABEL},
         "nearest_precip": nearest_precip,
         "nearest_thunderstorm": nearest_thunder,
+        "precip_motion": precip_motion,
+        "thunderstorm_motion": thunder_motion,
         "radar_time": radar_dt.strftime("%Y-%m-%dT%H:%M:%SZ") if radar_dt else None,
         "radar_age_min": radar_age_min,
         "coverage_radius_km": round(meters_per_px * TILE_SIZE / 2 / 1000, 0),
         "resolution_km_per_px": round(meters_per_px / 1000, 2),
+        "frames_used": len(arrs),
         "source": "RainViewer радар (реальное наблюдение); гроза — прокси по отражаемости "
-                  f">={THUNDER_DBZ_THRESHOLD}dBZ, не детекция молнии",
+                  f">={THUNDER_DBZ_THRESHOLD}dBZ, не детекция молнии; скорость движения — "
+                  "phase correlation по нескольким кадрам, усреднено",
         "attribution": "Weather data by RainViewer (https://www.rainviewer.com/) — "
                        "обязательна на странице, где эти данные показываются пользователю",
     }
@@ -274,20 +388,20 @@ def main():
     with open(OUT_FILE, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
 
-    precip_desc = (
-        f"{nearest_precip['distance_km']}km {nearest_precip['compass']}"
-        if nearest_precip else "none"
-    )
-    thunder_desc = (
-        f"{nearest_thunder['distance_km']}km {nearest_thunder['compass']}"
-        if nearest_thunder else "none"
-    )
-    _write_debug(
-        "ok",
-        f"precip={precip_desc}, thunder(proxy)={thunder_desc}, radar_age={radar_age_min}min",
-        {"tile_url": tile_url},
-    )
-    print(f"  [OK] nearby_precip.py: precip={precip_desc}, thunder(proxy)={thunder_desc}")
+    precip_desc = f"{nearest_precip['distance_km']}km {nearest_precip['compass']}" if nearest_precip else "none"
+    thunder_desc = f"{nearest_thunder['distance_km']}km {nearest_thunder['compass']}" if nearest_thunder else "none"
+    _write_debug({
+        "status": "ok",
+        "frames_fetched": len(arrs),
+        "times_unix": times_unix,
+        "precip_pairs_used": n_pairs_p,
+        "thunder_pairs_used": n_pairs_t,
+        "precip_motion": precip_motion,
+        "thunder_motion": thunder_motion,
+        "tile_urls": tile_urls,
+    })
+    print(f"  [OK] nearby_precip.py: precip={precip_desc}, thunder(proxy)={thunder_desc}, "
+          f"precip_motion={precip_motion}, thunder_motion={thunder_motion}")
 
 
 if __name__ == "__main__":
