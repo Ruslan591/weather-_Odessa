@@ -59,10 +59,25 @@ function _nearbyFmt(o){
     return `${km} км (${o.compass})`;
 }
 
+const CLM_LABELS = {
+    clear_water: "ясно (над водой)",
+    clear_land: "ясно (над сушей)",
+    cloud: "облачно",
+};
+
 function _eumetsatRow(label, layerData){
     if(!layerData) return `<div class="row"><div class="label">${label}</div><div class="value">—</div></div>`;
-    const val = layerData.value_raw;
-    const shown = (val === null || val === undefined) ? "нет данных" : `сырое значение: ${val}`;
+    if(layerData.error || !layerData.rgb){
+        return `<div class="row"><div class="label">${label}</div><div class="value">нет данных</div></div>`;
+    }
+    let shown;
+    if(layerData.category){
+        shown = CLM_LABELS[layerData.category] || layerData.category;
+    } else if(layerData.hue_bucket){
+        shown = layerData.hue_bucket;
+    } else {
+        shown = `RGB(${layerData.rgb.join(",")})`;
+    }
     return `<div class="row"><div class="label">${label}</div><div class="value">${shown}</div></div>`;
 }
 
@@ -88,7 +103,7 @@ function renderNearbyPrecipCard(){
     if(e && e.layers){
         eumetsatBlock = `
         <div class="small muted" style="margin-top:12px; border-top:1px solid #333; padding-top:8px;">
-            Спутник EUMETSAT в точке Одессы — для сравнения (сырые значения, расшифровка ещё не откалибрована):
+            Спутник EUMETSAT в точке Одессы — для сравнения (облачность откалибрована; высота облаков и молнии — приблизительно, по позиции на цветовой шкале):
         </div>
         ${_eumetsatRow("Облачность (Cloud Mask)", e.layers.clm)}
         ${_eumetsatRow("Высота облаков (CTH)", e.layers.cth)}
