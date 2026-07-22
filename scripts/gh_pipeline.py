@@ -129,6 +129,8 @@ def git_push_history():
                         "data/nearby_precip_debug.json",
                         "data/eumetsat_point.json",
                         "data/eumetsat_point_debug.json",
+                        "data/eumetsat_cloud_forecast.json",
+                        "data/eumetsat_cloud_forecast_debug.json",
                         "data/hmcbas_sea_temp_realtime.json",
                         "data/hmcbas_telegram_sea_temp.json",
                         "data/hmcbas_telegram_debug.json",
@@ -339,6 +341,28 @@ def check_nearby_precip():
     except Exception as e:
         print(f"  [WARN] nearby_precip.py: {e}")
 
+def check_eumetsat_cloud_forecast():
+    # Мини-прогноз движения облачности (EUMETSAT Cloud Mask, 2 кадра).
+    # Гейт 15 мин — реальные данные обновляются с той же частотой.
+    out_file = os.path.join(BASE_DIR, "data", "eumetsat_cloud_forecast.json")
+    now_utc = datetime.now(timezone.utc)
+    try:
+        if os.path.exists(out_file):
+            with open(out_file, "r", encoding="utf-8") as f:
+                prev = json.load(f)
+            last_time = datetime.strptime(prev["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            if (now_utc - last_time).total_seconds() < 15 * 60:
+                return
+    except Exception:
+        pass
+    try:
+        subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "eumetsat_cloud_forecast.py")],
+            cwd=BASE_DIR, capture_output=False, timeout=90
+        )
+    except Exception as e:
+        print(f"  [WARN] eumetsat_cloud_forecast.py: {e}")
+
 def check_eumetsat_point():
     # Значения EUMETSAT (облачность/высота/молнии) в точке Одессы, для
     # сравнения с RainViewer-прокси. Гейт 12 мин (реальные данные — 5-15 мин).
@@ -517,6 +541,7 @@ def main():
     check_marine_history()
     check_nearby_precip()
     check_eumetsat_point()
+    check_eumetsat_cloud_forecast()
     # check_hmcbas_sea_temp()  # отключено: виджет сайта стабильно отдаёт 0°C (брак), Telegram надёжнее
     check_hmcbas_telegram()
 
