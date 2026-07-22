@@ -100,13 +100,24 @@ function _eumetsatRow(label, layerData){
     return `<div class="row"><div class="label">${label}</div><div class="value">${shown}</div></div>`;
 }
 
+function _renderTrend(t){
+    if(!t) return "";
+    const parts = [];
+    if(t.density_verdict) parts.push(`плотность: ${t.density_verdict}`);
+    if(t.height_verdict) parts.push(`высота: ${t.height_verdict}`);
+    if(t.shape_verdict) parts.push(`форма: ${t.shape_verdict}`);
+    if(!parts.length) return "";
+    return `<div class="small muted" style="margin-top:2px;">${parts.join(" · ")}</div>`;
+}
+
 function _renderCloudForecast(f){
     if(!f) return "";
     const stateStr = f.current_state === "cloud" ? "сейчас облачно" : "сейчас ясно";
     const targetStr = f.target_type === "cloud_mass" ? "ближайшее облако" : "ближайший просвет";
 
     if(f.distance_km_now == null){
-        return `<div class="small muted" style="margin-top:8px;">Прогноз облачности: ${stateStr}, ${f.verdict || "недостаточно данных для оценки"}.</div>`;
+        return `<div class="small muted" style="margin-top:8px;">Прогноз облачности: ${stateStr}, ${f.verdict || "недостаточно данных для оценки"}.</div>
+        ${_renderTrend(f.trend)}`;
     }
 
     const distStr = `${Number(f.distance_km_now).toLocaleString("ru-RU")} км (${f.compass})`;
@@ -123,6 +134,7 @@ function _renderCloudForecast(f){
     } else {
         verdictLine = f.verdict || "";
     }
+    const dirStr = f.direction_compass ? `, направление на ${f.direction_compass}` : "";
 
     return `
         <div class="row">
@@ -130,8 +142,9 @@ function _renderCloudForecast(f){
             <div class="value">${stateStr}</div>
         </div>
         <div class="small muted" style="margin-top:4px;">
-            ${targetStr}: ${distStr}${f.speed_kmh != null ? `, скорость ~${Math.round(f.speed_kmh)} км/ч` : ""}. ${verdictLine}.
-        </div>`;
+            ${targetStr}: ${distStr}${f.speed_kmh != null ? `, скорость ~${Math.round(f.speed_kmh)} км/ч${dirStr}` : ""}. ${verdictLine}.
+        </div>
+        ${_renderTrend(f.trend)}`;
 }
 
 function _renderRadarMotion(label, m){
@@ -197,7 +210,7 @@ function renderNearbyPrecipCard(){
             <div class="label">Гроза (прокси по радару)</div>
             <div class="value">${thunderStr}</div>
         </div>
-        ${_renderRadarMotion("Движение осадков", d.precip_motion)}
+        ${_renderRadarMotion("Движение области осадков", d.precip_motion)}
         ${_renderRadarMotion("Движение грозового ядра", d.thunderstorm_motion)}
         <div class="small muted" style="margin-top:8px;">
             Радар обновлён: ${ageStr}. Признак грозы — отражаемость ≥45 dBZ на радаре,
