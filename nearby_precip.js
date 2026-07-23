@@ -229,6 +229,9 @@ function _renderCloudForecast(f){
         verdictLine = f.verdict || "";
     }
     const dirStr = f.direction_compass ? `, направление на ${f.direction_compass}` : "";
+    const probStr = (f.target_type === "cloud_mass" && f.probability_percent != null)
+        ? ` Вероятность, что принесёт изменение погоды: ~${f.probability_percent}%.`
+        : "";
 
     return `
         <div class="row">
@@ -236,7 +239,7 @@ function _renderCloudForecast(f){
             <div class="value">${stateStr}</div>
         </div>
         <div class="small muted" style="margin-top:4px;">
-            ${targetStr}: ${distStr}${f.speed_kmh != null ? `, скорость ~${Math.round(f.speed_kmh)} км/ч${dirStr}` : ""}. ${verdictLine}.
+            ${targetStr}: ${distStr}${f.speed_kmh != null ? `, скорость ~${Math.round(f.speed_kmh)} км/ч${dirStr}` : ""}. ${verdictLine}.${probStr}
         </div>
         ${_renderTrend(f.trend)}`;
 }
