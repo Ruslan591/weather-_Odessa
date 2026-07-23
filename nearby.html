@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Осадки и гроза поблизости — Одесса</title>
+<link rel="stylesheet" href="current_weather.css">
+</head>
+<body>
+
+<div class="header">
+    <div class="nav">
+        <a href="index.html">ГМЦ ЧАМ</a>
+    </div>
+    <div class="headerTitle">Осадки поблизости</div>
+    <div class="nav"></div>
+</div>
+
+<div class="container">
+
+    <!-- Осадки/гроза поблизости (RainViewer радар) + сравнение с EUMETSAT -->
+    <div class="card" id="nearbyPrecipCard" style="margin-top:14px;"></div>
+
+</div>
+
+<script src="nearby_precip.js"></script>
+<script>
+    function refreshNearbyPage(){
+        loadNearbyPrecip();
+        loadEumetsatPoint();
+        loadEumetsatCloudForecast();
+    }
+    refreshNearbyPage();
+    setInterval(refreshNearbyPage, 60000);
+</script>
+<script src="nav.js"></script>
+</body>
+</html>
