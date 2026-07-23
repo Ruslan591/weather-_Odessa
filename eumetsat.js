@@ -13,6 +13,19 @@
      mtg_fd:li_afa  — Lightning Imager Accumulated Flash Area (MTG-I) —
                       РЕАЛЬНАЯ детекция вспышек молний со спутника,
                       не прокси. Обновление раз в 5 мин.
+     msg_fes:h60b   — Blended SEVIRI/LEO MW precipitation (осадки) —
+                      мгновенная интенсивность осадков, комбинация IR
+                      геостационара с калибровкой по MW-измерениям LEO
+                      спутников. Обновление раз в 15 мин.
+     msg_fes:gii_kindex — GII K-Index (индекс грозовой неустойчивости
+                      воздушной массы, только для безоблачных участков).
+                      Прокси для потенциала гроз в дополнение к li_afa
+                      (реальные молнии). Обновление раз в 15 мин.
+
+   ПРИМЕЧАНИЕ: отдельного продукта "тип облаков" (низкая/средняя/высокая
+   облачность и т.п.) у EUMETView WMS нет — есть только Cloud Mask (clm,
+   ясно/облачно) и Cloud Top Height (cth, высота верхней границы),
+   которые вместе и являются ближайшей доступной альтернативой.
 
    ВАЖНО: эти слои отдаются WMS только в EPSG:4326 (не EPSG:3857) — для
    каждого TileLayer.WMS указан crs: L.CRS.EPSG4326, базовая карта (OSM)
@@ -33,6 +46,16 @@ const LAYERS = {
         name: "msg_fes:cth",
         stepMinutes: 15,
         legend: `${WMS_BASE}?service=WMS&version=1.3.0&request=GetLegendGraphic&format=image%2Fpng&width=640&height=80&layer=msg_fes%3Acth`,
+    },
+    h60b: {
+        name: "msg_fes:h60b",
+        stepMinutes: 15,
+        legend: `${WMS_BASE}?service=WMS&version=1.3.0&request=GetLegendGraphic&format=image%2Fpng&width=640&height=80&layer=msg_fes%3Ah60b`,
+    },
+    gii_kindex: {
+        name: "msg_fes:gii_kindex",
+        stepMinutes: 15,
+        legend: `${WMS_BASE}?service=WMS&version=1.3.0&request=GetLegendGraphic&format=image%2Fpng&width=640&height=80&layer=msg_fes%3Agii_kindex`,
     },
     li_afa: {
         name: "mtg_fd:li_afa",
