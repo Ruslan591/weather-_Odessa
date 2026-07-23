@@ -4,8 +4,13 @@
 var TABS = [
     { label: "Прогноз",  icon: "📅", href: "forecast.html", match: ["forecast.html"] },
     { label: "По городу",icon: "🌆", href: "pws.html",      match: ["pws.html"] },
-    { label: "Радар",    icon: "🌧️", href: "radar.html",    match: ["radar.html"] },
-    { label: "Спутник",  icon: "🛰️", href: "eumetsat.html", match: ["eumetsat.html"] },
+    { label: "Осадки",   icon: "🌦️", href: null, match: ["radar.html", "eumetsat.html", "nearby.html"],
+      submenu: [
+          { label: "Радар",       href: "radar.html" },
+          { label: "Спутник",     href: "eumetsat.html" },
+          { label: "Поблизости",  href: "nearby.html" },
+      ]
+    },
     { label: "Море",     icon: "🌊", href: "marine.html",   match: ["marine.html"] },
     { label: "Одесса",   icon: "🏙", href: null, match: ["index.html", "bufr.html"],
       submenu: [
