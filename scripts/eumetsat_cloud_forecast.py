@@ -36,6 +36,15 @@ PAST_STEP_MINUTES, классификация по 3 цветам легенды
     изменилось" подобраны эмпирически, не откалиброваны по историческим
     данным.
   - Высота — ординальный индекс по приближённым анкерам цвета, не метры.
+  - Прозрачные/необработанные (no-data) пиксели явно исключаются из
+    классификации (не прибиваются к ближайшему цвету), а поиск края
+    облако/просвет игнорирует связные пятна меньше MIN_SIGNIFICANT_BLOB_PX
+    (шум/антиалиасинг границы).
+  - Обратный случай (сейчас ясно/переменная облачность): если в радиусе
+    найдено значимое (после фильтра шума) поле облачности, дополнительно
+    считается probability_percent — эвристическая (не физическая) оценка
+    вероятности, что оно принесёт изменение погоды, по близости точки
+    сближения, площади поля и уверенности в оценке скорости.
 
 Пишет data/eumetsat_cloud_forecast.json.
 """
@@ -80,6 +89,15 @@ LOCAL_RADIUS_KM = 50.0           # область вокруг города дл
 DENSITY_CHANGE_THRESHOLD = 0.10  # 10 п.п. — считаем существенным изменением
 HEIGHT_CHANGE_THRESHOLD = 0.6    # изменение среднего ординального индекса
 ASPECT_CHANGE_THRESHOLD = 0.5    # изменение aspect ratio bounding box
+
+# Порог связной области (px), меньше которого пятно считается шумом/
+# антиалиасингом границы, а не реальным краем облачного поля. Одновременно
+# служит критерием "поле достаточно значимое, чтобы нести изменение погоды"
+# для обратного случая (сейчас ясно/переменная облачность).
+MIN_SIGNIFICANT_BLOB_PX = 40     # ~50-55 км² при текущем разрешении тайла
+# "Опорная" площадь синоптически значимого пятна для нормировки вероятности
+# (больше — вероятность влияния ближе к максимуму; меньше — доля от неё).
+SIGNIFICANT_AREA_REF_KM2 = 1200.0
 
 TIMEOUT = 25
 
@@ -155,7 +173,7 @@ def _fetch_tile(layer_name, time_iso, retries=2, delay=4):
         try:
             r = requests.get(WMS_BASE, params=params, timeout=TIMEOUT)
             r.raise_for_status()
-            img = Image.open(io.BytesIO(r.content)).convert("RGB")
+            img = Image.open(io.BytesIO(r.content)).convert("RGBA")
             return np.array(img)
         except Exception as e:
             last_err = e
@@ -165,20 +183,28 @@ def _fetch_tile(layer_name, time_iso, retries=2, delay=4):
 
 
 def _classify_cloud_mask(arr):
+    """arr: (H,W,4) RGBA. Возвращает (is_cloud, valid) — valid=False там, где
+    пиксель прозрачный (нет данных/сцена не обработана), такие пиксели не
+    участвуют ни в облаке, ни в просвете, а не силой прибиваются к ближайшему
+    цвету."""
     h, w, _ = arr.shape
-    pixels = arr.reshape(-1, 3).astype(np.float32)
+    rgb = arr[:, :, :3].reshape(-1, 3).astype(np.float32)
+    alpha = arr[:, :, 3].reshape(-1)
+    valid = alpha > 0
     anchors = np.array(list(CLM_ANCHORS.values()), dtype=np.float32)
     keys = list(CLM_ANCHORS.keys())
-    dists = np.sum((pixels[:, None, :] - anchors[None, :, :]) ** 2, axis=2)
+    dists = np.sum((rgb[:, None, :] - anchors[None, :, :]) ** 2, axis=2)
     nearest_idx = np.argmin(dists, axis=1)
     is_cloud = (np.array(keys)[nearest_idx] == "cloud").reshape(h, w)
-    return is_cloud
+    valid = valid.reshape(h, w)
+    is_cloud = is_cloud & valid
+    return is_cloud, valid
 
 
 def _cth_ordinal_index(arr):
-    """arr: (H,W,3) -> (H,W) float, ординальный индекс 0..7 (не метры)."""
-    h, w, _ = arr.shape
-    pixels = arr.reshape(-1, 3).astype(np.float32)
+    """arr: (H,W,4) RGBA -> (H,W) float, ординальный индекс 0..7 (не метры)."""
+    h, w = arr.shape[:2]
+    pixels = arr[:, :, :3].reshape(-1, 3).astype(np.float32)
     dists = np.sum((pixels[:, None, :] - _CTH_RGB[None, :, :]) ** 2, axis=2)
     nearest_idx = np.argmin(dists, axis=1)
     return _CTH_IDX[nearest_idx].reshape(h, w)
@@ -204,15 +230,31 @@ def _local_area_mask():
     return dist_km <= LOCAL_RADIUS_KM
 
 
-def _nearest_of_type(is_cloud_mask, want_cloud):
-    target = is_cloud_mask if want_cloud else ~is_cloud_mask
-    ys, xs = np.where(target)
-    if len(ys) == 0:
+def _nearest_of_type(is_cloud_mask, valid_mask, want_cloud, min_blob_px=MIN_SIGNIFICANT_BLOB_PX):
+    """Ищет ближайшую к центру точку нужного типа (облако/просвет), но только
+    внутри связных областей площадью >= min_blob_px — единичные шумовые/
+    переходные (антиалиасинг границы) пиксели и no-data не считаются краем.
+    Возвращает (dx_km, dy_km, blob_area_km2) для найденного пятна, или None
+    если значимых областей нужного типа в кадре не найдено."""
+    raw_target = is_cloud_mask if want_cloud else (~is_cloud_mask & valid_mask)
+    labeled, n = ndimage.label(raw_target)
+    if n == 0:
         return None
+    sizes = ndimage.sum(raw_target, labeled, range(1, n + 1))
+    keep_labels = np.where(sizes >= min_blob_px)[0] + 1
+    if len(keep_labels) == 0:
+        return None
+    filtered = np.isin(labeled, keep_labels)
+    ys, xs = np.where(filtered)
     center_row = center_col = (TILE_SIZE - 1) / 2
     dist_px = np.sqrt((ys - center_row) ** 2 + (xs - center_col) ** 2)
     best_i = np.argmin(dist_px)
-    return _pixel_to_km_offset(int(ys[best_i]), int(xs[best_i]))
+    row, col = int(ys[best_i]), int(xs[best_i])
+    blob_label = labeled[row, col]
+    blob_px = float(sizes[blob_label - 1])
+    blob_area_km2 = blob_px * KM_PER_PX_X * KM_PER_PX_Y
+    dx_km, dy_km = _pixel_to_km_offset(row, col)
+    return dx_km, dy_km, blob_area_km2
 
 
 def _phase_shift_px(mask_prev, mask_curr):
@@ -266,13 +308,15 @@ def _largest_component_aspect(mask):
     return max(h, w) / max(1, min(h, w))
 
 
-def _density_height_shape_trend(is_cloud_frames, cth_index_frames, local_mask):
+def _density_height_shape_trend(is_cloud_frames, cth_index_frames, valid_frames, local_mask):
     first_cloud, last_cloud = is_cloud_frames[0], is_cloud_frames[-1]
+    valid_first_local = valid_frames[0] & local_mask
+    valid_last_local = valid_frames[-1] & local_mask
     local_first = first_cloud & local_mask
     local_last = last_cloud & local_mask
 
-    frac_first = local_first.sum() / max(1, local_mask.sum())
-    frac_last = local_last.sum() / max(1, local_mask.sum())
+    frac_first = local_first.sum() / max(1, valid_first_local.sum())
+    frac_last = local_last.sum() / max(1, valid_last_local.sum())
     density_delta = frac_last - frac_first
 
     if density_delta > DENSITY_CHANGE_THRESHOLD:
@@ -322,6 +366,24 @@ def _density_height_shape_trend(is_cloud_frames, cth_index_frames, local_mask):
     }
 
 
+def _change_probability(effective_distance_km, blob_area_km2, confidence):
+    """Эвристическая (НЕ физическая модель осадков) оценка вероятности, что
+    значимое облачное поле принесёт изменение погоды в точку наблюдения.
+    Складывается из трёх факторов:
+      - proximity: чем ближе расчётная точка сближения (или просто текущая
+        дистанция, если скорость не посчиталась), тем выше
+      - size: чем крупнее найденное связное пятно относительно
+        SIGNIFICANT_AREA_REF_KM2, тем увереннее это синоптически значимое
+        поле, а не случайный мелкий фрагмент
+      - confidence: доля пар кадров, по которым вообще удалось оценить
+        скорость (не однородное поле) — чем меньше пар, тем ниже доверие
+    Веса (0.5/0.3/0.2) подобраны экспертно, не откалиброваны по истории."""
+    proximity = max(0.0, 1 - effective_distance_km / (AFFECT_THRESHOLD_KM * 4))
+    size = min(1.0, blob_area_km2 / SIGNIFICANT_AREA_REF_KM2)
+    score = 0.5 * proximity + 0.3 * size + 0.2 * confidence
+    return int(round(max(5, min(95, 5 + 90 * score))))
+
+
 def main():
     debug = {}
     now = datetime.now(timezone.utc)
@@ -346,20 +408,25 @@ def main():
     debug["frames_fetched"] = len(clm_arrs)
     debug["times_requested"] = times_iso
 
-    is_cloud_frames = [_classify_cloud_mask(a) for a in clm_arrs]
+    classified = [_classify_cloud_mask(a) for a in clm_arrs]
+    is_cloud_frames = [c[0] for c in classified]
+    valid_frames = [c[1] for c in classified]
     cth_index_frames = [_cth_ordinal_index(a) for a in cth_arrs]
     is_cloud_now = is_cloud_frames[-1]
+    valid_now = valid_frames[-1]
 
     center_idx = int((TILE_SIZE - 1) / 2)
     currently_cloudy = bool(is_cloud_now[center_idx, center_idx])
     want_cloud_target = not currently_cloudy
     target_type = "cloud_mass" if want_cloud_target else "clearing"
 
-    p_now = _nearest_of_type(is_cloud_now, want_cloud_target)
+    nearest = _nearest_of_type(is_cloud_now, valid_now, want_cloud_target)
+    p_now = nearest[:2] if nearest is not None else None
+    blob_area_km2 = nearest[2] if nearest is not None else None
     vx, vy, n_pairs = _estimate_motion(is_cloud_frames, PAST_STEP_MINUTES)
 
     local_mask = _local_area_mask()
-    trend = _density_height_shape_trend(is_cloud_frames, cth_index_frames, local_mask)
+    trend = _density_height_shape_trend(is_cloud_frames, cth_index_frames, valid_frames, local_mask)
 
     if p_now is None:
         out = {
@@ -383,8 +450,14 @@ def main():
                 "distance_km_now": round(dist_now, 1),
                 "bearing_deg": round(bearing_now, 0),
                 "compass": compass_now,
+                "blob_area_km2": round(blob_area_km2, 0),
                 "verdict": "скорость посчитать не удалось (поле слишком однородно во всех кадрах)",
             }
+            if target_type == "cloud_mass":
+                out["probability_percent"] = _change_probability(dist_now, blob_area_km2, confidence=0.25)
+                out["probability_note"] = (
+                    "эвристика (близость + размер поля), скорость не посчиталась — доверие снижено"
+                )
         else:
             speed_kmh = math.hypot(vx, vy)
             dot_pv = p_now[0] * vx + p_now[1] * vy
@@ -417,16 +490,29 @@ def main():
                 "direction_compass": _compass(bearing_v),
                 "cpa_km": round(cpa_km, 1),
                 "eta_min": eta_min if verdict in ("приближается", "уже у города") else None,
+                "blob_area_km2": round(blob_area_km2, 0),
                 "verdict": verdict,
                 "frame_pairs_used": n_pairs,
             }
+            if target_type == "cloud_mass":
+                confidence = min(1.0, n_pairs / max(1, N_FRAMES - 1))
+                out["probability_percent"] = _change_probability(cpa_km, blob_area_km2, confidence)
+                out["probability_note"] = (
+                    "эвристика (близость точки максимального сближения + размер поля + "
+                    "уверенность в оценке скорости), не физическая модель осадков"
+                )
 
     out["trend"] = trend
     out["method_note"] = (
         f"Скорость усреднена по {N_FRAMES} кадрам Cloud Mask (шаг {PAST_STEP_MINUTES} мин, "
-        "phase correlation всего поля). Тренды плотности/высоты/формы — сравнение первого и "
-        f"последнего кадра в радиусе {round(LOCAL_RADIUS_KM)}км. Высота — ординальный индекс "
-        "по цвету (не метры, официальной таблицы нет). Линейная экстраполяция, годится на ~1 час."
+        "phase correlation всего поля). Край облака/просвета ищется только среди связных "
+        f"областей >= {MIN_SIGNIFICANT_BLOB_PX}px (~{round(MIN_SIGNIFICANT_BLOB_PX*KM_PER_PX_X*KM_PER_PX_Y)}км²) "
+        "с учётом прозрачных no-data пикселей — единичный шум/антиалиасинг границы не считается "
+        "краем. Тренды плотности/высоты/формы — сравнение первого и последнего кадра в радиусе "
+        f"{round(LOCAL_RADIUS_KM)}км. Высота — ординальный индекс по цвету (не метры, официальной "
+        "таблицы нет). Вероятность (только когда сейчас ясно/переменная облачность и есть значимое "
+        "приближающееся поле) — эвристическая оценка по близости/размеру/уверенности в скорости, "
+        "не физическая модель осадков. Линейная экстраполяция, годится на ~1 час."
     )
 
     os.makedirs(os.path.dirname(OUT_FILE), exist_ok=True)
