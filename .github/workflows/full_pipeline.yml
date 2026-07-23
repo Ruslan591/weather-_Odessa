@@ -22,10 +22,31 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Установка системных зависимостей (ffmpeg, шрифт)
+      - name: Восстановление шрифта Carlito из кэша
+        id: font-cache
+        uses: actions/cache@v4
+        with:
+          path: /usr/share/fonts/truetype/crosextra
+          key: fonts-crosextra-carlito-v1
+
+      - name: Установка шрифта (только при промахе кэша)
+        if: steps.font-cache.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-crosextra-carlito
+          sudo apt-get install -y fonts-crosextra-carlito
+
+      - name: Обновление кэша шрифтов ОС
+        run: sudo fc-cache -f
+
+      - name: Проверка ffmpeg (уже предустановлен в ubuntu-latest)
+        run: |
+          if command -v ffmpeg >/dev/null 2>&1; then
+            echo "ffmpeg уже есть: $(ffmpeg -version | head -1)"
+          else
+            echo "ffmpeg не найден в образе — ставлю"
+            sudo apt-get update -y
+            sudo apt-get install -y ffmpeg
+          fi
 
       - name: Установка Python-зависимостей
         run: pip install edge-tts Pillow requests numpy scipy
