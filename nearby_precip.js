@@ -114,6 +114,10 @@ let _eumetsatPointData      = null;
 let _eumetsatPointFetchedAt = 0;
 let _eumetsatForecastData      = null;
 let _eumetsatForecastFetchedAt = 0;
+let _eumetsatPrecipForecastData      = null;
+let _eumetsatPrecipForecastFetchedAt = 0;
+let _eumetsatLightningForecastData      = null;
+let _eumetsatLightningForecastFetchedAt = 0;
 
 async function loadNearbyPrecip(){
     if(Date.now() - _nearbyPrecipFetchedAt < 10 * 60000) return; // раз в 10 мин
@@ -166,6 +170,40 @@ async function loadEumetsatCloudForecast(){
     }
 }
 
+async function loadEumetsatPrecipForecast(){
+    if(Date.now() - _eumetsatPrecipForecastFetchedAt < 12 * 60000) return; // раз в 12 мин
+    _eumetsatPrecipForecastFetchedAt = Date.now();
+    try {
+        const r = await fetch(
+            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_precip_forecast.json",
+            { cache: "no-store" }
+        );
+        if(!r.ok) return;
+        const j = await r.json();
+        if(j && j.timestamp) _eumetsatPrecipForecastData = j;
+        renderNearbyPrecipCard();
+    } catch(e){
+        _eumetsatPrecipForecastFetchedAt = 0;
+    }
+}
+
+async function loadEumetsatLightningForecast(){
+    if(Date.now() - _eumetsatLightningForecastFetchedAt < 5 * 60000) return; // раз в 5 мин
+    _eumetsatLightningForecastFetchedAt = Date.now();
+    try {
+        const r = await fetch(
+            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_lightning_forecast.json",
+            { cache: "no-store" }
+        );
+        if(!r.ok) return;
+        const j = await r.json();
+        if(j && j.timestamp) _eumetsatLightningForecastData = j;
+        renderNearbyPrecipCard();
+    } catch(e){
+        _eumetsatLightningForecastFetchedAt = 0;
+    }
+}
+
 function _nearbyFmt(o){
     if(!o) return null;
     const km = Number(o.distance_km).toLocaleString("ru-RU");
@@ -178,7 +216,10 @@ const CLM_LABELS = {
     cloud: "облачно",
 };
 
-function _eumetsatRow(label, layerData){
+const NO_SIGNAL_HUE = "серый/чёрный (низ шкалы или нет сигнала)";
+
+function _eumetsatRow(label, layerData, hideIfNoSignal){
+    if(hideIfNoSignal && layerData && layerData.hue_bucket === NO_SIGNAL_HUE) return "";
     if(!layerData) return `<div class="row"><div class="label">${label}</div><div class="value">—</div></div>`;
     if(layerData.error || !layerData.rgb){
         return `<div class="row"><div class="label">${label}</div><div class="value">нет данных</div></div>`;
@@ -204,17 +245,18 @@ function _renderTrend(t){
     return `<div class="small muted" style="margin-top:2px;">${parts.join(" · ")}</div>`;
 }
 
-function _renderCloudForecast(f){
+function _renderFieldForecast(f, cfg){
     if(!f) return "";
-    const stateStr = f.current_state === "cloud" ? "сейчас облачно" : "сейчас ясно";
-    const targetStr = f.target_type === "cloud_mass" ? "ближайшее облако" : "ближайший просвет";
+    const stateStr = f.current_state === cfg.stateOnValue ? cfg.stateOnLabel : cfg.stateOffLabel;
+    const targetStr = f.target_type === cfg.massTargetValue ? cfg.targetMassLabel : cfg.targetClearingLabel;
 
     if(f.distance_km_now == null){
-        return `<div class="small muted" style="margin-top:8px;">Прогноз облачности: ${stateStr}, ${f.verdict || "недостаточно данных для оценки"}.</div>
+        return `<div class="small muted" style="margin-top:8px;">${cfg.title}: ${stateStr}, ${f.verdict || "недостаточно данных для оценки"}.</div>
         ${_renderTrend(f.trend)}`;
     }
 
     const distStr = `${Number(f.distance_km_now).toLocaleString("ru-RU")} км (${f.compass})`;
+    const stationary = f.verdict === "почти стоит на месте";
     let verdictLine;
     if(f.verdict === "приближается" || f.verdict === "уже у города"){
         const etaStr = f.eta_min != null ? `~${Math.round(f.eta_min)} мин` : "скоро";
@@ -223,19 +265,21 @@ function _renderCloudForecast(f){
         verdictLine = `${targetStr} пройдёт мимо на расстоянии ~${Math.round(f.cpa_km)} км, город, скорее всего, не заденет`;
     } else if(f.verdict === "удаляется"){
         verdictLine = `${targetStr} удаляется`;
-    } else if(f.verdict === "почти стоит на месте"){
+    } else if(stationary){
         verdictLine = `${targetStr} почти не движется`;
     } else {
         verdictLine = f.verdict || "";
     }
-    const dirStr = f.direction_compass ? `, направление на ${f.direction_compass}` : "";
-    const probStr = (f.target_type === "cloud_mass" && f.probability_percent != null)
-        ? ` Вероятность, что принесёт изменение погоды: ~${f.probability_percent}%.`
+    // при скорости ~0 направление движения бессмысленно ("скорость 0, но
+    // направление на С") — показываем его только когда реально что-то едет
+    const dirStr = (f.direction_compass && !stationary) ? `, направление на ${f.direction_compass}` : "";
+    const probStr = (f.target_type === cfg.massTargetValue && f.probability_percent != null)
+        ? ` Вероятность, что ${cfg.probVerb}: ~${f.probability_percent}%.`
         : "";
 
     return `
         <div class="row">
-            <div class="label">Прогноз облачности</div>
+            <div class="label">${cfg.title}</div>
             <div class="value">${stateStr}</div>
         </div>
         <div class="small muted" style="margin-top:4px;">
@@ -244,8 +288,36 @@ function _renderCloudForecast(f){
         ${_renderTrend(f.trend)}`;
 }
 
+function _renderCloudForecast(f){
+    return _renderFieldForecast(f, {
+        title: "Прогноз облачности",
+        stateOnValue: "cloud", stateOnLabel: "сейчас облачно", stateOffLabel: "сейчас ясно",
+        massTargetValue: "cloud_mass", targetMassLabel: "ближайшее облако", targetClearingLabel: "ближайший просвет",
+        probVerb: "принесёт изменение погоды",
+    });
+}
+
+function _renderPrecipForecast(f){
+    return _renderFieldForecast(f, {
+        title: "Прогноз осадков (спутник)",
+        stateOnValue: "precip", stateOnLabel: "сейчас есть осадки", stateOffLabel: "сейчас без осадков",
+        massTargetValue: "precip_mass", targetMassLabel: "ближайшие осадки", targetClearingLabel: "ближайший просвет",
+        probVerb: "принесёт осадки",
+    });
+}
+
+function _renderLightningForecast(f){
+    return _renderFieldForecast(f, {
+        title: "Прогноз грозовой активности",
+        stateOnValue: "storm", stateOnLabel: "сейчас гроза", stateOffLabel: "сейчас без грозы",
+        massTargetValue: "storm_mass", targetMassLabel: "ближайшая грозовая ячейка", targetClearingLabel: "ближайший просвет",
+        probVerb: "принесёт грозу",
+    });
+}
+
 function _renderRadarMotion(label, m){
     if(!m) return "";
+    const stationary = m.verdict === "почти стоит на месте";
     let verdictLine;
     if(m.verdict === "приближается" || m.verdict === "уже у города"){
         const etaStr = m.eta_min != null ? `~${Math.round(m.eta_min)} мин до города` : "скоро у города";
@@ -254,13 +326,14 @@ function _renderRadarMotion(label, m){
         verdictLine = `пройдёт мимо на ~${Math.round(m.cpa_km)} км, город, скорее всего, не заденет`;
     } else if(m.verdict === "удаляется"){
         verdictLine = "удаляется";
-    } else if(m.verdict === "почти стоит на месте"){
+    } else if(stationary){
         verdictLine = "почти не движется";
     } else {
         verdictLine = m.verdict || "";
     }
+    const dirPart = stationary ? "" : ` на ${m.direction_compass}`;
     return `<div class="small muted" style="margin-top:2px;">
-        ${label}: ~${Math.round(m.speed_kmh)} км/ч на ${m.direction_compass}. ${verdictLine}.
+        ${label}: ~${Math.round(m.speed_kmh)} км/ч${dirPart}. ${verdictLine}.
     </div>`;
 }
 
@@ -290,8 +363,10 @@ function renderNearbyPrecipCard(){
         </div>
         ${_eumetsatRow("Облачность (Cloud Mask)", e.layers.clm)}
         ${_eumetsatRow("Высота облаков (CTH)", e.layers.cth)}
-        ${_eumetsatRow("Молнии (Flash Area/5мин)", e.layers.li_afa)}
+        ${_eumetsatRow("Молнии (Flash Area/5мин)", e.layers.li_afa, true)}
         ${_renderCloudForecast(_eumetsatForecastData)}
+        ${_renderPrecipForecast(_eumetsatPrecipForecastData)}
+        ${_renderLightningForecast(_eumetsatLightningForecastData)}
         <div class="small muted" style="margin-top:4px;">
             Data: <a href="https://www.eumetsat.int/" target="_blank" rel="noopener" style="color:#72c8ff;">EUMETSAT</a>
         </div>`;
