@@ -131,6 +131,10 @@ def git_push_history():
                         "data/eumetsat_point_debug.json",
                         "data/eumetsat_cloud_forecast.json",
                         "data/eumetsat_cloud_forecast_debug.json",
+                        "data/eumetsat_precip_forecast.json",
+                        "data/eumetsat_precip_forecast_debug.json",
+                        "data/eumetsat_lightning_forecast.json",
+                        "data/eumetsat_lightning_forecast_debug.json",
                         "data/hmcbas_sea_temp_realtime.json",
                         "data/hmcbas_telegram_sea_temp.json",
                         "data/hmcbas_telegram_debug.json",
@@ -385,6 +389,49 @@ def check_eumetsat_point():
     except Exception as e:
         print(f"  [WARN] eumetsat_point.py: {e}")
 
+def check_eumetsat_precip_forecast():
+    # Мини-прогноз движения осадков (msg_fes:h60b, 4 кадра). Гейт 15 мин.
+    out_file = os.path.join(BASE_DIR, "data", "eumetsat_precip_forecast.json")
+    now_utc = datetime.now(timezone.utc)
+    try:
+        if os.path.exists(out_file):
+            with open(out_file, "r", encoding="utf-8") as f:
+                prev = json.load(f)
+            last_time = datetime.strptime(prev["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            if (now_utc - last_time).total_seconds() < 15 * 60:
+                return
+    except Exception:
+        pass
+    try:
+        subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "eumetsat_precip_forecast.py")],
+            cwd=BASE_DIR, capture_output=False, timeout=90
+        )
+    except Exception as e:
+        print(f"  [WARN] eumetsat_precip_forecast.py: {e}")
+
+def check_eumetsat_lightning_forecast():
+    # Мини-прогноз движения грозовой активности (mtg_fd:li_afa, 4 кадра,
+    # шаг 5 мин — обновляется чаще осадков/облаков). Гейт 5 мин.
+    out_file = os.path.join(BASE_DIR, "data", "eumetsat_lightning_forecast.json")
+    now_utc = datetime.now(timezone.utc)
+    try:
+        if os.path.exists(out_file):
+            with open(out_file, "r", encoding="utf-8") as f:
+                prev = json.load(f)
+            last_time = datetime.strptime(prev["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            if (now_utc - last_time).total_seconds() < 5 * 60:
+                return
+    except Exception:
+        pass
+    try:
+        subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "eumetsat_lightning_forecast.py")],
+            cwd=BASE_DIR, capture_output=False, timeout=90
+        )
+    except Exception as e:
+        print(f"  [WARN] eumetsat_lightning_forecast.py: {e}")
+
 def check_marine_history():
     # marine_history.py пишет каждый прогон пайплайна (~15 мин) — все параметры моря,
     # а не только SST раз в час, как было раньше в sst_compare.py.
@@ -542,6 +589,8 @@ def main():
     check_nearby_precip()
     check_eumetsat_point()
     check_eumetsat_cloud_forecast()
+    check_eumetsat_precip_forecast()
+    check_eumetsat_lightning_forecast()
     # check_hmcbas_sea_temp()  # отключено: виджет сайта стабильно отдаёт 0°C (брак), Telegram надёжнее
     check_hmcbas_telegram()
 
