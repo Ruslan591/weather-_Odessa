@@ -18,13 +18,13 @@
     }
     #eumControls .title{ font-size:14px; font-weight:700; color:#eee; }
     #eumTimestamp{ font-size:12px; color:#72c8ff; font-weight:600; }
-    #eumLayerTabs{ display:flex; gap:6px; margin-top:4px; }
+    #eumLayerTabs{ display:flex; flex-wrap:wrap; gap:5px; margin-top:4px; }
     #eumLayerTabs button{
-        flex:1; padding:6px 4px; border-radius:8px; border:1px solid #333;
-        background:#1d1d1d; color:#bbb; font-size:12px; cursor:pointer;
+        flex:1 1 auto; min-width:30%; padding:6px 3px; border-radius:8px; border:1px solid #333;
+        background:#1d1d1d; color:#bbb; font-size:11px; cursor:pointer; white-space:nowrap;
     }
     #eumLayerTabs button.active{ background:#2a4d63; color:#fff; border-color:#3d7ca6; }
-    #mapid{ position:fixed; top:88px; left:0; right:0; bottom:150px; z-index:1; }
+    #mapid{ position:fixed; top:128px; left:0; right:0; bottom:150px; z-index:1; }
     #eumSliderWrap{
         position:fixed; left:0; right:0; bottom:56px; z-index:900;
         background:#161616; border-top:1px solid #262626;
@@ -41,7 +41,7 @@
         background:#232323; color:#eee; font-size:14px; cursor:pointer;
     }
     #eumLegendWrap{
-        position:fixed; top:92px; left:8px; z-index:800;
+        position:fixed; top:132px; left:8px; z-index:800;
         background:rgba(22,22,22,0.92); border:1px solid #262626; border-radius:8px;
         padding:4px; max-width:70vw; overflow-x:auto;
     }
@@ -65,6 +65,8 @@
     <div id="eumLayerTabs">
         <button data-layer="clm" class="active">Облачность</button>
         <button data-layer="cth">Высота облаков</button>
+        <button data-layer="h60b">Осадки</button>
+        <button data-layer="gii_kindex">Грозоопасность</button>
         <button data-layer="li_afa">Молнии</button>
     </div>
 </div>
