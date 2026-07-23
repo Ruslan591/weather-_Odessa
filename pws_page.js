@@ -1049,10 +1049,7 @@ async function loadAndRender(){
     loadMarineHistory(),
     loadHmcbasSeaTemp(),
     loadHmcbasTelegram(),
-    loadTiktokSeaTemp(),
-    loadNearbyPrecip(),
-    loadEumetsatPoint(),
-    loadEumetsatCloudForecast()
+    loadTiktokSeaTemp()
 ]);
     const p = stationResult.status === "fulfilled"
         ? stationResult.value
