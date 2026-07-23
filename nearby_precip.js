@@ -14,6 +14,100 @@
    диагностику "для сравнения", а не как готовую метрику.
 ========================================================= */
 
+/* =========================================================
+   PWS GROUND TRUTH — реальные показания дождемеров всех PWS-станций
+   в городе. Добавлено из-за подтверждённого провала покрытия RainViewer
+   прямо над Одессой и морем к югу (~20км+ от города радар не видит вообще,
+   независимо от того, идёт дождь или нет — это дыра в исходных данных
+   RainViewer, а не наша логика). Для "идёт ли дождь СЕЙЧАС В ГОРОДЕ" эти
+   датчики надёжнее радара: они физически стоят в городе, провала
+   покрытия по определению быть не может.
+   Те же станции и тот же метод, что и PWS_AVG на pws.html (pws_page.js),
+   но отдельно и легковесно — только precipRate, без давления/WBGT и т.п.
+========================================================= */
+
+const PWS_GT_STATIONS = [
+    "IODESA137", "IODESA138", "IODESA139", "IODESS41", "IODESS44",
+    "IODESS35", "IODESS16", "IODESS31", "IODESS37", "IKRASN91",
+];
+const WU_KEYS_GT = [
+    "6532d6454b8aa370768e63d6ba5a832e",
+    "e1f10a1e78da46f5b10a1e78da96f525",
+];
+
+let _pwsGroundTruthData      = null;
+let _pwsGroundTruthFetchedAt = 0;
+
+async function _fetchStationPrecip(id){
+    const url = `https://api.weather.com/v2/pws/observations/current` +
+        `?stationId=${encodeURIComponent(id)}&format=json&units=m&numericPrecision=decimal` +
+        `&apiKey=${WU_KEYS_GT[0]}`;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    try {
+        const r = await fetch(url, { signal: ctrl.signal, cache: "no-store" });
+        if(!r.ok) return null;
+        const data = await r.json();
+        if(!data?.observations?.length) return null;
+        const m = data.observations[0].metric || {};
+        return { id, precipRate: m.precipRate ?? null };
+    } catch(e){
+        return null;
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+async function loadPwsGroundTruth(){
+    if(Date.now() - _pwsGroundTruthFetchedAt < 3 * 60000) return; // раз в 3 мин
+    _pwsGroundTruthFetchedAt = Date.now();
+    try {
+        const results = await Promise.all(PWS_GT_STATIONS.map(_fetchStationPrecip));
+        const ok = results.filter(r => r && r.precipRate != null);
+        if(!ok.length){
+            _pwsGroundTruthData = null;
+        } else {
+            const raining = ok.filter(r => r.precipRate > 0);
+            const maxRate = Math.max(...ok.map(r => r.precipRate));
+            const avgRate = ok.reduce((s, r) => s + r.precipRate, 0) / ok.length;
+            _pwsGroundTruthData = {
+                stationsReporting: ok.length,
+                stationsRaining: raining.length,
+                maxRateMmH: Math.round(maxRate * 10) / 10,
+                avgRateMmH: Math.round(avgRate * 10) / 10,
+                isRaining: raining.length > 0,
+            };
+        }
+        renderNearbyPrecipCard();
+    } catch(e){
+        _pwsGroundTruthFetchedAt = 0;
+    }
+}
+
+function _renderPwsGroundTruth(g){
+    if(!g){
+        return `<div class="small muted">PWS-датчики города сейчас недоступны.</div>`;
+    }
+    const title = g.isRaining
+        ? `идёт дождь`
+        : `сухо`;
+    const detail = g.isRaining
+        ? `${g.stationsRaining} из ${g.stationsReporting} станций фиксируют осадки, макс. ${g.maxRateMmH} мм/ч (сред. ${g.avgRateMmH} мм/ч)`
+        : `0 из ${g.stationsReporting} станций фиксируют осадки`;
+    return `
+        <div class="row">
+            <div class="label">В городе сейчас (PWS-датчики)</div>
+            <div class="value">${title}</div>
+        </div>
+        <div class="small muted" style="margin-top:2px;">${detail}</div>
+        <div class="small muted" style="margin-top:4px; border-bottom:1px solid #333; padding-bottom:10px;">
+            Это реальные дождемеры физически в городе — надёжнее радара для вопроса
+            "идёт ли дождь прямо сейчас": у RainViewer подтверждён провал покрытия
+            над Одессой и морем к югу (~20км+ от города радар просто не видит,
+            независимо от погоды).
+        </div>`;
+}
+
 let _nearbyPrecipData      = null;
 let _nearbyPrecipFetchedAt = 0;
 let _eumetsatPointData      = null;
@@ -202,6 +296,7 @@ function renderNearbyPrecipCard(){
 
     card.innerHTML = `
         <div class="cardTitle">Осадки и гроза поблизости</div>
+        ${_renderPwsGroundTruth(_pwsGroundTruthData)}
         <div class="row">
             <div class="label">Ближайшие осадки</div>
             <div class="value">${precipStr}</div>
