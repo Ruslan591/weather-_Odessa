@@ -7,8 +7,12 @@
      data/eumetsat_cloud_forecast.json      — движение облачности (Cloud Mask)
      data/eumetsat_precip_forecast.json     — движение осадков (h60b)
      data/eumetsat_lightning_forecast.json  — движение грозовой активности (li_afa)
-     data/eumetsat_geocolour_motion.json    — независимая оценка по текстуре
-                                               HD true-color снимка (GeoColour RGB)
+     data/eumetsat_ir_motion.json           — независимая оценка по текстуре
+                                               ИК-канала (msg_fes:ir108, 10.8мкм) —
+                                               заменил GeoColour после того как
+                                               выяснилось, что ночью там огни
+                                               городов ломают phase correlation
+                                               (см. историю коммитов field_motion_common.py)
 ========================================================= */
 
 const STATION_LABEL = "Одесса (СИНОП 33837)";
@@ -19,8 +23,8 @@ let _eumetsatPrecipForecastData      = null;
 let _eumetsatPrecipForecastFetchedAt = 0;
 let _eumetsatLightningForecastData      = null;
 let _eumetsatLightningForecastFetchedAt = 0;
-let _eumetsatGeocolourMotionData      = null;
-let _eumetsatGeocolourMotionFetchedAt = 0;
+let _eumetsatIrMotionData      = null;
+let _eumetsatIrMotionFetchedAt = 0;
 
 async function loadEumetsatCloudForecast(){
     if(Date.now() - _eumetsatForecastFetchedAt < 12 * 60000) return; // раз в 12 мин
@@ -73,20 +77,20 @@ async function loadEumetsatLightningForecast(){
     }
 }
 
-async function loadEumetsatGeocolourMotion(){
-    if(Date.now() - _eumetsatGeocolourMotionFetchedAt < 10 * 60000) return; // раз в 10 мин
-    _eumetsatGeocolourMotionFetchedAt = Date.now();
+async function loadEumetsatIrMotion(){
+    if(Date.now() - _eumetsatIrMotionFetchedAt < 10 * 60000) return; // раз в 10 мин
+    _eumetsatIrMotionFetchedAt = Date.now();
     try {
         const r = await fetch(
-            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_geocolour_motion.json",
+            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_ir_motion.json",
             { cache: "no-store" }
         );
         if(!r.ok) return;
         const j = await r.json();
-        if(j && j.timestamp) _eumetsatGeocolourMotionData = j;
+        if(j && j.timestamp) _eumetsatIrMotionData = j;
         renderNearbyPrecipCard();
     } catch(e){
-        _eumetsatGeocolourMotionFetchedAt = 0;
+        _eumetsatIrMotionFetchedAt = 0;
     }
 }
 
@@ -196,14 +200,14 @@ function _renderLightningForecastLines(f){
     });
 }
 
-function _renderGeocolourMotionLines(g){
+function _renderIrMotionLines(g){
     if(!g) return "";
     const timeTag = _obsTimeTag(g.timestamp, 20);
     const body = g.valid
         ? `скорость ~${Math.round(g.speed_kmh)} км/ч, направление на ${g.direction_compass}.`
         : `${g.verdict || "недоступно"}.`;
     return `<div style="margin-top:14px;">
-        <div style="font-weight:600; color:#eee;">По HD-снимку (естественный цвет)${timeTag}</div>
+        <div style="font-weight:600; color:#eee;">По ИК-снимку (10.8мкм, день/ночь)${timeTag}</div>
         <div class="small muted" style="margin-top:2px;">${body}</div>
     </div>`;
 }
@@ -213,14 +217,14 @@ function renderNearbyPrecipCard(){
     if(!card) return;
 
     const anyData = _eumetsatForecastData || _eumetsatPrecipForecastData
-        || _eumetsatLightningForecastData || _eumetsatGeocolourMotionData;
+        || _eumetsatLightningForecastData || _eumetsatIrMotionData;
     if(!anyData){ card.innerHTML = ""; return; }
 
     card.innerHTML = `
         <div class="cardTitle">Анализ спутниковых снимков (EUMETSAT)</div>
         <div class="small muted">Точка наблюдения: станция "${STATION_LABEL}"</div>
         ${_renderCloudForecastLines(_eumetsatForecastData)}
-        ${_renderGeocolourMotionLines(_eumetsatGeocolourMotionData)}
+        ${_renderIrMotionLines(_eumetsatIrMotionData)}
         ${_renderPrecipForecastLines(_eumetsatPrecipForecastData)}
         ${_renderLightningForecastLines(_eumetsatLightningForecastData)}
         <div class="small muted" style="margin-top:14px;">
