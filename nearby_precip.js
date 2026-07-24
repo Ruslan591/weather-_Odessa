@@ -97,13 +97,39 @@ function _fmtObsTime(iso){
     return d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
 }
 
+function _ageMinutes(iso){
+    if(!iso) return null;
+    const d = new Date(iso);
+    if(isNaN(d)) return null;
+    return (Date.now() - d.getTime()) / 60000;
+}
+
+// staleMin — после скольки минут показывать предупреждение "устарело":
+// у каждого источника свой цикл обновления (облачность/осадки — 15 мин,
+// молния — 5 мин, HD-снимок — 10 мин), поэтому порог передаётся отдельно.
+function _obsTimeTag(iso, staleMin){
+    const timeStr = _fmtObsTime(iso);
+    if(!timeStr) return "";
+    const age = _ageMinutes(iso);
+    if(age != null && age > staleMin){
+        const ageStr = age < 60 ? `${Math.round(age)} мин` : `${(age/60).toFixed(1)} ч`;
+        return ` <span style="color:#e0a030;">(${timeStr} · ⚠ устарело, ${ageStr} назад)</span>`;
+    }
+    return ` <span style="color:#777;">(${timeStr})</span>`;
+}
+
 function _renderFieldForecastLines(f, cfg){
     if(!f) return "";
     const targetStr = f.target_type === cfg.massTargetValue ? cfg.targetMassLabel : cfg.targetClearingLabel;
+    const stateStr = f.current_state === cfg.stateOnValue ? cfg.stateOnLabel : cfg.stateOffLabel;
+    const timeTag = _obsTimeTag(f.timestamp, cfg.staleMin);
+    const titleLine = `<div style="font-weight:600; color:#eee;">${cfg.title}${timeTag}</div>`;
+    const stateLine = `<div class="small muted" style="margin-top:2px;">${stateStr}</div>`;
 
     if(f.distance_km_now == null){
         return `<div style="margin-top:14px;">
-            <div style="font-weight:600; color:#eee;">${cfg.title}</div>
+            ${titleLine}
+            ${stateLine}
             <div class="small muted" style="margin-top:2px;">${f.verdict || "недостаточно данных для оценки"}.</div>
         </div>`;
     }
@@ -132,7 +158,8 @@ function _renderFieldForecastLines(f, cfg){
         : "";
 
     return `<div style="margin-top:14px;">
-        <div style="font-weight:600; color:#eee;">${cfg.title}</div>
+        ${titleLine}
+        ${stateLine}
         <div class="small muted" style="margin-top:2px;">${targetStr} к точке наблюдения: ${distStr}${speedStr}.</div>
         <div class="small muted" style="margin-top:2px;">${verdictLine}.</div>
         ${probLine}
@@ -142,34 +169,41 @@ function _renderFieldForecastLines(f, cfg){
 function _renderCloudForecastLines(f){
     return _renderFieldForecastLines(f, {
         title: "Облачность",
+        stateOnValue: "cloud", stateOnLabel: "сейчас облачно", stateOffLabel: "сейчас ясно",
         massTargetValue: "cloud_mass", targetMassLabel: "ближайшее облако", targetClearingLabel: "ближайший просвет",
         probVerb: "принесёт изменение погоды",
+        staleMin: 25,
     });
 }
 
 function _renderPrecipForecastLines(f){
     return _renderFieldForecastLines(f, {
         title: "Осадки",
+        stateOnValue: "precip", stateOnLabel: "сейчас есть осадки", stateOffLabel: "сейчас без осадков",
         massTargetValue: "precip_mass", targetMassLabel: "ближайшие осадки", targetClearingLabel: "ближайший просвет",
         probVerb: "принесёт осадки",
+        staleMin: 25,
     });
 }
 
 function _renderLightningForecastLines(f){
     return _renderFieldForecastLines(f, {
         title: "Молния",
+        stateOnValue: "storm", stateOnLabel: "сейчас гроза", stateOffLabel: "сейчас без грозы",
         massTargetValue: "storm_mass", targetMassLabel: "ближайшая грозовая ячейка", targetClearingLabel: "ближайший просвет",
         probVerb: "принесёт грозу",
+        staleMin: 15,
     });
 }
 
 function _renderGeocolourMotionLines(g){
     if(!g) return "";
+    const timeTag = _obsTimeTag(g.timestamp, 20);
     const body = g.valid
         ? `скорость ~${Math.round(g.speed_kmh)} км/ч, направление на ${g.direction_compass}.`
         : `${g.verdict || "недоступно"}.`;
     return `<div style="margin-top:14px;">
-        <div style="font-weight:600; color:#eee;">По HD-снимку (естественный цвет)</div>
+        <div style="font-weight:600; color:#eee;">По HD-снимку (естественный цвет)${timeTag}</div>
         <div class="small muted" style="margin-top:2px;">${body}</div>
     </div>`;
 }
@@ -182,16 +216,9 @@ function renderNearbyPrecipCard(){
         || _eumetsatLightningForecastData || _eumetsatGeocolourMotionData;
     if(!anyData){ card.innerHTML = ""; return; }
 
-    const obsTimeIso = (_eumetsatForecastData && _eumetsatForecastData.timestamp)
-        || (_eumetsatPrecipForecastData && _eumetsatPrecipForecastData.timestamp)
-        || (_eumetsatLightningForecastData && _eumetsatLightningForecastData.timestamp)
-        || (_eumetsatGeocolourMotionData && _eumetsatGeocolourMotionData.timestamp);
-    const timeStr = _fmtObsTime(obsTimeIso) || "—";
-
     card.innerHTML = `
         <div class="cardTitle">Анализ спутниковых снимков (EUMETSAT)</div>
         <div class="small muted">Точка наблюдения: станция "${STATION_LABEL}"</div>
-        <div class="small muted" style="margin-top:2px;">Время наблюдения: ${timeStr}</div>
         ${_renderCloudForecastLines(_eumetsatForecastData)}
         ${_renderGeocolourMotionLines(_eumetsatGeocolourMotionData)}
         ${_renderPrecipForecastLines(_eumetsatPrecipForecastData)}
