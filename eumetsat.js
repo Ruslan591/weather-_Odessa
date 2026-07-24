@@ -25,6 +25,11 @@
                       натуральный цвет со спутника (то же самое, что
                       показывает официальный EUMETView, "GeoColour RGB").
                       Обновление раз в 10 мин.
+     msg_fes:ir108  — ИК-канал 10.8 мкм (яркостная температура верхней
+                      границы облака) — в отличие от geocolour работает
+                      одинаково днём и ночью (тепловое излучение, не
+                      отражённый свет; огней городов на нём физически нет).
+                      Обновление раз в 10 мин.
 
    ЛЕГЕНДА: GetLegendGraphic у этого WMS для mosaic-слоёв (clm/cth/h60b/
    gii_kindex/li_afa) НЕ работает надёжно — сервер у части таких слоёв
@@ -66,6 +71,9 @@ const LEGEND_HTML = {
         <div class="swatchRow"><span class="swatch" style="background:transparent;border-style:dashed;"></span>прозрачно = молний за 5 мин нет</div>
         <div>цвет = накопленная площадь вспышек, оттенок ≈ плотность (без калиброванного числа вспышек)</div>`,
     geocolour: `<div>натуральный цвет со спутника (как на официальном EUMETView), не тематическая карта</div>`,
+    ir108: `
+        <div class="gradBar" style="background:linear-gradient(90deg,#111111,#666666,#cccccc,#ffffff);"></div>
+        <div>яркостная температура верхней границы облака (10.8мкм) — холоднее (выше облако) обычно светлее на этой шкале; точной шкалы в °C нет. Работает одинаково днём и ночью.</div>`,
 };
 
 const LAYERS = {
@@ -91,6 +99,11 @@ const LAYERS = {
     },
     geocolour: {
         name: "mtg_fd:rgb_geocolour",
+        stepMinutes: 10,
+        opacity: 1.0,
+    },
+    ir108: {
+        name: "msg_fes:ir108",
         stepMinutes: 10,
         opacity: 1.0,
     },
