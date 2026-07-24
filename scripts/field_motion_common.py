@@ -17,6 +17,7 @@ import math
 import os
 import json
 import time as _time
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
 import requests
@@ -227,6 +228,31 @@ def estimate_motion_continuous(gray_frames, dt_minutes, min_std=6.0):
     if not vx_list:
         return None, None, 0
     return float(np.mean(vx_list)), float(np.mean(vy_list)), len(vx_list)
+
+
+def build_time_steps(step_minutes, n_frames):
+    """Строит список ISO-таймстемпов для запроса кадров: N_FRAMES-1 кадров
+    в прошлом (шаг step_minutes) + None для последнего (сервер сам отдаёт
+    самый свежий). "Сейчас" перед вычитанием шагов округляется ВНИЗ до
+    границы step_minutes — иначе получившаяся точная отметка времени может
+    не совпасть ни с одной реально существующей сценой конкретно у этого
+    слоя (WMS Dimension "time" без nearestValue у части mtg_fd-слоёв —
+    строгое совпадение, а не "ближайшее"), и запрос кадра падает с ошибкой
+    вида "cannot identify image file" вместо честного ответа. Это было
+    найдено как причина 3-часовой протухшей eumetsat_geocolour_motion.json:
+    один упавший кадр прерывал весь прогон, а старый файл оставался лежать
+    без пометки о своей неактуальности."""
+    now = datetime.now(timezone.utc)
+    aligned = now.replace(second=0, microsecond=0)
+    aligned -= timedelta(minutes=aligned.minute % step_minutes)
+    times_iso = []
+    for i in range(n_frames - 1, -1, -1):
+        if i == 0:
+            times_iso.append(None)
+        else:
+            t = aligned - timedelta(minutes=step_minutes * i)
+            times_iso.append(t.strftime("%Y-%m-%dT%H:%M:00.000Z"))
+    return times_iso
 
 
 def change_probability(effective_distance_km, blob_area_km2, confidence):
