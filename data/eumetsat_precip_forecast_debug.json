@@ -1,5 +1,28 @@
 {
-  "status": "error",
-  "stage": "fetch 2026-07-24T01:21:00.000Z",
-  "error": "cannot identify image file <_io.BytesIO object at 0x7f9723f360c0>"
+  "status": "ok",
+  "frames_fetched": 4,
+  "times_requested": [
+    "2026-07-24T00:57:00.000Z",
+    "2026-07-24T01:12:00.000Z",
+    "2026-07-24T01:27:00.000Z",
+    null
+  ],
+  "result": {
+    "timestamp": "2026-07-24T01:42:01Z",
+    "current_state": "no_precip",
+    "target_type": "precip_mass",
+    "distance_km_now": 2.1,
+    "bearing_deg": 193.0,
+    "compass": "Ю",
+    "speed_kmh": 22.5,
+    "direction_compass": "СВ",
+    "cpa_km": 0.8,
+    "eta_min": 5.0,
+    "blob_area_km2": 61172.0,
+    "verdict": "уже у города",
+    "frame_pairs_used": 3,
+    "probability_percent": 94,
+    "probability_note": "эвристика (близость точки сближения + размер поля + уверенность в скорости), не физическая модель осадков",
+    "method_note": "Скорость усреднена по 4 кадрам msg_fes:h60b (шаг 15 мин, phase correlation). Presence = непрозрачный пиксель. Край ищется только среди связных областей >= 40px (~53км²). Линейная экстраполяция, годится на ~1 час."
+  }
 }
