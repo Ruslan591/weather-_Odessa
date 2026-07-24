@@ -193,6 +193,42 @@ def estimate_motion(masks, dt_minutes):
     return float(np.mean(vx_list)), float(np.mean(vy_list)), len(vx_list)
 
 
+def to_grayscale_luminance(arr):
+    """RGBA/RGB (H,W,3|4) uint8 -> (H,W) float яркость (стандартные веса luma)."""
+    r = arr[:, :, 0].astype(np.float64)
+    g = arr[:, :, 1].astype(np.float64)
+    b = arr[:, :, 2].astype(np.float64)
+    return 0.299 * r + 0.587 * g + 0.114 * b
+
+
+def is_low_contrast(gray, min_std=6.0):
+    """Кадр слишком однороден для phase correlation (ночь/сумерки/туман —
+    в отличие от бинарной is_uniform() для масок, здесь непрерывная яркость,
+    поэтому критерий — стандартное отклонение, а не доля пикселей одного типа."""
+    return float(np.std(gray)) < min_std
+
+
+def estimate_motion_continuous(gray_frames, dt_minutes, min_std=6.0):
+    """То же, что estimate_motion(), но для непрерывных (не бинарных) полей
+    яркости — используется для оценки движения по текстуре true-color
+    снимка (GeoColour RGB), а не по бинарной Cloud Mask. Даёт независимую
+    оценку скорости/направления, устойчивую даже при сплошной облачности
+    (там, где бинарная маска однородна и phase correlation на ней не
+    работает вообще — у текстуры яркости всегда есть локальный рельеф)."""
+    vx_list, vy_list = [], []
+    dt_h = dt_minutes / 60.0
+    for i in range(len(gray_frames) - 1):
+        g_prev, g_curr = gray_frames[i], gray_frames[i + 1]
+        if is_low_contrast(g_prev, min_std) or is_low_contrast(g_curr, min_std):
+            continue
+        dy_px, dx_px = phase_shift_px(g_prev, g_curr)
+        vx_list.append((dx_px * KM_PER_PX_X) / dt_h)
+        vy_list.append((-dy_px * KM_PER_PX_Y) / dt_h)
+    if not vx_list:
+        return None, None, 0
+    return float(np.mean(vx_list)), float(np.mean(vy_list)), len(vx_list)
+
+
 def change_probability(effective_distance_km, blob_area_km2, confidence):
     """Эвристическая (не физическая) оценка вероятности, что значимое поле
     достигнет точки наблюдения. См. подробности в eumetsat_cloud_forecast.py."""
