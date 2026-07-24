@@ -135,6 +135,8 @@ def git_push_history():
                         "data/eumetsat_precip_forecast_debug.json",
                         "data/eumetsat_lightning_forecast.json",
                         "data/eumetsat_lightning_forecast_debug.json",
+                        "data/eumetsat_geocolour_motion.json",
+                        "data/eumetsat_geocolour_motion_debug.json",
                         "data/hmcbas_sea_temp_realtime.json",
                         "data/hmcbas_telegram_sea_temp.json",
                         "data/hmcbas_telegram_debug.json",
@@ -432,6 +434,28 @@ def check_eumetsat_lightning_forecast():
     except Exception as e:
         print(f"  [WARN] eumetsat_lightning_forecast.py: {e}")
 
+def check_eumetsat_geocolour_motion():
+    # Независимая оценка движения облачности по текстуре HD true-color
+    # снимка (mtg_fd:rgb_geocolour, 4 кадра, шаг 10 мин). Гейт 10 мин.
+    out_file = os.path.join(BASE_DIR, "data", "eumetsat_geocolour_motion.json")
+    now_utc = datetime.now(timezone.utc)
+    try:
+        if os.path.exists(out_file):
+            with open(out_file, "r", encoding="utf-8") as f:
+                prev = json.load(f)
+            last_time = datetime.strptime(prev["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            if (now_utc - last_time).total_seconds() < 10 * 60:
+                return
+    except Exception:
+        pass
+    try:
+        subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "eumetsat_geocolour_motion.py")],
+            cwd=BASE_DIR, capture_output=False, timeout=90
+        )
+    except Exception as e:
+        print(f"  [WARN] eumetsat_geocolour_motion.py: {e}")
+
 def check_marine_history():
     # marine_history.py пишет каждый прогон пайплайна (~15 мин) — все параметры моря,
     # а не только SST раз в час, как было раньше в sst_compare.py.
@@ -591,6 +615,7 @@ def main():
     check_eumetsat_cloud_forecast()
     check_eumetsat_precip_forecast()
     check_eumetsat_lightning_forecast()
+    check_eumetsat_geocolour_motion()
     # check_hmcbas_sea_temp()  # отключено: виджет сайта стабильно отдаёт 0°C (брак), Telegram надёжнее
     check_hmcbas_telegram()
 
