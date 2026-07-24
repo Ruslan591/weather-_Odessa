@@ -1,0 +1,45 @@
+name: Test — eumetsat_cloud_forecast (ручной запуск)
+
+on:
+  workflow_dispatch: {}
+
+# Только этот скрипт, без установки ffmpeg/шрифтов и без остального
+# пайплайна — для быстрой ручной проверки правок в eumetsat_cloud_forecast.py
+# прямо с телефона (кнопка на nearby.html), не дожидаясь ближайшего
+# планового прогона full_pipeline.yml.
+
+concurrency:
+  group: test-eumetsat-cloud-forecast
+  cancel-in-progress: true
+
+jobs:
+  run-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Установка Python-зависимостей (минимум для этого скрипта)
+        run: pip install numpy scipy pillow requests
+
+      - name: Запуск eumetsat_cloud_forecast.py
+        working-directory: scripts
+        run: python eumetsat_cloud_forecast.py
+
+      - name: Настройка git для коммита
+        run: |
+          git config user.name "eumetsat-test-bot"
+          git config user.email "actions@users.noreply.github.com"
+
+      - name: Коммит результата
+        run: |
+          git add data/eumetsat_cloud_forecast.json data/eumetsat_cloud_forecast_debug.json || true
+          git diff --cached --quiet || git commit -m "test: ручной прогон eumetsat_cloud_forecast.py"
+          git pull --rebase --autostash origin main
+          git push origin main
