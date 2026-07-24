@@ -18,17 +18,21 @@
 
 <div class="container">
 
-    <!-- Осадки/гроза поблизости (RainViewer радар) + сравнение с EUMETSAT -->
+    <!-- Анализ спутниковых снимков (EUMETSAT) -->
     <div class="card" id="nearbyPrecipCard" style="margin-top:14px;"></div>
+
+    <a href="https://github.com/ruslan591/weather-_Odessa/actions/workflows/test_eumetsat_cloud_forecast.yml"
+       target="_blank" rel="noopener"
+       style="display:block; text-align:center; margin-top:10px; padding:10px; border-radius:8px;
+              border:1px solid #333; color:#72c8ff; font-size:13px; text-decoration:none;">
+        🔄 Тест: запустить анализ облачности вручную (без ожидания пайплайна)
+    </a>
 
 </div>
 
 <script src="nearby_precip.js"></script>
 <script>
     function refreshNearbyPage(){
-        loadPwsGroundTruth();
-        loadNearbyPrecip();
-        loadEumetsatPoint();
         loadEumetsatCloudForecast();
         loadEumetsatPrecipForecast();
         loadEumetsatLightningForecast();
