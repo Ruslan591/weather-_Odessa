@@ -202,6 +202,25 @@ def to_grayscale_luminance(arr):
     return 0.299 * r + 0.587 * g + 0.114 * b
 
 
+def _despeckle(gray, size=5):
+    """Убирает точечные источники (городские огни ночью) МЕДИАННЫМ фильтром
+    перед phase correlation.
+
+    ВАЖНО почему именно медианный фильтр, а не gaussian blur/клиппинг:
+    phase correlation в phase_shift_px() — это нормированная кросс-корреляция
+    ПО ФАЗЕ (r = fb*conj(fa); r /= abs(r)), она инвариантна к амплитуде по
+    построению. Значит blur/клиппинг яркости точек НЕ меняют их вклад в
+    результат корреляции — проверено на синтетике: даже клиппинг по 95-му
+    перцентилю не убирал ложный "0 км/ч", возникающий из-за неподвижных
+    городских огней на ночном GeoColour-снимке (огни неподвижны -> их вклад
+    в корреляцию всегда "сдвиг = 0", и он забивает реальный сдвиг облачной
+    текстуры). Медианный фильтр меняет саму пространственную СТРУКТУРУ
+    (буквально стирает единичный выброс, заменяя соседями), а не только
+    его амплитуду — это и требуется для инвариантного к амплитуде метода.
+    """
+    return ndimage.median_filter(gray, size=size)
+
+
 def is_low_contrast(gray, min_std=6.0):
     """Кадр слишком однороден для phase correlation (ночь/сумерки/туман —
     в отличие от бинарной is_uniform() для масок, здесь непрерывная яркость,
@@ -209,17 +228,24 @@ def is_low_contrast(gray, min_std=6.0):
     return float(np.std(gray)) < min_std
 
 
-def estimate_motion_continuous(gray_frames, dt_minutes, min_std=6.0):
+def estimate_motion_continuous(gray_frames, dt_minutes, min_std=6.0, despeckle_size=5):
     """То же, что estimate_motion(), но для непрерывных (не бинарных) полей
     яркости — используется для оценки движения по текстуре true-color
     снимка (GeoColour RGB), а не по бинарной Cloud Mask. Даёт независимую
     оценку скорости/направления, устойчивую даже при сплошной облачности
     (там, где бинарная маска однородна и phase correlation на ней не
-    работает вообще — у текстуры яркости всегда есть локальный рельеф)."""
+    работает вообще — у текстуры яркости всегда есть локальный рельеф).
+
+    Каждый кадр сначала проходит _despeckle() (см. докстринг там) — иначе
+    ночью неподвижные городские огни ложно "перетягивают" корреляцию к
+    нулевому сдвигу, и метод выдаёт неверный "почти не движется" вместо
+    честного "недостаточно контраста", даже когда реальная облачная
+    текстура под огнями продолжает двигаться."""
     vx_list, vy_list = [], []
     dt_h = dt_minutes / 60.0
-    for i in range(len(gray_frames) - 1):
-        g_prev, g_curr = gray_frames[i], gray_frames[i + 1]
+    processed = [_despeckle(g, despeckle_size) for g in gray_frames]
+    for i in range(len(processed) - 1):
+        g_prev, g_curr = processed[i], processed[i + 1]
         if is_low_contrast(g_prev, min_std) or is_low_contrast(g_curr, min_std):
             continue
         dy_px, dx_px = phase_shift_px(g_prev, g_curr)
