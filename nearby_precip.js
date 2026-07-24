@@ -118,6 +118,8 @@ let _eumetsatPrecipForecastData      = null;
 let _eumetsatPrecipForecastFetchedAt = 0;
 let _eumetsatLightningForecastData      = null;
 let _eumetsatLightningForecastFetchedAt = 0;
+let _eumetsatGeocolourMotionData      = null;
+let _eumetsatGeocolourMotionFetchedAt = 0;
 
 async function loadNearbyPrecip(){
     if(Date.now() - _nearbyPrecipFetchedAt < 10 * 60000) return; // раз в 10 мин
@@ -201,6 +203,23 @@ async function loadEumetsatLightningForecast(){
         renderNearbyPrecipCard();
     } catch(e){
         _eumetsatLightningForecastFetchedAt = 0;
+    }
+}
+
+async function loadEumetsatGeocolourMotion(){
+    if(Date.now() - _eumetsatGeocolourMotionFetchedAt < 10 * 60000) return; // раз в 10 мин
+    _eumetsatGeocolourMotionFetchedAt = Date.now();
+    try {
+        const r = await fetch(
+            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_geocolour_motion.json",
+            { cache: "no-store" }
+        );
+        if(!r.ok) return;
+        const j = await r.json();
+        if(j && j.timestamp) _eumetsatGeocolourMotionData = j;
+        renderNearbyPrecipCard();
+    } catch(e){
+        _eumetsatGeocolourMotionFetchedAt = 0;
     }
 }
 
@@ -337,6 +356,16 @@ function _renderRadarMotion(label, m){
     </div>`;
 }
 
+function _renderGeocolourMotion(g){
+    if(!g) return "";
+    if(!g.valid){
+        return `<div class="small muted" style="margin-top:2px;">По HD-снимку (естественный цвет): ${g.verdict || "недоступно"}.</div>`;
+    }
+    return `<div class="small muted" style="margin-top:2px;">
+        По HD-снимку (естественный цвет, независимая оценка по текстуре): ~${Math.round(g.speed_kmh)} км/ч на ${g.direction_compass}.
+    </div>`;
+}
+
 function renderNearbyPrecipCard(){
     const card = document.getElementById("nearbyPrecipCard");
     if(!card) return;
@@ -365,6 +394,7 @@ function renderNearbyPrecipCard(){
         ${_eumetsatRow("Высота облаков (CTH)", e.layers.cth)}
         ${_eumetsatRow("Молнии (Flash Area/5мин)", e.layers.li_afa, true)}
         ${_renderCloudForecast(_eumetsatForecastData)}
+        ${_renderGeocolourMotion(_eumetsatGeocolourMotionData)}
         ${_renderPrecipForecast(_eumetsatPrecipForecastData)}
         ${_renderLightningForecast(_eumetsatLightningForecastData)}
         <div class="small muted" style="margin-top:4px;">
