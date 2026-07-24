@@ -35,13 +35,7 @@ STEP_MINUTES = 15
 def main():
     debug = {}
     now = datetime.now(timezone.utc)
-    times_iso = []
-    for i in range(N_FRAMES - 1, -1, -1):
-        if i == 0:
-            times_iso.append(None)
-        else:
-            t = now - timedelta(minutes=STEP_MINUTES * i)
-            times_iso.append(t.strftime("%Y-%m-%dT%H:%M:00.000Z"))
+    times_iso = fc.build_time_steps(STEP_MINUTES, N_FRAMES)
 
     arrs = []
     for t_iso in times_iso:
