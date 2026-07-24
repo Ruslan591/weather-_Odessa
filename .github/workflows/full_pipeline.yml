@@ -31,6 +31,9 @@ jobs:
 
       - name: Установка шрифта (только при промахе кэша)
         if: steps.font-cache.outputs.cache-hit != 'true'
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          NEEDRESTART_MODE: a
         run: |
           sudo apt-get update -y
           sudo apt-get install -y fonts-crosextra-carlito
@@ -38,12 +41,23 @@ jobs:
       - name: Обновление кэша шрифтов ОС
         run: sudo fc-cache -f
 
-      - name: Проверка ffmpeg (уже предустановлен в ubuntu-latest)
+      - name: Восстановление apt-архивов ffmpeg из кэша
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/apt/archives
+          key: apt-archives-ffmpeg-v1
+
+      - name: Проверка/установка ffmpeg
+        timeout-minutes: 4
+        continue-on-error: true
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          NEEDRESTART_MODE: a
         run: |
           if command -v ffmpeg >/dev/null 2>&1; then
             echo "ffmpeg уже есть: $(ffmpeg -version | head -1)"
           else
-            echo "ffmpeg не найден в образе — ставлю"
+            echo "ffmpeg не найден в образе — ставлю (из кэша apt-архивов, если он тёплый)"
             sudo apt-get update -y
             sudo apt-get install -y ffmpeg
           fi
