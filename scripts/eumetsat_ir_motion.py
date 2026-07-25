@@ -44,7 +44,13 @@ DEBUG_FILE = os.path.join(BASE_DIR, "data", "eumetsat_ir_motion_debug.json")
 
 LAYER_IR108 = "msg_fes:ir108"
 N_FRAMES = 4
-STEP_MINUTES = 10
+STEP_MINUTES = 15  # ВАЖНО: msg_fes-семейство (как h60b/clm/cth) обновляется
+                    # раз в 15 мин, НЕ 10 — 10 было скопировано с mtg_fd:rgb_geocolour
+                    # при переключении слоя и не поправлено. При шаге 10 часть
+                    # запрошенных таймстемпов (реальных сцен раз в 15 мин ещё нет)
+                    # снэпилась сервером на ОДИН И ТОТ ЖЕ реальный снимок —
+                    # отсюда были задублированные кадры и застрявший 0 км/ч,
+                    # а вовсе не проблема ИК-канала как такового.
 MIN_STD = 6.0  # порог контраста; требует калибровки по живым данным (см. геоколур-версию)
 
 
@@ -67,6 +73,15 @@ def main():
 
     gray_frames = [fc.to_grayscale_luminance(a) for a in arrs]
     stds = [round(float(g.std()), 1) for g in gray_frames]
+    # диагностика: доля пикселей, совпадающих БУКВАЛЬНО (в пределах шума) между
+    # соседними кадрами — если близко к 1.0, сервер отдал дважды один и тот же
+    # реальный снимок (несовпадение запрошенного шага с реальной частотой сцен),
+    # а не "движения нет" в физическом смысле
+    identical_fractions = []
+    for i in range(len(gray_frames) - 1):
+        diff = fc.np.abs(gray_frames[i] - gray_frames[i + 1])
+        identical_fractions.append(round(float((diff < 0.5).mean()), 3))
+    debug["identical_fraction_between_frames"] = identical_fractions
     debug["frame_std"] = stds
 
     vx, vy, n_pairs = fc.estimate_motion_continuous(gray_frames, STEP_MINUTES, min_std=MIN_STD)
