@@ -104,7 +104,7 @@ const LAYERS = {
     },
     ir108: {
         name: "msg_fes:ir108",
-        stepMinutes: 10,
+        stepMinutes: 15,
         opacity: 1.0,
     },
 };
