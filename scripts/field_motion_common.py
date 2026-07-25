@@ -228,6 +228,19 @@ def is_low_contrast(gray, min_std=6.0):
     return float(np.std(gray)) < min_std
 
 
+def is_duplicate_pair(gray_a, gray_b, threshold=0.98):
+    """True, если gray_b — это фактически тот же снимок, что и gray_a (сервер
+    отдал уже виденную сцену вместо новой — типичная причина: "самый свежий
+    доступный" (time=None) запрошен раньше, чем реальный новый скан успел
+    опубликоваться, и совпал с предыдущим явным таймстемпом). Такую пару
+    нужно ИСКЛЮЧИТЬ из усреднения, а не считать "честным нулевым сдвигом" —
+    иначе гарантированный (0,0) от дубля просто размывает среднее к нулю
+    вместе с реальными парами (найдено на живых данных: 1 из 3 пар была
+    100%-дублем и утащила итоговую скорость к 0 км/ч)."""
+    diff = np.abs(gray_a.astype(np.float64) - gray_b.astype(np.float64))
+    return float((diff < 0.5).mean()) > threshold
+
+
 def estimate_motion_continuous(gray_frames, dt_minutes, min_std=6.0, despeckle_size=5):
     """То же, что estimate_motion(), но для непрерывных (не бинарных) полей
     яркости — используется для оценки движения по текстуре true-color
@@ -240,13 +253,18 @@ def estimate_motion_continuous(gray_frames, dt_minutes, min_std=6.0, despeckle_s
     ночью неподвижные городские огни ложно "перетягивают" корреляцию к
     нулевому сдвигу, и метод выдаёт неверный "почти не движется" вместо
     честного "недостаточно контраста", даже когда реальная облачная
-    текстура под огнями продолжает двигаться."""
+    текстура под огнями продолжает двигаться.
+
+    Пары кадров-дублей (см. is_duplicate_pair) тоже пропускаются — иначе
+    гарантированный нулевой сдвиг от дубля искажает среднее."""
     vx_list, vy_list = [], []
     dt_h = dt_minutes / 60.0
     processed = [_despeckle(g, despeckle_size) for g in gray_frames]
     for i in range(len(processed) - 1):
         g_prev, g_curr = processed[i], processed[i + 1]
         if is_low_contrast(g_prev, min_std) or is_low_contrast(g_curr, min_std):
+            continue
+        if is_duplicate_pair(g_prev, g_curr):
             continue
         dy_px, dx_px = phase_shift_px(g_prev, g_curr)
         vx_list.append((dx_px * KM_PER_PX_X) / dt_h)
