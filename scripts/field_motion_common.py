@@ -319,6 +319,40 @@ def build_time_steps(step_minutes, n_frames):
     return times_iso
 
 
+def load_frame_buffer(path):
+    """Загружает ранее сохранённый буфер кадров (ISO-таймстемпы + grayscale
+    массивы). Возвращает ([], []) если файла нет или он повреждён —
+    вызывающий код должен в этом случае бутстрапить буфер заново."""
+    if not os.path.exists(path):
+        return [], []
+    try:
+        data = np.load(path)
+        times = list(data["times"])
+        frames = [data["frames"][i] for i in range(data["frames"].shape[0])]
+        return times, frames
+    except Exception:
+        return [], []
+
+
+def save_frame_buffer(path, times, frames, max_frames=6):
+    """Сохраняет буфер (обрезая до последних max_frames — FIFO: новый кадр
+    приходит, самый старый вываливается). Один файл, перезаписывается
+    каждый прогон — не бесконечно растущая история, а скользящее окно."""
+    times = times[-max_frames:]
+    frames = frames[-max_frames:]
+    arr = np.stack(frames).astype(np.float32)
+    times_arr = np.array(times, dtype="<U32")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    np.savez_compressed(path, times=times_arr, frames=arr)
+
+
+def circular_angle_diff(bearing_from_deg, bearing_to_deg):
+    """Кратчайшая разница углов в градусах (учитывает переход через 360°),
+    со знаком: положительное — поворот по часовой стрелке."""
+    diff = (bearing_to_deg - bearing_from_deg + 180) % 360 - 180
+    return diff
+
+
 def change_probability(effective_distance_km, blob_area_km2, confidence):
     """Эвристическая (не физическая) оценка вероятности, что значимое поле
     достигнет точки наблюдения. См. подробности в eumetsat_cloud_forecast.py."""
