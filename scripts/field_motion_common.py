@@ -156,6 +156,19 @@ def nearest_of_type(mask, valid, want_true, min_blob_px=MIN_SIGNIFICANT_BLOB_PX)
     return dx_km, dy_km, blob_area_km2
 
 
+def _parabolic_subpixel(c_minus, c_zero, c_plus):
+    """Субпиксельная поправка к целочисленному пику по трём соседним точкам
+    корреляции (параболическая интерполяция) — стандартный приём. Без неё
+    любой сдвиг меньше 1 px (например, при слабом ветре и малом шаге между
+    кадрами) округляется ровно до 0, и метод не отличает "реально стоит на
+    месте" от "движется медленнее одного пикселя за интервал"."""
+    denom = c_minus - 2 * c_zero + c_plus
+    if abs(denom) < 1e-9:
+        return 0.0
+    offset = 0.5 * (c_minus - c_plus) / denom
+    return float(np.clip(offset, -0.5, 0.5))
+
+
 def phase_shift_px(mask_prev, mask_curr):
     win = np.outer(np.hanning(mask_prev.shape[0]), np.hanning(mask_prev.shape[1]))
     a = (mask_prev.astype(np.float64) - mask_prev.mean()) * win
@@ -171,6 +184,13 @@ def phase_shift_px(mask_prev, mask_curr):
     peak = np.unravel_index(np.argmax(corr), corr.shape)
     center = np.array(corr.shape) // 2
     dy_px, dx_px = (np.array(peak) - center).tolist()
+
+    row, col = peak
+    if 0 < row < corr.shape[0] - 1:
+        dy_px += _parabolic_subpixel(corr[row - 1, col], corr[row, col], corr[row + 1, col])
+    if 0 < col < corr.shape[1] - 1:
+        dx_px += _parabolic_subpixel(corr[row, col - 1], corr[row, col], corr[row, col + 1])
+
     return dy_px, dx_px
 
 
