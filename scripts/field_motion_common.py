@@ -55,7 +55,7 @@ def write_debug(path, payload):
         pass
 
 
-def fetch_tile(layer_name, time_iso=None, retries=2, delay=4):
+def fetch_tile(layer_name, time_iso=None, retries=2, delay=4, style=""):
     min_lon = CENTER_LON - HALF_WINDOW_DEG
     max_lon = CENTER_LON + HALF_WINDOW_DEG
     min_lat = CENTER_LAT - HALF_WINDOW_DEG
@@ -67,7 +67,7 @@ def fetch_tile(layer_name, time_iso=None, retries=2, delay=4):
         "version": "1.3.0",
         "request": "GetMap",
         "layers": layer_name,
-        "styles": "",
+        "styles": style,
         "crs": "CRS:84",
         "bbox": bbox,
         "width": TILE_SIZE,
