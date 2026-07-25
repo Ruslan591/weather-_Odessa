@@ -77,4 +77,5 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           CLAUDE_ANALYSIS_ENABLED: "true"
           GEMINI_ANALYSIS_ENABLED: "true"
+          PYTHONUNBUFFERED: "1"
         run: python scripts/gh_pipeline.py
