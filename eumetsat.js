@@ -25,11 +25,13 @@
                       натуральный цвет со спутника (то же самое, что
                       показывает официальный EUMETView, "GeoColour RGB").
                       Обновление раз в 10 мин.
-     msg_fes:ir108  — ИК-канал 10.8 мкм (яркостная температура верхней
-                      границы облака) — в отличие от geocolour работает
-                      одинаково днём и ночью (тепловое излучение, не
-                      отражённый свет; огней городов на нём физически нет).
-                      Обновление раз в 10 мин.
+     mtg_fd:ir105_hrfi — ИК-канал 10.5 мкм, MTG FCI HRFI (яркостная
+                      температура верхней границы облака), 1км разрешение
+                      в надире (точнее старого msg_fes:ir108 ~3км) — в
+                      отличие от geocolour работает одинаково днём и ночью
+                      (тепловое излучение, не отражённый свет; огней
+                      городов на нём физически нет). Обновление раз в
+                      10 мин. Нужен явный style (mtg_fd_ir105_hrfi_grayscale).
 
    ЛЕГЕНДА: GetLegendGraphic у этого WMS для mosaic-слоёв (clm/cth/h60b/
    gii_kindex/li_afa) НЕ работает надёжно — сервер у части таких слоёв
@@ -73,7 +75,7 @@ const LEGEND_HTML = {
     geocolour: `<div>натуральный цвет со спутника (как на официальном EUMETView), не тематическая карта</div>`,
     ir108: `
         <div class="gradBar" style="background:linear-gradient(90deg,#111111,#666666,#cccccc,#ffffff);"></div>
-        <div>яркостная температура верхней границы облака (10.8мкм) — холоднее (выше облако) обычно светлее на этой шкале; точной шкалы в °C нет. Работает одинаково днём и ночью.</div>`,
+        <div>яркостная температура верхней границы облака (10.5мкм, MTG FCI, 1км) — холоднее (выше облако) обычно светлее на этой шкале; точной шкалы в °C нет. Работает одинаково днём и ночью.</div>`,
 };
 
 const LAYERS = {
@@ -103,8 +105,9 @@ const LAYERS = {
         opacity: 1.0,
     },
     ir108: {
-        name: "msg_fes:ir108",
-        stepMinutes: 15,
+        name: "mtg_fd:ir105_hrfi",
+        style: "mtg_fd:mtg_fd_ir105_hrfi_grayscale",
+        stepMinutes: 10,
         opacity: 1.0,
     },
 };
@@ -179,6 +182,7 @@ function renderCurrentFrame(){
     } else {
         currentWmsLayer = L.tileLayer.wms(WMS_BASE, {
             layers: LAYERS[currentKey].name,
+            styles: LAYERS[currentKey].style || "",
             format: "image/png",
             transparent: true,
             version: "1.3.0",
@@ -251,6 +255,7 @@ function _buildCompareMap(containerId, timeIso){
     L.marker([CENTER_LAT, CENTER_LON]).addTo(m);
     L.tileLayer.wms(WMS_BASE, {
         layers: LAYERS[currentKey].name,
+        styles: LAYERS[currentKey].style || "",
         format: "image/png",
         transparent: true,
         version: "1.3.0",
