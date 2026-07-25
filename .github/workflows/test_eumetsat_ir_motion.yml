@@ -1,0 +1,40 @@
+name: Test — eumetsat_ir_motion (ручной запуск)
+
+on:
+  workflow_dispatch: {}
+
+concurrency:
+  group: test-eumetsat-ir-motion
+  cancel-in-progress: true
+
+jobs:
+  run-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Установка Python-зависимостей (минимум для этого скрипта)
+        run: pip install numpy scipy pillow requests
+
+      - name: Запуск eumetsat_ir_motion.py
+        working-directory: scripts
+        run: python eumetsat_ir_motion.py
+
+      - name: Настройка git для коммита
+        run: |
+          git config user.name "eumetsat-test-bot"
+          git config user.email "actions@users.noreply.github.com"
+
+      - name: Коммит результата
+        run: |
+          git add data/eumetsat_ir_motion.json data/eumetsat_ir_motion_debug.json || true
+          git diff --cached --quiet || git commit -m "test: ручной прогон eumetsat_ir_motion.py"
+          git pull --rebase --autostash origin main
+          git push origin main
