@@ -163,10 +163,11 @@ def main():
     out = {
         "timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "buffer_size": len(frames),
-        "buffer_span_minutes": (len(frames) - 1) * STEP_MINUTES,
+        "buffer_span_minutes": round((fc._parse_iso_minutes(times[-1]) - fc._parse_iso_minutes(times[0]))
+                                      if len(times) >= 2 else 0),
     }
 
-    vx, vy, n_pairs = fc.estimate_motion_continuous(frames, STEP_MINUTES, min_std=MIN_STD)
+    vx, vy, n_pairs = fc.estimate_motion_continuous(frames, times, min_std=MIN_STD)
 
     if vx is None:
         out["valid"] = False
@@ -185,8 +186,10 @@ def main():
             half = len(frames) // 2
             early = frames[:half + 1]  # +1 кадр нахлёста, чтобы в каждом окне была хотя бы одна пара
             late = frames[half:]
-            vx_e, vy_e, n_e = fc.estimate_motion_continuous(early, STEP_MINUTES, min_std=MIN_STD)
-            vx_l, vy_l, n_l = fc.estimate_motion_continuous(late, STEP_MINUTES, min_std=MIN_STD)
+            early_times = times[:half + 1]
+            late_times = times[half:]
+            vx_e, vy_e, n_e = fc.estimate_motion_continuous(early, early_times, min_std=MIN_STD)
+            vx_l, vy_l, n_l = fc.estimate_motion_continuous(late, late_times, min_std=MIN_STD)
 
             if vx_e is not None and vx_l is not None:
                 speed_e = math.hypot(vx_e, vy_e)
@@ -207,7 +210,13 @@ def main():
                     out["turning_verdict"] = "направление стабильно"
 
                 # --- прогноз смещения на 30/60/120 мин: v*t + 0.5*a*t² ---
-                dt_centers_h = (half * STEP_MINUTES) / 60.0  # разница между центрами окон, часы
+                # dt между ЦЕНТРАМИ окон считается из реальных таймстемпов
+                # (среднее время кадров каждого окна), а не как half*STEP_MINUTES —
+                # буфер может содержать пропуски (см. bootstrap), и тогда
+                # фиксированный шаг занизил бы реальный интервал между окнами.
+                center_early_min = sum(fc._parse_iso_minutes(t) for t in early_times) / len(early_times)
+                center_late_min = sum(fc._parse_iso_minutes(t) for t in late_times) / len(late_times)
+                dt_centers_h = (center_late_min - center_early_min) / 60.0
                 if dt_centers_h > 1e-6:
                     ax = (vx_l - vx_e) / dt_centers_h
                     ay = (vy_l - vy_e) / dt_centers_h
