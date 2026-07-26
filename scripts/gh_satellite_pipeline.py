@@ -121,8 +121,9 @@ def check_eumetsat_lightning_forecast():
 
 
 def check_eumetsat_ir_motion():
-    # Независимая оценка движения облачности по текстуре ИК-канала 10.8мкм
-    # (msg_fes:ir108, 4 кадра, шаг 10 мин) — работает днём и ночью. Гейт 10 мин.
+    # Независимая оценка движения облачности по текстуре ИК-канала 10.5мкм
+    # (mtg_fd:ir105_hrfi, персистентный буфер 6 кадров, шаг 10 мин) —
+    # работает днём и ночью. Гейт 10 мин.
     out_file = os.path.join(BASE_DIR, "data", "eumetsat_ir_motion.json")
     now_utc = datetime.now(timezone.utc)
     try:
@@ -208,3 +209,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
