@@ -34,7 +34,7 @@ jobs:
 
       - name: Коммит результата
         run: |
-          git add data/eumetsat_ir_motion.json data/eumetsat_ir_motion_debug.json || true
+          git add data/eumetsat_ir_motion.json data/eumetsat_ir_motion_debug.json data/eumetsat_ir_buffer.npz || true
           git diff --cached --quiet || git commit -m "test: ручной прогон eumetsat_ir_motion.py"
           git pull --rebase --autostash origin main
           git push origin main
