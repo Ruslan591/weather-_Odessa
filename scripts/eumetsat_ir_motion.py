@@ -40,6 +40,21 @@ eumetsat_ir_motion.py — независимая оценка движения �
     не физическая модель атмосферы — годится как грубая нowcasting-оценка
     на ближайшие 1-2 часа, не как прогноз.
 
+ПОЧЕМУ crs=EPSG:4326 И ВСЕГДА ЯВНЫЙ TIME (не time=None "latest"):
+Раньше добор нового кадра каждый прогон запрашивал time=None ("отдай самый
+свежий"). Из-за задержки публикации сцены (publication lag) это иногда
+возвращало ТУ ЖЕ сцену, что и в прошлый прогон, но с чуть другим шумом —
+is_duplicate_pair() (точное побайтовое сравнение) такую почти-копию не ловил
+(найдено на живом буфере: пара кадров с корреляцией 0.98 и 83% идентичных
+пикселей вместо típичных 0.7/35-40% для настоящего 10-минутного шага).
+Теперь вместо "дай что есть" запрашивается КОНКРЕТНЫЙ ожидаемый следующий
+слот (последний кадр буфера + STEP_MINUTES); если сцена ещё не опубликована,
+сервер отдаёт 404/"cannot identify image file" — это ловится как штатный
+SKIP (см. ниже), а не как дубль постфактум. crs=EPSG:4326 — подтверждённый
+рабочий вариант для этого слоя; порядок осей в bbox для EPSG:4326 (lat,lon)
+отличается от использовавшегося раньше CRS:84 (lon,lat) — см. fetch_tile()
+в field_motion_common.py.
+
 Пишет data/eumetsat_ir_motion.json (результат) и
 data/eumetsat_ir_buffer.npz (персистентный буфер кадров).
 """
@@ -87,11 +102,11 @@ def main():
     debug["buffer_before"] = len(frames)
 
     if bootstrap:
-        times_iso = fc.build_time_steps(STEP_MINUTES, MAX_FRAMES)
+        times_iso = fc.build_time_steps(STEP_MINUTES, MAX_FRAMES, latest_as_none=False)
         new_times, new_frames = [], []
         for t_iso in times_iso:
             try:
-                arr = fc.fetch_tile(LAYER_IR105, t_iso, style=STYLE_IR105)
+                arr = fc.fetch_tile(LAYER_IR105, t_iso, style=STYLE_IR105, crs="EPSG:4326")
             except Exception as e:
                 fc.write_debug(DEBUG_FILE, {"status": "error", "stage": f"bootstrap fetch {t_iso}", "error": str(e)})
                 print(f"  [WARN] eumetsat_ir_motion.py: bootstrap fetch failed ({t_iso}): {e}")
@@ -100,11 +115,20 @@ def main():
             new_frames.append(fc.to_grayscale_luminance(arr))
         times, frames = new_times, new_frames
     else:
+        last_t = fc.datetime.strptime(str(times[-1]), "%Y-%m-%dT%H:%M:00.000Z").replace(tzinfo=fc.timezone.utc)
+        next_t = last_t + fc.timedelta(minutes=STEP_MINUTES)
+        next_t_iso = _fmt_time(next_t)
         try:
-            arr = fc.fetch_tile(LAYER_IR105, None, style=STYLE_IR105)
+            arr = fc.fetch_tile(LAYER_IR105, next_t_iso, style=STYLE_IR105, crs="EPSG:4326")
         except Exception as e:
-            fc.write_debug(DEBUG_FILE, {"status": "error", "stage": "fetch latest", "error": str(e)})
-            print(f"  [WARN] eumetsat_ir_motion.py: fetch latest failed: {e}")
+            # Явный TIME на ещё не опубликованный слот обычно даёт 404/"cannot
+            # identify image file" — это ШТАТНАЯ ситуация (сцена появится через
+            # 10 мин), а не ошибка пайплайна. Стабильный буфер важнее заполнения
+            # любой ценой — просто ждём следующего прогона.
+            debug["awaited_time"] = next_t_iso
+            fc.write_debug(DEBUG_FILE, {"status": "skipped", **debug,
+                                         "note": f"следующий кадр ({next_t_iso}) ещё не опубликован"})
+            print(f"  [SKIP] eumetsat_ir_motion.py: следующий кадр ({next_t_iso}) ещё не опубликован: {e}")
             return
         gray_new = fc.to_grayscale_luminance(arr)
         if fc.is_duplicate_pair(frames[-1], gray_new):
@@ -113,7 +137,7 @@ def main():
                                          "note": "новых данных ещё нет (дубль последнего кадра — задержка публикации)"})
             print("  [SKIP] eumetsat_ir_motion.py: новых данных ещё нет (дубль)")
             return
-        times = (times + [_fmt_time(now)])[-MAX_FRAMES:]
+        times = (times + [next_t_iso])[-MAX_FRAMES:]
         frames = (frames + [gray_new])[-MAX_FRAMES:]
 
     fc.save_frame_buffer(BUFFER_FILE, times, frames, MAX_FRAMES)
@@ -226,7 +250,8 @@ def main():
         out["temperature_trend_verdict"] = temp_verdict
 
     out["method_note"] = (
-        f"Буфер {len(frames)}/{MAX_FRAMES} кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг {STEP_MINUTES} мин), "
+        f"Буфер {len(frames)}/{MAX_FRAMES} кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг {STEP_MINUTES} мин, "
+        "crs=EPSG:4326, всегда явный TIME — не 'latest'), "
         "хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. "
         "Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — "
         "сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. "
