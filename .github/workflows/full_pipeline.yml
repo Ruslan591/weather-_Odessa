@@ -99,8 +99,12 @@ jobs:
             -d '{"ref":"main"}')
           echo "HTTP: $code"
           cat /tmp/dispatch_resp.json || true
+          echo "{\"http_code\": \"$code\", \"body\": $(cat /tmp/dispatch_resp.json | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')}" > data/_debug_satellite_dispatch.json
+          git add data/_debug_satellite_dispatch.json
+          git commit -m "debug: satellite dispatch response" || true
+          git push || true
           if [ "$code" != "204" ]; then
-            echo "::error::Диспетч satellite_pipeline.yml вернул HTTP $code вместо 204 — см. тело ответа выше (вероятно, GH_PAT без прав actions:write/workflow)"
+            echo "::error::Диспетч satellite_pipeline.yml вернул HTTP $code вместо 204 — см. data/_debug_satellite_dispatch.json"
             exit 1
           fi
 
