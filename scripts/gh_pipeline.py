@@ -137,6 +137,7 @@ def git_push_history():
                         "data/eumetsat_lightning_forecast_debug.json",
                         "data/eumetsat_ir_motion.json",
                         "data/eumetsat_ir_motion_debug.json",
+                        "data/eumetsat_ir_buffer.npz",
                         "data/hmcbas_sea_temp_realtime.json",
                         "data/hmcbas_telegram_sea_temp.json",
                         "data/hmcbas_telegram_debug.json",
