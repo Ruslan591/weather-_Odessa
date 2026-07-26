@@ -203,12 +203,46 @@ function _renderLightningForecastLines(f){
 function _renderIrMotionLines(g){
     if(!g) return "";
     const timeTag = _obsTimeTag(g.timestamp, 20);
-    const body = g.valid
-        ? `скорость ~${Math.round(g.speed_kmh)} км/ч, направление на ${g.direction_compass}.`
-        : `${g.verdict || "недоступно"}.`;
+
+    if(!g.valid){
+        return `<div style="margin-top:14px;">
+            <div style="font-weight:600; color:#eee;">По ИК-снимку (10.5мкм, MTG, день/ночь)${timeTag}</div>
+            <div class="small muted" style="margin-top:2px;">${g.verdict || "недоступно"}.</div>
+        </div>`;
+    }
+
+    const lowConfidence = g.frame_pairs_used != null && g.frame_pairs_used <= 2;
+    const lines = [];
+
+    lines.push(`скорость ~${Math.round(g.speed_kmh)} км/ч, направление на ${g.direction_compass}.`);
+
+    if(g.acceleration_verdict){
+        lines.push(`${g.acceleration_verdict}${lowConfidence ? " (мало пар кадров — невысокая уверенность)" : ""}.`);
+    }
+    if(g.turning_verdict){
+        lines.push(`${g.turning_verdict}.`);
+    }
+    if(g.area_trend_verdict){
+        lines.push(`${g.area_trend_verdict}.`);
+    }
+    if(g.temperature_trend_verdict){
+        lines.push(`${g.temperature_trend_verdict}.`);
+    }
+    if(g.forecast_displacement && g.forecast_displacement["30min"] && g.forecast_displacement["60min"] && g.forecast_displacement["120min"]){
+        const f30 = g.forecast_displacement["30min"];
+        const f60 = g.forecast_displacement["60min"];
+        const f120 = g.forecast_displacement["120min"];
+        lines.push(
+            `Прогноз смещения: ~${f30.distance_km}км за 30мин, ~${f60.distance_km}км за 60мин, `
+            + `~${f120.distance_km}км за 120мин (направление ~${f60.compass}).`
+        );
+    }
+
+    const linesHtml = lines.map(l => `<div class="small muted" style="margin-top:2px;">${l}</div>`).join("");
+
     return `<div style="margin-top:14px;">
-        <div style="font-weight:600; color:#eee;">По ИК-снимку (10.8мкм, день/ночь)${timeTag}</div>
-        <div class="small muted" style="margin-top:2px;">${body}</div>
+        <div style="font-weight:600; color:#eee;">По ИК-снимку (10.5мкм, MTG, день/ночь)${timeTag}</div>
+        ${linesHtml}
     </div>`;
 }
 
