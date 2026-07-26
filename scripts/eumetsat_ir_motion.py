@@ -73,6 +73,7 @@ BUFFER_FILE = os.path.join(BASE_DIR, "data", "eumetsat_ir_buffer.npz")
 LAYER_IR105 = "mtg_fd:ir105_hrfi"
 STYLE_IR105 = "mtg_fd:mtg_fd_ir105_hrfi_grayscale"
 MAX_FRAMES = 6
+MIN_FRAMES_FOR_INCREMENTAL = 2  # меньше — недостаточно даже для одной пары, тогда только полный bootstrap имеет смысл
 STEP_MINUTES = 10
 MIN_STD = 6.0
 STALE_BUFFER_SECONDS = 25 * 60  # если последний кадр буфера старше — бутстрап заново
@@ -97,7 +98,14 @@ def main():
         except Exception:
             stale = True
 
-    bootstrap = (not times) or (len(frames) < MAX_FRAMES) or stale
+    # MIN_FRAMES_FOR_INCREMENTAL, а не MAX_FRAMES: буфер может стабильно
+    # застрять короче MAX_FRAMES, если один исторический слот внутри окна
+    # реально отсутствует на сервере (см. bootstrap_failed_frames) — это
+    # НЕ повод пересобирать весь буфер заново на каждом прогоне (тогда
+    # мы теряем персистентность и вновь грузим WMS N раз вместо 1, ради
+    # чего и был введён этот буфер). Буфер сам дорастёт до MAX_FRAMES
+    # инкрементально, когда пропавший слот выйдет из скользящего окна.
+    bootstrap = (not times) or (len(frames) < MIN_FRAMES_FOR_INCREMENTAL) or stale
     debug["bootstrap"] = bootstrap
     debug["buffer_before"] = len(frames)
 
