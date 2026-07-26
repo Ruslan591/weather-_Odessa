@@ -220,7 +220,7 @@ function _renderIrMotionLines(g){
         lines.push(`${g.acceleration_verdict}${lowConfidence ? " (мало пар кадров — невысокая уверенность)" : ""}.`);
     }
     if(g.turning_verdict){
-        lines.push(`${g.turning_verdict}.`);
+        lines.push(`${g.turning_verdict}${lowConfidence ? " (мало пар кадров — невысокая уверенность)" : ""}.`);
     }
     if(g.area_trend_verdict){
         lines.push(`${g.area_trend_verdict}.`);
