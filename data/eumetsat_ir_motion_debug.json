@@ -1,16 +1,19 @@
 {
   "status": "ok",
   "bootstrap": true,
-  "buffer_before": 6,
+  "buffer_before": 5,
   "bootstrap_failed_frames": [
     {
       "time": "2026-07-26T16:30:00.000Z",
       "error": "попытка 1: HTTP 200, content-type='text/xml;charset=UTF-8', len=469: <?xml version=\"1.0\" encoding=\"UTF-8\"?><ServiceExceptionReport version=\"1.3.0\" xmlns=\"http://www.opengis.net/ogc\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.opengis.net/ogc https://view.eumetsat.int/geoserver/schemas/wms/1.3.0/exceptions_1_3_0.xsd\">   <Servic; попытка 2: HTTP 200, content-type='text/xml;charset=UTF-8', len=469: <?xml version=\"1.0\" encoding=\"UTF-8\"?><ServiceExceptionReport version=\"1.3.0\" xmlns=\"http://www.opengis.net/ogc\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.opengis.net/ogc https://view.eumetsat.int/geoserver/schemas/wms/1.3.0/exceptions_1_3_0.xsd\">   <Servic"
+    },
+    {
+      "time": "2026-07-26T17:10:00.000Z",
+      "error": "попытка 1: HTTP 200, content-type='text/xml;charset=UTF-8', len=469: <?xml version=\"1.0\" encoding=\"UTF-8\"?><ServiceExceptionReport version=\"1.3.0\" xmlns=\"http://www.opengis.net/ogc\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.opengis.net/ogc https://view.eumetsat.int/geoserver/schemas/wms/1.3.0/exceptions_1_3_0.xsd\">   <Servic; попытка 2: HTTP 200, content-type='text/xml;charset=UTF-8', len=469: <?xml version=\"1.0\" encoding=\"UTF-8\"?><ServiceExceptionReport version=\"1.3.0\" xmlns=\"http://www.opengis.net/ogc\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.opengis.net/ogc https://view.eumetsat.int/geoserver/schemas/wms/1.3.0/exceptions_1_3_0.xsd\">   <Servic"
     }
   ],
-  "buffer_size": 5,
+  "buffer_size": 4,
   "buffer_times": [
-    "2026-07-26T16:10:00.000Z",
     "2026-07-26T16:20:00.000Z",
     "2026-07-26T16:40:00.000Z",
     "2026-07-26T16:50:00.000Z",
@@ -18,35 +21,32 @@
   ],
   "frame_std": [
     6.0,
-    6.0,
     4.7,
     4.3,
     4.3
   ],
   "result": {
-    "timestamp": "2026-07-26T17:07:53Z",
-    "buffer_size": 5,
+    "timestamp": "2026-07-26T17:13:32Z",
+    "buffer_size": 4,
     "buffer_span_minutes": 40,
     "valid": false,
     "verdict": "недостаточно контраста для оценки (вероятно, однородная сцена)",
     "area_fraction_over_time": [
       0.399,
-      0.399,
       0.574,
-      0.732,
-      0.732
+      0.734,
+      0.734
     ],
-    "area_trend_delta": 0.333,
+    "area_trend_delta": 0.335,
     "area_trend_verdict": "площадь значимой облачности растёт",
     "mean_brightness_over_time": [
       29.0,
-      29.0,
       30.4,
-      30.9,
-      30.9
+      30.8,
+      30.8
     ],
     "brightness_trend_delta": 1.9,
     "temperature_trend_verdict": "без существенных изменений яркостной температуры",
-    "method_note": "Буфер 5/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин, crs=EPSG:4326, всегда явный TIME — не 'latest'), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
+    "method_note": "Буфер 4/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин, crs=EPSG:4326, всегда явный TIME — не 'latest'), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
   }
 }
