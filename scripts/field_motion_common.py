@@ -278,13 +278,28 @@ def is_duplicate_pair(gray_a, gray_b, threshold=0.98):
     return float((diff < 0.5).mean()) > threshold
 
 
-def estimate_motion_continuous(gray_frames, dt_minutes, min_std=6.0, despeckle_size=5):
+def _parse_iso_minutes(t_iso):
+    """ISO-таймстемп буфера ("YYYY-MM-DDTHH:MM:00.000Z") -> минуты с начала эпохи
+    (float), для вычисления РЕАЛЬНОГО dt между кадрами."""
+    dt = datetime.strptime(str(t_iso), "%Y-%m-%dT%H:%M:00.000Z").replace(tzinfo=timezone.utc)
+    return dt.timestamp() / 60.0
+
+
+def estimate_motion_continuous(gray_frames, times_iso, min_std=6.0, despeckle_size=5):
     """То же, что estimate_motion(), но для непрерывных (не бинарных) полей
     яркости — используется для оценки движения по текстуре true-color
     снимка (GeoColour RGB), а не по бинарной Cloud Mask. Даёт независимую
     оценку скорости/направления, устойчивую даже при сплошной облачности
     (там, где бинарная маска однородна и phase correlation на ней не
     работает вообще — у текстуры яркости всегда есть локальный рельеф).
+
+    times_iso: список ISO-таймстемпов кадров (та же длина, что gray_frames).
+    dt между парой кадров считается из РЕАЛЬНОЙ разницы их таймстемпов, а
+    не как фиксированный шаг — буфер может содержать пропуски (одиночный
+    недоступный слот в bootstrap пропускается, а не обрывает весь прогон,
+    см. eumetsat_ir_motion.py), и тогда реальный интервал между соседними
+    кадрами может быть кратен шагу (например, 20 мин вместо 10) — при
+    фиксированном шаге скорость для такой пары была бы завышена вдвое.
 
     Каждый кадр сначала проходит _despeckle() (см. докстринг там) — иначе
     ночью неподвижные городские огни ложно "перетягивают" корреляцию к
@@ -295,9 +310,12 @@ def estimate_motion_continuous(gray_frames, dt_minutes, min_std=6.0, despeckle_s
     Пары кадров-дублей (см. is_duplicate_pair) тоже пропускаются — иначе
     гарантированный нулевой сдвиг от дубля искажает среднее."""
     vx_list, vy_list = [], []
-    dt_h = dt_minutes / 60.0
+    times_min = [_parse_iso_minutes(t) for t in times_iso]
     processed = [_despeckle(g, despeckle_size) for g in gray_frames]
     for i in range(len(processed) - 1):
+        dt_h = (times_min[i + 1] - times_min[i]) / 60.0
+        if dt_h <= 0:
+            continue
         g_prev, g_curr = processed[i], processed[i + 1]
         if is_low_contrast(g_prev, min_std) or is_low_contrast(g_curr, min_std):
             continue
