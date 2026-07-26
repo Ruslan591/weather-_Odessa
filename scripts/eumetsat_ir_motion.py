@@ -103,16 +103,31 @@ def main():
 
     if bootstrap:
         times_iso = fc.build_time_steps(STEP_MINUTES, MAX_FRAMES, latest_as_none=False)
-        new_times, new_frames = [], []
+        new_times, new_frames, failed = [], [], []
         for t_iso in times_iso:
             try:
                 arr = fc.fetch_tile(LAYER_IR105, t_iso, style=STYLE_IR105, crs="EPSG:4326")
             except Exception as e:
-                fc.write_debug(DEBUG_FILE, {"status": "error", "stage": f"bootstrap fetch {t_iso}", "error": str(e)})
-                print(f"  [WARN] eumetsat_ir_motion.py: bootstrap fetch failed ({t_iso}): {e}")
-                return
+                # Одиночный пропуск/ServiceException на конкретном историческом
+                # слоте (реальный пробел в архиве EUMETSAT) — НЕ повод обрывать
+                # весь прогон: пропускаем этот кадр, собираем остальные. Буфер
+                # получится короче MAX_FRAMES в этот раз — это ок, следующие
+                # инкрементальные прогоны его дозаполнят (или бутстрап повторится,
+                # когда проблемный слот сам выйдет из скользящего окна).
+                failed.append({"time": t_iso, "error": str(e)})
+                print(f"  [SKIP] eumetsat_ir_motion.py: bootstrap кадр {t_iso} недоступен, пропуск: {e}")
+                continue
             new_times.append(t_iso or _fmt_time(now))
             new_frames.append(fc.to_grayscale_luminance(arr))
+
+        if len(new_frames) < 2:
+            fc.write_debug(DEBUG_FILE, {"status": "error", "stage": "bootstrap", "failed": failed,
+                                         "note": f"годных кадров {len(new_frames)}/{MAX_FRAMES} — недостаточно для оценки движения"})
+            print(f"  [WARN] eumetsat_ir_motion.py: bootstrap провалился, годных кадров {len(new_frames)}/{MAX_FRAMES}")
+            return
+
+        if failed:
+            debug["bootstrap_failed_frames"] = failed
         times, frames = new_times, new_frames
     else:
         last_t = fc.datetime.strptime(str(times[-1]), "%Y-%m-%dT%H:%M:00.000Z").replace(tzinfo=fc.timezone.utc)
