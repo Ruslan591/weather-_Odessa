@@ -86,7 +86,7 @@ def fetch_tile(layer_name, time_iso=None, retries=2, delay=4, style="", crs="CRS
     if time_iso:
         params["time"] = time_iso
 
-    last_err = None
+    attempt_errors = []
     for attempt in range(1, retries + 1):
         try:
             r = requests.get(WMS_BASE, params=params, timeout=TIMEOUT)
@@ -96,14 +96,17 @@ def fetch_tile(layer_name, time_iso=None, retries=2, delay=4, style="", crs="CRS
                 # и "сцена ещё не опубликована", и "неверный CRS/bbox" выглядят
                 # одинаково как "cannot identify image file", их не отличить.
                 snippet = r.content[:300].decode("utf-8", errors="replace")
-                raise RuntimeError(f"HTTP {r.status_code}, content-type={ctype!r}: {snippet}")
+                raise RuntimeError(f"HTTP {r.status_code}, content-type={ctype!r}, len={len(r.content)}: {snippet}")
             img = Image.open(io.BytesIO(r.content)).convert("RGBA")
             return np.array(img)
         except Exception as e:
-            last_err = e
+            attempt_errors.append(f"попытка {attempt}: {e}")
             if attempt < retries:
                 _time.sleep(delay)
-    raise last_err
+    # Все попытки провалились — прокидываем ПЕРВУЮ ошибку с полным контекстом
+    # (обычно самая информативная), а не только последнюю (retry на 404 обычно
+    # даёт тот же 404, но если первая попытка упала иначе — не терять её).
+    raise RuntimeError("; ".join(attempt_errors))
 
 
 def classify_presence_by_alpha(arr):
