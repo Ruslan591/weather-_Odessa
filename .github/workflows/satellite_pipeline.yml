@@ -1,9 +1,9 @@
 name: Спутниковый пайплайн (EUMETSAT)
 
 on:
-  workflow_run:
-    workflows: ["Полный облачный пайплайн (verification + AI + PWS)"]
-    types: [completed]
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 concurrency:
