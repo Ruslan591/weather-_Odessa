@@ -1,52 +1,52 @@
 {
-  "timestamp": "2026-07-26T06:19:58Z",
+  "timestamp": "2026-07-26T06:38:51Z",
   "buffer_size": 6,
   "buffer_span_minutes": 50,
   "valid": true,
-  "speed_kmh": 0.7,
+  "speed_kmh": 0.4,
   "direction_compass": "В",
-  "bearing_deg": 92.3,
+  "bearing_deg": 71.1,
   "frame_pairs_used": 4,
-  "acceleration_kmh": -0.6,
-  "turning_deg": -68.5,
+  "acceleration_kmh": 0.2,
+  "turning_deg": -35.7,
   "acceleration_verdict": "скорость стабильна",
   "turning_verdict": "меняет направление (против часовой)",
   "forecast_displacement": {
     "30min": {
-      "distance_km": 0.2,
-      "bearing_deg": 334.0,
-      "compass": "СЗ"
+      "distance_km": 0.3,
+      "bearing_deg": 39.0,
+      "compass": "СВ"
     },
     "60min": {
       "distance_km": 0.8,
-      "bearing_deg": 318.0,
-      "compass": "СЗ"
+      "bearing_deg": 34.0,
+      "compass": "СВ"
     },
     "120min": {
-      "distance_km": 3.2,
-      "bearing_deg": 308.0,
-      "compass": "СЗ"
+      "distance_km": 2.3,
+      "bearing_deg": 27.0,
+      "compass": "СВ"
     }
   },
   "area_fraction_over_time": [
-    0.327,
     0.287,
     0.248,
     0.221,
     0.207,
-    0.207
+    0.207,
+    0.176
   ],
-  "area_trend_delta": -0.119,
+  "area_trend_delta": -0.11,
   "area_trend_verdict": "площадь значимой облачности сокращается",
   "mean_brightness_over_time": [
-    32.9,
     32.2,
     31.5,
     30.9,
     30.2,
-    30.2
+    30.2,
+    28.9
   ],
-  "brightness_trend_delta": -2.7,
+  "brightness_trend_delta": -3.3,
   "temperature_trend_verdict": "без существенных изменений яркостной температуры",
   "method_note": "Буфер 6/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
 }
