@@ -1,43 +1,47 @@
 """
-eumetsat_ir_motion.py — независимая оценка направления/скорости движения
-облачности по ТЕПЛОВОМУ ИК-каналу (mtg_fd:ir105_hrfi, MTG FCI, 10.5 мкм,
-1км разрешение в надире), а не по бинарной Cloud Mask и НЕ по true-color
-GeoColour.
+eumetsat_ir_motion.py — независимая оценка движения облачности по текстуре
+ИК-канала (mtg_fd:ir105_hrfi, MTG FCI, 10.5 мкм, 1км), с ПОСТОЯННЫМ буфером
+последних 6 кадров (60 минут истории), а не разовым скачиванием 4 кадров
+на каждый прогон.
 
-ОБНОВЛЕНО: раньше использовался msg_fes:ir108 (старый SEVIRI/MSG, 10.8мкм,
-~3км в надире, шаг 15 мин). Переключено на mtg_fd:ir105_hrfi (MTG FCI HRFI —
-"High Resolution Fast Imagery", 10.5мкм, 1км, шаг 10 мин, подтверждено в
-GetCapabilities: PT10M) — заметно точнее по сетке, что должно помочь
-субпиксельной проблеме (см. историю коммитов field_motion_common.py).
-Слою нужен явный style (по умолчанию GeoServer мог отдать не тот стиль) —
-используется "mtg_fd:mtg_fd_ir105_hrfi_grayscale".
+ЗАЧЕМ ПЕРСИСТЕНТНЫЙ БУФЕР (data/eumetsat_ir_buffer.npz):
+Раньше каждый прогон качал 4 свежих кадра заново (T-30,T-20,T-10,T), хотя
+3 из них уже скачивались 10 минут назад в прошлом прогоне — 3x лишней
+нагрузки на WMS-сервер. Теперь буфер хранится между прогонами: обычный
+прогон докачивает ТОЛЬКО один новый кадр ("сейчас"), добавляет его в конец,
+самый старый кадр выпадает (FIFO, максимум 6 кадров = 60 минут). Полная
+перезакачка всех 6 кадров происходит только при "бутстрапе" — буфера ещё
+нет, повреждён, или пропущено слишком много прогонов (буфер протух).
 
-ПОЧЕМУ ИК, А НЕ GEOCOLOUR (естественный цвет):
-Изначально для текстурного анализа использовался mtg_fd:rgb_geocolour
-(true-color). Проблема обнаружилась ночью: GeoColour ночью показывает не
-чёрный кадр, а огни городов (яркие неподвижные точки). Phase correlation —
-это нормированная корреляция ПО ФАЗЕ, она инвариантна к амплитуде, поэтому
-попытка просто размыть/обрезать яркость огней не помогает (проверено на
-синтетике) — неподвижные огни всё равно "перетягивают" результат к
-ложному "скорость ~0". Медианный фильтр (despeckle, см.
-field_motion_common.py) частично лечит это, стирая точечные выбросы, но
-это по-прежнему заплатка поверх физически "грязного" источника.
+ЗАЧЕМ ИМЕННО 6 КАДРОВ (не 4):
+С 6 кадрами за 60 минут вместо 4 за 30 можно надёжно расщепить историю на
+"раннее" (первая половина) и "позднее" (вторая половина) окна и сравнить
+скорость/направление между ними — это даёт ускорение/замедление и поворот
+траектории, а не только "текущую" скорость. Плюс более длинная история
+устойчивее к случайному шуму одного кадра.
 
-ИК-канал — это яркостная температура верхней границы облака (тепловое
-излучение), а не отражённый видимый свет. Города физически не светятся в
-этом диапазоне сколько-нибудь заметно на фоне облаков — весь класс
-"точечные огни ночью" просто не существует как артефакт. Канал работает
-одинаково днём и ночью (в этом весь смысл ИК-каналов на метеоспутниках).
-Это же стандартный метод, которым метеослужбы официально считают
-"Atmospheric Motion Vectors" — трекинг облачных структур по ИК между
-последовательными кадрами геостационара.
+ЧТО СЧИТАЕТСЯ:
+  - speed_kmh / direction_compass — как раньше, но усреднено по всем (до 5)
+    парам кадров в буфере вместо 3.
+  - acceleration_kmh, turning_deg — сравнение раннего окна (первая половина
+    буфера) с поздним (вторая половина): "ускоряется"/"замедляется",
+    "меняет направление"/"направление стабильно".
+  - area_trend — доля пикселей "значимо холоднее" (порог — 60-й перцентиль
+    самого старого кадра в буфере, фиксированный, чтобы сравнение было
+    честным во времени) в локальном радиусе, отслеживается по всем 6
+    кадрам: растёт (облачная система разрастается) / сокращается (распад).
+  - temperature_trend — средняя яркость (проще говоря, средняя яркостная
+    температура) в локальном радиусе по времени: рост яркости = похолодание
+    верхней границы = часто усиление конвекции; падение = потепление =
+    часто ослабление. Шкала НЕ калибрована в °C, это относительный тренд.
+  - forecast_displacement — прогноз смещения через 30/60/120 минут:
+    кинематика v*t + 0.5*a*t² с вектором ускорения из сравнения раннего/
+    позднего окна. Это ЛИНЕЙНАЯ ЭКСТРАПОЛЯЦИЯ реального недавнего движения,
+    не физическая модель атмосферы — годится как грубая нowcasting-оценка
+    на ближайшие 1-2 часа, не как прогноз.
 
-despeckle (median_filter) в estimate_motion_continuous() оставлен как
-общая защита от единичных шумовых пикселей матрицы.
-
-N_FRAMES=4, шаг 10 мин (mtg_fd:ir105_hrfi обновляется раз в 10 мин).
-
-Пишет data/eumetsat_ir_motion.json.
+Пишет data/eumetsat_ir_motion.json (результат) и
+data/eumetsat_ir_buffer.npz (персистентный буфер кадров).
 """
 
 import json
@@ -49,73 +53,187 @@ import field_motion_common as fc
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_ir_motion.json")
 DEBUG_FILE = os.path.join(BASE_DIR, "data", "eumetsat_ir_motion_debug.json")
+BUFFER_FILE = os.path.join(BASE_DIR, "data", "eumetsat_ir_buffer.npz")
 
 LAYER_IR105 = "mtg_fd:ir105_hrfi"
 STYLE_IR105 = "mtg_fd:mtg_fd_ir105_hrfi_grayscale"
-N_FRAMES = 4
-STEP_MINUTES = 10  # подтверждено в GetCapabilities: <Dimension ...>PT10M</Dimension>
-MIN_STD = 6.0  # порог контраста; требует калибровки по живым данным
+MAX_FRAMES = 6
+STEP_MINUTES = 10
+MIN_STD = 6.0
+STALE_BUFFER_SECONDS = 25 * 60  # если последний кадр буфера старше — бутстрап заново
+AREA_CHANGE_THRESHOLD = 0.10    # 10 п.п. — "существенное" изменение площади
+
+
+def _fmt_time(dt):
+    return dt.strftime("%Y-%m-%dT%H:%M:00.000Z")
 
 
 def main():
-    debug = {}
     now = fc.datetime.now(fc.timezone.utc)
-    times_iso = fc.build_time_steps(STEP_MINUTES, N_FRAMES)
+    debug = {}
 
-    arrs = []
-    for t_iso in times_iso:
+    times, frames = fc.load_frame_buffer(BUFFER_FILE)
+
+    stale = True
+    if times:
         try:
-            arrs.append(fc.fetch_tile(LAYER_IR105, t_iso, style=STYLE_IR105))
+            last_t = fc.datetime.strptime(str(times[-1]), "%Y-%m-%dT%H:%M:00.000Z").replace(tzinfo=fc.timezone.utc)
+            stale = (now - last_t).total_seconds() > STALE_BUFFER_SECONDS
+        except Exception:
+            stale = True
+
+    bootstrap = (not times) or (len(frames) < MAX_FRAMES) or stale
+    debug["bootstrap"] = bootstrap
+    debug["buffer_before"] = len(frames)
+
+    if bootstrap:
+        times_iso = fc.build_time_steps(STEP_MINUTES, MAX_FRAMES)
+        new_times, new_frames = [], []
+        for t_iso in times_iso:
+            try:
+                arr = fc.fetch_tile(LAYER_IR105, t_iso, style=STYLE_IR105)
+            except Exception as e:
+                fc.write_debug(DEBUG_FILE, {"status": "error", "stage": f"bootstrap fetch {t_iso}", "error": str(e)})
+                print(f"  [WARN] eumetsat_ir_motion.py: bootstrap fetch failed ({t_iso}): {e}")
+                return
+            new_times.append(t_iso or _fmt_time(now))
+            new_frames.append(fc.to_grayscale_luminance(arr))
+        times, frames = new_times, new_frames
+    else:
+        try:
+            arr = fc.fetch_tile(LAYER_IR105, None, style=STYLE_IR105)
         except Exception as e:
-            fc.write_debug(DEBUG_FILE, {"status": "error", "stage": f"fetch {t_iso}", "error": str(e)})
-            print(f"  [WARN] eumetsat_ir_motion.py: fetch failed ({t_iso}): {e}")
+            fc.write_debug(DEBUG_FILE, {"status": "error", "stage": "fetch latest", "error": str(e)})
+            print(f"  [WARN] eumetsat_ir_motion.py: fetch latest failed: {e}")
             return
+        gray_new = fc.to_grayscale_luminance(arr)
+        if fc.is_duplicate_pair(frames[-1], gray_new):
+            debug["skipped_duplicate"] = True
+            fc.write_debug(DEBUG_FILE, {"status": "skipped", **debug,
+                                         "note": "новых данных ещё нет (дубль последнего кадра — задержка публикации)"})
+            print("  [SKIP] eumetsat_ir_motion.py: новых данных ещё нет (дубль)")
+            return
+        times = (times + [_fmt_time(now)])[-MAX_FRAMES:]
+        frames = (frames + [gray_new])[-MAX_FRAMES:]
 
-    debug["frames_fetched"] = len(arrs)
-    debug["times_requested"] = times_iso
+    fc.save_frame_buffer(BUFFER_FILE, times, frames, MAX_FRAMES)
+    debug["buffer_size"] = len(frames)
+    debug["buffer_times"] = list(times)
+    debug["frame_std"] = [round(float(g.std()), 1) for g in frames]
 
-    gray_frames = [fc.to_grayscale_luminance(a) for a in arrs]
-    stds = [round(float(g.std()), 1) for g in gray_frames]
-    # диагностика: доля пикселей, совпадающих БУКВАЛЬНО (в пределах шума) между
-    # соседними кадрами — если близко к 1.0, сервер отдал дважды один и тот же
-    # реальный снимок (несовпадение запрошенного шага с реальной частотой сцен),
-    # а не "движения нет" в физическом смысле
-    identical_fractions = []
-    for i in range(len(gray_frames) - 1):
-        diff = fc.np.abs(gray_frames[i] - gray_frames[i + 1])
-        identical_fractions.append(round(float((diff < 0.5).mean()), 3))
-    debug["identical_fraction_between_frames"] = identical_fractions
-    debug["frame_std"] = stds
+    out = {
+        "timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "buffer_size": len(frames),
+        "buffer_span_minutes": (len(frames) - 1) * STEP_MINUTES,
+    }
 
-    vx, vy, n_pairs = fc.estimate_motion_continuous(gray_frames, STEP_MINUTES, min_std=MIN_STD)
+    vx, vy, n_pairs = fc.estimate_motion_continuous(frames, STEP_MINUTES, min_std=MIN_STD)
 
     if vx is None:
-        out = {
-            "timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "valid": False,
-            "verdict": "недостаточно контраста для оценки (однородная облачность/безоблачно по всему окну)",
-            "frame_std": stds,
-        }
+        out["valid"] = False
+        out["verdict"] = "недостаточно контраста для оценки (вероятно, однородная сцена)"
     else:
         speed_kmh = math.hypot(vx, vy)
         bearing_v = (math.degrees(math.atan2(vx, vy)) + 360) % 360
-        out = {
-            "timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "valid": True,
-            "speed_kmh": round(speed_kmh, 1),
-            "direction_compass": fc.compass(bearing_v),
-            "bearing_deg": round(bearing_v, 0),
-            "frame_pairs_used": n_pairs,
-            "frame_std": stds,
-        }
+        out["valid"] = True
+        out["speed_kmh"] = round(speed_kmh, 1)
+        out["direction_compass"] = fc.compass(bearing_v)
+        out["bearing_deg"] = round(bearing_v, 1)
+        out["frame_pairs_used"] = n_pairs
+
+        # --- ускорение/поворот: раннее окно vs позднее окно ---
+        if len(frames) >= 4:
+            half = len(frames) // 2
+            early = frames[:half + 1]  # +1 кадр нахлёста, чтобы в каждом окне была хотя бы одна пара
+            late = frames[half:]
+            vx_e, vy_e, n_e = fc.estimate_motion_continuous(early, STEP_MINUTES, min_std=MIN_STD)
+            vx_l, vy_l, n_l = fc.estimate_motion_continuous(late, STEP_MINUTES, min_std=MIN_STD)
+
+            if vx_e is not None and vx_l is not None:
+                speed_e = math.hypot(vx_e, vy_e)
+                speed_l = math.hypot(vx_l, vy_l)
+                bearing_e = (math.degrees(math.atan2(vx_e, vy_e)) + 360) % 360
+                bearing_l = (math.degrees(math.atan2(vx_l, vy_l)) + 360) % 360
+                accel = speed_l - speed_e
+                turn = fc.circular_angle_diff(bearing_e, bearing_l)
+
+                out["acceleration_kmh"] = round(accel, 1)
+                out["turning_deg"] = round(turn, 1)
+                out["acceleration_verdict"] = (
+                    "ускоряется" if accel > 5 else "замедляется" if accel < -5 else "скорость стабильна"
+                )
+                if abs(turn) > 20:
+                    out["turning_verdict"] = f"меняет направление ({'по часовой' if turn > 0 else 'против часовой'})"
+                else:
+                    out["turning_verdict"] = "направление стабильно"
+
+                # --- прогноз смещения на 30/60/120 мин: v*t + 0.5*a*t² ---
+                dt_centers_h = (half * STEP_MINUTES) / 60.0  # разница между центрами окон, часы
+                if dt_centers_h > 1e-6:
+                    ax = (vx_l - vx_e) / dt_centers_h
+                    ay = (vy_l - vy_e) / dt_centers_h
+                else:
+                    ax = ay = 0.0
+
+                forecasts = {}
+                for label, t_min in [("30min", 30), ("60min", 60), ("120min", 120)]:
+                    t_h = t_min / 60.0
+                    dx = vx_l * t_h + 0.5 * ax * t_h ** 2
+                    dy = vy_l * t_h + 0.5 * ay * t_h ** 2
+                    dist = math.hypot(dx, dy)
+                    bearing_f = (math.degrees(math.atan2(dx, dy)) + 360) % 360
+                    forecasts[label] = {
+                        "distance_km": round(dist, 1),
+                        "bearing_deg": round(bearing_f, 0),
+                        "compass": fc.compass(bearing_f),
+                    }
+                out["forecast_displacement"] = forecasts
+
+    # --- рост/распад площади + тренд яркостной температуры ---
+    if len(frames) >= 2:
+        local_mask = fc.local_area_mask()
+        baseline_vals = frames[0][local_mask]
+        threshold = float(fc.np.percentile(baseline_vals, 60))
+
+        area_fracs, mean_brightness = [], []
+        for g in frames:
+            local_vals = g[local_mask]
+            area_fracs.append(float((local_vals > threshold).mean()))
+            mean_brightness.append(float(local_vals.mean()))
+
+        area_delta = area_fracs[-1] - area_fracs[0]
+        if area_delta > AREA_CHANGE_THRESHOLD:
+            area_verdict = "площадь значимой облачности растёт"
+        elif area_delta < -AREA_CHANGE_THRESHOLD:
+            area_verdict = "площадь значимой облачности сокращается"
+        else:
+            area_verdict = "площадь без существенных изменений"
+
+        brightness_delta = mean_brightness[-1] - mean_brightness[0]
+        brightness_scale = float(fc.np.mean(debug["frame_std"])) or 1.0
+        if brightness_delta > 0.5 * brightness_scale:
+            temp_verdict = "похолодание верхней границы (возможно усиление конвекции)"
+        elif brightness_delta < -0.5 * brightness_scale:
+            temp_verdict = "потепление верхней границы (возможно ослабление конвекции)"
+        else:
+            temp_verdict = "без существенных изменений яркостной температуры"
+
+        out["area_fraction_over_time"] = [round(f, 3) for f in area_fracs]
+        out["area_trend_delta"] = round(area_delta, 3)
+        out["area_trend_verdict"] = area_verdict
+        out["mean_brightness_over_time"] = [round(b, 1) for b in mean_brightness]
+        out["brightness_trend_delta"] = round(brightness_delta, 1)
+        out["temperature_trend_verdict"] = temp_verdict
 
     out["method_note"] = (
-        f"Оценка по текстуре яркостной температуры mtg_fd:ir105_hrfi (MTG FCI, 10.5мкм, 1км, {N_FRAMES} кадра, шаг "
-        f"{STEP_MINUTES} мин, phase correlation + despeckle), НЕ по бинарной Cloud Mask и НЕ по "
-        "true-color снимку — ИК-канал работает одинаково днём и ночью, городские огни в нём не "
-        "видны (это тепловое излучение, не отражённый свет), поэтому нет ночного артефакта, который "
-        "был у GeoColour. Направление/скорость облачного массива в целом над окном ~190км вокруг "
-        "точки, не привязано к конкретному краю/просвету."
+        f"Буфер {len(frames)}/{MAX_FRAMES} кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг {STEP_MINUTES} мин), "
+        "хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. "
+        "Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — "
+        "сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. "
+        "порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе "
+        f"{round(fc.LOCAL_RADIUS_KM)}км, шкала НЕ калибрована в °C. Прогноз смещения — линейная "
+        "экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт "
+        "с горизонтом (особенно на 120 мин)."
     )
 
     os.makedirs(os.path.dirname(OUT_FILE), exist_ok=True)
