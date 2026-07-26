@@ -2,51 +2,49 @@
   "status": "ok",
   "bootstrap": true,
   "buffer_before": 5,
-  "bootstrap_failed_frames": [
-    {
-      "time": "2026-07-26T17:50:00.000Z",
-      "error": "попытка 1: HTTP 200, content-type='text/xml;charset=UTF-8', len=469: <?xml version=\"1.0\" encoding=\"UTF-8\"?><ServiceExceptionReport version=\"1.3.0\" xmlns=\"http://www.opengis.net/ogc\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.opengis.net/ogc https://view.eumetsat.int/geoserver/schemas/wms/1.3.0/exceptions_1_3_0.xsd\">   <Servic; попытка 2: HTTP 200, content-type='text/xml;charset=UTF-8', len=469: <?xml version=\"1.0\" encoding=\"UTF-8\"?><ServiceExceptionReport version=\"1.3.0\" xmlns=\"http://www.opengis.net/ogc\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.opengis.net/ogc https://view.eumetsat.int/geoserver/schemas/wms/1.3.0/exceptions_1_3_0.xsd\">   <Servic"
-    }
-  ],
-  "buffer_size": 5,
+  "buffer_size": 6,
   "buffer_times": [
-    "2026-07-26T17:00:00.000Z",
-    "2026-07-26T17:10:00.000Z",
-    "2026-07-26T17:20:00.000Z",
     "2026-07-26T17:30:00.000Z",
-    "2026-07-26T17:40:00.000Z"
+    "2026-07-26T17:40:00.000Z",
+    "2026-07-26T17:50:00.000Z",
+    "2026-07-26T18:00:00.000Z",
+    "2026-07-26T18:10:00.000Z",
+    "2026-07-26T18:20:00.000Z"
   ],
   "frame_std": [
-    4.2,
-    4.2,
-    4.3,
     4.5,
-    4.5
+    4.7,
+    4.8,
+    5.0,
+    5.1,
+    5.2
   ],
   "result": {
-    "timestamp": "2026-07-26T17:51:53Z",
-    "buffer_size": 5,
-    "buffer_span_minutes": 40,
+    "timestamp": "2026-07-26T18:27:22Z",
+    "buffer_size": 6,
+    "buffer_span_minutes": 50,
     "valid": false,
     "verdict": "недостаточно контраста для оценки (вероятно, однородная сцена)",
     "area_fraction_over_time": [
-      0.323,
-      0.476,
-      0.543,
-      0.591,
-      0.591
+      0.237,
+      0.288,
+      0.328,
+      0.36,
+      0.392,
+      0.387
     ],
-    "area_trend_delta": 0.268,
+    "area_trend_delta": 0.15,
     "area_trend_verdict": "площадь значимой облачности растёт",
     "mean_brightness_over_time": [
-      31.3,
-      31.8,
-      32.2,
       32.6,
-      32.6
+      32.9,
+      33.1,
+      33.3,
+      33.5,
+      33.5
     ],
-    "brightness_trend_delta": 1.2,
+    "brightness_trend_delta": 0.9,
     "temperature_trend_verdict": "без существенных изменений яркостной температуры",
-    "method_note": "Буфер 5/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин, crs=EPSG:4326, всегда явный TIME — не 'latest'), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
+    "method_note": "Буфер 6/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин, crs=EPSG:4326, всегда явный TIME — не 'latest'), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
   }
 }
