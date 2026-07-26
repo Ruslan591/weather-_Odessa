@@ -79,3 +79,24 @@ jobs:
           GEMINI_ANALYSIS_ENABLED: "true"
           PYTHONUNBUFFERED: "1"
         run: python scripts/gh_pipeline.py
+
+      - name: Явный запуск спутникового пайплайна
+        # workflow_run в satellite_pipeline.yml документированно ненадёжен
+        # (GitHub Community: "one of the least reliable and least observable
+        # parts of Actions") — на практике ни разу не сработал после
+        # вынесения спутникового модуля в отдельный workflow 2026-07-26,
+        # хотя имя workflow и default-branch совпадают. Явный вызов через
+        # API тем же способом, каким телефон дёргает этот пайплайн —
+        # детерминирован и не зависит от этой недокументированной эвристики.
+        # workflow_run оставлен в satellite_pipeline.yml как резервный путь
+        # на случай, если когда-нибудь заработает — не мешает этому шагу.
+        if: always()
+        run: |
+          curl -sS -X POST \
+            -H "Authorization: token ${{ secrets.GH_PAT }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/satellite_pipeline.yml/dispatches" \
+            -d '{"ref":"main"}' \
+            -w "\nHTTP: %{http_code}\n"
+
+
