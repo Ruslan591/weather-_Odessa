@@ -1,52 +1,52 @@
 {
-  "timestamp": "2026-07-26T05:48:17Z",
+  "timestamp": "2026-07-26T06:19:58Z",
   "buffer_size": 6,
   "buffer_span_minutes": 50,
   "valid": true,
   "speed_kmh": 0.7,
-  "direction_compass": "СВ",
-  "bearing_deg": 65.3,
+  "direction_compass": "В",
+  "bearing_deg": 92.3,
   "frame_pairs_used": 4,
-  "acceleration_kmh": 1.1,
-  "turning_deg": 66.0,
+  "acceleration_kmh": -0.6,
+  "turning_deg": -68.5,
   "acceleration_verdict": "скорость стабильна",
-  "turning_verdict": "меняет направление (по часовой)",
+  "turning_verdict": "меняет направление (против часовой)",
   "forecast_displacement": {
     "30min": {
-      "distance_km": 1.2,
-      "bearing_deg": 104.0,
-      "compass": "В"
+      "distance_km": 0.2,
+      "bearing_deg": 334.0,
+      "compass": "СЗ"
     },
     "60min": {
-      "distance_km": 3.2,
-      "bearing_deg": 107.0,
-      "compass": "В"
+      "distance_km": 0.8,
+      "bearing_deg": 318.0,
+      "compass": "СЗ"
     },
     "120min": {
-      "distance_km": 9.5,
-      "bearing_deg": 110.0,
-      "compass": "В"
+      "distance_km": 3.2,
+      "bearing_deg": 308.0,
+      "compass": "СЗ"
     }
   },
   "area_fraction_over_time": [
-    0.136,
-    0.104,
-    0.072,
-    0.048,
-    0.042,
-    0.042
+    0.327,
+    0.287,
+    0.248,
+    0.221,
+    0.207,
+    0.207
   ],
-  "area_trend_delta": -0.094,
-  "area_trend_verdict": "площадь без существенных изменений",
+  "area_trend_delta": -0.119,
+  "area_trend_verdict": "площадь значимой облачности сокращается",
   "mean_brightness_over_time": [
-    34.7,
-    34.1,
-    33.4,
     32.9,
     32.2,
-    32.2
+    31.5,
+    30.9,
+    30.2,
+    30.2
   ],
-  "brightness_trend_delta": -2.5,
+  "brightness_trend_delta": -2.7,
   "temperature_trend_verdict": "без существенных изменений яркостной температуры",
   "method_note": "Буфер 6/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
 }
