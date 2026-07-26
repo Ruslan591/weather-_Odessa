@@ -55,12 +55,20 @@ def write_debug(path, payload):
         pass
 
 
-def fetch_tile(layer_name, time_iso=None, retries=2, delay=4, style=""):
+def fetch_tile(layer_name, time_iso=None, retries=2, delay=4, style="", crs="CRS:84"):
+    """crs="CRS:84" (по умолчанию, как раньше) — порядок осей lon,lat.
+    crs="EPSG:4326" — используется для mtg_fd:ir105_hrfi (подтверждённый
+    рабочий вариант, см. eumetsat_ir_motion.py); ВАЖНО: по спеке WMS 1.3.0
+    у EPSG:4326 порядок осей в bbox lat,lon (обратный CRS:84), иначе запрос
+    уйдёт с перепутанными широтой/долготой."""
     min_lon = CENTER_LON - HALF_WINDOW_DEG
     max_lon = CENTER_LON + HALF_WINDOW_DEG
     min_lat = CENTER_LAT - HALF_WINDOW_DEG
     max_lat = CENTER_LAT + HALF_WINDOW_DEG
-    bbox = f"{min_lon},{min_lat},{max_lon},{max_lat}"  # CRS:84 = lon,lat
+    if crs == "EPSG:4326":
+        bbox = f"{min_lat},{min_lon},{max_lat},{max_lon}"  # EPSG:4326 = lat,lon
+    else:
+        bbox = f"{min_lon},{min_lat},{max_lon},{max_lat}"  # CRS:84 = lon,lat
 
     params = {
         "service": "WMS",
@@ -68,7 +76,7 @@ def fetch_tile(layer_name, time_iso=None, retries=2, delay=4, style=""):
         "request": "GetMap",
         "layers": layer_name,
         "styles": style,
-        "crs": "CRS:84",
+        "crs": crs,
         "bbox": bbox,
         "width": TILE_SIZE,
         "height": TILE_SIZE,
@@ -294,24 +302,31 @@ def estimate_motion_continuous(gray_frames, dt_minutes, min_std=6.0, despeckle_s
     return float(np.mean(vx_list)), float(np.mean(vy_list)), len(vx_list)
 
 
-def build_time_steps(step_minutes, n_frames):
+def build_time_steps(step_minutes, n_frames, latest_as_none=True):
     """Строит список ISO-таймстемпов для запроса кадров: N_FRAMES-1 кадров
-    в прошлом (шаг step_minutes) + None для последнего (сервер сам отдаёт
-    самый свежий). "Сейчас" перед вычитанием шагов округляется ВНИЗ до
-    границы step_minutes — иначе получившаяся точная отметка времени может
-    не совпасть ни с одной реально существующей сценой конкретно у этого
-    слоя (WMS Dimension "time" без nearestValue у части mtg_fd-слоёв —
-    строгое совпадение, а не "ближайшее"), и запрос кадра падает с ошибкой
-    вида "cannot identify image file" вместо честного ответа. Это было
-    найдено как причина 3-часовой протухшей eumetsat_geocolour_motion.json:
-    один упавший кадр прерывал весь прогон, а старый файл оставался лежать
-    без пометки о своей неактуальности."""
+    в прошлом (шаг step_minutes) + последний кадр либо None (latest_as_none=
+    True, по умолчанию — сервер сам отдаёт самый свежий, поведение как
+    раньше, используется precip/lightning), либо тоже явный выровненный
+    таймстемп (latest_as_none=False — используется ir_motion: явный TIME
+    везде надёжнее "latest" при задержке публикации сцены, см. is_duplicate_pair
+    и историю бага с почти-дублем кадра). "Сейчас" перед вычитанием шагов
+    округляется ВНИЗ до границы step_minutes — иначе получившаяся точная
+    отметка времени может не совпасть ни с одной реально существующей сценой
+    конкретно у этого слоя (WMS Dimension "time" без nearestValue у части
+    mtg_fd-слоёв — строгое совпадение, а не "ближайшее"), и запрос кадра
+    падает с ошибкой вида "cannot identify image file"/404 вместо честного
+    ответа (для 404 на самом свежем — это нормально, значит сцена ещё не
+    опубликована, вызывающий код должен трактовать это как "подождать
+    следующего прогона", а не как ошибку). Это было найдено как причина
+    3-часовой протухшей eumetsat_geocolour_motion.json: один упавший кадр
+    прерывал весь прогон, а старый файл оставался лежать без пометки о
+    своей неактуальности."""
     now = datetime.now(timezone.utc)
     aligned = now.replace(second=0, microsecond=0)
     aligned -= timedelta(minutes=aligned.minute % step_minutes)
     times_iso = []
     for i in range(n_frames - 1, -1, -1):
-        if i == 0:
+        if i == 0 and latest_as_none:
             times_iso.append(None)
         else:
             t = aligned - timedelta(minutes=step_minutes * i)
