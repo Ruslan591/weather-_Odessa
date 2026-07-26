@@ -1,52 +1,52 @@
 {
-  "timestamp": "2026-07-26T08:55:22Z",
+  "timestamp": "2026-07-26T09:13:00Z",
   "buffer_size": 6,
   "buffer_span_minutes": 50,
   "valid": true,
-  "speed_kmh": 0.2,
-  "direction_compass": "СВ",
-  "bearing_deg": 48.6,
-  "frame_pairs_used": 3,
-  "acceleration_kmh": -0.4,
-  "turning_deg": 91.2,
+  "speed_kmh": 0.1,
+  "direction_compass": "З",
+  "bearing_deg": 247.8,
+  "frame_pairs_used": 4,
+  "acceleration_kmh": 0.1,
+  "turning_deg": -145.2,
   "acceleration_verdict": "скорость стабильна",
-  "turning_verdict": "меняет направление (по часовой)",
+  "turning_verdict": "меняет направление (против часовой)",
   "forecast_displacement": {
     "30min": {
       "distance_km": 0.2,
-      "bearing_deg": 149.0,
-      "compass": "ЮВ"
+      "bearing_deg": 207.0,
+      "compass": "ЮЗ"
     },
     "60min": {
-      "distance_km": 0.7,
-      "bearing_deg": 160.0,
-      "compass": "Ю"
+      "distance_km": 0.5,
+      "bearing_deg": 205.0,
+      "compass": "ЮЗ"
     },
     "120min": {
-      "distance_km": 2.4,
-      "bearing_deg": 167.0,
-      "compass": "Ю"
+      "distance_km": 1.7,
+      "bearing_deg": 203.0,
+      "compass": "ЮЗ"
     }
   },
   "area_fraction_over_time": [
     0.283,
     0.283,
-    0.283,
     0.259,
     0.246,
-    0.232
+    0.232,
+    0.225
   ],
-  "area_trend_delta": -0.052,
+  "area_trend_delta": -0.059,
   "area_trend_verdict": "площадь без существенных изменений",
   "mean_brightness_over_time": [
     24.4,
     24.4,
-    24.4,
     23.6,
     22.8,
-    22.2
+    22.2,
+    22.0
   ],
-  "brightness_trend_delta": -2.2,
+  "brightness_trend_delta": -2.5,
   "temperature_trend_verdict": "без существенных изменений яркостной температуры",
   "method_note": "Буфер 6/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
 }
