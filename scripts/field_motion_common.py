@@ -90,7 +90,13 @@ def fetch_tile(layer_name, time_iso=None, retries=2, delay=4, style="", crs="CRS
     for attempt in range(1, retries + 1):
         try:
             r = requests.get(WMS_BASE, params=params, timeout=TIMEOUT)
-            r.raise_for_status()
+            ctype = r.headers.get("content-type", "")
+            if r.status_code != 200 or "image" not in ctype:
+                # Не-PNG ответ (WMS ServiceException XML, 404, и т.п.) — без этого
+                # и "сцена ещё не опубликована", и "неверный CRS/bbox" выглядят
+                # одинаково как "cannot identify image file", их не отличить.
+                snippet = r.content[:300].decode("utf-8", errors="replace")
+                raise RuntimeError(f"HTTP {r.status_code}, content-type={ctype!r}: {snippet}")
             img = Image.open(io.BytesIO(r.content)).convert("RGBA")
             return np.array(img)
         except Exception as e:
