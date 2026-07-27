@@ -40,20 +40,26 @@ eumetsat_ir_motion.py — независимая оценка движения �
     не физическая модель атмосферы — годится как грубая нowcasting-оценка
     на ближайшие 1-2 часа, не как прогноз.
 
-ПОЧЕМУ crs=EPSG:4326 И ВСЕГДА ЯВНЫЙ TIME (не time=None "latest"):
+ПОЧЕМУ crs=EPSG:4326 И ВРЕМЯ ИЗ GetCapabilities (не гадаем и не time=None):
 Раньше добор нового кадра каждый прогон запрашивал time=None ("отдай самый
 свежий"). Из-за задержки публикации сцены (publication lag) это иногда
 возвращало ТУ ЖЕ сцену, что и в прошлый прогон, но с чуть другим шумом —
 is_duplicate_pair() (точное побайтовое сравнение) такую почти-копию не ловил
 (найдено на живом буфере: пара кадров с корреляцией 0.98 и 83% идентичных
 пикселей вместо típичных 0.7/35-40% для настоящего 10-минутного шага).
-Теперь вместо "дай что есть" запрашивается КОНКРЕТНЫЙ ожидаемый следующий
-слот (последний кадр буфера + STEP_MINUTES); если сцена ещё не опубликована,
-сервер отдаёт 404/"cannot identify image file" — это ловится как штатный
-SKIP (см. ниже), а не как дубль постфактум. crs=EPSG:4326 — подтверждённый
-рабочий вариант для этого слоя; порядок осей в bbox для EPSG:4326 (lat,lon)
-отличается от использовавшегося раньше CRS:84 (lon,lat) — см. fetch_tile()
-в field_motion_common.py.
+Промежуточный фикс — запрашивать явный вычисленный TIME (last+STEP) — тоже
+иногда давал 404, если сцена ещё не вышла (штатно, но негарантированно).
+ФИНАЛЬНЫЙ фикс: перед каждым прогоном спрашиваем GetCapabilities
+(fc.get_layer_latest_time) и берём АВТОРИТЕТНОЕ "самое свежее доступное
+время" слоя прямо из объявления сервера (Dimension name="time" default=...),
+а не угадываем его локально. Это устраняет саму причину 404 на "ещё не
+опубликовано": если сервер объявил default=X, значит X уже точно есть.
+Один лишний GET на GetCapabilities дешевле, чем неопределённость "получится
+или нет" на GetMap. Старая логика (floor(now) / last+STEP) остаётся как
+fallback на случай, если сам GetCapabilities недоступен.
+crs=EPSG:4326 — подтверждённый рабочий вариант для этого слоя; порядок осей
+в bbox для EPSG:4326 (lat,lon) отличается от использовавшегося раньше
+CRS:84 (lon,lat) — см. fetch_tile() в field_motion_common.py.
 
 Пишет data/eumetsat_ir_motion.json (результат) и
 data/eumetsat_ir_buffer.npz (персистентный буфер кадров).
@@ -98,19 +104,30 @@ def main():
         except Exception:
             stale = True
 
-    # MIN_FRAMES_FOR_INCREMENTAL, а не MAX_FRAMES: буфер может стабильно
-    # застрять короче MAX_FRAMES, если один исторический слот внутри окна
-    # реально отсутствует на сервере (см. bootstrap_failed_frames) — это
-    # НЕ повод пересобирать весь буфер заново на каждом прогоне (тогда
-    # мы теряем персистентность и вновь грузим WMS N раз вместо 1, ради
-    # чего и был введён этот буфер). Буфер сам дорастёт до MAX_FRAMES
-    # инкрементально, когда пропавший слот выйдет из скользящего окна.
+    # Авторитетное "самое свежее доступное время" слоя — берём из
+    # GetCapabilities (Dimension default), а не угадываем через
+    # floor(текущее_время). Устраняет саму причину 404/ServiceException на
+    # ещё не опубликованный TIME. При сетевой ошибке — откат на старую
+    # логику (get_layer_latest_time вернёт None, ветки ниже это учитывают).
+    server_latest_iso, server_period = fc.get_layer_latest_time(LAYER_IR105)
+    debug["server_latest_time"] = server_latest_iso
+
     bootstrap = (not times) or (len(frames) < MIN_FRAMES_FOR_INCREMENTAL) or stale
     debug["bootstrap"] = bootstrap
     debug["buffer_before"] = len(frames)
 
     if bootstrap:
-        times_iso = fc.build_time_steps(STEP_MINUTES, MAX_FRAMES, latest_as_none=False)
+        if server_latest_iso:
+            # Строим сетку НАЗАД от подтверждённого сервером времени —
+            # гарантированно существующая точка, а не наша догадка.
+            latest_min = fc._parse_iso_minutes(server_latest_iso)
+            times_iso = [
+                fc.datetime.fromtimestamp((latest_min - STEP_MINUTES * i) * 60, tz=fc.timezone.utc)
+                .strftime("%Y-%m-%dT%H:%M:00.000Z")
+                for i in range(MAX_FRAMES - 1, -1, -1)
+            ]
+        else:
+            times_iso = fc.build_time_steps(STEP_MINUTES, MAX_FRAMES, latest_as_none=False)
         new_times, new_frames, failed = [], [], []
         for t_iso in times_iso:
             try:
@@ -138,9 +155,22 @@ def main():
             debug["bootstrap_failed_frames"] = failed
         times, frames = new_times, new_frames
     else:
-        last_t = fc.datetime.strptime(str(times[-1]), "%Y-%m-%dT%H:%M:00.000Z").replace(tzinfo=fc.timezone.utc)
-        next_t = last_t + fc.timedelta(minutes=STEP_MINUTES)
-        next_t_iso = _fmt_time(next_t)
+        last_t_min = fc._parse_iso_minutes(times[-1])
+        if server_latest_iso:
+            server_min = fc._parse_iso_minutes(server_latest_iso)
+            if server_min <= last_t_min:
+                # GetCapabilities сам говорит, что нового кадра ещё нет —
+                # штатный SKIP без единого лишнего запроса на GetMap.
+                fc.write_debug(DEBUG_FILE, {"status": "skipped", **debug,
+                                             "note": f"сервер ещё не объявил кадр новее {times[-1]} (default={server_latest_iso})"})
+                print(f"  [SKIP] eumetsat_ir_motion.py: новых кадров пока нет (server default={server_latest_iso})")
+                return
+            next_t_iso = server_latest_iso  # подтверждено сервером — гарантированно существует
+        else:
+            # GetCapabilities недоступен — откат на старую догадку
+            # (last+STEP), с try/except ниже как раньше.
+            next_t = fc.datetime.fromtimestamp((last_t_min + STEP_MINUTES) * 60, tz=fc.timezone.utc)
+            next_t_iso = _fmt_time(next_t)
         try:
             arr = fc.fetch_tile(LAYER_IR105, next_t_iso, style=STYLE_IR105, crs="EPSG:4326")
         except Exception as e:
