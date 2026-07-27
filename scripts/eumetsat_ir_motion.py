@@ -203,6 +203,15 @@ def main():
         "buffer_size": len(frames),
         "buffer_span_minutes": round((fc._parse_iso_minutes(times[-1]) - fc._parse_iso_minutes(times[0]))
                                       if len(times) >= 2 else 0),
+        "observed_area": {
+            "center_lat": fc.CENTER_LAT,
+            "center_lon": fc.CENTER_LON,
+            "motion_window_km": {
+                "width": round(2 * fc.HALF_WINDOW_DEG * fc.KM_PER_DEG_LON),
+                "height": round(2 * fc.HALF_WINDOW_DEG * fc.KM_PER_DEG_LAT),
+            },
+            "local_trend_radius_km": round(fc.LOCAL_RADIUS_KM),
+        },
     }
 
     vx, vy, n_pairs = fc.estimate_motion_continuous(frames, times, min_std=MIN_STD)
