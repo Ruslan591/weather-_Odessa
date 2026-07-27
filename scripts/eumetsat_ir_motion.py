@@ -34,6 +34,12 @@ eumetsat_ir_motion.py — независимая оценка движения �
     температура) в локальном радиусе по времени: рост яркости = похолодание
     верхней границы = часто усиление конвекции; падение = потепление =
     часто ослабление. Шкала НЕ калибрована в °C, это относительный тренд.
+  - cloud_mass_distance_km/bearing_deg/compass — расстояние и направление
+    ОТ СТАНЦИИ до ближайшей значимой облачной массы на ИК-снимке (тот же
+    порог 60-й перцентиль, что и в area_trend, но ищем по всему окну, не
+    только в радиусе area_trend). Это ПОЛОЖЕНИЕ цели относительно станции —
+    в отличие от speed_kmh/direction_compass выше, которые описывают
+    направление ДВИЖЕНИЯ самой массы, а не то, где она сейчас находится.
   - forecast_displacement — прогноз смещения через 30/60/120 минут:
     кинематика v*t + 0.5*a*t² с вектором ускорения из сравнения раннего/
     позднего окна. Это ЛИНЕЙНАЯ ЭКСТРАПОЛЯЦИЯ реального недавнего движения,
@@ -318,6 +324,27 @@ def main():
         out["area_trend_verdict"] = area_verdict
         out["mean_brightness_over_time"] = [round(b, 1) for b in mean_brightness]
         out["brightness_trend_delta"] = round(brightness_delta, 1)
+
+        # --- направление и расстояние от станции до значимой облачной
+        # массы (аналог "ближайшее облако: X км (Ю)" в блоке Облачность
+        # выше, но по ИК-текстуре вместо бинарной Cloud Mask) — порог тот
+        # же 60-й перцентиль, ищем ближайший к станции связный blob по
+        # ПОСЛЕДНЕМУ кадру и по ВСЕМУ окну (не только 50км-радиусу
+        # area_trend — масса может быть заметно дальше). Это позиция ЦЕЛИ
+        # относительно станции, а не направление её движения (то уже есть
+        # выше как speed_kmh/direction_compass).
+        full_significant_mask = frames[-1] > threshold
+        valid_all = fc.np.ones_like(full_significant_mask, dtype=bool)
+        blob = fc.nearest_of_type(full_significant_mask, valid_all, True)
+        if blob is not None:
+            dx_km, dy_km, area_km2 = blob
+            bearing_deg, compass_dir = fc.bearing_compass(dx_km, dy_km)
+            out["cloud_mass_distance_km"] = round(math.hypot(dx_km, dy_km), 1)
+            out["cloud_mass_bearing_deg"] = round(bearing_deg, 0)
+            out["cloud_mass_compass"] = compass_dir
+            out["cloud_mass_area_km2"] = round(area_km2)
+        else:
+            out["cloud_mass_distance_km"] = None
         out["temperature_trend_verdict"] = temp_verdict
 
     out["method_note"] = (
@@ -327,7 +354,8 @@ def main():
         "Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — "
         "сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. "
         "порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе "
-        f"{round(fc.LOCAL_RADIUS_KM)}км, шкала НЕ калибрована в °C. Прогноз смещения — линейная "
+        f"{round(fc.LOCAL_RADIUS_KM)}км, шкала НЕ калибрована в °C. cloud_mass_* — положение (не движение) "
+        "ближайшей значимой облачной массы относительно станции. Прогноз смещения — линейная "
         "экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт "
         "с горизонтом (особенно на 120 мин)."
     )
