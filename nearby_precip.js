@@ -203,10 +203,12 @@ function _renderLightningForecastLines(f){
 function _renderIrMotionLines(g){
     if(!g) return "";
     const timeTag = _obsTimeTag(g.timestamp, 20);
+    const areaLine = _renderIrAreaLine(g.observed_area);
 
     if(!g.valid){
         return `<div style="margin-top:14px;">
             <div style="font-weight:600; color:#eee;">По ИК-снимку (10.5мкм, MTG, день/ночь)${timeTag}</div>
+            ${areaLine}
             <div class="small muted" style="margin-top:2px;">${g.verdict || "недоступно"}.</div>
         </div>`;
     }
@@ -242,8 +244,25 @@ function _renderIrMotionLines(g){
 
     return `<div style="margin-top:14px;">
         <div style="font-weight:600; color:#eee;">По ИК-снимку (10.5мкм, MTG, день/ночь)${timeTag}</div>
+        ${areaLine}
         ${linesHtml}
     </div>`;
+}
+
+// Строку "область анализа" рендерим отдельно от остальных verdict-строк:
+// это не тренд/прогноз, а статичная привязка к местности — где именно на
+// снимке измеряется движение (окно ~WxH км) и где считается площадь/тренд
+// температуры (радиус в км), в отличие от остальных карточек этого блока,
+// которые отслеживают ближайший ОБЪЕКТ (облако/осадки) от станции.
+function _renderIrAreaLine(area){
+    if(!area || area.center_lat == null || area.center_lon == null) return "";
+    const lat = Number(area.center_lat).toFixed(2);
+    const lon = Number(area.center_lon).toFixed(2);
+    const w = area.motion_window_km && area.motion_window_km.width;
+    const h = area.motion_window_km && area.motion_window_km.height;
+    const windowStr = (w && h) ? `окно ~${w}×${h} км` : "";
+    const radiusStr = area.local_trend_radius_km ? `, площадь/температура — в радиусе ~${area.local_trend_radius_km} км` : "";
+    return `<div class="small muted" style="margin-top:2px;">Наблюдаемая область: ${windowStr} с центром у Одессы (${lat}°N, ${lon}°E)${radiusStr}.</div>`;
 }
 
 function renderNearbyPrecipCard(){
