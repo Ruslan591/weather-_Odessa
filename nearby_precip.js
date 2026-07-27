@@ -216,6 +216,11 @@ function _renderIrMotionLines(g){
     const lowConfidence = g.frame_pairs_used != null && g.frame_pairs_used <= 2;
     const lines = [];
 
+    // Положение цели (где она СЕЙЧАС относительно станции) — перед строкой
+    // о направлении её движения, тот же порядок, что в блоке Облачность выше.
+    if(g.cloud_mass_distance_km != null){
+        lines.push(`значимая облачная масса: ~${Math.round(g.cloud_mass_distance_km)} км (${g.cloud_mass_compass}) от станции.`);
+    }
     lines.push(`скорость ~${Math.round(g.speed_kmh)} км/ч, направление на ${g.direction_compass}.`);
 
     if(g.acceleration_verdict){
