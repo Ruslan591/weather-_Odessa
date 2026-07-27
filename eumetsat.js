@@ -17,6 +17,8 @@
                       мгновенная интенсивность осадков, комбинация IR
                       геостационара с калибровкой по MW-измерениям LEO
                       спутников. Обновление раз в 15 мин.
+     mtg_fd:h40b    — то же самое (Blended FCI/LEO MW precipitation), но
+                      MTG FCI вместо MSG SEVIRI — точнее и чаще (10 мин).
      msg_fes:gii_kindex — GII K-Index (индекс грозовой неустойчивости
                       воздушной массы, только для безоблачных участков).
                       Прокси для потенциала гроз в дополнение к li_afa
@@ -66,6 +68,9 @@ const LEGEND_HTML = {
     h60b: `
         <div class="swatchRow"><span class="swatch" style="background:transparent;border-style:dashed;"></span>прозрачно = осадков нет</div>
         <div>цвет = осадки есть, оттенок ≈ интенсивность (калиброванной шкалы мм/ч нет)</div>`,
+    h40b: `
+        <div class="swatchRow"><span class="swatch" style="background:transparent;border-style:dashed;"></span>прозрачно = осадков нет</div>
+        <div>цвет = осадки есть, оттенок ≈ интенсивность (калиброванной шкалы мм/ч нет); MTG FCI — точнее и чаще (10 мин против 15 мин у msg_fes:h60b)</div>`,
     gii_kindex: `
         <div class="gradBar" style="background:linear-gradient(90deg,#3355ff,#eeee33,#ff3322);"></div>
         <div>цвет ≈ индекс грозовой неустойчивости воздушной массы (K-Index), только над безоблачными участками</div>`,
@@ -91,6 +96,11 @@ const LAYERS = {
         name: "msg_fes:h60b",
         stepMinutes: 15,
     },
+    h40b: {
+        name: "mtg_fd:h40b",
+        style: "mtg_fd:mtg_h40b_default",
+        stepMinutes: 10,
+    },
     gii_kindex: {
         name: "msg_fes:gii_kindex",
         stepMinutes: 15,
@@ -113,7 +123,9 @@ const LAYERS = {
 };
 
 let currentKey = "clm";
-let currentWmsLayer = null;
+let currentWmsLayer = null;  // видимый прямо сейчас слой
+let pendingWmsLayer = null;  // новый кадр грузится, ещё не показан
+let pendingLoadTimeout = null;
 let timeSteps = [];       // массив Date, от старых к новым
 let position = 0;
 let animationTimer = false;
@@ -172,25 +184,66 @@ function setLayer(key){
         map.removeLayer(currentWmsLayer);
         currentWmsLayer = null;
     }
+    if(pendingWmsLayer){
+        map.removeLayer(pendingWmsLayer);
+        pendingWmsLayer = null;
+    }
+    if(pendingLoadTimeout){
+        clearTimeout(pendingLoadTimeout);
+        pendingLoadTimeout = null;
+    }
     renderCurrentFrame();
 }
 
+// Раньше здесь был currentWmsLayer.setParams({time}) — у нового времени
+// другой URL тайлов (кэш-ключ Leaflet), поэтому старые тайлы сразу
+// признавались "лишними" и удалялись ДО того, как новые успевали
+// загрузиться — отсюда мелькание базовой карты (OSM) между кадрами при
+// анимации/перемотке. Теперь: грузим новый слой ПОВЕРХ старого и убираем
+// старый только после события 'load' нового (все его тайлы готовы) — с
+// подстраховкой по таймеру на случай, если 'load' не придёт (например,
+// один тайл упал с ошибкой сети).
 function renderCurrentFrame(){
     const timeIso = isoNoMillis(timeSteps[position]);
-    if(currentWmsLayer){
-        currentWmsLayer.setParams({ time: timeIso });
-    } else {
-        currentWmsLayer = L.tileLayer.wms(WMS_BASE, {
-            layers: LAYERS[currentKey].name,
-            styles: LAYERS[currentKey].style || "",
-            format: "image/png",
-            transparent: true,
-            version: "1.3.0",
-            crs: L.CRS.EPSG4326,
-            opacity: LAYERS[currentKey].opacity ?? 0.75,
-            time: timeIso,
-        }).addTo(map);
+
+    // если предыдущий кадр всё ещё грузится, а мы уже перескочили дальше
+    // (быстрая перемотка/анимация) — он не нужен, убираем сразу
+    if(pendingWmsLayer){
+        map.removeLayer(pendingWmsLayer);
+        pendingWmsLayer = null;
     }
+    if(pendingLoadTimeout){
+        clearTimeout(pendingLoadTimeout);
+        pendingLoadTimeout = null;
+    }
+
+    const incoming = L.tileLayer.wms(WMS_BASE, {
+        layers: LAYERS[currentKey].name,
+        styles: LAYERS[currentKey].style || "",
+        format: "image/png",
+        transparent: true,
+        version: "1.3.0",
+        crs: L.CRS.EPSG4326,
+        opacity: LAYERS[currentKey].opacity ?? 0.75,
+        time: timeIso,
+    });
+
+    pendingWmsLayer = incoming;
+    incoming.addTo(map);
+
+    const swapIn = () => {
+        if(pendingWmsLayer !== incoming) return; // устарело — уже сменили кадр
+        if(currentWmsLayer) map.removeLayer(currentWmsLayer);
+        currentWmsLayer = incoming;
+        pendingWmsLayer = null;
+        if(pendingLoadTimeout){ clearTimeout(pendingLoadTimeout); pendingLoadTimeout = null; }
+    };
+
+    incoming.once("load", swapIn);
+    // подстраховка: если 'load' почему-то не пришёл (например, ошибка
+    // одного тайла) — не показывать старый кадр вечно
+    pendingLoadTimeout = setTimeout(swapIn, 4000);
+
     updateTimestampLabel();
 }
 
