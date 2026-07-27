@@ -192,7 +192,7 @@ function _renderFieldForecastLines(f, cfg){
 function _renderCloudForecastLines(f){
     return _renderFieldForecastLines(f, {
         title: "Облачность",
-        stateOnValue: "cloud", stateOnLabel: "сейчас облачно", stateOffLabel: "сейчас ясно",
+        stateOnValue: "cloud", stateOnLabel: "над станцией сейчас облачно", stateOffLabel: "над станцией сейчас ясно",
         massTargetValue: "cloud_mass", targetMassLabel: "ближайшее облако", targetClearingLabel: "ближайший просвет",
         probVerb: "принесёт изменение погоды",
         staleMin: 25,
@@ -202,7 +202,7 @@ function _renderCloudForecastLines(f){
 function _renderPrecipForecastLines(f){
     return _renderFieldForecastLines(f, {
         title: "Осадки",
-        stateOnValue: "precip", stateOnLabel: "сейчас есть осадки", stateOffLabel: "сейчас без осадков",
+        stateOnValue: "precip", stateOnLabel: "над станцией сейчас есть осадки", stateOffLabel: "над станцией сейчас без осадков",
         massTargetValue: "precip_mass", targetMassLabel: "ближайшие осадки", targetClearingLabel: "ближайший просвет",
         probVerb: "принесёт осадки",
         staleMin: 25,
@@ -212,7 +212,7 @@ function _renderPrecipForecastLines(f){
 function _renderPrecipMotionLines(f){
     return _renderFieldForecastLines(f, {
         title: "Осадки (MTG h40b, буфер 6×10 мин)",
-        stateOnValue: "precip", stateOnLabel: "сейчас есть осадки", stateOffLabel: "сейчас без осадков",
+        stateOnValue: "precip", stateOnLabel: "над станцией сейчас есть осадки", stateOffLabel: "над станцией сейчас без осадков",
         massTargetValue: "precip_mass", targetMassLabel: "ближайшие осадки", targetClearingLabel: "ближайший просвет",
         probVerb: "принесёт осадки",
         staleMin: 20,
@@ -222,22 +222,30 @@ function _renderPrecipMotionLines(f){
 function _renderLightningForecastLines(f){
     return _renderFieldForecastLines(f, {
         title: "Молния",
-        stateOnValue: "storm", stateOnLabel: "сейчас гроза", stateOffLabel: "сейчас без грозы",
+        stateOnValue: "storm", stateOnLabel: "над станцией сейчас гроза", stateOffLabel: "над станцией сейчас без грозы",
         massTargetValue: "storm_mass", targetMassLabel: "ближайшая грозовая ячейка", targetClearingLabel: "ближайший просвет",
         probVerb: "принесёт грозу",
         staleMin: 15,
     });
 }
 
+function _renderIrStationLine(g){
+    if(!g.station_state) return "";
+    const label = g.station_state === "cloud" ? "облачно" : "ясно";
+    return `<div class="small muted" style="margin-top:2px;">Прямо над станцией сейчас: ${label}.</div>`;
+}
+
 function _renderIrMotionLines(g){
     if(!g) return "";
     const timeTag = _obsTimeTag(g.timestamp, 20);
     const areaLine = _renderIrAreaLine(g.observed_area);
+    const stationLine = _renderIrStationLine(g);
 
     if(!g.valid){
         return `<div style="margin-top:14px;">
             <div style="font-weight:600; color:#eee;">По ИК-снимку (10.5мкм, MTG, день/ночь)${timeTag}</div>
             ${areaLine}
+            ${stationLine}
             <div class="small muted" style="margin-top:2px;">${g.verdict || "недоступно"}.</div>
         </div>`;
     }
@@ -279,6 +287,7 @@ function _renderIrMotionLines(g){
     return `<div style="margin-top:14px;">
         <div style="font-weight:600; color:#eee;">По ИК-снимку (10.5мкм, MTG, день/ночь)${timeTag}</div>
         ${areaLine}
+        ${stationLine}
         ${linesHtml}
     </div>`;
 }
