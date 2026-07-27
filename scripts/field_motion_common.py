@@ -17,6 +17,7 @@ import math
 import os
 import json
 import time as _time
+import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 
 import numpy as np
@@ -25,8 +26,47 @@ from PIL import Image
 from scipy import ndimage
 
 WMS_BASE = "https://view.eumetsat.int/geoserver/wms"
+GETCAPABILITIES_URL = WMS_BASE + "?service=WMS&version=1.3.0&request=GetCapabilities"
+_WMS_NS = "{http://www.opengis.net/wms}"
 CENTER_LAT = 46.4406
 CENTER_LON = 30.7703
+
+
+def get_layer_latest_time(layer_name, timeout=25):
+    """Спрашивает GetCapabilities и возвращает (default_iso, period_iso) для
+    указанного слоя — default это АВТОРИТЕТНОЕ "самое свежее доступное
+    время" по объявлению самого сервера (Dimension name="time" default=...),
+    а не наша локальная догадка "текущее время округлённое вниз до шага".
+    Раньше запрос "последнего" кадра строился как now floored to STEP_MINUTES,
+    и мог целиться во время, которого сервер ещё не опубликовал (см. историю
+    404/ServiceException на конкретный TIME) — эта функция устраняет саму
+    причину, беря время напрямую из объявления сервера, а не угадывая его.
+    Возвращает (None, None) при сетевой ошибке/отсутствии слоя — вызывающий
+    код должен в этом случае откатиться на старую логику (floor(now))."""
+    try:
+        r = requests.get(GETCAPABILITIES_URL, timeout=timeout)
+        r.raise_for_status()
+        root = ET.fromstring(r.content)
+        for layer in root.iter(_WMS_NS + "Layer"):
+            name_el = layer.find(_WMS_NS + "Name")
+            if name_el is not None and name_el.text == layer_name:
+                dim_el = layer.find(f'{_WMS_NS}Dimension[@name="time"]')
+                if dim_el is not None:
+                    default_raw = dim_el.get("default")
+                    default_iso = None
+                    if default_raw:
+                        # Сервер отдаёt "...T17:50:00Z" (без миллисекунд) —
+                        # приводим к внутреннему формату буфера "...000Z",
+                        # иначе не совпадёт с _parse_iso_minutes/is_duplicate_pair.
+                        dt = datetime.strptime(default_raw, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                        default_iso = dt.strftime("%Y-%m-%dT%H:%M:00.000Z")
+                    period_iso = None
+                    if dim_el.text and "/" in dim_el.text:
+                        period_iso = dim_el.text.strip().split("/")[-1]
+                    return default_iso, period_iso
+        return None, None
+    except Exception:
+        return None, None
 
 HALF_WINDOW_DEG = 2.5
 TILE_SIZE = 400
