@@ -138,7 +138,7 @@ def check_eumetsat_ir_motion():
     try:
         subprocess.run(
             [PYTHON, os.path.join(SCRIPTS_DIR, "eumetsat_ir_motion.py")],
-            cwd=BASE_DIR, capture_output=False, timeout=90
+            cwd=BASE_DIR, capture_output=False, timeout=180
         )
     except Exception as e:
         print(f"  [WARN] eumetsat_ir_motion.py: {e}")
@@ -163,7 +163,7 @@ def check_eumetsat_precip_motion():
     try:
         subprocess.run(
             [PYTHON, os.path.join(SCRIPTS_DIR, "eumetsat_precip_motion.py")],
-            cwd=BASE_DIR, capture_output=False, timeout=90
+            cwd=BASE_DIR, capture_output=False, timeout=180
         )
     except Exception as e:
         print(f"  [WARN] eumetsat_precip_motion.py: {e}")
