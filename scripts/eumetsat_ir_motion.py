@@ -325,6 +325,15 @@ def main():
         out["mean_brightness_over_time"] = [round(b, 1) for b in mean_brightness]
         out["brightness_trend_delta"] = round(brightness_delta, 1)
 
+        # --- что прямо СЕЙЧАС над станцией (центральный пиксель окна = её
+        # координаты) — отдельно от cloud_mass ниже (тот про удалённую цель),
+        # это прямой ответ на "что происходит на станции прямо сейчас".
+        # Порог тот же, что у area_trend (60-й перцентиль) — это "заметная
+        # облачность", а не ядро/плотная масса (для того 90-й перцентиль ниже).
+        center_idx = int((fc.TILE_SIZE - 1) / 2)
+        station_val = float(frames[-1][center_idx, center_idx])
+        out["station_state"] = "cloud" if station_val > threshold else "clear"
+
         # --- направление и расстояние от станции до ЯДРА облачной массы
         # (аналог "ближайшее облако: X км (Ю)" в блоке Облачность выше, но
         # по ИК-текстуре вместо бинарной Cloud Mask) — ищем ближайший к
