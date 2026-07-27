@@ -144,6 +144,31 @@ def check_eumetsat_ir_motion():
         print(f"  [WARN] eumetsat_ir_motion.py: {e}")
 
 
+def check_eumetsat_precip_motion():
+    # Анализ движения осадков (mtg_fd:h40b, персистентный буфер 6 кадров,
+    # шаг 10 мин) — та же инфраструктура, что у eumetsat_ir_motion.py,
+    # домен-логика (CPA/ETA/probability) как у старого precip_forecast.
+    # Гейт 10 мин.
+    out_file = os.path.join(BASE_DIR, "data", "eumetsat_precip_motion.json")
+    now_utc = datetime.now(timezone.utc)
+    try:
+        if os.path.exists(out_file):
+            with open(out_file, "r", encoding="utf-8") as f:
+                prev = json.load(f)
+            last_time = datetime.strptime(prev["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            if (now_utc - last_time).total_seconds() < 10 * 60:
+                return
+    except Exception:
+        pass
+    try:
+        subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "eumetsat_precip_motion.py")],
+            cwd=BASE_DIR, capture_output=False, timeout=90
+        )
+    except Exception as e:
+        print(f"  [WARN] eumetsat_precip_motion.py: {e}")
+
+
 def git_push_satellite():
     """Коммитит и пушит только файлы спутникового модуля."""
     try:
@@ -159,6 +184,9 @@ def git_push_satellite():
             "data/eumetsat_ir_motion.json",
             "data/eumetsat_ir_motion_debug.json",
             "data/eumetsat_ir_buffer.npz",
+            "data/eumetsat_precip_motion.json",
+            "data/eumetsat_precip_motion_debug.json",
+            "data/eumetsat_precip_buffer.npz",
         ]
         _to_add = [p for p in _candidates if os.path.exists(os.path.join(BASE_DIR, p))]
         if not _to_add:
@@ -203,6 +231,7 @@ def main():
     check_eumetsat_precip_forecast()
     check_eumetsat_lightning_forecast()
     check_eumetsat_ir_motion()
+    check_eumetsat_precip_motion()
 
     git_push_satellite()
 
