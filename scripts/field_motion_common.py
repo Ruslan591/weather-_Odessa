@@ -256,6 +256,34 @@ def is_uniform(mask):
     return min(frac, 1 - frac) < MIN_FRACTION_FOR_CORR
 
 
+def estimate_motion_dt(masks, times_iso):
+    """То же, что estimate_motion(masks, dt_minutes), но dt между парой
+    считается из РЕАЛЬНЫХ таймстемпов (см. estimate_motion_continuous —
+    та же причина: персистентный буфер может содержать пропуски, и
+    фиксированный шаг тогда завысит/занизит скорость для затронутой пары).
+    Плюс явная защита от кадров-дублей (is_duplicate_pair) — у estimate_motion()
+    её нет, там дубль просто давал бы честный (0,0) и не отличался от
+    "объект не двигался", здесь же с плавающим dt дубль (diff=0 при dt>0)
+    исказил бы среднее так же, как в estimate_motion_continuous."""
+    vx_list, vy_list = [], []
+    times_min = [_parse_iso_minutes(t) for t in times_iso]
+    for i in range(len(masks) - 1):
+        dt_h = (times_min[i + 1] - times_min[i]) / 60.0
+        if dt_h <= 0:
+            continue
+        m_prev, m_curr = masks[i], masks[i + 1]
+        if is_uniform(m_prev) or is_uniform(m_curr):
+            continue
+        if np.array_equal(m_prev, m_curr):
+            continue
+        dy_px, dx_px = phase_shift_px(m_prev, m_curr)
+        vx_list.append((dx_px * KM_PER_PX_X) / dt_h)
+        vy_list.append((-dy_px * KM_PER_PX_Y) / dt_h)
+    if not vx_list:
+        return None, None, 0
+    return float(np.mean(vx_list)), float(np.mean(vy_list)), len(vx_list)
+
+
 def estimate_motion(masks, dt_minutes):
     vx_list, vy_list = [], []
     dt_h = dt_minutes / 60.0
