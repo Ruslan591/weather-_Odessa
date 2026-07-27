@@ -25,6 +25,8 @@ let _eumetsatLightningForecastData      = null;
 let _eumetsatLightningForecastFetchedAt = 0;
 let _eumetsatIrMotionData      = null;
 let _eumetsatIrMotionFetchedAt = 0;
+let _eumetsatPrecipMotionData      = null;
+let _eumetsatPrecipMotionFetchedAt = 0;
 
 async function loadEumetsatCloudForecast(){
     if(Date.now() - _eumetsatForecastFetchedAt < 12 * 60000) return; // раз в 12 мин
@@ -91,6 +93,23 @@ async function loadEumetsatIrMotion(){
         renderNearbyPrecipCard();
     } catch(e){
         _eumetsatIrMotionFetchedAt = 0;
+    }
+}
+
+async function loadEumetsatPrecipMotion(){
+    if(Date.now() - _eumetsatPrecipMotionFetchedAt < 10 * 60000) return; // раз в 10 мин
+    _eumetsatPrecipMotionFetchedAt = Date.now();
+    try {
+        const r = await fetch(
+            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_precip_motion.json",
+            { cache: "no-store" }
+        );
+        if(!r.ok) return;
+        const j = await r.json();
+        if(j && j.timestamp) _eumetsatPrecipMotionData = j;
+        renderNearbyPrecipCard();
+    } catch(e){
+        _eumetsatPrecipMotionFetchedAt = 0;
     }
 }
 
@@ -190,6 +209,16 @@ function _renderPrecipForecastLines(f){
     });
 }
 
+function _renderPrecipMotionLines(f){
+    return _renderFieldForecastLines(f, {
+        title: "Осадки (MTG h40b, буфер 6×10 мин)",
+        stateOnValue: "precip", stateOnLabel: "сейчас есть осадки", stateOffLabel: "сейчас без осадков",
+        massTargetValue: "precip_mass", targetMassLabel: "ближайшие осадки", targetClearingLabel: "ближайший просвет",
+        probVerb: "принесёт осадки",
+        staleMin: 20,
+    });
+}
+
 function _renderLightningForecastLines(f){
     return _renderFieldForecastLines(f, {
         title: "Молния",
@@ -275,7 +304,7 @@ function renderNearbyPrecipCard(){
     if(!card) return;
 
     const anyData = _eumetsatForecastData || _eumetsatPrecipForecastData
-        || _eumetsatLightningForecastData || _eumetsatIrMotionData;
+        || _eumetsatLightningForecastData || _eumetsatIrMotionData || _eumetsatPrecipMotionData;
     if(!anyData){ card.innerHTML = ""; return; }
 
     card.innerHTML = `
@@ -284,6 +313,7 @@ function renderNearbyPrecipCard(){
         ${_renderCloudForecastLines(_eumetsatForecastData)}
         ${_renderIrMotionLines(_eumetsatIrMotionData)}
         ${_renderPrecipForecastLines(_eumetsatPrecipForecastData)}
+        ${_renderPrecipMotionLines(_eumetsatPrecipMotionData)}
         ${_renderLightningForecastLines(_eumetsatLightningForecastData)}
         <div class="small muted" style="margin-top:14px;">
             Data: <a href="https://www.eumetsat.int/" target="_blank" rel="noopener" style="color:#72c8ff;">EUMETSAT</a>
