@@ -231,7 +231,8 @@ function _renderLightningForecastLines(f){
 
 function _renderIrStationLine(g){
     if(!g.station_state) return "";
-    const label = g.station_state === "cloud" ? "облачно" : "ясно";
+    const labels = { clear: "ясно", variable: "переменная облачность", cloud: "облачно" };
+    const label = labels[g.station_state] || g.station_state;
     return `<div class="small muted" style="margin-top:2px;">Прямо над станцией сейчас: ${label}.</div>`;
 }
 
