@@ -34,6 +34,14 @@
                       (тепловое излучение, не отражённый свет; огней
                       городов на нём физически нет). Обновление раз в
                       10 мин. Нужен явный style (mtg_fd_ir105_hrfi_grayscale).
+     mtg_fd:rgb_cloudtype — Cloud Type RGB (MTG) — различение типов
+                      облаков (высокие толстые ледяные/средние ледяные/
+                      тонкий перистый) через комбинацию NIR1.38+VIS0.64+
+                      NIR1.6. РАБОТАЕТ ТОЛЬКО ДНЁМ (нужен отражённый
+                      свет) — ночью недостоверно. Style "raster"
+                      (дефолтный у GeoServer для этого слоя, без
+                      namespace-префикса — подтверждено вручную через
+                      GetCapabilities). Обновление раз в 10 мин.
 
    ЛЕГЕНДА: GetLegendGraphic у этого WMS для mosaic-слоёв (clm/cth/h60b/
    gii_kindex/li_afa) НЕ работает надёжно — сервер у части таких слоёв
@@ -81,6 +89,11 @@ const LEGEND_HTML = {
     ir108: `
         <div class="gradBar" style="background:linear-gradient(90deg,#111111,#666666,#cccccc,#ffffff);"></div>
         <div>яркостная температура верхней границы облака (10.5мкм, MTG FCI, 1км) — холоднее (выше облако) обычно светлее на этой шкале; точной шкалы в °C нет. Работает одинаково днём и ночью.</div>`,
+    cloudtype: `
+        <div class="swatchRow"><span class="swatch" style="background:rgb(230,200,60);"></span>толстые высокие ледяные облака (грозы, мощная конвекция)</div>
+        <div class="swatchRow"><span class="swatch" style="background:rgb(90,180,90);"></span>толстые средние ледяные облака / иногда снег</div>
+        <div class="swatchRow"><span class="swatch" style="background:rgb(200,120,200);"></span>тонкий перистый поверх нижней облачности/снега — оттенок гуляет (красноватый/жёлтый/белёсый)</div>
+        <div>Составлено из NIR1.38 (высота), VIS0.64 (толщина), NIR1.6 (фаза). <b>Работает только днём</b> (нужен отражённый видимый/ближний ИК свет) — ночью изображение недостоверно/чёрное.</div>`,
 };
 
 const LAYERS = {
@@ -117,6 +130,12 @@ const LAYERS = {
     ir108: {
         name: "mtg_fd:ir105_hrfi",
         style: "mtg_fd:mtg_fd_ir105_hrfi_grayscale",
+        stepMinutes: 10,
+        opacity: 1.0,
+    },
+    cloudtype: {
+        name: "mtg_fd:rgb_cloudtype",
+        style: "raster",
         stepMinutes: 10,
         opacity: 1.0,
     },
