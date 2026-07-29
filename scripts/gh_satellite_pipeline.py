@@ -196,6 +196,36 @@ def check_eumetsat_cloud_phase_type():
         print(f"  [WARN] eumetsat_cloud_phase_type.py: {e}")
 
 
+def check_eumetsat_anim_render():
+    # MP4-петли (2ч) на каждый слой просмотрщика eumetsat.html — вместо
+    # живой покадровой WMS-анимации в браузере (см. eumetsat_anim_render.py
+    # docstring). Тяжелее остальных проверок (до ~9*13 GetMap-запросов на
+    # широкий обзорный кадр), поэтому гейт реже — 20 мин, не 10-15.
+    manifest_file = os.path.join(BASE_DIR, "data", "anim", "manifest.json")
+    now_utc = datetime.now(timezone.utc)
+    try:
+        if os.path.exists(manifest_file):
+            with open(manifest_file, "r", encoding="utf-8") as f:
+                manifest = json.load(f)
+            times = [v for v in manifest.values() if v]
+            if times:
+                last_time = max(
+                    datetime.strptime(t, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                    for t in times
+                )
+                if (now_utc - last_time).total_seconds() < 20 * 60:
+                    return
+    except Exception:
+        pass
+    try:
+        subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "eumetsat_anim_render.py")],
+            cwd=BASE_DIR, capture_output=False, timeout=600
+        )
+    except Exception as e:
+        print(f"  [WARN] eumetsat_anim_render.py: {e}")
+
+
 def git_push_satellite():
     """Коммитит и пушит только файлы спутникового модуля."""
     try:
@@ -218,6 +248,17 @@ def git_push_satellite():
             "data/eumetsat_precip_motion.json",
             "data/eumetsat_precip_motion_debug.json",
             "data/eumetsat_precip_buffer.npz",
+            "data/anim/manifest.json",
+            "data/anim/clm.mp4",
+            "data/anim/cth.mp4",
+            "data/anim/h60b.mp4",
+            "data/anim/h40b.mp4",
+            "data/anim/gii_kindex.mp4",
+            "data/anim/li_afa.mp4",
+            "data/anim/geocolour.mp4",
+            "data/anim/ir108.mp4",
+            "data/anim/cloudtype.mp4",
+            "data/anim/cloudphase.mp4",
         ]
         _to_add = [p for p in _candidates if os.path.exists(os.path.join(BASE_DIR, p))]
         if not _to_add:
@@ -264,6 +305,7 @@ def main():
     check_eumetsat_lightning_forecast()
     check_eumetsat_ir_motion()
     check_eumetsat_precip_motion()
+    check_eumetsat_anim_render()
 
     git_push_satellite()
 
