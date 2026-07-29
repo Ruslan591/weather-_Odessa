@@ -27,6 +27,8 @@ let _eumetsatIrMotionData      = null;
 let _eumetsatIrMotionFetchedAt = 0;
 let _eumetsatPrecipMotionData      = null;
 let _eumetsatPrecipMotionFetchedAt = 0;
+let _eumetsatCloudPhaseTypeData      = null;
+let _eumetsatCloudPhaseTypeFetchedAt = 0;
 
 async function loadEumetsatCloudForecast(){
     if(Date.now() - _eumetsatForecastFetchedAt < 12 * 60000) return; // раз в 12 мин
@@ -113,6 +115,23 @@ async function loadEumetsatPrecipMotion(){
     }
 }
 
+async function loadEumetsatCloudPhaseType(){
+    if(Date.now() - _eumetsatCloudPhaseTypeFetchedAt < 10 * 60000) return; // раз в 10 мин
+    _eumetsatCloudPhaseTypeFetchedAt = Date.now();
+    try {
+        const r = await fetch(
+            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_cloud_phase_type.json",
+            { cache: "no-store" }
+        );
+        if(!r.ok) return;
+        const j = await r.json();
+        if(j && j.timestamp) _eumetsatCloudPhaseTypeData = j;
+        renderNearbyPrecipCard();
+    } catch(e){
+        _eumetsatCloudPhaseTypeFetchedAt = 0;
+    }
+}
+
 function _fmtObsTime(iso){
     if(!iso) return null;
     const d = new Date(iso);
@@ -148,12 +167,14 @@ function _renderFieldForecastLines(f, cfg){
     const timeTag = _obsTimeTag(f.timestamp, cfg.staleMin);
     const titleLine = `<div style="font-weight:600; color:#eee;">${cfg.title}${timeTag}</div>`;
     const stateLine = `<div class="small muted" style="margin-top:2px;">${stateStr}</div>`;
+    const extraHtml = cfg.extraHtml ? cfg.extraHtml(f) : "";
 
     if(f.distance_km_now == null){
         return `<div style="margin-top:14px;">
             ${titleLine}
             ${stateLine}
             <div class="small muted" style="margin-top:2px;">${f.verdict || "недостаточно данных для оценки"}.</div>
+            ${extraHtml}
         </div>`;
     }
 
@@ -186,7 +207,26 @@ function _renderFieldForecastLines(f, cfg){
         <div class="small muted" style="margin-top:2px;">${targetStr} к точке наблюдения: ${distStr}${speedStr}.</div>
         <div class="small muted" style="margin-top:2px;">${verdictLine}.</div>
         ${probLine}
+        ${extraHtml}
     </div>`;
+}
+
+function _renderCloudTrendExtra(f){
+    if(!f) return "";
+    let lines = "";
+    if(f.trend){
+        const t = f.trend;
+        if(t.density_verdict) lines += `<div class="small muted" style="margin-top:2px;">Плотность (радиус 50км): ${t.density_verdict}.</div>`;
+        if(t.height_verdict) lines += `<div class="small muted" style="margin-top:2px;">Высота верхушек: ${t.height_verdict}.</div>`;
+        if(t.shape_verdict) lines += `<div class="small muted" style="margin-top:2px;">Форма поля: ${t.shape_verdict}.</div>`;
+    }
+    // техническая выноска: сколько снимков реально накоплено в буфере сейчас
+    // и через сколько минут накопится полное 2-часовое окно (просьба —
+    // "в памяти N снимков, запуск анализа через N минут")
+    if(f.buffer_status && f.buffer_status.note){
+        lines += `<div class="small muted" style="margin-top:2px; opacity:0.65; font-size:0.85em;">${f.buffer_status.note}.</div>`;
+    }
+    return lines;
 }
 
 function _renderCloudForecastLines(f){
@@ -196,6 +236,7 @@ function _renderCloudForecastLines(f){
         massTargetValue: "cloud_mass", targetMassLabel: "ближайшее облако", targetClearingLabel: "ближайший просвет",
         probVerb: "принесёт изменение погоды",
         staleMin: 25,
+        extraHtml: _renderCloudTrendExtra,
     });
 }
 
@@ -309,18 +350,57 @@ function _renderIrAreaLine(area){
     return `<div class="small muted" style="margin-top:2px;">Наблюдаемая область: ${windowStr} с центром у Одессы (${lat}°N, ${lon}°E)${radiusStr}.</div>`;
 }
 
+// Cloud Phase/Type RGB — не трекинг движения (это уже делают Cloud
+// Mask/IR/precip выше), а качественный тренд фазы (вода->лёд->гроза) и
+// грубой группы облачности. Анкеры цвета — первая, не откалиброванная по
+// реальным сценам версия (см. method_note в самом JSON) — поэтому здесь же
+// показываем unclassified_fraction, чтобы было видно, когда анкеры
+// разъезжаются с реальной картинкой.
+function _renderCloudPhaseTypeLines(g){
+    if(!g) return "";
+    const timeTag = _obsTimeTag(g.timestamp, 15);
+    const titleLine = `<div style="font-weight:600; color:#eee;">Фаза/тип облаков (MTG RGB)${timeTag}</div>`;
+
+    if(!g.phase_verdict){
+        return `<div style="margin-top:14px;">
+            ${titleLine}
+            <div class="small muted" style="margin-top:2px;">${g.verdict || "недостаточно данных"}.</div>
+        </div>`;
+    }
+
+    let unclassifiedLine = "";
+    if(g.unclassified_fraction_now != null && g.unclassified_fraction_now > 0.3){
+        const pct = Math.round(g.unclassified_fraction_now * 100);
+        unclassifiedLine = `<div class="small muted" style="margin-top:2px; color:#e0a030;">⚠ ${pct}% пикселей области не распознано цветовыми анкерами (первая версия, требует калибровки).</div>`;
+    }
+
+    const bufferLine = (g.buffer_status && g.buffer_status.note)
+        ? `<div class="small muted" style="margin-top:2px; opacity:0.65; font-size:0.85em;">${g.buffer_status.note}.</div>`
+        : "";
+
+    return `<div style="margin-top:14px;">
+        ${titleLine}
+        <div class="small muted" style="margin-top:2px;">${g.phase_verdict}.</div>
+        <div class="small muted" style="margin-top:2px;">${g.type_verdict}.</div>
+        ${unclassifiedLine}
+        ${bufferLine}
+    </div>`;
+}
+
 function renderNearbyPrecipCard(){
     const card = document.getElementById("nearbyPrecipCard");
     if(!card) return;
 
     const anyData = _eumetsatForecastData || _eumetsatPrecipForecastData
-        || _eumetsatLightningForecastData || _eumetsatIrMotionData || _eumetsatPrecipMotionData;
+        || _eumetsatLightningForecastData || _eumetsatIrMotionData || _eumetsatPrecipMotionData
+        || _eumetsatCloudPhaseTypeData;
     if(!anyData){ card.innerHTML = ""; return; }
 
     card.innerHTML = `
         <div class="cardTitle">Анализ спутниковых снимков (EUMETSAT)</div>
         <div class="small muted">Точка наблюдения: станция "${STATION_LABEL}"</div>
         ${_renderCloudForecastLines(_eumetsatForecastData)}
+        ${_renderCloudPhaseTypeLines(_eumetsatCloudPhaseTypeData)}
         ${_renderIrMotionLines(_eumetsatIrMotionData)}
         ${_renderPrecipForecastLines(_eumetsatPrecipForecastData)}
         ${_renderPrecipMotionLines(_eumetsatPrecipMotionData)}
