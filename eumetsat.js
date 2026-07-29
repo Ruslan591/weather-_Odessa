@@ -208,7 +208,32 @@ function buildLayerPair(key, timeIso){
         opacity: 0,
         time: timeIso,
     };
-    return [L.tileLayer.wms(WMS_BASE, opts), L.tileLayer.wms(WMS_BASE, opts)];
+    const la = L.tileLayer.wms(WMS_BASE, opts);
+    const lb = L.tileLayer.wms(WMS_BASE, opts);
+    // Каждый WMS-слой в Leaflet тайлится на стандартную XYZ-сетку — на
+    // экран может уйти НЕСКОЛЬКО отдельных GetMap-запросов (по тайлу), и
+    // событие 'load' слоя срабатывает, когда очередь загрузок ОПУСТЕЛА —
+    // включая тайлы, которые не загрузились, а упали по ошибке/таймауту
+    // (они просто помечаются "готовыми" с пустым содержимым). Раньше это
+    // означало: 'load' пришёл -> считаем кадр целиком готовым -> прячем
+    // старый слой -> но там, где упавший тайл, теперь видно НАСКВОЗЬ (базовая
+    // карта) — ровно тот "полукадр"/дыра с скриншота. Считаем долю упавших
+    // тайлов и НЕ подменяем кадр при массовом сбое (>15%) — старый кадр
+    // просто остаётся ещё один тик, тихо, без дыр. Единичный краевой тайл
+    // (например, у самой границы покрытия продукта) — терпим, иначе один
+    // "вечно недоступный" тайл у края карты заморозит показ навсегда.
+    la._tilesTotal = 0; la._tilesError = 0;
+    lb._tilesTotal = 0; lb._tilesError = 0;
+    la.on("tileloadstart", () => { la._tilesTotal++; });
+    lb.on("tileloadstart", () => { lb._tilesTotal++; });
+    la.on("tileerror", () => { la._tilesError++; });
+    lb.on("tileerror", () => { lb._tilesError++; });
+    return [la, lb];
+}
+
+function _tooManyTileErrors(layer){
+    if(layer._tilesTotal === 0) return false;
+    return (layer._tilesError / layer._tilesTotal) > 0.15;
 }
 
 function setLayer(key){
@@ -244,10 +269,18 @@ function setLayer(key){
     const targetOpacity = LAYERS[key].opacity ?? 0.75;
     const reveal = () => {
         if(myToken !== frameToken) return; // сменили вкладку/кадр ещё раз, пока грузилось
+        if(_tooManyTileErrors(la)){
+            // тихая повторная попытка тем же кадром — лучше показать чуть
+            // позже, чем один раз мигнуть массовой дырой
+            la._tilesTotal = 0; la._tilesError = 0;
+            la.setParams({ time: isoNoMillis(timeSteps[position]) });
+            la.once("load", reveal);
+            return;
+        }
         la.setOpacity(targetOpacity);
     };
     la.once("load", reveal);
-    setTimeout(reveal, 4000); // подстраховка, если 'load' не пришёл
+    setTimeout(reveal, 4000); // подстраховка, если 'load' не пришёл вовсе
 
     updateTimestampLabel();
 }
@@ -261,10 +294,19 @@ function renderCurrentFrame(){
     const active = activeIsA ? layerA : layerB;
 
     const myToken = ++frameToken;
+    inactive._tilesTotal = 0; inactive._tilesError = 0;
     inactive.setParams({ time: timeIso });
 
     const swapIn = () => {
         if(myToken !== frameToken) return; // устарело — уже перескочили на другой кадр
+        if(_tooManyTileErrors(inactive)){
+            // массовый сбой тайлов этого кадра — не подменяем видимый слой
+            // (иначе на его месте будет видна голая базовая карта, см.
+            // скриншот), просто оставляем старый кадр ещё один тик;
+            // следующий renderCurrentFrame (по таймеру/слайдеру) запросит
+            // кадр заново
+            return;
+        }
         inactive.setOpacity(targetOpacity);
         active.setOpacity(0);
         activeIsA = !activeIsA;
