@@ -13,7 +13,7 @@ concurrency:
 jobs:
   run-satellite:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -26,6 +26,15 @@ jobs:
 
       - name: Установка Python-зависимостей
         run: pip install numpy scipy Pillow requests
+
+      - name: Установка ffmpeg (для eumetsat_anim_render.py)
+        # DEBIAN_FRONTEND=noninteractive + NEEDRESTART_MODE=a — без этого
+        # apt-get зависает на needrestart на ubuntu-latest (24.04), см.
+        # известную проблему в video-пайплайне этого же проекта.
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          NEEDRESTART_MODE: a
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
 
       - name: Настройка git для коммитов
         run: |
