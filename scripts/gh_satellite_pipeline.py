@@ -53,7 +53,8 @@ def check_eumetsat_point():
 
 
 def check_eumetsat_cloud_forecast():
-    # Мини-прогноз движения облачности (EUMETSAT Cloud Mask, 2 кадра).
+    # Мини-прогноз движения облачности (EUMETSAT Cloud Mask + CTH,
+    # персистентный буфер до 9 кадров = 2ч, шаг 15 мин, докачка 1 кадра/прогон).
     # Гейт 15 мин — реальные данные обновляются с той же частотой.
     out_file = os.path.join(BASE_DIR, "data", "eumetsat_cloud_forecast.json")
     now_utc = datetime.now(timezone.utc)
@@ -169,6 +170,32 @@ def check_eumetsat_precip_motion():
         print(f"  [WARN] eumetsat_precip_motion.py: {e}")
 
 
+def check_eumetsat_cloud_phase_type():
+    # Тренд фазы облаков (mtg_fd:rgb_cloudphase) и грубой группы облачности
+    # (mtg_fd:rgb_cloudtype) по HSV-анкерам — персистентный буфер до 13
+    # кадров (2ч, шаг 10 мин, докачка 1 кадра/прогон). Не трекинг движения
+    # (это делает Cloud Mask/IR), только качественный тренд фазы/группы.
+    # Гейт 10 мин.
+    out_file = os.path.join(BASE_DIR, "data", "eumetsat_cloud_phase_type.json")
+    now_utc = datetime.now(timezone.utc)
+    try:
+        if os.path.exists(out_file):
+            with open(out_file, "r", encoding="utf-8") as f:
+                prev = json.load(f)
+            last_time = datetime.strptime(prev["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            if (now_utc - last_time).total_seconds() < 10 * 60:
+                return
+    except Exception:
+        pass
+    try:
+        subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "eumetsat_cloud_phase_type.py")],
+            cwd=BASE_DIR, capture_output=False, timeout=90
+        )
+    except Exception as e:
+        print(f"  [WARN] eumetsat_cloud_phase_type.py: {e}")
+
+
 def git_push_satellite():
     """Коммитит и пушит только файлы спутникового модуля."""
     try:
@@ -177,6 +204,10 @@ def git_push_satellite():
             "data/eumetsat_point_debug.json",
             "data/eumetsat_cloud_forecast.json",
             "data/eumetsat_cloud_forecast_debug.json",
+            "data/eumetsat_cloud_buffer.npz",
+            "data/eumetsat_cloud_phase_type.json",
+            "data/eumetsat_cloud_phase_type_debug.json",
+            "data/eumetsat_cloud_phase_type_buffer.npz",
             "data/eumetsat_precip_forecast.json",
             "data/eumetsat_precip_forecast_debug.json",
             "data/eumetsat_lightning_forecast.json",
@@ -228,6 +259,7 @@ def main():
 
     check_eumetsat_point()
     check_eumetsat_cloud_forecast()
+    check_eumetsat_cloud_phase_type()
     check_eumetsat_precip_forecast()
     check_eumetsat_lightning_forecast()
     check_eumetsat_ir_motion()
