@@ -8,16 +8,40 @@ eumetsat_cloud_forecast.py — мини-прогноз облачности дл
   4) тренд ФОРМЫ (вытягивается/остаётся компактной) — аспект-рейшо
      bounding box крупнейшего облачного пятна в локальной области
 
-МЕТОД ДВИЖЕНИЯ: N_FRAMES кадров msg_fes:clm (Cloud Mask) с шагом
-PAST_STEP_MINUTES, классификация по 3 цветам легенды, сдвиг поля между
-каждой парой кадров через FFT phase correlation (окно Ханнинга — защита от
-вырожденных случаев вроде почти прямой линии фронта через весь тайл),
-скорости усреднены по всем парам. Позиция ближайшей "противоположной" точки
-(просвет, если сейчас облачно; облако, если ясно) берётся с самого свежего
-кадра.
+ЗАЧЕМ ПЕРСИСТЕНТНЫЙ БУФЕР (data/eumetsat_cloud_buffer.npz):
+Раньше каждый прогон качал N_FRAMES=4 кадра msg_fes:clm + 4 кадра msg_fes:cth
+заново (8 GetMap-запросов), хотя 3 из 4 уже качались в прошлый прогон 15 минут
+назад. Теперь буфер хранится между прогонами (как в eumetsat_ir_motion.py и
+eumetsat_precip_motion.py): обычный прогон докачивает ТОЛЬКО один новый кадр
+(clm+cth = 2 запроса вместо 8), добавляет его в конец, самый старый выпадает
+(FIFO, максимум MAX_FRAMES). Полная перезакачка происходит только при
+"бутстрапе" — буфера ещё нет, повреждён, или пропущено слишком много прогонов.
 
-МЕТОД ПЛОТНОСТИ/ВЫСОТЫ/ФОРМЫ: сравниваем ПЕРВЫЙ и ПОСЛЕДНИЙ из N_FRAMES
-кадров в локальной области (круг радиуса LOCAL_RADIUS_KM вокруг Одессы):
+ЗАЧЕМ MAX_FRAMES=9 (не 4): msg_fes обновляется раз в 15 минут (см.
+eumetsat_ir_motion.py/precip_motion.py про частоты слоёв), поэтому 9 кадров
+с шагом 15 мин = 120 минут (ровно 2 часа) истории — по концепции
+многоуровневого анализа атмосферы. Тренды плотности/высоты/формы теперь
+сравнивают САМЫЙ старый и САМЫЙ новый кадр буфера, то есть по мере наполнения
+буфера окно сравнения растёт с ~15 мин (сразу после бутстрапа с нуля) до
+полных 2 часов — это ожидаемо и отражено в buffer_status ниже, а не баг.
+
+УПАКОВКА ДВУХ ПОЛЕЙ В ОДИН БУФЕР: field_motion_common.save_frame_buffer()
+хранит список 2D-массивов как есть, без привязки к смыслу пикселя — поэтому
+на кадр пакуется ОДИН (3,H,W) float32-массив: канал 0 = is_cloud (0/1),
+канал 1 = valid (0/1, нет данных = 0), канал 2 = cth_ordinal_index. Это
+позволяет переиспользовать общие load_frame_buffer/save_frame_buffer без
+изменений в field_motion_common.py.
+
+МЕТОД ДВИЖЕНИЯ: классификация по 3 цветам легенды Cloud Mask, сдвиг поля
+между каждой парой кадров буфера через FFT phase correlation (окно Ханнинга),
+скорости усреднены по всем парам с РЕАЛЬНЫМ dt между кадрами (буфер может
+содержать пропуски — одиночный недоступный слот не обрывает весь прогон, см.
+bootstrap ниже, — тогда шаг между соседними кадрами не всегда ровно
+STEP_MINUTES). Позиция ближайшей "противоположной" точки (просвет, если
+сейчас облачно; облако, если ясно) берётся с самого свежего кадра буфера.
+
+МЕТОД ПЛОТНОСТИ/ВЫСОТЫ/ФОРМЫ: сравниваем ПЕРВЫЙ и ПОСЛЕДНИЙ кадр буфера в
+локальной области (круг радиуса LOCAL_RADIUS_KM вокруг Одессы):
   - плотность = доля облачных пикселей в круге
   - высота = средний "ординальный индекс" по цветовой шкале CTH (НЕ метры —
     официальной таблицы цвет→высота у нас, в отличие от RainViewer, нет;
@@ -32,9 +56,9 @@ PAST_STEP_MINUTES, классификация по 3 цветам легенды
 ВАЖНО — ограничения:
   - Линейная экстраполяция скорости, разрешение Cloud Mask/CTH ~8-10км/px.
   - Тренды плотности/высоты/формы — сравнение первого и последнего кадра
-    (45 минут), не полноценная регрессия. Пороги для "существенно
-    изменилось" подобраны эмпирически, не откалиброваны по историческим
-    данным.
+    буфера (до 2 часов при заполненном буфере), не полноценная регрессия.
+    Пороги для "существенно изменилось" подобраны эмпирически, не
+    откалиброваны по историческим данным.
   - Высота — ординальный индекс по приближённым анкерам цвета, не метры.
   - Прозрачные/необработанные (no-data) пиксели явно исключаются из
     классификации (не прибиваются к ближайшему цвету), а поиск края
@@ -46,41 +70,39 @@ PAST_STEP_MINUTES, классификация по 3 цветам легенды
     вероятности, что оно принесёт изменение погоды, по близости точки
     сближения, площади поля и уверенности в оценке скорости.
 
-Пишет data/eumetsat_cloud_forecast.json.
+Пишет data/eumetsat_cloud_forecast.json (результат) и
+data/eumetsat_cloud_buffer.npz (персистентный буфер кадров).
 """
 
-import io
-import json
 import math
 import os
-from datetime import datetime, timedelta, timezone
 
 import numpy as np
-import requests
-from PIL import Image
 from scipy import ndimage
+
+import field_motion_common as fc
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_cloud_forecast.json")
 DEBUG_FILE = os.path.join(BASE_DIR, "data", "eumetsat_cloud_forecast_debug.json")
+BUFFER_FILE = os.path.join(BASE_DIR, "data", "eumetsat_cloud_buffer.npz")
 
-WMS_BASE = "https://view.eumetsat.int/geoserver/wms"
 LAYER_CLM = "msg_fes:clm"
 LAYER_CTH = "msg_fes:cth"
 
-CENTER_LAT = 46.4406
-CENTER_LON = 30.7703
 CENTER_LABEL = "Одесса (СИНОП 33837)"
 
-HALF_WINDOW_DEG = 2.5   # ~190км при этой широте
-TILE_SIZE = 400
-KM_PER_DEG_LAT = 111.32
-KM_PER_DEG_LON = 111.32 * math.cos(math.radians(CENTER_LAT))  # ~76.8 км/град
-KM_PER_PX_X = (2 * HALF_WINDOW_DEG * KM_PER_DEG_LON) / TILE_SIZE
-KM_PER_PX_Y = (2 * HALF_WINDOW_DEG * KM_PER_DEG_LAT) / TILE_SIZE
+TILE_SIZE = fc.TILE_SIZE
+KM_PER_DEG_LAT = fc.KM_PER_DEG_LAT
+KM_PER_DEG_LON = fc.KM_PER_DEG_LON
+KM_PER_PX_X = fc.KM_PER_PX_X
+KM_PER_PX_Y = fc.KM_PER_PX_Y
+HALF_WINDOW_DEG = fc.HALF_WINDOW_DEG
 
-N_FRAMES = 4
-PAST_STEP_MINUTES = 15
+MAX_FRAMES = 9                   # 9 кадров * 15 мин шаг = 120 мин (2 часа)
+MIN_FRAMES_FOR_INCREMENTAL = 2   # меньше — недостаточно даже для одной пары
+STEP_MINUTES = 15
+STALE_BUFFER_SECONDS = 35 * 60   # ~2.3x шага — если последний кадр буфера старше, бутстрап заново
 AFFECT_THRESHOLD_KM = 15.0
 STATIONARY_SPEED_KMH = 3.0
 MIN_FRACTION_FOR_CORR = 0.02
@@ -98,8 +120,6 @@ MIN_SIGNIFICANT_BLOB_PX = 40     # ~50-55 км² при текущем разр�
 # "Опорная" площадь синоптически значимого пятна для нормировки вероятности
 # (больше — вероятность влияния ближе к максимуму; меньше — доля от неё).
 SIGNIFICANT_AREA_REF_KM2 = 1200.0
-
-TIMEOUT = 25
 
 CLM_ANCHORS = {
     "clear_water": (0, 0, 255),
@@ -126,12 +146,8 @@ _CTH_RGB = np.array([a[1] for a in CTH_ORDINAL_ANCHORS], dtype=np.float32)
 COMPASS = ["С", "СВ", "В", "ЮВ", "Ю", "ЮЗ", "З", "СЗ"]
 
 
-def _write_debug(payload):
-    try:
-        with open(DEBUG_FILE, "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
+def _fmt_time(dt):
+    return dt.strftime("%Y-%m-%dT%H:%M:00.000Z")
 
 
 def _bearing_compass(dx_km, dy_km):
@@ -143,43 +159,6 @@ def _bearing_compass(dx_km, dy_km):
 def _compass(bearing_deg):
     idx = int(((bearing_deg + 22.5) % 360) // 45)
     return COMPASS[idx]
-
-
-def _fetch_tile(layer_name, time_iso, retries=2, delay=4):
-    import time as _time
-
-    min_lon = CENTER_LON - HALF_WINDOW_DEG
-    max_lon = CENTER_LON + HALF_WINDOW_DEG
-    min_lat = CENTER_LAT - HALF_WINDOW_DEG
-    max_lat = CENTER_LAT + HALF_WINDOW_DEG
-    params = {
-        "service": "WMS",
-        "version": "1.3.0",
-        "request": "GetMap",
-        "layers": layer_name,
-        "styles": "",
-        "crs": "CRS:84",
-        "bbox": f"{min_lon},{min_lat},{max_lon},{max_lat}",
-        "width": TILE_SIZE,
-        "height": TILE_SIZE,
-        "format": "image/png",
-        "transparent": "true",
-    }
-    if time_iso:
-        params["time"] = time_iso
-
-    last_err = None
-    for attempt in range(1, retries + 1):
-        try:
-            r = requests.get(WMS_BASE, params=params, timeout=TIMEOUT)
-            r.raise_for_status()
-            img = Image.open(io.BytesIO(r.content)).convert("RGBA")
-            return np.array(img)
-        except Exception as e:
-            last_err = e
-            if attempt < retries:
-                _time.sleep(delay)
-    raise last_err
 
 
 def _classify_cloud_mask(arr):
@@ -210,13 +189,25 @@ def _cth_ordinal_index(arr):
     return _CTH_IDX[nearest_idx].reshape(h, w)
 
 
+def _pack_frame(is_cloud, valid, cth_idx):
+    """Упаковывает 3 поля кадра в один (3,H,W) float32 массив для буфера
+    (см. докстринг модуля — зачем: переиспользовать общий save/load без
+    изменений field_motion_common.py)."""
+    return np.stack([is_cloud.astype(np.float32), valid.astype(np.float32),
+                      cth_idx.astype(np.float32)], axis=0)
+
+
+def _unpack_frame(packed):
+    return packed[0] > 0.5, packed[1] > 0.5, packed[2]
+
+
 def _pixel_to_km_offset(row, col):
     frac_x = col / (TILE_SIZE - 1)
     frac_y = row / (TILE_SIZE - 1)
-    lon = CENTER_LON - HALF_WINDOW_DEG + frac_x * (2 * HALF_WINDOW_DEG)
-    lat = CENTER_LAT + HALF_WINDOW_DEG - frac_y * (2 * HALF_WINDOW_DEG)
-    dx_km = (lon - CENTER_LON) * KM_PER_DEG_LON
-    dy_km = (lat - CENTER_LAT) * KM_PER_DEG_LAT
+    lon = fc.CENTER_LON - HALF_WINDOW_DEG + frac_x * (2 * HALF_WINDOW_DEG)
+    lat = fc.CENTER_LAT + HALF_WINDOW_DEG - frac_y * (2 * HALF_WINDOW_DEG)
+    dx_km = (lon - fc.CENTER_LON) * KM_PER_DEG_LON
+    dy_km = (lat - fc.CENTER_LAT) * KM_PER_DEG_LAT
     return dx_km, dy_km
 
 
@@ -261,9 +252,7 @@ def _parabolic_subpixel(c_minus, c_zero, c_plus):
     """Субпиксельная поправка к целочисленному пику по трём соседним точкам
     корреляции (параболическая интерполяция) — без неё любой сдвиг меньше
     1 px (слабый ветер / малый интервал между кадрами) округляется ровно
-    до 0, и метод не отличает "реально стоит на месте" от "движется
-    медленнее одного пикселя за интервал". См. ту же функцию в
-    field_motion_common.py (используется precip/lightning/ir-скриптами)."""
+    до 0. См. ту же функцию в field_motion_common.py."""
     denom = c_minus - 2 * c_zero + c_plus
     if abs(denom) < 1e-9:
         return 0.0
@@ -301,10 +290,19 @@ def _is_uniform(mask):
     return min(frac_cloud, 1 - frac_cloud) < MIN_FRACTION_FOR_CORR
 
 
-def _estimate_motion(masks, dt_minutes):
+def _estimate_motion(masks, times_iso):
+    """Как раньше, но dt между КАЖДОЙ парой кадров — РЕАЛЬНЫЙ (из
+    таймстемпов буфера), а не фиксированный STEP_MINUTES: персистентный
+    буфер может содержать пропуски (одиночный недоступный слот в bootstrap
+    пропускается, см. main()), и тогда интервал между соседними кадрами
+    может быть кратен шагу — при фиксированном шаге скорость для такой пары
+    была бы посчитана неверно."""
     vx_list, vy_list = [], []
-    dt_h = dt_minutes / 60.0
+    times_min = [fc._parse_iso_minutes(t) for t in times_iso]
     for i in range(len(masks) - 1):
+        dt_h = (times_min[i + 1] - times_min[i]) / 60.0
+        if dt_h <= 0:
+            continue
         m_prev, m_curr = masks[i], masks[i + 1]
         if _is_uniform(m_prev) or _is_uniform(m_curr):
             continue
@@ -389,50 +387,139 @@ def _density_height_shape_trend(is_cloud_frames, cth_index_frames, valid_frames,
 
 def _change_probability(effective_distance_km, blob_area_km2, confidence):
     """Эвристическая (НЕ физическая модель осадков) оценка вероятности, что
-    значимое облачное поле принесёт изменение погоды в точку наблюдения.
-    Складывается из трёх факторов:
-      - proximity: чем ближе расчётная точка сближения (или просто текущая
-        дистанция, если скорость не посчиталась), тем выше
-      - size: чем крупнее найденное связное пятно относительно
-        SIGNIFICANT_AREA_REF_KM2, тем увереннее это синоптически значимое
-        поле, а не случайный мелкий фрагмент
-      - confidence: доля пар кадров, по которым вообще удалось оценить
-        скорость (не однородное поле) — чем меньше пар, тем ниже доверие
-    Веса (0.5/0.3/0.2) подобраны экспертно, не откалиброваны по истории."""
+    значимое облачное поле принесёт изменение погоды в точку наблюдения."""
     proximity = max(0.0, 1 - effective_distance_km / (AFFECT_THRESHOLD_KM * 4))
     size = min(1.0, blob_area_km2 / SIGNIFICANT_AREA_REF_KM2)
     score = 0.5 * proximity + 0.3 * size + 0.2 * confidence
     return int(round(max(5, min(95, 5 + 90 * score))))
 
 
-def main():
-    debug = {}
-    now = datetime.now(timezone.utc)
-    times_iso = []
-    for i in range(N_FRAMES - 1, -1, -1):
-        if i == 0:
-            times_iso.append(None)
-        else:
-            t = now - timedelta(minutes=PAST_STEP_MINUTES * i)
-            times_iso.append(t.strftime("%Y-%m-%dT%H:%M:00.000Z"))
+def _buffer_status(n_frames):
+    eta_min = max(0, (MAX_FRAMES - n_frames) * STEP_MINUTES)
+    span_now = max(0, (n_frames - 1) * STEP_MINUTES)
+    span_target = (MAX_FRAMES - 1) * STEP_MINUTES
+    if n_frames >= MAX_FRAMES:
+        note = f"буфер заполнен ({n_frames}/{MAX_FRAMES}), тренды считаются по полному окну ~{span_target} мин"
+    else:
+        note = (f"в памяти {n_frames}/{MAX_FRAMES} снимков (~{span_now} мин истории), "
+                f"полное {span_target}-минутное окно накопится через ~{eta_min} мин")
+    return {
+        "frames_in_memory": n_frames,
+        "frames_target": MAX_FRAMES,
+        "span_minutes_now": span_now,
+        "span_minutes_target": span_target,
+        "eta_full_window_min": eta_min,
+        "note": note,
+    }
 
-    clm_arrs, cth_arrs = [], []
-    for t_iso in times_iso:
+
+def main():
+    now = fc.datetime.now(fc.timezone.utc)
+    debug = {}
+
+    times, packed_frames = fc.load_frame_buffer(BUFFER_FILE)
+
+    stale = True
+    if times:
         try:
-            clm_arrs.append(_fetch_tile(LAYER_CLM, t_iso))
-            cth_arrs.append(_fetch_tile(LAYER_CTH, t_iso))
-        except Exception as e:
-            _write_debug({"status": "error", "stage": f"fetch {t_iso}", "error": str(e)})
-            print(f"  [WARN] eumetsat_cloud_forecast.py: fetch failed ({t_iso}): {e}")
+            last_t = fc.datetime.strptime(str(times[-1]), "%Y-%m-%dT%H:%M:00.000Z").replace(tzinfo=fc.timezone.utc)
+            stale = (now - last_t).total_seconds() > STALE_BUFFER_SECONDS
+        except Exception:
+            stale = True
+
+    # Авторитетное "самое свежее доступное время" слоя — из GetCapabilities
+    # (см. подробное обоснование в eumetsat_ir_motion.py), а не floor(now).
+    server_latest_iso, _ = fc.get_layer_latest_time(LAYER_CLM)
+    debug["server_latest_time"] = server_latest_iso
+
+    bootstrap = (not times) or (len(packed_frames) < MIN_FRAMES_FOR_INCREMENTAL) or stale
+    debug["bootstrap"] = bootstrap
+    debug["buffer_before"] = len(packed_frames)
+
+    if bootstrap:
+        if server_latest_iso:
+            latest_min = fc._parse_iso_minutes(server_latest_iso)
+            times_iso = [
+                fc.datetime.fromtimestamp((latest_min - STEP_MINUTES * i) * 60, tz=fc.timezone.utc)
+                .strftime("%Y-%m-%dT%H:%M:00.000Z")
+                for i in range(MAX_FRAMES - 1, -1, -1)
+            ]
+        else:
+            times_iso = fc.build_time_steps(STEP_MINUTES, MAX_FRAMES, latest_as_none=False)
+
+        new_times, new_packed, failed = [], [], []
+        for t_iso in times_iso:
+            try:
+                clm_arr = fc.fetch_tile(LAYER_CLM, t_iso)
+                cth_arr = fc.fetch_tile(LAYER_CTH, t_iso)
+            except Exception as e:
+                # Одиночный пропуск на конкретном историческом слоте — не
+                # повод обрывать весь прогон (см. подробности в
+                # eumetsat_ir_motion.py): пропускаем кадр, собираем остальные.
+                failed.append({"time": t_iso, "error": str(e)})
+                print(f"  [SKIP] eumetsat_cloud_forecast.py: bootstrap кадр {t_iso} недоступен, пропуск: {e}")
+                continue
+            is_cloud, valid = _classify_cloud_mask(clm_arr)
+            cth_idx = _cth_ordinal_index(cth_arr)
+            new_times.append(t_iso or _fmt_time(now))
+            new_packed.append(_pack_frame(is_cloud, valid, cth_idx))
+
+        if len(new_packed) < MIN_FRAMES_FOR_INCREMENTAL:
+            fc.write_debug(DEBUG_FILE, {"status": "error", "stage": "bootstrap", "failed": failed,
+                                         "note": f"годных кадров {len(new_packed)}/{MAX_FRAMES} — недостаточно для анализа"})
+            print(f"  [WARN] eumetsat_cloud_forecast.py: bootstrap провалился, годных кадров {len(new_packed)}/{MAX_FRAMES}")
             return
 
-    debug["frames_fetched"] = len(clm_arrs)
-    debug["times_requested"] = times_iso
+        if failed:
+            debug["bootstrap_failed_frames"] = failed
+        times, packed_frames = new_times, new_packed
+    else:
+        last_t_min = fc._parse_iso_minutes(times[-1])
+        if server_latest_iso:
+            server_min = fc._parse_iso_minutes(server_latest_iso)
+            if server_min <= last_t_min:
+                fc.write_debug(DEBUG_FILE, {"status": "skipped", **debug,
+                                             "note": f"сервер ещё не объявил кадр новее {times[-1]} (default={server_latest_iso})"})
+                print(f"  [SKIP] eumetsat_cloud_forecast.py: новых кадров пока нет (server default={server_latest_iso})")
+                return
+            next_t_iso = server_latest_iso
+        else:
+            next_t = fc.datetime.fromtimestamp((last_t_min + STEP_MINUTES) * 60, tz=fc.timezone.utc)
+            next_t_iso = _fmt_time(next_t)
 
-    classified = [_classify_cloud_mask(a) for a in clm_arrs]
-    is_cloud_frames = [c[0] for c in classified]
-    valid_frames = [c[1] for c in classified]
-    cth_index_frames = [_cth_ordinal_index(a) for a in cth_arrs]
+        try:
+            clm_arr = fc.fetch_tile(LAYER_CLM, next_t_iso)
+            cth_arr = fc.fetch_tile(LAYER_CTH, next_t_iso)
+        except Exception as e:
+            debug["awaited_time"] = next_t_iso
+            fc.write_debug(DEBUG_FILE, {"status": "skipped", **debug,
+                                         "note": f"следующий кадр ({next_t_iso}) ещё не опубликован"})
+            print(f"  [SKIP] eumetsat_cloud_forecast.py: следующий кадр ({next_t_iso}) ещё не опубликован: {e}")
+            return
+
+        is_cloud_new, valid_new = _classify_cloud_mask(clm_arr)
+        cth_idx_new = _cth_ordinal_index(cth_arr)
+        last_is_cloud, _, _ = _unpack_frame(packed_frames[-1])
+        if fc.is_duplicate_pair(last_is_cloud.astype(float), is_cloud_new.astype(float)):
+            debug["skipped_duplicate"] = True
+            fc.write_debug(DEBUG_FILE, {"status": "skipped", **debug,
+                                         "note": "новых данных ещё нет (дубль последнего кадра — задержка публикации)"})
+            print("  [SKIP] eumetsat_cloud_forecast.py: новых данных ещё нет (дубль)")
+            return
+
+        new_packed = _pack_frame(is_cloud_new, valid_new, cth_idx_new)
+        times = (times + [next_t_iso])[-MAX_FRAMES:]
+        packed_frames = (packed_frames + [new_packed])[-MAX_FRAMES:]
+
+    fc.save_frame_buffer(BUFFER_FILE, times, packed_frames, MAX_FRAMES)
+    debug["buffer_size"] = len(packed_frames)
+    debug["buffer_times"] = list(times)
+
+    unpacked = [_unpack_frame(p) for p in packed_frames]
+    is_cloud_frames = [u[0] for u in unpacked]
+    valid_frames = [u[1] for u in unpacked]
+    cth_index_frames = [u[2] for u in unpacked]
+
     is_cloud_now = is_cloud_frames[-1]
     valid_now = valid_frames[-1]
 
@@ -444,10 +531,11 @@ def main():
     nearest = _nearest_of_type(is_cloud_now, valid_now, want_cloud_target)
     p_now = nearest[:2] if nearest is not None else None
     blob_area_km2 = nearest[2] if nearest is not None else None
-    vx, vy, n_pairs = _estimate_motion(is_cloud_frames, PAST_STEP_MINUTES)
+    vx, vy, n_pairs = _estimate_motion(is_cloud_frames, times)
 
     local_mask = _local_area_mask()
     trend = _density_height_shape_trend(is_cloud_frames, cth_index_frames, valid_frames, local_mask)
+    buffer_status = _buffer_status(len(packed_frames))
 
     if p_now is None:
         out = {
@@ -516,7 +604,7 @@ def main():
                 "frame_pairs_used": n_pairs,
             }
             if target_type == "cloud_mass":
-                confidence = min(1.0, n_pairs / max(1, N_FRAMES - 1))
+                confidence = min(1.0, n_pairs / max(1, len(packed_frames) - 1))
                 out["probability_percent"] = _change_probability(cpa_km, blob_area_km2, confidence)
                 out["probability_note"] = (
                     "эвристика (близость точки максимального сближения + размер поля + "
@@ -524,13 +612,16 @@ def main():
                 )
 
     out["trend"] = trend
+    out["buffer_status"] = buffer_status
     out["method_note"] = (
-        f"Скорость усреднена по {N_FRAMES} кадрам Cloud Mask (шаг {PAST_STEP_MINUTES} мин, "
-        "phase correlation всего поля). Край облака/просвета ищется только среди связных "
+        f"Персистентный буфер до {MAX_FRAMES} кадров Cloud Mask + CTH (шаг {STEP_MINUTES} мин, "
+        "до 2 часов истории), хранится между прогонами (FIFO) — обычный прогон докачивает только "
+        "1 новый кадр вместо всех заново. Скорость усреднена по всем парам кадров буфера с реальным "
+        "dt (phase correlation всего поля). Край облака/просвета ищется только среди связных "
         f"областей >= {MIN_SIGNIFICANT_BLOB_PX}px (~{round(MIN_SIGNIFICANT_BLOB_PX*KM_PER_PX_X*KM_PER_PX_Y)}км²) "
-        "с учётом прозрачных no-data пикселей — единичный шум/антиалиасинг границы не считается "
-        "краем. Тренды плотности/высоты/формы — сравнение первого и последнего кадра в радиусе "
-        f"{round(LOCAL_RADIUS_KM)}км. Высота — ординальный индекс по цвету (не метры, официальной "
+        "с учётом прозрачных no-data пикселей. Тренды плотности/высоты/формы — сравнение первого и "
+        f"последнего кадра БУФЕРА в радиусе {round(LOCAL_RADIUS_KM)}км (окно растёт по мере наполнения "
+        "буфера, см. buffer_status). Высота — ординальный индекс по цвету (не метры, официальной "
         "таблицы нет). Вероятность (только когда сейчас ясно/переменная облачность и есть значимое "
         "приближающееся поле) — эвристическая оценка по близости/размеру/уверенности в скорости, "
         "не физическая модель осадков. Линейная экстраполяция, годится на ~1 час."
@@ -538,10 +629,11 @@ def main():
 
     os.makedirs(os.path.dirname(OUT_FILE), exist_ok=True)
     with open(OUT_FILE, "w", encoding="utf-8") as f:
+        import json
         json.dump(out, f, ensure_ascii=False, indent=2)
 
-    _write_debug({"status": "ok", **debug, "result": out})
-    print(f"  [OK] eumetsat_cloud_forecast.py: {out.get('verdict')}, trend={trend}")
+    fc.write_debug(DEBUG_FILE, {"status": "ok", **debug, "result": out})
+    print(f"  [OK] eumetsat_cloud_forecast.py: {out.get('verdict')}, buffer={len(packed_frames)}/{MAX_FRAMES}")
 
 
 if __name__ == "__main__":
