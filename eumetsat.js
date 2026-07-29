@@ -90,9 +90,8 @@ const LEGEND_HTML = {
         <div class="gradBar" style="background:linear-gradient(90deg,#111111,#666666,#cccccc,#ffffff);"></div>
         <div>яркостная температура верхней границы облака (10.5мкм, MTG FCI, 1км) — холоднее (выше облако) обычно светлее на этой шкале; точной шкалы в °C нет. Работает одинаково днём и ночью.</div>`,
     cloudtype: `
-        <div>R=NIR1.38 (высота: слабый сигнал у низкой облачности/земли, сильный — у высокой), G=VIS0.64 (оптическая толщина: слабый — тонкие облака, сильный — толстые/снег/лёд), B=NIR1.61 (фаза: слабый — толстый ЛЁД и снег, сильный — толстая ВОДА).</div>
-        <div style="margin-top:4px;">По офиц. Quick Guide EUMETSAT: тонкий перистый лёд — красноватый оттенок (темнее над морем). Также различаются высокий плотный лёд, низкая водяная облачность, смешанная фаза и переохлаждённые капли — но точные оттенки не сверял глазами с эталонным снимком гайда, 1:1 совпадение с этим WMS-рендером не гарантирую.</div>
-        <div style="margin-top:4px;"><b>Работает только днём</b> (нужен отражённый видимый/ближний ИК свет) — ночью изображение недостоверно/чёрное.</div>`,
+        <div>RGB-композит: различает типы облаков по текстуре/фазе (лёд/вода, тонкие/плотные). Официальной калиброванной шкалы нет.</div>
+        <div style="margin-top:4px;"><b>Работает только днём</b> — ночью изображение недостоверно/чёрное.</div>`,
 };
 
 const LAYERS = {
@@ -141,9 +140,11 @@ const LAYERS = {
 };
 
 let currentKey = "clm";
-let currentWmsLayer = null;  // видимый прямо сейчас слой
-let pendingWmsLayer = null;  // новый кадр грузится, ещё не показан
-let pendingLoadTimeout = null;
+let layerA = null;
+let layerB = null;
+let activeIsA = true;    // какой из двух слоёв сейчас видим (opacity=target)
+let frameToken = 0;      // счётчик поколений кадра — гасит устаревшие callback'и
+                          // 'load' от быстрой перемотки/анимации/смены слоя
 let timeSteps = [];       // массив Date, от старых к новым
 let position = 0;
 let animationTimer = false;
@@ -184,6 +185,32 @@ function updateTimestampLabel(){
     document.getElementById("eumSlider").value = position;
 }
 
+// ПОЧЕМУ ДВА ПОСТОЯННЫХ СЛОЯ, А НЕ add/remove НА КАЖДЫЙ КАДР:
+// Раньше новый L.tileLayer.wms создавался заново на каждый кадр и добавлялся
+// поверх старого, старый убирался по событию 'load' — но у Leaflet ЕЩЁ есть
+// собственный per-tile fade-in (плавное нарастание opacity каждого <img>
+// ПОСЛЕ события 'load' всего слоя), поэтому в момент удаления старого слоя
+// новый мог быть ещё не полностью непрозрачным — отсюда мелькание базовой
+// карты между кадрами. Теперь: два слоя добавлены на карту ОДИН РАЗ и больше
+// никогда не удаляются — виден только "активный" (opacity=target), у
+// неактивного opacity=0. Новый кадр грузится В НЕВИДИМЫЙ (opacity=0) слой
+// через setParams({time}), и только когда он полностью загружен, слои
+// меняются местами (мгновенный toggle opacity, а не add/remove DOM-узла) —
+// базовая карта (OSM) вообще не участвует в этом процессе.
+function buildLayerPair(key, timeIso){
+    const opts = {
+        layers: LAYERS[key].name,
+        styles: LAYERS[key].style || "",
+        format: "image/png",
+        transparent: true,
+        version: "1.3.0",
+        crs: L.CRS.EPSG4326,
+        opacity: 0,
+        time: timeIso,
+    };
+    return [L.tileLayer.wms(WMS_BASE, opts), L.tileLayer.wms(WMS_BASE, opts)];
+}
+
 function setLayer(key){
     currentKey = key;
     document.querySelectorAll("#eumLayerTabs button").forEach(b => {
@@ -198,71 +225,54 @@ function setLayer(key){
     slider.max = timeSteps.length - 1;
     slider.value = position;
 
-    if(currentWmsLayer){
-        map.removeLayer(currentWmsLayer);
-        currentWmsLayer = null;
-    }
-    if(pendingWmsLayer){
-        map.removeLayer(pendingWmsLayer);
-        pendingWmsLayer = null;
-    }
-    if(pendingLoadTimeout){
-        clearTimeout(pendingLoadTimeout);
-        pendingLoadTimeout = null;
-    }
-    renderCurrentFrame();
-}
+    // у нового ключа другой layers/styles — старую пару приходится
+    // пересоздать (это редкое событие, смена вкладки, а не каждый тик
+    // анимации, поэтому небольшой перерыв в отрисовке здесь не проблема)
+    frameToken++;
+    const myToken = frameToken;
+    if(layerA){ map.removeLayer(layerA); }
+    if(layerB){ map.removeLayer(layerB); }
 
-// Раньше здесь был currentWmsLayer.setParams({time}) — у нового времени
-// другой URL тайлов (кэш-ключ Leaflet), поэтому старые тайлы сразу
-// признавались "лишними" и удалялись ДО того, как новые успевали
-// загрузиться — отсюда мелькание базовой карты (OSM) между кадрами при
-// анимации/перемотке. Теперь: грузим новый слой ПОВЕРХ старого и убираем
-// старый только после события 'load' нового (все его тайлы готовы) — с
-// подстраховкой по таймеру на случай, если 'load' не придёт (например,
-// один тайл упал с ошибкой сети).
-function renderCurrentFrame(){
     const timeIso = isoNoMillis(timeSteps[position]);
+    const [la, lb] = buildLayerPair(key, timeIso);
+    layerA = la;
+    layerB = lb;
+    layerA.addTo(map);
+    layerB.addTo(map);
+    activeIsA = true;
 
-    // если предыдущий кадр всё ещё грузится, а мы уже перескочили дальше
-    // (быстрая перемотка/анимация) — он не нужен, убираем сразу
-    if(pendingWmsLayer){
-        map.removeLayer(pendingWmsLayer);
-        pendingWmsLayer = null;
-    }
-    if(pendingLoadTimeout){
-        clearTimeout(pendingLoadTimeout);
-        pendingLoadTimeout = null;
-    }
-
-    const incoming = L.tileLayer.wms(WMS_BASE, {
-        layers: LAYERS[currentKey].name,
-        styles: LAYERS[currentKey].style || "",
-        format: "image/png",
-        transparent: true,
-        version: "1.3.0",
-        crs: L.CRS.EPSG4326,
-        opacity: LAYERS[currentKey].opacity ?? 0.75,
-        time: timeIso,
-    });
-
-    pendingWmsLayer = incoming;
-    incoming.addTo(map);
-
-    const swapIn = () => {
-        if(pendingWmsLayer !== incoming) return; // устарело — уже сменили кадр
-        if(currentWmsLayer) map.removeLayer(currentWmsLayer);
-        currentWmsLayer = incoming;
-        pendingWmsLayer = null;
-        if(pendingLoadTimeout){ clearTimeout(pendingLoadTimeout); pendingLoadTimeout = null; }
+    const targetOpacity = LAYERS[key].opacity ?? 0.75;
+    const reveal = () => {
+        if(myToken !== frameToken) return; // сменили вкладку/кадр ещё раз, пока грузилось
+        la.setOpacity(targetOpacity);
     };
-
-    incoming.once("load", swapIn);
-    // подстраховка: если 'load' почему-то не пришёл (например, ошибка
-    // одного тайла) — не показывать старый кадр вечно
-    pendingLoadTimeout = setTimeout(swapIn, 4000);
+    la.once("load", reveal);
+    setTimeout(reveal, 4000); // подстраховка, если 'load' не пришёл
 
     updateTimestampLabel();
+}
+
+function renderCurrentFrame(){
+    const timeIso = isoNoMillis(timeSteps[position]);
+    updateTimestampLabel();
+
+    const targetOpacity = LAYERS[currentKey].opacity ?? 0.75;
+    const inactive = activeIsA ? layerB : layerA;
+    const active = activeIsA ? layerA : layerB;
+
+    const myToken = ++frameToken;
+    inactive.setParams({ time: timeIso });
+
+    const swapIn = () => {
+        if(myToken !== frameToken) return; // устарело — уже перескочили на другой кадр
+        inactive.setOpacity(targetOpacity);
+        active.setOpacity(0);
+        activeIsA = !activeIsA;
+    };
+    inactive.once("load", swapIn);
+    // подстраховка: если 'load' почему-то не пришёл (например, ошибка
+    // одного тайла) — не показывать старый кадр вечно
+    setTimeout(swapIn, 4000);
 }
 
 function stopAnim(){
