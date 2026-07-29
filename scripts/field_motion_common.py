@@ -149,6 +149,51 @@ def fetch_tile(layer_name, time_iso=None, retries=2, delay=4, style="", crs="CRS
     raise RuntimeError("; ".join(attempt_errors))
 
 
+def fetch_map_custom(layer_name, bbox_lonlat, width, height, time_iso=None,
+                      retries=2, delay=4, style="", crs="CRS:84"):
+    """Как fetch_tile(), но с произвольным bbox/размером картинки — для
+    рендера широкого обзорного кадра (eumetsat_anim_render.py), а не
+    маленького квадрата анализа вокруг Одессы. bbox_lonlat — кортеж
+    (min_lon, min_lat, max_lon, max_lat)."""
+    min_lon, min_lat, max_lon, max_lat = bbox_lonlat
+    if crs == "EPSG:4326":
+        bbox = f"{min_lat},{min_lon},{max_lat},{max_lon}"
+    else:
+        bbox = f"{min_lon},{min_lat},{max_lon},{max_lat}"
+
+    params = {
+        "service": "WMS",
+        "version": "1.3.0",
+        "request": "GetMap",
+        "layers": layer_name,
+        "styles": style,
+        "crs": crs,
+        "bbox": bbox,
+        "width": width,
+        "height": height,
+        "format": "image/png",
+        "transparent": "true",
+    }
+    if time_iso:
+        params["time"] = time_iso
+
+    attempt_errors = []
+    for attempt in range(1, retries + 1):
+        try:
+            r = requests.get(WMS_BASE, params=params, timeout=TIMEOUT)
+            ctype = r.headers.get("content-type", "")
+            if r.status_code != 200 or "image" not in ctype:
+                snippet = r.content[:300].decode("utf-8", errors="replace")
+                raise RuntimeError(f"HTTP {r.status_code}, content-type={ctype!r}, len={len(r.content)}: {snippet}")
+            img = Image.open(io.BytesIO(r.content)).convert("RGBA")
+            return np.array(img)
+        except Exception as e:
+            attempt_errors.append(f"попытка {attempt}: {e}")
+            if attempt < retries:
+                _time.sleep(delay)
+    raise RuntimeError("; ".join(attempt_errors))
+
+
 def classify_presence_by_alpha(arr):
     """presence = непрозрачный пиксель (значение > 0 по легенде продукта).
     valid = True почти везде — для этих продуктов alpha сам кодирует
@@ -470,3 +515,4 @@ def change_probability(effective_distance_km, blob_area_km2, confidence):
     size = min(1.0, blob_area_km2 / SIGNIFICANT_AREA_REF_KM2)
     score = 0.5 * proximity + 0.3 * size + 0.2 * confidence
     return int(round(max(5, min(95, 5 + 90 * score))))
+
