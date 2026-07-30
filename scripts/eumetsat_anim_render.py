@@ -157,14 +157,30 @@ def main():
         except Exception:
             manifest = {}
 
+    # ВАЖНО: каждый слой в своём try/except — раньше необработанное
+    # исключение на ПЕРВОМ слое (например, сбой ffmpeg) убивало весь
+    # процесс, и ни один из следующих 9 слоёв даже не пробовался, и ничего
+    # не писалось вообще (см. инцидент — data/anim отсутствовал в репо
+    # целиком после "успешного" по логам GH Actions прогона).
+    debug = {}
     for key, cfg in LAYERS.items():
-        ok = render_layer(key, cfg)
-        if ok:
-            manifest[key] = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+        try:
+            ok = render_layer(key, cfg)
+            debug[key] = {"ok": ok}
+            if ok:
+                manifest[key] = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+        except Exception as e:
+            debug[key] = {"ok": False, "error": str(e)}
+            print(f"  [ERROR] eumetsat_anim_render.py: {key} упал целиком: {e}")
 
     os.makedirs(ANIM_DIR, exist_ok=True)
     with open(MANIFEST_FILE, "w", encoding="utf-8") as f:
         json.dump(manifest, f, ensure_ascii=False, indent=2)
+    # Отдельный debug-файл — логи самого запуска GitHub Actions недоступны
+    # для чтения через API (редирект на Azure Blob Storage вне разрешённых
+    # доменов), поэтому статус каждого слоя нужно видеть прямо в репо.
+    with open(os.path.join(ANIM_DIR, "debug.json"), "w", encoding="utf-8") as f:
+        json.dump({"timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "layers": debug}, f, ensure_ascii=False, indent=2)
 
 
 if __name__ == "__main__":
