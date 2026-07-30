@@ -1,69 +1,38 @@
 /* =========================================================
-   EUMETSAT.JS — карта спутника EUMETSAT (EUMETView WMS) для eumetsat.html.
-   Источник: https://view.eumetsat.int/geoserver/wms — бесплатно, без
-   регистрации (EUMETView WMS, "Fees: none", "AccessConstraints: none").
+   EUMETSAT.JS — карта спутника EUMETSAT для eumetsat.html.
 
-   Слои:
-     msg_fes:clm    — Cloud Mask (ясно/облачно, пиксельно), геостационар
-                      Meteosat-0°, обновление раз в 15 мин
-     msg_fes:cth    — Cloud Top Height (высота верхней границы облака,
-                      непрерывное значение — ярусов low/mid/high как
-                      готового продукта у EUMETSAT нет, это ближайшая
-                      альтернатива), тоже 15 мин
-     mtg_fd:li_afa  — Lightning Imager Accumulated Flash Area (MTG-I) —
-                      РЕАЛЬНАЯ детекция вспышек молний со спутника,
-                      не прокси. Обновление раз в 5 мин.
-     msg_fes:h60b   — Blended SEVIRI/LEO MW precipitation (осадки) —
-                      мгновенная интенсивность осадков, комбинация IR
-                      геостационара с калибровкой по MW-измерениям LEO
-                      спутников. Обновление раз в 15 мин.
-     mtg_fd:h40b    — то же самое (Blended FCI/LEO MW precipitation), но
-                      MTG FCI вместо MSG SEVIRI — точнее и чаще (10 мин).
-     msg_fes:gii_kindex — GII K-Index (индекс грозовой неустойчивости
-                      воздушной массы, только для безоблачных участков).
-                      Прокси для потенциала гроз в дополнение к li_afa
-                      (реальные молнии). Обновление раз в 15 мин.
-     mtg_fd:rgb_geocolour — GeoColour RGB (MTG, полный диск, 0°) —
-                      натуральный цвет со спутника (то же самое, что
-                      показывает официальный EUMETView, "GeoColour RGB").
-                      Обновление раз в 10 мин.
-     mtg_fd:ir105_hrfi — ИК-канал 10.5 мкм, MTG FCI HRFI (яркостная
-                      температура верхней границы облака), 1км разрешение
-                      в надире (точнее старого msg_fes:ir108 ~3км) — в
-                      отличие от geocolour работает одинаково днём и ночью
-                      (тепловое излучение, не отражённый свет; огней
-                      городов на нём физически нет). Обновление раз в
-                      10 мин. Нужен явный style (mtg_fd_ir105_hrfi_grayscale).
-     mtg_fd:rgb_cloudtype — Cloud Type RGB (MTG) — различение типов
-                      облаков (высокие толстые ледяные/средние ледяные/
-                      тонкий перистый) через комбинацию NIR1.38+VIS0.64+
-                      NIR1.6. РАБОТАЕТ ТОЛЬКО ДНЁМ (нужен отражённый
-                      свет) — ночью недостоверно. Style "raster"
-                      (дефолтный у GeoServer для этого слоя, без
-                      namespace-префикса — подтверждено вручную через
-                      GetCapabilities). Обновление раз в 10 мин.
+   АРХИТЕКТУРА (после переделки): раньше каждый слой анимировался ЖИВЫМИ
+   WMS-тайлами прямо в Leaflet — на каждый кадр уходило НЕСКОЛЬКО отдельных
+   GetMap-запросов (по тайлу стандартной XYZ-сетки), и если хоть один тайл
+   не успевал/не мог загрузиться — в этом месте кадра было видно НАСКВОЗЬ
+   базовую карту (см. обсуждение в чате). Патчи (двойной буфер с
+   кроссфейдом, порог ошибок тайлов) снижали частоту, но не убирали
+   проблему в принципе — слишком много точек отказа на клиенте.
 
-   ЛЕГЕНДА: GetLegendGraphic у этого WMS для mosaic-слоёв (clm/cth/h60b/
-   gii_kindex/li_afa) НЕ работает надёжно — сервер у части таких слоёв
-   отдаёт вместо PNG текст ошибки/XML (подтверждено на аналогичных слоях
-   этого же GeoServer). Поэтому легенда здесь — наш собственный статичный
-   HTML (LEGEND_HTML ниже), не запрос к серверу: для clm — точные анкеры
-   цвета (см. eumetsat_point.py), для остальных — честное качественное
-   описание без выдуманных калиброванных чисел.
+   Теперь сервер (scripts/eumetsat_anim_render.py, GitHub Actions) сам
+   собирает готовую MP4-петлю (последние ~2ч) ОДНИМ GetMap-запросом на
+   кадр (не тайлами — цельным широким обзорным изображением), кодирует и
+   кладёт ОДИН файл на слой в data/anim/<key>.mp4 (перезаписывается,
+   история не копится). Здесь — просто L.videoOverlay поверх карты,
+   привязанный к тем же географическим границам (ANIM_BOUNDS), что и
+   рендерился на сервере. Ни одного сетевого запроса к EUMETSAT на клиенте
+   — мерцать нечему, а base-карта (OSM) как отображалась статично, так и
+   отображается (она и не была источником мерцания).
 
-   ПРИМЕЧАНИЕ: отдельного продукта "тип облаков" (низкая/средняя/высокая
-   облачность и т.п.) у EUMETView WMS нет — есть только Cloud Mask (clm,
-   ясно/облачно) и Cloud Top Height (cth, высота верхней границы),
-   которые вместе и являются ближайшей доступной альтернативой.
-
-   ВАЖНО: эти слои отдаются WMS только в EPSG:4326 (не EPSG:3857) — для
-   каждого TileLayer.WMS указан crs: L.CRS.EPSG4326, базовая карта (OSM)
-   остаётся в обычной проекции, Leaflet сам делает трансформацию per-tile.
+   Прозрачность: у видео (H.264) нет альфа-канала, поэтому сервер кладёт
+   "нет данных" на сплошную тёмную подложку, а не на прозрачность — здесь
+   компенсируется общей opacity слоя (видно карту сквозь видео равномерно,
+   не только в no-data пятнах, это компромисс ради простоты и надёжности).
 ========================================================= */
 
-const WMS_BASE = "https://view.eumetsat.int/geoserver/wms";
+const ANIM_BASE = "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/anim";
+const MANIFEST_URL = ANIM_BASE + "/manifest.json";
 const CENTER_LAT = 46.4406;
 const CENTER_LON = 30.7703;
+
+// Тот же bbox, что в scripts/eumetsat_anim_render.py (BBOX) — если меняешь
+// там, поменяй и здесь, иначе видео "уедет" от реальных координат на карте.
+const ANIM_BOUNDS = [[43.5, 25.0], [50.5, 37.5]]; // [[lat_min,lon_min],[lat_max,lon_max]]
 
 const LEGEND_HTML = {
     clm: `
@@ -74,16 +43,16 @@ const LEGEND_HTML = {
         <div class="gradBar" style="background:linear-gradient(90deg,#3355ff,#33cc66,#eeee33,#ff6633,#cc2222);"></div>
         <div>цвет ≈ позиция на шкале высоты верхней границы облака (точной шкалы в метрах нет)</div>`,
     h60b: `
-        <div class="swatchRow"><span class="swatch" style="background:transparent;border-style:dashed;"></span>прозрачно = осадков нет</div>
+        <div>тёмный фон = осадков нет</div>
         <div>цвет = осадки есть, оттенок ≈ интенсивность (калиброванной шкалы мм/ч нет)</div>`,
     h40b: `
-        <div class="swatchRow"><span class="swatch" style="background:transparent;border-style:dashed;"></span>прозрачно = осадков нет</div>
+        <div>тёмный фон = осадков нет</div>
         <div>цвет = осадки есть, оттенок ≈ интенсивность (калиброванной шкалы мм/ч нет); MTG FCI — точнее и чаще (10 мин против 15 мин у msg_fes:h60b)</div>`,
     gii_kindex: `
         <div class="gradBar" style="background:linear-gradient(90deg,#3355ff,#eeee33,#ff3322);"></div>
         <div>цвет ≈ индекс грозовой неустойчивости воздушной массы (K-Index), только над безоблачными участками</div>`,
     li_afa: `
-        <div class="swatchRow"><span class="swatch" style="background:transparent;border-style:dashed;"></span>прозрачно = молний за 5 мин нет</div>
+        <div>тёмный фон = молний за 5 мин нет</div>
         <div>цвет = накопленная площадь вспышек, оттенок ≈ плотность (без калиброванного числа вспышек)</div>`,
     geocolour: `<div>натуральный цвет со спутника (как на официальном EUMETView), не тематическая карта</div>`,
     ir108: `
@@ -92,65 +61,30 @@ const LEGEND_HTML = {
     cloudtype: `
         <div>RGB-композит: различает типы облаков по текстуре/фазе (лёд/вода, тонкие/плотные). Официальной калиброванной шкалы нет.</div>
         <div style="margin-top:4px;"><b>Работает только днём</b> — ночью изображение недостоверно/чёрное.</div>`,
+    cloudphase: `
+        <div>RGB-композит: фаза облаков — зелёный/жёлтый/белый ≈ водяные (низкие→плотные), голубой/синий ≈ ледяные (перистые/плотные), розовый ≈ смешанная фаза, красный/фиолетовый ≈ самые холодные ледяные верхушки (мощная конвекция/гроза). Официальной калиброванной шкалы нет.</div>
+        <div style="margin-top:4px;"><b>Работает только днём</b> — ночью изображение недостоверно/чёрное.</div>`,
 };
 
 const LAYERS = {
-    clm: {
-        name: "msg_fes:clm",
-        stepMinutes: 15,
-    },
-    cth: {
-        name: "msg_fes:cth",
-        stepMinutes: 15,
-    },
-    h60b: {
-        name: "msg_fes:h60b",
-        stepMinutes: 15,
-    },
-    h40b: {
-        name: "mtg_fd:h40b",
-        style: "mtg_fd:mtg_h40b_default",
-        stepMinutes: 10,
-    },
-    gii_kindex: {
-        name: "msg_fes:gii_kindex",
-        stepMinutes: 15,
-    },
-    li_afa: {
-        name: "mtg_fd:li_afa",
-        stepMinutes: 5,
-    },
-    geocolour: {
-        name: "mtg_fd:rgb_geocolour",
-        stepMinutes: 10,
-        opacity: 1.0,
-    },
-    ir108: {
-        name: "mtg_fd:ir105_hrfi",
-        style: "mtg_fd:mtg_fd_ir105_hrfi_grayscale",
-        stepMinutes: 10,
-        opacity: 1.0,
-    },
-    cloudtype: {
-        name: "mtg_fd:rgb_cloudtype",
-        style: "raster",
-        stepMinutes: 10,
-        opacity: 1.0,
-    },
+    clm:        { opacity: 0.85 },
+    cth:        { opacity: 0.85 },
+    h60b:       { opacity: 0.85 },
+    h40b:       { opacity: 0.85 },
+    gii_kindex: { opacity: 0.85 },
+    li_afa:     { opacity: 0.85 },
+    geocolour:  { opacity: 1.0 },
+    ir108:      { opacity: 1.0 },
+    cloudtype:  { opacity: 1.0 },
+    cloudphase: { opacity: 1.0 },
 };
 
 let currentKey = "clm";
-let layerA = null;
-let layerB = null;
-let activeIsA = true;    // какой из двух слоёв сейчас видим (opacity=target)
-let frameToken = 0;      // счётчик поколений кадра — гасит устаревшие callback'и
-                          // 'load' от быстрой перемотки/анимации/смены слоя
-let timeSteps = [];       // массив Date, от старых к новым
-let position = 0;
-let animationTimer = false;
+let currentVideoOverlay = null;
+let manifestData = {};
 
-const map = L.map("mapid", { maxZoom: 10, attributionControl: true })
-    .setView([CENTER_LAT, CENTER_LON], 6);
+const map = L.map("mapid", { attributionControl: true });
+map.fitBounds(ANIM_BOUNDS);
 
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: '&copy; <a href="https://openstreetmap.org">OpenStreetMap</a> contributors',
@@ -159,81 +93,14 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
 
 L.marker([CENTER_LAT, CENTER_LON]).addTo(map).bindPopup("Одесса (СИНОП 33837)");
 
-function isoNoMillis(d){
-    return d.toISOString().replace(/\.\d{3}Z$/, ".000Z");
-}
-
-function buildTimeSteps(stepMinutes){
-    // последние 2 часа реальных кадров, округлено вниз до шага сетки EUMETSAT
-    const now = new Date();
-    const stepMs = stepMinutes * 60000;
-    const lastStep = new Date(Math.floor(now.getTime() / stepMs) * stepMs);
-    const steps = [];
-    const count = Math.floor(120 / stepMinutes); // 2 часа истории
-    for(let i = count; i >= 0; i--){
-        steps.push(new Date(lastStep.getTime() - i * stepMs));
-    }
-    return steps;
-}
-
-function updateTimestampLabel(){
-    const d = timeSteps[position];
-    if(!d) return;
+function updateTimestampLabel(key){
+    const iso = manifestData[key];
+    const el = document.getElementById("eumTimestamp");
+    if(!iso){ el.textContent = "нет данных"; return; }
+    const d = new Date(iso);
     const label = d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
-    const isNow = position === timeSteps.length - 1;
-    document.getElementById("eumTimestamp").textContent = isNow ? `${label} · сейчас` : label;
-    document.getElementById("eumSlider").value = position;
-}
-
-// ПОЧЕМУ ДВА ПОСТОЯННЫХ СЛОЯ, А НЕ add/remove НА КАЖДЫЙ КАДР:
-// Раньше новый L.tileLayer.wms создавался заново на каждый кадр и добавлялся
-// поверх старого, старый убирался по событию 'load' — но у Leaflet ЕЩЁ есть
-// собственный per-tile fade-in (плавное нарастание opacity каждого <img>
-// ПОСЛЕ события 'load' всего слоя), поэтому в момент удаления старого слоя
-// новый мог быть ещё не полностью непрозрачным — отсюда мелькание базовой
-// карты между кадрами. Теперь: два слоя добавлены на карту ОДИН РАЗ и больше
-// никогда не удаляются — виден только "активный" (opacity=target), у
-// неактивного opacity=0. Новый кадр грузится В НЕВИДИМЫЙ (opacity=0) слой
-// через setParams({time}), и только когда он полностью загружен, слои
-// меняются местами (мгновенный toggle opacity, а не add/remove DOM-узла) —
-// базовая карта (OSM) вообще не участвует в этом процессе.
-function buildLayerPair(key, timeIso){
-    const opts = {
-        layers: LAYERS[key].name,
-        styles: LAYERS[key].style || "",
-        format: "image/png",
-        transparent: true,
-        version: "1.3.0",
-        crs: L.CRS.EPSG4326,
-        opacity: 0,
-        time: timeIso,
-    };
-    const la = L.tileLayer.wms(WMS_BASE, opts);
-    const lb = L.tileLayer.wms(WMS_BASE, opts);
-    // Каждый WMS-слой в Leaflet тайлится на стандартную XYZ-сетку — на
-    // экран может уйти НЕСКОЛЬКО отдельных GetMap-запросов (по тайлу), и
-    // событие 'load' слоя срабатывает, когда очередь загрузок ОПУСТЕЛА —
-    // включая тайлы, которые не загрузились, а упали по ошибке/таймауту
-    // (они просто помечаются "готовыми" с пустым содержимым). Раньше это
-    // означало: 'load' пришёл -> считаем кадр целиком готовым -> прячем
-    // старый слой -> но там, где упавший тайл, теперь видно НАСКВОЗЬ (базовая
-    // карта) — ровно тот "полукадр"/дыра с скриншота. Считаем долю упавших
-    // тайлов и НЕ подменяем кадр при массовом сбое (>15%) — старый кадр
-    // просто остаётся ещё один тик, тихо, без дыр. Единичный краевой тайл
-    // (например, у самой границы покрытия продукта) — терпим, иначе один
-    // "вечно недоступный" тайл у края карты заморозит показ навсегда.
-    la._tilesTotal = 0; la._tilesError = 0;
-    lb._tilesTotal = 0; lb._tilesError = 0;
-    la.on("tileloadstart", () => { la._tilesTotal++; });
-    lb.on("tileloadstart", () => { lb._tilesTotal++; });
-    la.on("tileerror", () => { la._tilesError++; });
-    lb.on("tileerror", () => { lb._tilesError++; });
-    return [la, lb];
-}
-
-function _tooManyTileErrors(layer){
-    if(layer._tilesTotal === 0) return false;
-    return (layer._tilesError / layer._tilesTotal) > 0.15;
+    const ageMin = Math.round((Date.now() - d.getTime()) / 60000);
+    el.textContent = ageMin < 1 ? `обновлено только что` : `обновлено ${label} (${ageMin} мин назад)`;
 }
 
 function setLayer(key){
@@ -242,121 +109,51 @@ function setLayer(key){
         b.classList.toggle("active", b.dataset.layer === key);
     });
     document.getElementById("eumLegendContent").innerHTML = LEGEND_HTML[key] || "";
+    updateTimestampLabel(key);
 
-    timeSteps = buildTimeSteps(LAYERS[key].stepMinutes);
-    position = timeSteps.length - 1;
-    const slider = document.getElementById("eumSlider");
-    slider.min = 0;
-    slider.max = timeSteps.length - 1;
-    slider.value = position;
-
-    // у нового ключа другой layers/styles — старую пару приходится
-    // пересоздать (это редкое событие, смена вкладки, а не каждый тик
-    // анимации, поэтому небольшой перерыв в отрисовке здесь не проблема)
-    frameToken++;
-    const myToken = frameToken;
-    if(layerA){ map.removeLayer(layerA); }
-    if(layerB){ map.removeLayer(layerB); }
-
-    const timeIso = isoNoMillis(timeSteps[position]);
-    const [la, lb] = buildLayerPair(key, timeIso);
-    layerA = la;
-    layerB = lb;
-    layerA.addTo(map);
-    layerB.addTo(map);
-    activeIsA = true;
-
-    const targetOpacity = LAYERS[key].opacity ?? 0.75;
-    const reveal = () => {
-        if(myToken !== frameToken) return; // сменили вкладку/кадр ещё раз, пока грузилось
-        if(_tooManyTileErrors(la)){
-            // тихая повторная попытка тем же кадром — лучше показать чуть
-            // позже, чем один раз мигнуть массовой дырой
-            la._tilesTotal = 0; la._tilesError = 0;
-            la.setParams({ time: isoNoMillis(timeSteps[position]) });
-            la.once("load", reveal);
-            return;
-        }
-        la.setOpacity(targetOpacity);
-    };
-    la.once("load", reveal);
-    setTimeout(reveal, 4000); // подстраховка, если 'load' не пришёл вовсе
-
-    updateTimestampLabel();
-}
-
-function renderCurrentFrame(){
-    const timeIso = isoNoMillis(timeSteps[position]);
-    updateTimestampLabel();
-
-    const targetOpacity = LAYERS[currentKey].opacity ?? 0.75;
-    const inactive = activeIsA ? layerB : layerA;
-    const active = activeIsA ? layerA : layerB;
-
-    const myToken = ++frameToken;
-    inactive._tilesTotal = 0; inactive._tilesError = 0;
-    inactive.setParams({ time: timeIso });
-
-    const swapIn = () => {
-        if(myToken !== frameToken) return; // устарело — уже перескочили на другой кадр
-        if(_tooManyTileErrors(inactive)){
-            // массовый сбой тайлов этого кадра — не подменяем видимый слой
-            // (иначе на его месте будет видна голая базовая карта, см.
-            // скриншот), просто оставляем старый кадр ещё один тик;
-            // следующий renderCurrentFrame (по таймеру/слайдеру) запросит
-            // кадр заново
-            return;
-        }
-        inactive.setOpacity(targetOpacity);
-        active.setOpacity(0);
-        activeIsA = !activeIsA;
-    };
-    inactive.once("load", swapIn);
-    // подстраховка: если 'load' почему-то не пришёл (например, ошибка
-    // одного тайла) — не показывать старый кадр вечно
-    setTimeout(swapIn, 4000);
-}
-
-function stopAnim(){
-    if(animationTimer){
-        clearTimeout(animationTimer);
-        animationTimer = false;
-        document.getElementById("eumPlayBtn").textContent = "▶";
-        return true;
+    if(currentVideoOverlay){
+        map.removeLayer(currentVideoOverlay);
+        currentVideoOverlay = null;
     }
-    return false;
+
+    const url = `${ANIM_BASE}/${key}.mp4?v=${Date.now()}`; // cache-bust: файл перезаписывается на месте
+    const overlay = L.videoOverlay(url, ANIM_BOUNDS, {
+        opacity: LAYERS[key].opacity ?? 0.85,
+        interactive: false,
+    });
+    overlay.addTo(map);
+    currentVideoOverlay = overlay;
+
+    const videoEl = overlay.getElement();
+    if(videoEl){
+        videoEl.muted = true;
+        videoEl.loop = true;
+        videoEl.playsInline = true;
+        videoEl.controls = true; // нативный плеер — play/pause/перемотка
+        videoEl.autoplay = true;
+        videoEl.play().catch(() => {}); // автоплей может требовать жеста на некоторых браузерах — не критично, controls всё равно есть
+        videoEl.onerror = () => {
+            document.getElementById("eumTimestamp").textContent = "видео недоступно (ещё не сгенерировано?)";
+        };
+    }
 }
 
-function stepTo(newPos){
-    if(newPos < 0) newPos = 0;
-    if(newPos >= timeSteps.length) newPos = 0; // зациклить
-    position = newPos;
-    renderCurrentFrame();
+async function loadManifest(){
+    try {
+        const r = await fetch(MANIFEST_URL, { cache: "no-store" });
+        if(r.ok) manifestData = await r.json();
+    } catch(e){
+        manifestData = {};
+    }
+    updateTimestampLabel(currentKey);
 }
 
-function playTick(){
-    stepTo(position + 1);
-    if(animationTimer) animationTimer = setTimeout(playTick, 800);
-}
-
-function playStop(){
-    if(stopAnim()) return;
-    animationTimer = true;
-    document.getElementById("eumPlayBtn").textContent = "⏸";
-    playTick();
-}
-
-document.getElementById("eumPrevBtn").addEventListener("click", () => { stopAnim(); stepTo(position - 1); });
-document.getElementById("eumNextBtn").addEventListener("click", () => { stopAnim(); stepTo(position + 1); });
-document.getElementById("eumPlayBtn").addEventListener("click", playStop);
-document.getElementById("eumSlider").addEventListener("input", (e) => {
-    stopAnim();
-    stepTo(parseInt(e.target.value, 10));
-});
 document.querySelectorAll("#eumLayerTabs button").forEach(btn => {
-    btn.addEventListener("click", () => { stopAnim(); setLayer(btn.dataset.layer); });
+    btn.addEventListener("click", () => setLayer(btn.dataset.layer));
 });
 
-setLayer("clm");
-// раз в 5 минут пересчитываем сетку времени (появляются новые кадры)
-setInterval(() => { if(!animationTimer) setLayer(currentKey); }, 5 * 60000);
+loadManifest().then(() => setLayer("clm"));
+setInterval(async () => {
+    await loadManifest();
+    setLayer(currentKey); // подхватить свежую петлю, если manifest обновился
+}, 5 * 60000);
