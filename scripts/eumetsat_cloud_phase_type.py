@@ -342,18 +342,18 @@ def main():
         type_delta = type_last - type_first
 
         if phase_delta > PHASE_CHANGE_THRESHOLD:
-            phase_verdict = "фаза смещается к льду/мощной конвекции"
+            phase_verdict = "смещается к льду/мощной конвекции"
         elif phase_delta < -PHASE_CHANGE_THRESHOLD:
-            phase_verdict = "фаза смещается к воде (распад/ослабление)"
+            phase_verdict = "смещается к воде (распад/ослабление)"
         else:
-            phase_verdict = "без существенных изменений фазы"
+            phase_verdict = "без существенных изменений"
 
         if type_delta > TYPE_CHANGE_THRESHOLD:
-            type_verdict = "облачность становится плотнее/выше"
+            type_verdict = "становится плотнее/выше"
         elif type_delta < -TYPE_CHANGE_THRESHOLD:
-            type_verdict = "облачность становится реже/ниже"
+            type_verdict = "становится реже/ниже"
         else:
-            type_verdict = "без существенных изменений группы облачности"
+            type_verdict = "без существенных изменений"
 
         out.update({
             "phase_ordinal_now": round(phase_last, 2),
