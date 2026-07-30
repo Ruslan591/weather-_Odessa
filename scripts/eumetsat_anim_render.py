@@ -129,13 +129,20 @@ def render_layer(key, cfg):
 
         os.makedirs(ANIM_DIR, exist_ok=True)
         out_path = os.path.join(ANIM_DIR, f"{key}.mp4")
-        tmp_out = out_path + ".tmp"
+        tmp_out = out_path.replace(".mp4", ".tmp.mp4")  # ВАЖНО: расширение
+        # должно остаться .mp4 у временного файла тоже — ffmpeg определяет
+        # формат контейнера ПО РАСШИРЕНИЮ имени файла, а не по -c:v; с
+        # "<key>.mp4.tmp" он не мог понять, что это MP4, и падал с "Unable
+        # to choose an output format" (см. инцидент — все 10 слоёв упали
+        # на этом одновременно). "-f mp4" ниже — дополнительная страховка,
+        # чтобы не зависеть от расширения впредь.
         cmd = [
             "ffmpeg", "-y",
             "-framerate", str(FPS),
             "-i", os.path.join(tmp_dir, "frame_%03d.png"),
             "-c:v", "libx264", "-pix_fmt", "yuv420p",
             "-movflags", "+faststart",
+            "-f", "mp4",
             tmp_out,
         ]
         # capture_output вместо -loglevel error + check=True: без реального
