@@ -371,7 +371,7 @@ def _density_height_shape_trend(is_cloud_frames, cth_index_frames, valid_frames,
         elif aspect_delta < -ASPECT_CHANGE_THRESHOLD:
             shape_verdict = "становится компактнее"
         else:
-            shape_verdict = "форма существенно не меняется"
+            shape_verdict = "без существенных изменений"
 
     return {
         "density_fraction_now": round(float(frac_last), 2),
