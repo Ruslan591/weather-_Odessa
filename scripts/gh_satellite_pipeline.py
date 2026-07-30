@@ -249,6 +249,7 @@ def git_push_satellite():
             "data/eumetsat_precip_motion_debug.json",
             "data/eumetsat_precip_buffer.npz",
             "data/anim/manifest.json",
+            "data/anim/debug.json",
             "data/anim/clm.mp4",
             "data/anim/cth.mp4",
             "data/anim/h60b.mp4",
