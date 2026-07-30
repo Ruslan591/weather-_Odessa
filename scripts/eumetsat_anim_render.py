@@ -131,14 +131,21 @@ def render_layer(key, cfg):
         out_path = os.path.join(ANIM_DIR, f"{key}.mp4")
         tmp_out = out_path + ".tmp"
         cmd = [
-            "ffmpeg", "-y", "-loglevel", "error",
+            "ffmpeg", "-y",
             "-framerate", str(FPS),
             "-i", os.path.join(tmp_dir, "frame_%03d.png"),
             "-c:v", "libx264", "-pix_fmt", "yuv420p",
             "-movflags", "+faststart",
             tmp_out,
         ]
-        subprocess.run(cmd, check=True, timeout=60)
+        # capture_output вместо -loglevel error + check=True: без реального
+        # текста stderr от ffmpeg причину сбоя не увидеть — логи самого
+        # запуска GitHub Actions мне недоступны (редирект на Azure Blob
+        # Storage вне разрешённых доменов песочницы), а голый exit code
+        # (например, 234) сам по себе ничего не объясняет.
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        if r.returncode != 0:
+            raise RuntimeError(f"ffmpeg exit {r.returncode}: {r.stderr[-2000:]}")
         os.replace(tmp_out, out_path)  # атомарная замена — не оставить битый файл, если упадёт на середине
         print(f"  [OK] eumetsat_anim_render.py: {key} — {frame_i}/{len(times_iso)} кадров, пропущено {failed}")
         return True
