@@ -304,11 +304,11 @@ def main():
 
         area_delta = area_fracs[-1] - area_fracs[0]
         if area_delta > AREA_CHANGE_THRESHOLD:
-            area_verdict = "площадь значимой облачности растёт"
+            area_verdict = "растёт"
         elif area_delta < -AREA_CHANGE_THRESHOLD:
-            area_verdict = "площадь значимой облачности сокращается"
+            area_verdict = "сокращается"
         else:
-            area_verdict = "площадь без существенных изменений"
+            area_verdict = "без существенных изменений"
 
         brightness_delta = mean_brightness[-1] - mean_brightness[0]
         brightness_scale = float(fc.np.mean(debug["frame_std"])) or 1.0
@@ -317,7 +317,7 @@ def main():
         elif brightness_delta < -0.5 * brightness_scale:
             temp_verdict = "потепление верхней границы (возможно ослабление конвекции)"
         else:
-            temp_verdict = "без существенных изменений яркостной температуры"
+            temp_verdict = "без существенных изменений"
 
         out["area_fraction_over_time"] = [round(f, 3) for f in area_fracs]
         out["area_trend_delta"] = round(area_delta, 3)
