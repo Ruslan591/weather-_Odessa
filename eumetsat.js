@@ -134,7 +134,12 @@ function setLayer(key){
     const url = `${ANIM_BASE}/${key}.mp4?v=${Date.now()}`; // cache-bust: файл перезаписывается на месте
     const overlay = L.videoOverlay(url, ANIM_BOUNDS, {
         opacity: LAYERS[key].opacity ?? 0.85,
-        interactive: false,
+        // interactive:true — ИНАЧЕ Leaflet ставит pointer-events:none на
+        // видео (чтобы оно не мешало панорамировать карту), и тогда тапы
+        // по play/scrubber/fullscreen самого <video> просто не долетают
+        // до элемента: браузер сам прячет controls через пару секунд
+        // бездействия, а вернуть их уже нельзя (см. видео-баг в чате).
+        interactive: true,
     });
     overlay.addTo(map);
     currentVideoOverlay = overlay;
