@@ -32,7 +32,7 @@ const CENTER_LON = 30.7703;
 
 // Тот же bbox, что в scripts/eumetsat_anim_render.py (BBOX) — если меняешь
 // там, поменяй и здесь, иначе видео "уедет" от реальных координат на карте.
-const ANIM_BOUNDS = [[43.5, 25.0], [50.5, 37.5]]; // [[lat_min,lon_min],[lat_max,lon_max]]
+const ANIM_BOUNDS = [[40.0, 22.0], [52.0, 40.0]]; // [[lat_min,lon_min],[lat_max,lon_max]]
 
 const LEGEND_HTML = {
     clm: `
@@ -84,7 +84,22 @@ let currentVideoOverlay = null;
 let manifestData = {};
 
 const map = L.map("mapid", { attributionControl: true });
-map.fitBounds(ANIM_BOUNDS);
+
+// ПОЧЕМУ invalidateSize() ПЕРЕД fitBounds: #mapid — position:fixed с
+// размерами через top/left/right/bottom. Если fitBounds вызвать сразу же
+// при создании карты, Leaflet иногда успевает закэшировать размер
+// контейнера ДО того, как браузер завершил layout (особенно на мобильном
+// при первой отрисовке страницы) — тогда fitBounds считает зум по
+// неправильному (нулевому/старому) размеру, и видео с "правильными"
+// геокоординатами занимает только часть экрана, а не весь mapid (см.
+// баг-скриншот в чате). requestAnimationFrame даёт браузеру дорисовать
+// layout перед тем, как Leaflet пересчитает размер и зум.
+function fitToAnimBounds(){
+    map.invalidateSize();
+    map.fitBounds(ANIM_BOUNDS);
+}
+requestAnimationFrame(fitToAnimBounds);
+window.addEventListener("resize", fitToAnimBounds); // поворот экрана и т.п.
 
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: '&copy; <a href="https://openstreetmap.org">OpenStreetMap</a> contributors',
