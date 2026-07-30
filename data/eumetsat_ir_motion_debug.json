@@ -1,27 +1,27 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-07-30T06:30:00.000Z",
+  "server_latest_time": "2026-07-30T06:50:00.000Z",
   "bootstrap": true,
   "buffer_before": 6,
   "buffer_size": 6,
   "buffer_times": [
-    "2026-07-30T05:40:00.000Z",
-    "2026-07-30T05:50:00.000Z",
     "2026-07-30T06:00:00.000Z",
     "2026-07-30T06:10:00.000Z",
     "2026-07-30T06:20:00.000Z",
-    "2026-07-30T06:30:00.000Z"
+    "2026-07-30T06:30:00.000Z",
+    "2026-07-30T06:40:00.000Z",
+    "2026-07-30T06:50:00.000Z"
   ],
   "frame_std": [
-    9.1,
-    9.6,
     10.0,
     10.4,
     10.8,
-    11.2
+    11.2,
+    11.5,
+    11.8
   ],
   "result": {
-    "timestamp": "2026-07-30T06:55:37Z",
+    "timestamp": "2026-07-30T07:11:59Z",
     "buffer_size": 6,
     "buffer_span_minutes": 50,
     "observed_area": {
@@ -34,56 +34,56 @@
       "local_trend_radius_km": 50
     },
     "valid": true,
-    "speed_kmh": 0.2,
-    "direction_compass": "С",
-    "bearing_deg": 360.0,
+    "speed_kmh": 2.6,
+    "direction_compass": "ЮЗ",
+    "bearing_deg": 212.6,
     "frame_pairs_used": 5,
-    "acceleration_kmh": 0.3,
-    "turning_deg": -178.7,
+    "acceleration_kmh": 3.0,
+    "turning_deg": 28.6,
     "acceleration_verdict": "скорость стабильна",
-    "turning_verdict": "меняет направление (против часовой)",
+    "turning_verdict": "меняет направление (по часовой)",
     "forecast_displacement": {
       "30min": {
-        "distance_km": 2.2,
-        "bearing_deg": 185.0,
-        "compass": "Ю"
+        "distance_km": 3.2,
+        "bearing_deg": 225.0,
+        "compass": "ЮЗ"
       },
       "60min": {
-        "distance_km": 6.7,
-        "bearing_deg": 185.0,
-        "compass": "Ю"
+        "distance_km": 8.3,
+        "bearing_deg": 227.0,
+        "compass": "ЮЗ"
       },
       "120min": {
-        "distance_km": 22.6,
-        "bearing_deg": 185.0,
-        "compass": "Ю"
+        "distance_km": 24.5,
+        "bearing_deg": 229.0,
+        "compass": "ЮЗ"
       }
     },
     "area_fraction_over_time": [
-      0.2,
-      0.195,
-      0.184,
-      0.176,
-      0.174,
-      0.172
+      0.392,
+      0.373,
+      0.356,
+      0.333,
+      0.325,
+      0.311
     ],
-    "area_trend_delta": -0.028,
+    "area_trend_delta": -0.081,
     "area_trend_verdict": "площадь без существенных изменений",
     "mean_brightness_over_time": [
-      30.2,
-      29.5,
       28.9,
       28.3,
       27.8,
-      27.3
+      27.3,
+      26.8,
+      26.3
     ],
-    "brightness_trend_delta": -2.9,
+    "brightness_trend_delta": -2.7,
     "station_state": "variable",
-    "station_area_fraction": 0.172,
-    "cloud_mass_distance_km": 107.5,
-    "cloud_mass_bearing_deg": 195.0,
+    "station_area_fraction": 0.311,
+    "cloud_mass_distance_km": 114.9,
+    "cloud_mass_bearing_deg": 192.0,
     "cloud_mass_compass": "Ю",
-    "cloud_mass_area_km2": 197,
+    "cloud_mass_area_km2": 387,
     "temperature_trend_verdict": "без существенных изменений яркостной температуры",
     "method_note": "Буфер 6/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин, crs=EPSG:4326, всегда явный TIME — не 'latest'), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. cloud_mass_* — положение (не движение) ближайшей значимой облачной массы относительно станции. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
   }
