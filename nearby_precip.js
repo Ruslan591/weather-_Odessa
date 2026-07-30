@@ -160,194 +160,197 @@ function _obsTimeTag(iso, staleMin){
     return ` <span style="color:#777;">(${timeStr})</span>`;
 }
 
-function _renderFieldForecastLines(f, cfg){
+function _hr(){
+    return `<hr style="border:none; border-top:1px solid #333; margin:14px 0 10px;">`;
+}
+function _blockTitle(emoji, title, timeTag){
+    return `<div style="font-weight:700; color:#eee; font-size:14px;">${emoji} ${title}${timeTag}</div>`;
+}
+function _plain(text){
+    return `<div class="small muted" style="margin-top:4px;">${text}</div>`;
+}
+function _subhead(label){
+    return `<div style="font-weight:600; color:#ccc; margin-top:8px; font-size:12.5px;">${label}</div>`;
+}
+function _bullets(items){
+    if(!items || !items.length) return "";
+    return `<ul style="margin:3px 0 0 0; padding-left:18px; color:#bbb; font-size:12.5px; line-height:1.55;">`
+        + items.map(i => `<li>${i}</li>`).join("") + `</ul>`;
+}
+// техническая выноска про буфер — просьба "в памяти N снимков, запуск
+// анализа через N минут"; формулировка зависит от того, заполнен ли буфер
+// целиком (span_minutes_now == span_minutes_target) или ещё нет.
+function _bufferLine(status){
+    if(!status) return "";
+    const full = status.frames_in_memory >= status.frames_target;
+    const text = full
+        ? `Буфер заполнен: ${status.frames_in_memory}/${status.frames_target} кадров (≈${status.span_minutes_now} минут наблюдений).`
+        : `Буфер: ${status.frames_in_memory}/${status.frames_target} кадров, полное окно — через ≈${status.eta_full_window_min} мин.`;
+    return `<div class="small muted" style="margin-top:6px; opacity:0.6; font-size:11px;">${text}</div>`;
+}
+
+// Общий рендер для карточек "движение объекта относительно станции"
+// (Облачность / Осадки / Осадки MTG / Молния) — verdict-логика (текст про
+// приближение/удаление/ETA) не меняется, меняется только markup.
+function _fieldBlock(f, cfg){
     if(!f) return "";
-    const targetStr = f.target_type === cfg.massTargetValue ? cfg.targetMassLabel : cfg.targetClearingLabel;
-    const stateStr = f.current_state === cfg.stateOnValue ? cfg.stateOnLabel : cfg.stateOffLabel;
     const timeTag = _obsTimeTag(f.timestamp, cfg.staleMin);
-    const titleLine = `<div style="font-weight:600; color:#eee;">${cfg.title}${timeTag}</div>`;
-    const stateLine = `<div class="small muted" style="margin-top:2px;">${stateStr}</div>`;
+    const stateStr = f.current_state === cfg.stateOnValue ? cfg.stateOnLabel : cfg.stateOffLabel;
     const extraHtml = cfg.extraHtml ? cfg.extraHtml(f) : "";
 
     if(f.distance_km_now == null){
-        return `<div style="margin-top:14px;">
-            ${titleLine}
-            ${stateLine}
-            <div class="small muted" style="margin-top:2px;">${f.verdict || "недостаточно данных для оценки"}.</div>
-            ${extraHtml}
-        </div>`;
+        return _hr() + _blockTitle(cfg.emoji, cfg.title, timeTag)
+            + _plain(`Над станцией: ${stateStr}.`)
+            + _plain(f.verdict ? `${f.verdict[0].toUpperCase()}${f.verdict.slice(1)}.` : "Недостаточно данных для оценки.")
+            + extraHtml;
     }
 
+    const targetStr = f.target_type === cfg.massTargetValue ? cfg.targetMassLabel : cfg.targetClearingLabel;
     const distStr = `${Number(f.distance_km_now).toLocaleString("ru-RU")} км (${f.compass})`;
     const stationary = f.verdict === "почти стоит на месте";
-    let verdictLine;
+
+    let verdictText;
     if(f.verdict === "приближается" || f.verdict === "уже у города"){
         const etaStr = f.eta_min != null ? `~${Math.round(f.eta_min)} мин` : "скоро";
-        verdictLine = `приближается, ${etaStr} до станции`;
+        verdictText = `приближается, ${etaStr} до станции`;
     } else if(f.verdict === "пройдёт мимо, город, скорее всего, не заденет"){
-        verdictLine = `пройдёт мимо на расстоянии ~${Math.round(f.cpa_km)} км, станцию, скорее всего, не заденет`;
+        verdictText = `пройдёт мимо на расстоянии ≈${Math.round(f.cpa_km)} км, станцию, скорее всего, не заденет`;
     } else if(f.verdict === "удаляется"){
-        verdictLine = `удаляется`;
+        verdictText = `удаляется`;
     } else if(stationary){
-        verdictLine = `почти не движется`;
+        verdictText = `практически отсутствует`;
     } else {
-        verdictLine = f.verdict || "";
+        verdictText = f.verdict || "";
     }
-    // при скорости ~0 направление движения бессмысленно ("скорость 0, но
-    // направление на С") — показываем его только когда реально что-то едет
-    const dirStr = (f.direction_compass && !stationary) ? `, направление на ${f.direction_compass}` : "";
-    const speedStr = f.speed_kmh != null ? `, скорость ~${Math.round(f.speed_kmh)} км/ч${dirStr}` : "";
-    const probLine = (f.target_type === cfg.massTargetValue && f.probability_percent != null)
-        ? `<div class="small muted" style="margin-top:2px;">Вероятность, что ${cfg.probVerb}: ~${f.probability_percent}%.</div>`
-        : "";
 
-    return `<div style="margin-top:14px;">
-        ${titleLine}
-        ${stateLine}
-        <div class="small muted" style="margin-top:2px;">${targetStr} к точке наблюдения: ${distStr}${speedStr}.</div>
-        <div class="small muted" style="margin-top:2px;">${verdictLine}.</div>
-        ${probLine}
-        ${extraHtml}
-    </div>`;
+    const targetBullets = [`расстояние: ${distStr}`];
+    if(f.speed_kmh != null){
+        const dirStr = (f.direction_compass && !stationary) ? `, направление на ${f.direction_compass}` : "";
+        targetBullets.push(`скорость: ≈${Math.round(f.speed_kmh)} км/ч${dirStr}`);
+    }
+    targetBullets.push(`движение: ${verdictText}`);
+
+    const assessBullets = [];
+    if(f.target_type === cfg.massTargetValue && f.probability_percent != null){
+        assessBullets.push(`вероятность, что ${cfg.probVerb}: ≈${f.probability_percent}%`);
+    }
+    if(cfg.extraBullets) assessBullets.push(...cfg.extraBullets(f));
+
+    return _hr() + _blockTitle(cfg.emoji, cfg.title, timeTag)
+        + _plain(`Над станцией: ${stateStr}.`)
+        + _subhead(targetStr[0].toUpperCase() + targetStr.slice(1))
+        + _bullets(targetBullets)
+        + (assessBullets.length ? _subhead("Оценка") + _bullets(assessBullets) : "")
+        + _bufferLine(f.buffer_status);
 }
 
-function _renderCloudTrendExtra(f){
-    if(!f) return "";
-    let lines = "";
+function _cloudExtraBullets(f){
+    const out = [];
     if(f.trend){
         const t = f.trend;
-        if(t.density_verdict) lines += `<div class="small muted" style="margin-top:2px;">Плотность (радиус 50км): ${t.density_verdict}.</div>`;
-        if(t.height_verdict) lines += `<div class="small muted" style="margin-top:2px;">Высота верхушек: ${t.height_verdict}.</div>`;
-        if(t.shape_verdict) lines += `<div class="small muted" style="margin-top:2px;">Форма поля: ${t.shape_verdict}.</div>`;
+        if(t.density_verdict) out.push(`облачность в радиусе 50 км — ${t.density_verdict}`);
+        if(t.height_verdict) out.push(`высота верхушек — ${t.height_verdict}`);
+        if(t.shape_verdict) out.push(`форма поля — ${t.shape_verdict}`);
     }
-    // техническая выноска: сколько снимков реально накоплено в буфере сейчас
-    // и через сколько минут накопится полное 2-часовое окно (просьба —
-    // "в памяти N снимков, запуск анализа через N минут")
-    if(f.buffer_status && f.buffer_status.note){
-        lines += `<div class="small muted" style="margin-top:2px; opacity:0.65; font-size:0.85em;">${f.buffer_status.note}.</div>`;
-    }
-    return lines;
+    return out;
 }
 
 function _renderCloudForecastLines(f){
-    return _renderFieldForecastLines(f, {
-        title: "Облачность",
-        stateOnValue: "cloud", stateOnLabel: "над станцией сейчас облачно", stateOffLabel: "над станцией сейчас ясно",
+    return _fieldBlock(f, {
+        emoji: "☁️", title: "Облачность",
+        stateOnValue: "cloud", stateOnLabel: "облачно", stateOffLabel: "ясно",
         massTargetValue: "cloud_mass", targetMassLabel: "ближайшее облако", targetClearingLabel: "ближайший просвет",
         probVerb: "принесёт изменение погоды",
         staleMin: 25,
-        extraHtml: _renderCloudTrendExtra,
+        extraBullets: _cloudExtraBullets,
     });
 }
 
 function _renderPrecipForecastLines(f){
-    return _renderFieldForecastLines(f, {
-        title: "Осадки",
-        stateOnValue: "precip", stateOnLabel: "над станцией сейчас есть осадки", stateOffLabel: "над станцией сейчас без осадков",
-        massTargetValue: "precip_mass", targetMassLabel: "ближайшие осадки", targetClearingLabel: "ближайший просвет",
+    return _fieldBlock(f, {
+        emoji: "🌧", title: "Осадки",
+        stateOnValue: "precip", stateOnLabel: "есть осадки", stateOffLabel: "осадков нет",
+        massTargetValue: "precip_mass", targetMassLabel: "ближайшая зона осадков", targetClearingLabel: "ближайший просвет",
         probVerb: "принесёт осадки",
         staleMin: 25,
     });
 }
 
 function _renderPrecipMotionLines(f){
-    return _renderFieldForecastLines(f, {
-        title: "Осадки (MTG h40b, буфер 6×10 мин)",
-        stateOnValue: "precip", stateOnLabel: "над станцией сейчас есть осадки", stateOffLabel: "над станцией сейчас без осадков",
-        massTargetValue: "precip_mass", targetMassLabel: "ближайшие осадки", targetClearingLabel: "ближайший просвет",
+    return _fieldBlock(f, {
+        emoji: "🌧", title: "Осадки (MTG H40B)",
+        stateOnValue: "precip", stateOnLabel: "есть осадки", stateOffLabel: "осадков нет",
+        massTargetValue: "precip_mass", targetMassLabel: "ближайшая зона осадков", targetClearingLabel: "ближайший просвет",
         probVerb: "принесёт осадки",
         staleMin: 20,
     });
 }
 
 function _renderLightningForecastLines(f){
-    return _renderFieldForecastLines(f, {
-        title: "Молния",
-        stateOnValue: "storm", stateOnLabel: "над станцией сейчас гроза", stateOffLabel: "над станцией сейчас без грозы",
+    return _fieldBlock(f, {
+        emoji: "⚡", title: "Молниевая активность",
+        stateOnValue: "storm", stateOnLabel: "гроза", stateOffLabel: "грозы нет",
         massTargetValue: "storm_mass", targetMassLabel: "ближайшая грозовая ячейка", targetClearingLabel: "ближайший просвет",
         probVerb: "принесёт грозу",
         staleMin: 15,
     });
 }
 
-function _renderIrStationLine(g){
-    if(!g.station_state) return "";
-    const labels = { clear: "ясно", variable: "переменная облачность", cloud: "облачно" };
-    const label = labels[g.station_state] || g.station_state;
-    return `<div class="small muted" style="margin-top:2px;">Прямо над станцией сейчас: ${label}.</div>`;
-}
-
 function _renderIrMotionLines(g){
     if(!g) return "";
     const timeTag = _obsTimeTag(g.timestamp, 20);
-    const areaLine = _renderIrAreaLine(g.observed_area);
-    const stationLine = _renderIrStationLine(g);
+    const title = _blockTitle("🌡️", "Инфракрасный канал 10.5 мкм", timeTag);
+
+    const areaBullets = [];
+    const area = g.observed_area;
+    if(area && area.center_lat != null && area.center_lon != null){
+        const w = area.motion_window_km && area.motion_window_km.width;
+        const h = area.motion_window_km && area.motion_window_km.height;
+        if(w && h) areaBullets.push(`окно: ≈${w} × ${h} км`);
+        areaBullets.push(`центр: ${Number(area.center_lat).toFixed(2)}°N, ${Number(area.center_lon).toFixed(2)}°E (Одесса)`);
+        if(area.local_trend_radius_km) areaBullets.push(`анализ температуры верхней границы облаков в радиусе ≈${area.local_trend_radius_km} км`);
+    }
+    const areaHtml = areaBullets.length ? _subhead("Область анализа") + _bullets(areaBullets) : "";
+
+    const labels = { clear: "ясно", variable: "переменная облачность", cloud: "облачно" };
+    const stationText = g.station_state ? (labels[g.station_state] || g.station_state) : null;
+    const stationHtml = stationText ? _plain(`Над станцией: ${stationText}.`) : "";
 
     if(!g.valid){
-        return `<div style="margin-top:14px;">
-            <div style="font-weight:600; color:#eee;">По ИК-снимку (10.5мкм, MTG, день/ночь)${timeTag}</div>
-            ${areaLine}
-            ${stationLine}
-            <div class="small muted" style="margin-top:2px;">${g.verdict || "недоступно"}.</div>
-        </div>`;
+        return _hr() + title + areaHtml + stationHtml + _plain(g.verdict || "Недоступно.");
     }
 
     const lowConfidence = g.frame_pairs_used != null && g.frame_pairs_used <= 2;
-    const lines = [];
+    const suffix = lowConfidence ? " (мало пар кадров — невысокая уверенность)" : "";
 
-    // Положение цели (где она СЕЙЧАС относительно станции) — перед строкой
-    // о направлении её движения, тот же порядок, что в блоке Облачность выше.
+    const massBullets = [];
     if(g.cloud_mass_distance_km != null){
-        lines.push(`значимая облачная масса: ~${Math.round(g.cloud_mass_distance_km)} км (${g.cloud_mass_compass}) от станции.`);
+        massBullets.push(`расстояние: ≈${Math.round(g.cloud_mass_distance_km)} км (${g.cloud_mass_compass})`);
     }
-    lines.push(`скорость ~${Math.round(g.speed_kmh)} км/ч, направление на ${g.direction_compass}.`);
+    massBullets.push(`движение: на ${g.direction_compass}`);
+    massBullets.push(`скорость: ≈${Math.round(g.speed_kmh)} км/ч`);
+    const massHtml = _subhead("Основная облачная масса") + _bullets(massBullets);
 
-    if(g.acceleration_verdict){
-        lines.push(`${g.acceleration_verdict}${lowConfidence ? " (мало пар кадров — невысокая уверенность)" : ""}.`);
-    }
-    if(g.turning_verdict){
-        lines.push(`${g.turning_verdict}${lowConfidence ? " (мало пар кадров — невысокая уверенность)" : ""}.`);
-    }
-    if(g.area_trend_verdict){
-        lines.push(`${g.area_trend_verdict}.`);
-    }
-    if(g.temperature_trend_verdict){
-        lines.push(`${g.temperature_trend_verdict}.`);
-    }
+    const trendBullets = [];
+    if(g.acceleration_verdict) trendBullets.push(`${g.acceleration_verdict}${suffix}`);
+    if(g.turning_verdict) trendBullets.push(`${g.turning_verdict}${suffix}`);
+    if(g.area_trend_verdict) trendBullets.push(`площадь облачной массы — ${g.area_trend_verdict}`);
+    if(g.temperature_trend_verdict) trendBullets.push(`яркостная температура — ${g.temperature_trend_verdict}`);
+    const trendHtml = trendBullets.length ? _subhead("Тренд") + _bullets(trendBullets) : "";
+
+    let forecastHtml = "";
     if(g.forecast_displacement && g.forecast_displacement["30min"] && g.forecast_displacement["60min"] && g.forecast_displacement["120min"]){
         const f30 = g.forecast_displacement["30min"];
         const f60 = g.forecast_displacement["60min"];
         const f120 = g.forecast_displacement["120min"];
-        lines.push(
-            `Прогноз смещения: ~${f30.distance_km}км за 30мин, ~${f60.distance_km}км за 60мин, `
-            + `~${f120.distance_km}км за 120мин (направление ~${f60.compass}).`
-        );
+        forecastHtml = _subhead("Прогноз смещения") + _bullets([
+            `через 30 мин — ≈${Number(f30.distance_km).toLocaleString("ru-RU")} км`,
+            `через 60 мин — ≈${Number(f60.distance_km).toLocaleString("ru-RU")} км`,
+            `через 120 мин — ≈${Number(f120.distance_km).toLocaleString("ru-RU")} км (на ${f120.compass})`,
+        ]);
     }
 
-    const linesHtml = lines.map(l => `<div class="small muted" style="margin-top:2px;">${l}</div>`).join("");
-
-    return `<div style="margin-top:14px;">
-        <div style="font-weight:600; color:#eee;">По ИК-снимку (10.5мкм, MTG, день/ночь)${timeTag}</div>
-        ${areaLine}
-        ${stationLine}
-        ${linesHtml}
-    </div>`;
-}
-
-// Строку "область анализа" рендерим отдельно от остальных verdict-строк:
-// это не тренд/прогноз, а статичная привязка к местности — где именно на
-// снимке измеряется движение (окно ~WxH км) и где считается площадь/тренд
-// температуры (радиус в км), в отличие от остальных карточек этого блока,
-// которые отслеживают ближайший ОБЪЕКТ (облако/осадки) от станции.
-function _renderIrAreaLine(area){
-    if(!area || area.center_lat == null || area.center_lon == null) return "";
-    const lat = Number(area.center_lat).toFixed(2);
-    const lon = Number(area.center_lon).toFixed(2);
-    const w = area.motion_window_km && area.motion_window_km.width;
-    const h = area.motion_window_km && area.motion_window_km.height;
-    const windowStr = (w && h) ? `окно ~${w}×${h} км` : "";
-    const radiusStr = area.local_trend_radius_km ? `, площадь/температура — в радиусе ~${area.local_trend_radius_km} км` : "";
-    return `<div class="small muted" style="margin-top:2px;">Наблюдаемая область: ${windowStr} с центром у Одессы (${lat}°N, ${lon}°E)${radiusStr}.</div>`;
+    return _hr() + title + areaHtml + stationHtml + massHtml + trendHtml + forecastHtml;
 }
 
 // Cloud Phase/Type RGB — не трекинг движения (это уже делают Cloud
@@ -359,32 +362,22 @@ function _renderIrAreaLine(area){
 function _renderCloudPhaseTypeLines(g){
     if(!g) return "";
     const timeTag = _obsTimeTag(g.timestamp, 15);
-    const titleLine = `<div style="font-weight:600; color:#eee;">Фаза/тип облаков (MTG RGB)${timeTag}</div>`;
+    const title = _blockTitle("🌈", "Фаза и тип облаков (MTG RGB)", timeTag);
 
     if(!g.phase_verdict){
-        return `<div style="margin-top:14px;">
-            ${titleLine}
-            <div class="small muted" style="margin-top:2px;">${g.verdict || "недостаточно данных"}.</div>
-        </div>`;
+        return _hr() + title + _plain(g.verdict || "недостаточно данных");
     }
 
-    let unclassifiedLine = "";
+    let warnHtml = "";
     if(g.unclassified_fraction_now != null && g.unclassified_fraction_now > 0.3){
         const pct = Math.round(g.unclassified_fraction_now * 100);
-        unclassifiedLine = `<div class="small muted" style="margin-top:2px; color:#e0a030;">⚠ ${pct}% пикселей области не распознано цветовыми анкерами (первая версия, требует калибровки).</div>`;
+        warnHtml = `<div class="small muted" style="margin-top:6px; color:#e0a030;">⚠ ${pct}% пикселей области не распознано цветовыми анкерами (первая версия, требует калибровки).</div>`;
     }
 
-    const bufferLine = (g.buffer_status && g.buffer_status.note)
-        ? `<div class="small muted" style="margin-top:2px; opacity:0.65; font-size:0.85em;">${g.buffer_status.note}.</div>`
-        : "";
-
-    return `<div style="margin-top:14px;">
-        ${titleLine}
-        <div class="small muted" style="margin-top:2px;">${g.phase_verdict}.</div>
-        <div class="small muted" style="margin-top:2px;">${g.type_verdict}.</div>
-        ${unclassifiedLine}
-        ${bufferLine}
-    </div>`;
+    return _hr() + title
+        + _bullets([`фаза облаков — ${g.phase_verdict}`, `тип облаков — ${g.type_verdict}`])
+        + warnHtml
+        + _bufferLine(g.buffer_status);
 }
 
 function renderNearbyPrecipCard(){
@@ -405,7 +398,8 @@ function renderNearbyPrecipCard(){
         ${_renderPrecipForecastLines(_eumetsatPrecipForecastData)}
         ${_renderPrecipMotionLines(_eumetsatPrecipMotionData)}
         ${_renderLightningForecastLines(_eumetsatLightningForecastData)}
-        <div class="small muted" style="margin-top:14px;">
+        ${_hr()}
+        <div class="small muted">
             Data: <a href="https://www.eumetsat.int/" target="_blank" rel="noopener" style="color:#72c8ff;">EUMETSAT</a>
         </div>`;
 }
