@@ -1,27 +1,27 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-07-31T06:00:00.000Z",
+  "server_latest_time": "2026-07-31T06:10:00.000Z",
   "bootstrap": true,
   "buffer_before": 6,
   "buffer_size": 6,
   "buffer_times": [
-    "2026-07-31T05:10:00.000Z",
     "2026-07-31T05:20:00.000Z",
     "2026-07-31T05:30:00.000Z",
     "2026-07-31T05:40:00.000Z",
     "2026-07-31T05:50:00.000Z",
-    "2026-07-31T06:00:00.000Z"
+    "2026-07-31T06:00:00.000Z",
+    "2026-07-31T06:10:00.000Z"
   ],
   "frame_std": [
-    12.5,
     13.2,
     13.7,
     14.4,
     15.2,
-    15.9
+    15.9,
+    16.6
   ],
   "result": {
-    "timestamp": "2026-07-31T06:24:17Z",
+    "timestamp": "2026-07-31T06:41:27Z",
     "buffer_size": 6,
     "buffer_span_minutes": 50,
     "observed_area": {
@@ -34,29 +34,29 @@
       "local_trend_radius_km": 50
     },
     "valid": true,
-    "speed_kmh": 0.1,
-    "direction_compass": "ЮЗ",
-    "bearing_deg": 208.6,
+    "speed_kmh": 0.0,
+    "direction_compass": "З",
+    "bearing_deg": 270.3,
     "frame_pairs_used": 5,
-    "acceleration_kmh": -0.0,
-    "turning_deg": -171.0,
+    "acceleration_kmh": 0.1,
+    "turning_deg": 160.6,
     "acceleration_verdict": "скорость стабильна",
-    "turning_verdict": "меняет направление (против часовой)",
+    "turning_verdict": "меняет направление (по часовой)",
     "forecast_displacement": {
       "30min": {
         "distance_km": 0.3,
-        "bearing_deg": 50.0,
-        "compass": "СВ"
+        "bearing_deg": 19.0,
+        "compass": "С"
       },
       "60min": {
         "distance_km": 0.9,
-        "bearing_deg": 49.0,
-        "compass": "СВ"
+        "bearing_deg": 21.0,
+        "compass": "С"
       },
       "120min": {
-        "distance_km": 3.0,
-        "bearing_deg": 48.0,
-        "compass": "СВ"
+        "distance_km": 3.2,
+        "bearing_deg": 22.0,
+        "compass": "С"
       }
     },
     "area_fraction_over_time": [
@@ -71,10 +71,7 @@
     "area_trend_verdict": "без существенных изменений",
     "station_state": "clear",
     "station_area_fraction": 0.0,
-    "cloud_mass_distance_km": 209.3,
-    "cloud_mass_bearing_deg": 335.0,
-    "cloud_mass_compass": "СЗ",
-    "cloud_mass_area_km2": 61,
+    "cloud_mass_distance_km": null,
     "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
   }
 }
