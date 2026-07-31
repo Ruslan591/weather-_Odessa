@@ -49,6 +49,7 @@ import math
 import os
 
 import numpy as np
+from PIL import Image
 
 import field_motion_common as fc
 
@@ -56,6 +57,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_geocolour_motion.json")
 DEBUG_FILE = os.path.join(BASE_DIR, "data", "eumetsat_geocolour_motion_debug.json")
 BUFFER_FILE = os.path.join(BASE_DIR, "data", "eumetsat_geocolour_buffer.npz")
+DEBUG_PREVIEW_FILE = os.path.join(BASE_DIR, "data", "eumetsat_geocolour_debug_preview.png")
 
 LAYER_GEOCOLOUR = "mtg_fd:rgb_geocolour"
 MAX_FRAMES = 6                   # 6*10мин = 60 минут истории, как в IR
@@ -116,6 +118,21 @@ def _unpack_frame(packed):
     return packed[0], packed[1] > 0.5
 
 
+def _save_debug_preview(rgba, is_cloud):
+    """Оверлей классифицированных 'облачных' пикселей поверх исходного
+    кадра — чтобы КАЛИБРОВАТЬ пороги HSV по реальным данным, глядя на
+    картинку, а не гадать по цифрам вслепую (см. обсуждение в чате —
+    первая версия порогов дважды оказалась неверной)."""
+    try:
+        base = Image.fromarray(rgba[:, :, :3], mode="RGB").convert("RGB")
+        overlay = np.array(base).copy()
+        overlay[is_cloud] = [255, 0, 0]  # ярко-красным — что классифицировано как облако
+        blended = (np.array(base).astype(np.float32) * 0.4 + overlay.astype(np.float32) * 0.6).astype(np.uint8)
+        Image.fromarray(blended, mode="RGB").save(DEBUG_PREVIEW_FILE)
+    except Exception as e:
+        print(f"  [WARN] eumetsat_geocolour_motion.py: не удалось сохранить debug preview: {e}")
+
+
 def main():
     now = fc.datetime.now(fc.timezone.utc)
     debug = {}
@@ -160,6 +177,7 @@ def main():
             is_cloud, _ = _classify_cloud(arr, _is_daytime(t_iso))
             new_times.append(t_iso or _fmt_time(now))
             new_packed.append(_pack_frame(gray, is_cloud))
+            _save_debug_preview(arr, is_cloud)  # перезаписываем на каждой итерации — в конце останется последний (самый свежий) кадр
 
         if len(new_packed) < MIN_FRAMES_FOR_INCREMENTAL:
             fc.write_debug(DEBUG_FILE, {"status": "error", "stage": "bootstrap", "failed": failed,
@@ -206,6 +224,7 @@ def main():
         new_packed = _pack_frame(gray_new, is_cloud_new)
         times = (times + [next_t_iso])[-MAX_FRAMES:]
         packed_frames = (packed_frames + [new_packed])[-MAX_FRAMES:]
+        _save_debug_preview(arr, is_cloud_new)
 
     fc.save_frame_buffer(BUFFER_FILE, times, packed_frames, MAX_FRAMES)
     debug["buffer_size"] = len(packed_frames)
