@@ -311,7 +311,13 @@ def _estimate_motion(masks, times_iso):
         vy_list.append((-dy_px * KM_PER_PX_Y) / dt_h)
     if not vx_list:
         return None, None, 0
-    return float(np.mean(vx_list)), float(np.mean(vy_list)), len(vx_list)
+    # МЕДИАНА, а не среднее: на разреженной/шумной маске отдельные пары дают
+    # очень разные оценки (замечено живьём — от 0.15 до 111 км/ч на одном и
+    # том же облаке за один цикл), и среднее может как случайно занулиться
+    # от взаимной компенсации разнонаправленных выбросов, так и утянуться
+    # одним выбросом в нереалистичную сторону. Медиана по каждой компоненте
+    # устойчива к одиночным выбросам, в отличие от среднего.
+    return float(np.median(vx_list)), float(np.median(vy_list)), len(vx_list)
 
 
 def _largest_component_aspect(mask):
