@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-07-31T16:19:41Z",
+  "timestamp": "2026-07-31T16:44:58Z",
   "buffer_size": 6,
   "buffer_span_minutes": 50,
   "observed_area": {
@@ -14,30 +14,30 @@
   "valid": false,
   "verdict": "недостаточно контраста для оценки (вероятно, однородная сцена)",
   "area_fraction_over_time": [
-    0.239,
-    0.248,
-    0.267,
     0.275,
     0.279,
-    0.291
+    0.29,
+    0.291,
+    0.306,
+    0.319
   ],
-  "area_trend_delta": 0.052,
+  "area_trend_delta": 0.044,
   "area_trend_verdict": "без существенных изменений",
   "mean_brightness_over_time": [
-    21.5,
-    21.9,
-    22.5,
     22.9,
     23.4,
-    23.8
+    23.8,
+    23.8,
+    24.8,
+    25.4
   ],
-  "brightness_trend_delta": 2.3,
+  "brightness_trend_delta": 2.5,
   "station_state": "variable",
-  "station_area_fraction": 0.291,
-  "cloud_mass_distance_km": 1.6,
-  "cloud_mass_bearing_deg": 116.0,
-  "cloud_mass_compass": "ЮВ",
-  "cloud_mass_area_km2": 6303,
-  "temperature_trend_verdict": "без существенных изменений",
+  "station_area_fraction": 0.319,
+  "cloud_mass_distance_km": 2.5,
+  "cloud_mass_bearing_deg": 35.0,
+  "cloud_mass_compass": "СВ",
+  "cloud_mass_area_km2": 7379,
+  "temperature_trend_verdict": "похолодание верхней границы (возможно усиление конвекции)",
   "method_note": "Буфер 6/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин, crs=EPSG:4326, всегда явный TIME — не 'latest'), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. cloud_mass_* — положение (не движение) ближайшей значимой облачной массы относительно станции. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
 }
