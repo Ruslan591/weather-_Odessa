@@ -522,10 +522,30 @@ def main():
 
     is_cloud_now = is_cloud_frames[-1]
     valid_now = valid_frames[-1]
+    local_mask = _local_area_mask()
 
-    center_idx = int((TILE_SIZE - 1) / 2)
-    currently_cloudy = bool(is_cloud_now[center_idx, center_idx])
-    want_cloud_target = not currently_cloudy
+    # РАНЬШЕ брали ОДИН центральный пиксель (~1.4×1.4км) — та же проблема,
+    # что уже находили и чинили в eumetsat_ir_motion.py: человек оценивает
+    # облачность над собой в целом (десятки км в поперечнике), а не 1 пиксель
+    # точно над головой, и единичный пиксель может случайно попасть в разрыв
+    # между облаками даже при заметной облачности рядом (замечено живьём:
+    # ближайшее облако в 13км, а current_state всё равно "ясно"). Теперь —
+    # доля облачных пикселей в радиусе LOCAL_RADIUS_KM (тот же радиус, что и
+    # trend выше), с тремя градациями вместо бинарной.
+    area_fraction_now = float(is_cloud_now[local_mask].mean())
+    if area_fraction_now < 0.15:
+        current_state_str = "clear"
+    elif area_fraction_now < 0.70:
+        current_state_str = "variable"
+    else:
+        current_state_str = "cloud"
+
+    # Бинарное решение "что искать поблизости" (ближайшее облако vs
+    # ближайший просвет) — по большинству (>50% радиуса), отдельно от
+    # трёхуровневого current_state выше: для "переменной" облачности
+    # искать и то и другое одновременно эта функция не умеет, majority-vote
+    # — разумный выбор цели по умолчанию.
+    want_cloud_target = area_fraction_now < 0.5
     target_type = "cloud_mass" if want_cloud_target else "clearing"
 
     nearest = _nearest_of_type(is_cloud_now, valid_now, want_cloud_target)
@@ -533,14 +553,14 @@ def main():
     blob_area_km2 = nearest[2] if nearest is not None else None
     vx, vy, n_pairs = _estimate_motion(is_cloud_frames, times)
 
-    local_mask = _local_area_mask()
     trend = _density_height_shape_trend(is_cloud_frames, cth_index_frames, valid_frames, local_mask)
     buffer_status = _buffer_status(len(packed_frames))
 
     if p_now is None:
         out = {
             "timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "current_state": "cloud" if currently_cloudy else "clear",
+            "current_state": current_state_str,
+            "station_area_fraction": round(area_fraction_now, 3),
             "target_type": target_type,
             "verdict": "однородно в радиусе ~{}км, {} не найдено".format(
                 round(HALF_WINDOW_DEG * KM_PER_DEG_LON),
@@ -554,7 +574,8 @@ def main():
         if vx is None:
             out = {
                 "timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "current_state": "cloud" if currently_cloudy else "clear",
+                "current_state": current_state_str,
+                "station_area_fraction": round(area_fraction_now, 3),
                 "target_type": target_type,
                 "distance_km_now": round(dist_now, 1),
                 "bearing_deg": round(bearing_now, 0),
@@ -590,7 +611,8 @@ def main():
 
             out = {
                 "timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "current_state": "cloud" if currently_cloudy else "clear",
+                "current_state": current_state_str,
+                "station_area_fraction": round(area_fraction_now, 3),
                 "target_type": target_type,
                 "distance_km_now": round(dist_now, 1),
                 "bearing_deg": round(bearing_now, 0),
