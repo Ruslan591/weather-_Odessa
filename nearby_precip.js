@@ -195,7 +195,12 @@ function _bufferLine(status){
 function _fieldBlock(f, cfg){
     if(!f) return "";
     const timeTag = _obsTimeTag(f.timestamp, cfg.staleMin);
-    const stateStr = f.current_state === cfg.stateOnValue ? cfg.stateOnLabel : cfg.stateOffLabel;
+    // cfg.stateLabels — карта {значение_current_state: текст}; поддерживает
+    // и бинарные случаи (Осадки/Молния — только 2 значения), и тройные
+    // (Облачность — clear/variable/cloud, area-fraction по радиусу, см.
+    // eumetsat_cloud_forecast.py). Раньше был бинарный stateOnValue/
+    // stateOnLabel/stateOffLabel — молча показывал бы "variable" как "ясно".
+    const stateStr = cfg.stateLabels[f.current_state] || f.current_state;
     const extraHtml = cfg.extraHtml ? cfg.extraHtml(f) : "";
 
     if(f.distance_km_now == null){
@@ -258,7 +263,7 @@ function _cloudExtraBullets(f){
 function _renderCloudForecastLines(f){
     return _fieldBlock(f, {
         emoji: "☁️", title: "Облачность",
-        stateOnValue: "cloud", stateOnLabel: "облачно", stateOffLabel: "ясно",
+        stateLabels: { clear: "ясно", variable: "переменная облачность", cloud: "облачно" },
         massTargetValue: "cloud_mass", targetMassLabel: "ближайшее облако", targetClearingLabel: "ближайший просвет",
         probVerb: "принесёт изменение погоды",
         staleMin: 25,
@@ -269,7 +274,7 @@ function _renderCloudForecastLines(f){
 function _renderPrecipForecastLines(f){
     return _fieldBlock(f, {
         emoji: "🌧", title: "Осадки",
-        stateOnValue: "precip", stateOnLabel: "есть осадки", stateOffLabel: "осадков нет",
+        stateLabels: { precip: "есть осадки", no_precip: "осадков нет" },
         massTargetValue: "precip_mass", targetMassLabel: "ближайшая зона осадков", targetClearingLabel: "ближайший просвет",
         probVerb: "принесёт осадки",
         staleMin: 25,
@@ -279,7 +284,7 @@ function _renderPrecipForecastLines(f){
 function _renderPrecipMotionLines(f){
     return _fieldBlock(f, {
         emoji: "🌧", title: "Осадки (MTG H40B)",
-        stateOnValue: "precip", stateOnLabel: "есть осадки", stateOffLabel: "осадков нет",
+        stateLabels: { precip: "есть осадки", no_precip: "осадков нет" },
         massTargetValue: "precip_mass", targetMassLabel: "ближайшая зона осадков", targetClearingLabel: "ближайший просвет",
         probVerb: "принесёт осадки",
         staleMin: 20,
@@ -289,7 +294,7 @@ function _renderPrecipMotionLines(f){
 function _renderLightningForecastLines(f){
     return _fieldBlock(f, {
         emoji: "⚡", title: "Молниевая активность",
-        stateOnValue: "storm", stateOnLabel: "гроза", stateOffLabel: "грозы нет",
+        stateLabels: { storm: "гроза", no_storm: "грозы нет" },
         massTargetValue: "storm_mass", targetMassLabel: "ближайшая грозовая ячейка", targetClearingLabel: "ближайший просвет",
         probVerb: "принесёт грозу",
         staleMin: 15,
