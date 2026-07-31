@@ -275,6 +275,7 @@ def git_push_satellite():
             "data/eumetsat_geocolour_motion.json",
             "data/eumetsat_geocolour_motion_debug.json",
             "data/eumetsat_geocolour_buffer.npz",
+            "data/eumetsat_geocolour_debug_preview.png",
             "data/anim/manifest.json",
             "data/anim/debug.json",
             "data/anim/clm.mp4",
