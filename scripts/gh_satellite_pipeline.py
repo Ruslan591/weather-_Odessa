@@ -196,6 +196,30 @@ def check_eumetsat_cloud_phase_type():
         print(f"  [WARN] eumetsat_cloud_phase_type.py: {e}")
 
 
+def check_eumetsat_geocolour_motion():
+    # Motion + area-fraction по GeoColour RGB (mtg_fd:rgb_geocolour),
+    # круглосуточно (день/ночь-гейт в самом скрипте). Персистентный буфер
+    # 6 кадров (60 мин, шаг 10 мин). Гейт 10 мин.
+    out_file = os.path.join(BASE_DIR, "data", "eumetsat_geocolour_motion.json")
+    now_utc = datetime.now(timezone.utc)
+    try:
+        if os.path.exists(out_file):
+            with open(out_file, "r", encoding="utf-8") as f:
+                prev = json.load(f)
+            last_time = datetime.strptime(prev["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            if (now_utc - last_time).total_seconds() < 10 * 60:
+                return
+    except Exception:
+        pass
+    try:
+        subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "eumetsat_geocolour_motion.py")],
+            cwd=BASE_DIR, capture_output=False, timeout=90
+        )
+    except Exception as e:
+        print(f"  [WARN] eumetsat_geocolour_motion.py: {e}")
+
+
 def check_eumetsat_anim_render():
     # MP4-петли (2ч) на каждый слой просмотрщика eumetsat.html — вместо
     # живой покадровой WMS-анимации в браузере (см. eumetsat_anim_render.py
@@ -248,6 +272,9 @@ def git_push_satellite():
             "data/eumetsat_precip_motion.json",
             "data/eumetsat_precip_motion_debug.json",
             "data/eumetsat_precip_buffer.npz",
+            "data/eumetsat_geocolour_motion.json",
+            "data/eumetsat_geocolour_motion_debug.json",
+            "data/eumetsat_geocolour_buffer.npz",
             "data/anim/manifest.json",
             "data/anim/debug.json",
             "data/anim/clm.mp4",
@@ -306,6 +333,7 @@ def main():
     check_eumetsat_lightning_forecast()
     check_eumetsat_ir_motion()
     check_eumetsat_precip_motion()
+    check_eumetsat_geocolour_motion()
     check_eumetsat_anim_render()
 
     git_push_satellite()
