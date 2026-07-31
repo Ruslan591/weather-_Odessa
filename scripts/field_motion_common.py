@@ -194,6 +194,39 @@ def fetch_map_custom(layer_name, bbox_lonlat, width, height, time_iso=None,
     raise RuntimeError("; ".join(attempt_errors))
 
 
+def rgb_to_hsv_vec(arr):
+    """arr: (H,W,3) uint8 RGB -> (h_deg, s, v), все (H,W) float, векторно.
+    Стандартная формула RGB->HSV без внешних зависимостей (matplotlib нет
+    в requirements пайплайна). Общая версия для скриптов, работающих с
+    RGB-композитами (Cloud Phase/Type RGB, GeoColour RGB) — в отличие от
+    большинства функций этого модуля, рассчитанных на одноканальные
+    (grayscale/бинарные) поля."""
+    rgb = arr.astype(np.float32) / 255.0
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    maxc = np.max(rgb, axis=-1)
+    minc = np.min(rgb, axis=-1)
+    v = maxc
+    delta = maxc - minc
+    s = np.where(maxc > 1e-6, delta / np.where(maxc > 1e-6, maxc, 1), 0.0)
+
+    h = np.zeros_like(maxc)
+    safe_delta = np.where(delta > 1e-6, delta, 1.0)
+    rc = (maxc - r) / safe_delta
+    gc = (maxc - g) / safe_delta
+    bc = (maxc - b) / safe_delta
+
+    is_r = (maxc == r) & (delta > 1e-6)
+    is_g = (maxc == g) & (delta > 1e-6) & (~is_r)
+    is_b = (maxc == b) & (delta > 1e-6) & (~is_r) & (~is_g)
+
+    h = np.where(is_r, (bc - gc), h)
+    h = np.where(is_g, 2.0 + rc - bc, h)
+    h = np.where(is_b, 4.0 + gc - rc, h)
+    h = (h / 6.0) % 1.0
+    h_deg = h * 360.0
+    return h_deg, s, v
+
+
 def classify_presence_by_alpha(arr):
     """presence = непрозрачный пиксель (значение > 0 по легенде продукта).
     valid = True почти везде — для этих продуктов alpha сам кодирует
