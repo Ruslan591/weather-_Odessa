@@ -99,12 +99,18 @@ def _classify_cloud(rgba, is_day):
     (жёлто-оранжевые яркие точки) — явно ИСКЛЮЧЕНЫ в обеих ветках."""
     alpha_valid = rgba[:, :, 3] > 0
     h, s, v = fc.rgb_to_hsv_vec(rgba[:, :, :3])
-    city_light = _in_hue_range(h, 25, 65) & (s > 0.3) & (v > 0.35)
+    # Пороги скорректированы по реальному debug preview (data/
+    # eumetsat_geocolour_debug_preview.png) — первая версия (уже вторая по
+    # счёту) оказалась неверной в обе стороны сразу: огни городов ловились
+    # как облако (city_light была слишком мягкой), а настоящие ночные облака
+    # (на деле бледно-серо-голубые, менее насыщенные, чем предполагалось) —
+    # почти не ловились (night_cloud была слишком строгой по S).
+    city_light = _in_hue_range(h, 15, 70) & (s > 0.2) & (v > 0.25)
 
     if is_day:
         cloud = (s < 0.25) & (v > 0.55)
     else:
-        cloud = _in_hue_range(h, 190, 250) & (s > 0.15) & (v > 0.12)
+        cloud = _in_hue_range(h, 180, 260) & (s > 0.06) & (v > 0.10)
 
     is_cloud = cloud & (~city_light) & alpha_valid
     return is_cloud, alpha_valid
