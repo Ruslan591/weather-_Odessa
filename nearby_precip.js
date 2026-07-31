@@ -25,6 +25,8 @@ let _eumetsatLightningForecastData      = null;
 let _eumetsatLightningForecastFetchedAt = 0;
 let _eumetsatIrMotionData      = null;
 let _eumetsatIrMotionFetchedAt = 0;
+let _eumetsatGeocolourMotionData      = null;
+let _eumetsatGeocolourMotionFetchedAt = 0;
 let _eumetsatPrecipMotionData      = null;
 let _eumetsatPrecipMotionFetchedAt = 0;
 let _eumetsatCloudPhaseTypeData      = null;
@@ -95,6 +97,23 @@ async function loadEumetsatIrMotion(){
         renderNearbyPrecipCard();
     } catch(e){
         _eumetsatIrMotionFetchedAt = 0;
+    }
+}
+
+async function loadEumetsatGeocolourMotion(){
+    if(Date.now() - _eumetsatGeocolourMotionFetchedAt < 10 * 60000) return; // раз в 10 мин
+    _eumetsatGeocolourMotionFetchedAt = Date.now();
+    try {
+        const r = await fetch(
+            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_geocolour_motion.json",
+            { cache: "no-store" }
+        );
+        if(!r.ok) return;
+        const j = await r.json();
+        if(j && j.timestamp) _eumetsatGeocolourMotionData = j;
+        renderNearbyPrecipCard();
+    } catch(e){
+        _eumetsatGeocolourMotionFetchedAt = 0;
     }
 }
 
@@ -358,8 +377,71 @@ function _renderIrMotionLines(g){
     return _hr() + title + areaHtml + stationHtml + massHtml + trendHtml + forecastHtml;
 }
 
+// GeoColour RGB (mtg_fd:rgb_geocolour) — круглосуточно (day/night-композит,
+// ночью облака голубые от ИК-подсветки, огни городов жёлтые — исключены из
+// классификации на сервере). Гибрид: motion — phase correlation по сырой
+// яркости (как ИК), area-fraction/позиция — абсолютная HSV-классификация
+// (как Cloud Mask), не перцентиль. См. eumetsat_geocolour_motion.py.
+function _renderGeocolourMotionLines(g){
+    if(!g) return "";
+    const timeTag = _obsTimeTag(g.timestamp, 20);
+    const title = _blockTitle("🌍", "Естественный цвет (GeoColour, круглосуточно)", timeTag);
+
+    const areaBullets = [];
+    const area = g.observed_area;
+    if(area && area.center_lat != null && area.center_lon != null){
+        const w = area.motion_window_km && area.motion_window_km.width;
+        const h = area.motion_window_km && area.motion_window_km.height;
+        if(w && h) areaBullets.push(`окно: ≈${w} × ${h} км`);
+        areaBullets.push(`центр: ${Number(area.center_lat).toFixed(2)}°N, ${Number(area.center_lon).toFixed(2)}°E (Одесса)`);
+        if(area.local_trend_radius_km) areaBullets.push(`анализ облачности в радиусе ≈${area.local_trend_radius_km} км`);
+    }
+    const areaHtml = areaBullets.length ? _subhead("Область анализа") + _bullets(areaBullets) : "";
+
+    const stateLabels = { clear: "ясно", variable: "переменная облачность", cloud: "облачно" };
+    const stationText = g.station_state ? (stateLabels[g.station_state] || g.station_state) : null;
+    const stationHtml = stationText ? _plain(`Над станцией: ${stationText}.`) : "";
+
+    if(!g.valid){
+        return _hr() + title + areaHtml + stationHtml + _plain(g.verdict || "Недоступно.");
+    }
+
+    const lowConfidence = g.frame_pairs_used != null && g.frame_pairs_used <= 2;
+    const suffix = lowConfidence ? " (мало пар кадров — невысокая уверенность)" : "";
+
+    let massHtml = "";
+    if(g.cloud_mass_distance_km != null){
+        const massBullets = [
+            `расстояние: ≈${Math.round(g.cloud_mass_distance_km)} км (${g.cloud_mass_compass})`,
+            `движение: на ${g.direction_compass}`,
+            `скорость: ≈${Math.round(g.speed_kmh)} км/ч`,
+        ];
+        massHtml = _subhead("Основная облачная масса") + _bullets(massBullets);
+    }
+
+    const trendBullets = [];
+    if(g.acceleration_verdict) trendBullets.push(`${g.acceleration_verdict}${suffix}`);
+    if(g.turning_verdict) trendBullets.push(`${g.turning_verdict}${suffix}`);
+    if(g.area_trend_verdict) trendBullets.push(`площадь облачности (радиус 50км) — ${g.area_trend_verdict}`);
+    const trendHtml = trendBullets.length ? _subhead("Тренд") + _bullets(trendBullets) : "";
+
+    let forecastHtml = "";
+    if(g.forecast_displacement && g.forecast_displacement["30min"] && g.forecast_displacement["60min"] && g.forecast_displacement["120min"]){
+        const f30 = g.forecast_displacement["30min"];
+        const f60 = g.forecast_displacement["60min"];
+        const f120 = g.forecast_displacement["120min"];
+        forecastHtml = _subhead("Прогноз смещения") + _bullets([
+            `через 30 мин — ≈${Number(f30.distance_km).toLocaleString("ru-RU")} км`,
+            `через 60 мин — ≈${Number(f60.distance_km).toLocaleString("ru-RU")} км`,
+            `через 120 мин — ≈${Number(f120.distance_km).toLocaleString("ru-RU")} км (на ${f120.compass})`,
+        ]);
+    }
+
+    return _hr() + title + areaHtml + stationHtml + massHtml + trendHtml + forecastHtml;
+}
+
 // Cloud Phase/Type RGB — не трекинг движения (это уже делают Cloud
-// Mask/IR/precip выше), а качественный тренд фазы (вода->лёд->гроза) и
+// Mask/IR/GeoColour выше), а качественный тренд фазы (вода->лёд->гроза) и
 // грубой группы облачности. Анкеры цвета — первая, не откалиброванная по
 // реальным сценам версия (см. method_note в самом JSON) — поэтому здесь же
 // показываем unclassified_fraction, чтобы было видно, когда анкеры
@@ -391,7 +473,7 @@ function renderNearbyPrecipCard(){
 
     const anyData = _eumetsatForecastData || _eumetsatPrecipForecastData
         || _eumetsatLightningForecastData || _eumetsatIrMotionData || _eumetsatPrecipMotionData
-        || _eumetsatCloudPhaseTypeData;
+        || _eumetsatCloudPhaseTypeData || _eumetsatGeocolourMotionData;
     if(!anyData){ card.innerHTML = ""; return; }
 
     card.innerHTML = `
@@ -400,6 +482,7 @@ function renderNearbyPrecipCard(){
         ${_renderCloudForecastLines(_eumetsatForecastData)}
         ${_renderCloudPhaseTypeLines(_eumetsatCloudPhaseTypeData)}
         ${_renderIrMotionLines(_eumetsatIrMotionData)}
+        ${_renderGeocolourMotionLines(_eumetsatGeocolourMotionData)}
         ${_renderPrecipForecastLines(_eumetsatPrecipForecastData)}
         ${_renderPrecipMotionLines(_eumetsatPrecipMotionData)}
         ${_renderLightningForecastLines(_eumetsatLightningForecastData)}
