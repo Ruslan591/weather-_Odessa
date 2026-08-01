@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-01T17:50:52Z",
+  "timestamp": "2026-08-01T18:21:23Z",
   "buffer_size": 6,
   "buffer_span_minutes": 50,
   "observed_area": {
@@ -14,30 +14,30 @@
   "valid": false,
   "verdict": "недостаточно контраста для оценки (вероятно, однородная сцена)",
   "area_fraction_over_time": [
-    0.181,
-    0.19,
-    0.225,
-    0.401,
-    0.578,
-    0.666
+    0.121,
+    0.265,
+    0.365,
+    0.418,
+    0.451,
+    0.476
   ],
-  "area_trend_delta": 0.485,
+  "area_trend_delta": 0.355,
   "area_trend_verdict": "растёт",
   "mean_brightness_over_time": [
-    23.1,
-    23.9,
-    24.7,
-    25.5,
     26.3,
-    26.9
+    26.9,
+    27.4,
+    27.8,
+    28.2,
+    28.5
   ],
-  "brightness_trend_delta": 3.7,
+  "brightness_trend_delta": 2.2,
   "station_state": "variable",
-  "station_area_fraction": 0.666,
-  "cloud_mass_distance_km": 33.6,
-  "cloud_mass_bearing_deg": 21.0,
-  "cloud_mass_compass": "С",
-  "cloud_mass_area_km2": 84,
+  "station_area_fraction": 0.476,
+  "cloud_mass_distance_km": 51.6,
+  "cloud_mass_bearing_deg": 224.0,
+  "cloud_mass_compass": "ЮЗ",
+  "cloud_mass_area_km2": 96,
   "temperature_trend_verdict": "похолодание верхней границы (возможно усиление конвекции)",
   "method_note": "Буфер 6/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин, crs=EPSG:4326, всегда явный TIME — не 'latest'), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. cloud_mass_* — положение (не движение) ближайшей значимой облачной массы относительно станции. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
 }
