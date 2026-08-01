@@ -570,7 +570,7 @@ def main():
             "target_type": target_type,
             "verdict": "однородно в радиусе ~{}км, {} не найдено".format(
                 round(HALF_WINDOW_DEG * KM_PER_DEG_LON),
-                "просветов" if want_cloud_target else "облаков",
+                "облаков" if want_cloud_target else "просветов",
             ),
         }
     else:
