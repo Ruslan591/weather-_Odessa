@@ -35,3 +35,11 @@ _Последнее обновление: 2026-08-02_
 ## Известные подводные камни при отладке
 - Скриншоты интерфейса (Leaflet, зум) НЕ дают надёжной привязки пиксель→км — для количественной проверки лучше тянуть сырой буфер/JSON из `data/` и считать в sandbox, а не читать цвета на глаз
 - `data/eumetsat_cloud_forecast.json` — снапшот последнего результата, полезен для быстрой сверки чисел без похода в буфер
+
+
+## 2026-08-02: закрыт вопрос MTG CLM/CTTH
+Проверили `GetCapabilities` (список слоёв `mtg_fd:*`) — прямого аналога `msg_fes:clm`/`msg_fes:cth` для MTG на публичном WMS `view.eumetsat.int` НЕТ. Есть только RGB-композиты: `rgb_cloudphase`, `rgb_cloudtype`, `rgb_geocolour`, `rgb_truecolour`, `rgb_dust`, `rgb_fog`, `rgb_snow`, `rgb_firetemperature`. Настоящие численные MTG CLM/CTTH существуют только как L2 NetCDF-продукты через EUMETSAT Data Store (`data.eumetsat.int`, другой протокол — eumdac/API, не GetMap) — отдельная задача уровня "новая интеграция", не правка URL.
+Дополнительно: EUMETSAT продолжает параллельно генерировать MSG Cloud Mask/CTH "until further notice, or until end of MSG 0° services" — миграция не горит.
+Решение: задачу закрыть. `msg_fes:clm`/`msg_fes:cth` остаются источником для `eumetsat_cloud_forecast.py`. RGB-слои MTG уже используются отдельно и по назначению:
+  - `rgb_cloudphase` + `rgb_cloudtype` → `scripts/eumetsat_cloud_phase_type.py` (фаза/грубый тип облаков, HSV-анкеры "на глаз", не откалибровано — см. `unclassified_fraction` в debug-файле)
+  - `rgb_geocolour` → `scripts/eumetsat_geocolour_motion.py` (движение + area-fraction круглосуточно, день/ночь разные ветки классификации, с фильтром городских огней)
