@@ -325,35 +325,27 @@ function _renderIrMotionLines(g){
     const timeTag = _obsTimeTag(g.timestamp, 20);
     const title = _blockTitle("🌡️", "Инфракрасный канал 10.5 мкм", timeTag);
 
-    const areaBullets = [];
-    const area = g.observed_area;
-    if(area && area.center_lat != null && area.center_lon != null){
-        const w = area.motion_window_km && area.motion_window_km.width;
-        const h = area.motion_window_km && area.motion_window_km.height;
-        if(w && h) areaBullets.push(`окно: ≈${w} × ${h} км`);
-        areaBullets.push(`центр: ${Number(area.center_lat).toFixed(2)}°N, ${Number(area.center_lon).toFixed(2)}°E (Одесса)`);
-        if(area.local_trend_radius_km) areaBullets.push(`анализ температуры верхней границы облаков в радиусе ≈${area.local_trend_radius_km} км`);
-    }
-    const areaHtml = areaBullets.length ? _subhead("Область анализа") + _bullets(areaBullets) : "";
-
     const labels = { clear: "ясно", variable: "переменная облачность", cloud: "облачно" };
     const stationText = g.station_state ? (labels[g.station_state] || g.station_state) : null;
     const stationHtml = stationText ? _plain(`Над станцией: ${stationText}.`) : "";
 
     if(!g.valid){
-        return _hr() + title + areaHtml + stationHtml + _plain(g.verdict || "Недоступно.");
+        return _hr() + title + stationHtml + _plain(g.verdict || "Недоступно.");
     }
 
     const lowConfidence = g.frame_pairs_used != null && g.frame_pairs_used <= 2;
     const suffix = lowConfidence ? " (мало пар кадров — невысокая уверенность)" : "";
 
     const massBullets = [];
+    let massHtml;
     if(g.cloud_mass_distance_km != null){
         massBullets.push(`расстояние: ≈${Math.round(g.cloud_mass_distance_km)} км (${g.cloud_mass_compass})`);
+        massBullets.push(`движение: на ${g.direction_compass}`);
+        massBullets.push(`скорость: ≈${Math.round(g.speed_kmh)} км/ч`);
+        massHtml = _subhead("Основная облачная масса") + _bullets(massBullets);
+    } else {
+        massHtml = _plain(g.cloud_mass_verdict || "Значимой облачной массы в поле зрения нет.");
     }
-    massBullets.push(`движение: на ${g.direction_compass}`);
-    massBullets.push(`скорость: ≈${Math.round(g.speed_kmh)} км/ч`);
-    const massHtml = _subhead("Основная облачная масса") + _bullets(massBullets);
 
     const trendBullets = [];
     if(g.acceleration_verdict) trendBullets.push(`${g.acceleration_verdict}${suffix}`);
@@ -374,7 +366,7 @@ function _renderIrMotionLines(g){
         ]);
     }
 
-    return _hr() + title + areaHtml + stationHtml + massHtml + trendHtml + forecastHtml;
+    return _hr() + title + stationHtml + massHtml + trendHtml + forecastHtml;
 }
 
 // GeoColour RGB (mtg_fd:rgb_geocolour) — круглосуточно (day/night-композит,
