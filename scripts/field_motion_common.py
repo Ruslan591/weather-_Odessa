@@ -82,6 +82,14 @@ MIN_SIGNIFICANT_BLOB_PX = 40
 SIGNIFICANT_AREA_REF_KM2 = 1200.0
 
 LOCAL_RADIUS_KM = 50.0
+# Радиус "прямо над станцией" — МЕНЬШЕ LOCAL_RADIUS_KM (тот — для трендов
+# density/height/shape/area по региону). Смешивать их в одном радиусе —
+# частая ошибка: живой кейс (eumetsat_cloud_forecast.py, 2026-08-01 22:00Z)
+# показал 0% облачности в 0-10км от станции, но 25% в круге 50км, потому что
+# стоящее почти на месте облако в 15-50км утаскивало долю за порог "variable".
+# STATE_RADIUS_KM — общий для всех *_motion.py скриптов, считающих
+# station_state тем же способом (area_fraction в локальном круге).
+STATE_RADIUS_KM = 12.0
 
 TIMEOUT = 25
 COMPASS = ["С", "СВ", "В", "ЮВ", "Ю", "ЮЗ", "З", "СЗ"]
@@ -253,6 +261,17 @@ def local_area_mask():
     dy_km = (rows - center) * KM_PER_PX_Y
     dist_km = np.sqrt(dx_km ** 2 + dy_km ** 2)
     return dist_km <= LOCAL_RADIUS_KM
+
+
+def station_area_mask():
+    """Как local_area_mask(), но радиус STATE_RADIUS_KM (12км) — для
+    station_state ("сейчас над станцией"), а не для региональных трендов."""
+    rows, cols = np.meshgrid(np.arange(TILE_SIZE), np.arange(TILE_SIZE), indexing="ij")
+    center = (TILE_SIZE - 1) / 2
+    dx_km = (cols - center) * KM_PER_PX_X
+    dy_km = (rows - center) * KM_PER_PX_Y
+    dist_km = np.sqrt(dx_km ** 2 + dy_km ** 2)
+    return dist_km <= STATE_RADIUS_KM
 
 
 def bearing_compass(dx_km, dy_km):
