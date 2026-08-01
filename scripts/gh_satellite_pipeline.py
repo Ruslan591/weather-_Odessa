@@ -288,6 +288,7 @@ def git_push_satellite():
             "data/anim/ir108.mp4",
             "data/anim/cloudtype.mp4",
             "data/anim/cloudphase.mp4",
+            "data/anim/fog.mp4",
         ]
         _to_add = [p for p in _candidates if os.path.exists(os.path.join(BASE_DIR, p))]
         if not _to_add:
