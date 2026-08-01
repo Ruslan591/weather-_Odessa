@@ -90,6 +90,16 @@ STEP_MINUTES = 10
 MIN_STD = 6.0
 STALE_BUFFER_SECONDS = 25 * 60  # если последний кадр буфера старше — бутстрап заново
 AREA_CHANGE_THRESHOLD = 0.10    # 10 п.п. — "существенное" изменение площади
+# 90-й перцентиль ВСЕГДА определён (даже на полностью однородном кадре без
+# единого настоящего облака — это просто "10% самых тёплых пикселей чего
+# угодно": рельеф, берег, обычный дневной прогрев). Без проверки контраста
+# nearest_of_type() гарантированно находил "облачную массу" каждый прогон,
+# даже когда весь кадр видимо однороден (замечено живьём: сплошной тёмный
+# кадр без единого светлого пятна, но cloud_mass_distance_km всё равно
+# посчитан). MIN_CLOUD_CONTRAST_SIGMA — порог: 90-й перцентиль должен
+# отличаться от медианы кадра минимум на столько std кадра, иначе считаем,
+# что значимой облачной массы в кадре нет вообще.
+MIN_CLOUD_CONTRAST_SIGMA = 1.2
 
 
 def _fmt_time(dt):
@@ -293,6 +303,7 @@ def main():
     # --- рост/распад площади + тренд яркостной температуры ---
     if len(frames) >= 2:
         local_mask = fc.local_area_mask()
+        station_mask = fc.station_area_mask()
         baseline_vals = frames[0][local_mask]
         threshold = float(fc.np.percentile(baseline_vals, 60))
 
@@ -333,10 +344,15 @@ def main():
         # единичный пиксель может случайно попасть в разрыв между облаками
         # даже при явно заметной облачности вокруг (было замечено живьём:
         # area_fraction ~0.35-0.41 — классическая "переменная облачность",
-        # а один пиксель давал "ясно"). Теперь берём area_fracs[-1] — ту же
-        # долю значимой облачности в радиусе LOCAL_RADIUS_KM, что и в
-        # area_trend выше — с тремя градациями вместо бинарной.
-        latest_area_frac = area_fracs[-1]
+        # а один пиксель давал "ясно"). Тогда взяли area_fracs[-1] — долю в
+        # LOCAL_RADIUS_KM=50 (том же радиусе, что и area_trend выше) — но
+        # это радиус для РЕГИОНАЛЬНОГО тренда, не "сейчас над станцией":
+        # тот же баг нашли и починили в eumetsat_cloud_forecast.py (см.
+        # STATE_RADIUS_KM в field_motion_common.py) — облако в 15-50км
+        # утаскивало "переменная облачность", хотя прямо над станцией было
+        # чисто. Теперь считаем долю отдельно в STATE_RADIUS_KM=12.
+        station_vals_now = frames[-1][station_mask]
+        latest_area_frac = float((station_vals_now > threshold).mean())
         if latest_area_frac < 0.15:
             out["station_state"] = "clear"
         elif latest_area_frac < 0.70:
@@ -355,19 +371,35 @@ def main():
         # blob тогда почти всегда получается тривиальным "0 км от станции").
         # Берём 90-й перцентиль — это уже ядро/наиболее плотная часть массы,
         # а не облачность вообще, и направление до неё осмысленно.
-        core_threshold = float(fc.np.percentile(frames[-1], 90))
-        full_significant_mask = frames[-1] > core_threshold
-        valid_all = fc.np.ones_like(full_significant_mask, dtype=bool)
-        blob = fc.nearest_of_type(full_significant_mask, valid_all, True)
-        if blob is not None:
-            dx_km, dy_km, area_km2 = blob
-            bearing_deg, compass_dir = fc.bearing_compass(dx_km, dy_km)
-            out["cloud_mass_distance_km"] = round(math.hypot(dx_km, dy_km), 1)
-            out["cloud_mass_bearing_deg"] = round(bearing_deg, 0)
-            out["cloud_mass_compass"] = compass_dir
-            out["cloud_mass_area_km2"] = round(area_km2)
-        else:
+        # ВАЖНО (фикс 2026-08-02): 90-й перцентиль есть всегда, даже в
+        # однородном кадре без единого настоящего облака — тогда это просто
+        # "10% самых тёплых пикселей фона" (рельеф/берег), а не облако. Перед
+        # поиском blob проверяем, что порог реально ВЫДЕЛЯЕТСЯ на фоне шума
+        # кадра (>= MIN_CLOUD_CONTRAST_SIGMA std от медианы) — иначе считаем,
+        # что значимой облачной массы в кадре нет вообще.
+        last_frame = frames[-1]
+        frame_median = float(fc.np.median(last_frame))
+        frame_std_now = float(last_frame.std()) or 1.0
+        core_threshold = float(fc.np.percentile(last_frame, 90))
+        contrast_sigma = (core_threshold - frame_median) / frame_std_now
+        if contrast_sigma < MIN_CLOUD_CONTRAST_SIGMA:
             out["cloud_mass_distance_km"] = None
+            out["cloud_mass_contrast_sigma"] = round(contrast_sigma, 2)
+            out["cloud_mass_verdict"] = "значимой облачной массы в поле зрения нет (кадр однородный)"
+        else:
+            full_significant_mask = last_frame > core_threshold
+            valid_all = fc.np.ones_like(full_significant_mask, dtype=bool)
+            blob = fc.nearest_of_type(full_significant_mask, valid_all, True)
+            if blob is not None:
+                dx_km, dy_km, area_km2 = blob
+                bearing_deg, compass_dir = fc.bearing_compass(dx_km, dy_km)
+                out["cloud_mass_distance_km"] = round(math.hypot(dx_km, dy_km), 1)
+                out["cloud_mass_bearing_deg"] = round(bearing_deg, 0)
+                out["cloud_mass_compass"] = compass_dir
+                out["cloud_mass_area_km2"] = round(area_km2)
+                out["cloud_mass_contrast_sigma"] = round(contrast_sigma, 2)
+            else:
+                out["cloud_mass_distance_km"] = None
         out["temperature_trend_verdict"] = temp_verdict
 
     out["method_note"] = (
