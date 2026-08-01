@@ -84,6 +84,7 @@ LAYERS = {
     "ir108":      {"name": "mtg_fd:ir105_hrfi",      "style": "mtg_fd:mtg_fd_ir105_hrfi_grayscale",  "step_minutes": 10},
     "cloudtype":  {"name": "mtg_fd:rgb_cloudtype",   "style": "raster",                              "step_minutes": 10},
     "cloudphase": {"name": "mtg_fd:rgb_cloudphase",  "style": "raster",                              "step_minutes": 10},
+    "fog":        {"name": "mtg_fd:rgb_fog",         "style": "raster",                              "step_minutes": 10},
 }
 
 
