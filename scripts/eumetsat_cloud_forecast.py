@@ -107,7 +107,12 @@ AFFECT_THRESHOLD_KM = 15.0
 STATIONARY_SPEED_KMH = 3.0
 MIN_FRACTION_FOR_CORR = 0.02
 
-LOCAL_RADIUS_KM = 50.0           # область вокруг города для плотности/высоты/формы
+LOCAL_RADIUS_KM = 50.0           # область вокруг города для плотности/высоты/формы (тренд)
+STATE_RADIUS_KM = 12.0           # область для current_state ("сейчас над станцией") —
+                                  # меньше LOCAL_RADIUS_KM: живой кейс 2026-08-01 22:00Z
+                                  # показал 0% облачности в 0-10км, но 25% в круге 50км
+                                  # (стоящий на месте блоб 15-50км утаскивал за порог "variable",
+                                  # хотя прямо над станцией было чисто)
 DENSITY_CHANGE_THRESHOLD = 0.10  # 10 п.п. — считаем существенным изменением
 HEIGHT_CHANGE_THRESHOLD = 0.6    # изменение среднего ординального индекса
 ASPECT_CHANGE_THRESHOLD = 0.5    # изменение aspect ratio bounding box
@@ -211,14 +216,24 @@ def _pixel_to_km_offset(row, col):
     return dx_km, dy_km
 
 
-def _local_area_mask():
-    """Булев (H,W) — True внутри LOCAL_RADIUS_KM от центра тайла."""
+def _radius_mask(radius_km):
+    """Булев (H,W) — True внутри radius_km от центра тайла (Одесса)."""
     rows, cols = np.meshgrid(np.arange(TILE_SIZE), np.arange(TILE_SIZE), indexing="ij")
     center = (TILE_SIZE - 1) / 2
     dx_km = (cols - center) * KM_PER_PX_X
     dy_km = (rows - center) * KM_PER_PX_Y
     dist_km = np.sqrt(dx_km ** 2 + dy_km ** 2)
-    return dist_km <= LOCAL_RADIUS_KM
+    return dist_km <= radius_km
+
+
+def _local_area_mask():
+    """Булев (H,W) — True внутри LOCAL_RADIUS_KM (для тренда density/height/shape)."""
+    return _radius_mask(LOCAL_RADIUS_KM)
+
+
+def _station_area_mask():
+    """Булев (H,W) — True внутри STATE_RADIUS_KM (для current_state, "сейчас над станцией")."""
+    return _radius_mask(STATE_RADIUS_KM)
 
 
 def _nearest_of_type(is_cloud_mask, valid_mask, want_cloud, min_blob_px=MIN_SIGNIFICANT_BLOB_PX):
@@ -529,16 +544,23 @@ def main():
     is_cloud_now = is_cloud_frames[-1]
     valid_now = valid_frames[-1]
     local_mask = _local_area_mask()
+    station_mask = _station_area_mask()
 
     # РАНЬШЕ брали ОДИН центральный пиксель (~1.4×1.4км) — та же проблема,
     # что уже находили и чинили в eumetsat_ir_motion.py: человек оценивает
-    # облачность над собой в целом (десятки км в поперечнике), а не 1 пиксель
-    # точно над головой, и единичный пиксель может случайно попасть в разрыв
-    # между облаками даже при заметной облачности рядом (замечено живьём:
-    # ближайшее облако в 13км, а current_state всё равно "ясно"). Теперь —
-    # доля облачных пикселей в радиусе LOCAL_RADIUS_KM (тот же радиус, что и
-    # trend выше), с тремя градациями вместо бинарной.
-    area_fraction_now = float(is_cloud_now[local_mask].mean())
+    # облачность над собой в целом, а не 1 пиксель точно над головой, и
+    # единичный пиксель может случайно попасть в разрыв между облаками даже
+    # при заметной облачности рядом (замечено живьём: ближайшее облако в
+    # 13км, а current_state всё равно "ясно"). Тогда взяли долю облачных
+    # пикселей в LOCAL_RADIUS_KM=50 — но это радиус для РЕГИОНАЛЬНОГО
+    # тренда, не для "сейчас над станцией": живой кейс 2026-08-01 22:00Z
+    # показал 0% облачности в 0-10км от станции, но 25% в круге 50км, потому
+    # что стоящий на месте блоб в 15-50км утаскивал долю за порог "variable"
+    # (0.15), хотя прямо над станцией было чисто. current_state теперь
+    # считается по STATE_RADIUS_KM=12 (что реально "над станцией"), а
+    # LOCAL_RADIUS_KM=50 остаётся только для трендов density/height/shape
+    # ниже (там радиус нужен большой — это прогноз по региону, а не факт).
+    area_fraction_now = float(is_cloud_now[station_mask].mean())
     if area_fraction_now < 0.15:
         current_state_str = "clear"
     elif area_fraction_now < 0.70:
