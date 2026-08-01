@@ -66,6 +66,7 @@ STEP_MINUTES = 10
 MIN_STD = 6.0
 STALE_BUFFER_SECONDS = 25 * 60
 AREA_CHANGE_THRESHOLD = 0.10
+MIN_CLOUD_FRACTION_FOR_MOTION = 0.03  # <3% облачных пикселей в радиусе — считаем, что трекать нечего
 
 
 def _fmt_time(dt):
@@ -241,6 +242,22 @@ def main():
     is_cloud_frames = [u[1] for u in unpacked]
     debug["frame_std"] = [round(float(g.std()), 1) for g in gray_frames]
 
+    # --- area-fraction/station_state/cloud_mass ПЕРЕД motion — АБСОЛЮТНАЯ
+    # HSV-маска is_cloud, не относительный перцентиль-порог (см. докстринг
+    # модуля). Считаем area-fraction ПЕРВЫМ делом (а не после motion), чтобы
+    # можно было явно ЗАГЕЙТИТЬ расчёт скорости/направления/прогноза
+    # наличием хоть какой-то значимой облачности — иначе
+    # estimate_motion_continuous считает phase correlation по ЛЮБОЙ текстуре
+    # кадра (рельеф берега, рябь на воде, естественный шум), и при 0%
+    # облаков всё равно выдаёт "скорость"/"направление" — бессмысленные
+    # числа, полученные на пустом месте (см. живой пример в чате: ясно, а
+    # блок показывал "меняет направление, ~0.2км за 30мин").
+    latest_area_frac = 0.0
+    if len(packed_frames) >= 2:
+        local_mask = fc.local_area_mask()
+        area_fracs = [float(is_cloud[local_mask].mean()) for is_cloud in is_cloud_frames]
+        latest_area_frac = area_fracs[-1]
+
     out = {
         "timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "buffer_size": len(packed_frames),
@@ -257,74 +274,73 @@ def main():
         },
     }
 
-    vx, vy, n_pairs = fc.estimate_motion_continuous(gray_frames, times, min_std=MIN_STD)
-
-    if vx is None:
+    if latest_area_frac < MIN_CLOUD_FRACTION_FOR_MOTION:
         out["valid"] = False
-        out["verdict"] = "недостаточно контраста для оценки (вероятно, однородная сцена)"
+        out["verdict"] = "нет значимой облачности для оценки движения"
     else:
-        speed_kmh = math.hypot(vx, vy)
-        bearing_v = (math.degrees(math.atan2(vx, vy)) + 360) % 360
-        out["valid"] = True
-        out["speed_kmh"] = round(speed_kmh, 1)
-        out["direction_compass"] = fc.compass(bearing_v)
-        out["bearing_deg"] = round(bearing_v, 1)
-        out["frame_pairs_used"] = n_pairs
+        vx, vy, n_pairs = fc.estimate_motion_continuous(gray_frames, times, min_std=MIN_STD)
 
-        if len(gray_frames) >= 4:
-            half = len(gray_frames) // 2
-            early, late = gray_frames[:half + 1], gray_frames[half:]
-            early_times, late_times = times[:half + 1], times[half:]
-            vx_e, vy_e, n_e = fc.estimate_motion_continuous(early, early_times, min_std=MIN_STD)
-            vx_l, vy_l, n_l = fc.estimate_motion_continuous(late, late_times, min_std=MIN_STD)
+        if vx is None:
+            out["valid"] = False
+            out["verdict"] = "недостаточно контраста для оценки (вероятно, однородная сцена)"
+        else:
+            speed_kmh = math.hypot(vx, vy)
+            bearing_v = (math.degrees(math.atan2(vx, vy)) + 360) % 360
+            out["valid"] = True
+            out["speed_kmh"] = round(speed_kmh, 1)
+            out["direction_compass"] = fc.compass(bearing_v)
+            out["bearing_deg"] = round(bearing_v, 1)
+            out["frame_pairs_used"] = n_pairs
 
-            if vx_e is not None and vx_l is not None:
-                speed_e = math.hypot(vx_e, vy_e)
-                speed_l = math.hypot(vx_l, vy_l)
-                bearing_e = (math.degrees(math.atan2(vx_e, vy_e)) + 360) % 360
-                bearing_l = (math.degrees(math.atan2(vx_l, vy_l)) + 360) % 360
-                accel = speed_l - speed_e
-                turn = fc.circular_angle_diff(bearing_e, bearing_l)
+            if len(gray_frames) >= 4:
+                half = len(gray_frames) // 2
+                early, late = gray_frames[:half + 1], gray_frames[half:]
+                early_times, late_times = times[:half + 1], times[half:]
+                vx_e, vy_e, n_e = fc.estimate_motion_continuous(early, early_times, min_std=MIN_STD)
+                vx_l, vy_l, n_l = fc.estimate_motion_continuous(late, late_times, min_std=MIN_STD)
 
-                out["acceleration_kmh"] = round(accel, 1)
-                out["turning_deg"] = round(turn, 1)
-                out["acceleration_verdict"] = (
-                    "ускоряется" if accel > 5 else "замедляется" if accel < -5 else "скорость стабильна"
-                )
-                if abs(turn) > 20:
-                    out["turning_verdict"] = f"меняет направление ({'по часовой' if turn > 0 else 'против часовой'})"
-                else:
-                    out["turning_verdict"] = "направление стабильно"
+                if vx_e is not None and vx_l is not None:
+                    speed_e = math.hypot(vx_e, vy_e)
+                    speed_l = math.hypot(vx_l, vy_l)
+                    bearing_e = (math.degrees(math.atan2(vx_e, vy_e)) + 360) % 360
+                    bearing_l = (math.degrees(math.atan2(vx_l, vy_l)) + 360) % 360
+                    accel = speed_l - speed_e
+                    turn = fc.circular_angle_diff(bearing_e, bearing_l)
 
-                center_early_min = sum(fc._parse_iso_minutes(t) for t in early_times) / len(early_times)
-                center_late_min = sum(fc._parse_iso_minutes(t) for t in late_times) / len(late_times)
-                dt_centers_h = (center_late_min - center_early_min) / 60.0
-                if dt_centers_h > 1e-6:
-                    ax = (vx_l - vx_e) / dt_centers_h
-                    ay = (vy_l - vy_e) / dt_centers_h
-                else:
-                    ax = ay = 0.0
+                    out["acceleration_kmh"] = round(accel, 1)
+                    out["turning_deg"] = round(turn, 1)
+                    out["acceleration_verdict"] = (
+                        "ускоряется" if accel > 5 else "замедляется" if accel < -5 else "скорость стабильна"
+                    )
+                    if abs(turn) > 20:
+                        out["turning_verdict"] = f"меняет направление ({'по часовой' if turn > 0 else 'против часовой'})"
+                    else:
+                        out["turning_verdict"] = "направление стабильно"
 
-                forecasts = {}
-                for label, t_min in [("30min", 30), ("60min", 60), ("120min", 120)]:
-                    t_h = t_min / 60.0
-                    dx = vx_l * t_h + 0.5 * ax * t_h ** 2
-                    dy = vy_l * t_h + 0.5 * ay * t_h ** 2
-                    dist = math.hypot(dx, dy)
-                    bearing_f = (math.degrees(math.atan2(dx, dy)) + 360) % 360
-                    forecasts[label] = {
-                        "distance_km": round(dist, 1),
-                        "bearing_deg": round(bearing_f, 0),
-                        "compass": fc.compass(bearing_f),
-                    }
-                out["forecast_displacement"] = forecasts
+                    center_early_min = sum(fc._parse_iso_minutes(t) for t in early_times) / len(early_times)
+                    center_late_min = sum(fc._parse_iso_minutes(t) for t in late_times) / len(late_times)
+                    dt_centers_h = (center_late_min - center_early_min) / 60.0
+                    if dt_centers_h > 1e-6:
+                        ax = (vx_l - vx_e) / dt_centers_h
+                        ay = (vy_l - vy_e) / dt_centers_h
+                    else:
+                        ax = ay = 0.0
 
-    # --- area-fraction/station_state/cloud_mass — АБСОЛЮТНАЯ HSV-маска
-    # is_cloud, не относительный перцентиль-порог (см. докстринг модуля) ---
+                    forecasts = {}
+                    for label, t_min in [("30min", 30), ("60min", 60), ("120min", 120)]:
+                        t_h = t_min / 60.0
+                        dx = vx_l * t_h + 0.5 * ax * t_h ** 2
+                        dy = vy_l * t_h + 0.5 * ay * t_h ** 2
+                        dist = math.hypot(dx, dy)
+                        bearing_f = (math.degrees(math.atan2(dx, dy)) + 360) % 360
+                        forecasts[label] = {
+                            "distance_km": round(dist, 1),
+                            "bearing_deg": round(bearing_f, 0),
+                            "compass": fc.compass(bearing_f),
+                        }
+                    out["forecast_displacement"] = forecasts
+
     if len(packed_frames) >= 2:
-        local_mask = fc.local_area_mask()
-        area_fracs = [float(is_cloud[local_mask].mean()) for is_cloud in is_cloud_frames]
-
         area_delta = area_fracs[-1] - area_fracs[0]
         if area_delta > AREA_CHANGE_THRESHOLD:
             area_verdict = "растёт"
