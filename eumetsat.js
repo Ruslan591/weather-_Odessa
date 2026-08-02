@@ -84,6 +84,7 @@ const LAYERS = {
     li_afa:     { opacity: 0.85 },
     geocolour:  { opacity: 1.0 },
     ir108:      { opacity: 1.0 },
+    vis06:      { opacity: 1.0 },
     cloudtype:  { opacity: 1.0 },
     cloudphase: { opacity: 1.0 },
     fog:        { opacity: 1.0 },
