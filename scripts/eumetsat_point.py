@@ -37,14 +37,16 @@ from datetime import datetime, timezone
 
 import requests
 
+import field_motion_common as fc
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_point.json")
 DEBUG_FILE = os.path.join(BASE_DIR, "data", "eumetsat_point_debug.json")
 
 WMS_BASE = "https://view.eumetsat.int/geoserver/wms"
-CENTER_LAT = 46.4406
-CENTER_LON = 30.7703
-CENTER_LABEL = "Одесса (СИНОП 33837)"
+CENTER_LAT = fc.CENTER_LAT
+CENTER_LON = fc.CENTER_LON
+CENTER_LABEL = fc.STATION_LABEL
 
 # небольшое окно вокруг точки (~5-6 км), нечётные width/height чтобы
 # I/J=50 точно попадали в центральный пиксель окна
