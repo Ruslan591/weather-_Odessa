@@ -107,8 +107,8 @@ AFFECT_THRESHOLD_KM = 15.0
 STATIONARY_SPEED_KMH = 3.0
 MIN_FRACTION_FOR_CORR = 0.02
 
-LOCAL_RADIUS_KM = 50.0           # область вокруг города для плотности/высоты/формы (тренд)
-STATE_RADIUS_KM = 12.0           # область для current_state ("сейчас над станцией") —
+LOCAL_RADIUS_KM = fc.LOCAL_RADIUS_KM   # область вокруг города для плотности/высоты/формы (тренд)
+STATE_RADIUS_KM = fc.STATE_RADIUS_KM   # область для current_state ("сейчас над станцией") —
                                   # меньше LOCAL_RADIUS_KM: живой кейс 2026-08-01 22:00Z
                                   # показал 0% облачности в 0-10км, но 25% в круге 50км
                                   # (стоящий на месте блоб 15-50км утаскивал за порог "variable",
