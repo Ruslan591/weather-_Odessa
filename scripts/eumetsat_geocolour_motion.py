@@ -255,7 +255,9 @@ def main():
     latest_area_frac = 0.0
     if len(packed_frames) >= 2:
         local_mask = fc.local_area_mask()
+        state_mask = fc.station_area_mask()
         area_fracs = [float(is_cloud[local_mask].mean()) for is_cloud in is_cloud_frames]
+        state_fracs = [float(is_cloud[state_mask].mean()) for is_cloud in is_cloud_frames]
         latest_area_frac = area_fracs[-1]
 
     out = {
@@ -353,14 +355,14 @@ def main():
         out["area_trend_delta"] = round(area_delta, 3)
         out["area_trend_verdict"] = area_verdict
 
-        latest_area_frac = area_fracs[-1]
-        if latest_area_frac < 0.15:
+        latest_state_frac = state_fracs[-1]
+        if latest_state_frac < 0.15:
             out["station_state"] = "clear"
-        elif latest_area_frac < 0.70:
+        elif latest_state_frac < 0.70:
             out["station_state"] = "variable"
         else:
             out["station_state"] = "cloud"
-        out["station_area_fraction"] = round(latest_area_frac, 3)
+        out["station_area_fraction"] = round(latest_state_frac, 3)
 
         valid_all = np.ones_like(is_cloud_frames[-1], dtype=bool)
         blob = fc.nearest_of_type(is_cloud_frames[-1], valid_all, True)
@@ -394,3 +396,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
