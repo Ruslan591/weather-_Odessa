@@ -68,8 +68,8 @@ MANIFEST_FILE = os.path.join(ANIM_DIR, "manifest.json")
 # (ключ "_bounds"), а eumetsat.js читает их оттуда при загрузке вместо
 # хардкода — правишь BBOX только здесь, всё остальное (все 11 каналов в
 # LAYERS ниже + сам просмотрщик) подхватывает автоматически.
-BBOX = (22.0, 40.0, 40.0, 52.0)
-TARGET_KM_PER_PX = 1.5  # желаемое разрешение кадра; меньше — чётче, но тяжелее/дольше рендер
+BBOX = fc.ANIM_BBOX  # единый источник — data/geo_config.json (anim_window.bbox)
+TARGET_KM_PER_PX = fc.ANIM_TARGET_KM_PER_PX  # data/geo_config.json (anim_window.target_km_per_px)
 
 
 def _bbox_dimensions(bbox, target_km_per_px):
