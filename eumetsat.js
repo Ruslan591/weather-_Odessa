@@ -30,9 +30,15 @@ const MANIFEST_URL = ANIM_BASE + "/manifest.json";
 const CENTER_LAT = 46.4406;
 const CENTER_LON = 30.7703;
 
-// Тот же bbox, что в scripts/eumetsat_anim_render.py (BBOX) — если меняешь
-// там, поменяй и здесь, иначе видео "уедет" от реальных координат на карте.
-const ANIM_BOUNDS = [[40.0, 22.0], [52.0, 40.0]]; // [[lat_min,lon_min],[lat_max,lon_max]]
+// ANIM_BOUNDS больше НЕ хардкод — читается из manifest.json (ключ "_bounds",
+// публикуется scripts/eumetsat_anim_render.py). До первой загрузки манифеста
+// используется этот дефолт (тот же охват, что и раньше), просто чтобы карте
+// было с чем стартовать на requestAnimationFrame ниже — реальные границы
+// подставляются сразу после loadManifest() и карта перецентровывается.
+// Раньше здесь было "ВАЖНО: должен совпадать 1:1 с BBOX в
+// eumetsat_anim_render.py, иначе видео уедет от карты" — теперь менять
+// охват нужно только в ОДНОМ месте (BBOX там), это ключ синхронизации.
+let ANIM_BOUNDS = [[40.0, 22.0], [52.0, 40.0]]; // [[lat_min,lon_min],[lat_max,lon_max]] — дефолт до загрузки манифеста
 
 const LEGEND_HTML = {
     clm: `
@@ -169,6 +175,19 @@ async function loadManifest(){
     } catch(e){
         manifestData = {};
     }
+    // "_bounds" публикует eumetsat_anim_render.py из своего BBOX — единственная
+    // точка правды на весь охват. Если границы реально поменялись (кто-то
+    // расширил/сузил BBOX на сервере) — перецентровываем карту и текущий
+    // video overlay заново, не только при первой загрузке страницы.
+    if(Array.isArray(manifestData._bounds)){
+        const newBounds = manifestData._bounds;
+        const changed = JSON.stringify(newBounds) !== JSON.stringify(ANIM_BOUNDS);
+        ANIM_BOUNDS = newBounds;
+        if(changed){
+            fitToAnimBounds();
+            if(currentVideoOverlay) currentVideoOverlay.setBounds(ANIM_BOUNDS);
+        }
+    }
     updateTimestampLabel(currentKey);
 }
 
@@ -181,3 +200,4 @@ setInterval(async () => {
     await loadManifest();
     setLayer(currentKey); // подхватить свежую петлю, если manifest обновился
 }, 5 * 60000);
+
