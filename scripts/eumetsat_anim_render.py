@@ -37,6 +37,7 @@ gh_satellite_pipeline.py (см. check_eumetsat_anim_render, ~20-25 мин).
 каждый раз, история не копится — только текущая петля).
 """
 
+import math
 import os
 import shutil
 import subprocess
@@ -54,11 +55,40 @@ MANIFEST_FILE = os.path.join(ANIM_DIR, "manifest.json")
 # Широкий обзорный bbox (lon_min, lat_min, lon_max, lat_max) — покрывает
 # примерно ту же зону, что была доступна при свободном панорамировании в
 # старой live-версии (Молдова/зап.Украина до Ростова/Краснодара, Киев до
-# Стамбула), а не маленький квадрат анализа вокруг Одессы. ВАЖНО: должен
-# совпадать 1:1 с ANIM_BOUNDS в eumetsat.js — если меняешь здесь, поменяй и
-# там, иначе видео "уедет" от реальных координат на карте.
+# Стамбула), а не маленький квадрат анализа вокруг Одессы.
+#
+# ЕДИНСТВЕННОЕ МЕСТО ДЛЯ ИЗМЕНЕНИЯ ОХВАТА (2026-08-02): раньше BBOX и
+# WIDTH/HEIGHT приходилось синхронизировать вручную ещё и с ANIM_BOUNDS в
+# eumetsat.js (комментарий "если меняешь здесь, поменяй и там" — ровно тот
+# источник рассинхрона, из-за которого видео могло "уехать" от карты).
+# Теперь: (1) WIDTH/HEIGHT здесь НЕ константы, а вычисляются из BBOX и
+# TARGET_KM_PER_PX — увеличил BBOX, разрешение на пиксель не деградирует
+# само по себе; (2) сами границы публикуются в data/anim/manifest.json
+# (ключ "_bounds"), а eumetsat.js читает их оттуда при загрузке вместо
+# хардкода — правишь BBOX только здесь, всё остальное (все 11 каналов в
+# LAYERS ниже + сам просмотрщик) подхватывает автоматически.
 BBOX = (22.0, 40.0, 40.0, 52.0)
-WIDTH, HEIGHT = 1000, 666  # ВАЖНО: оба размера должны быть чётными — libx264
+TARGET_KM_PER_PX = 1.5  # желаемое разрешение кадра; меньше — чётче, но тяжелее/дольше рендер
+
+
+def _bbox_dimensions(bbox, target_km_per_px):
+    """Считает WIDTH,HEIGHT (px, оба чётные — см. ниже) из bbox в градусах
+    и желаемого км/пиксель, вместо того чтобы хардкодить размер отдельно от
+    охвата (см. комментарий у BBOX выше)."""
+    lon_min, lat_min, lon_max, lat_max = bbox
+    center_lat = (lat_min + lat_max) / 2.0
+    km_per_deg_lon = 111.32 * math.cos(math.radians(center_lat))
+    km_per_deg_lat = 111.32
+    width_km = (lon_max - lon_min) * km_per_deg_lon
+    height_km = (lat_max - lat_min) * km_per_deg_lat
+    width = max(2, int(round(width_km / target_km_per_px)))
+    height = max(2, int(round(height_km / target_km_per_px)))
+    width += width % 2    # ffmpeg/libx264 требует чётные размеры (см. ниже)
+    height += height % 2
+    return width, height
+
+
+WIDTH, HEIGHT = _bbox_dimensions(BBOX, TARGET_KM_PER_PX)  # ВАЖНО: оба размера должны быть чётными — libx264
                            # с yuv420p требует этого (chroma subsampling делит
                            # пополам), нечётные 667 валили кодирование на
                            # каждом прогоне ("height not divisible by 2")
@@ -196,6 +226,10 @@ def main():
 
     os.makedirs(ANIM_DIR, exist_ok=True)
     with open(MANIFEST_FILE, "w", encoding="utf-8") as f:
+        # "_bounds" — единственный источник охвата для eumetsat.js (см.
+        # комментарий у BBOX выше): [[lat_min,lon_min],[lat_max,lon_max]],
+        # тот же порядок, что Leaflet ждёт в fitBounds()/videoOverlay().
+        manifest["_bounds"] = [[BBOX[1], BBOX[0]], [BBOX[3], BBOX[2]]]
         json.dump(manifest, f, ensure_ascii=False, indent=2)
     # Отдельный debug-файл — логи самого запуска GitHub Actions недоступны
     # для чтения через API (редирект на Azure Blob Storage вне разрешённых
@@ -206,3 +240,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
