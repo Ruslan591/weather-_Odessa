@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-02T17:29:47Z",
+  "timestamp": "2026-08-02T17:49:40Z",
   "buffer_size": 6,
   "buffer_span_minutes": 50,
   "observed_area": {
@@ -14,31 +14,29 @@
   "valid": false,
   "verdict": "недостаточно контраста для оценки (вероятно, однородная сцена)",
   "area_fraction_over_time": [
-    0.122,
-    0.144,
-    0.166,
     0.195,
     0.266,
-    0.482
+    0.482,
+    0.651,
+    0.735,
+    0.791
   ],
-  "area_trend_delta": 0.359,
+  "area_trend_delta": 0.596,
   "area_trend_verdict": "растёт",
   "mean_brightness_over_time": [
-    19.3,
-    20.2,
-    21.0,
     21.9,
     22.9,
-    23.8
+    23.8,
+    24.6,
+    25.2,
+    25.7
   ],
-  "brightness_trend_delta": 4.5,
+  "brightness_trend_delta": 3.7,
   "station_state": "variable",
-  "station_area_fraction": 0.512,
-  "cloud_mass_distance_km": 126.6,
-  "cloud_mass_bearing_deg": 226.0,
-  "cloud_mass_compass": "ЮЗ",
-  "cloud_mass_area_km2": 65,
-  "cloud_mass_contrast_sigma": 1.28,
+  "station_area_fraction": 0.682,
+  "cloud_mass_distance_km": null,
+  "cloud_mass_contrast_sigma": 1.12,
+  "cloud_mass_verdict": "значимой облачной массы в поле зрения нет (кадр однородный)",
   "temperature_trend_verdict": "похолодание верхней границы (возможно усиление конвекции)",
   "method_note": "Буфер 6/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин, crs=EPSG:4326, всегда явный TIME — не 'latest'), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. cloud_mass_* — положение (не движение) ближайшей значимой облачной массы относительно станции. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
 }
