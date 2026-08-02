@@ -207,13 +207,12 @@ def _unpack_frame(packed):
 
 
 def _pixel_to_km_offset(row, col):
-    frac_x = col / (TILE_SIZE - 1)
-    frac_y = row / (TILE_SIZE - 1)
-    lon = fc.CENTER_LON - HALF_WINDOW_DEG + frac_x * (2 * HALF_WINDOW_DEG)
-    lat = fc.CENTER_LAT + HALF_WINDOW_DEG - frac_y * (2 * HALF_WINDOW_DEG)
-    dx_km = (lon - fc.CENTER_LON) * KM_PER_DEG_LON
-    dy_km = (lat - fc.CENTER_LAT) * KM_PER_DEG_LAT
-    return dx_km, dy_km
+    # ЕДИНСТВЕННАЯ реализация — в field_motion_common.py (fc.pixel_to_km_offset).
+    # Раньше здесь была своя копия со старой edge-to-edge конвенцией сетки —
+    # когда её пофиксили в field_motion_common.py (2026-08-02, см. docs/topics/
+    # eumetsat.md), фикс сюда не попал именно из-за дублирования. Теперь один
+    # источник правды на все *_motion.py и cloud_forecast.py разом.
+    return fc.pixel_to_km_offset(row, col)
 
 
 def _radius_mask(radius_km):
@@ -688,3 +687,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
