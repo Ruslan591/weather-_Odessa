@@ -379,23 +379,12 @@ function _renderGeocolourMotionLines(g){
     const timeTag = _obsTimeTag(g.timestamp, 20);
     const title = _blockTitle("🌍", "Естественный цвет (GeoColour, круглосуточно)", timeTag);
 
-    const areaBullets = [];
-    const area = g.observed_area;
-    if(area && area.center_lat != null && area.center_lon != null){
-        const w = area.motion_window_km && area.motion_window_km.width;
-        const h = area.motion_window_km && area.motion_window_km.height;
-        if(w && h) areaBullets.push(`окно: ≈${w} × ${h} км`);
-        areaBullets.push(`центр: ${Number(area.center_lat).toFixed(2)}°N, ${Number(area.center_lon).toFixed(2)}°E (Одесса)`);
-        if(area.local_trend_radius_km) areaBullets.push(`анализ облачности в радиусе ≈${area.local_trend_radius_km} км`);
-    }
-    const areaHtml = areaBullets.length ? _subhead("Область анализа") + _bullets(areaBullets) : "";
-
     const stateLabels = { clear: "ясно", variable: "переменная облачность", cloud: "облачно" };
     const stationText = g.station_state ? (stateLabels[g.station_state] || g.station_state) : null;
     const stationHtml = stationText ? _plain(`Над станцией: ${stationText}.`) : "";
 
     if(!g.valid){
-        return _hr() + title + areaHtml + stationHtml + _plain(g.verdict || "Недоступно.");
+        return _hr() + title + stationHtml + _plain(g.verdict || "Недоступно.");
     }
 
     const lowConfidence = g.frame_pairs_used != null && g.frame_pairs_used <= 2;
@@ -429,7 +418,7 @@ function _renderGeocolourMotionLines(g){
         ]);
     }
 
-    return _hr() + title + areaHtml + stationHtml + massHtml + trendHtml + forecastHtml;
+    return _hr() + title + stationHtml + massHtml + trendHtml + forecastHtml;
 }
 
 // Cloud Phase/Type RGB — не трекинг движения (это уже делают Cloud
@@ -459,6 +448,45 @@ function _renderCloudPhaseTypeLines(g){
         + _bufferLine(g.buffer_status);
 }
 
+// Сводка геометрии анализа — единая шапка перед всеми блоками карточки.
+// Источник данных: observed_area из eumetsat_geocolour_motion.json (единственный
+// скрипт, который сейчас публикует geometry в JSON). window/center/local_trend_radius_km
+// приходят с сервера напрямую из field_motion_common.py (CENTER_LAT/LON, HALF_WINDOW_DEG,
+// LOCAL_RADIUS_KM), state_radius_km — из fc.STATE_RADIUS_KM (добавлено 2026-08-02).
+// Радиус для осадков/гроз (192км) НЕ отдельная константа на сервере — это ровно
+// половина ширины окна (motion_window_km.width / 2), т.к. и *_motion.py, и
+// eumetsat_lightning_forecast.py используют один и тот же HALF_WINDOW_DEG/KM_PER_DEG_LON
+// из field_motion_common.py. Считаем на лету, а не дублируем магическое число —
+// если HALF_WINDOW_DEG когда-нибудь изменится, оба числа обновятся синхронно сами.
+//
+// ВАЖНО: "радиус" здесь имеет два разных смысла:
+//  - 12км и 50км — настоящий круг (маска по honest haversine-расстоянию, см.
+//    _radius_mask()/station_area_mask() в scripts).
+//  - 192км (осадки/гроза) — НЕ круг, а половина ширины прямоугольного окна
+//    по долготе (запад-восток). По широте (север-юг) окно тянется дальше,
+//    до ≈278км (половина от height=557км) — окно квадратное в градусах
+//    (2.5°×2.5°), но не в км, из-за сужения градуса долготы на широте Одессы.
+function _renderAreaSummary(g){
+    const area = g && g.observed_area;
+    if(!area || area.center_lat == null || area.center_lon == null) return "";
+
+    const bullets = [];
+    const w = area.motion_window_km && area.motion_window_km.width;
+    const h = area.motion_window_km && area.motion_window_km.height;
+    if(w && h) bullets.push(`окно: ≈${w} × ${h} км`);
+    bullets.push(`центр: ${Number(area.center_lat).toFixed(2)}°N, ${Number(area.center_lon).toFixed(2)}°E (Одесса)`);
+
+    const stateRadius = area.state_radius_km || 12; // фолбэк на старые data-файлы без поля
+    bullets.push(`локальный обзор над станцией, радиус ≈${stateRadius} км`);
+
+    if(area.local_trend_radius_km) bullets.push(`анализ облачности в радиусе ≈${area.local_trend_radius_km} км`);
+
+    const precipRadius = w ? Math.round(w / 2) : 192; // фолбэк, если окна ещё нет в данных
+    bullets.push(`анализ осадков и гроз в радиусе ≈${precipRadius} км`);
+
+    return _subhead("Область анализа") + _bullets(bullets);
+}
+
 function renderNearbyPrecipCard(){
     const card = document.getElementById("nearbyPrecipCard");
     if(!card) return;
@@ -471,6 +499,7 @@ function renderNearbyPrecipCard(){
     card.innerHTML = `
         <div class="cardTitle">Анализ спутниковых снимков (EUMETSAT)</div>
         <div class="small muted">Точка наблюдения: станция "${STATION_LABEL}"</div>
+        ${_renderAreaSummary(_eumetsatGeocolourMotionData)}
         ${_renderCloudForecastLines(_eumetsatForecastData)}
         ${_renderCloudPhaseTypeLines(_eumetsatCloudPhaseTypeData)}
         ${_renderIrMotionLines(_eumetsatIrMotionData)}
