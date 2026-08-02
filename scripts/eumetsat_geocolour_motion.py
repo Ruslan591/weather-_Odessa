@@ -273,6 +273,7 @@ def main():
                 "height": round(2 * fc.HALF_WINDOW_DEG * fc.KM_PER_DEG_LAT),
             },
             "local_trend_radius_km": round(fc.LOCAL_RADIUS_KM),
+            "state_radius_km": round(fc.STATE_RADIUS_KM),
         },
     }
 
