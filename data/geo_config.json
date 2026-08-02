@@ -1,0 +1,23 @@
+{
+    "_comment": "ЕДИНЫЙ источник правды по геометрии для всего EUMETSAT-конвейера. Меняешь центр/радиусы/окно/bbox — только здесь. Правится руками, пайплайн этот файл НЕ перезаписывает (в отличие от остальных data/*.json). Читается: scripts/field_motion_common.py при импорте (Python-сторона, все eumetsat_*.py берут константы из fc.*, а не хардкодят свои копии). Фронтенд (eumetsat.js/radar.js) координаты центра пока хардкодит отдельно — см. запись в docs/topics/eumetsat.md про остаточное дублирование.",
+    "center_lat": 46.4406,
+    "center_lon": 30.7703,
+    "station_label": "Одесса (СИНОП 33837)",
+    "state_radius_km": 12,
+    "local_radius_km": 50,
+    "motion_window": {
+        "_comment": "Малое 'моторное' окно для *_motion.py + lightning_forecast.py. Квадратное в градусах, НЕ квадратное в км (косинус-поправка долготы на этой широте) — отсюда окно ≈384×557км при half_window_deg=2.5.",
+        "half_window_deg": 2.5,
+        "tile_size": 400
+    },
+    "anim_window": {
+        "_comment": "Широкий обзорный bbox для eumetsat_anim_render.py (mp4-петли на eumetsat.html). Порядок как в WMS CRS:84: [min_lon, min_lat, max_lon, max_lat]. WIDTH/HEIGHT в пикселях считаются из bbox и target_km_per_px автоматически (scripts/eumetsat_anim_render.py:_bbox_dimensions) — здесь их нет, они не независимая настройка.",
+        "bbox": [22.0, 40.0, 40.0, 52.0],
+        "target_km_per_px": 1.5
+    },
+    "point_window": {
+        "_comment": "Точечный GetFeatureInfo-запрос в eumetsat_point.py — отдельная маленькая геометрия, не путать с motion_window.",
+        "half_window_deg": 0.05,
+        "grid": 101
+    }
+}
