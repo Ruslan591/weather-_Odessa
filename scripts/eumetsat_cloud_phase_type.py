@@ -59,7 +59,7 @@ LAYER_PHASE = "mtg_fd:rgb_cloudphase"
 LAYER_TYPE = "mtg_fd:rgb_cloudtype"
 
 TILE_SIZE = fc.TILE_SIZE
-LOCAL_RADIUS_KM = 50.0
+LOCAL_RADIUS_KM = fc.LOCAL_RADIUS_KM
 
 MAX_FRAMES = 13                  # 13 кадров * 10 мин шаг = 120 мин (2 часа)
 MIN_FRAMES_FOR_INCREMENTAL = 2
