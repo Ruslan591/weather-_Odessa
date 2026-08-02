@@ -245,12 +245,20 @@ def classify_presence_by_alpha(arr):
 
 
 def pixel_to_km_offset(row, col):
-    frac_x = col / (TILE_SIZE - 1)
-    frac_y = row / (TILE_SIZE - 1)
-    lon = CENTER_LON - HALF_WINDOW_DEG + frac_x * (2 * HALF_WINDOW_DEG)
-    lat = CENTER_LAT + HALF_WINDOW_DEG - frac_y * (2 * HALF_WINDOW_DEG)
-    dx_km = (lon - CENTER_LON) * KM_PER_DEG_LON
-    dy_km = (lat - CENTER_LAT) * KM_PER_DEG_LAT
+    """ВАЖНО: центр и шаг должны совпадать с local_area_mask()/
+    station_area_mask() (center=(TILE_SIZE-1)/2, шаг=KM_PER_PX_*), иначе
+    здесь и там — разные конвенции пиксельной сетки. Раньше здесь была
+    edge-to-edge конвенция (frac=col/(TILE_SIZE-1), пиксель 0 ровно на
+    границе bbox) вместо pixel-as-area (пиксель 0 занимает область шириной
+    в 1/TILE_SIZE окна, а не точку на границе) — как и должно быть для
+    WMS GetMap, где bbox описывает границы растра, а не координаты точек.
+    Расхождение росло от 0 в центре окна до ~0.5км на краю 5°-окна и
+    искажало cloud_mass_distance_km/bearing из nearest_of_type() —
+    небольшая, но систематическая ошибка именно в «расстоянии до облака
+    от станции» (см. обсуждение в чате, 2026-08-02)."""
+    center = (TILE_SIZE - 1) / 2
+    dx_km = (col - center) * KM_PER_PX_X
+    dy_km = -(row - center) * KM_PER_PX_Y  # row растёт вниз (юг) -> dy_km отрицательный
     return dx_km, dy_km
 
 
@@ -567,4 +575,5 @@ def change_probability(effective_distance_km, blob_area_km2, confidence):
     size = min(1.0, blob_area_km2 / SIGNIFICANT_AREA_REF_KM2)
     score = 0.5 * proximity + 0.3 * size + 0.2 * confidence
     return int(round(max(5, min(95, 5 + 90 * score))))
+
 
