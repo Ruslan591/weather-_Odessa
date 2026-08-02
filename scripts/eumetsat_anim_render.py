@@ -42,6 +42,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time as _time
 
 import numpy as np
 from PIL import Image
@@ -145,8 +146,12 @@ def render_layer(key, cfg):
     tmp_dir = tempfile.mkdtemp(prefix=f"eumanim_{key}_")
     frame_i = 0
     failed = 0
+    n_total = len(times_iso)
+    layer_t0 = _time.monotonic()
+    print(f"  [...] eumetsat_anim_render.py: {key} — старт, {n_total} кадров к скачиванию")
     try:
-        for t_iso in times_iso:
+        for idx, t_iso in enumerate(times_iso, start=1):
+            frame_t0 = _time.monotonic()
             try:
                 arr = fc.fetch_map_custom(cfg["name"], BBOX, WIDTH, HEIGHT,
                                            time_iso=t_iso, style=cfg["style"])
@@ -155,14 +160,18 @@ def render_layer(key, cfg):
                 # в bootstrap других eumetsat_*.py скриптов, пропускаем и
                 # собираем ролик из того, что получилось
                 failed += 1
-                print(f"  [SKIP] eumetsat_anim_render.py: {key} @ {t_iso} недоступен: {e}")
+                dt = _time.monotonic() - frame_t0
+                print(f"  [SKIP] eumetsat_anim_render.py: {key} кадр {idx}/{n_total} @ {t_iso} недоступен ({dt:.1f}с): {e}")
                 continue
+            dt = _time.monotonic() - frame_t0
+            print(f"  [...] eumetsat_anim_render.py: {key} кадр {idx}/{n_total} готов за {dt:.1f}с")
             frame = _composite_frame(arr)
             frame.save(os.path.join(tmp_dir, f"frame_{frame_i:03d}.png"))
             frame_i += 1
 
         if frame_i < MIN_FRAMES_FOR_VIDEO:
-            print(f"  [WARN] eumetsat_anim_render.py: {key} — годных кадров {frame_i}/{len(times_iso)}, пропуск ролика")
+            dt_layer = _time.monotonic() - layer_t0
+            print(f"  [WARN] eumetsat_anim_render.py: {key} — годных кадров {frame_i}/{n_total}, пропуск ролика ({dt_layer:.1f}с)")
             return False
 
         os.makedirs(ANIM_DIR, exist_ok=True)
@@ -192,7 +201,8 @@ def render_layer(key, cfg):
         if r.returncode != 0:
             raise RuntimeError(f"ffmpeg exit {r.returncode}: {r.stderr[-2000:]}")
         os.replace(tmp_out, out_path)  # атомарная замена — не оставить битый файл, если упадёт на середине
-        print(f"  [OK] eumetsat_anim_render.py: {key} — {frame_i}/{len(times_iso)} кадров, пропущено {failed}")
+        dt_layer = _time.monotonic() - layer_t0
+        print(f"  [OK] eumetsat_anim_render.py: {key} — {frame_i}/{n_total} кадров, пропущено {failed}, {dt_layer:.1f}с всего")
         return True
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
