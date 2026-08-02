@@ -28,8 +28,19 @@ from scipy import ndimage
 WMS_BASE = "https://view.eumetsat.int/geoserver/wms"
 GETCAPABILITIES_URL = WMS_BASE + "?service=WMS&version=1.3.0&request=GetCapabilities"
 _WMS_NS = "{http://www.opengis.net/wms}"
-CENTER_LAT = 46.4406
-CENTER_LON = 30.7703
+
+# ЕДИНЫЙ источник правды по геометрии — data/geo_config.json (центр,
+# радиусы, оба окна/bbox). Меняешь его — подхватывается всеми скриптами,
+# которые импортируют константы отсюда (fc.CENTER_LAT и т.п.), а не
+# держат свою копию числа. См. комментарий в самом geo_config.json.
+_GEO_CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                 "data", "geo_config.json")
+with open(_GEO_CONFIG_PATH, "r", encoding="utf-8") as _f:
+    _GEO = json.load(_f)
+
+CENTER_LAT = _GEO["center_lat"]
+CENTER_LON = _GEO["center_lon"]
+STATION_LABEL = _GEO["station_label"]
 
 
 def get_layer_latest_time(layer_name, timeout=25):
@@ -68,12 +79,20 @@ def get_layer_latest_time(layer_name, timeout=25):
     except Exception:
         return None, None
 
-HALF_WINDOW_DEG = 2.5
-TILE_SIZE = 400
+HALF_WINDOW_DEG = _GEO["motion_window"]["half_window_deg"]
+TILE_SIZE = _GEO["motion_window"]["tile_size"]
 KM_PER_DEG_LAT = 111.32
 KM_PER_DEG_LON = 111.32 * math.cos(math.radians(CENTER_LAT))
 KM_PER_PX_X = (2 * HALF_WINDOW_DEG * KM_PER_DEG_LON) / TILE_SIZE
 KM_PER_PX_Y = (2 * HALF_WINDOW_DEG * KM_PER_DEG_LAT) / TILE_SIZE
+
+# Широкий обзорный bbox для eumetsat_anim_render.py (mp4-петли на
+# eumetsat.html) — раньше был хардкожен прямо там, теперь тоже из
+# geo_config.json. WIDTH/HEIGHT в пикселях остаются производными
+# (считаются из bbox+target_km_per_px в самом eumetsat_anim_render.py),
+# это не независимая настройка.
+ANIM_BBOX = tuple(_GEO["anim_window"]["bbox"])
+ANIM_TARGET_KM_PER_PX = _GEO["anim_window"]["target_km_per_px"]
 
 AFFECT_THRESHOLD_KM = 15.0
 STATIONARY_SPEED_KMH = 3.0
@@ -81,7 +100,7 @@ MIN_FRACTION_FOR_CORR = 0.02
 MIN_SIGNIFICANT_BLOB_PX = 40
 SIGNIFICANT_AREA_REF_KM2 = 1200.0
 
-LOCAL_RADIUS_KM = 50.0
+LOCAL_RADIUS_KM = _GEO["local_radius_km"]
 # Радиус "прямо над станцией" — МЕНЬШЕ LOCAL_RADIUS_KM (тот — для трендов
 # density/height/shape/area по региону). Смешивать их в одном радиусе —
 # частая ошибка: живой кейс (eumetsat_cloud_forecast.py, 2026-08-01 22:00Z)
@@ -89,7 +108,7 @@ LOCAL_RADIUS_KM = 50.0
 # стоящее почти на месте облако в 15-50км утаскивало долю за порог "variable".
 # STATE_RADIUS_KM — общий для всех *_motion.py скриптов, считающих
 # station_state тем же способом (area_fraction в локальном круге).
-STATE_RADIUS_KM = 12.0
+STATE_RADIUS_KM = _GEO["state_radius_km"]
 
 TIMEOUT = 25
 COMPASS = ["С", "СВ", "В", "ЮВ", "Ю", "ЮЗ", "З", "СЗ"]
