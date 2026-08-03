@@ -29,12 +29,14 @@ eumetsat_cloud_forecast.py и т.п.) — здесь это обзорная к�
 достаточное для просмотра движения. Настоящую карту-подложку можно добавить
 позже, если понадобится (см. TODO ниже).
 
-ЧАСТОТА: не на каждый гейт 10-15 мин (это 9 слоёв * до 13 кадров = больше
-сотни GetMap-запросов за прогон) — отдельный, более редкий гейт в
+ЧАСТОТА: не на каждый гейт 10-15 мин (даже после разделения на animated/static
+это 12 слоёв — 5 полных роликов по до 13 кадров + 7 одиночных кадров, около
+70 GetMap-запросов за прогон) — отдельный, более редкий гейт в
 gh_satellite_pipeline.py (см. check_eumetsat_anim_render, ~20-25 мин).
 
-Пишет по одному файлу на слой: data/anim/<key>.mp4 (перезаписывается
-каждый раз, история не копится — только текущая петля).
+Пишет по одному файлу на слой: data/anim/<key>.mp4 (animated=True) или
+data/anim/<key>.png (animated=False, один последний кадр) — оба перезаписываются
+каждый раз, история не копится.
 """
 
 import math
@@ -104,19 +106,27 @@ FPS = 2  # 0.5 сек/кадр — достаточно медленно, что
 
 # Зеркало LAYERS из eumetsat.js — если добавляешь/меняешь слой там, поменяй
 # и здесь (общего конфига между Python и JS в проекте пока нет).
+#
+# animated=True (5 слоёв) — движение реально несёт информацию на глаз для
+# визуального обзора: Cloud mask, ИК 10.5мкм, GeoColour, осадки (H40B),
+# молнии. Полный MP4-ролик (до MAX_ANIM_FRAMES кадров).
+# animated=False (7 слоёв, 2026-08-03) — используются только для программного
+# анализа/справки, движение на глаз не нужно: последний ОДИН кадр (PNG),
+# не 13-кадровый ролик. Экономия примерно в 2 раза по числу GetMap-запросов
+# за прогон (5×13 + 7×1 = 72 вместо 12×13=156).
 LAYERS = {
-    "clm":        {"name": "msg_fes:clm",           "style": "",                                   "step_minutes": 15},
-    "cth":        {"name": "msg_fes:cth",            "style": "",                                   "step_minutes": 15},
-    "h60b":       {"name": "msg_fes:h60b",           "style": "",                                   "step_minutes": 15},
-    "h40b":       {"name": "mtg_fd:h40b",            "style": "mtg_fd:mtg_h40b_default",             "step_minutes": 10},
-    "gii_kindex": {"name": "msg_fes:gii_kindex",     "style": "",                                   "step_minutes": 15},
-    "li_afa":     {"name": "mtg_fd:li_afa",          "style": "",                                   "step_minutes": 5},
-    "geocolour":  {"name": "mtg_fd:rgb_geocolour",   "style": "",                                   "step_minutes": 10},
-    "ir108":      {"name": "mtg_fd:ir105_hrfi",      "style": "mtg_fd:mtg_fd_ir105_hrfi_grayscale",  "step_minutes": 10},
-    "vis06":      {"name": "mtg_fd:vis06_hrfi",      "style": "",                                   "step_minutes": 10},
-    "cloudtype":  {"name": "mtg_fd:rgb_cloudtype",   "style": "raster",                              "step_minutes": 10},
-    "cloudphase": {"name": "mtg_fd:rgb_cloudphase",  "style": "raster",                              "step_minutes": 10},
-    "fog":        {"name": "mtg_fd:rgb_fog",         "style": "raster",                              "step_minutes": 10},
+    "clm":        {"name": "msg_fes:clm",           "style": "",                                   "step_minutes": 15, "animated": True},
+    "cth":        {"name": "msg_fes:cth",            "style": "",                                   "step_minutes": 15, "animated": False},
+    "h60b":       {"name": "msg_fes:h60b",           "style": "",                                   "step_minutes": 15, "animated": False},
+    "h40b":       {"name": "mtg_fd:h40b",            "style": "mtg_fd:mtg_h40b_default",             "step_minutes": 10, "animated": True},
+    "gii_kindex": {"name": "msg_fes:gii_kindex",     "style": "",                                   "step_minutes": 15, "animated": False},
+    "li_afa":     {"name": "mtg_fd:li_afa",          "style": "",                                   "step_minutes": 5,  "animated": True},
+    "geocolour":  {"name": "mtg_fd:rgb_geocolour",   "style": "",                                   "step_minutes": 10, "animated": True},
+    "ir108":      {"name": "mtg_fd:ir105_hrfi",      "style": "mtg_fd:mtg_fd_ir105_hrfi_grayscale",  "step_minutes": 10, "animated": True},
+    "vis06":      {"name": "mtg_fd:vis06_hrfi",      "style": "",                                   "step_minutes": 10, "animated": False},
+    "cloudtype":  {"name": "mtg_fd:rgb_cloudtype",   "style": "raster",                              "step_minutes": 10, "animated": False},
+    "cloudphase": {"name": "mtg_fd:rgb_cloudphase",  "style": "raster",                              "step_minutes": 10, "animated": False},
+    "fog":        {"name": "mtg_fd:rgb_fog",         "style": "raster",                              "step_minutes": 10, "animated": False},
 }
 
 
@@ -208,6 +218,41 @@ def render_layer(key, cfg):
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
+def render_static_layer(key, cfg):
+    """Для animated=False слоёв (2026-08-03) — ОДИН последний кадр, PNG,
+    без ffmpeg. Та же композиция на подложку (_composite_frame), что и в
+    render_layer(), просто без цикла по времени и без кодирования видео."""
+    t0 = _time.monotonic()
+    server_latest_iso, _ = fc.get_layer_latest_time(cfg["name"])
+    try:
+        arr = fc.fetch_map_custom(cfg["name"], BBOX, WIDTH, HEIGHT,
+                                   time_iso=server_latest_iso, style=cfg["style"])
+    except Exception as e:
+        dt = _time.monotonic() - t0
+        print(f"  [WARN] eumetsat_anim_render.py: {key} (статичный кадр) недоступен ({dt:.1f}с): {e}")
+        return False
+
+    frame = _composite_frame(arr)
+    os.makedirs(ANIM_DIR, exist_ok=True)
+    out_path = os.path.join(ANIM_DIR, f"{key}.png")
+    tmp_out = out_path.replace(".png", ".tmp.png")  # PIL определяет формат
+    # ПО РАСШИРЕНИЮ имени файла при .save() — просто ".tmp" ловил
+    # "unknown file extension" (см. тот же приём и объяснение для .mp4 в
+    # render_layer() выше — тот же класс бага).
+    frame.save(tmp_out)
+    os.replace(tmp_out, out_path)  # атомарная замена, как и у .mp4
+
+    # Если слой раньше был animated=True (был .mp4) — убрать устаревший
+    # файл, иначе фронтенд/пользователь может по ошибке взять протухшее видео.
+    old_mp4 = os.path.join(ANIM_DIR, f"{key}.mp4")
+    if os.path.exists(old_mp4):
+        os.remove(old_mp4)
+
+    dt = _time.monotonic() - t0
+    print(f"  [OK] eumetsat_anim_render.py: {key} (статичный кадр) за {dt:.1f}с")
+    return True
+
+
 def main():
     import json
     now = fc.datetime.now(fc.timezone.utc)
@@ -227,8 +272,11 @@ def main():
     debug = {}
     for key, cfg in LAYERS.items():
         try:
-            ok = render_layer(key, cfg)
-            debug[key] = {"ok": ok}
+            if cfg.get("animated", True):
+                ok = render_layer(key, cfg)
+            else:
+                ok = render_static_layer(key, cfg)
+            debug[key] = {"ok": ok, "animated": cfg.get("animated", True)}
             if ok:
                 manifest[key] = now.strftime("%Y-%m-%dT%H:%M:%SZ")
         except Exception as e:
@@ -241,6 +289,11 @@ def main():
         # комментарий у BBOX выше): [[lat_min,lon_min],[lat_max,lon_max]],
         # тот же порядок, что Leaflet ждёт в fitBounds()/videoOverlay().
         manifest["_bounds"] = [[BBOX[1], BBOX[0]], [BBOX[3], BBOX[2]]]
+        # "_type" — какой файл на слое: .mp4 (video) или .png (image).
+        # Добавлено 2026-08-03 вместе с animated=False у 7 слоёв — eumetsat.js
+        # читает отсюда, какой L.*Overlay создавать, вместо хардкода "все mp4".
+        manifest["_type"] = {k: ("video" if v.get("animated", True) else "image")
+                              for k, v in LAYERS.items()}
         json.dump(manifest, f, ensure_ascii=False, indent=2)
     # Отдельный debug-файл — логи самого запуска GitHub Actions недоступны
     # для чтения через API (редирект на Azure Blob Storage вне разрешённых
