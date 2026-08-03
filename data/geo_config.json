@@ -1,19 +1,39 @@
 {
-    "_comment": "ЕДИНЫЙ источник правды по геометрии для всего EUMETSAT-конвейера. Меняешь центр/радиусы/окно/bbox — только здесь. Правится руками, пайплайн этот файл НЕ перезаписывает (в отличие от остальных data/*.json). Читается: scripts/field_motion_common.py при импорте (Python-сторона, все eumetsat_*.py берут константы из fc.*, а не хардкодят свои копии). Фронтенд (eumetsat.js/radar.js) координаты центра пока хардкодит отдельно — см. запись в docs/topics/eumetsat.md про остаточное дублирование.",
+    "_comment": "ЕДИНЫЙ источник правды по геометрии для всего EUMETSAT-конвейера. Меняешь центр/радиусы/окно/bbox — только здесь. Правится руками, пайплайн этот файл НЕ перезаписывает. Читается: scripts/field_motion_common.py при импорте.",
     "center_lat": 46.4406,
     "center_lon": 30.7703,
     "station_label": "Одесса (СИНОП 33837)",
+
+    "_control_tiers_comment": "4 ступени контроля (2026-08-03): station/local — точный трекинг у города (не меняются нынешним расширением); far/very_far — новые, редкие, лёгкие, НЕ входят в основной 13-слойный 10-минутный конвейер (eumetsat_anim_render.py/*_motion.py трогать не пришлось).",
+    "control_tiers": {
+        "station":   { "radius_km": 12,  "purpose": "прямо над станцией — current_state" },
+        "local":     { "radius_km": 50,  "purpose": "регион — тренд плотности/высоты/формы" },
+        "near":      { "radius_km": 192, "purpose": "точный трекинг ячеек — motion_window, 13 слоёв, 10-15 мин" },
+        "far":       { "radius_km": 1000, "purpose": "Балканы/Турция/Кавказ/Центр.Европа — крупные фронты/циклоны, 2-3 слоя, 30-60 мин" },
+        "very_far":  { "radius_km": 2500, "purpose": "Испания/Италия/Британия — где сейчас крупные системы, 1 слой (geocolour), 2-4 часа" }
+    },
+
     "state_radius_km": 12,
     "local_radius_km": 50,
     "motion_window": {
-        "_comment": "Малое 'моторное' окно для *_motion.py + lightning_forecast.py. Квадратное в градусах, НЕ квадратное в км (косинус-поправка долготы на этой широте) — отсюда окно ≈384×557км при half_window_deg=2.5.",
+        "_comment": "Малое 'моторное' окно для *_motion.py + lightning_forecast.py — тир 'near' (≈192км). Квадратное в градусах, НЕ в км (косинус-поправка долготы).",
         "half_window_deg": 2.5,
         "tile_size": 400
     },
     "anim_window": {
-        "_comment": "Широкий обзорный bbox для eumetsat_anim_render.py (mp4-петли на eumetsat.html). Порядок как в WMS CRS:84: [min_lon, min_lat, max_lon, max_lat]. WIDTH/HEIGHT в пикселях считаются из bbox и target_km_per_px автоматически (scripts/eumetsat_anim_render.py:_bbox_dimensions) — здесь их нет, они не независимая настройка.",
+        "_comment": "Широкий обзорный bbox для eumetsat_anim_render.py (mp4-петли на eumetsat.html, тот же тир 'near'). CRS:84 порядок [min_lon, min_lat, max_lon, max_lat].",
         "bbox": [22.0, 40.0, 40.0, 52.0],
         "target_km_per_px": 1.5
+    },
+    "far_window": {
+        "_comment": "Тир 'far' (≈1000км) — симметрично вокруг Одессы, как motion_window, но шире. half_window_deg=13 даёт ≈997км по долготе (гарантированный минимум) и ≈1447км по широте.",
+        "half_window_deg": 13.0,
+        "target_km_per_px": 3.0
+    },
+    "very_far_window": {
+        "_comment": "Тир 'very_far' (≈2500км, Испания/Италия/Британия) — НЕ симметричен вокруг Одессы (нужен запад/юго-запад Европы, восток не нужен). Явный bbox CRS:84 [min_lon, min_lat, max_lon, max_lat].",
+        "bbox": [-10.0, 35.0, 32.0, 60.0],
+        "target_km_per_px": 4.0
     },
     "point_window": {
         "_comment": "Точечный GetFeatureInfo-запрос в eumetsat_point.py — отдельная маленькая геометрия, не путать с motion_window.",
