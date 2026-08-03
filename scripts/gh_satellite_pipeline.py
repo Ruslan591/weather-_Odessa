@@ -250,6 +250,41 @@ def check_eumetsat_anim_render():
         print(f"  [WARN] eumetsat_anim_render.py: {e}")
 
 
+def check_eumetsat_far_watch():
+    # Дальний контроль (~1000км, Балканы/Турция/Кавказ/Центр.Европа), см.
+    # docstring eumetsat_far_watch.py — секторная сводка облачности, БЕЗ
+    # векторного трекинга (на такой дистанции он даёт шум). Раньше был
+    # отдельный workflow far_watch.yml со своим cron — отказались (лишняя
+    # независимая цепочка триггеров вместо переиспользования этой), гейт
+    # по mtime файла (реальные часы), а не по времени сцены сервера — тут
+    # важно "не чаще раза в 30 мин", а не "появился ли новый кадр".
+    out_file = os.path.join(BASE_DIR, "data", "eumetsat_far_watch.json")
+    if os.path.exists(out_file) and (_time.time() - os.path.getmtime(out_file)) < 30 * 60:
+        return
+    try:
+        subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "eumetsat_far_watch.py"), "far"],
+            cwd=BASE_DIR, capture_output=False, timeout=60
+        )
+    except Exception as e:
+        print(f"  [WARN] eumetsat_far_watch.py far: {e}")
+
+
+def check_eumetsat_very_far_watch():
+    # Очень дальний контроль (~2500км, Испания/Италия/Британия) — раз в 3ч,
+    # тот же гейт по mtime, что и check_eumetsat_far_watch().
+    out_file = os.path.join(BASE_DIR, "data", "eumetsat_very_far_watch.json")
+    if os.path.exists(out_file) and (_time.time() - os.path.getmtime(out_file)) < 180 * 60:
+        return
+    try:
+        subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "eumetsat_far_watch.py"), "very_far"],
+            cwd=BASE_DIR, capture_output=False, timeout=90
+        )
+    except Exception as e:
+        print(f"  [WARN] eumetsat_far_watch.py very_far: {e}")
+
+
 def git_push_satellite():
     """Коммитит и пушит только файлы спутникового модуля."""
     try:
@@ -276,6 +311,12 @@ def git_push_satellite():
             "data/eumetsat_geocolour_motion_debug.json",
             "data/eumetsat_geocolour_buffer.npz",
             "data/eumetsat_geocolour_debug_preview.png",
+            "data/eumetsat_far_watch.json",
+            "data/eumetsat_far_watch_state.json",
+            "data/eumetsat_far_watch_debug.json",
+            "data/eumetsat_very_far_watch.json",
+            "data/eumetsat_very_far_watch_state.json",
+            "data/eumetsat_very_far_watch_debug.json",
             "data/anim/manifest.json",
             "data/anim/debug.json",
             "data/anim/clm.mp4",
@@ -337,6 +378,8 @@ def main():
     check_eumetsat_precip_motion()
     check_eumetsat_geocolour_motion()
     check_eumetsat_anim_render()
+    check_eumetsat_far_watch()
+    check_eumetsat_very_far_watch()
 
     git_push_satellite()
 
