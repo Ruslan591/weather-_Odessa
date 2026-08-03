@@ -319,17 +319,6 @@ def git_push_satellite():
             "data/eumetsat_very_far_watch_debug.json",
             "data/anim/manifest.json",
             "data/anim/debug.json",
-            "data/anim/clm.mp4",
-            "data/anim/cth.mp4",
-            "data/anim/h60b.mp4",
-            "data/anim/h40b.mp4",
-            "data/anim/gii_kindex.mp4",
-            "data/anim/li_afa.mp4",
-            "data/anim/geocolour.mp4",
-            "data/anim/ir108.mp4",
-            "data/anim/cloudtype.mp4",
-            "data/anim/cloudphase.mp4",
-            "data/anim/fog.mp4",
         ]
         _to_add = [p for p in _candidates if os.path.exists(os.path.join(BASE_DIR, p))]
         if not _to_add:
@@ -337,6 +326,20 @@ def git_push_satellite():
             return
         subprocess.run(["git", "-C", BASE_DIR, "add"] + _to_add,
                         check=True, capture_output=True)
+        # data/anim/* — ОТДЕЛЬНО, директорией целиком, не поштучным списком
+        # файлов (баг 2026-08-03): внутри вперемешку .mp4 (animated=True) и
+        # .png (animated=False, см. eumetsat_anim_render.py), и когда слой
+        # переключается video->image, старый файл УДАЛЯЕТСЯ с диска —
+        # поштучный список "добавь X.mp4, если он существует" никогда не
+        # видел эту ситуацию (сам путь X.mp4 просто исчезал из проверки
+        # exists() ДО git add, а новый X.png в списке вообще не было
+        # перечислено) — из-за этого fog.png молча терялся, а протухший
+        # fog.mp4 навсегда оставался закоммиченным. Заодно всплыл более
+        # старый баг: vis06.mp4 не был в поштучном списке вообще и никогда
+        # не коммитился, даже до сегодняшних правок. "git add <директория>"
+        # (без -A) в современном git сам покрывает добавления, изменения И
+        # удаления путей внутри неё — за это отвечает git, а не наш список.
+        subprocess.run(["git", "-C", BASE_DIR, "add", "data/anim"], capture_output=True)
         result = subprocess.run(
             ["git", "-C", BASE_DIR, "commit", "-m", "satellite: eumetsat cloud/precip/lightning/ir update"],
             capture_output=True, text=True)
