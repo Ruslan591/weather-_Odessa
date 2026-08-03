@@ -1,7 +1,7 @@
 {
-  "timestamp": "2026-08-03T06:42:00Z",
-  "buffer_size": 6,
-  "buffer_span_minutes": 50,
+  "timestamp": "2026-08-03T07:16:05Z",
+  "buffer_size": 3,
+  "buffer_span_minutes": 20,
   "observed_area": {
     "center_lat": 46.4406,
     "center_lon": 30.7703,
@@ -12,17 +12,17 @@
   },
   "current_state": "no_precip",
   "target_type": "precip_mass",
-  "distance_km_now": 94.0,
-  "bearing_deg": 179.0,
+  "distance_km_now": 66.1,
+  "bearing_deg": 178.0,
   "compass": "Ю",
-  "blob_area_km2": 42120.0,
-  "speed_kmh": 10.7,
-  "direction_compass": "СЗ",
-  "cpa_km": 82.7,
+  "blob_area_km2": 1125.0,
+  "speed_kmh": 0.2,
+  "direction_compass": "С",
+  "cpa_km": 15.5,
   "eta_min": null,
-  "verdict": "пройдёт мимо, город, скорее всего, не заденет",
-  "frame_pairs_used": 5,
-  "probability_percent": 50,
+  "verdict": "почти стоит на месте",
+  "frame_pairs_used": 2,
+  "probability_percent": 71,
   "probability_note": "эвристика (близость точки сближения + размер поля + уверенность в скорости), не физическая модель осадков",
-  "method_note": "Буфер 6/6 масок mtg_fd:h40b (шаг 10 мин, crs=EPSG:4326, всегда явный TIME из GetCapabilities — не floor(now)), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Presence = непрозрачный пиксель. Край ищется только среди связных областей >= 40px (~53км²). Скорость — из реальных интервалов буфера (не фиксированный шаг). Линейная экстраполяция, годится на ~1 час."
+  "method_note": "Буфер 3/6 масок mtg_fd:h40b (шаг 10 мин, crs=EPSG:4326, всегда явный TIME из GetCapabilities — не floor(now)), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Presence = непрозрачный пиксель. Край ищется только среди связных областей >= 40px (~53км²). Скорость — из реальных интервалов буфера (не фиксированный шаг). Линейная экстраполяция, годится на ~1 час."
 }
