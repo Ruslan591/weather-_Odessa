@@ -142,7 +142,28 @@ function setLayer(key){
         currentVideoOverlay = null;
     }
 
-    const url = `${ANIM_BASE}/${key}.mp4?v=${Date.now()}`; // cache-bust: файл перезаписывается на месте
+    // "_type" публикует eumetsat_anim_render.py (2026-08-03) — 5 слоёв
+    // (clm/h40b/li_afa/geocolour/ir108) реально анимированы (движение
+    // несёт информацию), остальные 7 — только последний кадр, статичный
+    // PNG (программный анализ не нуждается в ролике, а рендерить 13-кадровую
+    // петлю для них — лишняя нагрузка на пайплайн без пользы для обзора).
+    const layerType = (manifestData._type && manifestData._type[key]) || "video";
+    const ext = layerType === "image" ? "png" : "mp4";
+    const url = `${ANIM_BASE}/${key}.${ext}?v=${Date.now()}`; // cache-bust: файл перезаписывается на месте
+
+    if(layerType === "image"){
+        const overlay = L.imageOverlay(url, ANIM_BOUNDS, {
+            opacity: LAYERS[key].opacity ?? 0.85,
+            interactive: false,
+        });
+        overlay.addTo(map);
+        currentVideoOverlay = overlay; // общая переменная под removeLayer(), имя не переименовывал — не только видео теперь
+        overlay.on("error", () => {
+            document.getElementById("eumTimestamp").textContent = "снимок недоступен (ещё не сгенерирован?)";
+        });
+        return;
+    }
+
     const overlay = L.videoOverlay(url, ANIM_BOUNDS, {
         opacity: LAYERS[key].opacity ?? 0.85,
         // interactive:true — ИНАЧЕ Leaflet ставит pointer-events:none на
