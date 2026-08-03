@@ -42,7 +42,9 @@ npz с полными полями) — не оптический поток, а
 
 import json
 import os
+import subprocess
 import sys
+import time as _time
 from datetime import datetime, timezone
 
 import numpy as np
@@ -275,11 +277,55 @@ def run_tier(tier_key):
     print(f"  [OK] eumetsat_far_watch.py: {tier_key} — {verdict}")
 
 
+def git_push_far_watch():
+    """Коммитит и пушит только файлы far/very_far — тот же паттерн, что
+    git_push_satellite() в gh_satellite_pipeline.py (retry с rebase при
+    конфликте push, не падать если нечего коммитить)."""
+    try:
+        _candidates = [
+            "data/eumetsat_far_watch.json", "data/eumetsat_far_watch_state.json",
+            "data/eumetsat_far_watch_debug.json",
+            "data/eumetsat_very_far_watch.json", "data/eumetsat_very_far_watch_state.json",
+            "data/eumetsat_very_far_watch_debug.json",
+        ]
+        _to_add = [p for p in _candidates if os.path.exists(os.path.join(BASE_DIR, p))]
+        if not _to_add:
+            print("  Нет файлов для коммита.")
+            return
+        subprocess.run(["git", "-C", BASE_DIR, "add"] + _to_add, check=True, capture_output=True)
+        result = subprocess.run(
+            ["git", "-C", BASE_DIR, "commit", "-m", "far_watch: update"],
+            capture_output=True, text=True)
+        if result.returncode != 0:
+            msg = result.stdout.strip() or result.stderr.strip()
+            if "nothing to commit" not in msg and "nothing added" not in msg:
+                print(f"  commit warn: {msg}")
+                return
+
+        _delays = [10, 20]
+        for _attempt in range(3):
+            push = subprocess.run(["git", "-C", BASE_DIR, "push"], capture_output=True, text=True)
+            if push.returncode == 0:
+                suffix = f" (attempt {_attempt+1})" if _attempt > 0 else ""
+                print(f"  far_watch push ✓{suffix}")
+                return
+            err = push.stderr.strip()
+            print(f"  far_watch push ✗ attempt {_attempt+1}: {err}")
+            if _attempt < 2:
+                _time.sleep(_delays[_attempt])
+                subprocess.run(["git", "-C", BASE_DIR, "fetch", "origin", "main"], capture_output=True)
+                subprocess.run(["git", "-C", BASE_DIR, "rebase", "origin/main"], capture_output=True)
+        print("  far_watch push failed after 3 attempts")
+    except Exception as e:
+        print(f"  far_watch git error: {e}")
+
+
 def main():
     if len(sys.argv) < 2 or sys.argv[1] not in TIERS:
         print("Использование: python eumetsat_far_watch.py far|very_far")
         sys.exit(1)
     run_tier(sys.argv[1])
+    git_push_far_watch()
 
 
 if __name__ == "__main__":
