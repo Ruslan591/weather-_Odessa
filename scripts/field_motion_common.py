@@ -94,6 +94,20 @@ KM_PER_PX_Y = (2 * HALF_WINDOW_DEG * KM_PER_DEG_LAT) / TILE_SIZE
 ANIM_BBOX = tuple(_GEO["anim_window"]["bbox"])
 ANIM_TARGET_KM_PER_PX = _GEO["anim_window"]["target_km_per_px"]
 
+# Тир "far" (≈1000км) — симметричный вокруг Одессы, как motion_window, но шире.
+# bbox строится из half_window_deg точно так же, как HALF_WINDOW_DEG для
+# motion_window (min_lon,min_lat,max_lon,max_lat — порядок CRS:84).
+_far_half = _GEO["far_window"]["half_window_deg"]
+FAR_BBOX = (CENTER_LON - _far_half, CENTER_LAT - _far_half,
+            CENTER_LON + _far_half, CENTER_LAT + _far_half)
+FAR_TARGET_KM_PER_PX = _GEO["far_window"]["target_km_per_px"]
+
+# Тир "very_far" (≈2500км, Испания/Италия/Британия) — НЕ симметричен вокруг
+# Одессы (нужен запад/юго-запад Европы), поэтому bbox — явный литерал в JSON,
+# не производная от CENTER_LAT/LON.
+VERY_FAR_BBOX = tuple(_GEO["very_far_window"]["bbox"])
+VERY_FAR_TARGET_KM_PER_PX = _GEO["very_far_window"]["target_km_per_px"]
+
 AFFECT_THRESHOLD_KM = 15.0
 STATIONARY_SPEED_KMH = 3.0
 MIN_FRACTION_FOR_CORR = 0.02
