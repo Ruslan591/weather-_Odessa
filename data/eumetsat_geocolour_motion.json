@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-03T17:06:51Z",
+  "timestamp": "2026-08-03T17:36:39Z",
   "buffer_size": 6,
   "buffer_span_minutes": 50,
   "observed_area": {
@@ -12,20 +12,47 @@
     "local_trend_radius_km": 50,
     "state_radius_km": 12
   },
-  "valid": false,
-  "verdict": "нет значимой облачности для оценки движения",
+  "valid": true,
+  "speed_kmh": 0.3,
+  "direction_compass": "ЮЗ",
+  "bearing_deg": 203.7,
+  "frame_pairs_used": 5,
+  "acceleration_kmh": -0.5,
+  "turning_deg": 77.1,
+  "acceleration_verdict": "скорость стабильна",
+  "turning_verdict": "меняет направление (по часовой)",
+  "forecast_displacement": {
+    "30min": {
+      "distance_km": 0.2,
+      "bearing_deg": 8.0,
+      "compass": "С"
+    },
+    "60min": {
+      "distance_km": 0.7,
+      "bearing_deg": 12.0,
+      "compass": "С"
+    },
+    "120min": {
+      "distance_km": 2.7,
+      "bearing_deg": 14.0,
+      "compass": "С"
+    }
+  },
   "area_fraction_over_time": [
-    0.284,
-    0.278,
-    0.223,
     0.03,
     0.001,
-    0.011
+    0.011,
+    0.016,
+    0.692,
+    0.781
   ],
-  "area_trend_delta": -0.274,
-  "area_trend_verdict": "сокращается",
-  "station_state": "clear",
-  "station_area_fraction": 0.119,
-  "cloud_mass_distance_km": null,
+  "area_trend_delta": 0.751,
+  "area_trend_verdict": "растёт",
+  "station_state": "variable",
+  "station_area_fraction": 0.202,
+  "cloud_mass_distance_km": 3.4,
+  "cloud_mass_bearing_deg": 78.0,
+  "cloud_mass_compass": "В",
+  "cloud_mass_area_km2": 170972,
   "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
 }
