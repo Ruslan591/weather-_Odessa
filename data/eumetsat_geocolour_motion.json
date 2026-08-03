@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-03T16:43:58Z",
+  "timestamp": "2026-08-03T17:06:51Z",
   "buffer_size": 6,
   "buffer_span_minutes": 50,
   "observed_area": {
@@ -12,47 +12,20 @@
     "local_trend_radius_km": 50,
     "state_radius_km": 12
   },
-  "valid": true,
-  "speed_kmh": 9.7,
-  "direction_compass": "З",
-  "bearing_deg": 249.3,
-  "frame_pairs_used": 5,
-  "acceleration_kmh": -5.7,
-  "turning_deg": -1.8,
-  "acceleration_verdict": "замедляется",
-  "turning_verdict": "направление стабильно",
-  "forecast_displacement": {
-    "30min": {
-      "distance_km": 1.5,
-      "bearing_deg": 243.0,
-      "compass": "ЮЗ"
-    },
-    "60min": {
-      "distance_km": 0.7,
-      "bearing_deg": 111.0,
-      "compass": "В"
-    },
-    "120min": {
-      "distance_km": 14.7,
-      "bearing_deg": 75.0,
-      "compass": "В"
-    }
-  },
+  "valid": false,
+  "verdict": "нет значимой облачности для оценки движения",
   "area_fraction_over_time": [
-    0.258,
-    0.261,
-    0.271,
     0.284,
     0.278,
-    0.223
+    0.223,
+    0.03,
+    0.001,
+    0.011
   ],
-  "area_trend_delta": -0.035,
-  "area_trend_verdict": "без существенных изменений",
+  "area_trend_delta": -0.274,
+  "area_trend_verdict": "сокращается",
   "station_state": "clear",
-  "station_area_fraction": 0.03,
-  "cloud_mass_distance_km": 9.3,
-  "cloud_mass_bearing_deg": 145.0,
-  "cloud_mass_compass": "ЮВ",
-  "cloud_mass_area_km2": 5025,
+  "station_area_fraction": 0.119,
+  "cloud_mass_distance_km": null,
   "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
 }
