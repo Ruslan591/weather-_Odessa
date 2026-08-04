@@ -1,27 +1,27 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-08-04T05:50:00.000Z",
+  "server_latest_time": "2026-08-04T06:00:00.000Z",
   "bootstrap": true,
   "buffer_before": 6,
   "buffer_size": 6,
   "buffer_times": [
-    "2026-08-04T05:00:00.000Z",
     "2026-08-04T05:10:00.000Z",
     "2026-08-04T05:20:00.000Z",
     "2026-08-04T05:30:00.000Z",
     "2026-08-04T05:40:00.000Z",
-    "2026-08-04T05:50:00.000Z"
+    "2026-08-04T05:50:00.000Z",
+    "2026-08-04T06:00:00.000Z"
   ],
   "frame_std": [
-    29.6,
     29.5,
     29.1,
     28.7,
     28.6,
-    29.1
+    29.1,
+    29.6
   ],
   "result": {
-    "timestamp": "2026-08-04T06:14:12Z",
+    "timestamp": "2026-08-04T06:27:21Z",
     "buffer_size": 6,
     "buffer_span_minutes": 50,
     "observed_area": {
@@ -37,21 +37,21 @@
     "valid": false,
     "verdict": "нет значимой облачности для оценки движения",
     "area_fraction_over_time": [
-      0.211,
       0.032,
       0.006,
       0.001,
       0.0,
-      0.004
+      0.004,
+      0.002
     ],
-    "area_trend_delta": -0.207,
-    "area_trend_verdict": "сокращается",
+    "area_trend_delta": -0.03,
+    "area_trend_verdict": "без существенных изменений",
     "station_state": "clear",
     "station_area_fraction": 0.0,
-    "cloud_mass_distance_km": 47.6,
+    "cloud_mass_distance_km": 47.0,
     "cloud_mass_bearing_deg": 144.0,
     "cloud_mass_compass": "ЮВ",
-    "cloud_mass_area_km2": 600,
+    "cloud_mass_area_km2": 660,
     "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
   }
 }
