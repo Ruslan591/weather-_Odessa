@@ -315,6 +315,56 @@ def station_area_mask():
     return dist_km <= STATE_RADIUS_KM
 
 
+def load_primary_target(max_age_minutes=30):
+    """Читает data/eumetsat_cloud_forecast.json и отдаёт ПЕРВИЧНУЮ цель
+    (candidates[0], target_id=0 — ближайшая значимая масса, как её выбирает
+    _significant_blobs() в eumetsat_cloud_forecast.py) для остальных модулей
+    пайплайна (ИК/GeoColour/Phase-Type/осадки/гроза), чтобы они проверяли
+    ТУ ЖЕ ROI, а не искали свою независимо (см. docs/topics/eumetsat.md,
+    план object-centric пайплайна от 2026-08-04).
+    Возвращает (target_dict, reason) — target_dict is None если файла нет,
+    JSON битый, поле candidates отсутствует/пусто, или снапшот устарел
+    (> max_age_minutes от текущего момента) — вызывающий код должен в этом
+    случае откатываться на собственную независимую детекцию, а не падать.
+    """
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                         "data", "eumetsat_cloud_forecast.json")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            snap = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        return None, f"cloud_forecast.json недоступен: {e}"
+
+    ts_raw = snap.get("timestamp")
+    if ts_raw:
+        try:
+            ts = datetime.strptime(ts_raw, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            age_min = (datetime.now(timezone.utc) - ts).total_seconds() / 60
+            if age_min > max_age_minutes:
+                return None, f"снапшот устарел ({round(age_min)} мин > {max_age_minutes})"
+        except ValueError:
+            pass  # не смогли распарсить timestamp — не блокируем, просто не проверяем возраст
+
+    candidates = snap.get("candidates") or []
+    if not candidates:
+        return None, "candidates пуст или отсутствует (снапшот от старой версии cloud_forecast.py?)"
+    return candidates[0], "ok"
+
+
+def km_bbox_to_pixel_mask(bbox_km, pad_km=0.0):
+    """Обратное к pixel_to_km_offset() — булева (TILE_SIZE,TILE_SIZE) маска,
+    True внутри bbox_km (словарь dx_min/dx_max/dy_min/dy_max, как отдаёт
+    _significant_blobs()), с необязательным расширением на pad_km по краям
+    (запас на неточность привязки между разными слоями/проекциями WMS)."""
+    rows, cols = np.meshgrid(np.arange(TILE_SIZE), np.arange(TILE_SIZE), indexing="ij")
+    center = (TILE_SIZE - 1) / 2
+    dx_km = (cols - center) * KM_PER_PX_X
+    dy_km = -(rows - center) * KM_PER_PX_Y  # тот же знак, что в pixel_to_km_offset
+    in_x = (dx_km >= bbox_km["dx_min"] - pad_km) & (dx_km <= bbox_km["dx_max"] + pad_km)
+    in_y = (dy_km >= bbox_km["dy_min"] - pad_km) & (dy_km <= bbox_km["dy_max"] + pad_km)
+    return in_x & in_y
+
+
 def bearing_compass(dx_km, dy_km):
     bearing = (math.degrees(math.atan2(dx_km, dy_km)) + 360) % 360
     idx = int(((bearing + 22.5) % 360) // 45)
