@@ -255,12 +255,30 @@ def check_eumetsat_far_watch():
     # docstring eumetsat_far_watch.py — секторная сводка облачности, БЕЗ
     # векторного трекинга (на такой дистанции он даёт шум). Раньше был
     # отдельный workflow far_watch.yml со своим cron — отказались (лишняя
-    # независимая цепочка триггеров вместо переиспользования этой), гейт
-    # по mtime файла (реальные часы), а не по времени сцены сервера — тут
-    # важно "не чаще раза в 30 мин", а не "появился ли новый кадр".
+    # независимая цепочка триггеров вместо переиспользования этой).
+    #
+    # БАГ (2026-08-04, найден по скрину Руслана — данные зависли на 15+
+    # часов): гейт раньше сравнивал os.path.getmtime(out_file) — а после
+    # actions/checkout@v4 mtime ВСЕГДА "только что" (git checkout не
+    # сохраняет исходное время коммита, выставляет текущее при клонировании
+    # в свежем контейнере). Гейт "< 30 мин с момента mtime" был математически
+    # ВСЕГДА true → скрипт никогда не перезапускался после самого первого
+    # раза. Исправлено по образцу check_eumetsat_anim_render() — сравниваем
+    # с временем ВНУТРИ самого JSON (payload["timestamp"]), не с файловой
+    # системой.
     out_file = os.path.join(BASE_DIR, "data", "eumetsat_far_watch.json")
-    if os.path.exists(out_file) and (_time.time() - os.path.getmtime(out_file)) < 30 * 60:
-        return
+    now_utc = datetime.now(timezone.utc)
+    try:
+        if os.path.exists(out_file):
+            with open(out_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            ts = data.get("timestamp")
+            if ts:
+                last_time = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
+                if (now_utc - last_time).total_seconds() < 30 * 60:
+                    return
+    except Exception:
+        pass
     try:
         subprocess.run(
             [PYTHON, os.path.join(SCRIPTS_DIR, "eumetsat_far_watch.py"), "far"],
@@ -272,10 +290,21 @@ def check_eumetsat_far_watch():
 
 def check_eumetsat_very_far_watch():
     # Очень дальний контроль (~2500км, Испания/Италия/Британия) — раз в 3ч,
-    # тот же гейт по mtime, что и check_eumetsat_far_watch().
+    # тот же гейт по содержимому JSON, что и check_eumetsat_far_watch()
+    # (см. комментарий там про баг с mtime после checkout).
     out_file = os.path.join(BASE_DIR, "data", "eumetsat_very_far_watch.json")
-    if os.path.exists(out_file) and (_time.time() - os.path.getmtime(out_file)) < 180 * 60:
-        return
+    now_utc = datetime.now(timezone.utc)
+    try:
+        if os.path.exists(out_file):
+            with open(out_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            ts = data.get("timestamp")
+            if ts:
+                last_time = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
+                if (now_utc - last_time).total_seconds() < 180 * 60:
+                    return
+    except Exception:
+        pass
     try:
         subprocess.run(
             [PYTHON, os.path.join(SCRIPTS_DIR, "eumetsat_far_watch.py"), "very_far"],
