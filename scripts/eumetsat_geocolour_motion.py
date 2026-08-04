@@ -377,6 +377,37 @@ def main():
         else:
             out["cloud_mass_distance_km"] = None
 
+        # --- ROI-подтверждение той же цели, что выбрал CLM (candidates[0] в
+        # cloud_forecast.json) — визуальная сверка GeoColour в её bbox, а не
+        # независимый поиск выше. Шаг 3 задуманного алгоритма (см.
+        # docs/topics/eumetsat.md, план от 2026-08-04). Аддитивно.
+        target, target_reason = fc.load_primary_target()
+        if target is None:
+            out["target_confirmation"] = {"confirmed": None, "reason": target_reason}
+        else:
+            roi_mask = fc.km_bbox_to_pixel_mask(target["bbox_km"], pad_km=2.0)
+            roi_is_cloud = is_cloud_frames[-1][roi_mask]
+            if roi_is_cloud.size == 0:
+                out["target_confirmation"] = {
+                    "confirmed": None,
+                    "reason": "ROI цели CLM вне окна GeoColour-кадра",
+                    "target_id": target["target_id"],
+                }
+            else:
+                roi_cloud_fraction = float(roi_is_cloud.mean())
+                confirmed = roi_cloud_fraction >= 0.5
+                out["target_confirmation"] = {
+                    "confirmed": confirmed,
+                    "target_id": target["target_id"],
+                    "target_area_km2": target["area_km2"],
+                    "roi_cloud_fraction": round(roi_cloud_fraction, 3),
+                    "verdict": (
+                        "GeoColour подтверждает: в ROI CLM-цели преобладает облачность"
+                        if confirmed else
+                        "GeoColour НЕ подтверждает: в ROI CLM-цели облачность не преобладает — возможно расхождение слоёв"
+                    ),
+                }
+
     out["method_note"] = (
         f"Буфер {len(packed_frames)}/{MAX_FRAMES} кадров mtg_fd:rgb_geocolour (шаг {STEP_MINUTES} мин), "
         "круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, "
