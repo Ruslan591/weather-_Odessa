@@ -69,6 +69,20 @@ STALE_BUFFER_SECONDS = 25 * 60   # ~2.5x шага, как у остальных 
 PHASE_CHANGE_THRESHOLD = 0.6     # изменение среднего ординального индекса фазы
 TYPE_CHANGE_THRESHOLD = 0.25     # изменение средней группы типа
 
+# Метки ординального индекса фазы — соответствуют цветовым правилам в
+# _classify_phase() выше (см. её докстринг про неоткалиброванные анкеры).
+PHASE_LABELS = {
+    0: "безоблачно",
+    1: "низкая водяная",
+    2: "средняя водяная",
+    3: "плотная водяная",
+    4: "тонкий лёд (перистые)",
+    5: "лёд",
+    6: "смешанная фаза",
+    7: "холодные верхушки (мощная конвекция)",
+    8: "гроза",
+}
+
 
 def _fmt_time(dt):
     return dt.strftime("%Y-%m-%dT%H:%M:00.000Z")
@@ -365,6 +379,44 @@ def main():
         })
     else:
         out["verdict"] = "недостаточно классифицированных пикселей в локальной области"
+
+    # --- ROI-подтверждение той же цели, что выбрал CLM (candidates[0] в
+    # cloud_forecast.json) — классификация фазы/типа ИМЕННО её ROI, а не
+    # региональное среднее по LOCAL_RADIUS_KM=50 выше. Отвечает на
+    # "что за облака: перистые/слоистые и т.д." из задуманного алгоритма
+    # (см. docs/topics/eumetsat.md, план от 2026-08-04). Аддитивно.
+    target, target_reason = fc.load_primary_target()
+    if target is None:
+        out["target_confirmation"] = {"confirmed": None, "reason": target_reason}
+    else:
+        roi_mask = fc.km_bbox_to_pixel_mask(target["bbox_km"], pad_km=2.0)
+        roi_valid = valid_frames[-1][roi_mask]
+        if roi_valid.sum() < 5:
+            out["target_confirmation"] = {
+                "confirmed": None,
+                "reason": "мало классифицированных пикселей в ROI цели CLM (облачно, но цвет неуверенный, либо вне окна)",
+                "target_id": target["target_id"],
+            }
+        else:
+            roi_phase = phase_frames[-1][roi_mask][roi_valid]
+            roi_type = type_frames[-1][roi_mask][roi_valid]
+            cloud_px = roi_type > 0
+            cloud_fraction = float(cloud_px.mean())
+            confirmed = cloud_fraction >= 0.5
+            dominant_phase_ordinal = float(np.median(roi_phase[cloud_px])) if cloud_px.any() else 0.0
+            out["target_confirmation"] = {
+                "confirmed": confirmed,
+                "target_id": target["target_id"],
+                "target_area_km2": target["area_km2"],
+                "roi_cloud_fraction": round(cloud_fraction, 3),
+                "roi_dominant_phase_ordinal": round(dominant_phase_ordinal, 1),
+                "roi_dominant_phase_label": PHASE_LABELS.get(round(dominant_phase_ordinal), "неопределено"),
+                "verdict": (
+                    "Phase/Type подтверждает: в ROI CLM-цели преобладает облачность"
+                    if confirmed else
+                    "Phase/Type НЕ подтверждает: в ROI CLM-цели облачность не преобладает — возможно расхождение слоёв"
+                ),
+            }
 
     out["buffer_status"] = _buffer_status(len(packed_frames))
     out["method_note"] = (
