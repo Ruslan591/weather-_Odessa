@@ -1,27 +1,27 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-08-04T06:40:00.000Z",
+  "server_latest_time": "2026-08-04T07:00:00.000Z",
   "bootstrap": true,
   "buffer_before": 6,
   "buffer_size": 6,
   "buffer_times": [
-    "2026-08-04T05:50:00.000Z",
-    "2026-08-04T06:00:00.000Z",
     "2026-08-04T06:10:00.000Z",
     "2026-08-04T06:20:00.000Z",
     "2026-08-04T06:30:00.000Z",
-    "2026-08-04T06:40:00.000Z"
+    "2026-08-04T06:40:00.000Z",
+    "2026-08-04T06:50:00.000Z",
+    "2026-08-04T07:00:00.000Z"
   ],
   "frame_std": [
-    29.1,
-    29.6,
     29.8,
     29.9,
+    29.8,
+    29.8,
     29.8,
     29.8
   ],
   "result": {
-    "timestamp": "2026-08-04T07:11:19Z",
+    "timestamp": "2026-08-04T07:26:17Z",
     "buffer_size": 6,
     "buffer_span_minutes": 50,
     "observed_area": {
@@ -37,21 +37,21 @@
     "valid": false,
     "verdict": "нет значимой облачности для оценки движения",
     "area_fraction_over_time": [
-      0.004,
-      0.002,
       0.001,
       0.0,
       0.0,
-      0.001
+      0.001,
+      0.004,
+      0.002
     ],
-    "area_trend_delta": -0.003,
+    "area_trend_delta": 0.001,
     "area_trend_verdict": "без существенных изменений",
     "station_state": "clear",
     "station_area_fraction": 0.0,
-    "cloud_mass_distance_km": 59.0,
-    "cloud_mass_bearing_deg": 92.0,
+    "cloud_mass_distance_km": 62.0,
+    "cloud_mass_bearing_deg": 101.0,
     "cloud_mass_compass": "В",
-    "cloud_mass_area_km2": 290,
+    "cloud_mass_area_km2": 419,
     "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
   }
 }
