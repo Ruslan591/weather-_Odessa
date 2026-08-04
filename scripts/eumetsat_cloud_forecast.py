@@ -262,6 +262,59 @@ def _nearest_of_type(is_cloud_mask, valid_mask, want_cloud, min_blob_px=MIN_SIGN
     return dx_km, dy_km, blob_area_km2
 
 
+def _significant_blobs(is_cloud_mask, valid_mask, want_cloud, min_blob_px=MIN_SIGNIFICANT_BLOB_PX):
+    """Как _nearest_of_type, но возвращает ВСЕ значимые связные области нужного
+    типа, а не только ближайшую к центру — основа для object-centric пайплайна
+    (см. docs/topics/eumetsat.md, план ROI-передачи между модулями от 2026-08-04).
+    Каждый элемент: centroid_dx_km/dy_km, area_km2, bbox_km (min/max dx/dy —
+    прямоугольник в км от центра тайла, для передачи как ROI другим скриптам).
+    Список отсортирован по расстоянию centroid до центра (ближайший первым),
+    как и раньше делал _nearest_of_type для элемента [0].
+    """
+    raw_target = is_cloud_mask if want_cloud else (~is_cloud_mask & valid_mask)
+    labeled, n = ndimage.label(raw_target)
+    if n == 0:
+        return []
+    sizes = ndimage.sum(raw_target, labeled, range(1, n + 1))
+    keep_labels = np.where(sizes >= min_blob_px)[0] + 1
+    if len(keep_labels) == 0:
+        return []
+    center_row = center_col = (TILE_SIZE - 1) / 2
+    blobs = []
+    for lbl in keep_labels:
+        ys, xs = np.where(labeled == lbl)
+        blob_px = float(sizes[lbl - 1])
+        blob_area_km2 = blob_px * KM_PER_PX_X * KM_PER_PX_Y
+        # centroid — ближайший к центру пиксель блоба (не геометрический
+        # центр масс), чтобы distance/bearing были согласованы с тем, как
+        # их всегда считал _nearest_of_type (ближайшая точка блоба, не center of mass)
+        dist_px = np.sqrt((ys - center_row) ** 2 + (xs - center_col) ** 2)
+        best_i = np.argmin(dist_px)
+        row, col = int(ys[best_i]), int(xs[best_i])
+        cdx_km, cdy_km = _pixel_to_km_offset(row, col)
+        # bbox в км — по всем пикселям блоба, для ROI-запроса в других слоях
+        corners_dx, corners_dy = [], []
+        for r, c in ((ys.min(), xs.min()), (ys.max(), xs.max())):
+            dx, dy = _pixel_to_km_offset(int(r), int(c))
+            corners_dx.append(dx)
+            corners_dy.append(dy)
+        blobs.append({
+            "centroid_dx_km": round(cdx_km, 2),
+            "centroid_dy_km": round(cdy_km, 2),
+            "area_km2": round(blob_area_km2, 1),
+            "bbox_km": {
+                "dx_min": round(min(corners_dx), 2),
+                "dx_max": round(max(corners_dx), 2),
+                "dy_min": round(min(corners_dy), 2),
+                "dy_max": round(max(corners_dy), 2),
+            },
+        })
+    blobs.sort(key=lambda b: math.hypot(b["centroid_dx_km"], b["centroid_dy_km"]))
+    for i, b in enumerate(blobs):
+        b["target_id"] = i  # 0 = primary (ближайшая, как раньше выбирал _nearest_of_type)
+    return blobs
+
+
 def _parabolic_subpixel(c_minus, c_zero, c_plus):
     """Субпиксельная поправка к целочисленному пику по трём соседним точкам
     корреляции (параболическая интерполяция) — без неё любой сдвиг меньше
@@ -578,6 +631,10 @@ def main():
     nearest = _nearest_of_type(is_cloud_now, valid_now, want_cloud_target)
     p_now = nearest[:2] if nearest is not None else None
     blob_area_km2 = nearest[2] if nearest is not None else None
+    # ROI-контракт для остальных модулей пайплайна (ИК/GeoColour/Phase-Type/
+    # осадки/гроза читают candidates вместо собственного независимого поиска
+    # "ближайшего пятна" — см. docs/topics/eumetsat.md, план от 2026-08-04)
+    candidates = _significant_blobs(is_cloud_now, valid_now, want_cloud_target)
     vx, vy, n_pairs = _estimate_motion(is_cloud_frames, times)
 
     trend = _density_height_shape_trend(is_cloud_frames, cth_index_frames, valid_frames, local_mask)
@@ -662,6 +719,7 @@ def main():
 
     out["trend"] = trend
     out["buffer_status"] = buffer_status
+    out["candidates"] = candidates
     out["method_note"] = (
         f"Персистентный буфер до {MAX_FRAMES} кадров Cloud Mask + CTH (шаг {STEP_MINUTES} мин, "
         "до 2 часов истории), хранится между прогонами (FIFO) — обычный прогон докачивает только "
@@ -687,4 +745,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
