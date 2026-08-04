@@ -144,6 +144,42 @@ def main():
         "Линейная экстраполяция, годится на ~1 час."
     )
 
+    # --- ROI-проверка: идут ли осадки ИМЕННО из той массы, что выбрал CLM
+    # (candidates[0] в cloud_forecast.json), а не глобально ближайшее пятно
+    # в h60b (см. выше nearest/p_now — это отдельный независимый поиск).
+    # Порог ниже, чем у остальных target_confirmation (0.05 вместо 0.5) —
+    # осадки типично покрывают лишь часть площади облачной массы, а не
+    # большинство её пикселей, majority-порог тут дал бы много ложных "нет".
+    # Шаг 5 задуманного алгоритма (см. docs/topics/eumetsat.md, план от
+    # 2026-08-04). Аддитивно.
+    target, target_reason = fc.load_primary_target()
+    if target is None:
+        out["target_confirmation"] = {"confirmed": None, "reason": target_reason}
+    else:
+        roi_mask = fc.km_bbox_to_pixel_mask(target["bbox_km"], pad_km=2.0)
+        roi_valid = valid_now[roi_mask]
+        roi_presence = presence_now[roi_mask]
+        if roi_valid.sum() == 0:
+            out["target_confirmation"] = {
+                "confirmed": None,
+                "reason": "ROI цели CLM вне окна h60b-кадра или нет данных",
+                "target_id": target["target_id"],
+            }
+        else:
+            roi_precip_fraction = float(roi_presence[roi_valid].mean()) if roi_valid.any() else 0.0
+            confirmed = roi_precip_fraction >= 0.05
+            out["target_confirmation"] = {
+                "confirmed": confirmed,
+                "target_id": target["target_id"],
+                "target_area_km2": target["area_km2"],
+                "roi_precip_fraction": round(roi_precip_fraction, 3),
+                "verdict": (
+                    "Осадки наблюдаются непосредственно из этой облачной массы"
+                    if confirmed else
+                    "Осадков из этой конкретной массы не наблюдается (сухое облако либо осадки не достигают земли)"
+                ),
+            }
+
     os.makedirs(os.path.dirname(OUT_FILE), exist_ok=True)
     with open(OUT_FILE, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
