@@ -31,6 +31,10 @@ let _eumetsatPrecipMotionData      = null;
 let _eumetsatPrecipMotionFetchedAt = 0;
 let _eumetsatCloudPhaseTypeData      = null;
 let _eumetsatCloudPhaseTypeFetchedAt = 0;
+let _eumetsatFarWatchData      = null;
+let _eumetsatFarWatchFetchedAt = 0;
+let _eumetsatVeryFarWatchData      = null;
+let _eumetsatVeryFarWatchFetchedAt = 0;
 
 async function loadEumetsatCloudForecast(){
     if(Date.now() - _eumetsatForecastFetchedAt < 12 * 60000) return; // раз в 12 мин
@@ -148,6 +152,43 @@ async function loadEumetsatCloudPhaseType(){
         renderNearbyPrecipCard();
     } catch(e){
         _eumetsatCloudPhaseTypeFetchedAt = 0;
+    }
+}
+
+async function loadEumetsatFarWatch(){
+    // Сервер обновляет не чаще раза в 30 мин (гейт по mtime в
+    // gh_satellite_pipeline.py) — 20 мин клиентского опроса с запасом.
+    if(Date.now() - _eumetsatFarWatchFetchedAt < 20 * 60000) return;
+    _eumetsatFarWatchFetchedAt = Date.now();
+    try {
+        const r = await fetch(
+            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_far_watch.json",
+            { cache: "no-store" }
+        );
+        if(!r.ok) return;
+        const j = await r.json();
+        if(j && j.timestamp) _eumetsatFarWatchData = j;
+        renderNearbyPrecipCard();
+    } catch(e){
+        _eumetsatFarWatchFetchedAt = 0;
+    }
+}
+
+async function loadEumetsatVeryFarWatch(){
+    // Сервер обновляет раз в 3ч — 60 мин клиентского опроса достаточно.
+    if(Date.now() - _eumetsatVeryFarWatchFetchedAt < 60 * 60000) return;
+    _eumetsatVeryFarWatchFetchedAt = Date.now();
+    try {
+        const r = await fetch(
+            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_very_far_watch.json",
+            { cache: "no-store" }
+        );
+        if(!r.ok) return;
+        const j = await r.json();
+        if(j && j.timestamp) _eumetsatVeryFarWatchData = j;
+        renderNearbyPrecipCard();
+    } catch(e){
+        _eumetsatVeryFarWatchFetchedAt = 0;
     }
 }
 
@@ -466,7 +507,7 @@ function _renderCloudPhaseTypeLines(g){
 //    по долготе (запад-восток). По широте (север-юг) окно тянется дальше,
 //    до ≈278км (половина от height=557км) — окно квадратное в градусах
 //    (2.5°×2.5°), но не в км, из-за сужения градуса долготы на широте Одессы.
-function _renderAreaSummary(g){
+function _renderAreaSummary(g, farData, veryFarData){
     const area = g && g.observed_area;
     if(!area || area.center_lat == null || area.center_lon == null) return "";
 
@@ -484,7 +525,54 @@ function _renderAreaSummary(g){
     const precipRadius = w ? Math.round(w / 2) : 192; // фолбэк, если окна ещё нет в данных
     bullets.push(`анализ осадков и гроз в радиусе ≈${precipRadius} км`);
 
+    // Далёкие тиры (2026-08-03) — радиус берём из самих far/very_far данных
+    // (observed_area.radius_label_km), а не хардкодим тут: если появятся —
+    // подтянутся сами, если ещё не загрузились — тихо не показываем строку
+    // (не ждём их специально, area уже требует geocolour_motion как основу).
+    const farRadius = farData && farData.observed_area && farData.observed_area.radius_label_km;
+    if(farRadius) bullets.push(`дальний контроль (Балканы/Турция/Центр.Европа) — радиус ≈${farRadius} км`);
+    const veryFarRadius = veryFarData && veryFarData.observed_area && veryFarData.observed_area.radius_label_km;
+    if(veryFarRadius) bullets.push(`очень дальний контроль (Испания/Италия/Британия) — радиус ≈${veryFarRadius} км`);
+
     return _subhead("Область анализа") + _bullets(bullets);
+}
+
+// Компас-названия секторов — те же 8, что и fc.COMPASS на Python-стороне
+// (scripts/field_motion_common.py), порядок важен для читаемого текста.
+const _COMPASS_RU = ["С", "СВ", "В", "ЮВ", "Ю", "ЮЗ", "З", "СЗ"];
+
+function _renderOneFarTier(data, label){
+    if(!data) return "";
+    const ts = data.timestamp ? _obsTimeTag(data.timestamp, 240) : ""; // окно "устарело" пошире — тир редкий (30мин/3ч), не 10-15мин как ближние
+    const img = data.observed_area && data.observed_area.geocolour_image;
+    const imgHtml = img
+        ? `<img src="https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/${img}?v=${encodeURIComponent(data.timestamp || "")}"
+                alt="${label}" style="width:100%; border-radius:8px; margin:6px 0; display:block;"
+                onerror="this.style.display='none';">`
+        : "";
+
+    const sectorBullets = _COMPASS_RU
+        .map(name => [name, data.sectors && data.sectors[name]])
+        .filter(([, s]) => s && s.cloud_fraction != null && s.cloud_fraction >= 0.1)
+        .sort((a, b) => b[1].cloud_fraction - a[1].cloud_fraction)
+        .map(([name, s]) => {
+            const pct = Math.round(s.cloud_fraction * 100);
+            const trend = s.trend ? `, ${s.trend}` : "";
+            return `${name}: ${pct}%${trend}`;
+        });
+
+    return _blockTitle("🌍", label, ts)
+        + imgHtml
+        + _plain(data.verdict || "нет данных")
+        + (sectorBullets.length ? _bullets(sectorBullets) : "");
+}
+
+function _renderFarWatchLines(farData, veryFarData){
+    if(!farData && !veryFarData) return "";
+    return _hr()
+        + _subhead("Наблюдения по Европе")
+        + _renderOneFarTier(farData, "Дальний контроль (~1000км)")
+        + _renderOneFarTier(veryFarData, "Очень дальний контроль (~2500км)");
 }
 
 function renderNearbyPrecipCard(){
@@ -493,13 +581,14 @@ function renderNearbyPrecipCard(){
 
     const anyData = _eumetsatForecastData || _eumetsatPrecipForecastData
         || _eumetsatLightningForecastData || _eumetsatIrMotionData || _eumetsatPrecipMotionData
-        || _eumetsatCloudPhaseTypeData || _eumetsatGeocolourMotionData;
+        || _eumetsatCloudPhaseTypeData || _eumetsatGeocolourMotionData
+        || _eumetsatFarWatchData || _eumetsatVeryFarWatchData;
     if(!anyData){ card.innerHTML = ""; return; }
 
     card.innerHTML = `
         <div class="cardTitle">Анализ спутниковых снимков (EUMETSAT)</div>
         <div class="small muted">Точка наблюдения: станция "${STATION_LABEL}"</div>
-        ${_renderAreaSummary(_eumetsatGeocolourMotionData)}
+        ${_renderAreaSummary(_eumetsatGeocolourMotionData, _eumetsatFarWatchData, _eumetsatVeryFarWatchData)}
         ${_renderCloudForecastLines(_eumetsatForecastData)}
         ${_renderCloudPhaseTypeLines(_eumetsatCloudPhaseTypeData)}
         ${_renderIrMotionLines(_eumetsatIrMotionData)}
@@ -507,6 +596,7 @@ function renderNearbyPrecipCard(){
         ${_renderPrecipForecastLines(_eumetsatPrecipForecastData)}
         ${_renderPrecipMotionLines(_eumetsatPrecipMotionData)}
         ${_renderLightningForecastLines(_eumetsatLightningForecastData)}
+        ${_renderFarWatchLines(_eumetsatFarWatchData, _eumetsatVeryFarWatchData)}
         ${_hr()}
         <div class="small muted">
             Data: <a href="https://www.eumetsat.int/" target="_blank" rel="noopener" style="color:#72c8ff;">EUMETSAT</a>
