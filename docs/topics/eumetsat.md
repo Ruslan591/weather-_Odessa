@@ -481,3 +481,29 @@ rule-based или AI) отсутствует полностью — есть т�
 совместимость сохранена. Коммит 471497f. Следующий шаг — переписать
 ir_motion/geocolour_motion/cloud_phase_type на чтение этого списка вместо
 своего `_nearest_of_type`.
+
+Проверено на живых данных после прогона 20:03Z — `candidates` пришёл, 15
+масс с bbox_km, target_id=0 совпал по порядку величины с тем, что раньше
+давал одиночный `_nearest_of_type` (6.3км/84°В). Один прогон (19:50Z)
+успел проскочить на старом коде до коммита — race condition, не баг:
+workflow стартовал за 38 сек до пуша, checkout взял старую версию.
+Ожидаемо, не страшно — следующий прогон уже подхватил.
+
+**Шаг 2 сделан:** в `field_motion_common.py` добавлены `load_primary_target()`
+(читает candidates[0] из cloud_forecast.json, с проверкой возраста снапшота
+и грейсфул fallback на None если файла/поля нет или снапшот старше 30 мин)
+и `km_bbox_to_pixel_mask()` (обратное к pixel_to_km_offset — bbox_km →
+булева маска на сетке TILE_SIZE). Коммит 4f28ffc.
+
+В `eumetsat_ir_motion.py` добавлен новый блок `target_confirmation` —
+сверяет ИК-яркость ИМЕННО в ROI primary target CLM (с запасом pad_km=2 на
+неточность привязки между слоями), а не независимый поиск. Аддитивно —
+старые поля `cloud_mass_*` (собственный поиск ИК) не тронуты, оба существуют
+параллельно. Коммит 00e6114, верифицировано. Ещё не проверено на живых
+данных — ждём следующего прогона спутникового пайплайна.
+
+Осталось по плану: geocolour_motion.py и cloud_phase_type.py — та же схема
+(target_confirmation через fc.load_primary_target()+km_bbox_to_pixel_mask()).
+precip_forecast.py/lightning_forecast.py — то же самое, но там своя
+"presence"-конвенция (alpha>0), see комментарий в шапке field_motion_common.py.
+После всех пяти — слой конфликтов и текстовый синтез (шаги 3-4 плана).
