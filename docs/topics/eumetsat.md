@@ -369,3 +369,50 @@ manifest.json, последний прогон был 21:44:33Z) должен з
 .png корректно. Проверить data/anim/*.png и manifest.json после следующего
 срабатывания — если снова пусто, разбираться дальше (сеть/ffmpeg/etc, а не
 git-логика, которая теперь протестирована).
+
+
+## 2026-08-03 (продолжение 4): визуал + текст far/very_far на nearby.html
+
+Реализовано отображение результатов far/very_far — и картинка, и текст.
+
+**scripts/eumetsat_far_watch.py:**
+- Добавлен LAYER_GEOCOLOUR = "mtg_fd:rgb_geocolour" — ТОЛЬКО для визуала,
+  детектор (clm/cth) не тронут, verdict/sectors по-прежнему считаются без
+  geocolour (см. запись выше про "geocolour не для авто-детекта").
+- После сохранения основного payload — best-effort захват ОДНОГО
+  geocolour-кадра, composited через ту же _composite_frame(), что и у
+  eumetsat_anim_render.py (импортирую оттуда, не дублирую). Сохраняется
+  в data/anim/{tier}_geocolour.png — тот же каталог, что и у near-тира,
+  уже покрыт фиксом "git add data/anim" (см. запись выше про потерянные
+  .png). Сбой захвата картинки НЕ портит уже сохранённый текстовый payload
+  (свой try/except, только WARN в лог).
+- payload.observed_area.geocolour_image = "data/anim/{tier}_geocolour.png" —
+  путь к картинке публикуется в самом JSON, фронтенд не хардкодит имя файла.
+
+**nearby_precip.js:**
+- loadEumetsatFarWatch() / loadEumetsatVeryFarWatch() — тот же паттерн
+  fetch, что у остальных loadEumetsat*(), интервалы клиентского опроса
+  20 мин / 60 мин (с запасом от серверных 30мин/3ч).
+- _renderAreaSummary(g, farData, veryFarData) — сигнатура расширена,
+  добавлены строки радиуса far/very_far (берутся из
+  observed_area.radius_label_km САМИХ far/very_far данных, не хардкод).
+- Новый блок _renderFarWatchLines() → "Наблюдения по Европе": для каждого
+  тира — заголовок с временем, картинка (<img>, откат на display:none при
+  ошибке загрузки через onerror, НЕ ломает раскладку), текстовый verdict,
+  список секторов с cloud_fraction≥10% отсортированный по убыванию с трендом.
+- renderNearbyPrecipCard() — far/very_far добавлены в проверку anyData
+  (карточка появится, даже если near-тир данных ещё нет, но far/very_far
+  уже есть) и в саму разметку.
+
+**nearby.html:** добавлены вызовы loadEumetsatFarWatch()/loadEumetsatVeryFarWatch()
+в refreshNearbyPage().
+
+**Протестировано:** py_compile + импорт всей цепочки (не сломал ничего из
+уже работающего); render_tier с моками — файл {tier}_geocolour.png реально
+создаётся; JS-функции рендера прогнаны в node на синтетических данных
+(geoData/farData/veryFarData) — вывели ожидаемый HTML (радиусы, картинка с
+cache-bust по timestamp, сектора отсортированы, verdict на месте).
+
+**Ещё не проверено на живых данных** — ждём следующего прогона
+gh_satellite_pipeline.py (гейты far/very_far: 30мин/3ч от mtime), затем
+глянуть nearby.html глазами.
