@@ -402,6 +402,40 @@ def main():
                 out["cloud_mass_distance_km"] = None
         out["temperature_trend_verdict"] = temp_verdict
 
+        # --- ROI-подтверждение: та же цель, что CLM выбрал primary
+        # (candidates[0] в eumetsat_cloud_forecast.json) — сверяем ИК-сигнатуру
+        # ИМЕННО в её bbox, а не независимый поиск выше. Это и есть шаг 2
+        # "ИК подтверждает/уточняет" из задуманного алгоритма (см.
+        # docs/topics/eumetsat.md, план от 2026-08-04). Аддитивно — старые
+        # cloud_mass_* поля выше не трогаем, это ДОПОЛНИТЕЛЬНАЯ проверка.
+        target, target_reason = fc.load_primary_target()
+        if target is None:
+            out["target_confirmation"] = {"confirmed": None, "reason": target_reason}
+        else:
+            roi_mask = fc.km_bbox_to_pixel_mask(target["bbox_km"], pad_km=2.0)
+            roi_vals = last_frame[roi_mask]
+            if roi_vals.size == 0:
+                out["target_confirmation"] = {
+                    "confirmed": None,
+                    "reason": "ROI цели CLM вне окна ИК-кадра",
+                    "target_id": target["target_id"],
+                }
+            else:
+                roi_mean = float(roi_vals.mean())
+                roi_contrast_sigma = (roi_mean - frame_median) / frame_std_now
+                confirmed = roi_contrast_sigma >= MIN_CLOUD_CONTRAST_SIGMA
+                out["target_confirmation"] = {
+                    "confirmed": confirmed,
+                    "target_id": target["target_id"],
+                    "target_area_km2": target["area_km2"],
+                    "roi_contrast_sigma": round(roi_contrast_sigma, 2),
+                    "verdict": (
+                        "ИК подтверждает: в ROI CLM-цели повышенная яркость (облако)"
+                        if confirmed else
+                        "ИК НЕ подтверждает: в ROI CLM-цели нет значимого контраста — возможна тонкая/низкая облачность, невидимая на ИК, либо расхождение слоёв"
+                    ),
+                }
+
     out["method_note"] = (
         f"Буфер {len(frames)}/{MAX_FRAMES} кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг {STEP_MINUTES} мин, "
         "crs=EPSG:4326, всегда явный TIME — не 'latest'), "
