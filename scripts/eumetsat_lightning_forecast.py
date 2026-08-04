@@ -143,6 +143,41 @@ def main():
         "считается (поле слишком разреженное) — это ограничение метода, не ошибка."
     )
 
+    # --- ROI-проверка: наблюдается ли гроза ИМЕННО в той массе, что выбрал
+    # CLM (candidates[0] в cloud_forecast.json), а не глобально ближайшая
+    # грозовая ячейка (см. выше nearest/p_now — отдельный независимый поиск).
+    # Порог ниже, чем у precip (0.02 вместо 0.05) — грозовые ячейки li_afa ещё
+    # компактнее осадочных пятен относительно площади облачной массы. Шаг 6
+    # задуманного алгоритма (см. docs/topics/eumetsat.md, план от 2026-08-04).
+    # Аддитивно.
+    target, target_reason = fc.load_primary_target()
+    if target is None:
+        out["target_confirmation"] = {"confirmed": None, "reason": target_reason}
+    else:
+        roi_mask = fc.km_bbox_to_pixel_mask(target["bbox_km"], pad_km=2.0)
+        roi_valid = valid_now[roi_mask]
+        roi_presence = presence_now[roi_mask]
+        if roi_valid.sum() == 0:
+            out["target_confirmation"] = {
+                "confirmed": None,
+                "reason": "ROI цели CLM вне окна li_afa-кадра или нет данных",
+                "target_id": target["target_id"],
+            }
+        else:
+            roi_lightning_fraction = float(roi_presence[roi_valid].mean()) if roi_valid.any() else 0.0
+            confirmed = roi_lightning_fraction >= 0.02
+            out["target_confirmation"] = {
+                "confirmed": confirmed,
+                "target_id": target["target_id"],
+                "target_area_km2": target["area_km2"],
+                "roi_lightning_fraction": round(roi_lightning_fraction, 3),
+                "verdict": (
+                    "Гроза наблюдается непосредственно в этой облачной массе"
+                    if confirmed else
+                    "Грозовой активности в этой конкретной массе не наблюдается"
+                ),
+            }
+
     os.makedirs(os.path.dirname(OUT_FILE), exist_ok=True)
     with open(OUT_FILE, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
