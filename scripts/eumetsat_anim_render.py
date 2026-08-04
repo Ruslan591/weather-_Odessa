@@ -218,6 +218,68 @@ def render_layer(key, cfg):
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
+CALIBRATION_LOG_FILE = os.path.join(BASE_DIR, "data", "fog_calibration_log.jsonl")
+CALIBRATION_STATE_RADIUS_KM = fc.STATE_RADIUS_KM  # 12км, тот же круг, что station_state в остальных модулях
+
+
+def _log_fog_calibration_sample(arr, t_iso):
+    """Копит сырые R/G/B над станцией (12км, тот же круг, что station_state
+    везде) в data/fog_calibration_log.jsonl — по одной строке на прогон,
+    история НЕ перезаписывается (в отличие от fog.png). Цель: набрать серию
+    ночей и сверить offline с реальным N (облачность в октантах) из
+    data/synop_2026.txt, чтобы откалибровать анкеры для ночной классификации
+    в cloud_phase_type.py (Fog RGB = mtg_fd:rgb_fog, day-only rgb_cloudphase/
+    rgb_cloudtype ночью даёт систематическое ложное "безоблачно" — см.
+    docs/topics/eumetsat.md, запись от 2026-08-04). Не участвует в основном
+    выводе пайплайна, чисто сбор данных на будущее — если запись не удалась,
+    молча пропускаем (не должно ронять рендер анимации).
+    """
+    import json as _json
+
+    try:
+        H, W = arr.shape[0], arr.shape[1]
+        lon_min, lat_min, lon_max, lat_max = BBOX
+        center_lat, center_lon = fc.CENTER_LAT, fc.CENTER_LON
+
+        # bbox станции в градусах (грубо, без косинус-поправки — 12км мал,
+        # точность тут не критична, это просто вырезка прямоугольника)
+        dlat = CALIBRATION_STATE_RADIUS_KM / fc.KM_PER_DEG_LAT
+        dlon = CALIBRATION_STATE_RADIUS_KM / (fc.KM_PER_DEG_LAT * math.cos(math.radians(center_lat)))
+
+        def _px(lat, lon):
+            row = int(round((lat_max - lat) / (lat_max - lat_min) * H))
+            col = int(round((lon - lon_min) / (lon_max - lon_min) * W))
+            return max(0, min(H - 1, row)), max(0, min(W - 1, col))
+
+        r1, c1 = _px(center_lat + dlat, center_lon - dlon)
+        r2, c2 = _px(center_lat - dlat, center_lon + dlon)
+        roi = arr[min(r1, r2):max(r1, r2) + 1, min(c1, c2):max(c1, c2) + 1]
+        if roi.size == 0:
+            return
+
+        rgb = roi[:, :, :3].reshape(-1, 3).astype(np.float32)
+        alpha = roi[:, :, 3].reshape(-1) if roi.shape[2] > 3 else None
+        valid = alpha > 0 if alpha is not None else np.ones(len(rgb), dtype=bool)
+        if valid.sum() == 0:
+            entry = {"timestamp": t_iso, "is_daytime": fc.is_daytime(t_iso), "valid_px": 0}
+        else:
+            m = rgb[valid].mean(axis=0)
+            entry = {
+                "timestamp": t_iso,
+                "is_daytime": fc.is_daytime(t_iso),
+                "valid_px": int(valid.sum()),
+                "r_mean": round(float(m[0]), 1),
+                "g_mean": round(float(m[1]), 1),
+                "b_mean": round(float(m[2]), 1),
+            }
+
+        os.makedirs(os.path.dirname(CALIBRATION_LOG_FILE), exist_ok=True)
+        with open(CALIBRATION_LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(_json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception as e:
+        print(f"  [WARN] eumetsat_anim_render.py: fog calibration log не записан: {e}")
+
+
 def render_static_layer(key, cfg):
     """Для animated=False слоёв (2026-08-03) — ОДИН последний кадр, PNG,
     без ffmpeg. Та же композиция на подложку (_composite_frame), что и в
@@ -233,6 +295,10 @@ def render_static_layer(key, cfg):
         return False
 
     frame = _composite_frame(arr)
+
+    if key == "fog":
+        _log_fog_calibration_sample(arr, server_latest_iso)
+
     os.makedirs(ANIM_DIR, exist_ok=True)
     out_path = os.path.join(ANIM_DIR, f"{key}.png")
     tmp_out = out_path.replace(".png", ".tmp.png")  # PIL определяет формат
