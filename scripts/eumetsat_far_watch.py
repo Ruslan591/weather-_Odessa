@@ -53,6 +53,8 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 LAYER_CLM = "msg_fes:clm"
 LAYER_CTH = "msg_fes:cth"
+LAYER_GEOCOLOUR = "mtg_fd:rgb_geocolour"  # только для ВИЗУАЛА (см. докстринг выше — не для авто-детекта)
+ANIM_DIR = os.path.join(BASE_DIR, "data", "anim")  # тот же каталог, что и у eumetsat_anim_render.py — уже покрыт фиксом git_push_satellite() "git add data/anim" (2026-08-03)
 
 CLM_ANCHORS = {
     "clear_water": (0, 0, 255),
@@ -264,6 +266,7 @@ def run_tier(tier_key):
         "observed_area": {
             "center_lat": fc.CENTER_LAT, "center_lon": fc.CENTER_LON,
             "bbox": list(bbox), "radius_label_km": cfg["radius_label_km"],
+            "geocolour_image": f"data/anim/{tier_key}_geocolour.png",
         },
         "overall_cloud_fraction": round(overall_cloud_frac, 3) if overall_cloud_frac is not None else None,
         "sectors": sectors_out,
@@ -273,6 +276,23 @@ def run_tier(tier_key):
     _save_json(state_path, {"timestamp": payload["timestamp"], "sectors": sectors_out})
     fc.write_debug(debug_path, {"status": "ok", "tier": tier_key, "timestamp": payload["timestamp"]})
     print(f"  [OK] eumetsat_far_watch.py: {tier_key} — {verdict}")
+
+    # Визуальный снимок (geocolour) — ОТДЕЛЬНО от детектора выше (clm/cth),
+    # см. докстринг в начале файла про "почему не geocolour для авто-детекта".
+    # Best-effort: сбой здесь НЕ должен портить уже сохранённый payload —
+    # текстовый анализ ценнее картинки, поэтому свой try/except и просто WARN.
+    try:
+        from eumetsat_anim_render import _composite_frame  # тот же способ подложки, что у mp4/png слоёв
+        geo_arr = fc.fetch_map_custom(LAYER_GEOCOLOUR, bbox, width, height, time_iso=time_iso)
+        frame = _composite_frame(geo_arr)
+        os.makedirs(ANIM_DIR, exist_ok=True)
+        out_img = os.path.join(ANIM_DIR, f"{tier_key}_geocolour.png")
+        tmp_img = out_img.replace(".png", ".tmp.png")  # см. баг 2026-08-03 про расширение у tmp-файла в eumetsat_anim_render.py — тот же приём
+        frame.save(tmp_img)
+        os.replace(tmp_img, out_img)
+        print(f"  [OK] eumetsat_far_watch.py: {tier_key}_geocolour.png сохранён")
+    except Exception as e:
+        print(f"  [WARN] eumetsat_far_watch.py: {tier_key} geocolour-снимок не удался: {e}")
 
 
 def main():
