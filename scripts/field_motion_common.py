@@ -365,6 +365,19 @@ def km_bbox_to_pixel_mask(bbox_km, pad_km=0.0):
     return in_x & in_y
 
 
+def is_daytime(t_iso):
+    """Грубая оценка дня/ночи по локальному часу — НЕ настоящий расчёт
+    восхода/заката (без сезонной/DST-точности, UTC+3 — летнее время
+    Одессы), но структурно достаточно, чтобы развести ветки классификации.
+    ЕДИНСТВЕННАЯ реализация — раньше была локальная копия в
+    eumetsat_geocolour_motion.py, вынесена сюда 2026-08-04 по тому же
+    принципу, что и pixel_to_km_offset (см. коммент там про инцидент
+    с расхождением копий при фиксе в одном месте, но не в другом)."""
+    dt = datetime.strptime(t_iso, "%Y-%m-%dT%H:%M:00.000Z").replace(tzinfo=timezone.utc)
+    local_hour = (dt.hour + 3) % 24
+    return 5 <= local_hour < 20
+
+
 def bearing_compass(dx_km, dy_km):
     bearing = (math.degrees(math.atan2(dx_km, dy_km)) + 360) % 360
     idx = int(((bearing + 22.5) % 360) // 45)
