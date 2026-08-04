@@ -1,27 +1,27 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-08-04T16:30:00.000Z",
+  "server_latest_time": "2026-08-04T16:50:00.000Z",
   "bootstrap": true,
   "buffer_before": 6,
   "buffer_size": 6,
   "buffer_times": [
-    "2026-08-04T15:40:00.000Z",
-    "2026-08-04T15:50:00.000Z",
     "2026-08-04T16:00:00.000Z",
     "2026-08-04T16:10:00.000Z",
     "2026-08-04T16:20:00.000Z",
-    "2026-08-04T16:30:00.000Z"
+    "2026-08-04T16:30:00.000Z",
+    "2026-08-04T16:40:00.000Z",
+    "2026-08-04T16:50:00.000Z"
   ],
   "frame_std": [
-    24.3,
-    24.8,
     24.8,
     25.8,
     25.2,
-    23.4
+    23.4,
+    18.8,
+    14.3
   ],
   "result": {
-    "timestamp": "2026-08-04T16:59:12Z",
+    "timestamp": "2026-08-04T17:18:07Z",
     "buffer_size": 6,
     "buffer_span_minutes": 50,
     "observed_area": {
@@ -41,17 +41,17 @@
       0.0,
       0.0,
       0.0,
-      0.0,
-      0.0
+      0.012,
+      0.017
     ],
-    "area_trend_delta": 0.0,
+    "area_trend_delta": 0.017,
     "area_trend_verdict": "без существенных изменений",
-    "station_state": "clear",
-    "station_area_fraction": 0.0,
-    "cloud_mass_distance_km": 111.9,
-    "cloud_mass_bearing_deg": 79.0,
-    "cloud_mass_compass": "В",
-    "cloud_mass_area_km2": 109,
+    "station_state": "variable",
+    "station_area_fraction": 0.199,
+    "cloud_mass_distance_km": 0.8,
+    "cloud_mass_bearing_deg": 325.0,
+    "cloud_mass_compass": "СЗ",
+    "cloud_mass_area_km2": 83,
     "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
   }
 }
