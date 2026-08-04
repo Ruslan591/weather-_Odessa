@@ -348,6 +348,7 @@ def git_push_satellite():
             "data/eumetsat_very_far_watch_debug.json",
             "data/anim/manifest.json",
             "data/anim/debug.json",
+            "data/fog_calibration_log.jsonl",
         ]
         _to_add = [p for p in _candidates if os.path.exists(os.path.join(BASE_DIR, p))]
         if not _to_add:
