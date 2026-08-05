@@ -35,6 +35,25 @@ let _eumetsatFarWatchData      = null;
 let _eumetsatFarWatchFetchedAt = 0;
 let _eumetsatVeryFarWatchData      = null;
 let _eumetsatVeryFarWatchFetchedAt = 0;
+let _eumetsatTargetSummaryData      = null;
+let _eumetsatTargetSummaryFetchedAt = 0;
+
+async function loadEumetsatTargetSummary(){
+    if(Date.now() - _eumetsatTargetSummaryFetchedAt < 12 * 60000) return; // раз в 12 мин
+    _eumetsatTargetSummaryFetchedAt = Date.now();
+    try {
+        const r = await fetch(
+            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_target_summary.json",
+            { cache: "no-store" }
+        );
+        if(!r.ok) return;
+        const j = await r.json();
+        if(j && j.timestamp) _eumetsatTargetSummaryData = j;
+        renderNearbyPrecipCard();
+    } catch(e){
+        _eumetsatTargetSummaryFetchedAt = 0;
+    }
+}
 
 async function loadEumetsatCloudForecast(){
     if(Date.now() - _eumetsatForecastFetchedAt < 12 * 60000) return; // раз в 12 мин
@@ -567,6 +586,54 @@ function _renderOneFarTier(data, label){
         + (sectorBullets.length ? _bullets(sectorBullets) : "");
 }
 
+// Слой конфликтов — сводка target_confirmation всех 5 модулей в одно
+// место (data/eumetsat_target_summary.json, пишет eumetsat_target_summary.py,
+// см. docs/topics/eumetsat.md, план от 2026-08-04/05). Ставится ПЕРВЫМ
+// блоком карточки — это уже готовый вывод ("что происходит"), детали по
+// каждому каналу идут ниже как обоснование, а не наоборот.
+const _CONSENSUS_BADGE = {
+    confirmed:        { color: "#4caf50", label: "подтверждено" },
+    not_confirmed:     { color: "#888",    label: "не подтверждено" },
+    disputed:          { color: "#e0a030", label: "каналы расходятся" },
+    insufficient_data: { color: "#666",    label: "недостаточно данных" },
+};
+function _moduleIcon(confirmed){
+    if(confirmed === true) return "✅";
+    if(confirmed === false) return "❌";
+    return "➖";
+}
+const _MODULE_LABELS = {
+    ir_motion: "ИК", geocolour_motion: "GeoColour", cloud_phase_type: "Фаза/тип",
+    precip_forecast: "Осадки", lightning_forecast: "Гроза",
+};
+function _renderTargetSummaryLines(s){
+    if(!s) return "";
+    const timeTag = _obsTimeTag(s.timestamp, 20);
+
+    if(s.status === "no_data") return "";
+    if(s.status === "no_target"){
+        return `${_blockTitle("🎯", "Итог", timeTag)}`
+            + _plain("Значимых облачных масс поблизости сейчас нет.");
+    }
+    if(s.status !== "ok") return "";
+
+    const badge = _CONSENSUS_BADGE[s.existence.consensus] || _CONSENSUS_BADGE.insufficient_data;
+    const moduleBits = Object.entries(s.existence.modules)
+        .map(([k, v]) => `${_moduleIcon(v.confirmed)} ${_MODULE_LABELS[k] || k}`).join("&nbsp;&nbsp;");
+    const phenomBits = Object.entries(s.phenomena || {})
+        .map(([k, v]) => `${_moduleIcon(v.confirmed)} ${_MODULE_LABELS[k] || k}`).join("&nbsp;&nbsp;");
+
+    return `${_blockTitle("🎯", "Итог", timeTag)}`
+        + `<div style="margin-top:4px;">`
+        + `<span style="display:inline-block; padding:1px 8px; border-radius:10px; background:${badge.color}; `
+        + `color:#111; font-size:11.5px; font-weight:700;">${badge.label}</span>`
+        + `</div>`
+        + _plain(s.verdict)
+        + _subhead("По каналам")
+        + `<div class="small muted" style="margin-top:2px; font-size:12px;">${moduleBits}</div>`
+        + (phenomBits ? `<div class="small muted" style="margin-top:2px; font-size:12px;">${phenomBits}</div>` : "");
+}
+
 function _renderFarWatchLines(farData, veryFarData){
     if(!farData && !veryFarData) return "";
     return _hr()
@@ -582,12 +649,13 @@ function renderNearbyPrecipCard(){
     const anyData = _eumetsatForecastData || _eumetsatPrecipForecastData
         || _eumetsatLightningForecastData || _eumetsatIrMotionData || _eumetsatPrecipMotionData
         || _eumetsatCloudPhaseTypeData || _eumetsatGeocolourMotionData
-        || _eumetsatFarWatchData || _eumetsatVeryFarWatchData;
+        || _eumetsatFarWatchData || _eumetsatVeryFarWatchData || _eumetsatTargetSummaryData;
     if(!anyData){ card.innerHTML = ""; return; }
 
     card.innerHTML = `
         <div class="cardTitle">Анализ спутниковых снимков (EUMETSAT)</div>
         <div class="small muted">Точка наблюдения: станция "${STATION_LABEL}"</div>
+        ${_renderTargetSummaryLines(_eumetsatTargetSummaryData)}
         ${_renderAreaSummary(_eumetsatGeocolourMotionData, _eumetsatFarWatchData, _eumetsatVeryFarWatchData)}
         ${_renderCloudForecastLines(_eumetsatForecastData)}
         ${_renderCloudPhaseTypeLines(_eumetsatCloudPhaseTypeData)}
