@@ -126,6 +126,18 @@ MIN_SIGNIFICANT_BLOB_PX = 40     # ~50-55 км² при текущем разр�
 # (больше — вероятность влияния ближе к максимуму; меньше — доля от неё).
 SIGNIFICANT_AREA_REF_KM2 = 1200.0
 
+# Порог площади для классификации кандидата: "local" (компактная масса,
+# для неё имеет смысл object-centric ROI-подтверждение через 5 модулей) vs
+# "system" (крупный фронт/облачный массив синоптического масштаба — сам
+# факт существования очевиден без ROI-сверки, интересна скорее динамика/
+# приближение, не подтверждение "существует ли"). НЕ путать с
+# SIGNIFICANT_AREA_REF_KM2 выше — та константа для нормировки вероятности
+# влияния, эта — чисто для разделения семантики между локальной массой и
+# синоптической системой (см. docs/topics/eumetsat.md, вариант "б" от
+# 2026-08-05). Подобран по разрыву в реальных данных: локальные массы в
+# наблюдаемых прогонах — 60-121км², следующий кластер — уже 215-8632км².
+LARGE_SYSTEM_AREA_KM2 = 300.0
+
 CLM_ANCHORS = {
     "clear_water": (0, 0, 255),
     "clear_land": (0, 170, 0),
@@ -266,10 +278,14 @@ def _significant_blobs(is_cloud_mask, valid_mask, want_cloud, min_blob_px=MIN_SI
     """Как _nearest_of_type, но возвращает ВСЕ значимые связные области нужного
     типа, а не только ближайшую к центру — основа для object-centric пайплайна
     (см. docs/topics/eumetsat.md, план ROI-передачи между модулями от 2026-08-04).
-    Каждый элемент: centroid_dx_km/dy_km, area_km2, bbox_km (min/max dx/dy —
-    прямоугольник в км от центра тайла, для передачи как ROI другим скриптам).
-    Список отсортирован по расстоянию centroid до центра (ближайший первым),
-    как и раньше делал _nearest_of_type для элемента [0].
+    Каждый элемент: centroid_dx_km/dy_km, area_km2, class ("local"/"system" —
+    см. LARGE_SYSTEM_AREA_KM2, вариант "б" от 2026-08-05), bbox_km (min/max
+    dx/dy — прямоугольник в км от центра тайла, для передачи как ROI другим
+    скриптам). Список отсортирован по расстоянию centroid до центра (ближайший
+    первым) — target_id = позиция в ЭТОМ общем списке (local+system вперемешку),
+    а не отдельная нумерация внутри класса; кто из них "primary" для
+    ROI-подтверждения решает fc.load_primary_target() (берёт ближайший именно
+    class=="local", пропуская system, если тот оказался ближе).
     """
     raw_target = is_cloud_mask if want_cloud else (~is_cloud_mask & valid_mask)
     labeled, n = ndimage.label(raw_target)
@@ -302,6 +318,7 @@ def _significant_blobs(is_cloud_mask, valid_mask, want_cloud, min_blob_px=MIN_SI
             "centroid_dx_km": round(cdx_km, 2),
             "centroid_dy_km": round(cdy_km, 2),
             "area_km2": round(blob_area_km2, 1),
+            "class": "system" if blob_area_km2 >= LARGE_SYSTEM_AREA_KM2 else "local",
             "bbox_km": {
                 "dx_min": round(min(corners_dx), 2),
                 "dx_max": round(max(corners_dx), 2),
