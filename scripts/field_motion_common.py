@@ -316,16 +316,20 @@ def station_area_mask():
 
 
 def load_primary_target(max_age_minutes=30):
-    """Читает data/eumetsat_cloud_forecast.json и отдаёт ПЕРВИЧНУЮ цель
-    (candidates[0], target_id=0 — ближайшая значимая масса, как её выбирает
-    _significant_blobs() в eumetsat_cloud_forecast.py) для остальных модулей
-    пайплайна (ИК/GeoColour/Phase-Type/осадки/гроза), чтобы они проверяли
-    ТУ ЖЕ ROI, а не искали свою независимо (см. docs/topics/eumetsat.md,
-    план object-centric пайплайна от 2026-08-04).
+    """Читает data/eumetsat_cloud_forecast.json и отдаёт ПЕРВИЧНУЮ ЛОКАЛЬНУЮ
+    цель (ближайший кандидат с class=="local" — не просто candidates[0],
+    который может оказаться крупной системой, см. вариант "б" от 2026-08-05
+    в docs/topics/eumetsat.md) для остальных модулей пайплайна (ИК/
+    GeoColour/Phase-Type/осадки/гроза), чтобы они проверяли ТУ ЖЕ ROI, а не
+    искали свою независимо (план object-centric пайплайна от 2026-08-04).
+    Крупные системы (class=="system") этой функцией не возвращаются
+    намеренно — им отдельный, более лёгкий путь без ROI-подтверждения
+    (см. eumetsat_target_summary.py).
     Возвращает (target_dict, reason) — target_dict is None если файла нет,
-    JSON битый, поле candidates отсутствует/пусто, или снапшот устарел
-    (> max_age_minutes от текущего момента) — вызывающий код должен в этом
-    случае откатываться на собственную независимую детекцию, а не падать.
+    JSON битый, candidates отсутствует/пусто, локальных масс среди
+    кандидатов нет (все system), или снапшот устарел (> max_age_minutes) —
+    вызывающий код должен в этом случае откатываться на собственную
+    независимую детекцию, а не падать.
     """
     path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                          "data", "eumetsat_cloud_forecast.json")
@@ -348,7 +352,13 @@ def load_primary_target(max_age_minutes=30):
     candidates = snap.get("candidates") or []
     if not candidates:
         return None, "candidates пуст или отсутствует (снапшот от старой версии cloud_forecast.py?)"
-    return candidates[0], "ok"
+    # class отсутствует у снапшотов ДО коммита 6f12528 (2026-08-05) —
+    # трактуем как "local" для обратной совместимости, старое поведение
+    # (просто ближайший) сохраняется, пока не накопятся новые снапшоты.
+    for c in candidates:
+        if c.get("class", "local") == "local":
+            return c, "ok"
+    return None, "среди кандидатов нет локальных масс (только системы синоптического масштаба)"
 
 
 def km_bbox_to_pixel_mask(bbox_km, pad_km=0.0):
