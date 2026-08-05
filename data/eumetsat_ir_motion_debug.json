@@ -1,27 +1,27 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-08-05T06:10:00.000Z",
+  "server_latest_time": "2026-08-05T06:30:00.000Z",
   "bootstrap": true,
   "buffer_before": 6,
   "buffer_size": 6,
   "buffer_times": [
-    "2026-08-05T05:20:00.000Z",
-    "2026-08-05T05:30:00.000Z",
     "2026-08-05T05:40:00.000Z",
     "2026-08-05T05:50:00.000Z",
     "2026-08-05T06:00:00.000Z",
-    "2026-08-05T06:10:00.000Z"
+    "2026-08-05T06:10:00.000Z",
+    "2026-08-05T06:20:00.000Z",
+    "2026-08-05T06:30:00.000Z"
   ],
   "frame_std": [
-    6.7,
-    7.4,
     8.1,
     8.5,
     8.9,
-    9.6
+    9.6,
+    10.3,
+    11.1
   ],
   "result": {
-    "timestamp": "2026-08-05T06:33:08Z",
+    "timestamp": "2026-08-05T06:56:45Z",
     "buffer_size": 6,
     "buffer_span_minutes": 50,
     "observed_area": {
@@ -34,61 +34,61 @@
       "local_trend_radius_km": 50
     },
     "valid": true,
-    "speed_kmh": 1.5,
-    "direction_compass": "ЮВ",
-    "bearing_deg": 117.6,
+    "speed_kmh": 4.2,
+    "direction_compass": "СВ",
+    "bearing_deg": 40.6,
     "frame_pairs_used": 5,
-    "acceleration_kmh": -0.3,
-    "turning_deg": -100.5,
-    "acceleration_verdict": "скорость стабильна",
+    "acceleration_kmh": -7.0,
+    "turning_deg": -129.4,
+    "acceleration_verdict": "замедляется",
     "turning_verdict": "меняет направление (против часовой)",
     "forecast_displacement": {
       "30min": {
-        "distance_km": 1.9,
-        "bearing_deg": 28.0,
-        "compass": "СВ"
+        "distance_km": 2.2,
+        "bearing_deg": 223.0,
+        "compass": "ЮЗ"
       },
       "60min": {
-        "distance_km": 5.8,
-        "bearing_deg": 21.0,
-        "compass": "С"
+        "distance_km": 8.7,
+        "bearing_deg": 223.0,
+        "compass": "ЮЗ"
       },
       "120min": {
-        "distance_km": 19.8,
-        "bearing_deg": 15.0,
-        "compass": "С"
+        "distance_km": 34.8,
+        "bearing_deg": 222.0,
+        "compass": "ЮЗ"
       }
     },
     "area_fraction_over_time": [
-      0.045,
-      0.053,
-      0.047,
-      0.032,
-      0.012,
-      0.007
+      0.05,
+      0.03,
+      0.015,
+      0.007,
+      0.004,
+      0.001
     ],
-    "area_trend_delta": -0.038,
+    "area_trend_delta": -0.049,
     "area_trend_verdict": "без существенных изменений",
     "mean_brightness_over_time": [
-      24.7,
-      24.2,
-      23.8,
+      23.7,
       23.3,
       22.8,
-      22.3
+      22.3,
+      21.8,
+      21.3
     ],
-    "brightness_trend_delta": -2.4,
+    "brightness_trend_delta": -2.5,
     "station_state": "clear",
-    "station_area_fraction": 0.045,
+    "station_area_fraction": 0.0,
     "cloud_mass_distance_km": null,
-    "cloud_mass_contrast_sigma": 0.63,
+    "cloud_mass_contrast_sigma": 0.54,
     "cloud_mass_verdict": "значимой облачной массы в поле зрения нет (кадр однородный)",
     "temperature_trend_verdict": "без существенных изменений",
     "target_confirmation": {
       "confirmed": false,
       "target_id": 0,
-      "target_area_km2": 261.5,
-      "roi_contrast_sigma": 0.1,
+      "target_area_km2": 60.0,
+      "roi_contrast_sigma": 0.39,
       "verdict": "ИК НЕ подтверждает: в ROI CLM-цели нет значимого контраста — возможна тонкая/низкая облачность, невидимая на ИК, либо расхождение слоёв"
     },
     "method_note": "Буфер 6/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин, crs=EPSG:4326, всегда явный TIME — не 'latest'), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. cloud_mass_* — положение (не движение) ближайшей значимой облачной массы относительно станции. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
