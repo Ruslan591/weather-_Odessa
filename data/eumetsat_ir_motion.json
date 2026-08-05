@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-05T04:13:01Z",
+  "timestamp": "2026-08-05T04:27:20Z",
   "buffer_size": 6,
   "buffer_span_minutes": 50,
   "observed_area": {
@@ -14,35 +14,37 @@
   "valid": false,
   "verdict": "недостаточно контраста для оценки (вероятно, однородная сцена)",
   "area_fraction_over_time": [
-    0.184,
-    0.104,
-    0.044,
-    0.014,
-    0.004,
-    0.0
+    0.389,
+    0.34,
+    0.231,
+    0.101,
+    0.032,
+    0.007
   ],
-  "area_trend_delta": -0.184,
+  "area_trend_delta": -0.383,
   "area_trend_verdict": "сокращается",
   "mean_brightness_over_time": [
-    30.4,
     30.3,
     30.0,
     29.7,
     29.3,
-    29.0
+    29.0,
+    28.5
   ],
-  "brightness_trend_delta": -1.4,
+  "brightness_trend_delta": -1.8,
   "station_state": "clear",
   "station_area_fraction": 0.0,
-  "cloud_mass_distance_km": null,
-  "cloud_mass_contrast_sigma": 0.97,
-  "cloud_mass_verdict": "значимой облачной массы в поле зрения нет (кадр однородный)",
+  "cloud_mass_distance_km": 162.7,
+  "cloud_mass_bearing_deg": 355.0,
+  "cloud_mass_compass": "С",
+  "cloud_mass_area_km2": 137,
+  "cloud_mass_contrast_sigma": 1.46,
   "temperature_trend_verdict": "без существенных изменений",
   "target_confirmation": {
     "confirmed": false,
     "target_id": 0,
     "target_area_km2": 2105.5,
-    "roi_contrast_sigma": -0.46,
+    "roi_contrast_sigma": -0.13,
     "verdict": "ИК НЕ подтверждает: в ROI CLM-цели нет значимого контраста — возможна тонкая/низкая облачность, невидимая на ИК, либо расхождение слоёв"
   },
   "method_note": "Буфер 6/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин, crs=EPSG:4326, всегда явный TIME — не 'latest'), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. cloud_mass_* — положение (не движение) ближайшей значимой облачной массы относительно станции. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
