@@ -349,6 +349,7 @@ def git_push_satellite():
             "data/anim/manifest.json",
             "data/anim/debug.json",
             "data/fog_calibration_log.jsonl",
+            "data/eumetsat_target_summary.json",
         ]
         _to_add = [p for p in _candidates if os.path.exists(os.path.join(BASE_DIR, p))]
         if not _to_add:
@@ -397,6 +398,20 @@ def git_push_satellite():
         print(f"  satellite git error: {e}")
 
 
+def check_eumetsat_target_summary():
+    # Слой конфликтов (см. docs/topics/eumetsat.md, план от 2026-08-04) —
+    # только читает уже готовые JSON остальных 6 модулей и агрегирует,
+    # никакого WMS-фетча, дёшево — гейта по времени не нужно, гоняем
+    # каждый цикл, чтобы summary всегда отражал самое свежее состояние.
+    try:
+        subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "eumetsat_target_summary.py")],
+            cwd=BASE_DIR, capture_output=False, timeout=30
+        )
+    except Exception as e:
+        print(f"  [WARN] eumetsat_target_summary.py: {e}")
+
+
 def main():
     print(f"\n{'─'*52}")
     print(f"  [SATELLITE] Цикл спутникового модуля  {datetime.now(timezone.utc).strftime('%d.%m %H:%M UTC')}")
@@ -410,6 +425,7 @@ def main():
     check_eumetsat_ir_motion()
     check_eumetsat_precip_motion()
     check_eumetsat_geocolour_motion()
+    check_eumetsat_target_summary()
     check_eumetsat_anim_render()
     check_eumetsat_far_watch()
     check_eumetsat_very_far_watch()
