@@ -1,40 +1,40 @@
 {
-  "timestamp": "2026-08-05T18:22:41Z",
+  "timestamp": "2026-08-05T18:42:10Z",
   "status": "ok",
-  "cloud_forecast_timestamp": "2026-08-05T18:21:11Z",
+  "cloud_forecast_timestamp": "2026-08-05T18:41:01Z",
   "target_id": 0,
-  "target_area_km2": 80.1,
-  "target_distance_km": 32.7,
-  "target_bearing_deg": 183.0,
-  "target_compass": "Ю",
+  "target_area_km2": 10794.5,
+  "target_distance_km": 71.5,
+  "target_bearing_deg": 286.0,
+  "target_compass": "З",
   "existence": {
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-08-05T18:22:19Z"
+        "timestamp": "2026-08-05T18:41:49Z"
       },
       "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-08-05T18:22:30Z"
+        "confirmed": true,
+        "timestamp": "2026-08-05T18:41:58Z"
       },
       "cloud_phase_type": {
         "confirmed": false,
-        "timestamp": "2026-08-05T18:21:28Z"
+        "timestamp": "2026-08-05T18:41:20Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
       "confirmed": false,
-      "timestamp": "2026-08-05T18:22:05Z"
+      "timestamp": "2026-08-05T18:41:45Z"
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-08-05T18:22:09Z"
+      "timestamp": "2026-08-05T18:41:47Z"
     }
   },
-  "verdict": "CLM отметил цель в 33км Ю, но остальные каналы облачность там не видят — вероятно, ложное срабатывание."
+  "verdict": "Цель в 72км З — каналы расходятся: geocolour_motion подтверждают, ir_motion/cloud_phase_type нет (ночь — rgb_cloudphase/rgb_cloudtype дают систематическое ложное «безоблачно» без солнечного света, см. docs/topics/eumetsat.md)."
 }
