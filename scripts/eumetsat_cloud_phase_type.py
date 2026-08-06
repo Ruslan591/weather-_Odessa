@@ -418,6 +418,40 @@ def main():
                 ),
             }
 
+    # --- Обогащающий (не voting) анализ крупной системы синоптического
+    # масштаба, если CLM её отметил (class=="system"). В отличие от блока
+    # выше это НЕ подтверждение существования (система и так очевидно
+    # реальна при такой площади, ROI-голосование под неё не нужно — см.
+    # docs/topics/eumetsat.md, обсуждение 2026-08-06), а просто описание
+    # содержимого: доминирующая фаза/тип внутри её ROI. Аддитивно, поле
+    # "confirmed" здесь намеренно отсутствует.
+    sys_target, sys_reason = fc.load_system_target()
+    if sys_target is None:
+        out["system_analysis"] = {"available": False, "reason": sys_reason}
+    else:
+        sys_roi_mask = fc.km_bbox_to_pixel_mask(sys_target["bbox_km"], pad_km=2.0)
+        sys_roi_valid = valid_frames[-1][sys_roi_mask]
+        if sys_roi_valid.sum() < 5:
+            out["system_analysis"] = {
+                "available": False,
+                "reason": "мало классифицированных пикселей в ROI системы (облачно, но цвет неуверенный, либо вне окна)",
+                "target_id": sys_target["target_id"],
+            }
+        else:
+            sys_roi_phase = phase_frames[-1][sys_roi_mask][sys_roi_valid]
+            sys_roi_type = type_frames[-1][sys_roi_mask][sys_roi_valid]
+            sys_cloud_px = sys_roi_type > 0
+            sys_cloud_fraction = float(sys_cloud_px.mean())
+            sys_dominant_phase = float(np.median(sys_roi_phase[sys_cloud_px])) if sys_cloud_px.any() else 0.0
+            out["system_analysis"] = {
+                "available": True,
+                "target_id": sys_target["target_id"],
+                "area_km2": sys_target["area_km2"],
+                "roi_cloud_fraction": round(sys_cloud_fraction, 3),
+                "roi_dominant_phase_ordinal": round(sys_dominant_phase, 1),
+                "roi_dominant_phase_label": PHASE_LABELS.get(round(sys_dominant_phase), "неопределено"),
+            }
+
     out["buffer_status"] = _buffer_status(len(packed_frames))
     out["method_note"] = (
         f"Персистентный буфер до {MAX_FRAMES} кадров Cloud Phase RGB + Cloud Type RGB "
