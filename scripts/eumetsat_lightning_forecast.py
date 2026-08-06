@@ -178,6 +178,34 @@ def main():
                 ),
             }
 
+    # --- Обогащающий (не voting) анализ грозы внутри крупной системы
+    # синоптического масштаба, если CLM её отметил (class=="system"). Не
+    # confirmed/not_confirmed — вопрос не "существует ли система", а "есть
+    # ли внутри неё гроза" (см. docs/topics/eumetsat.md, обсуждение
+    # 2026-08-06). Тот же порог 0.02, что и у target_confirmation выше.
+    sys_target, sys_reason = fc.load_system_target()
+    if sys_target is None:
+        out["system_analysis"] = {"available": False, "reason": sys_reason}
+    else:
+        sys_roi_mask = fc.km_bbox_to_pixel_mask(sys_target["bbox_km"], pad_km=2.0)
+        sys_roi_valid = valid_now[sys_roi_mask]
+        sys_roi_presence = presence_now[sys_roi_mask]
+        if sys_roi_valid.sum() == 0:
+            out["system_analysis"] = {
+                "available": False,
+                "reason": "ROI системы вне окна li_afa-кадра или нет данных",
+                "target_id": sys_target["target_id"],
+            }
+        else:
+            sys_lightning_fraction = float(sys_roi_presence[sys_roi_valid].mean()) if sys_roi_valid.any() else 0.0
+            out["system_analysis"] = {
+                "available": True,
+                "target_id": sys_target["target_id"],
+                "area_km2": sys_target["area_km2"],
+                "roi_lightning_fraction": round(sys_lightning_fraction, 3),
+                "has_lightning": sys_lightning_fraction >= 0.02,
+            }
+
     os.makedirs(os.path.dirname(OUT_FILE), exist_ok=True)
     with open(OUT_FILE, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
