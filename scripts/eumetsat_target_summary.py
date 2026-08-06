@@ -57,6 +57,35 @@ def _load_json(filename):
         return None
 
 
+def _load_system_enrichment(system_target_id):
+    """Обогащающий (не voting) анализ системы синоптического масштаба —
+    читает system_analysis из cloud_phase_type/precip_forecast/
+    lightning_forecast.json (см. docs/topics/eumetsat.md, обсуждение
+    2026-08-06: система не проходит через существование-конфирмейшн трио,
+    но полезно знать, что внутри неё — фаза/тип, осадки, гроза).
+    Сверяет target_id с тем, что в system_info, — если модуль отработал по
+    другой ближайшей системе (например snapshot cloud_forecast обновился
+    между прогонами разных скриптов), не приписываем чужие данные."""
+    enrichment = {}
+    phase_data = _load_json("eumetsat_cloud_phase_type.json")
+    sa = (phase_data or {}).get("system_analysis") or {}
+    if sa.get("available") and sa.get("target_id") == system_target_id:
+        enrichment["phase_label"] = sa.get("roi_dominant_phase_label")
+        enrichment["cloud_fraction"] = sa.get("roi_cloud_fraction")
+
+    precip_data = _load_json("eumetsat_precip_forecast.json")
+    sa = (precip_data or {}).get("system_analysis") or {}
+    if sa.get("available") and sa.get("target_id") == system_target_id:
+        enrichment["has_precip"] = sa.get("has_precip")
+
+    lightning_data = _load_json("eumetsat_lightning_forecast.json")
+    sa = (lightning_data or {}).get("system_analysis") or {}
+    if sa.get("available") and sa.get("target_id") == system_target_id:
+        enrichment["has_lightning"] = sa.get("has_lightning")
+
+    return enrichment
+
+
 def _is_night(t_iso_seconds_format):
     """Локальная проверка ночи под формат таймстемпов ЭТИХ JSON
     (%Y-%m-%dT%H:%M:%SZ — с секундами, без .000) — НЕ то же самое, что
@@ -113,6 +142,7 @@ def main():
             "bearing_deg": round(s_bearing, 0),
             "compass": s_compass,
         }
+        system_info.update(_load_system_enrichment(sys_c["target_id"]))
 
     if not local_candidates:
         out = {
@@ -236,21 +266,39 @@ def _build_verdict(out):
         base += " " + ", ".join(extras).capitalize() + "."
 
     if out.get("system"):
-        s = out["system"]
-        base += (f" Отдельно: система синоптического масштаба ({s['area_km2']:.0f}км²) "
-                  f"в {s['distance_km']:.0f}км {s['compass']}.")
+        base += " Отдельно: " + _system_sentence(out["system"])
     return base
+
+
+def _system_sentence(s, capitalize=False):
+    """Общий текст про систему синоптического масштаба — используется и в
+    основном verdict (система найдена вместе с локальной целью), и в
+    system_only. Дописывает обогащение (фаза/осадки/гроза), если оно
+    доступно (см. docs/topics/eumetsat.md, обсуждение 2026-08-06) — само
+    существование системы не подтверждается отдельно (не нужно при такой
+    площади), это только описание содержимого."""
+    word = "Система" if capitalize else "система"
+    base = (f"{word} синоптического масштаба ({s['area_km2']:.0f}км²) "
+            f"в {s['distance_km']:.0f}км {s['compass']}")
+    extras = []
+    if s.get("phase_label") and s["phase_label"] != "безоблачно":
+        extras.append(s["phase_label"])
+    if s.get("has_precip") is True:
+        extras.append("осадки")
+    if s.get("has_lightning") is True:
+        extras.append("гроза")
+    if extras:
+        base += " (" + ", ".join(extras) + ")"
+    return base + "."
 
 
 def _build_system_only_verdict(system_info):
     """Случай, когда локальных компактных масс нет, но есть крупная
     система — она не проходит через ROI-подтверждение (см. комментарий в
-    fc.load_primary_target), просто сообщаем факт."""
+    fc.load_primary_target), просто сообщаем факт (+ обогащение, если есть)."""
     if system_info is None:
         return "Целей нет."
-    return (f"Локальных облачных масс нет. Система синоптического масштаба "
-            f"({system_info['area_km2']:.0f}км²) в {system_info['distance_km']:.0f}км "
-            f"{system_info['compass']}.")
+    return "Локальных облачных масс нет. " + _system_sentence(system_info, capitalize=True)
 
 
 def _write(out):
