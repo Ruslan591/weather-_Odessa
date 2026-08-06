@@ -615,6 +615,10 @@ function _renderTargetSummaryLines(s){
         return `${_blockTitle("🎯", "Итог", timeTag)}`
             + _plain("Значимых облачных масс поблизости сейчас нет.");
     }
+    if(s.status === "system_only"){
+        return `${_blockTitle("🎯", "Итог", timeTag)}`
+            + _plain(s.verdict);
+    }
     if(s.status !== "ok") return "";
 
     const badge = _CONSENSUS_BADGE[s.existence.consensus] || _CONSENSUS_BADGE.insufficient_data;
