@@ -96,7 +96,38 @@ def main():
         print("  [OK] eumetsat_target_summary.py: целей нет")
         return
 
-    target = candidates[0]
+    # class отсутствует у снапшотов ДО 2026-08-05 — трактуем как "local"
+    # для обратной совместимости (тот же приём, что в fc.load_primary_target).
+    local_candidates = [c for c in candidates if c.get("class", "local") == "local"]
+    system_candidates = [c for c in candidates if c.get("class", "local") == "system"]
+
+    system_info = None
+    if system_candidates:
+        sys_c = system_candidates[0]  # ближайшая система (список уже отсортирован по расстоянию)
+        s_bearing, s_compass = fc.bearing_compass(sys_c["centroid_dx_km"], sys_c["centroid_dy_km"])
+        s_distance = math.hypot(sys_c["centroid_dx_km"], sys_c["centroid_dy_km"])
+        system_info = {
+            "target_id": sys_c["target_id"],
+            "area_km2": sys_c["area_km2"],
+            "distance_km": round(s_distance, 1),
+            "bearing_deg": round(s_bearing, 0),
+            "compass": s_compass,
+        }
+
+    if not local_candidates:
+        out = {
+            "timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "status": "system_only",
+            "reason": "локальных компактных масс нет, есть только система(ы) синоптического масштаба",
+            "cloud_forecast_timestamp": cf.get("timestamp"),
+            "system": system_info,
+        }
+        out["verdict"] = _build_system_only_verdict(system_info)
+        _write(out)
+        print(f"  [OK] eumetsat_target_summary.py: только система, {out['verdict']}")
+        return
+
+    target = local_candidates[0]
     bearing_deg, compass_dir = fc.bearing_compass(target["centroid_dx_km"], target["centroid_dy_km"])
     distance_km = math.hypot(target["centroid_dx_km"], target["centroid_dy_km"])
 
@@ -109,6 +140,7 @@ def main():
         "target_distance_km": round(distance_km, 1),
         "target_bearing_deg": round(bearing_deg, 0),
         "target_compass": compass_dir,
+        "system": system_info,
     }
 
     # --- существование цели: трио ir/geocolour/phase_type ---
@@ -202,7 +234,23 @@ def _build_verdict(out):
         extras.append("зафиксирована гроза")
     if extras:
         base += " " + ", ".join(extras).capitalize() + "."
+
+    if out.get("system"):
+        s = out["system"]
+        base += (f" Отдельно: система синоптического масштаба ({s['area_km2']:.0f}км²) "
+                  f"в {s['distance_km']:.0f}км {s['compass']}.")
     return base
+
+
+def _build_system_only_verdict(system_info):
+    """Случай, когда локальных компактных масс нет, но есть крупная
+    система — она не проходит через ROI-подтверждение (см. комментарий в
+    fc.load_primary_target), просто сообщаем факт."""
+    if system_info is None:
+        return "Целей нет."
+    return (f"Локальных облачных масс нет. Система синоптического масштаба "
+            f"({system_info['area_km2']:.0f}км²) в {system_info['distance_km']:.0f}км "
+            f"{system_info['compass']}.")
 
 
 def _write(out):
