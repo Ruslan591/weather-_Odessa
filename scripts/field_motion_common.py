@@ -361,6 +361,49 @@ def load_primary_target(max_age_minutes=30):
     return None, "среди кандидатов нет локальных масс (только системы синоптического масштаба)"
 
 
+def load_system_target(max_age_minutes=30):
+    """Как load_primary_target(), но отдаёт ближайшую крупную систему
+    (class=="system") вместо локальной цели — для обогащающего (не
+    voting) анализа "что несёт система" (фаза/тип, осадки, гроза),
+    добавлено 2026-08-06 по итогам обсуждения "нужна ли верификация
+    системы" (см. docs/topics/eumetsat.md). В отличие от
+    load_primary_target() это НЕ про существование (крупная система и
+    так очевидно реальна — не шумовое пятно на грани порога
+    MIN_SIGNIFICANT_BLOB_PX), а просто ROI для описательного анализа
+    содержимого. Снапшоты без поля "class" (до коммита 6f12528)
+    трактуются как "local" и ничего не возвращают здесь — те же правила
+    обратной совместимости, что в load_primary_target().
+    Возвращает (target_dict, reason), target_dict is None при отсутствии
+    системы среди кандидатов (обычный случай — большинство прогонов без
+    крупных систем поблизости) или прочих сбоях чтения снапшота.
+    """
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                         "data", "eumetsat_cloud_forecast.json")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            snap = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        return None, f"cloud_forecast.json недоступен: {e}"
+
+    ts_raw = snap.get("timestamp")
+    if ts_raw:
+        try:
+            ts = datetime.strptime(ts_raw, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            age_min = (datetime.now(timezone.utc) - ts).total_seconds() / 60
+            if age_min > max_age_minutes:
+                return None, f"снапшот устарел ({round(age_min)} мин > {max_age_minutes})"
+        except ValueError:
+            pass
+
+    candidates = snap.get("candidates") or []
+    if not candidates:
+        return None, "candidates пуст или отсутствует"
+    for c in candidates:
+        if c.get("class", "local") == "system":
+            return c, "ok"
+    return None, "среди кандидатов нет систем синоптического масштаба (только локальные массы)"
+
+
 def km_bbox_to_pixel_mask(bbox_km, pad_km=0.0):
     """Обратное к pixel_to_km_offset() — булева (TILE_SIZE,TILE_SIZE) маска,
     True внутри bbox_km (словарь dx_min/dx_max/dy_min/dy_max, как отдаёт
