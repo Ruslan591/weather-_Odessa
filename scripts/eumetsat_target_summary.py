@@ -157,7 +157,42 @@ def main():
         print(f"  [OK] eumetsat_target_summary.py: только система, {out['verdict']}")
         return
 
-    target = local_candidates[0]
+    # Выбор локальной цели с учётом реестра повторяющихся ложных срабатываний
+    # CLM (см. docs/topics/eumetsat.md, запись от 2026-08-07) — вместо
+    # local_candidates[0] напрямую пропускаем известные шумовые сигнатуры.
+    fp_log = fc.load_false_positive_log()
+    target, suppressed = fc.pick_local_target(local_candidates, fp_log)
+
+    if target is None:
+        # Все local-кандидаты в этом цикле — известные шумовые объекты
+        # (excluded). Ни один из 5 модулей ROI-подтверждения тоже не
+        # получит цель в этом цикле (они ходят через тот же fc.load_primary_target()),
+        # поэтому реестр здесь НЕ обновляем — не было ни одной новой проверки.
+        s_bearing, s_compass = fc.bearing_compass(suppressed["centroid_dx_km"], suppressed["centroid_dy_km"])
+        s_distance = math.hypot(suppressed["centroid_dx_km"], suppressed["centroid_dy_km"])
+        entry = fp_log.get(suppressed["false_positive_signature"], {})
+        suppressed_info = {
+            "signature": suppressed["false_positive_signature"],
+            "area_km2": suppressed["area_km2"],
+            "distance_km": round(s_distance, 1),
+            "bearing_deg": round(s_bearing, 0),
+            "compass": s_compass,
+            "not_confirmed_streak": entry.get("not_confirmed_streak"),
+            "total_not_confirmed": entry.get("total_not_confirmed"),
+            "excluded_since": entry.get("excluded_since"),
+        }
+        out = {
+            "timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "status": "suppressed_known_false_positive",
+            "cloud_forecast_timestamp": cf.get("timestamp"),
+            "suppressed_target": suppressed_info,
+            "system": system_info,
+        }
+        out["verdict"] = _build_suppressed_verdict(suppressed_info, system_info)
+        _write(out)
+        print(f"  [OK] eumetsat_target_summary.py: подавлено (известный шумовой объект), {out['verdict']}")
+        return
+
     bearing_deg, compass_dir = fc.bearing_compass(target["centroid_dx_km"], target["centroid_dy_km"])
     distance_km = math.hypot(target["centroid_dx_km"], target["centroid_dy_km"])
 
@@ -172,6 +207,14 @@ def main():
         "target_compass": compass_dir,
         "system": system_info,
     }
+    if suppressed is not None:
+        # Ближе есть известный шумовой объект, но он подавлен — выбрана
+        # следующая по расстоянию нормальная цель. Пишем для прозрачности,
+        # не влияет на verdict основной цели.
+        out["also_suppressed_nearby"] = {
+            "signature": suppressed["false_positive_signature"],
+            "area_km2": suppressed["area_km2"],
+        }
 
     # --- существование цели: трио ir/geocolour/phase_type ---
     existence = {}
@@ -224,9 +267,68 @@ def main():
     # --- человекочитаемый текстовый вывод (шаг 7, rule-based первая версия) ---
     out["verdict"] = _build_verdict(out)
 
+    # --- обновление реестра ложных срабатываний по итогам ЭТОЙ проверки ---
+    # (см. docs/topics/eumetsat.md, запись от 2026-08-07). Апдейт только
+    # здесь — единственный писатель файла, чтобы не было гонки коммитов
+    # между модулями.
+    sig = fc.false_positive_signature(target["centroid_dx_km"], target["centroid_dy_km"])
+    fp_log[sig] = _update_false_positive_entry(fp_log.get(sig), consensus, out["timestamp"])
+    fc.save_false_positive_log(fp_log)
+
     _write(out)
     print(f"  [OK] eumetsat_target_summary.py: {consensus} "
           f"({votes_true} за / {votes_false} против), {out['verdict']}")
+
+
+def _update_false_positive_entry(entry, consensus, now_iso):
+    """Streak-логика по аналогии с уже принятой в проекте для PWS-давления
+    (2 последовательные проверки в одном направлении). Здесь: 3 not_confirmed
+    подряд -> excluded (порог согласован с пользователем 2026-08-07),
+    2 confirmed/disputed подряд -> снова active. disputed трактуется как
+    "было хотя бы одно подтверждение" — не копит streak к исключению,
+    поскольку хотя бы один канал видел цель реальной. insufficient_data
+    сюда никогда не попадает — эта функция вызывается только когда target
+    реально прошёл through существование-проверку (см. main())."""
+    entry = dict(entry) if entry else {
+        "not_confirmed_streak": 0,
+        "confirmed_streak": 0,
+        "total_not_confirmed": 0,
+        "total_confirmed": 0,
+        "status": "active",
+    }
+    if consensus == "not_confirmed":
+        entry["not_confirmed_streak"] = entry.get("not_confirmed_streak", 0) + 1
+        entry["confirmed_streak"] = 0
+        entry["total_not_confirmed"] = entry.get("total_not_confirmed", 0) + 1
+        if entry["not_confirmed_streak"] >= fc.FALSE_POSITIVE_STREAK_THRESHOLD:
+            # Ставим/обновляем excluded_since даже если статус уже был
+            # excluded — если мы вообще досюда дошли, значит объект только
+            # что прошёл повторную проверку (TTL истёк) и снова не
+            # подтвердился: перезапускаем TTL-таймер на новый цикл ожидания.
+            entry["status"] = "excluded"
+            entry["excluded_since"] = now_iso
+    elif consensus in ("confirmed", "disputed"):
+        entry["confirmed_streak"] = entry.get("confirmed_streak", 0) + 1
+        entry["not_confirmed_streak"] = 0
+        if consensus == "confirmed":
+            entry["total_confirmed"] = entry.get("total_confirmed", 0) + 1
+        if entry["confirmed_streak"] >= fc.FALSE_POSITIVE_REACTIVATE_STREAK:
+            entry["status"] = "active"
+            entry.pop("excluded_since", None)
+    entry["last_seen"] = now_iso
+    return entry
+
+
+def _build_suppressed_verdict(suppressed_info, system_info):
+    """Вердикт, когда единственный/ближайший local-кандидат — уже известный
+    шумовой объект, подавленный по реестру ложных срабатываний (см.
+    docs/topics/eumetsat.md, запись от 2026-08-07)."""
+    base = (f"Известный шумовой объект в {suppressed_info['distance_km']:.0f}км "
+            f"{suppressed_info['compass']} (~{suppressed_info['area_km2']:.0f}км²) — "
+            f"подавлено (не подтверждался {suppressed_info['not_confirmed_streak']} раз подряд).")
+    if system_info:
+        base += " Отдельно: " + _system_sentence(system_info)
+    return base
 
 
 def _build_verdict(out):
@@ -309,3 +411,4 @@ def _write(out):
 
 if __name__ == "__main__":
     main()
+
