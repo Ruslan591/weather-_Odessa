@@ -315,6 +315,92 @@ def station_area_mask():
     return dist_km <= STATE_RADIUS_KM
 
 
+# --- Реестр повторяющихся ложных срабатываний CLM (шумовые объекты) ---
+# См. docs/topics/eumetsat.md, запись от 2026-08-07: некоторые CLM-кандидаты
+# регулярно (по наблюдению — почти круглосуточно) НЕ подтверждаются
+# остальными каналами в одной и той же точке — похоже на артефакт
+# классификации CLM, а не реальную облачность. Вместо подавления области
+# целиком отслеживаем историю ПО СИГНАТУРЕ (квантованная координата),
+# исключаем конкретный повторяющийся объект, если он N раз подряд не
+# подтверждён, и периодически (TTL) даём ему шанс на повторную проверку.
+# Единственный писатель этого файла — eumetsat_target_summary.py (там же
+# считается consensus), остальные модули только читают.
+FALSE_POSITIVE_LOG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                        "data", "eumetsat_target_false_positive_log.json")
+FALSE_POSITIVE_GRID_KM = 5.0          # квантование координаты в сигнатуру
+FALSE_POSITIVE_STREAK_THRESHOLD = 3   # not_confirmed подряд -> исключить
+FALSE_POSITIVE_REACTIVATE_STREAK = 2  # confirmed/disputed подряд -> вернуть
+FALSE_POSITIVE_TTL_HOURS = 6          # раз в сколько давать повторный шанс
+
+
+def false_positive_signature(dx_km, dy_km, grid_km=FALSE_POSITIVE_GRID_KM):
+    """Квантует координату кандидата в ячейку сетки grid_km×grid_km —
+    сигнатура одного и того же физического места, устойчивая к мелкому
+    дрожанию centroid между прогонами."""
+    gx = round(dx_km / grid_km) * grid_km
+    gy = round(dy_km / grid_km) * grid_km
+    return f"{gx:.0f}_{gy:.0f}"
+
+
+def load_false_positive_log():
+    """Читает data/eumetsat_target_false_positive_log.json. Отсутствие
+    файла/битый JSON — не ошибка, просто ещё нет истории (пустой реестр)."""
+    try:
+        with open(FALSE_POSITIVE_LOG_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def save_false_positive_log(fp_log):
+    os.makedirs(os.path.dirname(FALSE_POSITIVE_LOG_PATH), exist_ok=True)
+    with open(FALSE_POSITIVE_LOG_PATH, "w", encoding="utf-8") as f:
+        json.dump(fp_log, f, ensure_ascii=False, indent=2)
+
+
+def _fp_currently_excluded(entry):
+    """True, если сигнатура сейчас реально исключена — статус excluded И
+    TTL повторного шанса ещё не истёк. По истечении TTL сигнатура на один
+    цикл снова становится доступной для выбора: если объект и правда
+    шумовой, он почти сразу наберёт новый streak not_confirmed и будет
+    переисключён (excluded_since обновится); если условия изменились —
+    пройдёт ROI-подтверждение и статус снимется."""
+    if not entry or entry.get("status") != "excluded":
+        return False
+    since = entry.get("excluded_since")
+    if not since:
+        return True
+    try:
+        dt = datetime.strptime(since, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except (ValueError, TypeError):
+        return True
+    age_hours = (datetime.now(timezone.utc) - dt).total_seconds() / 3600
+    return age_hours < FALSE_POSITIVE_TTL_HOURS
+
+
+def pick_local_target(candidates, fp_log=None):
+    """Выбирает ближайшего local-кандидата, ПРОПУСКАЯ те, чья сигнатура
+    сейчас в статусе excluded (см. блок выше). candidates — уже
+    отсортированный по расстоянию список (как отдаёт cloud_forecast.json).
+    Возвращает (target_or_None, suppressed_or_None) — suppressed — это
+    САМЫЙ БЛИЖНИЙ подавленный кандидат (для отображения на странице
+    пометки "известный шумовой объект"), даже если дальше нашлась обычная
+    цель."""
+    if fp_log is None:
+        fp_log = load_false_positive_log()
+    suppressed = None
+    for c in candidates:
+        if c.get("class", "local") != "local":
+            continue
+        sig = false_positive_signature(c["centroid_dx_km"], c["centroid_dy_km"])
+        if _fp_currently_excluded(fp_log.get(sig)):
+            if suppressed is None:
+                suppressed = dict(c, false_positive_signature=sig)
+            continue
+        return c, suppressed
+    return None, suppressed
+
+
 def load_primary_target(max_age_minutes=30):
     """Читает data/eumetsat_cloud_forecast.json и отдаёт ПЕРВИЧНУЮ ЛОКАЛЬНУЮ
     цель (ближайший кандидат с class=="local" — не просто candidates[0],
@@ -355,9 +441,13 @@ def load_primary_target(max_age_minutes=30):
     # class отсутствует у снапшотов ДО коммита 6f12528 (2026-08-05) —
     # трактуем как "local" для обратной совместимости, старое поведение
     # (просто ближайший) сохраняется, пока не накопятся новые снапшоты.
-    for c in candidates:
-        if c.get("class", "local") == "local":
-            return c, "ok"
+    target, suppressed = pick_local_target(candidates)
+    if target is not None:
+        return target, "ok"
+    if suppressed is not None:
+        return None, (f"известный шумовой объект в этой точке подавлен "
+                       f"(сигнатура {suppressed['false_positive_signature']}), "
+                       f"других локальных целей нет")
     return None, "среди кандидатов нет локальных масс (только системы синоптического масштаба)"
 
 
