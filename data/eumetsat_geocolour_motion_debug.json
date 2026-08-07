@@ -1,27 +1,27 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-08-07T03:10:00.000Z",
+  "server_latest_time": "2026-08-07T03:40:00.000Z",
   "bootstrap": true,
   "buffer_before": 6,
   "buffer_size": 6,
   "buffer_times": [
-    "2026-08-07T02:20:00.000Z",
-    "2026-08-07T02:30:00.000Z",
-    "2026-08-07T02:40:00.000Z",
     "2026-08-07T02:50:00.000Z",
     "2026-08-07T03:00:00.000Z",
-    "2026-08-07T03:10:00.000Z"
+    "2026-08-07T03:10:00.000Z",
+    "2026-08-07T03:20:00.000Z",
+    "2026-08-07T03:30:00.000Z",
+    "2026-08-07T03:40:00.000Z"
   ],
   "frame_std": [
-    17.1,
-    17.1,
-    16.5,
     15.7,
     16.0,
-    18.4
+    18.4,
+    19.6,
+    19.4,
+    18.1
   ],
   "result": {
-    "timestamp": "2026-08-07T03:41:50Z",
+    "timestamp": "2026-08-07T04:14:55Z",
     "buffer_size": 6,
     "buffer_span_minutes": 50,
     "observed_area": {
@@ -34,28 +34,52 @@
       "local_trend_radius_km": 50,
       "state_radius_km": 12
     },
-    "valid": false,
-    "verdict": "нет значимой облачности для оценки движения",
+    "valid": true,
+    "speed_kmh": 0.0,
+    "direction_compass": "ЮЗ",
+    "bearing_deg": 225.1,
+    "frame_pairs_used": 5,
+    "acceleration_kmh": 0.0,
+    "turning_deg": 157.2,
+    "acceleration_verdict": "скорость стабильна",
+    "turning_verdict": "меняет направление (по часовой)",
+    "forecast_displacement": {
+      "30min": {
+        "distance_km": 0.0,
+        "bearing_deg": 267.0,
+        "compass": "З"
+      },
+      "60min": {
+        "distance_km": 0.0,
+        "bearing_deg": 268.0,
+        "compass": "З"
+      },
+      "120min": {
+        "distance_km": 0.1,
+        "bearing_deg": 269.0,
+        "compass": "З"
+      }
+    },
     "area_fraction_over_time": [
       0.021,
       0.021,
-      0.021,
-      0.021,
-      0.021,
-      0.023
+      0.023,
+      0.026,
+      0.038,
+      0.061
     ],
-    "area_trend_delta": 0.003,
+    "area_trend_delta": 0.041,
     "area_trend_verdict": "без существенных изменений",
     "station_state": "variable",
-    "station_area_fraction": 0.262,
+    "station_area_fraction": 0.476,
     "cloud_mass_distance_km": 0.8,
     "cloud_mass_bearing_deg": 325.0,
     "cloud_mass_compass": "СЗ",
-    "cloud_mass_area_km2": 116,
+    "cloud_mass_area_km2": 402,
     "target_confirmation": {
       "confirmed": false,
-      "target_id": 1,
-      "target_area_km2": 194.8,
+      "target_id": 0,
+      "target_area_km2": 157.4,
       "roi_cloud_fraction": 0.0,
       "verdict": "GeoColour НЕ подтверждает: в ROI CLM-цели облачность не преобладает — возможно расхождение слоёв"
     },
