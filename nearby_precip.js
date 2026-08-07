@@ -597,6 +597,11 @@ const _CONSENSUS_BADGE = {
     disputed:          { color: "#e0a030", label: "каналы расходятся" },
     insufficient_data: { color: "#666",    label: "недостаточно данных" },
 };
+// Отдельный бейдж для case'а "цель — уже известный повторяющийся шумовой
+// объект, подавлено по реестру ложных срабатываний" (не то же самое, что
+// not_confirmed — здесь мы даже не гоняли повторную ROI-проверку в этом
+// цикле, см. docs/topics/eumetsat.md, запись 2026-08-07).
+const _SUPPRESSED_BADGE = { color: "#5c6bc0", label: "известный шумовой объект" };
 function _moduleIcon(confirmed){
     if(confirmed === true) return "✅";
     if(confirmed === false) return "❌";
@@ -617,6 +622,14 @@ function _renderTargetSummaryLines(s){
     }
     if(s.status === "system_only"){
         return `${_blockTitle("🎯", "Итог", timeTag)}`
+            + _plain(s.verdict);
+    }
+    if(s.status === "suppressed_known_false_positive"){
+        return `${_blockTitle("🎯", "Итог", timeTag)}`
+            + `<div style="margin-top:4px;">`
+            + `<span style="display:inline-block; padding:1px 8px; border-radius:10px; background:${_SUPPRESSED_BADGE.color}; `
+            + `color:#fff; font-size:11.5px; font-weight:700;">${_SUPPRESSED_BADGE.label}</span>`
+            + `</div>`
             + _plain(s.verdict);
     }
     if(s.status !== "ok") return "";
