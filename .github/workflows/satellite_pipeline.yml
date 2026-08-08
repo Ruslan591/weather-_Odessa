@@ -48,6 +48,35 @@ jobs:
       - name: Запуск спутникового пайплайна
         run: python scripts/gh_satellite_pipeline.py
 
+      - name: Push-уведомление (ntfy) при новой тревоге
+        # Шлёт push ТОЛЬКО на переход false→true (just_triggered), не на
+        # каждый цикл — иначе спам все 5 минут, пока тревога активна.
+        # Topic — случайная нечитаемая строка вместо auth (см.
+        # docs/topics/eumetsat.md, обсуждение 2026-08-09): приемлемо для
+        # личных алертов, не для критичных данных.
+        if: always()
+        run: |
+          if [ ! -f data/eumetsat_alert_state.json ]; then
+            echo "нет alert_state.json — пропуск"
+            exit 0
+          fi
+          just_triggered=$(jq -r '.just_triggered' data/eumetsat_alert_state.json)
+          if [ "$just_triggered" = "true" ]; then
+            eta=$(jq -r '.eta_min // "?"' data/eumetsat_alert_state.json)
+            dist=$(jq -r '.distance_km_now // "?"' data/eumetsat_alert_state.json)
+            verdict=$(jq -r '.verdict // "?"' data/eumetsat_alert_state.json)
+            prob=$(jq -r '.probability_percent // "?"' data/eumetsat_alert_state.json)
+            curl -sS -X POST "https://ntfy.sh/odessa-storm-x7k2m9qp4h" \
+              -H "Title: Гроза приближается" \
+              -H "Priority: high" \
+              -H "Tags: warning,cloud_with_lightning" \
+              -H "Click: https://ruslan591.github.io/weather-_Odessa/nearby.html" \
+              -d "${verdict} / ETA ~${eta} мин / ${dist} км / вероятность ${prob}%"
+            echo "push отправлен"
+          else
+            echo "тревоги нет либо уже уведомляли — пропуск"
+          fi
+
       - name: Проверка тревоги — досрочный повтор через 5 минут
         # Android job scheduler (job 1001) не позволяет учащать триггер
         # чаще 15 мин, поэтому во время тревоги каденс ускоряет сам GitHub:
