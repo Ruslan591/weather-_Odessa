@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-08T00:27:01Z",
+  "timestamp": "2026-08-08T00:42:45Z",
   "buffer_size": 6,
   "buffer_span_minutes": 50,
   "observed_area": {
@@ -15,10 +15,10 @@
   "valid": true,
   "speed_kmh": 0.0,
   "direction_compass": "СЗ",
-  "bearing_deg": 305.6,
+  "bearing_deg": 299.8,
   "frame_pairs_used": 5,
   "acceleration_kmh": 0.0,
-  "turning_deg": 78.6,
+  "turning_deg": 21.4,
   "acceleration_verdict": "скорость стабильна",
   "turning_verdict": "меняет направление (по часовой)",
   "forecast_displacement": {
@@ -29,36 +29,36 @@
     },
     "60min": {
       "distance_km": 0.0,
-      "bearing_deg": 318.0,
+      "bearing_deg": 322.0,
       "compass": "СЗ"
     },
     "120min": {
       "distance_km": 0.0,
-      "bearing_deg": 319.0,
+      "bearing_deg": 327.0,
       "compass": "СЗ"
     }
   },
   "area_fraction_over_time": [
-    0.403,
-    0.406,
     0.408,
     0.429,
     0.406,
-    0.409
+    0.409,
+    0.408,
+    0.413
   ],
-  "area_trend_delta": 0.006,
+  "area_trend_delta": 0.004,
   "area_trend_verdict": "без существенных изменений",
   "station_state": "clear",
-  "station_area_fraction": 0.018,
+  "station_area_fraction": 0.033,
   "cloud_mass_distance_km": 18.2,
   "cloud_mass_bearing_deg": 343.0,
   "cloud_mass_compass": "С",
-  "cloud_mass_area_km2": 121860,
+  "cloud_mass_area_km2": 122368,
   "target_confirmation": {
     "confirmed": true,
-    "target_id": 0,
-    "target_area_km2": 124.1,
-    "roi_cloud_fraction": 0.997,
+    "target_id": 2,
+    "target_area_km2": 65.4,
+    "roi_cloud_fraction": 1.0,
     "verdict": "GeoColour подтверждает: в ROI CLM-цели преобладает облачность"
   },
   "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
