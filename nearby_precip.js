@@ -39,6 +39,8 @@ let _eumetsatTargetSummaryData      = null;
 let _eumetsatTargetSummaryFetchedAt = 0;
 let _eumetsatPrecipHistoryData      = null;
 let _eumetsatPrecipHistoryFetchedAt = 0;
+let _eumetsatLightningHistoryData      = null;
+let _eumetsatLightningHistoryFetchedAt = 0;
 
 // Хронология переходов (data/eumetsat_precip_history.jsonl, пишет
 // eumetsat_precip_forecast.py при каждом запуске). Отдельный формат —
@@ -65,6 +67,32 @@ async function loadEumetsatPrecipHistory(){
         renderNearbyPrecipCard();
     } catch(e){
         _eumetsatPrecipHistoryFetchedAt = 0;
+    }
+}
+
+// Та же хронология, но для грозы (data/eumetsat_lightning_history.jsonl,
+// пишет eumetsat_lightning_forecast.py) — отдельная таблица, не смешивается
+// с осадками (см. обсуждение 2026-08-09: раздельные push для дождя и грозы,
+// хронология на сайте следует той же логике).
+async function loadEumetsatLightningHistory(){
+    if(Date.now() - _eumetsatLightningHistoryFetchedAt < 12 * 60000) return; // раз в 12 мин
+    _eumetsatLightningHistoryFetchedAt = Date.now();
+    try {
+        const r = await fetch(
+            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_lightning_history.jsonl",
+            { cache: "no-store" }
+        );
+        if(!r.ok) return;
+        const text = await r.text();
+        const rows = text.split("\n")
+            .map(l => l.trim())
+            .filter(Boolean)
+            .map(l => { try { return JSON.parse(l); } catch(e){ return null; } })
+            .filter(Boolean);
+        if(rows.length) _eumetsatLightningHistoryData = rows;
+        renderNearbyPrecipCard();
+    } catch(e){
+        _eumetsatLightningHistoryFetchedAt = 0;
     }
 }
 
@@ -715,11 +743,11 @@ function _renderFarWatchLines(farData, veryFarData){
         + _renderOneFarTier(veryFarData, "Очень дальний контроль (~2500км)");
 }
 
-// Таблица "хронология" — последние N записей из eumetsat_precip_history.jsonl,
-// свежие сверху. Именно эти данные (время/расстояние/ETA/вердикт) достаточны,
-// чтобы восстановить, как менялся прогноз — не нужно лезть в git-историю
-// коммитов, как раньше (см. кейс 2026-08-09).
-function _renderHistoryTable(rows){
+// Таблица "хронология" — последние N записей из .jsonl-лога, свежие сверху.
+// Общая функция для осадков и грозы (title/emoji параметризованы) — именно
+// эти данные (время/расстояние/ETA/вердикт) достаточны, чтобы восстановить,
+// как менялся прогноз, не лезя в git-историю коммитов (см. кейс 2026-08-09).
+function _renderHistoryTable(rows, emoji, title){
     if(!rows || !rows.length) return "";
     const last = rows.slice(-16).reverse();
     const trs = last.map(r => {
@@ -735,7 +763,7 @@ function _renderHistoryTable(rows){
         </tr>`;
     }).join("");
     return `<details style="margin-top:10px;">
-        <summary style="cursor:pointer; color:#72c8ff; font-size:13px; font-weight:600;">📜 Хронология осадков (последние ${last.length})</summary>
+        <summary style="cursor:pointer; color:#72c8ff; font-size:13px; font-weight:600;">${emoji} ${title} (последние ${last.length})</summary>
         <div style="overflow-x:auto; margin-top:6px;">
         <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
             <thead><tr style="color:#777; text-align:left;">
@@ -782,7 +810,8 @@ function renderNearbyPrecipCard(){
         <div class="cardTitle">Анализ спутниковых снимков (EUMETSAT)</div>
         <div class="small muted">Точка наблюдения: станция "${STATION_LABEL}"</div>
         ${_renderTargetSummaryLines(_eumetsatTargetSummaryData)}
-        ${_renderHistoryTable(_eumetsatPrecipHistoryData)}
+        ${_renderHistoryTable(_eumetsatPrecipHistoryData, "📜", "Хронология осадков")}
+        ${_renderHistoryTable(_eumetsatLightningHistoryData, "⛈️", "Хронология грозы")}
         <details style="margin-top:10px;">
             <summary style="cursor:pointer; color:#72c8ff; font-size:13px; font-weight:600;">🔧 Подробности по каналам</summary>
             <div style="margin-top:6px;">${channelDetails}</div>
