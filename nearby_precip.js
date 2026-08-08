@@ -37,6 +37,36 @@ let _eumetsatVeryFarWatchData      = null;
 let _eumetsatVeryFarWatchFetchedAt = 0;
 let _eumetsatTargetSummaryData      = null;
 let _eumetsatTargetSummaryFetchedAt = 0;
+let _eumetsatPrecipHistoryData      = null;
+let _eumetsatPrecipHistoryFetchedAt = 0;
+
+// Хронология переходов (data/eumetsat_precip_history.jsonl, пишет
+// eumetsat_precip_forecast.py при каждом запуске). Отдельный формат —
+// JSON Lines, не единый JSON, поэтому парсинг построчный. См.
+// docs/topics/eumetsat.md, обсуждение 2026-08-09 (кейс шквала на пляже —
+// разбор задним числом по git-истории коммитов вместо штатной таблицы
+// на сайте).
+async function loadEumetsatPrecipHistory(){
+    if(Date.now() - _eumetsatPrecipHistoryFetchedAt < 12 * 60000) return; // раз в 12 мин
+    _eumetsatPrecipHistoryFetchedAt = Date.now();
+    try {
+        const r = await fetch(
+            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_precip_history.jsonl",
+            { cache: "no-store" }
+        );
+        if(!r.ok) return;
+        const text = await r.text();
+        const rows = text.split("\n")
+            .map(l => l.trim())
+            .filter(Boolean)
+            .map(l => { try { return JSON.parse(l); } catch(e){ return null; } })
+            .filter(Boolean);
+        if(rows.length) _eumetsatPrecipHistoryData = rows;
+        renderNearbyPrecipCard();
+    } catch(e){
+        _eumetsatPrecipHistoryFetchedAt = 0;
+    }
+}
 
 async function loadEumetsatTargetSummary(){
     if(Date.now() - _eumetsatTargetSummaryFetchedAt < 12 * 60000) return; // раз в 12 мин
@@ -685,6 +715,41 @@ function _renderFarWatchLines(farData, veryFarData){
         + _renderOneFarTier(veryFarData, "Очень дальний контроль (~2500км)");
 }
 
+// Таблица "хронология" — последние N записей из eumetsat_precip_history.jsonl,
+// свежие сверху. Именно эти данные (время/расстояние/ETA/вердикт) достаточны,
+// чтобы восстановить, как менялся прогноз — не нужно лезть в git-историю
+// коммитов, как раньше (см. кейс 2026-08-09).
+function _renderHistoryTable(rows){
+    if(!rows || !rows.length) return "";
+    const last = rows.slice(-16).reverse();
+    const trs = last.map(r => {
+        const t = _fmtObsTime(r.timestamp) || "—";
+        const dist = r.distance_km_now != null ? r.distance_km_now : "—";
+        const eta = r.eta_min != null ? r.eta_min : "—";
+        const verdict = r.verdict || "—";
+        return `<tr>
+            <td style="padding:3px 10px 3px 0; color:#999; white-space:nowrap;">${t}</td>
+            <td style="padding:3px 10px; color:#bbb; text-align:right;">${dist}</td>
+            <td style="padding:3px 10px; color:#bbb; text-align:right;">${eta}</td>
+            <td style="padding:3px 0; color:#ccc;">${verdict}</td>
+        </tr>`;
+    }).join("");
+    return `<details style="margin-top:10px;">
+        <summary style="cursor:pointer; color:#72c8ff; font-size:13px; font-weight:600;">📜 Хронология осадков (последние ${last.length})</summary>
+        <div style="overflow-x:auto; margin-top:6px;">
+        <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
+            <thead><tr style="color:#777; text-align:left;">
+                <th style="padding:3px 10px 3px 0; font-weight:600;">Время</th>
+                <th style="padding:3px 10px; font-weight:600; text-align:right;">Км</th>
+                <th style="padding:3px 10px; font-weight:600; text-align:right;">ETA</th>
+                <th style="padding:3px 0; font-weight:600;">Вердикт</th>
+            </tr></thead>
+            <tbody>${trs}</tbody>
+        </table>
+        </div>
+    </details>`;
+}
+
 function renderNearbyPrecipCard(){
     const card = document.getElementById("nearbyPrecipCard");
     if(!card) return;
@@ -695,10 +760,13 @@ function renderNearbyPrecipCard(){
         || _eumetsatFarWatchData || _eumetsatVeryFarWatchData || _eumetsatTargetSummaryData;
     if(!anyData){ card.innerHTML = ""; return; }
 
-    card.innerHTML = `
-        <div class="cardTitle">Анализ спутниковых снимков (EUMETSAT)</div>
-        <div class="small muted">Точка наблюдения: станция "${STATION_LABEL}"</div>
-        ${_renderTargetSummaryLines(_eumetsatTargetSummaryData)}
+    // Единый блок наверху ("Итог" из target_summary + хронология) — это
+    // единственное, что нужно прочитать в спешке. Разбивка по каналам
+    // (8 модулей) свёрнута под спойлер: раньше это были отдельные блоки
+    // подряд на странице, из-за чего в моменте легко перепутать, какое
+    // именно число/вердикт читаешь (см. docs/topics/eumetsat.md,
+    // обсуждение 2026-08-09, кейс шквала на пляже).
+    const channelDetails = `
         ${_renderAreaSummary(_eumetsatGeocolourMotionData, _eumetsatFarWatchData, _eumetsatVeryFarWatchData)}
         ${_renderCloudForecastLines(_eumetsatForecastData)}
         ${_renderCloudPhaseTypeLines(_eumetsatCloudPhaseTypeData)}
@@ -708,6 +776,17 @@ function renderNearbyPrecipCard(){
         ${_renderPrecipMotionLines(_eumetsatPrecipMotionData)}
         ${_renderLightningForecastLines(_eumetsatLightningForecastData)}
         ${_renderFarWatchLines(_eumetsatFarWatchData, _eumetsatVeryFarWatchData)}
+    `;
+
+    card.innerHTML = `
+        <div class="cardTitle">Анализ спутниковых снимков (EUMETSAT)</div>
+        <div class="small muted">Точка наблюдения: станция "${STATION_LABEL}"</div>
+        ${_renderTargetSummaryLines(_eumetsatTargetSummaryData)}
+        ${_renderHistoryTable(_eumetsatPrecipHistoryData)}
+        <details style="margin-top:10px;">
+            <summary style="cursor:pointer; color:#72c8ff; font-size:13px; font-weight:600;">🔧 Подробности по каналам</summary>
+            <div style="margin-top:6px;">${channelDetails}</div>
+        </details>
         ${_hr()}
         <div class="small muted">
             Data: <a href="https://www.eumetsat.int/" target="_blank" rel="noopener" style="color:#72c8ff;">EUMETSAT</a>
