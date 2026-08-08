@@ -320,11 +320,22 @@ function _fieldBlock(f, cfg){
     }
     if(cfg.extraBullets) assessBullets.push(...cfg.extraBullets(f));
 
+    // Опережающее предупреждение по реестру ложных срабатываний (см.
+    // docs/topics/eumetsat.md, запись 2026-08-08 (2)) — этот блок видит
+    // ТОЛЬКО CLM/своё поле, без переклёстной проверки внутри одного цикла;
+    // если на предыдущей проверке той же точки другие каналы её не
+    // подтвердили, честно показываем это здесь же, а не молчим до
+    // автоисключения через "Итог".
+    const warnHtml = f.cross_check_warning
+        ? `<div class="small muted" style="margin-top:6px; color:#e0a030;">⚠ ${f.cross_check_warning}</div>`
+        : "";
+
     return _hr() + _blockTitle(cfg.emoji, cfg.title, timeTag)
         + _plain(`Над станцией: ${stateStr}.`)
         + _subhead(targetStr[0].toUpperCase() + targetStr.slice(1))
         + _bullets(targetBullets)
         + (assessBullets.length ? _subhead("Оценка") + _bullets(assessBullets) : "")
+        + warnHtml
         + _bufferLine(f.buffer_status);
 }
 
