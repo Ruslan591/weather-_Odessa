@@ -328,6 +328,8 @@ def git_push_satellite():
             "data/eumetsat_cloud_phase_type_buffer.npz",
             "data/eumetsat_precip_forecast.json",
             "data/eumetsat_precip_forecast_debug.json",
+            "data/eumetsat_precip_history.jsonl",
+            "data/eumetsat_alert_state.json",
             "data/eumetsat_lightning_forecast.json",
             "data/eumetsat_lightning_forecast_debug.json",
             "data/eumetsat_ir_motion.json",
