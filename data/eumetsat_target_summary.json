@@ -1,18 +1,18 @@
 {
-  "timestamp": "2026-08-08T19:56:42Z",
+  "timestamp": "2026-08-08T20:14:44Z",
   "status": "ok",
-  "cloud_forecast_timestamp": "2026-08-08T19:41:05Z",
+  "cloud_forecast_timestamp": "2026-08-08T20:13:39Z",
   "target_id": 1,
-  "target_area_km2": 108.1,
-  "target_distance_km": 120.5,
-  "target_bearing_deg": 87.0,
-  "target_compass": "В",
+  "target_area_km2": 268.2,
+  "target_distance_km": 14.6,
+  "target_bearing_deg": 155.0,
+  "target_compass": "ЮВ",
   "system": {
     "target_id": 0,
-    "area_km2": 98044.2,
-    "distance_km": 1.6,
-    "bearing_deg": 296.0,
-    "compass": "СЗ",
+    "area_km2": 100485.9,
+    "distance_km": 6.5,
+    "bearing_deg": 222.0,
+    "compass": "ЮЗ",
     "phase_label": "безоблачно",
     "cloud_fraction": 0.0,
     "has_precip": false,
@@ -26,30 +26,30 @@
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-08-08T19:56:22Z"
+        "timestamp": "2026-08-08T20:14:21Z"
       },
       "geocolour_motion": {
-        "confirmed": true,
-        "timestamp": "2026-08-08T19:56:32Z"
+        "confirmed": false,
+        "timestamp": "2026-08-08T20:14:33Z"
       },
       "cloud_phase_type": {
         "confirmed": false,
-        "timestamp": "2026-08-08T19:56:00Z"
+        "timestamp": "2026-08-08T20:13:54Z"
       }
     },
-    "votes_confirmed": 1,
-    "votes_not_confirmed": 2,
-    "consensus": "disputed"
+    "votes_confirmed": 0,
+    "votes_not_confirmed": 3,
+    "consensus": "not_confirmed"
   },
   "phenomena": {
     "precip_forecast": {
       "confirmed": false,
-      "timestamp": "2026-08-08T19:42:11Z"
+      "timestamp": "2026-08-08T20:14:15Z"
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-08-08T19:56:19Z"
+      "timestamp": "2026-08-08T20:14:18Z"
     }
   },
-  "verdict": "Цель в 120км В, безоблачно — каналы расходятся: geocolour_motion подтверждают, ir_motion/cloud_phase_type нет (ночь — rgb_cloudphase/rgb_cloudtype дают систематическое ложное «безоблачно» без солнечного света, см. docs/topics/eumetsat.md). Отдельно: система синоптического масштаба (98044км²) в 2км СЗ."
+  "verdict": "CLM отметил цель в 15км ЮВ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (100486км²) в 6км ЮЗ."
 }
