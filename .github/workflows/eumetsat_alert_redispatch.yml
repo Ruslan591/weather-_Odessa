@@ -1,0 +1,46 @@
+name: Отложенный повтор спутникового пайплайна (режим тревоги)
+
+# Лёгкий воркфлоу-таймер. satellite_pipeline.yml, увидев alert=true в
+# data/eumetsat_alert_state.json, диспетчит ЭТОТ воркфлоу вместо немедленного
+# повторного запуска себя. Он просто спит delay_seconds и затем дёргает
+# satellite_pipeline.yml заново — точнее и дешевле, чем schedule:cron
+# (крон не гарантирует точное время срабатывания, особенно в busy-периоды),
+# и не требует учащать job 1001 на телефоне (Android job scheduler не
+# позволяет чаще 15 мин). См. docs/topics/eumetsat.md, обсуждение 2026-08-09
+# (кейс шквала на пляже — 15-минутный каденс потерял оперативность).
+#
+# chain_depth ограничивает длину цепочки (защита от зацикливания, если
+# тревога зависла у самой границы порога и не гаснет сама).
+
+on:
+  workflow_dispatch:
+    inputs:
+      delay_seconds:
+        description: "Сколько секунд подождать перед повторным запуском"
+        default: "300"
+      chain_depth:
+        description: "Глубина цепочки самоповторов (защита от зацикливания)"
+        default: "0"
+
+jobs:
+  wait-and-redispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Ждать перед повтором
+        run: sleep "${{ inputs.delay_seconds }}"
+
+      - name: Повторно запустить спутниковый пайплайн
+        run: |
+          code=$(curl -sS -o /tmp/dispatch_resp.json -w "%{http_code}" -X POST \
+            -H "Authorization: token ${{ secrets.GH_PAT }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/satellite_pipeline.yml/dispatches" \
+            -d "{\"ref\":\"main\",\"inputs\":{\"chain_depth\":\"${{ inputs.chain_depth }}\"}}")
+          echo "HTTP: $code"
+          cat /tmp/dispatch_resp.json || true
+          if [ "$code" != "204" ]; then
+            echo "::error::Диспетч satellite_pipeline.yml вернул HTTP $code вместо 204"
+            exit 1
+          fi
