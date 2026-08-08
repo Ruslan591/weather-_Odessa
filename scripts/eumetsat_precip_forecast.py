@@ -26,10 +26,21 @@ import field_motion_common as fc
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_precip_forecast.json")
 DEBUG_FILE = os.path.join(BASE_DIR, "data", "eumetsat_precip_forecast_debug.json")
+HISTORY_FILE = os.path.join(BASE_DIR, "data", "eumetsat_precip_history.jsonl")
+ALERT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_alert_state.json")
 
 LAYER_H60B = "msg_fes:h60b"
 N_FRAMES = 4
 STEP_MINUTES = 15
+
+# Хронология и режим тревоги (docs/topics/eumetsat.md, обсуждение 2026-08-09,
+# кейс шквала на пляже). HISTORY хранит компактную запись каждого запуска для
+# таблицы "хронология" на nearby.html. ALERT_FILE читает job-триггер (для
+# адаптивного каденса) и отдельный шаг воркфлоу (для ntfy push) — оба должны
+# видеть один и тот же файл, а не пересчитывать логику самостоятельно.
+MAX_HISTORY_LINES = 500
+ALERT_ETA_THRESHOLD_MIN = 30
+ALERT_MIN_PROBABILITY = 80
 
 
 def main():
@@ -214,8 +225,61 @@ def main():
     with open(OUT_FILE, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
 
+    # --- Хронология (append-only, для таблицы на nearby.html)
+    history_entry = {
+        "timestamp": out.get("timestamp"),
+        "current_state": out.get("current_state"),
+        "distance_km_now": out.get("distance_km_now"),
+        "eta_min": out.get("eta_min"),
+        "verdict": out.get("verdict"),
+        "probability_percent": out.get("probability_percent"),
+    }
+    try:
+        lines = []
+        if os.path.exists(HISTORY_FILE):
+            with open(HISTORY_FILE, "r", encoding="utf-8") as hf:
+                lines = hf.readlines()
+        lines.append(json.dumps(history_entry, ensure_ascii=False) + "\n")
+        lines = lines[-MAX_HISTORY_LINES:]
+        with open(HISTORY_FILE, "w", encoding="utf-8") as hf:
+            hf.writelines(lines)
+    except Exception as e:
+        print(f"  [WARN] eumetsat_precip_forecast.py: history log failed: {e}")
+
+    # --- Режим тревоги: адаптивный каденс (job-триггер читает этот файл,
+    # чтобы опрашивать спутник чаще) + флаг just_triggered для одноразового
+    # ntfy push (без спама на каждый цикл, пока тревога активна)
+    is_alert = out.get("verdict") == "уже у города" or (
+        out.get("eta_min") is not None
+        and out.get("eta_min") <= ALERT_ETA_THRESHOLD_MIN
+        and (out.get("probability_percent") or 0) >= ALERT_MIN_PROBABILITY
+    )
+    prev_alert = False
+    try:
+        if os.path.exists(ALERT_FILE):
+            with open(ALERT_FILE, "r", encoding="utf-8") as af:
+                prev_alert = bool(json.load(af).get("alert"))
+    except Exception:
+        prev_alert = False
+
+    alert_state = {
+        "timestamp": out.get("timestamp"),
+        "alert": is_alert,
+        "just_triggered": bool(is_alert and not prev_alert),
+        "eta_min": out.get("eta_min"),
+        "distance_km_now": out.get("distance_km_now"),
+        "verdict": out.get("verdict"),
+        "probability_percent": out.get("probability_percent"),
+    }
+    try:
+        with open(ALERT_FILE, "w", encoding="utf-8") as af:
+            json.dump(alert_state, af, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"  [WARN] eumetsat_precip_forecast.py: alert state write failed: {e}")
+
     fc.write_debug(DEBUG_FILE, {"status": "ok", **debug, "result": out})
-    print(f"  [OK] eumetsat_precip_forecast.py: {out.get('verdict')}")
+    print(f"  [OK] eumetsat_precip_forecast.py: {out.get('verdict')}"
+          + (" [ALERT]" if is_alert else ""))
 
 
 if __name__ == "__main__":
