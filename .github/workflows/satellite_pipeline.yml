@@ -5,6 +5,10 @@ on:
     workflows: ["Полный облачный пайплайн (verification + AI + PWS)"]
     types: [completed]
   workflow_dispatch:
+    inputs:
+      chain_depth:
+        description: "Глубина цепочки самоповторов в режиме тревоги (см. eumetsat_alert_redispatch.yml)"
+        default: "0"
 
 concurrency:
   group: satellite-pipeline
@@ -43,3 +47,39 @@ jobs:
 
       - name: Запуск спутникового пайплайна
         run: python scripts/gh_satellite_pipeline.py
+
+      - name: Проверка тревоги — досрочный повтор через 5 минут
+        # Android job scheduler (job 1001) не позволяет учащать триггер
+        # чаще 15 мин, поэтому во время тревоги каденс ускоряет сам GitHub:
+        # если eumetsat_alert_state.json показывает alert=true, дёргаем
+        # eumetsat_alert_redispatch.yml (спит 5 мин, затем снова этот
+        # воркфлоу) вместо ожидания следующего цикла с телефона.
+        # chain_depth ограничивает цепочку 8 повторами (~40 мин ускоренного
+        # каденса), после чего откатываемся на обычный 15-минутный ритм.
+        if: always()
+        env:
+          CHAIN_DEPTH: ${{ inputs.chain_depth }}
+        run: |
+          MAX_CHAIN=8
+          if [ ! -f data/eumetsat_alert_state.json ]; then
+            echo "нет alert_state.json — пропуск"
+            exit 0
+          fi
+          alert=$(python3 -c "import json; print(json.load(open('data/eumetsat_alert_state.json')).get('alert'))")
+          depth="${CHAIN_DEPTH:-0}"
+          echo "alert=$alert chain_depth=$depth"
+          if [ "$alert" = "True" ] && [ "$depth" -lt "$MAX_CHAIN" ]; then
+            next_depth=$((depth + 1))
+            code=$(curl -sS -o /tmp/redispatch_resp.json -w "%{http_code}" -X POST \
+              -H "Authorization: token ${{ secrets.GH_PAT }}" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${{ github.repository }}/actions/workflows/eumetsat_alert_redispatch.yml/dispatches" \
+              -d "{\"ref\":\"main\",\"inputs\":{\"delay_seconds\":\"300\",\"chain_depth\":\"$next_depth\"}}")
+            echo "HTTP: $code"
+            cat /tmp/redispatch_resp.json || true
+            if [ "$code" != "204" ]; then
+              echo "::warning::Диспетч eumetsat_alert_redispatch.yml вернул HTTP $code"
+            fi
+          else
+            echo "тревоги нет или цепочка исчерпана — обычный каденс"
+          fi
