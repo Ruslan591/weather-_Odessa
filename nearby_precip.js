@@ -336,6 +336,21 @@ function _cloudExtraBullets(f){
         if(t.height_verdict) out.push(`высота верхушек — ${t.height_verdict}`);
         if(t.shape_verdict) out.push(`форма поля — ${t.shape_verdict}`);
     }
+    // Вид облаков (фаза) — из eumetsat_cloud_phase_type.json, подобран
+    // ПО target_id/class, чтобы описывать ровно тот же объект, что и
+    // "ближайшее облако" выше (см. docs/topics/eumetsat.md, запись
+    // 2026-08-08 — до синхронизации выбора цели это могли быть разные
+    // объекты).
+    const pt = _eumetsatCloudPhaseTypeData;
+    if(pt && f.target_id != null && f.class){
+        let label = null;
+        if(f.class === "local" && pt.target_confirmation && pt.target_confirmation.target_id === f.target_id){
+            label = pt.target_confirmation.roi_dominant_phase_label;
+        } else if(f.class === "system" && pt.system_analysis && pt.system_analysis.available && pt.system_analysis.target_id === f.target_id){
+            label = pt.system_analysis.roi_dominant_phase_label;
+        }
+        if(label) out.push(`вид облаков — ${label}`);
+    }
     return out;
 }
 
