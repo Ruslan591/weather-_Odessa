@@ -378,19 +378,20 @@ def _fp_currently_excluded(entry):
     return age_hours < FALSE_POSITIVE_TTL_HOURS
 
 
-def pick_local_target(candidates, fp_log=None):
-    """Выбирает ближайшего local-кандидата, ПРОПУСКАЯ те, чья сигнатура
-    сейчас в статусе excluded (см. блок выше). candidates — уже
-    отсортированный по расстоянию список (как отдаёт cloud_forecast.json).
-    Возвращает (target_or_None, suppressed_or_None) — suppressed — это
-    САМЫЙ БЛИЖНИЙ подавленный кандидат (для отображения на странице
-    пометки "известный шумовой объект"), даже если дальше нашлась обычная
-    цель."""
+def pick_nearest_candidate(candidates, fp_log=None, require_class="local"):
+    """Обобщённая версия: выбирает ближайшего кандидата нужного класса,
+    ПРОПУСКАЯ те, чья сигнатура сейчас в статусе excluded (см. блок выше).
+    require_class: "local" — как раньше (для 5 confirming-модулей и
+    target_summary), "system" — только системные, None — любой класс
+    (используется картой "Облачность" на nearby.html, чтобы её выбор цели
+    совпадал с "Итогом" — см. docs/topics/eumetsat.md, запись 2026-08-08).
+    candidates — уже отсортированный по расстоянию список (как отдаёт
+    cloud_forecast.json). Возвращает (target_or_None, suppressed_or_None)."""
     if fp_log is None:
         fp_log = load_false_positive_log()
     suppressed = None
     for c in candidates:
-        if c.get("class", "local") != "local":
+        if require_class is not None and c.get("class", "local") != require_class:
             continue
         sig = false_positive_signature(c["centroid_dx_km"], c["centroid_dy_km"])
         if _fp_currently_excluded(fp_log.get(sig)):
@@ -399,6 +400,17 @@ def pick_local_target(candidates, fp_log=None):
             continue
         return c, suppressed
     return None, suppressed
+
+
+def pick_local_target(candidates, fp_log=None):
+    """Выбирает ближайшего local-кандидата, ПРОПУСКАЯ те, чья сигнатура
+    сейчас в статусе excluded (см. блок выше). candidates — уже
+    отсортированный по расстоянию список (как отдаёт cloud_forecast.json).
+    Возвращает (target_or_None, suppressed_or_None) — suppressed — это
+    САМЫЙ БЛИЖНИЙ подавленный кандидат (для отображения на странице
+    пометки "известный шумовой объект"), даже если дальше нашлась обычная
+    цель. Тонкая обёртка над pick_nearest_candidate(require_class="local")."""
+    return pick_nearest_candidate(candidates, fp_log, require_class="local")
 
 
 def load_primary_target(max_age_minutes=30):
