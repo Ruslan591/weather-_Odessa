@@ -48,7 +48,7 @@ jobs:
       - name: Запуск спутникового пайплайна
         run: python scripts/gh_satellite_pipeline.py
 
-      - name: Push-уведомление (ntfy) при новой тревоге
+      - name: Push-уведомление (ntfy) — осадки, новая тревога
         # Шлёт push ТОЛЬКО на переход false→true (just_triggered), не на
         # каждый цикл — иначе спам все 5 минут, пока тревога активна.
         # Topic — случайная нечитаемая строка вместо auth (см.
@@ -67,21 +67,47 @@ jobs:
             verdict=$(jq -r '.verdict // "?"' data/eumetsat_alert_state.json)
             prob=$(jq -r '.probability_percent // "?"' data/eumetsat_alert_state.json)
             curl -sS -X POST "https://ntfy.sh/odessa-storm-x7k2m9qp4h" \
-              -H "Title: Гроза приближается" \
+              -H "Title: 🌧️ Осадки приближаются" \
               -H "Priority: high" \
-              -H "Tags: warning,cloud_with_lightning" \
+              -H "Tags: cloud_with_rain" \
               -H "Click: https://ruslan591.github.io/weather-_Odessa/nearby.html" \
               -d "${verdict} / ETA ~${eta} мин / ${dist} км / вероятность ${prob}%"
-            echo "push отправлен"
+            echo "push (осадки) отправлен"
           else
-            echo "тревоги нет либо уже уведомляли — пропуск"
+            echo "тревоги по осадкам нет либо уже уведомляли — пропуск"
+          fi
+
+      - name: Push-уведомление (ntfy) — гроза, новая тревога
+        # Отдельная тревога от осадков (li_afa вместо h60b) — своё
+        # сообщение, чтобы не путать "просто дождь" с грозовой активностью.
+        if: always()
+        run: |
+          if [ ! -f data/eumetsat_lightning_alert_state.json ]; then
+            echo "нет lightning_alert_state.json — пропуск"
+            exit 0
+          fi
+          just_triggered=$(jq -r '.just_triggered' data/eumetsat_lightning_alert_state.json)
+          if [ "$just_triggered" = "true" ]; then
+            eta=$(jq -r '.eta_min // "?"' data/eumetsat_lightning_alert_state.json)
+            dist=$(jq -r '.distance_km_now // "?"' data/eumetsat_lightning_alert_state.json)
+            verdict=$(jq -r '.verdict // "?"' data/eumetsat_lightning_alert_state.json)
+            prob=$(jq -r '.probability_percent // "?"' data/eumetsat_lightning_alert_state.json)
+            curl -sS -X POST "https://ntfy.sh/odessa-storm-x7k2m9qp4h" \
+              -H "Title: ⛈️ Гроза приближается" \
+              -H "Priority: urgent" \
+              -H "Tags: zap" \
+              -H "Click: https://ruslan591.github.io/weather-_Odessa/nearby.html" \
+              -d "${verdict} / ETA ~${eta} мин / ${dist} км / вероятность ${prob}%"
+            echo "push (гроза) отправлен"
+          else
+            echo "тревоги по грозе нет либо уже уведомляли — пропуск"
           fi
 
       - name: Проверка тревоги — досрочный повтор через 5 минут
         # Android job scheduler (job 1001) не позволяет учащать триггер
         # чаще 15 мин, поэтому во время тревоги каденс ускоряет сам GitHub:
-        # если eumetsat_alert_state.json показывает alert=true, дёргаем
-        # eumetsat_alert_redispatch.yml (спит 5 мин, затем снова этот
+        # если ЛЮБОЙ из alert_state (осадки ИЛИ гроза) показывает alert=true,
+        # дёргаем eumetsat_alert_redispatch.yml (спит 5 мин, затем снова этот
         # воркфлоу) вместо ожидания следующего цикла с телефона.
         # chain_depth ограничивает цепочку 8 повторами (~40 мин ускоренного
         # каденса), после чего откатываемся на обычный 15-минутный ритм.
@@ -90,14 +116,17 @@ jobs:
           CHAIN_DEPTH: ${{ inputs.chain_depth }}
         run: |
           MAX_CHAIN=8
-          if [ ! -f data/eumetsat_alert_state.json ]; then
-            echo "нет alert_state.json — пропуск"
-            exit 0
+          alert_precip="False"
+          alert_lightning="False"
+          if [ -f data/eumetsat_alert_state.json ]; then
+            alert_precip=$(python3 -c "import json; print(json.load(open('data/eumetsat_alert_state.json')).get('alert'))")
           fi
-          alert=$(python3 -c "import json; print(json.load(open('data/eumetsat_alert_state.json')).get('alert'))")
+          if [ -f data/eumetsat_lightning_alert_state.json ]; then
+            alert_lightning=$(python3 -c "import json; print(json.load(open('data/eumetsat_lightning_alert_state.json')).get('alert'))")
+          fi
           depth="${CHAIN_DEPTH:-0}"
-          echo "alert=$alert chain_depth=$depth"
-          if [ "$alert" = "True" ] && [ "$depth" -lt "$MAX_CHAIN" ]; then
+          echo "alert_precip=$alert_precip alert_lightning=$alert_lightning chain_depth=$depth"
+          if { [ "$alert_precip" = "True" ] || [ "$alert_lightning" = "True" ]; } && [ "$depth" -lt "$MAX_CHAIN" ]; then
             next_depth=$((depth + 1))
             code=$(curl -sS -o /tmp/redispatch_resp.json -w "%{http_code}" -X POST \
               -H "Authorization: token ${{ secrets.GH_PAT }}" \
