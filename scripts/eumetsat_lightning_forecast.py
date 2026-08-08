@@ -23,6 +23,8 @@ import field_motion_common as fc
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_lightning_forecast.json")
 DEBUG_FILE = os.path.join(BASE_DIR, "data", "eumetsat_lightning_forecast_debug.json")
+HISTORY_FILE = os.path.join(BASE_DIR, "data", "eumetsat_lightning_history.jsonl")
+ALERT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_lightning_alert_state.json")
 
 LAYER_LI_AFA = "mtg_fd:li_afa"
 N_FRAMES = 4
@@ -30,6 +32,15 @@ STEP_MINUTES = 5
 # Грозовые ячейки компактнее осадков/облаков — порог значимости ниже,
 # иначе реальные, но небольшие очаги молний будут отбрасываться как шум.
 MIN_BLOB_PX = 8
+
+# Отдельная история/тревога для грозы (не путать с eumetsat_alert_state.json
+# у precip_forecast — это разные явления, разные push-уведомления). Порог
+# ETA ниже, чем у осадков — грозовые ячейки мельче и быстрее движутся,
+# скорость у них чаще вообще не считается (см. method_note), поэтому
+# verdict "уже у города" — более надёжный триггер тревоги, чем eta_min.
+MAX_HISTORY_LINES = 500
+ALERT_ETA_THRESHOLD_MIN = 20
+ALERT_MIN_PROBABILITY = 75
 
 
 def main():
@@ -210,8 +221,59 @@ def main():
     with open(OUT_FILE, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
 
+    # --- Хронология (append-only, для таблицы на nearby.html)
+    history_entry = {
+        "timestamp": out.get("timestamp"),
+        "current_state": out.get("current_state"),
+        "distance_km_now": out.get("distance_km_now"),
+        "eta_min": out.get("eta_min"),
+        "verdict": out.get("verdict"),
+        "probability_percent": out.get("probability_percent"),
+    }
+    try:
+        lines = []
+        if os.path.exists(HISTORY_FILE):
+            with open(HISTORY_FILE, "r", encoding="utf-8") as hf:
+                lines = hf.readlines()
+        lines.append(json.dumps(history_entry, ensure_ascii=False) + "\n")
+        lines = lines[-MAX_HISTORY_LINES:]
+        with open(HISTORY_FILE, "w", encoding="utf-8") as hf:
+            hf.writelines(lines)
+    except Exception as e:
+        print(f"  [WARN] eumetsat_lightning_forecast.py: history log failed: {e}")
+
+    # --- Режим тревоги (отдельный от осадков — своя тема, свой push)
+    is_alert = out.get("verdict") == "уже у города" or (
+        out.get("eta_min") is not None
+        and out.get("eta_min") <= ALERT_ETA_THRESHOLD_MIN
+        and (out.get("probability_percent") or 0) >= ALERT_MIN_PROBABILITY
+    )
+    prev_alert = False
+    try:
+        if os.path.exists(ALERT_FILE):
+            with open(ALERT_FILE, "r", encoding="utf-8") as af:
+                prev_alert = bool(json.load(af).get("alert"))
+    except Exception:
+        prev_alert = False
+
+    alert_state = {
+        "timestamp": out.get("timestamp"),
+        "alert": is_alert,
+        "just_triggered": bool(is_alert and not prev_alert),
+        "eta_min": out.get("eta_min"),
+        "distance_km_now": out.get("distance_km_now"),
+        "verdict": out.get("verdict"),
+        "probability_percent": out.get("probability_percent"),
+    }
+    try:
+        with open(ALERT_FILE, "w", encoding="utf-8") as af:
+            json.dump(alert_state, af, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"  [WARN] eumetsat_lightning_forecast.py: alert state write failed: {e}")
+
     fc.write_debug(DEBUG_FILE, {"status": "ok", **debug, "result": out})
-    print(f"  [OK] eumetsat_lightning_forecast.py: {out.get('verdict')}")
+    print(f"  [OK] eumetsat_lightning_forecast.py: {out.get('verdict')}"
+          + (" [ALERT]" if is_alert else ""))
 
 
 if __name__ == "__main__":
