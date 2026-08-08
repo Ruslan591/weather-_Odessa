@@ -67,8 +67,16 @@ STEP_MINUTES). Позиция ближайшей "противоположной
   - Обратный случай (сейчас ясно/переменная облачность): если в радиусе
     найдено значимое (после фильтра шума) поле облачности, дополнительно
     считается probability_percent — эвристическая (не физическая) оценка
-    вероятности, что оно принесёт изменение погоды, по близости точки
-    сближения, площади поля и уверенности в оценке скорости.
+    вероятности, что оно принесёт изменение погоды. С 2026-08-08 база
+    берётся ИЗ КАТЕГОРИИ verdict (approaching/receding/passing по CPA), а
+    не только из сырой близости — раньше у "удаляется"/"пройдёт мимо" могла
+    получиться существенная % оценка вопреки тексту рядом (см.
+    docs/topics/eumetsat.md). Площадь поля и уверенность в оценке скорости
+    только модулируют базу, не переопределяют её.
+  - Выбор "ближайшего облака/просвета" для этого блока СИНХРОНИЗИРОВАН с
+    реестром повторяющихся ложных срабатываний CLM
+    (data/eumetsat_target_false_positive_log.json, fc.pick_nearest_candidate) —
+    известные шумовые объекты сюда не попадают, как и в "Итог" на странице.
 
 Пишет data/eumetsat_cloud_forecast.json (результат) и
 data/eumetsat_cloud_buffer.npz (персистентный буфер кадров).
@@ -245,33 +253,6 @@ def _local_area_mask():
 def _station_area_mask():
     """Булев (H,W) — True внутри STATE_RADIUS_KM (для current_state, "сейчас над станцией")."""
     return _radius_mask(STATE_RADIUS_KM)
-
-
-def _nearest_of_type(is_cloud_mask, valid_mask, want_cloud, min_blob_px=MIN_SIGNIFICANT_BLOB_PX):
-    """Ищет ближайшую к центру точку нужного типа (облако/просвет), но только
-    внутри связных областей площадью >= min_blob_px — единичные шумовые/
-    переходные (антиалиасинг границы) пиксели и no-data не считаются краем.
-    Возвращает (dx_km, dy_km, blob_area_km2) для найденного пятна, или None
-    если значимых областей нужного типа в кадре не найдено."""
-    raw_target = is_cloud_mask if want_cloud else (~is_cloud_mask & valid_mask)
-    labeled, n = ndimage.label(raw_target)
-    if n == 0:
-        return None
-    sizes = ndimage.sum(raw_target, labeled, range(1, n + 1))
-    keep_labels = np.where(sizes >= min_blob_px)[0] + 1
-    if len(keep_labels) == 0:
-        return None
-    filtered = np.isin(labeled, keep_labels)
-    ys, xs = np.where(filtered)
-    center_row = center_col = (TILE_SIZE - 1) / 2
-    dist_px = np.sqrt((ys - center_row) ** 2 + (xs - center_col) ** 2)
-    best_i = np.argmin(dist_px)
-    row, col = int(ys[best_i]), int(xs[best_i])
-    blob_label = labeled[row, col]
-    blob_px = float(sizes[blob_label - 1])
-    blob_area_km2 = blob_px * KM_PER_PX_X * KM_PER_PX_Y
-    dx_km, dy_km = _pixel_to_km_offset(row, col)
-    return dx_km, dy_km, blob_area_km2
 
 
 def _significant_blobs(is_cloud_mask, valid_mask, want_cloud, min_blob_px=MIN_SIGNIFICANT_BLOB_PX):
@@ -475,13 +456,41 @@ def _density_height_shape_trend(is_cloud_frames, cth_index_frames, valid_frames,
     }
 
 
-def _change_probability(effective_distance_km, blob_area_km2, confidence):
+def _change_probability(verdict, dist_now_km, cpa_km, eta_min, blob_area_km2, confidence):
     """Эвристическая (НЕ физическая модель осадков) оценка вероятности, что
-    значимое облачное поле принесёт изменение погоды в точку наблюдения."""
-    proximity = max(0.0, 1 - effective_distance_km / (AFFECT_THRESHOLD_KM * 4))
+    значимое облачное поле принесёт изменение погоды в точку наблюдения.
+
+    ПЕРЕДЕЛАНО 2026-08-08 (см. docs/topics/eumetsat.md): раньше база
+    считалась ТОЛЬКО из близости точки максимального сближения (cpa_km) и
+    площади поля, БЕЗ оглядки на сам verdict — из-за этого у объекта с
+    verdict='удаляется' или 'пройдёт мимо, город, скорее всего, не заденет'
+    могла получиться существенная % оценка, хотя текст рядом прямо говорил
+    обратное (реальная жалоба: "пройдёт мимо, идут в другую сторону, но
+    вероятность изменений 50%"). Теперь БАЗА берётся из категории verdict
+    (что уже честно отражает физику — approaching/receding/passing по CPA),
+    и лишь модулируется площадью поля и уверенностью в оценке скорости —
+    поэтому число теперь согласовано с текстом, а не противоречит ему."""
     size = min(1.0, blob_area_km2 / SIGNIFICANT_AREA_REF_KM2)
-    score = 0.5 * proximity + 0.3 * size + 0.2 * confidence
-    return int(round(max(5, min(95, 5 + 90 * score))))
+    if verdict == "уже у города":
+        base = 0.90
+    elif verdict == "приближается":
+        # чем меньше ETA, тем увереннее, что зона дойдёт до порога
+        eta_factor = 1.0 if eta_min is None else max(0.3, 1 - eta_min / 180.0)
+        base = 0.40 + 0.35 * eta_factor
+    elif verdict == "почти стоит на месте":
+        base = max(0.10, 1 - dist_now_km / (AFFECT_THRESHOLD_KM * 3))
+    elif verdict == "пройдёт мимо, город, скорее всего, не заденет":
+        # запас расстояния между CPA и порогом — чем больше, тем ближе к нулю
+        margin_km = max(0.0, (cpa_km or 0.0) - AFFECT_THRESHOLD_KM)
+        base = max(0.05, 0.35 - margin_km / 200.0)
+    elif verdict == "удаляется":
+        base = 0.05
+    else:
+        # скорость не посчиталась — старый fallback, только по близости,
+        # честно помечен сниженной уверенностью через confidence-множитель
+        base = max(0.05, min(0.6, 1 - dist_now_km / (AFFECT_THRESHOLD_KM * 4)))
+    score = 0.70 * base + 0.20 * size + 0.10 * confidence
+    return int(round(max(3, min(97, 100 * score))))
 
 
 def _buffer_status(n_frames):
@@ -645,28 +654,55 @@ def main():
     want_cloud_target = area_fraction_now < 0.5
     target_type = "cloud_mass" if want_cloud_target else "clearing"
 
-    nearest = _nearest_of_type(is_cloud_now, valid_now, want_cloud_target)
-    p_now = nearest[:2] if nearest is not None else None
-    blob_area_km2 = nearest[2] if nearest is not None else None
     # ROI-контракт для остальных модулей пайплайна (ИК/GeoColour/Phase-Type/
     # осадки/гроза читают candidates вместо собственного независимого поиска
     # "ближайшего пятна" — см. docs/topics/eumetsat.md, план от 2026-08-04)
     candidates = _significant_blobs(is_cloud_now, valid_now, want_cloud_target)
+    # Выбор "ближайшего облака" СИНХРОНИЗИРОВАН с реестром повторяющихся
+    # ложных срабатываний CLM (data/eumetsat_target_false_positive_log.json,
+    # см. docs/topics/eumetsat.md, запись 2026-08-08) — раньше этот блок
+    # искал ближайшее пятно сам по себе (_nearest_of_type), в обход
+    # подавления, из-за чего карточка "Облачность" могла показывать ровно
+    # тот объект, который "Итог" уже считает шумовым и подавляет. Для
+    # облаков (want_cloud_target) фильтр смотрит на кандидатов ЛЮБОГО
+    # класса (не только "local" — крупная система тоже должна попадать
+    # сюда, как и раньше попадала через _nearest_of_type); для просветов
+    # подавление не имеет смысла (реестр — только про ложные срабатывания
+    # облачности), берём просто ближайший.
+    suppressed_cand = None
+    if want_cloud_target:
+        picked, suppressed_cand = fc.pick_nearest_candidate(candidates, require_class=None)
+    else:
+        picked = candidates[0] if candidates else None
+    p_now = (picked["centroid_dx_km"], picked["centroid_dy_km"]) if picked is not None else None
+    blob_area_km2 = picked["area_km2"] if picked is not None else None
+    picked_target_id = picked["target_id"] if picked is not None else None
+    picked_class = picked.get("class") if picked is not None else None
     vx, vy, n_pairs = _estimate_motion(is_cloud_frames, times)
 
     trend = _density_height_shape_trend(is_cloud_frames, cth_index_frames, valid_frames, local_mask)
     buffer_status = _buffer_status(len(packed_frames))
 
     if p_now is None:
+        verdict_text = "однородно в радиусе ~{}км, {} не найдено".format(
+            round(HALF_WINDOW_DEG * KM_PER_DEG_LON),
+            "облаков" if want_cloud_target else "просветов",
+        )
+        if want_cloud_target and suppressed_cand is not None:
+            # Кандидат физически есть, но это уже известный шумовой объект
+            # (все local/system-кандидаты рядом подавлены) — не то же самое,
+            # что "реально пусто", поэтому отдельная формулировка.
+            verdict_text = (
+                f"рядом виден только известный шумовой объект "
+                f"(сигнатура {suppressed_cand['false_positive_signature']}), подавлено — "
+                f"настоящих облаков в радиусе не найдено"
+            )
         out = {
             "timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "current_state": current_state_str,
             "station_area_fraction": round(area_fraction_now, 3),
             "target_type": target_type,
-            "verdict": "однородно в радиусе ~{}км, {} не найдено".format(
-                round(HALF_WINDOW_DEG * KM_PER_DEG_LON),
-                "облаков" if want_cloud_target else "просветов",
-            ),
+            "verdict": verdict_text,
         }
     else:
         dist_now = math.hypot(*p_now)
@@ -682,12 +718,18 @@ def main():
                 "bearing_deg": round(bearing_now, 0),
                 "compass": compass_now,
                 "blob_area_km2": round(blob_area_km2, 0),
+                "target_id": picked_target_id,
+                "class": picked_class,
                 "verdict": "скорость посчитать не удалось (поле слишком однородно во всех кадрах)",
             }
             if target_type == "cloud_mass":
-                out["probability_percent"] = _change_probability(dist_now, blob_area_km2, confidence=0.25)
+                out["probability_percent"] = _change_probability(
+                    out["verdict"], dist_now, cpa_km=None, eta_min=None,
+                    blob_area_km2=blob_area_km2, confidence=0.25,
+                )
                 out["probability_note"] = (
-                    "эвристика (близость + размер поля), скорость не посчиталась — доверие снижено"
+                    "база — близость (скорость не посчиталась, доверие снижено), "
+                    "не физическая модель осадков"
                 )
         else:
             speed_kmh = math.hypot(vx, vy)
@@ -723,15 +765,21 @@ def main():
                 "cpa_km": round(cpa_km, 1),
                 "eta_min": eta_min if verdict in ("приближается", "уже у города") else None,
                 "blob_area_km2": round(blob_area_km2, 0),
+                "target_id": picked_target_id,
+                "class": picked_class,
                 "verdict": verdict,
                 "frame_pairs_used": n_pairs,
             }
             if target_type == "cloud_mass":
                 confidence = min(1.0, n_pairs / max(1, len(packed_frames) - 1))
-                out["probability_percent"] = _change_probability(cpa_km, blob_area_km2, confidence)
+                out["probability_percent"] = _change_probability(
+                    verdict, dist_now, cpa_km, eta_min, blob_area_km2, confidence,
+                )
                 out["probability_note"] = (
-                    "эвристика (близость точки максимального сближения + размер поля + "
-                    "уверенность в оценке скорости), не физическая модель осадков"
+                    f"база берётся из категории движения ('{verdict}'), затем немного "
+                    "корректируется площадью поля и уверенностью в оценке скорости — "
+                    "у 'удаляется'/'пройдёт мимо' база низкая, у 'приближается'/'уже у "
+                    "города' высокая; не физическая модель осадков"
                 )
 
     out["trend"] = trend
