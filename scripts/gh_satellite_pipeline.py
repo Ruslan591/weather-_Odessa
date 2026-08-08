@@ -332,6 +332,8 @@ def git_push_satellite():
             "data/eumetsat_alert_state.json",
             "data/eumetsat_lightning_forecast.json",
             "data/eumetsat_lightning_forecast_debug.json",
+            "data/eumetsat_lightning_history.jsonl",
+            "data/eumetsat_lightning_alert_state.json",
             "data/eumetsat_ir_motion.json",
             "data/eumetsat_ir_motion_debug.json",
             "data/eumetsat_ir_buffer.npz",
