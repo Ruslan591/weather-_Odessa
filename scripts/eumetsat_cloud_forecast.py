@@ -670,14 +670,30 @@ def main():
     # подавление не имеет смысла (реестр — только про ложные срабатывания
     # облачности), берём просто ближайший.
     suppressed_cand = None
+    fp_log = fc.load_false_positive_log()
     if want_cloud_target:
-        picked, suppressed_cand = fc.pick_nearest_candidate(candidates, require_class=None)
+        picked, suppressed_cand = fc.pick_nearest_candidate(candidates, fp_log, require_class=None)
     else:
         picked = candidates[0] if candidates else None
     p_now = (picked["centroid_dx_km"], picked["centroid_dy_km"]) if picked is not None else None
     blob_area_km2 = picked["area_km2"] if picked is not None else None
     picked_target_id = picked["target_id"] if picked is not None else None
     picked_class = picked.get("class") if picked is not None else None
+    # Перекрёстная проверка ДО отображения (не только после исключения) —
+    # см. docs/topics/eumetsat.md, запись 2026-08-08 (2): этот блок сам по
+    # себе видит ТОЛЬКО CLM, без оглядки на ИК/GeoColour/Phase-Type — те
+    # голосуют уже ПОСЛЕ этого прогона в этом же цикле (target_summary
+    # пишется последним), так что live-consensus текущего цикла тут в
+    # принципе недоступен. Но реестр ложных срабатываний уже содержит
+    # результат ПРЕДЫДУЩЕЙ проверки той же сигнатуры (not_confirmed_streak) —
+    # используем его как опережающий сигнал, а не ждём порога исключения
+    # (3 подряд), после которого объект и так пропадёт из candidates.
+    cross_check_streak = 0
+    if want_cloud_target and picked is not None:
+        _sig = fc.false_positive_signature(picked["centroid_dx_km"], picked["centroid_dy_km"])
+        _entry = fp_log.get(_sig)
+        if _entry:
+            cross_check_streak = _entry.get("not_confirmed_streak", 0)
     vx, vy, n_pairs = _estimate_motion(is_cloud_frames, times)
 
     trend = _density_height_shape_trend(is_cloud_frames, cth_index_frames, valid_frames, local_mask)
@@ -731,6 +747,14 @@ def main():
                     "база — близость (скорость не посчиталась, доверие снижено), "
                     "не физическая модель осадков"
                 )
+                if cross_check_streak > 0:
+                    out["cross_check_warning"] = (
+                        f"на последней проверке остальные каналы (ИК/GeoColour/"
+                        f"Phase-Type) эту цель НЕ подтвердили "
+                        f"({cross_check_streak}/{fc.FALSE_POSITIVE_STREAK_THRESHOLD} "
+                        f"до автоисключения) — возможно, ложное срабатывание CLM"
+                    )
+                    out["probability_percent"] = max(3, round(out["probability_percent"] * 0.5))
         else:
             speed_kmh = math.hypot(vx, vy)
             dot_pv = p_now[0] * vx + p_now[1] * vy
@@ -781,6 +805,14 @@ def main():
                     "у 'удаляется'/'пройдёт мимо' база низкая, у 'приближается'/'уже у "
                     "города' высокая; не физическая модель осадков"
                 )
+                if cross_check_streak > 0:
+                    out["cross_check_warning"] = (
+                        f"на последней проверке остальные каналы (ИК/GeoColour/"
+                        f"Phase-Type) эту цель НЕ подтвердили "
+                        f"({cross_check_streak}/{fc.FALSE_POSITIVE_STREAK_THRESHOLD} "
+                        f"до автоисключения) — возможно, ложное срабатывание CLM"
+                    )
+                    out["probability_percent"] = max(3, round(out["probability_percent"] * 0.5))
 
     out["trend"] = trend
     out["buffer_status"] = buffer_status
