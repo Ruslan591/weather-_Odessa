@@ -1116,3 +1116,55 @@ consistent прогноз (40→29→0 мин, точка перехода в "�
 (`Z`), при разборе инцидентов ВСЕГДА конвертировать в Europe/Kiev (+3 летом)
 и не сравнивать сырые UTC-часы с местными таймстемпами PWS/пользователя
 напрямую.
+
+---
+
+## Реализовано (2026-08-09, по итогам разбора кейса выше): единый блок,
+## адаптивный каденс, push, хронология
+
+По итогам разбора шквала 08.08 сделаны 4 фичи:
+
+1. **История/хронология** — `eumetsat_precip_forecast.py` пишет
+   `data/eumetsat_precip_history.jsonl` (append-only, последние 500 записей:
+   timestamp/current_state/distance_km_now/eta_min/verdict/probability_percent).
+   На `nearby.html` рендерится таблицей под спойлером "📜 Хронология осадков"
+   (`_renderHistoryTable()` в `nearby_precip.js`, `loadEumetsatPrecipHistory()`
+   грузит .jsonl построчным парсингом).
+
+2. **Адаптивный каденс** — Android job scheduler (job 1001) физически не
+   позволяет учащать триггер чаще 15 мин, поэтому решено на стороне GitHub:
+   `eumetsat_precip_forecast.py` пишет `data/eumetsat_alert_state.json`
+   (`alert`, `just_triggered`, пороги `eta_min<=30` и `probability>=80`,
+   либо verdict "уже у города"). Финальный шаг в `satellite_pipeline.yml`
+   при `alert=true` дёргает новый воркфлоу `eumetsat_alert_redispatch.yml` —
+   тот **спит 5 минут** (не cron — cron неточен, особенно в busy-периоды) и
+   дёргает `satellite_pipeline.yml` заново, с `chain_depth+1`. Цепочка до
+   8 витков (~40 мин ускоренного каденса раз в 5 мин), дальше откат на
+   обычный ритм с телефона. Диспетч — через `secrets.GH_PAT`, не
+   `GITHUB_TOKEN` (дефолтный токен не может триггерить workflow_dispatch
+   на другой workflow — защита GitHub от рекурсии), как уже было сделано
+   в `full_pipeline.yml`.
+
+3. **Push (ntfy.sh)** — шаг в `satellite_pipeline.yml`, шлёт curl POST на
+   `https://ntfy.sh/odessa-storm-x7k2m9qp4h` (topic — случайная строка без
+   авторизации, приемлемо для личных алертов) при `just_triggered=true`
+   (переход false→true, не спамит каждые 5 мин пока тревога активна).
+   Priority high, click ведёт на `nearby.html`.
+
+4. **Единый блок вместо путаницы карточек** — на `nearby.html` был уже
+   один card-элемент (`nearbyPrecipCard`), но внутри — 8 последовательных
+   блоков по каналам (Облачность/Осадки/Гроза/ИК/GeoColour/Фаза-тип/
+   Far-watch/Very-far-watch), из-за чего в моменте легко перепутать, какое
+   именно число читаешь (см. кейс выше — пользователь не смог вспомнить,
+   в какую карточку смотрел). Теперь: `_renderTargetSummaryLines()`
+   ("🎯 Итог" из `eumetsat_target_summary.json`) + таблица хронологии —
+   единственное, что видно сразу. Остальные 8 блоков свёрнуты под
+   `<details>` "🔧 Подробности по каналам".
+
+**Открыто:** ntfy push пока не проверен на реальном срабатывании (нужно
+дождаться следующей тревоги). Единый "Итог"-блок использует
+`eumetsat_target_summary.json` как есть — если понадобится, можно доработать
+его текст, чтобы явно включать eta_min/distance_km_now из precip_forecast
+(сейчас это текстовый verdict, собранный отдельным скриптом
+`eumetsat_target_summary.py`, не всегда 1-в-1 с числами из
+precip_forecast.json — стоит перепроверить на следующем реальном кейсе).
