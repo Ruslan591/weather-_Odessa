@@ -216,10 +216,27 @@ def main():
             "area_km2": suppressed["area_km2"],
         }
 
+    # --- движение цели (скорость/направление/ETA/CPA) — берём из ТОГО ЖЕ
+    # cloud_forecast.json, если он сейчас смотрит на тот же самый объект
+    # (target_id+class совпадают): с 2026-08-08 выбор "ближайшего облака" в
+    # cloud_forecast.py синхронизирован с тем же реестром подавления, что и
+    # выбор здесь (см. docs/topics/eumetsat.md), так что чаще всего это одна
+    # и та же цель — но при рассинхроне снапшотов (гонка обновлений между
+    # прогонами) можем и не совпасть, тогда просто не показываем движение.
+    if cf.get("target_id") == target["target_id"] and cf.get("class") == "local" and cf.get("speed_kmh") is not None:
+        out["target_movement"] = {
+            "speed_kmh": cf["speed_kmh"],
+            "direction_compass": cf.get("direction_compass"),
+            "cpa_km": cf.get("cpa_km"),
+            "eta_min": cf.get("eta_min"),
+            "verdict": cf.get("verdict"),
+        }
+
     # --- существование цели: трио ir/geocolour/phase_type ---
     existence = {}
     votes_true = 0
     votes_false = 0
+    target_phase = None
     for key, filename in EXISTENCE_MODULES.items():
         data = _load_json(filename)
         tc = (data or {}).get("target_confirmation")
@@ -235,6 +252,17 @@ def main():
             votes_true += 1
         elif confirmed is False:
             votes_false += 1
+        # Вид облаков (фаза) — данные уже посчитаны cloud_phase_type.py для
+        # ROI этой же цели (target_confirmation.roi_dominant_phase_label),
+        # просто раньше не пробрасывались в текст "Итога" (см.
+        # docs/topics/eumetsat.md, запись 2026-08-08).
+        if key == "cloud_phase_type" and tc.get("roi_dominant_phase_label"):
+            target_phase = {
+                "label": tc["roi_dominant_phase_label"],
+                "cloud_fraction": tc.get("roi_cloud_fraction"),
+            }
+    if target_phase is not None:
+        out["target_phase"] = target_phase
 
     total_voted = votes_true + votes_false
     if total_voted == 0:
@@ -340,9 +368,11 @@ def _build_verdict(out):
     dist = out["target_distance_km"]
     compass = out["target_compass"]
     area = out["target_area_km2"]
+    phase = out.get("target_phase")
+    phase_str = f", {phase['label']}" if phase else ""
 
     if consensus == "confirmed":
-        base = f"Облачная масса ({area:.0f}км²) в {dist:.0f}км {compass} подтверждена всеми доступными каналами."
+        base = f"Облачная масса ({area:.0f}км²{phase_str}) в {dist:.0f}км {compass} подтверждена всеми доступными каналами."
     elif consensus == "not_confirmed":
         base = f"CLM отметил цель в {dist:.0f}км {compass}, но остальные каналы облачность там не видят — вероятно, ложное срабатывание."
     elif consensus == "disputed":
@@ -351,11 +381,29 @@ def _build_verdict(out):
         night_hint = ""
         if _is_night(out["cloud_forecast_timestamp"] or out["timestamp"]) and "cloud_phase_type" in disagree:
             night_hint = " (ночь — rgb_cloudphase/rgb_cloudtype дают систематическое ложное «безоблачно» без солнечного света, см. docs/topics/eumetsat.md)"
-        base = (f"Цель в {dist:.0f}км {compass} — каналы расходятся: "
+        base = (f"Цель в {dist:.0f}км {compass}{phase_str} — каналы расходятся: "
                 f"{'/'.join(agree) or '—'} подтверждают, {'/'.join(disagree) or '—'} нет"
                 f"{night_hint}.")
     else:
         base = f"Цель в {dist:.0f}км {compass} — недостаточно данных для подтверждения."
+
+    # --- движение (скорость/направление/куда идёт/через сколько дойдёт) —
+    # только если существование подтверждено хотя бы частично (нет смысла
+    # описывать движение объекта, который сами каналы не видят).
+    move = out.get("target_movement")
+    if move and consensus in ("confirmed", "disputed"):
+        v = move["verdict"]
+        if v in ("приближается", "уже у города"):
+            eta_str = f"~{round(move['eta_min'])} мин" if move.get("eta_min") is not None else "скоро"
+            base += f" Движется в сторону станции, {eta_str} до сближения (~{move['speed_kmh']:.0f} км/ч)."
+        elif v == "пройдёт мимо, город, скорее всего, не заденет":
+            base += (f" Идёт на {move.get('direction_compass') or '?'} со скоростью "
+                     f"~{move['speed_kmh']:.0f} км/ч, пройдёт мимо на ≈{move.get('cpa_km', 0):.0f}км, "
+                     f"город, скорее всего, не заденет.")
+        elif v == "удаляется":
+            base += f" Удаляется (~{move['speed_kmh']:.0f} км/ч)."
+        elif v == "почти стоит на месте":
+            base += " Почти не движется."
 
     precip = out["phenomena"].get("precip_forecast", {}).get("confirmed")
     lightning = out["phenomena"].get("lightning_forecast", {}).get("confirmed")
