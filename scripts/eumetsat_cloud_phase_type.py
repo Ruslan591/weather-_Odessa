@@ -492,7 +492,7 @@ def main():
                 "target_area_km2": target["area_km2"],
                 "roi_cloud_fraction": round(cloud_fraction, 3),
                 "roi_dominant_phase_ordinal": round(dominant_phase_ordinal, 1),
-                "roi_dominant_phase_label": PHASE_LABELS.get(round(dominant_phase_ordinal), "неопределено"),
+                "roi_dominant_phase_label": labels_a.get(round(dominant_phase_ordinal), "неопределено"),
                 "verdict": (
                     "Phase/Type подтверждает: в ROI CLM-цели преобладает облачность"
                     if confirmed else
@@ -532,8 +532,8 @@ def main():
                 "area_km2": sys_target["area_km2"],
                 "roi_cloud_fraction": round(sys_cloud_fraction, 3),
                 "roi_dominant_phase_ordinal": round(sys_dominant_phase, 1),
-                "roi_dominant_phase_label": PHASE_LABELS.get(round(sys_dominant_phase), "неопределено"),
-                "roi_dominant_type_label": TYPE_LABELS.get(round(sys_dominant_type), "неопределено"),
+                "roi_dominant_phase_label": labels_a.get(round(sys_dominant_phase), "неопределено"),
+                "roi_dominant_type_label": labels_b.get(round(sys_dominant_type), "неопределено"),
             }
 
     # --- То же самое, но для ВСЕХ систем (не только ближайшей выше) — по
@@ -562,8 +562,8 @@ def main():
             "target_id": st["target_id"],
             "available": True,
             "roi_cloud_fraction": round(cloud_fraction, 3),
-            "roi_dominant_phase_label": PHASE_LABELS.get(round(dominant_phase), "неопределено"),
-            "roi_dominant_type_label": TYPE_LABELS.get(round(dominant_type), "неопределено"),
+            "roi_dominant_phase_label": labels_a.get(round(dominant_phase), "неопределено"),
+            "roi_dominant_type_label": labels_b.get(round(dominant_type), "неопределено"),
         })
     out["system_analysis_all"] = system_analysis_all
 
