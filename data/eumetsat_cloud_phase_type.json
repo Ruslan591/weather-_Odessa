@@ -1,72 +1,64 @@
 {
-  "timestamp": "2026-08-09T22:36:58Z",
+  "timestamp": "2026-08-09T22:58:42Z",
+  "mode": "night",
   "unclassified_fraction_now": 0.0,
-  "phase_ordinal_now": 0.29,
+  "phase_ordinal_now": 0.28,
   "phase_ordinal_delta": 0.04,
   "phase_verdict": "без существенных изменений",
-  "type_group_now": 0.19,
-  "type_group_delta": 0.11,
+  "type_group_now": 0.21,
+  "type_group_delta": 0.1,
   "type_verdict": "без существенных изменений",
   "target_confirmation": {
-    "confirmed": true,
-    "target_id": 4,
-    "target_area_km2": 257.5,
-    "roi_cloud_fraction": 0.82,
-    "roi_dominant_phase_ordinal": 0.0,
-    "roi_dominant_phase_label": "безоблачно",
-    "verdict": "Phase/Type подтверждает: в ROI CLM-цели преобладает облачность"
+    "confirmed": null,
+    "target_id": 0,
+    "target_area_km2": 108.1,
+    "roi_fog_signal_fraction": 0.0,
+    "roi_dust_signal_fraction": 0.006,
+    "verdict": "Ночь: Fog/Dust RGB — грубый сигнал контраста, не полноценное подтверждение (confirmed не считается)"
   },
   "system_analysis": {
     "available": true,
-    "target_id": 0,
-    "area_km2": 902.0,
-    "roi_cloud_fraction": 0.332,
-    "roi_dominant_phase_ordinal": 0.0,
-    "roi_dominant_phase_label": "безоблачно",
-    "roi_dominant_type_label": "низкая/средняя"
+    "target_id": 1,
+    "area_km2": 717.9,
+    "roi_dominant_phase_label": "нет выраженного сигнала (Fog RGB)",
+    "roi_dominant_type_label": "заметное отклонение — возможна пыль"
   },
   "system_analysis_all": [
     {
-      "target_id": 0,
-      "available": true,
-      "roi_cloud_fraction": 0.332,
-      "roi_dominant_phase_label": "безоблачно",
-      "roi_dominant_type_label": "низкая/средняя"
-    },
-    {
       "target_id": 1,
       "available": true,
-      "roi_cloud_fraction": 0.096,
-      "roi_dominant_phase_label": "низкая водяная",
-      "roi_dominant_type_label": "низкая/средняя"
+      "roi_dominant_phase_label": "нет выраженного сигнала (Fog RGB)",
+      "roi_dominant_type_label": "заметное отклонение — возможна пыль"
     },
     {
       "target_id": 2,
       "available": true,
-      "roi_cloud_fraction": 0.059,
-      "roi_dominant_phase_label": "низкая водяная",
-      "roi_dominant_type_label": "низкая/средняя"
+      "roi_dominant_phase_label": "заметное отклонение — возможен туман/дымка",
+      "roi_dominant_type_label": "нет выраженного сигнала (Dust RGB)"
     },
     {
       "target_id": 3,
       "available": true,
-      "roi_cloud_fraction": 0.919,
-      "roi_dominant_phase_label": "безоблачно",
-      "roi_dominant_type_label": "низкая/средняя"
+      "roi_dominant_phase_label": "заметное отклонение — возможен туман/дымка",
+      "roi_dominant_type_label": "заметное отклонение — возможна пыль"
     },
     {
-      "target_id": 5,
+      "target_id": 6,
       "available": true,
-      "roi_cloud_fraction": 1.0,
-      "roi_dominant_phase_label": "безоблачно",
-      "roi_dominant_type_label": "низкая/средняя"
+      "roi_dominant_phase_label": "заметное отклонение — возможен туман/дымка",
+      "roi_dominant_type_label": "заметное отклонение — возможна пыль"
     },
     {
-      "target_id": 12,
+      "target_id": 9,
       "available": true,
-      "roi_cloud_fraction": 0.0,
-      "roi_dominant_phase_label": "безоблачно",
-      "roi_dominant_type_label": "безоблачно"
+      "roi_dominant_phase_label": "заметное отклонение — возможен туман/дымка",
+      "roi_dominant_type_label": "нет выраженного сигнала (Dust RGB)"
+    },
+    {
+      "target_id": 13,
+      "available": true,
+      "roi_dominant_phase_label": "заметное отклонение — возможен туман/дымка",
+      "roi_dominant_type_label": "нет выраженного сигнала (Dust RGB)"
     }
   ],
   "buffer_status": {
@@ -77,5 +69,5 @@
     "eta_full_window_min": 0,
     "note": "буфер заполнен (13/13), тренд по полному окну ~120 мин"
   },
-  "method_note": "Персистентный буфер до 13 кадров Cloud Phase RGB + Cloud Type RGB (шаг 10 мин, до 2 часов). Анкеры цвета — HSV-диапазоны, ПЕРВАЯ, не откалиброванная по реальным сценам версия (у обоих слоёв нет официальной легенды — это настоящие RGB-композиты, GetLegendGraphic возвращает не легенду). phase_ordinal (0..8) — безоблачно -> вода (низкая/средняя/плотная) -> лёд (тонкий/плотный) -> смешанная фаза -> холодные верхушки Cb -> гроза. type_group (0..2) — безоблачно/низкая-средняя/плотная-высокая. Тренд — сравнение первого и последнего кадра буфера в радиусе 50км. unclassified_fraction_now — доля пикселей, не попавших уверенно ни в одно цветовое правило: при большом значении анкеры нужно пересматривать."
+  "method_note": "[Ночь] Персистентный буфер до 13 кадров Fog RGB + Dust RGB (шаг 10 мин, до 2 часов), заменяют Cloud Phase/Type RGB (ненадёжны ночью — дневные composites, см. docs/topics/eumetsat.md). НЕ цветовая классификация (у Phase/Type она не откалибрована и не устроила пользователя, здесь решили не повторять) — self-relative контраст яркости, тот же принцип, что roi_contrast_sigma в eumetsat_ir_motion.py. ordinal 0/1 = нет/есть заметное отклонение яркости от медианы тайла — НЕ различает 'это туман' от 'это пыль' по смыслу, просто two отдельных RGB-источника (Fog vs Dust) с одинаковым методом детекции аномалии каждый. Первая версия, порог sigma_threshold=1.0 не откалиброван по живым сценам."
 }
