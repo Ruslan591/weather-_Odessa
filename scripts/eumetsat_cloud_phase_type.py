@@ -285,7 +285,43 @@ def main():
     now = fc.datetime.now(fc.timezone.utc)
     debug = {}
 
+    # --- Выбор день/ночь набора слоёв — по запросу 2026-08-09. Грубая
+    # оценка через fc.is_daytime() (локальный час, без сезонной точности,
+    # см. её докстринг) — этого достаточно, чтобы развести ветки; секундная
+    # точность восхода/заката тут не нужна.
+    is_day = fc.is_daytime(_fmt_time(now))
+    mode = "day" if is_day else "night"
+    if is_day:
+        LAYER_A, LAYER_B = LAYER_PHASE, LAYER_TYPE
+        classify_a, classify_b = _classify_phase, _classify_type
+        labels_a, labels_b = PHASE_LABELS, TYPE_LABELS
+    else:
+        LAYER_A, LAYER_B = LAYER_NIGHT_A, LAYER_NIGHT_B
+        classify_a = classify_b = _classify_contrast
+        labels_a = {0: "нет выраженного сигнала (Fog RGB)", 1: "заметное отклонение — возможен туман/дымка"}
+        labels_b = {0: "нет выраженного сигнала (Dust RGB)", 1: "заметное отклонение — возможна пыль"}
+
+    # Смена режима день<->ночь между запусками делает буфер (накопленный на
+    # ДРУГОЙ паре слоёв) бессмысленным для тренда — сравнивать Phase-ординал
+    # часовой давности с сегодняшним Fog-сигналом не имеет смысла. При смене
+    # режима принудительно считаем буфер невалидным (как будто stale) —
+    # естественно уйдёт в существующую ветку bootstrap ниже, без отдельного
+    # dublirующего пути.
+    last_mode = None
+    try:
+        with open(MODE_FILE, "r", encoding="utf-8") as f:
+            last_mode = json.load(f).get("mode")
+    except (OSError, json.JSONDecodeError):
+        pass
+    mode_changed = last_mode is not None and last_mode != mode
+    os.makedirs(os.path.dirname(MODE_FILE), exist_ok=True)
+    with open(MODE_FILE, "w", encoding="utf-8") as f:
+        json.dump({"mode": mode, "timestamp": _fmt_time(now)}, f)
+
     times, packed_frames = fc.load_frame_buffer(BUFFER_FILE)
+    if mode_changed:
+        times, packed_frames = [], []
+        debug["mode_changed"] = f"{last_mode} -> {mode}, буфер сброшен"
 
     stale = True
     if times:
@@ -295,8 +331,9 @@ def main():
         except Exception:
             stale = True
 
-    server_latest_iso, _ = fc.get_layer_latest_time(LAYER_PHASE)
+    server_latest_iso, _ = fc.get_layer_latest_time(LAYER_A)
     debug["server_latest_time"] = server_latest_iso
+    debug["mode"] = mode
 
     bootstrap = (not times) or (len(packed_frames) < MIN_FRAMES_FOR_INCREMENTAL) or stale
     debug["bootstrap"] = bootstrap
