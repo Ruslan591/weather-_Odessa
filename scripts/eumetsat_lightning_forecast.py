@@ -217,6 +217,30 @@ def main():
                 "has_lightning": sys_lightning_fraction >= 0.02,
             }
 
+    # --- То же самое, но для ВСЕХ систем — см. eumetsat_cloud_phase_type.py,
+    # тот же запрос 2026-08-09. Старое поле system_analysis (выше, только
+    # ближайшая) не трогали.
+    system_analysis_all = []
+    for st in fc.load_system_targets_all():
+        roi_mask = fc.km_bbox_to_pixel_mask(st["bbox_km"], pad_km=2.0)
+        roi_valid = valid_now[roi_mask]
+        roi_presence = presence_now[roi_mask]
+        if roi_valid.sum() == 0:
+            system_analysis_all.append({
+                "target_id": st["target_id"],
+                "available": False,
+                "reason": "ROI вне окна li_afa-кадра или нет данных",
+            })
+            continue
+        lightning_fraction = float(roi_presence[roi_valid].mean()) if roi_valid.any() else 0.0
+        system_analysis_all.append({
+            "target_id": st["target_id"],
+            "available": True,
+            "roi_lightning_fraction": round(lightning_fraction, 3),
+            "has_lightning": lightning_fraction >= 0.02,
+        })
+    out["system_analysis_all"] = system_analysis_all
+
     os.makedirs(os.path.dirname(OUT_FILE), exist_ok=True)
     with open(OUT_FILE, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
