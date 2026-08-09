@@ -146,6 +146,18 @@ SIGNIFICANT_AREA_REF_KM2 = 1200.0
 # наблюдаемых прогонах — 60-121км², следующий кластер — уже 215-8632км².
 LARGE_SYSTEM_AREA_KM2 = 300.0
 
+# Порог вытянутости (PCA aspect ratio главных осей блоба), выше которого
+# крупная система (class=="system") дополнительно помечается как
+# потенциально линейная структура ("frontlike") — черновая эвристика для
+# идеи "отслеживание фронтов" (см. docs/topics/eumetsat.md, раздел "Идея
+# на будущее"). НЕ физическое обнаружение фронта (нет анализа градиента
+# давления/температуры, только форма облачного поля по Cloud Mask) —
+# просто сигнал "эта система вытянута в линию, а не компактная клякса".
+# Подобран на глаз (типичный aspect ratio компактного кучевого поля ~1-1.8,
+# вытянутая полоса вдоль фронта — заметно больше), калибровки по реальным
+# синоптическим картам ещё не делали.
+FRONTLIKE_ASPECT_THRESHOLD = 2.2
+
 CLM_ANCHORS = {
     "clear_water": (0, 0, 255),
     "clear_land": (0, 170, 0),
@@ -255,6 +267,47 @@ def _station_area_mask():
     return _radius_mask(STATE_RADIUS_KM)
 
 
+def _blob_elongation(ys, xs, center_row, center_col):
+    """PCA по пикселям блоба (переведённым в км, с учётом разных
+    KM_PER_PX_X/Y) — возвращает (aspect_ratio, axis_bearing_deg) главной оси
+    вытянутости, или (None, None) при недостатке пикселей для устойчивой
+    оценки. aspect_ratio = sqrt(большее собств.значение ковариации / меньшее)
+    — во сколько раз объект длиннее, чем шире, вдоль главных осей; устойчивее
+    к диагональной ориентации, чем bounding-box aspect ratio (тот уже
+    отдельно считается для тренда "вытягивается" в
+    _density_height_shape_trend, но только для крупнейшего пятна в
+    LOCAL_RADIUS_KM, не по каждому кандидату). axis_bearing_deg — направление
+    ГЛАВНОЙ ОСИ как ЛИНИИ (не вектора, поэтому 0..180, не 0..360), та же
+    конвенция atan2(dx,dy), что и bearing до объекта."""
+    if len(ys) < 5:
+        return None, None
+    dx_km = (xs - center_col) * KM_PER_PX_X
+    dy_km = -(ys - center_row) * KM_PER_PX_Y
+    cov = np.cov(np.stack([dx_km, dy_km], axis=0))
+    if cov.shape != (2, 2):
+        return None, None
+    eigvals, eigvecs = np.linalg.eigh(cov)
+    order = np.argsort(eigvals)[::-1]
+    eigvals = eigvals[order]
+    eigvecs = eigvecs[:, order]
+    minor = max(float(eigvals[1]), 1e-6)
+    major = max(float(eigvals[0]), 1e-6)
+    aspect = math.sqrt(major / minor)
+    major_vec = eigvecs[:, 0]
+    bearing = (math.degrees(math.atan2(major_vec[0], major_vec[1])) + 360) % 180
+    return aspect, bearing
+
+
+def _axis_compass_label(bearing_deg):
+    """Компасная метка ОСИ (не направления, у линии два конца), например
+    'СЗ-ЮВ'. bearing_deg ожидается в 0..180 (см. _blob_elongation)."""
+    if bearing_deg is None:
+        return None
+    end_a = _compass(bearing_deg % 360)
+    end_b = _compass((bearing_deg + 180) % 360)
+    return f"{end_a}-{end_b}"
+
+
 def _significant_blobs(is_cloud_mask, valid_mask, want_cloud, min_blob_px=MIN_SIGNIFICANT_BLOB_PX):
     """Как _nearest_of_type, но возвращает ВСЕ значимые связные области нужного
     типа, а не только ближайшую к центру — основа для object-centric пайплайна
@@ -262,7 +315,10 @@ def _significant_blobs(is_cloud_mask, valid_mask, want_cloud, min_blob_px=MIN_SI
     Каждый элемент: centroid_dx_km/dy_km, area_km2, class ("local"/"system" —
     см. LARGE_SYSTEM_AREA_KM2, вариант "б" от 2026-08-05), bbox_km (min/max
     dx/dy — прямоугольник в км от центра тайла, для передачи как ROI другим
-    скриптам). Список отсортирован по расстоянию centroid до центра (ближайший
+    скриптам), elongation_aspect_ratio/elongation_axis_compass/frontlike —
+    черновая эвристика вытянутости для идеи "отслеживание фронтов" (см.
+    FRONTLIKE_ASPECT_THRESHOLD выше, докстринг docs/topics/eumetsat.md).
+    Список отсортирован по расстоянию centroid до центра (ближайший
     первым) — target_id = позиция в ЭТОМ общем списке (local+system вперемешку),
     а не отдельная нумерация внутри класса; кто из них "primary" для
     ROI-подтверждения решает fc.load_primary_target() (берёт ближайший именно
@@ -295,17 +351,26 @@ def _significant_blobs(is_cloud_mask, valid_mask, want_cloud, min_blob_px=MIN_SI
             dx, dy = _pixel_to_km_offset(int(r), int(c))
             corners_dx.append(dx)
             corners_dy.append(dy)
+        blob_class = "system" if blob_area_km2 >= LARGE_SYSTEM_AREA_KM2 else "local"
+        aspect_ratio, axis_bearing = _blob_elongation(ys, xs, center_row, center_col)
         blobs.append({
             "centroid_dx_km": round(cdx_km, 2),
             "centroid_dy_km": round(cdy_km, 2),
             "area_km2": round(blob_area_km2, 1),
-            "class": "system" if blob_area_km2 >= LARGE_SYSTEM_AREA_KM2 else "local",
+            "class": blob_class,
             "bbox_km": {
                 "dx_min": round(min(corners_dx), 2),
                 "dx_max": round(max(corners_dx), 2),
                 "dy_min": round(min(corners_dy), 2),
                 "dy_max": round(max(corners_dy), 2),
             },
+            "elongation_aspect_ratio": round(aspect_ratio, 2) if aspect_ratio is not None else None,
+            "elongation_axis_compass": _axis_compass_label(axis_bearing),
+            "frontlike": bool(
+                blob_class == "system"
+                and aspect_ratio is not None
+                and aspect_ratio >= FRONTLIKE_ASPECT_THRESHOLD
+            ),
         })
     blobs.sort(key=lambda b: math.hypot(b["centroid_dx_km"], b["centroid_dy_km"]))
     for i, b in enumerate(blobs):
