@@ -436,6 +436,31 @@ def main():
                     ),
                 }
 
+        # --- То же самое, но для ВСЕХ систем — по запросу 2026-08-09
+        # ("не хватает ИК и естественного света для систем, как для
+        # локальных очагов"). Старое target_confirmation (выше, только
+        # ближайший local-таргет) не трогали.
+        system_analysis_all = []
+        for st in fc.load_system_targets_all():
+            sys_roi_mask = fc.km_bbox_to_pixel_mask(st["bbox_km"], pad_km=2.0)
+            sys_roi_vals = last_frame[sys_roi_mask]
+            if sys_roi_vals.size == 0:
+                system_analysis_all.append({
+                    "target_id": st["target_id"],
+                    "available": False,
+                    "reason": "ROI вне окна ИК-кадра",
+                })
+                continue
+            sys_roi_mean = float(sys_roi_vals.mean())
+            sys_roi_contrast_sigma = (sys_roi_mean - frame_median) / frame_std_now
+            system_analysis_all.append({
+                "target_id": st["target_id"],
+                "available": True,
+                "roi_contrast_sigma": round(sys_roi_contrast_sigma, 2),
+                "confirmed": sys_roi_contrast_sigma >= MIN_CLOUD_CONTRAST_SIGMA,
+            })
+        out["system_analysis_all"] = system_analysis_all
+
     out["method_note"] = (
         f"Буфер {len(frames)}/{MAX_FRAMES} кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг {STEP_MINUTES} мин, "
         "crs=EPSG:4326, всегда явный TIME — не 'latest'), "
