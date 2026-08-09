@@ -141,6 +141,13 @@ def main():
             "distance_km": round(s_distance, 1),
             "bearing_deg": round(s_bearing, 0),
             "compass": s_compass,
+            # Черновая эвристика "похоже на фронт" (PCA aspect ratio формы
+            # blob'а), см. eumetsat_cloud_forecast.py::_blob_elongation и
+            # docs/topics/eumetsat.md, "Идея на будущее: отслеживание фронтов".
+            # Поля отсутствуют у снапшотов до этой правки — .get() на чтении.
+            "elongation_aspect_ratio": sys_c.get("elongation_aspect_ratio"),
+            "elongation_axis_compass": sys_c.get("elongation_axis_compass"),
+            "frontlike": sys_c.get("frontlike", False),
         }
         system_info.update(_load_system_enrichment(sys_c["target_id"]))
 
@@ -431,6 +438,9 @@ def _system_sentence(s, capitalize=False):
     base = (f"{word} синоптического масштаба ({s['area_km2']:.0f}км²) "
             f"в {s['distance_km']:.0f}км {s['compass']}")
     extras = []
+    if s.get("frontlike"):
+        axis = s.get("elongation_axis_compass")
+        extras.append(f"вытянута {axis}, похоже на фронт" if axis else "похоже на фронт")
     if s.get("phase_label") and s["phase_label"] != "безоблачно":
         extras.append(s["phase_label"])
     if s.get("has_precip") is True:
