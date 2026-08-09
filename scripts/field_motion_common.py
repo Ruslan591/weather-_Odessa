@@ -506,6 +506,44 @@ def load_system_target(max_age_minutes=30):
     return None, "среди кандидатов нет систем синоптического масштаба (только локальные массы)"
 
 
+def load_system_targets_all(max_age_minutes=30):
+    """Как load_system_target(), но возвращает СПИСОК ВСЕХ систем
+    (class=="system"), а не только ближайшую — по запросу 2026-08-09:
+    "нужно подтверждение от остальных каналов, как для локальных очагов,
+    для КАЖДОЙ системы", не только для ближайшей (её одну уже покрывает
+    load_system_target() + _load_system_enrichment() в
+    eumetsat_target_summary.py). Используется тремя модулями
+    (cloud_phase_type/precip/lightning forecast), которые пишут
+    system_analysis_all — список обогащения (фаза/осадки/гроза) по
+    КАЖДОМУ target_id, не только по одному. Дублирует часть логики
+    load_system_target() ради простоты (не рефакторил в общую приватную
+    функцию, чтобы не трогать поведение уже проверенной load_system_target()).
+    Возвращает [] (не None) при отсутствии систем или сбоях чтения —
+    "нет систем для обогащения" не отличается по последствиям от "снапшот
+    недоступен", вызывающему коду достаточно one for-loop без веток.
+    """
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                         "data", "eumetsat_cloud_forecast.json")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            snap = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return []
+
+    ts_raw = snap.get("timestamp")
+    if ts_raw:
+        try:
+            ts = datetime.strptime(ts_raw, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            age_min = (datetime.now(timezone.utc) - ts).total_seconds() / 60
+            if age_min > max_age_minutes:
+                return []
+        except ValueError:
+            pass
+
+    candidates = snap.get("candidates") or []
+    return [c for c in candidates if c.get("class", "local") == "system"]
+
+
 def km_bbox_to_pixel_mask(bbox_km, pad_km=0.0):
     """Обратное к pixel_to_km_offset() — булева (TILE_SIZE,TILE_SIZE) маска,
     True внутри bbox_km (словарь dx_min/dx_max/dy_min/dy_max, как отдаёт
