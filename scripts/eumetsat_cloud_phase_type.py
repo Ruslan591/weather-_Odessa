@@ -487,11 +487,13 @@ def main():
         cloud_px = roi_type > 0
         cloud_fraction = float(cloud_px.mean())
         dominant_phase = float(np.median(roi_phase[cloud_px])) if cloud_px.any() else 0.0
+        dominant_type = float(np.median(roi_type[cloud_px])) if cloud_px.any() else 0.0
         system_analysis_all.append({
             "target_id": st["target_id"],
             "available": True,
             "roi_cloud_fraction": round(cloud_fraction, 3),
             "roi_dominant_phase_label": PHASE_LABELS.get(round(dominant_phase), "неопределено"),
+            "roi_dominant_type_label": TYPE_LABELS.get(round(dominant_type), "неопределено"),
         })
     out["system_analysis_all"] = system_analysis_all
 
