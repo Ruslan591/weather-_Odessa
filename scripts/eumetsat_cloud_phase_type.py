@@ -424,7 +424,7 @@ def main():
     valid_first_local = valid_frames[0] & local_mask
     valid_last_local = valid_frames[-1] & local_mask
 
-    out = {"timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ")}
+    out = {"timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "mode": mode}
 
     unclassified_now = 1.0 - (valid_frames[-1] & local_mask).sum() / max(1, local_mask.sum())
     out["unclassified_fraction_now"] = round(float(unclassified_now), 3)
@@ -437,19 +437,35 @@ def main():
         type_last = float(type_frames[-1][valid_last_local].mean())
         type_delta = type_last - type_first
 
-        if phase_delta > PHASE_CHANGE_THRESHOLD:
-            phase_verdict = "смещается к льду/мощной конвекции"
-        elif phase_delta < -PHASE_CHANGE_THRESHOLD:
-            phase_verdict = "смещается к воде (распад/ослабление)"
+        if is_day:
+            if phase_delta > PHASE_CHANGE_THRESHOLD:
+                phase_verdict = "смещается к льду/мощной конвекции"
+            elif phase_delta < -PHASE_CHANGE_THRESHOLD:
+                phase_verdict = "смещается к воде (распад/ослабление)"
+            else:
+                phase_verdict = "без существенных изменений"
+            if type_delta > TYPE_CHANGE_THRESHOLD:
+                type_verdict = "становится плотнее/выше"
+            elif type_delta < -TYPE_CHANGE_THRESHOLD:
+                type_verdict = "становится реже/ниже"
+            else:
+                type_verdict = "без существенных изменений"
         else:
-            phase_verdict = "без существенных изменений"
-
-        if type_delta > TYPE_CHANGE_THRESHOLD:
-            type_verdict = "становится плотнее/выше"
-        elif type_delta < -TYPE_CHANGE_THRESHOLD:
-            type_verdict = "становится реже/ниже"
-        else:
-            type_verdict = "без существенных изменений"
+            # Ночью ordinal — доля 0/1 аномальных пикселей (Fog/Dust), не
+            # фаза/тип, "смещается к льду" не имеет смысла — просто
+            # растёт/падает доля сигнала.
+            if phase_delta > 0.1:
+                phase_verdict = "доля Fog-сигнала растёт"
+            elif phase_delta < -0.1:
+                phase_verdict = "доля Fog-сигнала падает"
+            else:
+                phase_verdict = "без существенных изменений"
+            if type_delta > 0.1:
+                type_verdict = "доля Dust-сигнала растёт"
+            elif type_delta < -0.1:
+                type_verdict = "доля Dust-сигнала падает"
+            else:
+                type_verdict = "без существенных изменений"
 
         out.update({
             "phase_ordinal_now": round(phase_last, 2),
