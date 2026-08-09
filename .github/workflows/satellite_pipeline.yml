@@ -55,6 +55,7 @@ jobs:
         # docs/topics/eumetsat.md, обсуждение 2026-08-09): приемлемо для
         # личных алертов, не для критичных данных.
         if: always()
+        continue-on-error: true
         run: |
           if [ ! -f data/eumetsat_alert_state.json ]; then
             echo "нет alert_state.json — пропуск"
@@ -66,7 +67,7 @@ jobs:
             dist=$(jq -r '.distance_km_now // "?"' data/eumetsat_alert_state.json)
             verdict=$(jq -r '.verdict // "?"' data/eumetsat_alert_state.json)
             prob=$(jq -r '.probability_percent // "?"' data/eumetsat_alert_state.json)
-            curl -sS -X POST "https://ntfy.sh/odessa-storm-x7k2m9qp4h" \
+            curl -sS --retry 3 --retry-delay 2 --retry-all-errors --max-time 15 -X POST "https://ntfy.sh/odessa-storm-x7k2m9qp4h" \
               -H "Title: 🌧️ Осадки приближаются" \
               -H "Priority: high" \
               -H "Tags: cloud_with_rain" \
@@ -81,6 +82,7 @@ jobs:
         # Отдельная тревога от осадков (li_afa вместо h60b) — своё
         # сообщение, чтобы не путать "просто дождь" с грозовой активностью.
         if: always()
+        continue-on-error: true
         run: |
           if [ ! -f data/eumetsat_lightning_alert_state.json ]; then
             echo "нет lightning_alert_state.json — пропуск"
@@ -92,7 +94,7 @@ jobs:
             dist=$(jq -r '.distance_km_now // "?"' data/eumetsat_lightning_alert_state.json)
             verdict=$(jq -r '.verdict // "?"' data/eumetsat_lightning_alert_state.json)
             prob=$(jq -r '.probability_percent // "?"' data/eumetsat_lightning_alert_state.json)
-            curl -sS -X POST "https://ntfy.sh/odessa-storm-x7k2m9qp4h" \
+            curl -sS --retry 3 --retry-delay 2 --retry-all-errors --max-time 15 -X POST "https://ntfy.sh/odessa-storm-x7k2m9qp4h" \
               -H "Title: ⛈️ Гроза приближается" \
               -H "Priority: urgent" \
               -H "Tags: zap" \
@@ -112,6 +114,7 @@ jobs:
         # chain_depth ограничивает цепочку 8 повторами (~40 мин ускоренного
         # каденса), после чего откатываемся на обычный 15-минутный ритм.
         if: always()
+        continue-on-error: true
         env:
           CHAIN_DEPTH: ${{ inputs.chain_depth }}
         run: |
@@ -128,7 +131,7 @@ jobs:
           echo "alert_precip=$alert_precip alert_lightning=$alert_lightning chain_depth=$depth"
           if { [ "$alert_precip" = "True" ] || [ "$alert_lightning" = "True" ]; } && [ "$depth" -lt "$MAX_CHAIN" ]; then
             next_depth=$((depth + 1))
-            code=$(curl -sS -o /tmp/redispatch_resp.json -w "%{http_code}" -X POST \
+            code=$(curl -sS --retry 3 --retry-delay 2 --retry-all-errors --max-time 15 -o /tmp/redispatch_resp.json -w "%{http_code}" -X POST \
               -H "Authorization: token ${{ secrets.GH_PAT }}" \
               -H "Accept: application/vnd.github+json" \
               "https://api.github.com/repos/${{ github.repository }}/actions/workflows/eumetsat_alert_redispatch.yml/dispatches" \
