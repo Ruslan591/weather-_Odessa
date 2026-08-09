@@ -505,4 +505,30 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        # Раньше падение здесь было ПОЛНОСТЬЮ невидимым: subprocess.run() в
+        # gh_satellite_pipeline.py вызывается без check=True, необработанное
+        # исключение тут не роняет ни job, ни оркестратор, просто основной
+        # data/eumetsat_cloud_phase_type.json не обновляется — обнаружилось
+        # только по запросу 2026-08-09 ("Фаза пустая, канал работает, а
+        # разбора нет"), снапшот был устаревшим на 52 минуты. Основной
+        # OUT_FILE НЕ трогаем (пусть отдаёт последний валидный результат,
+        # это лучше, чем ничего) — пишем traceback только в DEBUG_FILE,
+        # чтобы в следующий раз ошибку можно было увидеть через
+        # data/eumetsat_cloud_phase_type_debug.json, не копаясь в логах
+        # Actions (которые недоступны Claude — blob storage не в allowlist
+        # сети песочницы).
+        import traceback
+        try:
+            fc.write_debug(DEBUG_FILE, {
+                "status": "error",
+                "timestamp": fc.datetime.now(fc.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "error": str(e),
+                "traceback": traceback.format_exc(),
+            })
+        except Exception:
+            pass
+        print(f"  [ERROR] eumetsat_cloud_phase_type.py: {e}")
+        raise
