@@ -584,17 +584,27 @@ def main():
             continue
         roi_phase = phase_frames[-1][roi_mask][roi_valid]
         roi_type = type_frames[-1][roi_mask][roi_valid]
-        cloud_px = roi_type > 0
-        cloud_fraction = float(cloud_px.mean())
-        dominant_phase = float(np.median(roi_phase[cloud_px])) if cloud_px.any() else 0.0
-        dominant_type = float(np.median(roi_type[cloud_px])) if cloud_px.any() else 0.0
-        system_analysis_all.append({
-            "target_id": st["target_id"],
-            "available": True,
-            "roi_cloud_fraction": round(cloud_fraction, 3),
-            "roi_dominant_phase_label": labels_a.get(round(dominant_phase), "неопределено"),
-            "roi_dominant_type_label": labels_b.get(round(dominant_type), "неопределено"),
-        })
+        if is_day:
+            cloud_px = roi_type > 0
+            cloud_fraction = float(cloud_px.mean())
+            dominant_phase = float(np.median(roi_phase[cloud_px])) if cloud_px.any() else 0.0
+            dominant_type = float(np.median(roi_type[cloud_px])) if cloud_px.any() else 0.0
+            system_analysis_all.append({
+                "target_id": st["target_id"],
+                "available": True,
+                "roi_cloud_fraction": round(cloud_fraction, 3),
+                "roi_dominant_phase_label": labels_a.get(round(dominant_phase), "неопределено"),
+                "roi_dominant_type_label": labels_b.get(round(dominant_type), "неопределено"),
+            })
+        else:
+            # Ночью — см. target_confirmation выше, без cloud_px гейта:
+            # raw доля аномальных пикселей Fog/Dust по ROI, не "облачность".
+            system_analysis_all.append({
+                "target_id": st["target_id"],
+                "available": True,
+                "roi_dominant_phase_label": labels_a.get(1 if float(roi_phase.mean()) >= 0.15 else 0, "неопределено"),
+                "roi_dominant_type_label": labels_b.get(1 if float(roi_type.mean()) >= 0.15 else 0, "неопределено"),
+            })
     out["system_analysis_all"] = system_analysis_all
 
     out["buffer_status"] = _buffer_status(len(packed_frames))
