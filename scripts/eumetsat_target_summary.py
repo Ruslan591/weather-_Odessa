@@ -205,6 +205,8 @@ def main():
         }
         ph = phase_by_id.get(tid)
         entry["phase_label"] = ph.get("roi_dominant_phase_label") if ph else None
+        tp = type_by_id.get(tid)
+        entry["type_label"] = tp.get("roi_dominant_type_label") if tp else None
         pr = precip_by_id.get(tid)
         entry["has_precip"] = pr.get("has_precip") if pr else None
         lt = lightning_by_id.get(tid)
