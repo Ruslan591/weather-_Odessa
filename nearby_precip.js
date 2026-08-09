@@ -755,6 +755,8 @@ function _renderSystemCandidatesTable(rows){
         const phase = r.phase_label && r.phase_label !== "безоблачно" ? r.phase_label : "—";
         const precip = r.has_precip === true ? "🌧️" : (r.has_precip === false ? "—" : "?");
         const lightning = r.has_lightning === true ? "⚡" : (r.has_lightning === false ? "—" : "?");
+        const irConf = r.ir_confirmed === true ? "✅" : (r.ir_confirmed === false ? "❌" : "?");
+        const gcConf = r.geocolour_confirmed === true ? "✅" : (r.geocolour_confirmed === false ? "❌" : "?");
         return `<tr>
             <td style="padding:3px 10px 3px 0; color:#bbb; text-align:right;">${dist}</td>
             <td style="padding:3px 10px; color:#bbb;">${dir}</td>
@@ -765,6 +767,8 @@ function _renderSystemCandidatesTable(rows){
             <td style="padding:3px 0 3px 10px; color:#ccc;">${phase}</td>
             <td style="padding:3px 0; text-align:center;">${precip}</td>
             <td style="padding:3px 0; text-align:center;">${lightning}</td>
+            <td style="padding:3px 0; text-align:center;">${irConf}</td>
+            <td style="padding:3px 0; text-align:center;">${gcConf}</td>
         </tr>`;
     }).join("");
     return `<details style="margin-top:10px;">
@@ -781,6 +785,8 @@ function _renderSystemCandidatesTable(rows){
                 <th style="padding:3px 0 3px 10px; font-weight:600;">Фаза</th>
                 <th style="padding:3px 0; font-weight:600; text-align:center;">🌧️</th>
                 <th style="padding:3px 0; font-weight:600; text-align:center;">⚡</th>
+                <th style="padding:3px 0; font-weight:600; text-align:center;" title="ИК">IR</th>
+                <th style="padding:3px 0; font-weight:600; text-align:center;" title="Естественный свет (GeoColour)">GC</th>
             </tr></thead>
             <tbody>${trs}</tbody>
         </table>
