@@ -400,6 +400,28 @@ def main():
                     ),
                 }
 
+        # --- То же самое, но для ВСЕХ систем — см. eumetsat_ir_motion.py,
+        # тот же запрос 2026-08-09. Старое target_confirmation не трогали.
+        system_analysis_all = []
+        for st in fc.load_system_targets_all():
+            sys_roi_mask = fc.km_bbox_to_pixel_mask(st["bbox_km"], pad_km=2.0)
+            sys_roi_is_cloud = is_cloud_frames[-1][sys_roi_mask]
+            if sys_roi_is_cloud.size == 0:
+                system_analysis_all.append({
+                    "target_id": st["target_id"],
+                    "available": False,
+                    "reason": "ROI вне окна GeoColour-кадра",
+                })
+                continue
+            sys_roi_cloud_fraction = float(sys_roi_is_cloud.mean())
+            system_analysis_all.append({
+                "target_id": st["target_id"],
+                "available": True,
+                "roi_cloud_fraction": round(sys_roi_cloud_fraction, 3),
+                "confirmed": sys_roi_cloud_fraction >= 0.5,
+            })
+        out["system_analysis_all"] = system_analysis_all
+
     out["method_note"] = (
         f"Буфер {len(packed_frames)}/{MAX_FRAMES} кадров mtg_fd:rgb_geocolour (шаг {STEP_MINUTES} мин), "
         "круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, "
