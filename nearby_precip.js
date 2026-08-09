@@ -794,11 +794,13 @@ function _renderHistoryTable(rows, emoji, title){
     const trs = last.map(r => {
         const t = _fmtObsTime(r.timestamp) || "—";
         const dist = r.distance_km_now != null ? r.distance_km_now : "—";
+        const dir = r.compass || "—";
         const eta = r.eta_min != null ? r.eta_min : "—";
         const verdict = r.verdict || "—";
         return `<tr>
             <td style="padding:3px 10px 3px 0; color:#999; white-space:nowrap;">${t}</td>
             <td style="padding:3px 10px; color:#bbb; text-align:right;">${dist}</td>
+            <td style="padding:3px 10px; color:#bbb;">${dir}</td>
             <td style="padding:3px 10px; color:#bbb; text-align:right;">${eta}</td>
             <td style="padding:3px 0; color:#ccc;">${verdict}</td>
         </tr>`;
@@ -810,6 +812,7 @@ function _renderHistoryTable(rows, emoji, title){
             <thead><tr style="color:#777; text-align:left;">
                 <th style="padding:3px 10px 3px 0; font-weight:600;">Время</th>
                 <th style="padding:3px 10px; font-weight:600; text-align:right;">Км</th>
+                <th style="padding:3px 10px; font-weight:600;">Напр.</th>
                 <th style="padding:3px 10px; font-weight:600; text-align:right;">ETA</th>
                 <th style="padding:3px 0; font-weight:600;">Вердикт</th>
             </tr></thead>
@@ -851,6 +854,7 @@ function renderNearbyPrecipCard(){
         <div class="cardTitle">Анализ спутниковых снимков (EUMETSAT)</div>
         <div class="small muted">Точка наблюдения: станция "${STATION_LABEL}"</div>
         ${_renderTargetSummaryLines(_eumetsatTargetSummaryData)}
+        ${_renderSystemCandidatesTable(_eumetsatTargetSummaryData && _eumetsatTargetSummaryData.system_candidates)}
         ${_renderHistoryTable(_eumetsatPrecipHistoryData, "📜", "Хронология осадков")}
         ${_renderHistoryTable(_eumetsatLightningHistoryData, "⛈️", "Хронология грозы")}
         <details style="margin-top:10px;">
