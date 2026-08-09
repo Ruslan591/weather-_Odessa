@@ -325,54 +325,83 @@ def _significant_blobs(is_cloud_mask, valid_mask, want_cloud, min_blob_px=MIN_SI
     class=="local", пропуская system, если тот оказался ближе).
     """
     raw_target = is_cloud_mask if want_cloud else (~is_cloud_mask & valid_mask)
-    labeled, n = ndimage.label(raw_target)
-    if n == 0:
-        return []
-    sizes = ndimage.sum(raw_target, labeled, range(1, n + 1))
-    keep_labels = np.where(sizes >= min_blob_px)[0] + 1
-    if len(keep_labels) == 0:
-        return []
     center_row = center_col = (TILE_SIZE - 1) / 2
-    blobs = []
-    for lbl in keep_labels:
-        ys, xs = np.where(labeled == lbl)
-        blob_px = float(sizes[lbl - 1])
-        blob_area_km2 = blob_px * KM_PER_PX_X * KM_PER_PX_Y
-        # centroid — ближайший к центру пиксель блоба (не геометрический
-        # центр масс), чтобы distance/bearing были согласованы с тем, как
-        # их всегда считал _nearest_of_type (ближайшая точка блоба, не center of mass)
-        dist_px = np.sqrt((ys - center_row) ** 2 + (xs - center_col) ** 2)
-        best_i = np.argmin(dist_px)
-        row, col = int(ys[best_i]), int(xs[best_i])
-        cdx_km, cdy_km = _pixel_to_km_offset(row, col)
-        # bbox в км — по всем пикселям блоба, для ROI-запроса в других слоях
-        corners_dx, corners_dy = [], []
-        for r, c in ((ys.min(), xs.min()), (ys.max(), xs.max())):
-            dx, dy = _pixel_to_km_offset(int(r), int(c))
-            corners_dx.append(dx)
-            corners_dy.append(dy)
-        blob_class = "system" if blob_area_km2 >= LARGE_SYSTEM_AREA_KM2 else "local"
-        aspect_ratio, axis_bearing = _blob_elongation(ys, xs, center_row, center_col)
-        blobs.append({
-            "centroid_dx_km": round(cdx_km, 2),
-            "centroid_dy_km": round(cdy_km, 2),
-            "area_km2": round(blob_area_km2, 1),
-            "class": blob_class,
-            "bbox_km": {
-                "dx_min": round(min(corners_dx), 2),
-                "dx_max": round(max(corners_dx), 2),
-                "dy_min": round(min(corners_dy), 2),
-                "dy_max": round(max(corners_dy), 2),
-            },
-            "elongation_aspect_ratio": round(aspect_ratio, 2) if aspect_ratio is not None else None,
-            "elongation_axis_deg": round(axis_bearing, 0) if axis_bearing is not None else None,
-            "elongation_axis_compass": _axis_compass_label(axis_bearing),
-            "frontlike": bool(
-                blob_class == "system"
-                and aspect_ratio is not None
-                and aspect_ratio >= FRONTLIKE_ASPECT_THRESHOLD
-            ),
-        })
+
+    def _blobs_from_labeling(labeled, n, keep_area_pred, class_label):
+        """Общая часть извлечения блобов из уже посчитанной разметки
+        ndimage.label — вынесено, чтобы local- и system-проходы (см. ниже)
+        считали координаты/bbox/elongation ОДИНАКОВО, различаясь только
+        связностью разметки и порогом площади."""
+        if n == 0:
+            return []
+        sizes = ndimage.sum(raw_target, labeled, range(1, n + 1))
+        result = []
+        for lbl in range(1, n + 1):
+            blob_px = float(sizes[lbl - 1])
+            if blob_px < min_blob_px:
+                continue
+            blob_area_km2 = blob_px * KM_PER_PX_X * KM_PER_PX_Y
+            if not keep_area_pred(blob_area_km2):
+                continue
+            ys, xs = np.where(labeled == lbl)
+            # centroid — ближайший к центру пиксель блоба (не геометрический
+            # центр масс), чтобы distance/bearing были согласованы с тем, как
+            # их всегда считал _nearest_of_type (ближайшая точка блоба, не center of mass)
+            dist_px = np.sqrt((ys - center_row) ** 2 + (xs - center_col) ** 2)
+            best_i = np.argmin(dist_px)
+            row, col = int(ys[best_i]), int(xs[best_i])
+            cdx_km, cdy_km = _pixel_to_km_offset(row, col)
+            # bbox в км — по всем пикселям блоба, для ROI-запроса в других слоях
+            corners_dx, corners_dy = [], []
+            for r, c in ((ys.min(), xs.min()), (ys.max(), xs.max())):
+                dx, dy = _pixel_to_km_offset(int(r), int(c))
+                corners_dx.append(dx)
+                corners_dy.append(dy)
+            aspect_ratio, axis_bearing = _blob_elongation(ys, xs, center_row, center_col)
+            result.append({
+                "centroid_dx_km": round(cdx_km, 2),
+                "centroid_dy_km": round(cdy_km, 2),
+                "area_km2": round(blob_area_km2, 1),
+                "class": class_label,
+                "bbox_km": {
+                    "dx_min": round(min(corners_dx), 2),
+                    "dx_max": round(max(corners_dx), 2),
+                    "dy_min": round(min(corners_dy), 2),
+                    "dy_max": round(max(corners_dy), 2),
+                },
+                "elongation_aspect_ratio": round(aspect_ratio, 2) if aspect_ratio is not None else None,
+                "elongation_axis_deg": round(axis_bearing, 0) if axis_bearing is not None else None,
+                "elongation_axis_compass": _axis_compass_label(axis_bearing),
+                "frontlike": bool(
+                    class_label == "system"
+                    and aspect_ratio is not None
+                    and aspect_ratio >= FRONTLIKE_ASPECT_THRESHOLD
+                ),
+            })
+        return result
+
+    # Проход 1 — ЛОКАЛЬНЫЕ цели: 4-связность (ndimage.label БЕЗ structure,
+    # поведение идентично коду до 2026-08-09). НЕ ТРОГАТЬ — явный запрос
+    # 2026-08-09 "механизм определения локальных облаков не должен пострадать".
+    labeled4, n4 = ndimage.label(raw_target)
+    local_blobs = _blobs_from_labeling(labeled4, n4, lambda a: a < LARGE_SYSTEM_AREA_KM2, "local")
+
+    # Проход 2 — СИСТЕМЫ: 8-связность (с диагоналями, structure=3x3 из единиц).
+    # Причина отдельного прохода: протяжённая диагональная фронтальная полоса
+    # рвётся 4-связностью на множество несвязанных "систем" в местах, где
+    # касается себя только по углу пикселя — живой прогон 2026-08-09 показал
+    # 14 "систем" с ОДНОЙ И ТОЙ ЖЕ осью СВ-ЮЗ независимо от положения —
+    # явные фрагменты одной структуры (см. docs/topics/eumetsat.md). Из
+    # 8-связной разметки берутся только компоненты >= LARGE_SYSTEM_AREA_KM2 —
+    # то, что мельче, уже точнее учтено локальным (4-связным) проходом выше;
+    # пересечение по площади с local_blobs возможно (два мелких локальных
+    # блоба могут диагонально слиться в один system-блоб) — это осознанно:
+    # local_blobs при этом не меняются ни на пиксель, просто система сверху
+    # показывает более крупную структуру, в которую они входят.
+    labeled8, n8 = ndimage.label(raw_target, structure=np.ones((3, 3), dtype=int))
+    system_blobs = _blobs_from_labeling(labeled8, n8, lambda a: a >= LARGE_SYSTEM_AREA_KM2, "system")
+
+    blobs = local_blobs + system_blobs
     blobs.sort(key=lambda b: math.hypot(b["centroid_dx_km"], b["centroid_dy_km"]))
     for i, b in enumerate(blobs):
         b["target_id"] = i  # 0 = primary (ближайшая, как раньше выбирал _nearest_of_type)
