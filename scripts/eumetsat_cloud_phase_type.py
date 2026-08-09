@@ -482,23 +482,43 @@ def main():
         else:
             roi_phase = phase_frames[-1][roi_mask][roi_valid]
             roi_type = type_frames[-1][roi_mask][roi_valid]
-            cloud_px = roi_type > 0
-            cloud_fraction = float(cloud_px.mean())
-            confirmed = cloud_fraction >= 0.5
-            dominant_phase_ordinal = float(np.median(roi_phase[cloud_px])) if cloud_px.any() else 0.0
-            out["target_confirmation"] = {
-                "confirmed": confirmed,
-                "target_id": target["target_id"],
-                "target_area_km2": target["area_km2"],
-                "roi_cloud_fraction": round(cloud_fraction, 3),
-                "roi_dominant_phase_ordinal": round(dominant_phase_ordinal, 1),
-                "roi_dominant_phase_label": labels_a.get(round(dominant_phase_ordinal), "неопределено"),
-                "verdict": (
-                    "Phase/Type подтверждает: в ROI CLM-цели преобладает облачность"
-                    if confirmed else
-                    "Phase/Type НЕ подтверждает: в ROI CLM-цели облачность не преобладает — возможно расхождение слоёв"
-                ),
-            }
+            if is_day:
+                # Днём type_group==0 значит "безоблачно" — гейт cloud_px по
+                # нему валиден, ordinal Phase внутри облачных пикселей имеет
+                # смысл (см. докстринг PHASE_LABELS).
+                cloud_px = roi_type > 0
+                cloud_fraction = float(cloud_px.mean())
+                confirmed = cloud_fraction >= 0.5
+                dominant_phase_ordinal = float(np.median(roi_phase[cloud_px])) if cloud_px.any() else 0.0
+                out["target_confirmation"] = {
+                    "confirmed": confirmed,
+                    "target_id": target["target_id"],
+                    "target_area_km2": target["area_km2"],
+                    "roi_cloud_fraction": round(cloud_fraction, 3),
+                    "roi_dominant_phase_ordinal": round(dominant_phase_ordinal, 1),
+                    "roi_dominant_phase_label": labels_a.get(round(dominant_phase_ordinal), "неопределено"),
+                    "verdict": (
+                        "Phase/Type подтверждает: в ROI CLM-цели преобладает облачность"
+                        if confirmed else
+                        "Phase/Type НЕ подтверждает: в ROI CLM-цели облачность не преобладает — возможно расхождение слоёв"
+                    ),
+                }
+            else:
+                # Ночью НЕ гейтуем по roi_type>0 — тут это доля аномальных
+                # Dust-пикселей, а не "облачно/нет", гейт по нему обнулил бы
+                # почти всё. Просто средняя доля аномалии Fog/Dust по ВСЕМ
+                # валидным пикселям ROI — не "облачность", а "заметный
+                # сигнал" (см. _classify_contrast).
+                fog_fraction = float(roi_phase.mean())
+                dust_fraction = float(roi_type.mean())
+                out["target_confirmation"] = {
+                    "confirmed": None,
+                    "target_id": target["target_id"],
+                    "target_area_km2": target["area_km2"],
+                    "roi_fog_signal_fraction": round(fog_fraction, 3),
+                    "roi_dust_signal_fraction": round(dust_fraction, 3),
+                    "verdict": "Ночь: Fog/Dust RGB — грубый сигнал контраста, не полноценное подтверждение (confirmed не считается)",
+                }
 
     # --- Обогащающий (не voting) анализ крупной системы синоптического
     # масштаба, если CLM её отметил (class=="system"). В отличие от блока
