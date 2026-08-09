@@ -145,11 +145,40 @@ def main():
             # blob'а), см. eumetsat_cloud_forecast.py::_blob_elongation и
             # docs/topics/eumetsat.md, "Идея на будущее: отслеживание фронтов".
             # Поля отсутствуют у снапшотов до этой правки — .get() на чтении.
+            # elongation_axis_deg — точный градус ОСИ (0..180) рядом с
+            # компасной меткой (та округляется до одного из 8 направлений,
+            # шаг 45° — метка одна может отличаться от реального угла до
+            # ±22°, добавлено по запросу 2026-08-09 после разбора живого
+            # кейса, где ось "не совсем СЗ, не совсем С-Ю").
             "elongation_aspect_ratio": sys_c.get("elongation_aspect_ratio"),
+            "elongation_axis_deg": sys_c.get("elongation_axis_deg"),
             "elongation_axis_compass": sys_c.get("elongation_axis_compass"),
             "frontlike": sys_c.get("frontlike", False),
         }
         system_info.update(_load_system_enrichment(sys_c["target_id"]))
+
+    # Список ВСЕХ систем (не только ближайшей) — по запросу 2026-08-09:
+    # раньше дальние системы (target_id 5/9/10/12 и т.д. в реальном прогоне)
+    # были посчитаны (candidates уже содержит elongation/frontlike у КАЖДОГО
+    # кандидата), но нигде не показывались — verdict текст собирается только
+    # для ближайшей system_info. Это отдельный, более лёгкий список —
+    # обогащение (фаза/осадки/гроза) сюда НЕ подмешивается (то ROI-сверка,
+    # которая делается только для ближайшей системы в _load_system_enrichment,
+    # тащить её на каждую систему было бы дорого и не нужно для таблицы).
+    system_candidates_list = [
+        {
+            "target_id": c["target_id"],
+            "area_km2": c["area_km2"],
+            "distance_km": round(math.hypot(c["centroid_dx_km"], c["centroid_dy_km"]), 1),
+            "bearing_deg": round(fc.bearing_compass(c["centroid_dx_km"], c["centroid_dy_km"])[0], 0),
+            "compass": fc.bearing_compass(c["centroid_dx_km"], c["centroid_dy_km"])[1],
+            "elongation_aspect_ratio": c.get("elongation_aspect_ratio"),
+            "elongation_axis_deg": c.get("elongation_axis_deg"),
+            "elongation_axis_compass": c.get("elongation_axis_compass"),
+            "frontlike": c.get("frontlike", False),
+        }
+        for c in system_candidates
+    ]
 
     if not local_candidates:
         out = {
