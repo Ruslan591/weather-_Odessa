@@ -749,6 +749,12 @@ function _renderSystemCandidatesTable(rows){
         const axis = r.elongation_axis_compass ? `${r.elongation_axis_compass}${axisDeg}` : "—";
         const ratio = r.elongation_aspect_ratio != null ? r.elongation_aspect_ratio.toFixed(2) : "—";
         const front = r.frontlike ? "🌩️" : "—";
+        // Обогащение по каналам (фаза/осадки/гроза) для КАЖДОЙ системы —
+        // по запросу 2026-08-09, тот же смысл, что и модули подтверждения
+        // у локальных целей, но здесь не voting, а просто "что внутри".
+        const phase = r.phase_label && r.phase_label !== "безоблачно" ? r.phase_label : "—";
+        const precip = r.has_precip === true ? "🌧️" : (r.has_precip === false ? "—" : "?");
+        const lightning = r.has_lightning === true ? "⚡" : (r.has_lightning === false ? "—" : "?");
         return `<tr>
             <td style="padding:3px 10px 3px 0; color:#bbb; text-align:right;">${dist}</td>
             <td style="padding:3px 10px; color:#bbb;">${dir}</td>
@@ -756,6 +762,9 @@ function _renderSystemCandidatesTable(rows){
             <td style="padding:3px 10px; color:#ccc;">${axis}</td>
             <td style="padding:3px 10px; color:#ccc; text-align:right;">${ratio}</td>
             <td style="padding:3px 0; text-align:center;">${front}</td>
+            <td style="padding:3px 0 3px 10px; color:#ccc;">${phase}</td>
+            <td style="padding:3px 0; text-align:center;">${precip}</td>
+            <td style="padding:3px 0; text-align:center;">${lightning}</td>
         </tr>`;
     }).join("");
     return `<details style="margin-top:10px;">
@@ -769,6 +778,9 @@ function _renderSystemCandidatesTable(rows){
                 <th style="padding:3px 10px; font-weight:600;">Ось</th>
                 <th style="padding:3px 10px; font-weight:600; text-align:right;">Aspect</th>
                 <th style="padding:3px 0; font-weight:600; text-align:center;">Фронт?</th>
+                <th style="padding:3px 0 3px 10px; font-weight:600;">Фаза</th>
+                <th style="padding:3px 0; font-weight:600; text-align:center;">🌧️</th>
+                <th style="padding:3px 0; font-weight:600; text-align:center;">⚡</th>
             </tr></thead>
             <tbody>${trs}</tbody>
         </table>
