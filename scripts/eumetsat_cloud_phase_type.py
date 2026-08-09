@@ -455,6 +455,7 @@ def main():
             sys_cloud_px = sys_roi_type > 0
             sys_cloud_fraction = float(sys_cloud_px.mean())
             sys_dominant_phase = float(np.median(sys_roi_phase[sys_cloud_px])) if sys_cloud_px.any() else 0.0
+            sys_dominant_type = float(np.median(sys_roi_type[sys_cloud_px])) if sys_cloud_px.any() else 0.0
             out["system_analysis"] = {
                 "available": True,
                 "target_id": sys_target["target_id"],
@@ -462,6 +463,7 @@ def main():
                 "roi_cloud_fraction": round(sys_cloud_fraction, 3),
                 "roi_dominant_phase_ordinal": round(sys_dominant_phase, 1),
                 "roi_dominant_phase_label": PHASE_LABELS.get(round(sys_dominant_phase), "неопределено"),
+                "roi_dominant_type_label": TYPE_LABELS.get(round(sys_dominant_type), "неопределено"),
             }
 
     # --- То же самое, но для ВСЕХ систем (не только ближайшей выше) — по
