@@ -1,17 +1,17 @@
 {
-  "timestamp": "2026-08-09T03:10:58Z",
-  "unclassified_fraction_now": 0.0,
-  "phase_ordinal_now": 0.0,
-  "phase_ordinal_delta": 0.0,
+  "timestamp": "2026-08-09T03:30:28Z",
+  "unclassified_fraction_now": 0.023,
+  "phase_ordinal_now": 0.1,
+  "phase_ordinal_delta": 0.1,
   "phase_verdict": "без существенных изменений",
-  "type_group_now": 0.0,
-  "type_group_delta": 0.0,
+  "type_group_now": 0.06,
+  "type_group_delta": 0.06,
   "type_verdict": "без существенных изменений",
   "target_confirmation": {
     "confirmed": false,
     "target_id": 0,
-    "target_area_km2": 80.1,
-    "roi_cloud_fraction": 0.0,
+    "target_area_km2": 105.4,
+    "roi_cloud_fraction": 0.113,
     "roi_dominant_phase_ordinal": 0.0,
     "roi_dominant_phase_label": "безоблачно",
     "verdict": "Phase/Type НЕ подтверждает: в ROI CLM-цели облачность не преобладает — возможно расхождение слоёв"
@@ -19,18 +19,18 @@
   "system_analysis": {
     "available": true,
     "target_id": 1,
-    "area_km2": 23758.5,
-    "roi_cloud_fraction": 0.0,
-    "roi_dominant_phase_ordinal": 0.0,
-    "roi_dominant_phase_label": "безоблачно"
+    "area_km2": 26034.8,
+    "roi_cloud_fraction": 0.285,
+    "roi_dominant_phase_ordinal": 6.0,
+    "roi_dominant_phase_label": "смешанная фаза"
   },
   "buffer_status": {
-    "frames_in_memory": 6,
+    "frames_in_memory": 8,
     "frames_target": 13,
-    "span_minutes_now": 50,
+    "span_minutes_now": 70,
     "span_minutes_target": 120,
-    "eta_full_window_min": 70,
-    "note": "в памяти 6/13 снимков (~50 мин истории), полное 120-минутное окно накопится через ~70 мин"
+    "eta_full_window_min": 50,
+    "note": "в памяти 8/13 снимков (~70 мин истории), полное 120-минутное окно накопится через ~50 мин"
   },
   "method_note": "Персистентный буфер до 13 кадров Cloud Phase RGB + Cloud Type RGB (шаг 10 мин, до 2 часов). Анкеры цвета — HSV-диапазоны, ПЕРВАЯ, не откалиброванная по реальным сценам версия (у обоих слоёв нет официальной легенды — это настоящие RGB-композиты, GetLegendGraphic возвращает не легенду). phase_ordinal (0..8) — безоблачно -> вода (низкая/средняя/плотная) -> лёд (тонкий/плотный) -> смешанная фаза -> холодные верхушки Cb -> гроза. type_group (0..2) — безоблачно/низкая-средняя/плотная-высокая. Тренд — сравнение первого и последнего кадра буфера в радиусе 50км. unclassified_fraction_now — доля пикселей, не попавших уверенно ни в одно цветовое правило: при большом значении анкеры нужно пересматривать."
 }
