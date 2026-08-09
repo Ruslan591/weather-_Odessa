@@ -57,6 +57,15 @@ BUFFER_FILE = os.path.join(BASE_DIR, "data", "eumetsat_cloud_phase_type_buffer.n
 
 LAYER_PHASE = "mtg_fd:rgb_cloudphase"
 LAYER_TYPE = "mtg_fd:rgb_cloudtype"
+# Ночная замена — по запросу 2026-08-09 ("на свету Phase/Type, в темноте
+# Fog/Dust"; пользователь сам подтвердил точные имена слоёв через Termux
+# GetCapabilities). НЕ HSV-анкерная классификация (см. _classify_contrast
+# ниже) — пользователь прямо сказал, что результат Phase/Type его "не
+# удовлетворяет", у Fog/Dust совсем другая цветовая семантика (пыль/туман,
+# не фаза/тип облака), калибровать вторые анкеры с нуля сейчас не стали.
+LAYER_NIGHT_A = "mtg_fd:rgb_fog"
+LAYER_NIGHT_B = "mtg_fd:rgb_dust"
+MODE_FILE = os.path.join(BASE_DIR, "data", "eumetsat_cloud_phase_type_mode.json")
 
 TILE_SIZE = fc.TILE_SIZE
 LOCAL_RADIUS_KM = fc.LOCAL_RADIUS_KM
