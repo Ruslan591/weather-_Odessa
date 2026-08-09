@@ -753,6 +753,7 @@ function _renderSystemCandidatesTable(rows){
         // по запросу 2026-08-09, тот же смысл, что и модули подтверждения
         // у локальных целей, но здесь не voting, а просто "что внутри".
         const phase = r.phase_label && r.phase_label !== "безоблачно" ? r.phase_label : "—";
+        const typeLbl = r.type_label && r.type_label !== "безоблачно" ? r.type_label : "—";
         const precip = r.has_precip === true ? "🌧️" : (r.has_precip === false ? "—" : "?");
         const lightning = r.has_lightning === true ? "⚡" : (r.has_lightning === false ? "—" : "?");
         const irConf = r.ir_confirmed === true ? "✅" : (r.ir_confirmed === false ? "❌" : "?");
@@ -765,6 +766,7 @@ function _renderSystemCandidatesTable(rows){
             <td style="padding:3px 10px; color:#ccc; text-align:right;">${ratio}</td>
             <td style="padding:3px 0; text-align:center;">${front}</td>
             <td style="padding:3px 0 3px 10px; color:#ccc;">${phase}</td>
+            <td style="padding:3px 0 3px 10px; color:#ccc;">${typeLbl}</td>
             <td style="padding:3px 0; text-align:center;">${precip}</td>
             <td style="padding:3px 0; text-align:center;">${lightning}</td>
             <td style="padding:3px 0; text-align:center;">${irConf}</td>
@@ -783,6 +785,7 @@ function _renderSystemCandidatesTable(rows){
                 <th style="padding:3px 10px; font-weight:600; text-align:right;">Aspect</th>
                 <th style="padding:3px 0; font-weight:600; text-align:center;">Фронт?</th>
                 <th style="padding:3px 0 3px 10px; font-weight:600;">Фаза</th>
+                <th style="padding:3px 0 3px 10px; font-weight:600;">Тип</th>
                 <th style="padding:3px 0; font-weight:600; text-align:center;">🌧️</th>
                 <th style="padding:3px 0; font-weight:600; text-align:center;">⚡</th>
                 <th style="padding:3px 0; font-weight:600; text-align:center;" title="ИК">IR</th>
