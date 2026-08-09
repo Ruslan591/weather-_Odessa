@@ -187,6 +187,7 @@ def main():
             "reason": "локальных компактных масс нет, есть только система(ы) синоптического масштаба",
             "cloud_forecast_timestamp": cf.get("timestamp"),
             "system": system_info,
+            "system_candidates": system_candidates_list,
         }
         out["verdict"] = _build_system_only_verdict(system_info)
         _write(out)
@@ -223,6 +224,7 @@ def main():
             "cloud_forecast_timestamp": cf.get("timestamp"),
             "suppressed_target": suppressed_info,
             "system": system_info,
+            "system_candidates": system_candidates_list,
         }
         out["verdict"] = _build_suppressed_verdict(suppressed_info, system_info)
         _write(out)
@@ -242,6 +244,7 @@ def main():
         "target_bearing_deg": round(bearing_deg, 0),
         "target_compass": compass_dir,
         "system": system_info,
+        "system_candidates": system_candidates_list,
     }
     if suppressed is not None:
         # Ближе есть известный шумовой объект, но он подавлен — выбрана
@@ -469,7 +472,9 @@ def _system_sentence(s, capitalize=False):
     extras = []
     if s.get("frontlike"):
         axis = s.get("elongation_axis_compass")
-        extras.append(f"вытянута {axis}, похоже на фронт" if axis else "похоже на фронт")
+        deg = s.get("elongation_axis_deg")
+        deg_str = f" ({deg:.0f}°)" if deg is not None else ""
+        extras.append(f"вытянута {axis}{deg_str}, похоже на фронт" if axis else "похоже на фронт")
     if s.get("phase_label") and s["phase_label"] != "безоблачно":
         extras.append(s["phase_label"])
     if s.get("has_precip") is True:
