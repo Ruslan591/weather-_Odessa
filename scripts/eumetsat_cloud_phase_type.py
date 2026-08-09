@@ -452,6 +452,35 @@ def main():
                 "roi_dominant_phase_label": PHASE_LABELS.get(round(sys_dominant_phase), "неопределено"),
             }
 
+    # --- То же самое, но для ВСЕХ систем (не только ближайшей выше) — по
+    # запросу 2026-08-09: "подтверждение от остальных каналов для каждой
+    # системы", не только для ближайшей. Отдельный список, старое поле
+    # system_analysis (выше) не трогали — его читает nearby_precip.js для
+    # цветовой метки кандидата, ломать не стали.
+    system_analysis_all = []
+    for st in fc.load_system_targets_all():
+        roi_mask = fc.km_bbox_to_pixel_mask(st["bbox_km"], pad_km=2.0)
+        roi_valid = valid_frames[-1][roi_mask]
+        if roi_valid.sum() < 5:
+            system_analysis_all.append({
+                "target_id": st["target_id"],
+                "available": False,
+                "reason": "мало классифицированных пикселей в ROI (облачно, но цвет неуверенный, либо вне окна)",
+            })
+            continue
+        roi_phase = phase_frames[-1][roi_mask][roi_valid]
+        roi_type = type_frames[-1][roi_mask][roi_valid]
+        cloud_px = roi_type > 0
+        cloud_fraction = float(cloud_px.mean())
+        dominant_phase = float(np.median(roi_phase[cloud_px])) if cloud_px.any() else 0.0
+        system_analysis_all.append({
+            "target_id": st["target_id"],
+            "available": True,
+            "roi_cloud_fraction": round(cloud_fraction, 3),
+            "roi_dominant_phase_label": PHASE_LABELS.get(round(dominant_phase), "неопределено"),
+        })
+    out["system_analysis_all"] = system_analysis_all
+
     out["buffer_status"] = _buffer_status(len(packed_frames))
     out["method_note"] = (
         f"Персистентный буфер до {MAX_FRAMES} кадров Cloud Phase RGB + Cloud Type RGB "
