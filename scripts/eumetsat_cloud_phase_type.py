@@ -217,6 +217,30 @@ def _classify_type(rgba):
     return group, valid
 
 
+def _classify_contrast(rgba, sigma_threshold=1.0):
+    """Ночная замена _classify_phase/_classify_type для Fog/Dust RGB — по
+    запросу 2026-08-09. НЕ анкерная классификация (нет попытки сказать
+    "это конкретно туман" или "это конкретно пыль" по цвету) — вместо
+    этого self-relative контраст яркости, ТОТ ЖЕ принцип, что уже
+    проверен и одобрен в eumetsat_ir_motion.py (roi_contrast_sigma).
+    Возвращает (ordinal (H,W) float 0/1, valid (H,W) bool):
+      1 — пиксель заметно отличается по яркости от медианы всего тайла
+          (потенциальный сигнал — туман ИЛИ пыль, не различаем ЧТО именно)
+      0 — фон, ничего примечательного
+    valid = alpha>0 везде (в отличие от HSV-анкеров тут нет "неопознанного
+    цвета" — единственная причина невалидности пикселя — нет данных)."""
+    alpha_valid = rgba[:, :, 3] > 0
+    gray = rgba[:, :, :3].astype(np.float32).mean(axis=2) / 255.0
+    vals = gray[alpha_valid]
+    if vals.size < 10:
+        return np.zeros(gray.shape, dtype=np.float32), np.zeros(gray.shape, dtype=bool)
+    median = float(np.median(vals))
+    std = float(np.std(vals)) or 1e-6
+    sigma = (gray - median) / std
+    ordinal = (np.abs(sigma) >= sigma_threshold).astype(np.float32)
+    return ordinal, alpha_valid
+
+
 def _pack_frame(phase_ordinal, phase_valid, type_group, type_valid):
     valid = (phase_valid & type_valid).astype(np.float32)
     return np.stack([phase_ordinal.astype(np.float32),
