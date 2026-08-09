@@ -165,9 +165,25 @@ def main():
     # обогащение (фаза/осадки/гроза) сюда НЕ подмешивается (то ROI-сверка,
     # которая делается только для ближайшей системы в _load_system_enrichment,
     # тащить её на каждую систему было бы дорого и не нужно для таблицы).
-    system_candidates_list = [
-        {
-            "target_id": c["target_id"],
+    # Обогащение (фаза/осадки/гроза) ПО КАЖДОЙ системе — по запросу
+    # 2026-08-09 ("подтверждение от остальных каналов, как для локальных
+    # очагов, для каждой системы"). Три источника пишут system_analysis_all
+    # (список по всем target_id, см. eumetsat_cloud_phase_type.py/
+    # eumetsat_precip_forecast.py/eumetsat_lightning_forecast.py) — тут
+    # просто собираем по target_id в словари для быстрого lookup.
+    def _by_target_id(data, key):
+        rows = (data or {}).get("system_analysis_all") or []
+        return {r["target_id"]: r for r in rows if key is None or key in r}
+
+    phase_by_id = _by_target_id(_load_json("eumetsat_cloud_phase_type.json"), "roi_dominant_phase_label")
+    precip_by_id = _by_target_id(_load_json("eumetsat_precip_forecast.json"), "has_precip")
+    lightning_by_id = _by_target_id(_load_json("eumetsat_lightning_forecast.json"), "has_lightning")
+
+    system_candidates_list = []
+    for c in system_candidates:
+        tid = c["target_id"]
+        entry = {
+            "target_id": tid,
             "area_km2": c["area_km2"],
             "distance_km": round(math.hypot(c["centroid_dx_km"], c["centroid_dy_km"]), 1),
             "bearing_deg": round(fc.bearing_compass(c["centroid_dx_km"], c["centroid_dy_km"])[0], 0),
@@ -177,8 +193,13 @@ def main():
             "elongation_axis_compass": c.get("elongation_axis_compass"),
             "frontlike": c.get("frontlike", False),
         }
-        for c in system_candidates
-    ]
+        ph = phase_by_id.get(tid)
+        entry["phase_label"] = ph.get("roi_dominant_phase_label") if ph else None
+        pr = precip_by_id.get(tid)
+        entry["has_precip"] = pr.get("has_precip") if pr else None
+        lt = lightning_by_id.get(tid)
+        entry["has_lightning"] = lt.get("has_lightning") if lt else None
+        system_candidates_list.append(entry)
 
     if not local_candidates:
         out = {
