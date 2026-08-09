@@ -178,6 +178,10 @@ def main():
     phase_by_id = _by_target_id(_load_json("eumetsat_cloud_phase_type.json"), "roi_dominant_phase_label")
     precip_by_id = _by_target_id(_load_json("eumetsat_precip_forecast.json"), "has_precip")
     lightning_by_id = _by_target_id(_load_json("eumetsat_lightning_forecast.json"), "has_lightning")
+    # ИК и естественный свет (GeoColour) — по запросу 2026-08-09, тот же
+    # смысл, что у trio-подтверждения локальных целей, но тут не voting.
+    ir_by_id = _by_target_id(_load_json("eumetsat_ir_motion.json"), "roi_contrast_sigma")
+    geocolour_by_id = _by_target_id(_load_json("eumetsat_geocolour_motion.json"), "roi_cloud_fraction")
 
     system_candidates_list = []
     for c in system_candidates:
@@ -199,6 +203,10 @@ def main():
         entry["has_precip"] = pr.get("has_precip") if pr else None
         lt = lightning_by_id.get(tid)
         entry["has_lightning"] = lt.get("has_lightning") if lt else None
+        ir = ir_by_id.get(tid)
+        entry["ir_confirmed"] = ir.get("confirmed") if ir else None
+        gc = geocolour_by_id.get(tid)
+        entry["geocolour_confirmed"] = gc.get("confirmed") if gc else None
         system_candidates_list.append(entry)
 
     if not local_candidates:
