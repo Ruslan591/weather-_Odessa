@@ -388,8 +388,8 @@ def main():
             next_t_iso = _fmt_time(next_t)
 
         try:
-            phase_arr = fc.fetch_tile(LAYER_PHASE, next_t_iso)
-            type_arr = fc.fetch_tile(LAYER_TYPE, next_t_iso)
+            phase_arr = fc.fetch_tile(LAYER_A, next_t_iso)
+            type_arr = fc.fetch_tile(LAYER_B, next_t_iso)
         except Exception as e:
             debug["awaited_time"] = next_t_iso
             fc.write_debug(DEBUG_FILE, {"status": "skipped", **debug,
@@ -397,8 +397,8 @@ def main():
             print(f"  [SKIP] eumetsat_cloud_phase_type.py: следующий кадр ({next_t_iso}) ещё не опубликован: {e}")
             return
 
-        phase_ord_new, phase_valid_new = _classify_phase(phase_arr)
-        type_grp_new, type_valid_new = _classify_type(type_arr)
+        phase_ord_new, phase_valid_new = classify_a(phase_arr)
+        type_grp_new, type_valid_new = classify_b(type_arr)
         last_phase, _, _ = _unpack_frame(packed_frames[-1])
         if fc.is_duplicate_pair(last_phase, phase_ord_new):
             debug["skipped_duplicate"] = True
