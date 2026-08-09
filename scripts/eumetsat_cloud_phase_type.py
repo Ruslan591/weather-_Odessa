@@ -542,19 +542,29 @@ def main():
         else:
             sys_roi_phase = phase_frames[-1][sys_roi_mask][sys_roi_valid]
             sys_roi_type = type_frames[-1][sys_roi_mask][sys_roi_valid]
-            sys_cloud_px = sys_roi_type > 0
-            sys_cloud_fraction = float(sys_cloud_px.mean())
-            sys_dominant_phase = float(np.median(sys_roi_phase[sys_cloud_px])) if sys_cloud_px.any() else 0.0
-            sys_dominant_type = float(np.median(sys_roi_type[sys_cloud_px])) if sys_cloud_px.any() else 0.0
-            out["system_analysis"] = {
-                "available": True,
-                "target_id": sys_target["target_id"],
-                "area_km2": sys_target["area_km2"],
-                "roi_cloud_fraction": round(sys_cloud_fraction, 3),
-                "roi_dominant_phase_ordinal": round(sys_dominant_phase, 1),
-                "roi_dominant_phase_label": labels_a.get(round(sys_dominant_phase), "неопределено"),
-                "roi_dominant_type_label": labels_b.get(round(sys_dominant_type), "неопределено"),
-            }
+            if is_day:
+                sys_cloud_px = sys_roi_type > 0
+                sys_cloud_fraction = float(sys_cloud_px.mean())
+                sys_dominant_phase = float(np.median(sys_roi_phase[sys_cloud_px])) if sys_cloud_px.any() else 0.0
+                sys_dominant_type = float(np.median(sys_roi_type[sys_cloud_px])) if sys_cloud_px.any() else 0.0
+                out["system_analysis"] = {
+                    "available": True,
+                    "target_id": sys_target["target_id"],
+                    "area_km2": sys_target["area_km2"],
+                    "roi_cloud_fraction": round(sys_cloud_fraction, 3),
+                    "roi_dominant_phase_ordinal": round(sys_dominant_phase, 1),
+                    "roi_dominant_phase_label": labels_a.get(round(sys_dominant_phase), "неопределено"),
+                    "roi_dominant_type_label": labels_b.get(round(sys_dominant_type), "неопределено"),
+                }
+            else:
+                # Ночью — см. target_confirmation выше, без cloud_px гейта.
+                out["system_analysis"] = {
+                    "available": True,
+                    "target_id": sys_target["target_id"],
+                    "area_km2": sys_target["area_km2"],
+                    "roi_dominant_phase_label": labels_a.get(1 if float(sys_roi_phase.mean()) >= 0.15 else 0, "неопределено"),
+                    "roi_dominant_type_label": labels_b.get(1 if float(sys_roi_type.mean()) >= 0.15 else 0, "неопределено"),
+                }
 
     # --- То же самое, но для ВСЕХ систем (не только ближайшей выше) — по
     # запросу 2026-08-09: "подтверждение от остальных каналов для каждой
