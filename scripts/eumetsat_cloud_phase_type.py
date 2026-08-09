@@ -624,25 +624,40 @@ def main():
     out["system_analysis_all"] = system_analysis_all
 
     out["buffer_status"] = _buffer_status(len(packed_frames))
-    out["method_note"] = (
-        f"Персистентный буфер до {MAX_FRAMES} кадров Cloud Phase RGB + Cloud Type RGB "
-        f"(шаг {STEP_MINUTES} мин, до 2 часов). Анкеры цвета — HSV-диапазоны, ПЕРВАЯ, "
-        "не откалиброванная по реальным сценам версия (у обоих слоёв нет официальной "
-        "легенды — это настоящие RGB-композиты, GetLegendGraphic возвращает не легенду). "
-        "phase_ordinal (0..8) — безоблачно -> вода (низкая/средняя/плотная) -> лёд "
-        "(тонкий/плотный) -> смешанная фаза -> холодные верхушки Cb -> гроза. "
-        "type_group (0..2) — безоблачно/низкая-средняя/плотная-высокая. Тренд — сравнение "
-        f"первого и последнего кадра буфера в радиусе {round(LOCAL_RADIUS_KM)}км. "
-        "unclassified_fraction_now — доля пикселей, не попавших уверенно ни в одно "
-        "цветовое правило: при большом значении анкеры нужно пересматривать."
-    )
+    if is_day:
+        out["method_note"] = (
+            f"[День] Персистентный буфер до {MAX_FRAMES} кадров Cloud Phase RGB + Cloud Type RGB "
+            f"(шаг {STEP_MINUTES} мин, до 2 часов). Анкеры цвета — HSV-диапазоны, ПЕРВАЯ, "
+            "не откалиброванная по реальным сценам версия (у обоих слоёв нет официальной "
+            "легенды — это настоящие RGB-композиты, GetLegendGraphic возвращает не легенду). "
+            "phase_ordinal (0..8) — безоблачно -> вода (низкая/средняя/плотная) -> лёд "
+            "(тонкий/плотный) -> смешанная фаза -> холодные верхушки Cb -> гроза. "
+            "type_group (0..2) — безоблачно/низкая-средняя/плотная-высокая. Тренд — сравнение "
+            f"первого и последнего кадра буфера в радиусе {round(LOCAL_RADIUS_KM)}км. "
+            "unclassified_fraction_now — доля пикселей, не попавших уверенно ни в одно "
+            "цветовое правило: при большом значении анкеры нужно пересматривать."
+        )
+    else:
+        out["method_note"] = (
+            f"[Ночь] Персистентный буфер до {MAX_FRAMES} кадров Fog RGB + Dust RGB "
+            f"(шаг {STEP_MINUTES} мин, до 2 часов), заменяют Cloud Phase/Type RGB "
+            "(ненадёжны ночью — дневные composites, см. docs/topics/eumetsat.md). "
+            "НЕ цветовая классификация (у Phase/Type она не откалибрована и не "
+            "устроила пользователя, здесь решили не повторять) — self-relative "
+            "контраст яркости, тот же принцип, что roi_contrast_sigma в "
+            "eumetsat_ir_motion.py. ordinal 0/1 = нет/есть заметное отклонение "
+            "яркости от медианы тайла — НЕ различает 'это туман' от 'это пыль' "
+            "по смыслу, просто two отдельных RGB-источника (Fog vs Dust) с "
+            "одинаковым методом детекции аномалии каждый. Первая версия, порог "
+            "sigma_threshold=1.0 не откалиброван по живым сценам."
+        )
 
     os.makedirs(os.path.dirname(OUT_FILE), exist_ok=True)
     with open(OUT_FILE, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
 
     fc.write_debug(DEBUG_FILE, {"status": "ok", **debug, "result": out})
-    print(f"  [OK] eumetsat_cloud_phase_type.py: phase={out.get('phase_ordinal_now')}, "
+    print(f"  [OK] eumetsat_cloud_phase_type.py: mode={mode}, phase={out.get('phase_ordinal_now')}, "
           f"type={out.get('type_group_now')}, unclassified={out['unclassified_fraction_now']}")
 
 
