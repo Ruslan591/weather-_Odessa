@@ -176,6 +176,12 @@ def main():
         return {r["target_id"]: r for r in rows if key is None or key in r}
 
     phase_by_id = _by_target_id(_load_json("eumetsat_cloud_phase_type.json"), "roi_dominant_phase_label")
+    # Type — ДРУГОЙ слой (Cloud Type RGB), отдельный от Phase (Cloud Phase
+    # RGB), см. запрос 2026-08-09 "Фаза и тип вместе будут? Это разные
+    # каналы". Тот же файл содержит оба поля в одном элементе
+    # system_analysis_all, поэтому источник данных (data) один и тот же —
+    # только ключ для непустого-проверки другой.
+    type_by_id = _by_target_id(_load_json("eumetsat_cloud_phase_type.json"), "roi_dominant_type_label")
     precip_by_id = _by_target_id(_load_json("eumetsat_precip_forecast.json"), "has_precip")
     lightning_by_id = _by_target_id(_load_json("eumetsat_lightning_forecast.json"), "has_lightning")
     # ИК и естественный свет (GeoColour) — по запросу 2026-08-09, тот же
