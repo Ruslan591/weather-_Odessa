@@ -1554,18 +1554,28 @@ MTG - 0 degree"), но точное имя WMS-слоя (вероятно `mtg_f
 точное имя слоя для нашего региона не искали (пользователь: "доразведывать
 не нужно, я через termux всё найду").
 
-**Готовый блок для Termux** (список всех слоёв под `mtg_fd:` и `msg_fes:`
-— оба namespace уже используются пайплайном, самый вероятный источник
-нужных RGB):
-```bash
-curl -s "https://view.eumetsat.int/geoserver/wms?service=WMS&version=1.3.0&request=GetCapabilities" \
-  | grep -oE '<Name>(mtg_fd|msg_fes):[a-zA-Z0-9_]+</Name>' \
-  | sed -E 's/<\/?Name>//g' | sort -u
+**Найдено пользователем через Termux (2026-08-09):**
 ```
-Уже точно должно найтись: `mtg_fd:rgb_dust` или `msg_fes:rgb_dust`
-(один из них), и что-то вроде `rgb_nightmicro`/`rgb_fog`/`rgb_night_micro`
-— искать по грепу `grep -i "night\|fog\|micro\|dust"` по результату
-выше.
+msg_fes:rgb_dust
+msg_fes:rgb_fog
+msg_fes:rgb_microphysics
+mtg_fd:rgb_dust
+mtg_fd:rgb_fog
+```
+**Важный нюанс** — `rgb_microphysics` (Night Microphysics RGB) есть ТОЛЬКО
+у `msg_fes`, у `mtg_fd` его нет (только `rgb_fog`/`rgb_dust`). Сейчас
+Phase/Type/GeoColour/ИК идут с `mtg_fd`, а CLM/CTH/осадки/молния — с
+`msg_fes` — то есть день и ночь для одного и того же "канала подтверждения"
+физически брались бы с РАЗНЫХ спутниковых серий (MTG vs MSG). Открытый
+вопрос для следующего шага: либо ночью брать `mtg_fd:rgb_fog` +
+`mtg_fd:rgb_dust` (тот же источник, что и дневные Phase/Type — консистентно
+по гео-привязке/разрешению, но без "полноценной" Night Microphysics, только
+Fog), либо тянуть `msg_fes:rgb_microphysics` вперемешку с mtg_fd-слоями
+(нужно перепроверить, что gео-привязка/pixel-to-km у msg_fes и mtg_fd
+совпадает достаточно точно для одного и того же tile/window — CLM/CTH уже
+берутся с msg_fes через тот же `field_motion_common.py`, так что
+инфраструктура для чтения msg_fes-слоёв уже есть и проверена, риск чисто
+в согласованности геопривязки между сериями).
 
 ## Horizon (обновлено 2026-08-09)
 
