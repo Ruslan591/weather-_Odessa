@@ -230,6 +230,8 @@ def main():
         "timestamp": out.get("timestamp"),
         "current_state": out.get("current_state"),
         "distance_km_now": out.get("distance_km_now"),
+        "bearing_deg": out.get("bearing_deg"),
+        "compass": out.get("compass"),
         "eta_min": out.get("eta_min"),
         "verdict": out.get("verdict"),
         "probability_percent": out.get("probability_percent"),
