@@ -365,6 +365,7 @@ def _significant_blobs(is_cloud_mask, valid_mask, want_cloud, min_blob_px=MIN_SI
                 "dy_max": round(max(corners_dy), 2),
             },
             "elongation_aspect_ratio": round(aspect_ratio, 2) if aspect_ratio is not None else None,
+            "elongation_axis_deg": round(axis_bearing, 0) if axis_bearing is not None else None,
             "elongation_axis_compass": _axis_compass_label(axis_bearing),
             "frontlike": bool(
                 blob_class == "system"
