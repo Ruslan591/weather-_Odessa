@@ -353,14 +353,14 @@ def main():
         new_times, new_packed, failed = [], [], []
         for t_iso in times_iso:
             try:
-                phase_arr = fc.fetch_tile(LAYER_PHASE, t_iso)
-                type_arr = fc.fetch_tile(LAYER_TYPE, t_iso)
+                phase_arr = fc.fetch_tile(LAYER_A, t_iso)
+                type_arr = fc.fetch_tile(LAYER_B, t_iso)
             except Exception as e:
                 failed.append({"time": t_iso, "error": str(e)})
                 print(f"  [SKIP] eumetsat_cloud_phase_type.py: bootstrap кадр {t_iso} недоступен, пропуск: {e}")
                 continue
-            phase_ord, phase_valid = _classify_phase(phase_arr)
-            type_grp, type_valid = _classify_type(type_arr)
+            phase_ord, phase_valid = classify_a(phase_arr)
+            type_grp, type_valid = classify_b(type_arr)
             new_times.append(t_iso or _fmt_time(now))
             new_packed.append(_pack_frame(phase_ord, phase_valid, type_grp, type_valid))
 
