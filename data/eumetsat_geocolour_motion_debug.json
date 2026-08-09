@@ -1,27 +1,27 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-08-09T14:20:00.000Z",
+  "server_latest_time": "2026-08-09T14:30:00.000Z",
   "bootstrap": true,
   "buffer_before": 6,
   "buffer_size": 6,
   "buffer_times": [
-    "2026-08-09T13:30:00.000Z",
     "2026-08-09T13:40:00.000Z",
     "2026-08-09T13:50:00.000Z",
     "2026-08-09T14:00:00.000Z",
     "2026-08-09T14:10:00.000Z",
-    "2026-08-09T14:20:00.000Z"
+    "2026-08-09T14:20:00.000Z",
+    "2026-08-09T14:30:00.000Z"
   ],
   "frame_std": [
-    21.1,
     20.7,
     20.2,
     19.6,
     19.1,
-    18.5
+    18.5,
+    18.1
   ],
   "result": {
-    "timestamp": "2026-08-09T14:50:16Z",
+    "timestamp": "2026-08-09T15:01:53Z",
     "buffer_size": 6,
     "buffer_span_minutes": 50,
     "observed_area": {
@@ -37,26 +37,26 @@
     "valid": false,
     "verdict": "нет значимой облачности для оценки движения",
     "area_fraction_over_time": [
-      0.006,
       0.009,
       0.016,
       0.014,
       0.014,
+      0.01,
       0.01
     ],
-    "area_trend_delta": 0.004,
+    "area_trend_delta": 0.001,
     "area_trend_verdict": "без существенных изменений",
     "station_state": "clear",
-    "station_area_fraction": 0.024,
-    "cloud_mass_distance_km": 51.1,
-    "cloud_mass_bearing_deg": 15.0,
+    "station_area_fraction": 0.021,
+    "cloud_mass_distance_km": 52.5,
+    "cloud_mass_bearing_deg": 20.0,
     "cloud_mass_compass": "С",
-    "cloud_mass_area_km2": 55,
+    "cloud_mass_area_km2": 56,
     "target_confirmation": {
       "confirmed": false,
       "target_id": 1,
       "target_area_km2": 121.4,
-      "roi_cloud_fraction": 0.042,
+      "roi_cloud_fraction": 0.008,
       "verdict": "GeoColour НЕ подтверждает: в ROI CLM-цели облачность не преобладает — возможно расхождение слоёв"
     },
     "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
