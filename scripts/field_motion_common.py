@@ -358,6 +358,37 @@ def save_false_positive_log(fp_log):
         json.dump(fp_log, f, ensure_ascii=False, indent=2)
 
 
+# Отдельный реестр подавления ДЛЯ ТАБЛИЦЫ ВСЕХ локальных очагов на
+# nearby.html — по запросу 2026-08-10 ("скопления, которые не видит ни
+# ir_motion, ни geocolour_motion — банить по принципу как в Итог"). НЕ тот
+# же файл, что FALSE_POSITIVE_LOG_PATH выше (тот — трио-голосование
+# ир/geocolour/phase_type ТОЛЬКО для основной voting-цели, единственный
+# писатель — main() до этой правки). Здесь критерий УЖЕ (только ИК+
+# GeoColour оба явно False) и применяется КО ВСЕМ кандидатам таблицы, не
+# только к первичному — смешивать в одном файле/одних полях было бы
+# путаницей двух разных правил голосования по одной сигнатуре. Та же
+# сигнатура координат (false_positive_signature) и та же TTL-логика
+# (_fp_currently_excluded, см. fp_currently_excluded ниже) — просто другой
+# файл и другие поля счётчиков (см. eumetsat_target_summary.py).
+LOCAL_CHANNEL_SUPPRESSION_LOG_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "data", "eumetsat_local_channel_suppression_log.json")
+
+
+def load_local_channel_suppression_log():
+    try:
+        with open(LOCAL_CHANNEL_SUPPRESSION_LOG_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def save_local_channel_suppression_log(log):
+    os.makedirs(os.path.dirname(LOCAL_CHANNEL_SUPPRESSION_LOG_PATH), exist_ok=True)
+    with open(LOCAL_CHANNEL_SUPPRESSION_LOG_PATH, "w", encoding="utf-8") as f:
+        json.dump(log, f, ensure_ascii=False, indent=2)
+
+
 def _fp_currently_excluded(entry):
     """True, если сигнатура сейчас реально исключена — статус excluded И
     TTL повторного шанса ещё не истёк. По истечении TTL сигнатура на один
@@ -376,6 +407,14 @@ def _fp_currently_excluded(entry):
         return True
     age_hours = (datetime.now(timezone.utc) - dt).total_seconds() / 3600
     return age_hours < FALSE_POSITIVE_TTL_HOURS
+
+
+def fp_currently_excluded(entry):
+    """Публичная обёртка над _fp_currently_excluded() — переиспользуется
+    другими реестрами с той же TTL-логикой (не только
+    FALSE_POSITIVE_LOG_PATH), см. LOCAL_CHANNEL_SUPPRESSION_LOG_PATH выше и
+    docs/topics/eumetsat.md, запись 2026-08-10."""
+    return _fp_currently_excluded(entry)
 
 
 def pick_nearest_candidate(candidates, fp_log=None, require_class="local"):
