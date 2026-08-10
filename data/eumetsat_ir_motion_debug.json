@@ -1,27 +1,27 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-08-10T05:10:00.000Z",
+  "server_latest_time": "2026-08-10T05:30:00.000Z",
   "bootstrap": true,
   "buffer_before": 6,
   "buffer_size": 6,
   "buffer_times": [
-    "2026-08-10T04:20:00.000Z",
-    "2026-08-10T04:30:00.000Z",
     "2026-08-10T04:40:00.000Z",
     "2026-08-10T04:50:00.000Z",
     "2026-08-10T05:00:00.000Z",
-    "2026-08-10T05:10:00.000Z"
+    "2026-08-10T05:10:00.000Z",
+    "2026-08-10T05:20:00.000Z",
+    "2026-08-10T05:30:00.000Z"
   ],
   "frame_std": [
-    5.2,
-    4.9,
     4.6,
     4.4,
     4.1,
-    4.0
+    4.0,
+    3.9,
+    3.9
   ],
   "result": {
-    "timestamp": "2026-08-10T05:31:32Z",
+    "timestamp": "2026-08-10T05:55:23Z",
     "buffer_size": 6,
     "buffer_span_minutes": 50,
     "observed_area": {
@@ -36,68 +36,66 @@
     "valid": false,
     "verdict": "недостаточно контраста для оценки (вероятно, однородная сцена)",
     "area_fraction_over_time": [
-      0.27,
-      0.127,
-      0.038,
-      0.013,
-      0.007,
-      0.002
+      0.35,
+      0.145,
+      0.086,
+      0.064,
+      0.048,
+      0.036
     ],
-    "area_trend_delta": -0.269,
+    "area_trend_delta": -0.314,
     "area_trend_verdict": "сокращается",
     "mean_brightness_over_time": [
-      32.2,
-      31.7,
       31.2,
       30.6,
       30.1,
-      29.5
+      29.5,
+      28.9,
+      28.4
     ],
-    "brightness_trend_delta": -2.6,
+    "brightness_trend_delta": -2.8,
     "station_state": "clear",
     "station_area_fraction": 0.0,
-    "cloud_mass_distance_km": 104.9,
-    "cloud_mass_bearing_deg": 46.0,
-    "cloud_mass_compass": "СВ",
-    "cloud_mass_area_km2": 125,
-    "cloud_mass_contrast_sigma": 1.51,
+    "cloud_mass_distance_km": null,
+    "cloud_mass_contrast_sigma": 1.02,
+    "cloud_mass_verdict": "значимой облачной массы в поле зрения нет (кадр однородный)",
     "temperature_trend_verdict": "потепление верхней границы (возможно ослабление конвекции)",
     "target_confirmation": {
       "confirmed": false,
       "target_id": 0,
-      "target_area_km2": 193.5,
-      "roi_contrast_sigma": 0.82,
+      "target_area_km2": 69.4,
+      "roi_contrast_sigma": 0.62,
       "verdict": "ИК НЕ подтверждает: в ROI CLM-цели нет значимого контраста — возможна тонкая/низкая облачность, невидимая на ИК, либо расхождение слоёв"
     },
     "system_analysis_all": [
       {
-        "target_id": 1,
+        "target_id": 2,
         "available": true,
-        "roi_contrast_sigma": 0.45,
+        "roi_contrast_sigma": 0.28,
         "confirmed": false
       },
       {
-        "target_id": 9,
+        "target_id": 6,
         "available": true,
-        "roi_contrast_sigma": 2.22,
+        "roi_contrast_sigma": 1.05,
+        "confirmed": false
+      },
+      {
+        "target_id": 8,
+        "available": true,
+        "roi_contrast_sigma": 1.47,
         "confirmed": true
       },
       {
-        "target_id": 12,
+        "target_id": 10,
         "available": true,
-        "roi_contrast_sigma": 1.39,
+        "roi_contrast_sigma": 1.2,
         "confirmed": true
       },
       {
-        "target_id": 13,
+        "target_id": 11,
         "available": true,
-        "roi_contrast_sigma": 1.69,
-        "confirmed": true
-      },
-      {
-        "target_id": 16,
-        "available": true,
-        "roi_contrast_sigma": 2.38,
+        "roi_contrast_sigma": 3.59,
         "confirmed": true
       }
     ],
