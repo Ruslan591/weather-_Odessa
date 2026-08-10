@@ -461,6 +461,34 @@ def main():
             })
         out["system_analysis_all"] = system_analysis_all
 
+        # --- То же самое, но для ВСЕХ локальных очагов (не только
+        # первичного target_confirmation выше) — по запросу 2026-08-09
+        # ("такая же таблица, как для систем, для локальных очагов"),
+        # см. docs/topics/eumetsat.md, Horizon. Не заменяет
+        # target_confirmation (тот учитывает реестр ложных срабатываний
+        # через fc.load_primary_target()) — это просто построчный снапшот
+        # по всем кандидатам CLM для обзорной таблицы.
+        local_analysis_all = []
+        for lt in fc.load_local_targets_all():
+            loc_roi_mask = fc.km_bbox_to_pixel_mask(lt["bbox_km"], pad_km=2.0)
+            loc_roi_vals = last_frame[loc_roi_mask]
+            if loc_roi_vals.size == 0:
+                local_analysis_all.append({
+                    "target_id": lt["target_id"],
+                    "available": False,
+                    "reason": "ROI вне окна ИК-кадра",
+                })
+                continue
+            loc_roi_mean = float(loc_roi_vals.mean())
+            loc_roi_contrast_sigma = (loc_roi_mean - frame_median) / frame_std_now
+            local_analysis_all.append({
+                "target_id": lt["target_id"],
+                "available": True,
+                "roi_contrast_sigma": round(loc_roi_contrast_sigma, 2),
+                "confirmed": loc_roi_contrast_sigma >= MIN_CLOUD_CONTRAST_SIGMA,
+            })
+        out["local_analysis_all"] = local_analysis_all
+
     out["method_note"] = (
         f"Буфер {len(frames)}/{MAX_FRAMES} кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг {STEP_MINUTES} мин, "
         "crs=EPSG:4326, всегда явный TIME — не 'latest'), "
