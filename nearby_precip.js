@@ -809,8 +809,16 @@ function _renderLocalCandidatesTable(rows, suppressedCount){
 // уже описана в "Итог" выше) — снапшот, не хронология. По запросу
 // 2026-08-09: раньше дальние системы считались (elongation/frontlike есть
 // у каждого кандидата в cloud_forecast.json), но нигде не показывались.
-function _renderSystemCandidatesTable(rows){
-    if(!rows || !rows.length) return "";
+function _renderSystemCandidatesTable(rows, suppressedCount){
+    const supNote = suppressedCount > 0
+        ? `<div style="color:#777; font-size:11.5px; margin-top:4px;">+${suppressedCount} известных шумовых ${suppressedCount === 1 ? "объект" : "объекта"} скрыто (не подтверждены ни ИК, ни GeoColour 3 цикла подряд)</div>`
+        : "";
+    if(!rows || !rows.length){
+        if(suppressedCount > 0){
+            return `<div style="margin-top:10px; color:#72c8ff; font-size:13px; font-weight:600;">🌍 Системы синоптического масштаба (0)</div>${supNote}`;
+        }
+        return "";
+    }
     const trs = rows.map(r => {
         const dist = r.distance_km != null ? r.distance_km : "—";
         const dir = r.compass || "—";
@@ -864,7 +872,25 @@ function _renderSystemCandidatesTable(rows){
             <tbody>${trs}</tbody>
         </table>
         </div>
-    </details>`;
+    </details>${supNote}`;
+}
+
+// Последний снимок GeoColour (debug preview с оверлеем классификации
+// облачности красным) — по запросу 2026-08-10, "добавь под таблицами".
+// Файл перезаписывается КАЖДЫЙ цикл eumetsat_geocolour_motion.py (см.
+// _save_debug_preview() в scripts/eumetsat_geocolour_motion.py) — всегда
+// самый свежий кадр, кэш-бастинг через timestamp самих geocolour-данных.
+function _renderGeocolourSnapshot(geocolourData){
+    if(!geocolourData || !geocolourData.timestamp) return "";
+    const ts = _obsTimeTag(geocolourData.timestamp, 20);
+    const src = `https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_geocolour_debug_preview.png?v=${encodeURIComponent(geocolourData.timestamp)}`;
+    return `<div style="margin-top:10px;">
+        <div style="color:#72c8ff; font-size:13px; font-weight:600; margin-bottom:4px;">🛰️ Последний снимок GeoColour ${ts}</div>
+        <img src="${src}" alt="GeoColour"
+             style="width:100%; border-radius:8px; display:block;"
+             onerror="this.parentElement.style.display='none';">
+        <div style="color:#777; font-size:11px; margin-top:3px;">Красным — пиксели, классифицированные как облако</div>
+    </div>`;
 }
 
 function _renderFarWatchLines(farData, veryFarData){
@@ -946,7 +972,8 @@ function renderNearbyPrecipCard(){
         <div class="small muted">Точка наблюдения: станция "${STATION_LABEL}"</div>
         ${_renderTargetSummaryLines(_eumetsatTargetSummaryData)}
         ${_renderLocalCandidatesTable(_eumetsatTargetSummaryData && _eumetsatTargetSummaryData.local_candidates, _eumetsatTargetSummaryData && _eumetsatTargetSummaryData.local_suppressed_count)}
-        ${_renderSystemCandidatesTable(_eumetsatTargetSummaryData && _eumetsatTargetSummaryData.system_candidates)}
+        ${_renderSystemCandidatesTable(_eumetsatTargetSummaryData && _eumetsatTargetSummaryData.system_candidates, _eumetsatTargetSummaryData && _eumetsatTargetSummaryData.system_suppressed_count)}
+        ${_renderGeocolourSnapshot(_eumetsatGeocolourMotionData)}
         ${_renderHistoryTable(_eumetsatPrecipHistoryData, "📜", "Хронология осадков")}
         ${_renderHistoryTable(_eumetsatLightningHistoryData, "⛈️", "Хронология грозы")}
         <details style="margin-top:10px;">
