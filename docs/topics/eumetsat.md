@@ -1671,3 +1671,56 @@ py_compile — чисто (проверено через `api.github.com` conten
 **НЕ откалибровано** — `sigma_threshold=1.0` для Fog/Dust взят с потолка,
 как и день-анкеры когда-то. Ждём отзыва пользователя после первых ночных
 прогонов, аналогично тому, как ждали для Phase/Type.
+
+
+## 2026-08-10: таблица локальных очагов — та же структура, что у систем
+
+По запросу из Horizon (2026-08-09) — локальные очаги получили ту же
+построчную таблицу (Км/Напр./Площадь/Ось/Aspect/Фронт?/Фаза/Тип/🌧️/⚡/IR/GC),
+что уже была у систем синоптического масштаба, размещена ПЕРЕД таблицей
+систем в свёрнутом блоке "🔧 Подробности по каналам".
+
+**Сделано:**
+1. `field_motion_common.py` — новая `load_local_targets_all()`, симметрична
+   `load_system_targets_all()`, но фильтрует `class=="local"`. НЕ фильтрует
+   по реестру ложных срабатываний (таблица описательная, снапшот всех
+   кандидатов CLM — подавление актуально только при выборе ОДНОЙ
+   voting-цели через `pick_local_target()`).
+2. Пять модулей (`eumetsat_ir_motion.py`, `eumetsat_geocolour_motion.py`,
+   `eumetsat_cloud_phase_type.py`, `eumetsat_precip_forecast.py`,
+   `eumetsat_lightning_forecast.py`) — у каждого добавлен блок
+   `local_analysis_all` (список по ВСЕМ local target_id), тем же паттерном,
+   что уже был `system_analysis_all`. `cloud_phase_type.py` — та же
+   день/ночь ветка, что и в `target_confirmation` (день: HSV-анкеры Phase/
+   Type, `confirmed` по порогу 0.5; ночь: Fog/Dust self-relative контраст,
+   `confirmed=None` — не полноценное подтверждение). Старые поля
+   (`target_confirmation`, `system_analysis_all`) не тронуты — всё
+   аддитивно.
+3. `eumetsat_target_summary.py` — `_by_target_id()` параметризован именем
+   ключа (`system_analysis_all`/`local_analysis_all`), новый
+   `local_candidates_list` собирается той же логикой, что и
+   `system_candidates_list` (distance/bearing/compass/area/elongation/
+   frontlike + phase/type/precip/lightning/ir/geocolour lookup по
+   target_id). Добавлено в вывод как `local_candidates` в статусах `ok` и
+   `suppressed_known_false_positive` (в `system_only` список всегда пуст по
+   определению статуса — не добавлял).
+4. `nearby_precip.js` — новая `_renderLocalCandidatesTable()`, визуально
+   идентична `_renderSystemCandidatesTable()` (те же 12 колонок,
+   `<details>`-спойлер), заголовок "☁️ Локальные очаги (N)". Вызывается в
+   `renderNearbyPrecipCard()` ПЕРЕД таблицей систем. Колонка "Фронт?" у
+   локальных очагов всегда "—" (compact массы <300км² не могут быть
+   фронтом), оставлена для единообразия вида.
+
+**Проверено:** `py_compile` на всех 7 python-файлах, `node --check` на
+`nearby_precip.js` — чисто. GitHub Contents API: GET sha → PUT → верификация
+повторным GET по всем 8 файлам, sha совпали.
+
+**НЕ проверено на живых данных** — таблица появится на `nearby.html` со
+следующего прогона спутникового пайплайна (`local_analysis_all` у 5 модулей
+и `local_candidates` в target_summary — все они гейтов по времени не имеют,
+должны обновиться уже в следующем цикле ~10-15 мин).
+
+**Следующий шаг (по плану из Horizon 2026-08-09):** теперь, когда обе
+таблицы (локальные + системы) готовы, обсудить с пользователем возможную
+чистку — какие из существующих 8 блоков "Подробности по каналам" стали
+избыточными на фоне этих двух таблиц + снимков.
