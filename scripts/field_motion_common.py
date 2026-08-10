@@ -389,6 +389,30 @@ def save_local_channel_suppression_log(log):
         json.dump(log, f, ensure_ascii=False, indent=2)
 
 
+# Та же логика, но для таблицы систем — по запросу 2026-08-10 ("делай такую
+# же фильтрацию невидимых для систем"). ОТДЕЛЬНЫЙ файл от
+# LOCAL_CHANNEL_SUPPRESSION_LOG_PATH — системы и локальные очаги физически
+# разные объекты, сигнатура координат (одна и та же сетка) могла бы иначе
+# случайно столкнуться между классами.
+SYSTEM_CHANNEL_SUPPRESSION_LOG_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "data", "eumetsat_system_channel_suppression_log.json")
+
+
+def load_system_channel_suppression_log():
+    try:
+        with open(SYSTEM_CHANNEL_SUPPRESSION_LOG_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def save_system_channel_suppression_log(log):
+    os.makedirs(os.path.dirname(SYSTEM_CHANNEL_SUPPRESSION_LOG_PATH), exist_ok=True)
+    with open(SYSTEM_CHANNEL_SUPPRESSION_LOG_PATH, "w", encoding="utf-8") as f:
+        json.dump(log, f, ensure_ascii=False, indent=2)
+
+
 def _fp_currently_excluded(entry):
     """True, если сигнатура сейчас реально исключена — статус excluded И
     TTL повторного шанса ещё не истёк. По истечении TTL сигнатура на один
