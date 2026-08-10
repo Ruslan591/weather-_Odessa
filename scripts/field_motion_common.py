@@ -544,6 +544,42 @@ def load_system_targets_all(max_age_minutes=30):
     return [c for c in candidates if c.get("class", "local") == "system"]
 
 
+def load_local_targets_all(max_age_minutes=30):
+    """Как load_system_targets_all(), но возвращает СПИСОК ВСЕХ локальных
+    очагов (class=="local"), а не только первичный (его одного уже покрывает
+    load_primary_target()/pick_local_target() с учётом реестра ложных
+    срабатываний). Нужно, чтобы построить для локальных очагов ту же
+    построчную таблицу (Км/Напр./Площадь/Ось/Aspect/Фронт?/Фаза/Тип/🌧️/⚡/
+    IR/GC), что уже есть для систем (см. docs/topics/eumetsat.md, задача из
+    Horizon 2026-08-09 "такая же таблица, как для систем, для локальных
+    очагов"). В отличие от load_primary_target() НЕ фильтрует по реестру
+    ложных срабатываний — таблица описательная (снапшот всех кандидатов
+    CLM), подавление актуально только для выбора ОДНОЙ voting-цели, не для
+    обзорного списка.
+    Возвращает [] (не None) при отсутствии кандидатов или сбоях чтения.
+    """
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                         "data", "eumetsat_cloud_forecast.json")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            snap = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return []
+
+    ts_raw = snap.get("timestamp")
+    if ts_raw:
+        try:
+            ts = datetime.strptime(ts_raw, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            age_min = (datetime.now(timezone.utc) - ts).total_seconds() / 60
+            if age_min > max_age_minutes:
+                return []
+        except ValueError:
+            pass
+
+    candidates = snap.get("candidates") or []
+    return [c for c in candidates if c.get("class", "local") == "local"]
+
+
 def km_bbox_to_pixel_mask(bbox_km, pad_km=0.0):
     """Обратное к pixel_to_km_offset() — булева (TILE_SIZE,TILE_SIZE) маска,
     True внутри bbox_km (словарь dx_min/dx_max/dy_min/dy_max, как отдаёт
