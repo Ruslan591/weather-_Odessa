@@ -171,8 +171,8 @@ def main():
     # (список по всем target_id, см. eumetsat_cloud_phase_type.py/
     # eumetsat_precip_forecast.py/eumetsat_lightning_forecast.py) — тут
     # просто собираем по target_id в словари для быстрого lookup.
-    def _by_target_id(data, key):
-        rows = (data or {}).get("system_analysis_all") or []
+    def _by_target_id(data, key, key_name="system_analysis_all"):
+        rows = (data or {}).get(key_name) or []
         return {r["target_id"]: r for r in rows if key is None or key in r}
 
     phase_by_id = _by_target_id(_load_json("eumetsat_cloud_phase_type.json"), "roi_dominant_phase_label")
@@ -216,6 +216,51 @@ def main():
         gc = geocolour_by_id.get(tid)
         entry["geocolour_confirmed"] = gc.get("confirmed") if gc else None
         system_candidates_list.append(entry)
+
+    # Таблица ВСЕХ локальных очагов — та же построчная структура, что у
+    # system_candidates_list выше, только источник — *_analysis_all по
+    # class=="local" (см. docs/topics/eumetsat.md, Horizon 2026-08-09:
+    # "такая же таблица, как для систем, для локальных очагов"). Реестр
+    # ложных срабатываний здесь НЕ фильтрует список — таблица обзорная
+    # (снапшот всех кандидатов CLM), подавление применяется только при
+    # выборе ОДНОЙ voting-цели (target/suppressed выше).
+    local_phase_by_id = _by_target_id(_load_json("eumetsat_cloud_phase_type.json"), None,
+                                       key_name="local_analysis_all")
+    local_precip_by_id = _by_target_id(_load_json("eumetsat_precip_forecast.json"), None,
+                                        key_name="local_analysis_all")
+    local_lightning_by_id = _by_target_id(_load_json("eumetsat_lightning_forecast.json"), None,
+                                           key_name="local_analysis_all")
+    local_ir_by_id = _by_target_id(_load_json("eumetsat_ir_motion.json"), None,
+                                    key_name="local_analysis_all")
+    local_geocolour_by_id = _by_target_id(_load_json("eumetsat_geocolour_motion.json"), None,
+                                           key_name="local_analysis_all")
+
+    local_candidates_list = []
+    for c in local_candidates:
+        tid = c["target_id"]
+        entry = {
+            "target_id": tid,
+            "area_km2": c["area_km2"],
+            "distance_km": round(math.hypot(c["centroid_dx_km"], c["centroid_dy_km"]), 1),
+            "bearing_deg": round(fc.bearing_compass(c["centroid_dx_km"], c["centroid_dy_km"])[0], 0),
+            "compass": fc.bearing_compass(c["centroid_dx_km"], c["centroid_dy_km"])[1],
+            "elongation_aspect_ratio": c.get("elongation_aspect_ratio"),
+            "elongation_axis_deg": c.get("elongation_axis_deg"),
+            "elongation_axis_compass": c.get("elongation_axis_compass"),
+            "frontlike": c.get("frontlike", False),
+        }
+        ph = local_phase_by_id.get(tid)
+        entry["phase_label"] = ph.get("roi_dominant_phase_label") if ph else None
+        entry["type_label"] = ph.get("roi_dominant_type_label") if ph else None
+        pr = local_precip_by_id.get(tid)
+        entry["has_precip"] = pr.get("has_precip") if pr else None
+        lt = local_lightning_by_id.get(tid)
+        entry["has_lightning"] = lt.get("has_lightning") if lt else None
+        ir = local_ir_by_id.get(tid)
+        entry["ir_confirmed"] = ir.get("confirmed") if ir else None
+        gc = local_geocolour_by_id.get(tid)
+        entry["geocolour_confirmed"] = gc.get("confirmed") if gc else None
+        local_candidates_list.append(entry)
 
     if not local_candidates:
         out = {
@@ -261,6 +306,7 @@ def main():
             "cloud_forecast_timestamp": cf.get("timestamp"),
             "suppressed_target": suppressed_info,
             "system": system_info,
+            "local_candidates": local_candidates_list,
             "system_candidates": system_candidates_list,
         }
         out["verdict"] = _build_suppressed_verdict(suppressed_info, system_info)
@@ -281,6 +327,7 @@ def main():
         "target_bearing_deg": round(bearing_deg, 0),
         "target_compass": compass_dir,
         "system": system_info,
+        "local_candidates": local_candidates_list,
         "system_candidates": system_candidates_list,
     }
     if suppressed is not None:
