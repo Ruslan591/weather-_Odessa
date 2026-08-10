@@ -735,6 +735,68 @@ function _renderTargetSummaryLines(s){
         + (phenomBits ? `<div class="small muted" style="margin-top:2px; font-size:12px;">${phenomBits}</div>` : "");
 }
 
+// Таблица ВСЕХ локальных очагов (не только первичного, который уже описан
+// в "Итог" выше как voting-цель) — снапшот, не хронология. Та же структура
+// колонок, что у таблицы систем ниже (по запросу из Horizon 2026-08-09:
+// "такая же таблица, как для систем, для локальных очагов"). "Фронт?"
+// у локальных очагов всегда "—" (компактные массы <300км² физически не
+// могут быть фронтом, см. docs/topics/eumetsat.md) — колонка оставлена
+// для единообразия вида с таблицей систем.
+function _renderLocalCandidatesTable(rows){
+    if(!rows || !rows.length) return "";
+    const trs = rows.map(r => {
+        const dist = r.distance_km != null ? r.distance_km : "—";
+        const dir = r.compass || "—";
+        const area = r.area_km2 != null ? Math.round(r.area_km2).toLocaleString("ru-RU") : "—";
+        const axisDeg = r.elongation_axis_deg != null ? ` (${Math.round(r.elongation_axis_deg)}°)` : "";
+        const axis = r.elongation_axis_compass ? `${r.elongation_axis_compass}${axisDeg}` : "—";
+        const ratio = r.elongation_aspect_ratio != null ? r.elongation_aspect_ratio.toFixed(2) : "—";
+        const front = r.frontlike ? "🌩️" : "—";
+        const phase = r.phase_label && r.phase_label !== "безоблачно" ? r.phase_label : "—";
+        const typeLbl = r.type_label && r.type_label !== "безоблачно" ? r.type_label : "—";
+        const precip = r.has_precip === true ? "🌧️" : (r.has_precip === false ? "—" : "?");
+        const lightning = r.has_lightning === true ? "⚡" : (r.has_lightning === false ? "—" : "?");
+        const irConf = r.ir_confirmed === true ? "✅" : (r.ir_confirmed === false ? "❌" : "?");
+        const gcConf = r.geocolour_confirmed === true ? "✅" : (r.geocolour_confirmed === false ? "❌" : "?");
+        return `<tr>
+            <td style="padding:3px 10px 3px 0; color:#bbb; text-align:right;">${dist}</td>
+            <td style="padding:3px 10px; color:#bbb;">${dir}</td>
+            <td style="padding:3px 10px; color:#bbb; text-align:right;">${area}</td>
+            <td style="padding:3px 10px; color:#ccc;">${axis}</td>
+            <td style="padding:3px 10px; color:#ccc; text-align:right;">${ratio}</td>
+            <td style="padding:3px 0; text-align:center;">${front}</td>
+            <td style="padding:3px 0 3px 10px; color:#ccc;">${phase}</td>
+            <td style="padding:3px 0 3px 10px; color:#ccc;">${typeLbl}</td>
+            <td style="padding:3px 0; text-align:center;">${precip}</td>
+            <td style="padding:3px 0; text-align:center;">${lightning}</td>
+            <td style="padding:3px 0; text-align:center;">${irConf}</td>
+            <td style="padding:3px 0; text-align:center;">${gcConf}</td>
+        </tr>`;
+    }).join("");
+    return `<details style="margin-top:10px;">
+        <summary style="cursor:pointer; color:#72c8ff; font-size:13px; font-weight:600;">☁️ Локальные очаги (${rows.length})</summary>
+        <div style="overflow-x:auto; margin-top:6px;">
+        <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
+            <thead><tr style="color:#777; text-align:left;">
+                <th style="padding:3px 10px 3px 0; font-weight:600; text-align:right;">Км</th>
+                <th style="padding:3px 10px; font-weight:600;">Напр.</th>
+                <th style="padding:3px 10px; font-weight:600; text-align:right;">Площадь</th>
+                <th style="padding:3px 10px; font-weight:600;">Ось</th>
+                <th style="padding:3px 10px; font-weight:600; text-align:right;">Aspect</th>
+                <th style="padding:3px 0; font-weight:600; text-align:center;">Фронт?</th>
+                <th style="padding:3px 0 3px 10px; font-weight:600;">Фаза</th>
+                <th style="padding:3px 0 3px 10px; font-weight:600;">Тип</th>
+                <th style="padding:3px 0; font-weight:600; text-align:center;">🌧️</th>
+                <th style="padding:3px 0; font-weight:600; text-align:center;">⚡</th>
+                <th style="padding:3px 0; font-weight:600; text-align:center;" title="ИК">IR</th>
+                <th style="padding:3px 0; font-weight:600; text-align:center;" title="Естественный свет (GeoColour)">GC</th>
+            </tr></thead>
+            <tbody>${trs}</tbody>
+        </table>
+        </div>
+    </details>`;
+}
+
 // Таблица ВСЕХ систем синоптического масштаба (не только ближайшей, которая
 // уже описана в "Итог" выше) — снапшот, не хронология. По запросу
 // 2026-08-09: раньше дальние системы считались (elongation/frontlike есть
@@ -875,6 +937,7 @@ function renderNearbyPrecipCard(){
         <div class="cardTitle">Анализ спутниковых снимков (EUMETSAT)</div>
         <div class="small muted">Точка наблюдения: станция "${STATION_LABEL}"</div>
         ${_renderTargetSummaryLines(_eumetsatTargetSummaryData)}
+        ${_renderLocalCandidatesTable(_eumetsatTargetSummaryData && _eumetsatTargetSummaryData.local_candidates)}
         ${_renderSystemCandidatesTable(_eumetsatTargetSummaryData && _eumetsatTargetSummaryData.system_candidates)}
         ${_renderHistoryTable(_eumetsatPrecipHistoryData, "📜", "Хронология осадков")}
         ${_renderHistoryTable(_eumetsatLightningHistoryData, "⛈️", "Хронология грозы")}
