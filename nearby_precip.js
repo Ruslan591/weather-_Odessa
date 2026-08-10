@@ -742,8 +742,16 @@ function _renderTargetSummaryLines(s){
 // у локальных очагов всегда "—" (компактные массы <300км² физически не
 // могут быть фронтом, см. docs/topics/eumetsat.md) — колонка оставлена
 // для единообразия вида с таблицей систем.
-function _renderLocalCandidatesTable(rows){
-    if(!rows || !rows.length) return "";
+function _renderLocalCandidatesTable(rows, suppressedCount){
+    const supNote = suppressedCount > 0
+        ? `<div style="color:#777; font-size:11.5px; margin-top:4px;">+${suppressedCount} известных шумовых ${suppressedCount === 1 ? "объект" : "объекта"} скрыто (не подтверждены ни ИК, ни GeoColour 3 цикла подряд)</div>`
+        : "";
+    if(!rows || !rows.length){
+        if(suppressedCount > 0){
+            return `<div style="margin-top:10px; color:#72c8ff; font-size:13px; font-weight:600;">☁️ Локальные очаги (0)</div>${supNote}`;
+        }
+        return "";
+    }
     const trs = rows.map(r => {
         const dist = r.distance_km != null ? r.distance_km : "—";
         const dir = r.compass || "—";
@@ -794,7 +802,7 @@ function _renderLocalCandidatesTable(rows){
             <tbody>${trs}</tbody>
         </table>
         </div>
-    </details>`;
+    </details>${supNote}`;
 }
 
 // Таблица ВСЕХ систем синоптического масштаба (не только ближайшей, которая
@@ -937,7 +945,7 @@ function renderNearbyPrecipCard(){
         <div class="cardTitle">Анализ спутниковых снимков (EUMETSAT)</div>
         <div class="small muted">Точка наблюдения: станция "${STATION_LABEL}"</div>
         ${_renderTargetSummaryLines(_eumetsatTargetSummaryData)}
-        ${_renderLocalCandidatesTable(_eumetsatTargetSummaryData && _eumetsatTargetSummaryData.local_candidates)}
+        ${_renderLocalCandidatesTable(_eumetsatTargetSummaryData && _eumetsatTargetSummaryData.local_candidates, _eumetsatTargetSummaryData && _eumetsatTargetSummaryData.local_suppressed_count)}
         ${_renderSystemCandidatesTable(_eumetsatTargetSummaryData && _eumetsatTargetSummaryData.system_candidates)}
         ${_renderHistoryTable(_eumetsatPrecipHistoryData, "📜", "Хронология осадков")}
         ${_renderHistoryTable(_eumetsatLightningHistoryData, "⛈️", "Хронология грозы")}
