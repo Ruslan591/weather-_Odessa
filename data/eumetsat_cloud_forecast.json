@@ -1,25 +1,25 @@
 {
-  "timestamp": "2026-08-10T07:14:54Z",
+  "timestamp": "2026-08-10T07:34:35Z",
   "current_state": "clear",
   "station_area_fraction": 0.0,
   "target_type": "cloud_mass",
-  "distance_km_now": 143.6,
-  "bearing_deg": 76.0,
+  "distance_km_now": 179.1,
+  "bearing_deg": 78.0,
   "compass": "В",
   "speed_kmh": 0.0,
-  "direction_compass": "СВ",
-  "cpa_km": 143.6,
+  "direction_compass": "С",
+  "cpa_km": 179.1,
   "eta_min": null,
-  "blob_area_km2": 132.0,
+  "blob_area_km2": 77.0,
   "target_id": 0,
   "class": "local",
   "verdict": "почти стоит на месте",
-  "frame_pairs_used": 4,
-  "probability_percent": 14,
+  "frame_pairs_used": 2,
+  "probability_percent": 11,
   "probability_note": "база берётся из категории движения ('почти стоит на месте'), затем немного корректируется площадью поля и уверенностью в оценке скорости — у 'удаляется'/'пройдёт мимо' база низкая, у 'приближается'/'уже у города' высокая; не физическая модель осадков",
   "trend": {
     "density_fraction_now": 0.0,
-    "density_delta": -0.02,
+    "density_delta": -0.01,
     "density_verdict": "без существенных изменений",
     "height_ordinal_delta": null,
     "height_verdict": null,
@@ -37,72 +37,21 @@
   },
   "candidates": [
     {
-      "centroid_dx_km": 139.52,
-      "centroid_dy_km": 34.09,
-      "area_km2": 132.1,
+      "centroid_dx_km": 175.0,
+      "centroid_dy_km": 38.27,
+      "area_km2": 77.4,
       "class": "local",
       "bbox_km": {
-        "dx_min": 139.52,
-        "dx_max": 157.74,
-        "dy_min": 34.09,
-        "dy_max": 41.05
+        "dx_min": 175.0,
+        "dx_max": 186.5,
+        "dy_min": 38.27,
+        "dy_max": 46.62
       },
-      "elongation_aspect_ratio": 2.09,
-      "elongation_axis_deg": 88.0,
-      "elongation_axis_compass": "В-З",
-      "frontlike": false,
-      "target_id": 0
-    },
-    {
-      "centroid_dx_km": 88.7,
-      "centroid_dy_km": 219.16,
-      "area_km2": 377.6,
-      "class": "system",
-      "bbox_km": {
-        "dx_min": 88.7,
-        "dx_max": 119.38,
-        "dy_min": 209.42,
-        "dy_max": 235.86
-      },
-      "elongation_aspect_ratio": 1.63,
-      "elongation_axis_deg": 120.0,
-      "elongation_axis_compass": "ЮВ-СЗ",
-      "frontlike": false,
-      "target_id": 1
-    },
-    {
-      "centroid_dx_km": 59.93,
-      "centroid_dy_km": 237.25,
-      "area_km2": 166.8,
-      "class": "local",
-      "bbox_km": {
-        "dx_min": 57.05,
-        "dx_max": 72.4,
-        "dy_min": 237.25,
-        "dy_max": 249.77
-      },
-      "elongation_aspect_ratio": 1.29,
-      "elongation_axis_deg": 43.0,
+      "elongation_aspect_ratio": 1.99,
+      "elongation_axis_deg": 52.0,
       "elongation_axis_compass": "СВ-ЮЗ",
       "frontlike": false,
-      "target_id": 2
-    },
-    {
-      "centroid_dx_km": 101.16,
-      "centroid_dy_km": 245.6,
-      "area_km2": 341.6,
-      "class": "system",
-      "bbox_km": {
-        "dx_min": 101.16,
-        "dx_max": 119.38,
-        "dy_min": 241.43,
-        "dy_max": 263.69
-      },
-      "elongation_aspect_ratio": 1.22,
-      "elongation_axis_deg": 161.0,
-      "elongation_axis_compass": "Ю-С",
-      "frontlike": false,
-      "target_id": 3
+      "target_id": 0
     }
   ],
   "method_note": "Персистентный буфер до 9 кадров Cloud Mask + CTH (шаг 15 мин, до 2 часов истории), хранится между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр вместо всех заново. Скорость усреднена по всем парам кадров буфера с реальным dt (phase correlation всего поля). Край облака/просвета ищется только среди связных областей >= 40px (~53км²) с учётом прозрачных no-data пикселей. Тренды плотности/высоты/формы — сравнение первого и последнего кадра БУФЕРА в радиусе 50км (окно растёт по мере наполнения буфера, см. buffer_status). Высота — ординальный индекс по цвету (не метры, официальной таблицы нет). Вероятность (только когда сейчас ясно/переменная облачность и есть значимое приближающееся поле) — эвристическая оценка по близости/размеру/уверенности в скорости, не физическая модель осадков. Линейная экстраполяция, годится на ~1 час."
