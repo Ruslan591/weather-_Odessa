@@ -744,7 +744,7 @@ function _renderTargetSummaryLines(s){
 // для единообразия вида с таблицей систем.
 function _renderLocalCandidatesTable(rows, suppressedCount){
     const supNote = suppressedCount > 0
-        ? `<div style="color:#777; font-size:11.5px; margin-top:4px;">+${suppressedCount} известных шумовых ${suppressedCount === 1 ? "объект" : "объекта"} скрыто (не подтверждены ни ИК, ни GeoColour 3 цикла подряд)</div>`
+        ? `<div style="color:#777; font-size:11.5px; margin-top:4px;">+${suppressedCount} известных шумовых ${suppressedCount === 1 ? "объект" : "объекта"} скрыто (не подтверждены ни ИК, ни GeoColour)</div>`
         : "";
     if(!rows || !rows.length){
         if(suppressedCount > 0){
@@ -811,7 +811,7 @@ function _renderLocalCandidatesTable(rows, suppressedCount){
 // у каждого кандидата в cloud_forecast.json), но нигде не показывались.
 function _renderSystemCandidatesTable(rows, suppressedCount){
     const supNote = suppressedCount > 0
-        ? `<div style="color:#777; font-size:11.5px; margin-top:4px;">+${suppressedCount} известных шумовых ${suppressedCount === 1 ? "объект" : "объекта"} скрыто (не подтверждены ни ИК, ни GeoColour 3 цикла подряд)</div>`
+        ? `<div style="color:#777; font-size:11.5px; margin-top:4px;">+${suppressedCount} известных шумовых ${suppressedCount === 1 ? "объект" : "объекта"} скрыто (не подтверждены ни ИК, ни GeoColour)</div>`
         : "";
     if(!rows || !rows.length){
         if(suppressedCount > 0){
