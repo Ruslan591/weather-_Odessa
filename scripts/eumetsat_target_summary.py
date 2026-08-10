@@ -262,6 +262,39 @@ def main():
         entry["geocolour_confirmed"] = gc.get("confirmed") if gc else None
         local_candidates_list.append(entry)
 
+    # --- Подавление очагов, которые НЕ видит ни ИК, ни GeoColour — по
+    # прямому запросу пользователя 2026-08-10 ("либо не показывать, либо
+    # банить по принципу как в Итог"). Отдельный реестр
+    # (fc.LOCAL_CHANNEL_SUPPRESSION_LOG_PATH) и отдельный, более узкий
+    # критерий (только ИК+GeoColour оба явно False — cloud_phase_type
+    # сейчас сознательно НЕ участвует: его "confirmed" основан на Cloud
+    # Type RGB, который в текущей неоткалиброванной версии почти всегда
+    # даёт confirmed=True, см. диагностику 2026-08-10 в
+    # docs/topics/eumetsat.md — включать его размыло бы критерий). Та же
+    # streak+TTL логика (3 подряд -> исключить, 2 подряд подтверждения ->
+    # вернуть, TTL 6ч на повторный шанс), что уже принята в проекте для
+    # реестра ложных срабатываний основной voting-цели (fc.FALSE_POSITIVE_*),
+    # константы переиспользуются, файл — отдельный (см. field_motion_common.py).
+    now_iso = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    ch_log = fc.load_local_channel_suppression_log()
+    visible_local_candidates = []
+    suppressed_local_count = 0
+    for entry, src in zip(local_candidates_list, local_candidates):
+        sig = fc.false_positive_signature(src["centroid_dx_km"], src["centroid_dy_km"])
+        has_channel_data = entry["ir_confirmed"] is not None or entry["geocolour_confirmed"] is not None
+        if has_channel_data:
+            no_channel_confirms = entry["ir_confirmed"] is False and entry["geocolour_confirmed"] is False
+            ch_log[sig] = _update_channel_suppression_entry(ch_log.get(sig), no_channel_confirms, now_iso)
+        # Если данных ИК/GeoColour нет вообще в этом цикле — streak не
+        # трогаем (не было новой проверки), но статус (excluded/active) от
+        # предыдущих циклов всё равно проверяем ниже.
+        if fc.fp_currently_excluded(ch_log.get(sig)):
+            suppressed_local_count += 1
+            continue
+        visible_local_candidates.append(entry)
+    fc.save_local_channel_suppression_log(ch_log)
+    local_candidates_list = visible_local_candidates
+
     if not local_candidates:
         out = {
             "timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -307,6 +340,7 @@ def main():
             "suppressed_target": suppressed_info,
             "system": system_info,
             "local_candidates": local_candidates_list,
+            "local_suppressed_count": suppressed_local_count,
             "system_candidates": system_candidates_list,
         }
         out["verdict"] = _build_suppressed_verdict(suppressed_info, system_info)
@@ -328,6 +362,7 @@ def main():
         "target_compass": compass_dir,
         "system": system_info,
         "local_candidates": local_candidates_list,
+        "local_suppressed_count": suppressed_local_count,
         "system_candidates": system_candidates_list,
     }
     if suppressed is not None:
@@ -470,7 +505,33 @@ def _update_false_positive_entry(entry, consensus, now_iso):
     return entry
 
 
-def _build_suppressed_verdict(suppressed_info, system_info):
+def _update_channel_suppression_entry(entry, no_channel_confirms, now_iso):
+    """Streak-логика для реестра подавления таблицы ВСЕХ локальных очагов
+    (см. field_motion_common.LOCAL_CHANNEL_SUPPRESSION_LOG_PATH и
+    docs/topics/eumetsat.md, запись 2026-08-10). Та же схема N=3/TTL=6ч,
+    что и в _update_false_positive_entry() выше, но критерий уже — булев
+    "не подтвердили ни ИК, ни GeoColour" вместо трио-консенсуса, и
+    применяется ко ВСЕМ кандидатам таблицы, а не только к выбранной
+    voting-цели."""
+    entry = dict(entry) if entry else {
+        "not_confirmed_streak": 0,
+        "confirmed_streak": 0,
+        "status": "active",
+    }
+    if no_channel_confirms:
+        entry["not_confirmed_streak"] = entry.get("not_confirmed_streak", 0) + 1
+        entry["confirmed_streak"] = 0
+        if entry["not_confirmed_streak"] >= fc.FALSE_POSITIVE_STREAK_THRESHOLD:
+            entry["status"] = "excluded"
+            entry["excluded_since"] = now_iso
+    else:
+        entry["confirmed_streak"] = entry.get("confirmed_streak", 0) + 1
+        entry["not_confirmed_streak"] = 0
+        if entry["confirmed_streak"] >= fc.FALSE_POSITIVE_REACTIVATE_STREAK:
+            entry["status"] = "active"
+            entry.pop("excluded_since", None)
+    entry["last_seen"] = now_iso
+    return entry
     """Вердикт, когда единственный/ближайший local-кандидат — уже известный
     шумовой объект, подавленный по реестру ложных срабатываний (см.
     docs/topics/eumetsat.md, запись от 2026-08-07)."""
