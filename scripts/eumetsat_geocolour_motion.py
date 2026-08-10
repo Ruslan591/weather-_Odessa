@@ -49,7 +49,7 @@ import math
 import os
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 
 import field_motion_common as fc
 
@@ -58,6 +58,7 @@ OUT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_geocolour_motion.json")
 DEBUG_FILE = os.path.join(BASE_DIR, "data", "eumetsat_geocolour_motion_debug.json")
 BUFFER_FILE = os.path.join(BASE_DIR, "data", "eumetsat_geocolour_buffer.npz")
 DEBUG_PREVIEW_FILE = os.path.join(BASE_DIR, "data", "eumetsat_geocolour_debug_preview.png")
+SNAPSHOT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_geocolour_snapshot.png")
 
 LAYER_GEOCOLOUR = "mtg_fd:rgb_geocolour"
 MAX_FRAMES = 6                   # 6*10мин = 60 минут истории, как в IR
@@ -132,6 +133,34 @@ def _save_debug_preview(rgba, is_cloud):
         print(f"  [WARN] eumetsat_geocolour_motion.py: не удалось сохранить debug preview: {e}")
 
 
+def _save_clean_snapshot(rgba):
+    """Чистый (БЕЗ оверлея классификации) натуральный кадр GeoColour для
+    показа на nearby.html — по запросу 2026-08-10: пользователь уточнил
+    ('я имел в виду ЭТОТ снимок'), что имел в виду обычный натуральный
+    цвет как на eumetsat.html, а не debug preview с красными пятнами
+    классификации выше (тот остаётся, но только для внутренней
+    калибровки).
+
+    Поверх дорисована жёлтая окружность зоны обзора тира 'near'
+    (fc.NEAR_RADIUS_KM ≈192км) — по отдельному запросу, чтобы на глаз было
+    видно, что попадает в таблицы local_candidates/system_candidates, а
+    что нет. Пример: облачность, которую пользователь увидел на востоке на
+    скриншоте eumetsat.html, была ЗА пределами этого круга — её видит
+    только far_watch (грубый посекторный %, тир 'far' ≈1000км), а не
+    объектные таблицы (те смотрят только внутри круга)."""
+    try:
+        base = Image.fromarray(rgba[:, :, :3], mode="RGB").convert("RGB")
+        draw = ImageDraw.Draw(base)
+        cx = (base.width - 1) / 2.0
+        cy = (base.height - 1) / 2.0
+        rx = fc.NEAR_RADIUS_KM / fc.KM_PER_PX_X
+        ry = fc.NEAR_RADIUS_KM / fc.KM_PER_PX_Y
+        draw.ellipse([cx - rx, cy - ry, cx + rx, cy + ry], outline=(255, 221, 0), width=3)
+        base.save(SNAPSHOT_FILE)
+    except Exception as e:
+        print(f"  [WARN] eumetsat_geocolour_motion.py: не удалось сохранить чистый снимок: {e}")
+
+
 def main():
     now = fc.datetime.now(fc.timezone.utc)
     debug = {}
@@ -177,6 +206,7 @@ def main():
             new_times.append(t_iso or _fmt_time(now))
             new_packed.append(_pack_frame(gray, is_cloud))
             _save_debug_preview(arr, is_cloud)  # перезаписываем на каждой итерации — в конце останется последний (самый свежий) кадр
+            _save_clean_snapshot(arr)  # то же самое — в конце останется последний кадр
 
         if len(new_packed) < MIN_FRAMES_FOR_INCREMENTAL:
             fc.write_debug(DEBUG_FILE, {"status": "error", "stage": "bootstrap", "failed": failed,
@@ -224,6 +254,7 @@ def main():
         times = (times + [next_t_iso])[-MAX_FRAMES:]
         packed_frames = (packed_frames + [new_packed])[-MAX_FRAMES:]
         _save_debug_preview(arr, is_cloud_new)
+        _save_clean_snapshot(arr)
 
     fc.save_frame_buffer(BUFFER_FILE, times, packed_frames, MAX_FRAMES)
     debug["buffer_size"] = len(packed_frames)
