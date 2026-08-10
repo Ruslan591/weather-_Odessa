@@ -217,6 +217,30 @@ def main():
         entry["geocolour_confirmed"] = gc.get("confirmed") if gc else None
         system_candidates_list.append(entry)
 
+    # --- Подавление систем, которые НЕ видит ни ИК, ни GeoColour — тот же
+    # запрос 2026-08-10, распространён с локальных очагов на системы.
+    # ОТДЕЛЬНЫЙ реестр от local (fc.SYSTEM_CHANNEL_SUPPRESSION_LOG_PATH) —
+    # системы и локальные очаги физически разные объекты (системы дальше,
+    # crупнее), сигнатуры координат из одной сетки могли бы иначе случайно
+    # столкнуться. Та же streak+TTL логика и тот же узкий критерий (без
+    # cloud_phase_type — см. обоснование в блоке локальных очагов ниже).
+    now_iso = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    sys_ch_log = fc.load_system_channel_suppression_log()
+    visible_system_candidates = []
+    suppressed_system_count = 0
+    for entry, src in zip(system_candidates_list, system_candidates):
+        sig = fc.false_positive_signature(src["centroid_dx_km"], src["centroid_dy_km"])
+        has_channel_data = entry["ir_confirmed"] is not None or entry["geocolour_confirmed"] is not None
+        if has_channel_data:
+            no_channel_confirms = entry["ir_confirmed"] is False and entry["geocolour_confirmed"] is False
+            sys_ch_log[sig] = _update_channel_suppression_entry(sys_ch_log.get(sig), no_channel_confirms, now_iso)
+        if fc.fp_currently_excluded(sys_ch_log.get(sig)):
+            suppressed_system_count += 1
+            continue
+        visible_system_candidates.append(entry)
+    fc.save_system_channel_suppression_log(sys_ch_log)
+    system_candidates_list = visible_system_candidates
+
     # Таблица ВСЕХ локальных очагов — та же построчная структура, что у
     # system_candidates_list выше, только источник — *_analysis_all по
     # class=="local" (см. docs/topics/eumetsat.md, Horizon 2026-08-09:
@@ -275,7 +299,7 @@ def main():
     # вернуть, TTL 6ч на повторный шанс), что уже принята в проекте для
     # реестра ложных срабатываний основной voting-цели (fc.FALSE_POSITIVE_*),
     # константы переиспользуются, файл — отдельный (см. field_motion_common.py).
-    now_iso = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    # now_iso уже посчитан выше (блок подавления систем) — переиспользуем.
     ch_log = fc.load_local_channel_suppression_log()
     visible_local_candidates = []
     suppressed_local_count = 0
@@ -303,6 +327,7 @@ def main():
             "cloud_forecast_timestamp": cf.get("timestamp"),
             "system": system_info,
             "system_candidates": system_candidates_list,
+            "system_suppressed_count": suppressed_system_count,
         }
         out["verdict"] = _build_system_only_verdict(system_info)
         _write(out)
@@ -342,6 +367,7 @@ def main():
             "local_candidates": local_candidates_list,
             "local_suppressed_count": suppressed_local_count,
             "system_candidates": system_candidates_list,
+            "system_suppressed_count": suppressed_system_count,
         }
         out["verdict"] = _build_suppressed_verdict(suppressed_info, system_info)
         _write(out)
@@ -364,6 +390,7 @@ def main():
         "local_candidates": local_candidates_list,
         "local_suppressed_count": suppressed_local_count,
         "system_candidates": system_candidates_list,
+        "system_suppressed_count": suppressed_system_count,
     }
     if suppressed is not None:
         # Ближе есть известный шумовой объект, но он подавлен — выбрана
