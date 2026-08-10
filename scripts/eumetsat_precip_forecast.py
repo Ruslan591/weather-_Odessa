@@ -245,6 +245,31 @@ def main():
         })
     out["system_analysis_all"] = system_analysis_all
 
+    # --- То же самое, но для ВСЕХ локальных очагов — см.
+    # eumetsat_ir_motion.py, тот же запрос 2026-08-09 ("такая же таблица,
+    # как для систем, для локальных очагов"). Не заменяет
+    # target_confirmation (учитывает реестр ложных срабатываний).
+    local_analysis_all = []
+    for lt in fc.load_local_targets_all():
+        loc_roi_mask = fc.km_bbox_to_pixel_mask(lt["bbox_km"], pad_km=2.0)
+        loc_roi_valid = valid_now[loc_roi_mask]
+        loc_roi_presence = presence_now[loc_roi_mask]
+        if loc_roi_valid.sum() == 0:
+            local_analysis_all.append({
+                "target_id": lt["target_id"],
+                "available": False,
+                "reason": "ROI вне окна h60b-кадра или нет данных",
+            })
+            continue
+        loc_precip_fraction = float(loc_roi_presence[loc_roi_valid].mean()) if loc_roi_valid.any() else 0.0
+        local_analysis_all.append({
+            "target_id": lt["target_id"],
+            "available": True,
+            "roi_precip_fraction": round(loc_precip_fraction, 3),
+            "has_precip": loc_precip_fraction >= 0.05,
+        })
+    out["local_analysis_all"] = local_analysis_all
+
     os.makedirs(os.path.dirname(OUT_FILE), exist_ok=True)
     with open(OUT_FILE, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
