@@ -623,6 +623,51 @@ def main():
             })
     out["system_analysis_all"] = system_analysis_all
 
+    # --- То же самое, но для ВСЕХ локальных очагов (не только первичного
+    # target_confirmation выше) — по запросу 2026-08-09 ("такая же таблица,
+    # как для систем, для локальных очагов"), см. docs/topics/eumetsat.md,
+    # Horizon. Не заменяет target_confirmation (тот учитывает реестр ложных
+    # срабатываний через fc.load_primary_target()) — построчный снапшот по
+    # всем кандидатам CLM для обзорной таблицы. Та же день/ночь логика.
+    local_analysis_all = []
+    for lt in fc.load_local_targets_all():
+        loc_roi_mask = fc.km_bbox_to_pixel_mask(lt["bbox_km"], pad_km=2.0)
+        loc_roi_valid = valid_frames[-1][loc_roi_mask]
+        if loc_roi_valid.sum() < 5:
+            local_analysis_all.append({
+                "target_id": lt["target_id"],
+                "available": False,
+                "reason": "мало классифицированных пикселей в ROI (облачно, но цвет неуверенный, либо вне окна)",
+            })
+            continue
+        loc_roi_phase = phase_frames[-1][loc_roi_mask][loc_roi_valid]
+        loc_roi_type = type_frames[-1][loc_roi_mask][loc_roi_valid]
+        if is_day:
+            loc_cloud_px = loc_roi_type > 0
+            loc_cloud_fraction = float(loc_cloud_px.mean())
+            loc_dominant_phase = float(np.median(loc_roi_phase[loc_cloud_px])) if loc_cloud_px.any() else 0.0
+            loc_dominant_type = float(np.median(loc_roi_type[loc_cloud_px])) if loc_cloud_px.any() else 0.0
+            local_analysis_all.append({
+                "target_id": lt["target_id"],
+                "available": True,
+                "roi_cloud_fraction": round(loc_cloud_fraction, 3),
+                "confirmed": loc_cloud_fraction >= 0.5,
+                "roi_dominant_phase_label": labels_a.get(round(loc_dominant_phase), "неопределено"),
+                "roi_dominant_type_label": labels_b.get(round(loc_dominant_type), "неопределено"),
+            })
+        else:
+            # Ночью — без cloud_px гейта (см. target_confirmation выше),
+            # confirmed не считается (грубый сигнал Fog/Dust, не полноценное
+            # подтверждение облачности).
+            local_analysis_all.append({
+                "target_id": lt["target_id"],
+                "available": True,
+                "confirmed": None,
+                "roi_dominant_phase_label": labels_a.get(1 if float(loc_roi_phase.mean()) >= 0.15 else 0, "неопределено"),
+                "roi_dominant_type_label": labels_b.get(1 if float(loc_roi_type.mean()) >= 0.15 else 0, "неопределено"),
+            })
+    out["local_analysis_all"] = local_analysis_all
+
     out["buffer_status"] = _buffer_status(len(packed_frames))
     if is_day:
         out["method_note"] = (
