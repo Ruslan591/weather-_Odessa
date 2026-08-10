@@ -875,21 +875,28 @@ function _renderSystemCandidatesTable(rows, suppressedCount){
     </details>${supNote}`;
 }
 
-// Последний снимок GeoColour (debug preview с оверлеем классификации
-// облачности красным) — по запросу 2026-08-10, "добавь под таблицами".
+// Последний снимок GeoColour — чистый натуральный цвет (без оверлея
+// классификации, тот отдельно, только для внутренней калибровки, см.
+// eumetsat_geocolour_debug_preview.png) — по запросу 2026-08-10,
+// уточнённому после скриншота ("я имел в виду ЭТОТ снимок" — натуральный
+// цвет как на eumetsat.html). Жёлтой окружностью размечена зона обзора
+// тира "near" (~192км, radius fc.NEAR_RADIUS_KM) — именно оттуда берутся
+// все кандидаты для таблиц local_candidates/system_candidates выше; всё,
+// что за кругом (например облачность на востоке/северо-востоке), таблицы
+// не видят — это ловит только далёкий грубый посекторный far_watch ниже.
 // Файл перезаписывается КАЖДЫЙ цикл eumetsat_geocolour_motion.py (см.
-// _save_debug_preview() в scripts/eumetsat_geocolour_motion.py) — всегда
-// самый свежий кадр, кэш-бастинг через timestamp самих geocolour-данных.
+// _save_clean_snapshot()) — всегда самый свежий кадр, кэш-бастинг через
+// timestamp самих geocolour-данных.
 function _renderGeocolourSnapshot(geocolourData){
     if(!geocolourData || !geocolourData.timestamp) return "";
     const ts = _obsTimeTag(geocolourData.timestamp, 20);
-    const src = `https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_geocolour_debug_preview.png?v=${encodeURIComponent(geocolourData.timestamp)}`;
+    const src = `https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_geocolour_snapshot.png?v=${encodeURIComponent(geocolourData.timestamp)}`;
     return `<div style="margin-top:10px;">
         <div style="color:#72c8ff; font-size:13px; font-weight:600; margin-bottom:4px;">🛰️ Последний снимок GeoColour ${ts}</div>
         <img src="${src}" alt="GeoColour"
              style="width:100%; border-radius:8px; display:block;"
              onerror="this.parentElement.style.display='none';">
-        <div style="color:#777; font-size:11px; margin-top:3px;">Красным — пиксели, классифицированные как облако</div>
+        <div style="color:#777; font-size:11px; margin-top:3px;">Жёлтый круг — зона обзора таблиц выше (~192км); дальше видит только грубый посекторный обзор ниже</div>
     </div>`;
 }
 
