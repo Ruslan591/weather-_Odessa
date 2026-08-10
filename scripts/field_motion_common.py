@@ -108,6 +108,13 @@ FAR_TARGET_KM_PER_PX = _GEO["far_window"]["target_km_per_px"]
 VERY_FAR_BBOX = tuple(_GEO["very_far_window"]["bbox"])
 VERY_FAR_TARGET_KM_PER_PX = _GEO["very_far_window"]["target_km_per_px"]
 
+# Радиус тира "near" (≈192км) — та же зона, откуда CLM берёт кандидатов
+# для таблиц local_candidates/system_candidates (motion_window). Нужен как
+# явная python-константа (не только в geo_config.json) для отрисовки круга
+# зоны обзора на снимке GeoColour, см. eumetsat_geocolour_motion.py,
+# _save_clean_snapshot() — запрос 2026-08-10 ("дорисуй окружность обзора").
+NEAR_RADIUS_KM = _GEO["control_tiers"]["near"]["radius_km"]
+
 AFFECT_THRESHOLD_KM = 15.0
 STATIONARY_SPEED_KMH = 3.0
 MIN_FRACTION_FOR_CORR = 0.02
