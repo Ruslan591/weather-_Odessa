@@ -533,13 +533,21 @@ def _update_false_positive_entry(entry, consensus, now_iso):
 
 
 def _update_channel_suppression_entry(entry, no_channel_confirms, now_iso):
-    """Streak-логика для реестра подавления таблицы ВСЕХ локальных очагов
-    (см. field_motion_common.LOCAL_CHANNEL_SUPPRESSION_LOG_PATH и
-    docs/topics/eumetsat.md, запись 2026-08-10). Та же схема N=3/TTL=6ч,
-    что и в _update_false_positive_entry() выше, но критерий уже — булев
-    "не подтвердили ни ИК, ни GeoColour" вместо трио-консенсуса, и
-    применяется ко ВСЕМ кандидатам таблицы, а не только к выбранной
-    voting-цели."""
+    """Streak-логика для реестра подавления таблицы ВСЕХ локальных
+    очагов/систем (см. field_motion_common.LOCAL_/SYSTEM_
+    CHANNEL_SUPPRESSION_LOG_PATH и docs/topics/eumetsat.md, запись
+    2026-08-10). Критерий — булев "не подтвердили ни ИК, ни GeoColour"
+    вместо трио-консенсуса, применяется ко ВСЕМ кандидатам таблицы, а не
+    только к выбранной voting-цели.
+
+    Порог исключения — БЫСТРЫЙ (fc.CHANNEL_SUPPRESSION_STREAK_THRESHOLD=1,
+    исключить сразу же), а не fc.FALSE_POSITIVE_STREAK_THRESHOLD=3 как у
+    основной voting-цели — по прямому запросу 2026-08-10: цена ошибки тут
+    низкая (объект просто пропадает на 1 цикл из описательной таблицы, а
+    не из "Итог"), значит ждать несколько прогонов подряд, показывая
+    объект, который прямо сейчас НИ ОДИН реальный канал не видит, смысла
+    нет. Порог возврата (fc.FALSE_POSITIVE_REACTIVATE_STREAK=2) оставлен
+    медленнее — небольшой гистерезис защищает от мигания на грани."""
     entry = dict(entry) if entry else {
         "not_confirmed_streak": 0,
         "confirmed_streak": 0,
@@ -548,7 +556,7 @@ def _update_channel_suppression_entry(entry, no_channel_confirms, now_iso):
     if no_channel_confirms:
         entry["not_confirmed_streak"] = entry.get("not_confirmed_streak", 0) + 1
         entry["confirmed_streak"] = 0
-        if entry["not_confirmed_streak"] >= fc.FALSE_POSITIVE_STREAK_THRESHOLD:
+        if entry["not_confirmed_streak"] >= fc.CHANNEL_SUPPRESSION_STREAK_THRESHOLD:
             entry["status"] = "excluded"
             entry["excluded_since"] = now_iso
     else:
@@ -559,6 +567,9 @@ def _update_channel_suppression_entry(entry, no_channel_confirms, now_iso):
             entry.pop("excluded_since", None)
     entry["last_seen"] = now_iso
     return entry
+
+
+def _build_suppressed_verdict(suppressed_info, system_info):
     """Вердикт, когда единственный/ближайший local-кандидат — уже известный
     шумовой объект, подавленный по реестру ложных срабатываний (см.
     docs/topics/eumetsat.md, запись от 2026-08-07)."""
