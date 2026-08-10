@@ -1797,3 +1797,42 @@ Phase сейчас чисто описательное поле, на голос
 (~45-60 мин) с одним и тем же результатом ир/gc, прежде чем первый очаг
 реально скроется — тогда можно будет визуально проверить сноску на
 nearby.html.
+
+
+## 2026-08-10 (продолжение 2): та же фильтрация для систем + снимок GeoColour
+
+**Фильтрация систем** — распространено с локальных очагов на таблицу
+систем (запрос "делай такую же фильтрацию невидимых для систем"):
+
+- `field_motion_common.py`: `SYSTEM_CHANNEL_SUPPRESSION_LOG_PATH` — новый
+  файл `data/eumetsat_system_channel_suppression_log.json`,
+  `load/save_system_channel_suppression_log()`. ОТДЕЛЬНЫЙ от локального
+  реестра (`LOCAL_CHANNEL_SUPPRESSION_LOG_PATH`) — системы физически
+  другие объекты (крупнее, дальше), сигнатура координат могла бы иначе
+  случайно столкнуться между классами.
+- `eumetsat_target_summary.py`: тот же `_update_channel_suppression_entry()`
+  переиспользован без изменений (уже был generic, ничего local-специфичного
+  в нём не было) — применён к `system_candidates_list` тем же образом:
+  streak=3 подряд `ir=False AND gc=False` → скрыть, TTL 6ч. Добавлен
+  `system_suppressed_count` в вывод (все статусы: `ok`,
+  `suppressed_known_false_positive`, `system_only`).
+- `nearby_precip.js`: `_renderSystemCandidatesTable()` получил второй
+  параметр `suppressedCount`, та же сноска-прозрачность, что у локальной
+  таблицы.
+
+**Снимок GeoColour под таблицами** — добавлена новая функция
+`_renderGeocolourSnapshot()` в `nearby_precip.js`, показывает
+`data/eumetsat_geocolour_debug_preview.png` (существующий файл, пишет
+`_save_debug_preview()` в `eumetsat_geocolour_motion.py` — перезаписывается
+КАЖДЫЙ цикл, оверлей красным поверх кадра там, где пиксели
+классифицированы как облако; изначально существовал только для ручной
+калибровки HSV-порогов, теперь показывается и пользователю). Кэш-бастинг
+через `?v=timestamp` geocolour-данных, как у far/very_far watch-тиров.
+Вставлен в `renderNearbyPrecipCard()` сразу после таблицы систем, перед
+хронологией осадков/грозы (`nearby.html`, "под таблицами").
+
+**Проверено:** `py_compile` + `node --check` — чисто. GET sha → PUT →
+верификация по всем 3 файлам — sha совпали.
+
+**Не проверено визуально** — снимок и обе фильтрации появятся на
+`nearby.html` со следующего прогона пайплайна.
