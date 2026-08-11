@@ -22,7 +22,7 @@ from datetime import datetime, timedelta, timezone
 
 import numpy as np
 import requests
-from PIL import Image
+from PIL import Image, ImageDraw
 from scipy import ndimage
 
 WMS_BASE = "https://view.eumetsat.int/geoserver/wms"
@@ -984,5 +984,95 @@ def change_probability(effective_distance_km, blob_area_km2, confidence):
     size = min(1.0, blob_area_km2 / SIGNIFICANT_AREA_REF_KM2)
     score = 0.5 * proximity + 0.3 * size + 0.2 * confidence
     return int(round(max(5, min(95, 5 + 90 * score))))
+
+
+# Единый источник порога ИК-контраста — РАНЬШЕ была локальная константа
+# внутри eumetsat_ir_motion.py (тот же смысл, то же значение 1.2), теперь
+# здесь, чтобы не было риска рассинхронизации между модулем-источником
+# (ir_motion.py per-ROI confirmed) и новым пиксельным использованием ниже
+# (eumetsat_cloud_forecast.py, "ясно/переменная облачность/..." — запрос
+# 2026-08-10, "учитывать только те облака, которые подтверждены IR и GC").
+# eumetsat_ir_motion.py теперь ссылается на fc.MIN_CLOUD_CONTRAST_SIGMA
+# вместо своей копии.
+MIN_CLOUD_CONTRAST_SIGMA = 1.2
+
+IR_BUFFER_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                               "data", "eumetsat_ir_buffer.npz")
+GEOCOLOUR_BUFFER_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                      "data", "eumetsat_geocolour_buffer.npz")
+
+
+def load_ir_confirmed_mask(smooth_px=3):
+    """Пиксельная маска 'ИК видит здесь облако' на последнем доступном
+    ИК-кадре (data/eumetsat_ir_buffer.npz — те же сырые grayscale-кадры,
+    что читает eumetsat_ir_motion.py). Та же формула self-relative
+    контраста, что уже используется там для ROI-подтверждения
+    (roi_contrast_sigma >= MIN_CLOUD_CONTRAST_SIGMA), но применённая К
+    КАЖДОМУ пикселю кадра, а не к среднему по ROI — по запросу 2026-08-10
+    ("учитывать только те облака, которые подтверждены IR и GC" для
+    "ясно/малооблачно/..." в eumetsat_cloud_forecast.py).
+
+    smooth_px — сторона box-фильтра (scipy.ndimage.uniform_filter) ПЕРЕД
+    расчётом контраста: ROI-агрегация в ir_motion.py усредняет шум по
+    площади ROI, а голый попиксельный порог на сыром кадре был бы куда
+    шумнее (единичный пиксель может случайно провалиться под порог даже
+    в центре настоящего облака) — лёгкое сглаживание 3×3 компенсирует эту
+    разницу, не размывая структуру существенно.
+
+    Возвращает (mask (H,W) bool | None, ok bool). ok=False, если буфера ещё
+    нет (например ИК-модуль ещё ни разу не отработал) — вызывающий код
+    должен в этом случае откатиться на исходную (не-AND) логику, а не
+    падать."""
+    times, frames = load_frame_buffer(IR_BUFFER_FILE)
+    if not frames:
+        return None, False
+    frame = frames[-1]
+    if smooth_px and smooth_px > 1:
+        frame = ndimage.uniform_filter(frame, size=smooth_px)
+    median = float(np.median(frame))
+    std = float(frame.std()) or 1e-6
+    sigma = (frame - median) / std
+    return sigma >= MIN_CLOUD_CONTRAST_SIGMA, True
+
+
+def load_geocolour_confirmed_mask():
+    """Пиксельная маска 'GeoColour видит здесь облако' — последний
+    is_cloud-канал из data/eumetsat_geocolour_buffer.npz (уже бинарный
+    per-pixel результат HSV-классификации eumetsat_geocolour_motion.py,
+    доп. порог не нужен). Формат упаковки — [gray, is_cloud] на канал 0/1,
+    см. _pack_frame()/_unpack_frame() в eumetsat_geocolour_motion.py.
+    Возвращает (mask (H,W) bool | None, ok bool), см. докстринг
+    load_ir_confirmed_mask() выше про ok=False."""
+    times, frames = load_frame_buffer(GEOCOLOUR_BUFFER_FILE)
+    if not frames:
+        return None, False
+    packed = frames[-1]
+    return packed[1] > 0.5, True
+
+
+def draw_view_radius_circle(base_image, radius_km=None, color=(255, 210, 90), alpha=110, width=2):
+    """Дорисовывает ПОЛУПРОЗРАЧНУЮ окружность зоны обзора тира 'near' поверх
+    RGB-снимка (PIL Image, режим RGB) — общая для GeoColour и ИК снимков на
+    nearby.html (см. eumetsat_geocolour_motion.py, eumetsat_ir_motion.py).
+    По запросу 2026-08-10 ('круг сделай не такой яркий') — раньше был
+    непрозрачный ImageDraw.ellipse(width=3) прямо по базовому изображению
+    (сплошная яркая линия, визуально навязчиво поверх натурального снимка).
+    Теперь окружность рисуется на отдельном RGBA-слое с alpha и
+    смешивается (Image.alpha_composite) с базой — мягкая полупрозрачная
+    линия вместо сплошной.
+
+    radius_km по умолчанию NEAR_RADIUS_KM (тир 'near' ≈192км — та же зона,
+    откуda таблицы local_candidates/system_candidates берут кандидатов).
+    Возвращает НОВОЕ Image (режим RGB), не мутирует переданное."""
+    if radius_km is None:
+        radius_km = NEAR_RADIUS_KM
+    overlay = Image.new("RGBA", base_image.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    cx = (base_image.width - 1) / 2.0
+    cy = (base_image.height - 1) / 2.0
+    rx = radius_km / KM_PER_PX_X
+    ry = radius_km / KM_PER_PX_Y
+    draw.ellipse([cx - rx, cy - ry, cx + rx, cy + ry], outline=color + (alpha,), width=width)
+    return Image.alpha_composite(base_image.convert("RGBA"), overlay).convert("RGB")
 
 
