@@ -49,7 +49,7 @@ import math
 import os
 
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image
 
 import field_motion_common as fc
 
@@ -141,21 +141,17 @@ def _save_clean_snapshot(rgba):
     классификации выше (тот остаётся, но только для внутренней
     калибровки).
 
-    Поверх дорисована жёлтая окружность зоны обзора тира 'near'
-    (fc.NEAR_RADIUS_KM ≈192км) — по отдельному запросу, чтобы на глаз было
-    видно, что попадает в таблицы local_candidates/system_candidates, а
-    что нет. Пример: облачность, которую пользователь увидел на востоке на
-    скриншоте eumetsat.html, была ЗА пределами этого круга — её видит
-    только far_watch (грубый посекторный %, тир 'far' ≈1000км), а не
-    объектные таблицы (те смотрят только внутри круга)."""
+    Поверх дорисована ПОЛУПРОЗРАЧНАЯ окружность зоны обзора тира 'near'
+    (fc.draw_view_radius_circle(), fc.NEAR_RADIUS_KM ≈192км) — по
+    отдельному запросу, чтобы на глаз было видно, что попадает в таблицы
+    local_candidates/system_candidates, а что нет. Пример: облачность,
+    которую пользователь увидел на востоке на скриншоте eumetsat.html,
+    была ЗА пределами этого круга — её видит только far_watch (грубый
+    посекторный %, тир 'far' ≈1000км), а не объектные таблицы (те смотрят
+    только внутри круга)."""
     try:
         base = Image.fromarray(rgba[:, :, :3], mode="RGB").convert("RGB")
-        draw = ImageDraw.Draw(base)
-        cx = (base.width - 1) / 2.0
-        cy = (base.height - 1) / 2.0
-        rx = fc.NEAR_RADIUS_KM / fc.KM_PER_PX_X
-        ry = fc.NEAR_RADIUS_KM / fc.KM_PER_PX_Y
-        draw.ellipse([cx - rx, cy - ry, cx + rx, cy + ry], outline=(255, 221, 0), width=3)
+        base = fc.draw_view_radius_circle(base)
         base.save(SNAPSHOT_FILE)
     except Exception as e:
         print(f"  [WARN] eumetsat_geocolour_motion.py: не удалось сохранить чистый снимок: {e}")
