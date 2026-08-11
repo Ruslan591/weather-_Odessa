@@ -730,16 +730,58 @@ def main():
     # показал 0% облачности в 0-10км от станции, но 25% в круге 50км, потому
     # что стоящий на месте блоб в 15-50км утаскивал долю за порог "variable"
     # (0.15), хотя прямо над станцией было чисто. current_state теперь
-    # считается по STATE_RADIUS_KM=12 (что реально "над станцией"), а
-    # LOCAL_RADIUS_KM=50 остаётся только для трендов density/height/shape
-    # ниже (там радиус нужен большой — это прогноз по региону, а не факт).
-    area_fraction_now = float(is_cloud_now[station_mask].mean())
-    if area_fraction_now < 0.15:
-        current_state_str = "clear"
-    elif area_fraction_now < 0.70:
-        current_state_str = "variable"
+    # считается по STATE_RADIUS_KM=12 (что реально "над станцией" — по сути
+    # площадь города, запрос 2026-08-10 "радиус берём такой чтобы нормально
+    # работал по городу" уже удовлетворён этим historические выбором, менять
+    # не стали), а LOCAL_RADIUS_KM=50 остаётся только для трендов
+    # density/height/shape ниже (там радиус нужен большой — это прогноз по
+    # региону, а не факт).
+    #
+    # 2026-08-10: раньше area_fraction_now считалась ТОЛЬКО по CLM (Cloud
+    # Mask) — по прямой жалобе пользователя (скриншот таблицы локальных
+    # очагов с десятками объектов, которые CLM видит, а ИК и GeoColour оба
+    # в упор нет) заменено на пересечение CLM∩ИК∩GeoColour: пиксель
+    # засчитывается как облачный для current_state, ТОЛЬКО если все три
+    # независимых канала согласны. Раздельные источники — те же сырые
+    # буферы, что уже используются в ir_motion.py/geocolour_motion.py (см.
+    # fc.load_ir_confirmed_mask()/load_geocolour_confirmed_mask()) — тот же
+    # принцип, что уже применяется для trio-подтверждения кандидатов
+    # (eumetsat_target_summary.py), просто попиксельно, а не по объектам.
+    # Если буфер ИК или GeoColour ещё не готов (например пайплайн только
+    # что запущен) — откатываемся на исходную CLM-only логику, чтобы модуль
+    # не переставал работать вообще.
+    ir_mask, ir_ok = fc.load_ir_confirmed_mask()
+    gc_mask, gc_ok = fc.load_geocolour_confirmed_mask()
+    if ir_ok and gc_ok:
+        confirmed_cloud_now = is_cloud_now & ir_mask & gc_mask
+        state_source = "clm_ir_gc_confirmed"
     else:
+        confirmed_cloud_now = is_cloud_now
+        state_source = "clm_only_fallback_ir_or_gc_unavailable"
+    area_fraction_now = float(confirmed_cloud_now[station_mask].mean())
+    debug["state_source"] = state_source
+    debug["state_area_fraction"] = round(area_fraction_now, 3)
+
+    # Расширенная градация (запрос 2026-08-10: "все существующие варианты
+    # описания состояния неба") — стандартный русскоязычный метеослог
+    # (Гидрометцентр/массовые погодные сервисы), 6 уровней вместо прежних
+    # 3. ПЕРВЫЙ ПРОХОД порогов — пересечение трёх каналов физически даёт
+    # МЕНЬШИЕ доли, чем раньше CLM-only (это AND трёх условий, не одного),
+    # поэтому границы ниже прежних 0.15/0.70, не прямое масштабирование —
+    # предстоит откалибровать точнее по мере накопления сравнений с SYNOP
+    # (см. Horizon в docs/topics/eumetsat.md).
+    if area_fraction_now < 0.05:
+        current_state_str = "clear"
+    elif area_fraction_now < 0.20:
+        current_state_str = "mostly_clear"
+    elif area_fraction_now < 0.45:
+        current_state_str = "variable"
+    elif area_fraction_now < 0.65:
+        current_state_str = "considerable"
+    elif area_fraction_now < 0.85:
         current_state_str = "cloud"
+    else:
+        current_state_str = "overcast"
 
     # Бинарное решение "что искать поблизости" (ближайшее облако vs
     # ближайший просвет) — по большинству (>50% радиуса), отдельно от
