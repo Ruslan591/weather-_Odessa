@@ -426,7 +426,18 @@ function _cloudExtraBullets(f){
 function _renderCloudForecastLines(f){
     return _fieldBlock(f, {
         emoji: "☁️", title: "Облачность",
-        stateLabels: { clear: "ясно", variable: "переменная облачность", cloud: "облачно" },
+        // Расширенная градация (запрос 2026-08-10) — см.
+        // eumetsat_cloud_forecast.py, current_state теперь считается по
+        // пересечению CLM∩ИК∩GeoColour (учитываются только облака,
+        // подтверждённые всеми тремя каналами), 6 уровней вместо прежних 3.
+        stateLabels: {
+            clear: "ясно",
+            mostly_clear: "малооблачно",
+            variable: "переменная облачность",
+            considerable: "значительная облачность",
+            cloud: "облачно",
+            overcast: "пасмурно",
+        },
         massTargetValue: "cloud_mass", targetMassLabel: "ближайшее облако", targetClearingLabel: "ближайший просвет",
         probVerb: "принесёт изменение погоды",
         staleMin: 25,
