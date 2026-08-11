@@ -890,14 +890,16 @@ function _renderSystemCandidatesTable(rows, suppressedCount){
 // классификации, тот отдельно, только для внутренней калибровки, см.
 // eumetsat_geocolour_debug_preview.png) — по запросу 2026-08-10,
 // уточнённому после скриншота ("я имел в виду ЭТОТ снимок" — натуральный
-// цвет как на eumetsat.html). Жёлтой окружностью размечена зона обзора
-// тира "near" (~192км, radius fc.NEAR_RADIUS_KM) — именно оттуда берутся
-// все кандидаты для таблиц local_candidates/system_candidates выше; всё,
-// что за кругом (например облачность на востоке/северо-востоке), таблицы
-// не видят — это ловит только далёкий грубый посекторный far_watch ниже.
-// Файл перезаписывается КАЖДЫЙ цикл eumetsat_geocolour_motion.py (см.
-// _save_clean_snapshot()) — всегда самый свежий кадр, кэш-бастинг через
-// timestamp самих geocolour-данных.
+// цвет как на eumetsat.html). Полупрозрачной жёлтой окружностью (по
+// отдельному запросу "сделай не такой яркий" — см.
+// fc.draw_view_radius_circle() в field_motion_common.py) размечена зона
+// обзора тира "near" (~192км, radius fc.NEAR_RADIUS_KM) — именно оттуда
+// берутся все кандидаты для таблиц local_candidates/system_candidates
+// выше; всё, что за кругом (например облачность на востоке/северо-востоке),
+// таблицы не видят — это ловит только далёкий грубый посекторный far_watch
+// ниже. Файл перезаписывается КАЖДЫЙ цикл eumetsat_geocolour_motion.py
+// (см. _save_clean_snapshot()) — всегда самый свежий кадр, кэш-бастинг
+// через timestamp самих geocolour-данных.
 function _renderGeocolourSnapshot(geocolourData){
     if(!geocolourData || !geocolourData.timestamp) return "";
     const ts = _obsTimeTag(geocolourData.timestamp, 20);
@@ -907,7 +909,25 @@ function _renderGeocolourSnapshot(geocolourData){
         <img src="${src}" alt="GeoColour"
              style="width:100%; border-radius:8px; display:block;"
              onerror="this.parentElement.style.display='none';">
-        <div style="color:#777; font-size:11px; margin-top:3px;">Жёлтый круг — зона обзора таблиц выше (~192км); дальше видит только грубый посекторный обзор ниже</div>
+        <div style="color:#777; font-size:11px; margin-top:3px;">Круг — зона обзора таблиц выше (~192км); дальше видит только грубый посекторный обзор ниже</div>
+    </div>`;
+}
+
+// Последний снимок ИК (10.5 мкм) — под GeoColour, по прямому запросу
+// 2026-08-10 ("под этим снимком добавь ИК, такой же, с кругом"). Тот же
+// принцип: eumetsat_ir_motion.py._save_ir_snapshot() перезаписывает файл
+// каждый цикл, тот же fc.draw_view_radius_circle() для круга — визуально
+// согласовано со снимком GeoColour выше.
+function _renderIrSnapshot(irData){
+    if(!irData || !irData.timestamp) return "";
+    const ts = _obsTimeTag(irData.timestamp, 20);
+    const src = `https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_ir_snapshot.png?v=${encodeURIComponent(irData.timestamp)}`;
+    return `<div style="margin-top:10px;">
+        <div style="color:#72c8ff; font-size:13px; font-weight:600; margin-bottom:4px;">🌡️ Последний снимок ИК 10.5 мкм ${ts}</div>
+        <img src="${src}" alt="ИК 10.5 мкм"
+             style="width:100%; border-radius:8px; display:block;"
+             onerror="this.parentElement.style.display='none';">
+        <div style="color:#777; font-size:11px; margin-top:3px;">Тот же круг — зона обзора таблиц выше (~192км)</div>
     </div>`;
 }
 
@@ -992,6 +1012,7 @@ function renderNearbyPrecipCard(){
         ${_renderLocalCandidatesTable(_eumetsatTargetSummaryData && _eumetsatTargetSummaryData.local_candidates, _eumetsatTargetSummaryData && _eumetsatTargetSummaryData.local_suppressed_count)}
         ${_renderSystemCandidatesTable(_eumetsatTargetSummaryData && _eumetsatTargetSummaryData.system_candidates, _eumetsatTargetSummaryData && _eumetsatTargetSummaryData.system_suppressed_count)}
         ${_renderGeocolourSnapshot(_eumetsatGeocolourMotionData)}
+        ${_renderIrSnapshot(_eumetsatIrMotionData)}
         ${_renderHistoryTable(_eumetsatPrecipHistoryData, "📜", "Хронология осадков")}
         ${_renderHistoryTable(_eumetsatLightningHistoryData, "⛈️", "Хронология грозы")}
         <details style="margin-top:10px;">
