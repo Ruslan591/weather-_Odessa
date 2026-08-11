@@ -740,24 +740,44 @@ def main():
     # 2026-08-10: раньше area_fraction_now считалась ТОЛЬКО по CLM (Cloud
     # Mask) — по прямой жалобе пользователя (скриншот таблицы локальных
     # очагов с десятками объектов, которые CLM видит, а ИК и GeoColour оба
-    # в упор нет) заменено на пересечение CLM∩ИК∩GeoColour: пиксель
-    # засчитывается как облачный для current_state, ТОЛЬКО если все три
-    # независимых канала согласны. Раздельные источники — те же сырые
-    # буферы, что уже используются в ir_motion.py/geocolour_motion.py (см.
-    # fc.load_ir_confirmed_mask()/load_geocolour_confirmed_mask()) — тот же
-    # принцип, что уже применяется для trio-подтверждения кандидатов
-    # (eumetsat_target_summary.py), просто попиксельно, а не по объектам.
-    # Если буфер ИК или GeoColour ещё не готов (например пайплайн только
-    # что запущен) — откатываемся на исходную CLM-only логику, чтобы модуль
-    # не переставал работать вообще.
+    # в упор нет) заменено на подтверждение независимыми каналами. Раздельные
+    # источники — те же сырые буферы, что уже используются в
+    # ir_motion.py/geocolour_motion.py (см.
+    # fc.load_ir_confirmed_mask()/load_geocolour_confirmed_mask()).
+    #
+    # 2026-08-11: ПЕРВАЯ версия требовала СТРОГОГО согласия ВСЕХ ТРЁХ
+    # каналов (CLM & IR & GC) — на живом снимке (09:56, видны рассеянные
+    # кучевые облака) это дало current_state="ясно" (пользователь: "не
+    # сказал бы что над станцией ясно... их видно"). Диагностика на сырых
+    # буферах подтвердила причину: GeoColour-классификатор
+    # (_classify_cloud в eumetsat_geocolour_motion.py, тот же класс
+    # проблемы, что уже находили у Phase RGB — неоткалиброванные HSV-
+    # анкеры) дал РОВНО 0% в круге станции при явно облачном небе на
+    # снимке — единственный "нет" от одного нездорового канала обнулял всё
+    # трио. Заменено на CLM & (IR | GC) — облако засчитывается, если CLM
+    # его видит И ХОТЯ БЫ ОДИН из двух независимых каналов подтверждает
+    # (не обязательно оба сразу). Та же логика симметрии, что уже принята
+    # в реестрах подавления шумовых объектов (там наоборот — объект
+    # прячем, только если ОБА канала отвергли; здесь — облако засчитываем,
+    # если хотя бы один подтвердил), устойчива к временной поломке одного
+    # канала. GeoColour-калибровка остаётся отдельной открытой проблемой
+    # (см. Horizon в docs/topics/eumetsat.md) — само по себе under-
+    # detection GeoColour не устранено, просто current_state больше от
+    # него единолично не зависит.
     ir_mask, ir_ok = fc.load_ir_confirmed_mask()
     gc_mask, gc_ok = fc.load_geocolour_confirmed_mask()
     if ir_ok and gc_ok:
-        confirmed_cloud_now = is_cloud_now & ir_mask & gc_mask
-        state_source = "clm_ir_gc_confirmed"
+        confirmed_cloud_now = is_cloud_now & (ir_mask | gc_mask)
+        state_source = "clm_and_ir_or_gc_confirmed"
+    elif ir_ok:
+        confirmed_cloud_now = is_cloud_now & ir_mask
+        state_source = "clm_ir_confirmed_gc_unavailable"
+    elif gc_ok:
+        confirmed_cloud_now = is_cloud_now & gc_mask
+        state_source = "clm_gc_confirmed_ir_unavailable"
     else:
         confirmed_cloud_now = is_cloud_now
-        state_source = "clm_only_fallback_ir_or_gc_unavailable"
+        state_source = "clm_only_fallback_ir_and_gc_unavailable"
     area_fraction_now = float(confirmed_cloud_now[station_mask].mean())
     debug["state_source"] = state_source
     debug["state_area_fraction"] = round(area_fraction_now, 3)
@@ -765,11 +785,13 @@ def main():
     # Расширенная градация (запрос 2026-08-10: "все существующие варианты
     # описания состояния неба") — стандартный русскоязычный метеослог
     # (Гидрометцентр/массовые погодные сервисы), 6 уровней вместо прежних
-    # 3. ПЕРВЫЙ ПРОХОД порогов — пересечение трёх каналов физически даёт
-    # МЕНЬШИЕ доли, чем раньше CLM-only (это AND трёх условий, не одного),
-    # поэтому границы ниже прежних 0.15/0.70, не прямое масштабирование —
-    # предстоит откалибровать точнее по мере накопления сравнений с SYNOP
-    # (см. Horizon в docs/topics/eumetsat.md).
+    # 3. ПЕРВЫЙ ПРОХОД порогов (обновлён 2026-08-11 вместе со сменой AND->OR
+    # выше, см. комментарий там) — CLM & (IR|GC) физически даёт МЕНЬШИЕ доли,
+    # чем раньше CLM-only (это всё ещё пересечение двух условий, не одного),
+    # но БОЛЬШИЕ, чем строгий CLM&IR&GC — границы по-прежнему ниже прежних
+    # 0.15/0.70 (не прямое масштабирование), но выше, чем были бы под
+    # строгим AND трёх каналов — предстоит откалибровать точнее по мере
+    # накопления сравнений с SYNOP (см. Horizon в docs/topics/eumetsat.md).
     if area_fraction_now < 0.05:
         current_state_str = "clear"
     elif area_fraction_now < 0.20:
