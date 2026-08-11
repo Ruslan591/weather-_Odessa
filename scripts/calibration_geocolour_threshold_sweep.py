@@ -42,8 +42,13 @@ OUT_FILE = os.path.join(BASE_DIR, "data", "calibration_geocolour_threshold_sweep
 REQUEST_DELAY_SECONDS = 0.4
 
 RADIUS_KM = 25  # лучший день-radius из мультирадиус-анализа 2026-08-11
-S_MAX_GRID = [0.15, 0.20, 0.25, 0.30, 0.35]
-V_MIN_GRID = [0.45, 0.50, 0.55, 0.60, 0.65]
+GRID_VERSION = 2  # v1 (2026-08-11, первый прогон): s_max упирался в
+# v_min=0.45 — это был КРАЙ сетки, лучший результат сел на границу, значит
+# оптимум ниже. v2: расширяем v_min вниз (0.30-0.55), s_max почти не влиял
+# на результат в v1 (0.15-0.35 давали почти одинаково) — оставляем всего
+# 2 значения, чтобы не раздувать датасет.
+S_MAX_GRID = [0.25, 0.35]
+V_MIN_GRID = [0.30, 0.35, 0.40, 0.45, 0.50, 0.55]
 
 
 def _radius_mask(radius_km):
@@ -55,17 +60,29 @@ def _radius_mask(radius_km):
     return dist_km <= radius_km
 
 
-def _load_done_timestamps():
+def _load_done_timestamps_and_prune_stale_grid():
+    """Строки с ТЕКУЩЕЙ версией сетки — готовы, пропускаем. Строки старой
+    версии сетки (другой набор комбинаций s_max/v_min) — выкидываем из
+    файла целиком и пересобираем заново, чтобы не мешать несовместимые
+    наборы ключей 'fractions' для одного и того же timestamp."""
     done = set()
+    kept_lines = []
     if os.path.exists(OUT_FILE):
         with open(OUT_FILE, "r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
-                if line:
-                    try:
-                        done.add(json.loads(line)["synop_timestamp"])
-                    except Exception:
-                        continue
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except Exception:
+                    continue
+                if row.get("grid_version") == GRID_VERSION:
+                    done.add(row["synop_timestamp"])
+                    kept_lines.append(line)
+        with open(OUT_FILE, "w", encoding="utf-8") as f:
+            for line in kept_lines:
+                f.write(line + "\n")
     return done
 
 
@@ -74,7 +91,7 @@ def main():
         samples = [s for s in json.load(f) if s["day"]]  # только дневные — ночь не в этом переборе
     print(f"дневных сроков в выборке: {len(samples)}")
 
-    done = _load_done_timestamps()
+    done = _load_done_timestamps_and_prune_stale_grid()
     mask = _radius_mask(RADIUS_KM)
 
     ok, skipped, failed = 0, 0, 0
@@ -117,6 +134,7 @@ def main():
                     fractions[key] = round(float(is_cloud.mean()), 4)
 
             row = {
+                "grid_version": GRID_VERSION,
                 "synop_timestamp": ts,
                 "synop_n": entry["n"],
                 "synop_bucket": entry["bucket"],
