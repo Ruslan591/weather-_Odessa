@@ -1,7 +1,7 @@
 {
-  "timestamp": "2026-08-12T13:09:32Z",
+  "timestamp": "2026-08-12T13:24:13Z",
   "status": "ok",
-  "cloud_forecast_timestamp": "2026-08-12T13:05:18Z",
+  "cloud_forecast_timestamp": "2026-08-12T13:20:32Z",
   "target_id": 1,
   "target_area_km2": 152.1,
   "target_distance_km": 74.5,
@@ -17,27 +17,12 @@
     "elongation_axis_deg": 88.0,
     "elongation_axis_compass": "В-З",
     "frontlike": false,
+    "phase_label": "безоблачно",
+    "cloud_fraction": 0.988,
     "has_precip": true,
     "has_lightning": false
   },
   "local_candidates": [
-    {
-      "target_id": 1,
-      "area_km2": 152.1,
-      "distance_km": 74.5,
-      "bearing_deg": 180.0,
-      "compass": "Ю",
-      "elongation_aspect_ratio": 2.16,
-      "elongation_axis_deg": 59.0,
-      "elongation_axis_compass": "СВ-ЮЗ",
-      "frontlike": false,
-      "phase_label": null,
-      "type_label": null,
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": true,
-      "geocolour_confirmed": true
-    },
     {
       "target_id": 4,
       "area_km2": 281.5,
@@ -48,8 +33,8 @@
       "elongation_axis_deg": 167.0,
       "elongation_axis_compass": "Ю-С",
       "frontlike": false,
-      "phase_label": null,
-      "type_label": null,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
@@ -65,15 +50,15 @@
       "elongation_axis_deg": 54.0,
       "elongation_axis_compass": "СВ-ЮЗ",
       "frontlike": false,
-      "phase_label": null,
-      "type_label": null,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
       "geocolour_confirmed": true
     }
   ],
-  "local_suppressed_count": 0,
+  "local_suppressed_count": 1,
   "system_candidates": [
     {
       "target_id": 3,
@@ -85,11 +70,11 @@
       "elongation_axis_deg": 32.0,
       "elongation_axis_compass": "СВ-ЮЗ",
       "frontlike": true,
-      "phase_label": null,
-      "type_label": null,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
       "has_precip": true,
       "has_lightning": false,
-      "ir_confirmed": true,
+      "ir_confirmed": false,
       "geocolour_confirmed": true
     },
     {
@@ -102,8 +87,8 @@
       "elongation_axis_deg": 1.0,
       "elongation_axis_compass": "С-Ю",
       "frontlike": true,
-      "phase_label": null,
-      "type_label": null,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
@@ -113,26 +98,26 @@
   "system_suppressed_count": 2,
   "target_phase": {
     "label": "безоблачно",
-    "cloud_fraction": 1.0
+    "cloud_fraction": 0.124
   },
   "existence": {
     "modules": {
       "ir_motion": {
-        "confirmed": true,
-        "timestamp": "2026-08-12T13:08:40Z"
+        "confirmed": false,
+        "timestamp": "2026-08-12T13:22:52Z"
       },
       "geocolour_motion": {
-        "confirmed": true,
-        "timestamp": "2026-08-12T13:09:13Z"
+        "confirmed": false,
+        "timestamp": "2026-08-12T13:23:32Z"
       },
       "cloud_phase_type": {
-        "confirmed": true,
-        "timestamp": "2026-08-12T11:58:03Z"
+        "confirmed": false,
+        "timestamp": "2026-08-12T13:21:29Z"
       }
     },
-    "votes_confirmed": 3,
-    "votes_not_confirmed": 0,
-    "consensus": "confirmed"
+    "votes_confirmed": 0,
+    "votes_not_confirmed": 3,
+    "consensus": "not_confirmed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -144,5 +129,5 @@
       "timestamp": "2026-08-12T13:08:31Z"
     }
   },
-  "verdict": "Облачная масса (152км², безоблачно) в 74км Ю подтверждена всеми доступными каналами. Отдельно: система синоптического масштаба (87992км²) в 6км С (осадки)."
+  "verdict": "CLM отметил цель в 74км Ю, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (87992км²) в 6км С (осадки)."
 }
