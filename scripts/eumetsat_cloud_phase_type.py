@@ -217,8 +217,29 @@ def _classify_type(rgba):
     return group, valid
 
 
+def _classify_fog_brightness(rgba, gray_max=0.25):
+    """Классификатор Fog RGB (LAYER_NIGHT_A), откалиброван по SYNOP
+    2026-08-13 (73 ночных срока станции 33837, см. docs/topics/
+    eumetsat.md). ЗАМЕНИЛ self-relative контраст (_classify_contrast) —
+    тот провалился для Fog: НЕ монотонно по N, ложные 40-70% на любом
+    радиусе/пороге sigma. Оказалось, сигнал абсолютный и ОБРАТНЫЙ: ROI
+    темнее при большей облачности (r=25км: gray_mean 0.412 при N=0 ->
+    0.307 при N=8-9). Порог gray_max=0.25 на r=25км дал: ложное N=0=0.4%,
+    N=1-2=2.2%, детект N=8-9=52.7%, почти монотонно по всем бакетам —
+    выбран сознательно консервативный порог (низкое ложное), не самый
+    высокий детект (у gray_max=0.30 детект выше, 58%, но ложные растут
+    до 5-15% и не монотонно).
+    ВАЖНО: этот классификатор — ТОЛЬКО для Fog (LAYER_A). Dust (LAYER_B)
+    пока НЕ откалиброван — остаётся на _classify_contrast() ниже, до
+    отдельной калибровки тем же методом (следующий шаг в очереди)."""
+    alpha_valid = rgba[:, :, 3] > 0
+    gray = rgba[:, :, :3].astype(np.float32).mean(axis=2) / 255.0
+    ordinal = (gray < gray_max).astype(np.float32)
+    return ordinal, alpha_valid
+
+
 def _classify_contrast(rgba, sigma_threshold=1.0):
-    """Ночная замена _classify_phase/_classify_type для Fog/Dust RGB — по
+    """Ночная замена _classify_phase/_classify_type для Dust RGB — по
     запросу 2026-08-09. НЕ анкерная классификация (нет попытки сказать
     "это конкретно туман" или "это конкретно пыль" по цвету) — вместо
     этого self-relative контраст яркости, ТОТ ЖЕ принцип, что уже
@@ -228,7 +249,11 @@ def _classify_contrast(rgba, sigma_threshold=1.0):
           (потенциальный сигнал — туман ИЛИ пыль, не различаем ЧТО именно)
       0 — фон, ничего примечательного
     valid = alpha>0 везде (в отличие от HSV-анкеров тут нет "неопознанного
-    цвета" — единственная причина невалидности пикселя — нет данных)."""
+    цвета" — единственная причина невалидности пикселя — нет данных).
+    ВНИМАНИЕ: для Fog (LAYER_A) этот метод ПРОВАЛИЛСЯ при калибровке
+    2026-08-13 (не монотонно по N) — заменён на _classify_fog_brightness()
+    выше. Здесь остаётся ТОЛЬКО для Dust (LAYER_B), пока не откалиброван
+    отдельно тем же методом (абсолютный порог по gray)."""
     alpha_valid = rgba[:, :, 3] > 0
     gray = rgba[:, :, :3].astype(np.float32).mean(axis=2) / 255.0
     vals = gray[alpha_valid]
@@ -297,7 +322,7 @@ def main():
         labels_a, labels_b = PHASE_LABELS, TYPE_LABELS
     else:
         LAYER_A, LAYER_B = LAYER_NIGHT_A, LAYER_NIGHT_B
-        classify_a = classify_b = _classify_contrast
+        classify_a, classify_b = _classify_fog_brightness, _classify_contrast
         labels_a = {0: "нет выраженного сигнала (Fog RGB)", 1: "заметное отклонение — возможен туман/дымка"}
         labels_b = {0: "нет выраженного сигнала (Dust RGB)", 1: "заметное отклонение — возможна пыль"}
 
