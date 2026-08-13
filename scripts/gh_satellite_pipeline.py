@@ -29,6 +29,17 @@ SCRIPTS_DIR = os.path.join(BASE_DIR, "scripts")
 PYTHON      = sys.executable
 
 
+def _is_daytime_utc(now_utc):
+    """Та же грубая формула, что fc.is_daytime() в field_motion_common.py
+    (локальный час Одессы UTC+3, без сезонной точности) — продублирована
+    здесь напрямую (не импортом fc), чтобы не тащить scipy-зависимость
+    field_motion_common.py в лёгкий процесс-оркестратор ради одной проверки.
+    Используется только для гейта check_eumetsat_cloud_phase_type() —
+    см. комментарий там."""
+    local_hour = (now_utc.hour + 3) % 24
+    return 5 <= local_hour < 20
+
+
 def check_eumetsat_point():
     # Значения EUMETSAT (облачность/высота/молнии) в точке Одессы, для
     # сравнения с RainViewer-прокси. Гейт 12 мин (реальные данные — 5-15 мин).
@@ -176,6 +187,18 @@ def check_eumetsat_cloud_phase_type():
     # кадров (2ч, шаг 10 мин, докачка 1 кадра/прогон). Не трекинг движения
     # (это делает Cloud Mask/IR), только качественный тренд фазы/группы.
     # Гейт 10 мин.
+    #
+    # НОЧЬЮ ПРОПУСКАЕМ ЦЕЛИКОМ (экономия времени пайплайна, запрос
+    # 2026-08-14 "убрать лишнее"): ночная пара слоёв (Fog/Dust RGB) даёт
+    # confirmed=None ВСЕГДА (не участвует в trio-голосовании существования
+    # цели — см. eumetsat_cloud_phase_type.py, ветка is_day), и по решению
+    # от 2026-08-13 Fog/Dust явно выведены из активного состава каналов
+    # ("вне активного состава", докстринг docs/topics/eumetsat.md) — не
+    # относятся к цели проекта (форма/движение фронтов). Функциональных
+    # потерь нет: два WMS-запроса + классификация + запись буфера/файла
+    # просто не тратятся зря всю ночь (~12ч из суток).
+    if not _is_daytime_utc(datetime.now(timezone.utc)):
+        return
     out_file = os.path.join(BASE_DIR, "data", "eumetsat_cloud_phase_type.json")
     now_utc = datetime.now(timezone.utc)
     try:
@@ -426,7 +449,13 @@ def main():
     print(f"  [SATELLITE] Цикл спутникового модуля  {datetime.now(timezone.utc).strftime('%d.%m %H:%M UTC')}")
     print(f"{'─'*52}\n")
 
-    check_eumetsat_point()
+    # check_eumetsat_point() убран из цикла 2026-08-14 ("убрать всё лишнее,
+    # сократить время"): eumetsat_point.json писался, но НИ ОДИН html/js
+    # файл его не читает (проверено code search по репозиторию) — мёртвый
+    # шаг с эпохи RainViewer-сравнения (RainViewer давно удалён из
+    # nearby.html, см. память проекта). Функция check_eumetsat_point()
+    # оставлена в файле неиспользуемой — если понадобится, легко вернуть
+    # вызов обратно.
     check_eumetsat_cloud_forecast()
     check_eumetsat_cloud_phase_type()
     check_eumetsat_precip_forecast()
