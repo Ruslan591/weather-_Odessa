@@ -1,0 +1,59 @@
+name: Калибровка Phase RGB (сбор по стратифицированной выборке CL/CM/CH)
+
+# Ручной запуск. Первый калибровочный прогон для Phase RGB (9 категорий
+# фазы/типа облака, mtg_fd:rgb_cloudphase) — в отличие от GeoColour/ИК/
+# Type, ground truth здесь не просто N (общая облачность), а тип облака
+# по ярусам из группы SYNOP 8NhCLCMCH (коды ВМО 0513/0515/0509).
+# Выборка (192 срока, 2023-2026, дневные) уже собрана и закоммичена —
+# data/calibration_phase_sample.json. См. docs/topics/eumetsat.md.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Установка Python-зависимостей
+        run: pip install numpy scipy Pillow requests
+
+      - name: Настройка git для коммитов
+        run: |
+          git config user.name "gh-calibration-bot"
+          git config user.email "actions@users.noreply.github.com"
+
+      - name: Сбор калибровочных данных Phase RGB
+        working-directory: scripts
+        run: python calibration_phase_collect.py
+
+      - name: Коммит и пуш результата
+        run: |
+          set -e
+          if [ -z "$(git status --porcelain data/calibration_phase_synop.jsonl 2>/dev/null)" ]; then
+            echo "Нет изменений — нечего коммитить"
+            exit 0
+          fi
+          git add data/calibration_phase_synop.jsonl
+          git commit -m "data: калибровочная выборка Phase RGB (CL/CM/CH)"
+          for i in 1 2 3; do
+            if git push; then
+              echo "push успешен (попытка $i)"
+              break
+            fi
+            echo "push не удался (попытка $i), git pull --rebase и повтор..."
+            git pull --rebase origin main
+            if [ "$i" = "3" ]; then
+              echo "::error::push не удался после 3 попыток"
+              exit 1
+            fi
+          done
