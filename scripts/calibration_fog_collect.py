@@ -47,7 +47,13 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SAMPLE_FILE = os.path.join(BASE_DIR, "data", "calibration_geocolour_sample.json")
 OUT_FILE = os.path.join(BASE_DIR, "data", "calibration_fog_synop.jsonl")
 REQUEST_DELAY_SECONDS = 0.4
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
+# 2026-08-13: gray_mean дал реальный (обратный!) сигнал — ROI темнее при
+# большей облачности (rho=-0.23, монотонно 0.41->0.31 от N=0 к N=8-9).
+# v3 добавляет фракцию пикселей gray < порог (аналог v_min у GeoColour,
+# но инвертирован) — чтобы подобрать реальный порог, а не судить по
+# одному среднему.
+GRAY_MAX_GRID = [0.25, 0.30, 0.35, 0.40, 0.45]
 
 RADII_KM = [12, 25, 50, 100]
 SIGMA_THRESHOLDS = [0.5, 0.8, 1.0, 1.2, 1.5, 1.8, 2.2]
@@ -145,11 +151,16 @@ def main():
                     for th in SIGMA_THRESHOLDS
                 }
                 gray_roi = gray[mask][valid_in_mask]
+                by_gray_max = {
+                    str(g): round(float((gray_roi < g).mean()), 4)
+                    for g in GRAY_MAX_GRID
+                }
                 by_radius[str(r)] = {
                     "valid_px": valid_px,
                     "by_sigma_threshold": by_threshold,
                     "gray_mean": round(float(gray_roi.mean()), 4),
                     "gray_std": round(float(gray_roi.std()), 4),
+                    "by_gray_max": by_gray_max,
                 }
 
             row = {
