@@ -308,6 +308,18 @@ def _axis_compass_label(bearing_deg):
     return f"{end_a}-{end_b}"
 
 
+WINDOW_SPAN_TOLERANCE_PX = 2  # допуск в пикселях при проверке "bbox упирается в край окна"
+
+
+def _window_edge_km():
+    """Km-координаты краёв окна анализа (motion_window) по X и Y — для
+    проверки window_spanning (см. _significant_blobs). Симметрично вокруг
+    центра тайла, тот же расчёт, что _pixel_to_km_offset даёт для угловых
+    пикселей 0 и TILE_SIZE-1."""
+    center = (TILE_SIZE - 1) / 2
+    return center * KM_PER_PX_X, center * KM_PER_PX_Y
+
+
 def _significant_blobs(is_cloud_mask, valid_mask, want_cloud, min_blob_px=MIN_SIGNIFICANT_BLOB_PX):
     """Как _nearest_of_type, но возвращает ВСЕ значимые связные области нужного
     типа, а не только ближайшую к центру — основа для object-centric пайплайна
@@ -358,6 +370,19 @@ def _significant_blobs(is_cloud_mask, valid_mask, want_cloud, min_blob_px=MIN_SI
                 corners_dx.append(dx)
                 corners_dy.append(dy)
             aspect_ratio, axis_bearing = _blob_elongation(ys, xs, center_row, center_col)
+            # window_spanning — дёшевый диагностический флаг (см. docs/topics/
+            # eumetsat.md, находка 2026-08-09 "продолжение 4"): если bbox блоба
+            # упирается в ОБА края окна хотя бы по одной оси (X или Y, с
+            # допуском WINDOW_SPAN_TOLERANCE_PX), это подозрение, что 8-связный
+            # проход склеил разрозненные пятна через диагональную ниточку шума
+            # в один "спан" через весь тайл, а не реальная связная структура
+            # такого размера. НЕ меняет сегментацию/список кандидатов — только
+            # предупреждающая метка для потребителей (target_summary/фронтенд).
+            edge_dx_km, edge_dy_km = _window_edge_km()
+            tol_dx_km = WINDOW_SPAN_TOLERANCE_PX * KM_PER_PX_X
+            tol_dy_km = WINDOW_SPAN_TOLERANCE_PX * KM_PER_PX_Y
+            spans_x = (min(corners_dx) <= -edge_dx_km + tol_dx_km) and (max(corners_dx) >= edge_dx_km - tol_dx_km)
+            spans_y = (min(corners_dy) <= -edge_dy_km + tol_dy_km) and (max(corners_dy) >= edge_dy_km - tol_dy_km)
             result.append({
                 "centroid_dx_km": round(cdx_km, 2),
                 "centroid_dy_km": round(cdy_km, 2),
@@ -376,7 +401,9 @@ def _significant_blobs(is_cloud_mask, valid_mask, want_cloud, min_blob_px=MIN_SI
                     class_label == "system"
                     and aspect_ratio is not None
                     and aspect_ratio >= FRONTLIKE_ASPECT_THRESHOLD
+                    and not (spans_x or spans_y)
                 ),
+                "window_spanning": bool(spans_x or spans_y),
             })
         return result
 
