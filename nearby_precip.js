@@ -847,10 +847,20 @@ function _renderSystemCandidatesTable(rows, suppressedCount){
         const lightning = r.has_lightning === true ? "⚡" : (r.has_lightning === false ? "—" : "?");
         const irConf = r.ir_confirmed === true ? "✅" : (r.ir_confirmed === false ? "❌" : "?");
         const gcConf = r.geocolour_confirmed === true ? "✅" : (r.geocolour_confirmed === false ? "❌" : "?");
-        return `<tr>
+        // window_spanning — bbox упирается в оба края окна обзора хотя бы по
+        // одной оси, подозрение на склейку разрозненных пятен через шум при
+        // 8-связной разметке (см. docs/topics/eumetsat.md, 2026-08-09
+        // "продолжение 4"). Площадь/форма этой строки ненадёжны — не скрываем,
+        // но помечаем и приглушаем визуально.
+        const spanning = !!r.window_spanning;
+        const rowStyle = spanning ? ' style="opacity:0.6;"' : "";
+        const areaLabel = spanning
+            ? `<span title="Площадь/форма ненадёжны — объект упирается в границы окна обзора, возможна склейка через шум">⚠️ ${area}</span>`
+            : area;
+        return `<tr${rowStyle}>
             <td style="padding:3px 10px 3px 0; color:#bbb; text-align:right;">${dist}</td>
             <td style="padding:3px 10px; color:#bbb;">${dir}</td>
-            <td style="padding:3px 10px; color:#bbb; text-align:right;">${area}</td>
+            <td style="padding:3px 10px; color:#bbb; text-align:right;">${areaLabel}</td>
             <td style="padding:3px 10px; color:#ccc;">${axis}</td>
             <td style="padding:3px 10px; color:#ccc; text-align:right;">${ratio}</td>
             <td style="padding:3px 0; text-align:center;">${front}</td>
