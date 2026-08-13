@@ -47,10 +47,14 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SAMPLE_FILE = os.path.join(BASE_DIR, "data", "calibration_geocolour_sample.json")
 OUT_FILE = os.path.join(BASE_DIR, "data", "calibration_fog_synop.jsonl")
 REQUEST_DELAY_SECONDS = 0.4
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 RADII_KM = [12, 25, 50, 100]
 SIGMA_THRESHOLDS = [0.5, 0.8, 1.0, 1.2, 1.5, 1.8, 2.2]
+# 2026-08-13: self-relative контраст провалился (не монотонно по N,
+# ложные 40-70%). v2 схема добавляет АБСОЛЮТНУЮ яркость ROI (gray_mean) —
+# без привязки к медиане кадра, по аналогии с v_min, спасшим ночной
+# GeoColour. SCHEMA_VERSION поднят -> полный пересбор (~73 срока).
 
 
 def _radius_mask(radius_km):
@@ -140,7 +144,13 @@ def main():
                     str(th): round(float((np.abs(sigma_roi) >= th).mean()), 4)
                     for th in SIGMA_THRESHOLDS
                 }
-                by_radius[str(r)] = {"valid_px": valid_px, "by_sigma_threshold": by_threshold}
+                gray_roi = gray[mask][valid_in_mask]
+                by_radius[str(r)] = {
+                    "valid_px": valid_px,
+                    "by_sigma_threshold": by_threshold,
+                    "gray_mean": round(float(gray_roi.mean()), 4),
+                    "gray_std": round(float(gray_roi.std()), 4),
+                }
 
             row = {
                 "schema_version": SCHEMA_VERSION,
