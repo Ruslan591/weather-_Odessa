@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-13T07:53:28Z",
+  "timestamp": "2026-08-13T08:16:12Z",
   "buffer_size": 6,
   "buffer_span_minutes": 50,
   "observed_area": {
@@ -26,64 +26,46 @@
   "area_trend_verdict": "без существенных изменений",
   "station_state": "clear",
   "station_area_fraction": 0.0,
-  "cloud_mass_distance_km": 76.9,
-  "cloud_mass_bearing_deg": 223.0,
+  "cloud_mass_distance_km": 71.7,
+  "cloud_mass_bearing_deg": 228.0,
   "cloud_mass_compass": "ЮЗ",
-  "cloud_mass_area_km2": 61,
+  "cloud_mass_area_km2": 266,
   "target_confirmation": {
-    "confirmed": false,
-    "target_id": 0,
-    "target_area_km2": 93.4,
-    "roi_cloud_fraction": 0.0,
-    "verdict": "GeoColour НЕ подтверждает: в ROI CLM-цели облачность не преобладает — возможно расхождение слоёв"
+    "confirmed": true,
+    "target_id": 1,
+    "target_area_km2": 53.4,
+    "roi_cloud_fraction": 0.535,
+    "verdict": "GeoColour подтверждает: в ROI CLM-цели преобладает облачность"
   },
   "system_analysis_all": [
     {
-      "target_id": 1,
-      "available": true,
-      "roi_cloud_fraction": 0.328,
-      "confirmed": false
-    },
-    {
       "target_id": 2,
       "available": true,
+      "roi_cloud_fraction": 0.382,
+      "confirmed": false
+    },
+    {
+      "target_id": 4,
+      "available": true,
       "roi_cloud_fraction": 0.0,
-      "confirmed": false
-    },
-    {
-      "target_id": 3,
-      "available": true,
-      "roi_cloud_fraction": 0.438,
-      "confirmed": false
-    },
-    {
-      "target_id": 5,
-      "available": true,
-      "roi_cloud_fraction": 0.348,
       "confirmed": false
     },
     {
       "target_id": 7,
       "available": true,
-      "roi_cloud_fraction": 0.0,
+      "roi_cloud_fraction": 0.002,
       "confirmed": false
     },
     {
-      "target_id": 8,
+      "target_id": 9,
       "available": true,
-      "roi_cloud_fraction": 0.405,
+      "roi_cloud_fraction": 0.397,
       "confirmed": false
     },
     {
-      "target_id": 10,
+      "target_id": 13,
       "available": true,
-      "roi_cloud_fraction": 0.504,
-      "confirmed": true
-    },
-    {
-      "target_id": 14,
-      "available": true,
-      "roi_cloud_fraction": 0.197,
+      "roi_cloud_fraction": 0.064,
       "confirmed": false
     }
   ],
@@ -95,9 +77,21 @@
       "confirmed": false
     },
     {
-      "target_id": 4,
+      "target_id": 1,
       "available": true,
-      "roi_cloud_fraction": 0.205,
+      "roi_cloud_fraction": 0.535,
+      "confirmed": true
+    },
+    {
+      "target_id": 3,
+      "available": true,
+      "roi_cloud_fraction": 0.0,
+      "confirmed": false
+    },
+    {
+      "target_id": 5,
+      "available": true,
+      "roi_cloud_fraction": 0.0,
       "confirmed": false
     },
     {
@@ -107,28 +101,28 @@
       "confirmed": false
     },
     {
-      "target_id": 9,
+      "target_id": 8,
       "available": true,
-      "roi_cloud_fraction": 0.258,
+      "roi_cloud_fraction": 0.744,
+      "confirmed": true
+    },
+    {
+      "target_id": 10,
+      "available": true,
+      "roi_cloud_fraction": 0.0,
       "confirmed": false
     },
     {
       "target_id": 11,
       "available": true,
-      "roi_cloud_fraction": 0.352,
+      "roi_cloud_fraction": 0.0,
       "confirmed": false
     },
     {
       "target_id": 12,
       "available": true,
-      "roi_cloud_fraction": 0.421,
-      "confirmed": false
-    },
-    {
-      "target_id": 13,
-      "available": true,
-      "roi_cloud_fraction": 0.261,
-      "confirmed": false
+      "roi_cloud_fraction": 0.674,
+      "confirmed": true
     }
   ],
   "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
