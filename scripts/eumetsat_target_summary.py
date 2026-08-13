@@ -154,6 +154,13 @@ def main():
             "elongation_axis_deg": sys_c.get("elongation_axis_deg"),
             "elongation_axis_compass": sys_c.get("elongation_axis_compass"),
             "frontlike": sys_c.get("frontlike", False),
+            # window_spanning — см. eumetsat_cloud_forecast.py::_significant_blobs,
+            # 2026-08-09 "продолжение 4": bbox упирается в оба края окна анализа
+            # хотя бы по одной оси — подозрение на склейку разрозненных пятен
+            # через диагональную ниточку шума при 8-связной разметке, а не
+            # настоящая связная структура такого размера. .get() — отсутствует
+            # у снапшотов до этой правки.
+            "window_spanning": sys_c.get("window_spanning", False),
         }
         system_info.update(_load_system_enrichment(sys_c["target_id"]))
 
@@ -202,6 +209,7 @@ def main():
             "elongation_axis_deg": c.get("elongation_axis_deg"),
             "elongation_axis_compass": c.get("elongation_axis_compass"),
             "frontlike": c.get("frontlike", False),
+            "window_spanning": c.get("window_spanning", False),
         }
         ph = phase_by_id.get(tid)
         entry["phase_label"] = ph.get("roi_dominant_phase_label") if ph else None
@@ -653,6 +661,13 @@ def _system_sentence(s, capitalize=False):
     base = (f"{word} синоптического масштаба ({s['area_km2']:.0f}км²) "
             f"в {s['distance_km']:.0f}км {s['compass']}")
     extras = []
+    if s.get("window_spanning"):
+        # Площадь/форма этой конкретной системы ненадёжны — bbox упирается в
+        # оба края окна анализа, похоже на склейку разрозненных пятен через
+        # диагональную ниточку шума при 8-связной разметке (см.
+        # docs/topics/eumetsat.md, 2026-08-09 "продолжение 4"). frontlike для
+        # неё уже принудительно False на источнике (eumetsat_cloud_forecast.py).
+        extras.append("площадь/форма ненадёжны — объект упирается в границы окна обзора")
     if s.get("frontlike"):
         axis = s.get("elongation_axis_compass")
         deg = s.get("elongation_axis_deg")
