@@ -41,6 +41,9 @@ CLOUD_FORECAST_FILE = os.path.join(DATA_DIR, "eumetsat_cloud_forecast.json")
 STATE_FILE = os.path.join(DATA_DIR, "eumetsat_frontal_track_state.json")
 OUT_FILE = os.path.join(DATA_DIR, "eumetsat_frontal_track.json")
 
+PRECIP_FORECAST_FILE = os.path.join(DATA_DIR, "eumetsat_precip_forecast.json")
+LIGHTNING_FORECAST_FILE = os.path.join(DATA_DIR, "eumetsat_lightning_forecast.json")
+
 MAX_POINTS_PER_TRACK = 12     # ~2-3ч истории при обычном шаге 10-15 мин
 STALE_TRACK_MINUTES = 90      # трек без новых точек дольше этого — удаляется
 JITTER_FLOOR_KM = 40          # допуск на шум centroid даже при dt->0
@@ -85,6 +88,19 @@ def _save_json(path, data):
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     os.replace(tmp, path)
+
+
+def _by_target_id(path, key_name="system_analysis_all"):
+    """Тот же приём, что в eumetsat_target_summary.py — читаем ГОТОВЫЙ
+    анализ по каждому target_id из precip_forecast/lightning_forecast (сами
+    ничего не пересчитываем). Не импортируем target_summary.py напрямую —
+    оба модуля читают эти файлы независимо и параллельно, тот же паттерн,
+    что уже принят в проекте (cloud_phase_type/precip_forecast/
+    lightning_forecast все пишут в общий формат, а не завязаны друг на
+    друга)."""
+    data = _load_json(path, None)
+    rows = (data or {}).get(key_name) or []
+    return {r["target_id"]: r for r in rows}
 
 
 def main():
@@ -154,6 +170,7 @@ def main():
             "dy_km": c["centroid_dy_km"],
             "axis_deg": c.get("elongation_axis_deg"),
             "area_km2": c.get("area_km2"),
+            "target_id": c.get("target_id"),
         })
         tracks[ti]["points"] = tracks[ti]["points"][-MAX_POINTS_PER_TRACK:]
         tracks[ti]["last_seen"] = cf_ts_str
@@ -172,6 +189,7 @@ def main():
                 "dy_km": c["centroid_dy_km"],
                 "axis_deg": c.get("elongation_axis_deg"),
                 "area_km2": c.get("area_km2"),
+                "target_id": c.get("target_id"),
             }],
         })
         next_track_id += 1
@@ -186,6 +204,17 @@ def main():
     # Публичный выход — только треки, ПОЙМАННЫЕ в ЭТОМ кадре (last_seen ==
     # текущий timestamp); устаревшие треки в состоянии остаются (для
     # будущего matching), но наружу как "активные" не показываем.
+    # Осадки/гроза — по запросу 2026-08-14 ("подключи осадки и грозы в
+    # таблицу"): смотрим по target_id ПОСЛЕДНЕЙ точки трека (тот кандидат
+    # cloud_forecast, к которому трек привязан ПРЯМО СЕЙЧАС) — если этот
+    # target_id уже не встречается в свежих precip/lightning-файлах (они
+    # сами гейтятся по своим интервалам, могут немного отставать от
+    # cloud_forecast) — оба поля None (не False!), это "не проверено в
+    # этом кадре", не "точно нет". None рисуется на фронтенде как "?", не
+    # как "—", чтобы это различие было видно.
+    precip_by_id = _by_target_id(PRECIP_FORECAST_FILE)
+    lightning_by_id = _by_target_id(LIGHTNING_FORECAST_FILE)
+
     out_tracks = []
     for t in tracks:
         if t["last_seen"] != cf_ts_str:
@@ -207,6 +236,12 @@ def main():
             "axis_rotation_deg": None,
         }
         _, entry["direction_compass"] = _bearing_compass(latest["dx_km"], latest["dy_km"])
+
+        latest_tid = latest.get("target_id")
+        pr = precip_by_id.get(latest_tid) if latest_tid is not None else None
+        lt = lightning_by_id.get(latest_tid) if latest_tid is not None else None
+        entry["has_precip"] = pr.get("has_precip") if pr else None
+        entry["has_lightning"] = lt.get("has_lightning") if lt else None
 
         if len(pts) >= MIN_POINTS_FOR_VELOCITY:
             first = pts[0]
