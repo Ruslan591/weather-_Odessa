@@ -174,10 +174,27 @@ def _save_clean_snapshot(rgba):
     которую пользователь увидел на востоке на скриншоте eumetsat.html,
     была ЗА пределами этого круга — её видит только far_watch (грубый
     посекторный %, тир 'far' ≈1000км), а не объектные таблицы (те смотрят
-    только внутри круга)."""
+    только внутри круга).
+
+    Дальше — цветные отрезки найденных треков фронтов
+    (fc.draw_frontal_tracks_overlay(), запрос 2026-08-14: "подсветить
+    найденные фронты, разными цветами"). Источник — уже готовый
+    data/eumetsat_frontal_track.json (пишет eumetsat_frontal_track.py,
+    порядок в gh_satellite_pipeline.py: cloud_forecast → frontal_track →
+    ... → geocolour_motion, так что к этому моменту в ТЕКУЩЕМ цикле файл
+    уже свежий). Отсутствие файла/пустой список треков — не ошибка,
+    просто ничего не подсвечивается (частый случай — активных
+    frontlike-треков может не быть вообще)."""
     try:
         base = Image.fromarray(rgba[:, :, :3], mode="RGB").convert("RGB")
         base = fc.draw_view_radius_circle(base)
+        ft_path = os.path.join(BASE_DIR, "data", "eumetsat_frontal_track.json")
+        tracks = []
+        if os.path.exists(ft_path):
+            with open(ft_path, "r", encoding="utf-8") as f:
+                tracks = (json.load(f) or {}).get("tracks", [])
+        if tracks:
+            base = fc.draw_frontal_tracks_overlay(base, tracks)
         base.save(SNAPSHOT_FILE)
     except Exception as e:
         print(f"  [WARN] eumetsat_geocolour_motion.py: не удалось сохранить чистый снимок: {e}")
