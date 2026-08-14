@@ -910,6 +910,69 @@ function _renderSystemCandidatesTable(rows, suppressedCount){
 // ниже. Файл перезаписывается КАЖДЫЙ цикл eumetsat_geocolour_motion.py
 // (см. _save_clean_snapshot()) — всегда самый свежий кадр, кэш-бастинг
 // через timestamp самих geocolour-данных.
+// Треки фронтоподобных систем во времени — шаг 4 плана "Отслеживание
+// фронтов" (2026-08-14, см. docs/topics/eumetsat.md). Источник —
+// data/eumetsat_frontal_track.json через target_summary.frontal_tracks
+// (не отдельная загрузка, чтобы не плодить ещё один fetch — файл маленький
+// и уже проходит через target_summary как единая точка сборки). Строка
+// таблицы = один активный трек (пойман в ТЕКУЩЕМ кадре, см. докстринг
+// eumetsat_frontal_track.py — устаревшие треки target_summary не отдаёт).
+// velocity/movement_bearing присутствуют только при points_count>=3
+// (см. MIN_POINTS_FOR_VELOCITY в скрипте) — до этого строка показывает
+// только текущее положение/ось, без "куда и как быстро едет".
+function _renderFrontalTracksTable(tracks){
+    if(!tracks || !tracks.length) return "";
+    const trs = tracks.map(t => {
+        const dist = t.distance_from_odessa_km != null ? t.distance_from_odessa_km : "—";
+        const dir = t.direction_compass || "—";
+        const area = t.area_km2 != null ? Math.round(t.area_km2).toLocaleString("ru-RU") : "—";
+        const axisDeg = t.axis_deg != null ? ` (${Math.round(t.axis_deg)}°)` : "";
+        const axis = axisDeg ? axisDeg.trim() : "—";
+        const age = t.age_minutes != null ? `${Math.round(t.age_minutes)} мин` : "—";
+        const hasVelocity = t.velocity_kmh != null;
+        const velocity = hasVelocity ? `${Math.round(t.velocity_kmh)} км/ч` : "—";
+        const moveDir = hasVelocity && t.movement_bearing_compass ? t.movement_bearing_compass : "—";
+        const rotation = t.axis_rotation_deg != null ? `${Math.round(t.axis_rotation_deg)}°` : "—";
+        // Молодые треки (<3 точек) ещё не публикуют скорость — приглушаем
+        // строку, чтобы визуально не путать "пока нет данных" с "стоит на
+        // месте" (velocity_kmh=0 выглядело бы так же, как отсутствие поля,
+        // если не различать явно).
+        const pending = !hasVelocity;
+        const rowStyle = pending ? ' style="opacity:0.6;"' : "";
+        const velocityLabel = pending
+            ? `<span title="Меньше 3 подтверждений подряд — скорость ещё не публикуется">${velocity}</span>`
+            : velocity;
+        return `<tr${rowStyle}>
+            <td style="padding:3px 10px 3px 0; color:#bbb; text-align:right;">${dist}</td>
+            <td style="padding:3px 10px; color:#bbb;">${dir}</td>
+            <td style="padding:3px 10px; color:#bbb; text-align:right;">${area}</td>
+            <td style="padding:3px 10px; color:#ccc;">${axis}</td>
+            <td style="padding:3px 10px; color:#ccc; text-align:right;">${velocityLabel}</td>
+            <td style="padding:3px 10px; color:#ccc;">${moveDir}</td>
+            <td style="padding:3px 10px; color:#ccc; text-align:right;">${rotation}</td>
+            <td style="padding:3px 0; color:#888; text-align:right;">${age}</td>
+        </tr>`;
+    }).join("");
+    return `<details style="margin-top:10px;">
+        <summary style="cursor:pointer; color:#72c8ff; font-size:13px; font-weight:600;">🌩️ Треки фронтов (${tracks.length})</summary>
+        <div style="overflow-x:auto; margin-top:6px;">
+        <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
+            <thead><tr style="color:#777; text-align:left;">
+                <th style="padding:3px 10px 3px 0; font-weight:600; text-align:right;">Км</th>
+                <th style="padding:3px 10px; font-weight:600;">Напр.</th>
+                <th style="padding:3px 10px; font-weight:600; text-align:right;">Площадь</th>
+                <th style="padding:3px 10px; font-weight:600;">Ось</th>
+                <th style="padding:3px 10px; font-weight:600; text-align:right;" title="Скорость смещения центроида">Скорость</th>
+                <th style="padding:3px 10px; font-weight:600;" title="Куда движется (не ось, а направление смещения)">Движение</th>
+                <th style="padding:3px 10px; font-weight:600; text-align:right;" title="Поворот оси за время трека">Поворот</th>
+                <th style="padding:3px 0; font-weight:600; text-align:right;">Возраст</th>
+            </tr></thead>
+            <tbody>${trs}</tbody>
+        </table>
+        </div>
+    </details>`;
+}
+
 function _renderGeocolourSnapshot(geocolourData){
     if(!geocolourData || !geocolourData.timestamp) return "";
     const ts = _obsTimeTag(geocolourData.timestamp, 20);
@@ -1021,6 +1084,7 @@ function renderNearbyPrecipCard(){
         ${_renderTargetSummaryLines(_eumetsatTargetSummaryData)}
         ${_renderLocalCandidatesTable(_eumetsatTargetSummaryData && _eumetsatTargetSummaryData.local_candidates, _eumetsatTargetSummaryData && _eumetsatTargetSummaryData.local_suppressed_count)}
         ${_renderSystemCandidatesTable(_eumetsatTargetSummaryData && _eumetsatTargetSummaryData.system_candidates, _eumetsatTargetSummaryData && _eumetsatTargetSummaryData.system_suppressed_count)}
+        ${_renderFrontalTracksTable(_eumetsatTargetSummaryData && _eumetsatTargetSummaryData.frontal_tracks)}
         ${_renderGeocolourSnapshot(_eumetsatGeocolourMotionData)}
         ${_renderIrSnapshot(_eumetsatIrMotionData)}
         ${_renderHistoryTable(_eumetsatPrecipHistoryData, "📜", "Хронология осадков")}
