@@ -115,6 +115,15 @@ def main():
         return
 
     candidates = cf.get("candidates") or []
+
+    # Треки фронтов (шаг 3 плана "Отслеживание фронтов", 2026-08-14) —
+    # отдельный от candidates источник, отдельный файл, читаем один раз
+    # здесь и прокидываем в оба основных выхода ниже (ok / suppressed).
+    # Отсутствие файла/пустой список — не ошибка (обычная ситуация, если
+    # сейчас нет ни одной frontlike-системы или трекер ещё не набрал точек).
+    _ft = _load_json("eumetsat_frontal_track.json")
+    frontal_tracks = (_ft or {}).get("tracks", [])
+
     if not candidates:
         out = {
             "timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -378,6 +387,7 @@ def main():
             "system_suppressed_count": suppressed_system_count,
         }
         out["verdict"] = _build_suppressed_verdict(suppressed_info, system_info)
+        out["frontal_tracks"] = frontal_tracks
         _write(out)
         print(f"  [OK] eumetsat_target_summary.py: подавлено (известный шумовой объект), {out['verdict']}")
         return
@@ -399,6 +409,7 @@ def main():
         "local_suppressed_count": suppressed_local_count,
         "system_candidates": system_candidates_list,
         "system_suppressed_count": suppressed_system_count,
+        "frontal_tracks": frontal_tracks,
     }
     if suppressed is not None:
         # Ближе есть известный шумовой объект, но он подавлен — выбрана
