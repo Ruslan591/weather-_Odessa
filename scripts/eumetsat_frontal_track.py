@@ -169,6 +169,7 @@ def main():
             "dx_km": c["centroid_dx_km"],
             "dy_km": c["centroid_dy_km"],
             "axis_deg": c.get("elongation_axis_deg"),
+            "aspect_ratio": c.get("elongation_aspect_ratio"),
             "area_km2": c.get("area_km2"),
             "target_id": c.get("target_id"),
         })
@@ -188,6 +189,7 @@ def main():
                 "dx_km": c["centroid_dx_km"],
                 "dy_km": c["centroid_dy_km"],
                 "axis_deg": c.get("elongation_axis_deg"),
+                "aspect_ratio": c.get("elongation_aspect_ratio"),
                 "area_km2": c.get("area_km2"),
                 "target_id": c.get("target_id"),
             }],
@@ -230,6 +232,7 @@ def main():
             "distance_from_odessa_km": round(math.hypot(latest["dx_km"], latest["dy_km"]), 1),
             "area_km2": round(latest["area_km2"], 1) if latest.get("area_km2") is not None else None,
             "axis_deg": latest.get("axis_deg"),
+            "aspect_ratio": latest.get("aspect_ratio"),
             "velocity_kmh": None,
             "movement_bearing_deg": None,
             "movement_bearing_compass": None,
