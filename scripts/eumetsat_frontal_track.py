@@ -1,0 +1,239 @@
+"""
+eumetsat_frontal_track.py — трекинг фронтоподобных систем во времени
+(см. docs/topics/eumetsat.md, план "Отслеживание фронтов", шаг 3, 2026-08-14).
+
+Читает ТОЛЬКО data/eumetsat_cloud_forecast.json (candidates с class="system",
+frontlike=True, window_spanning=False — ненадёжные по площади/форме объекты
+в трек не берём, см. шаг 1 плана). WMS/сеть не трогает, чистая локальная
+обработка уже посчитанных полей — дёшево, гейта по времени не требует, но
+идемпотентно: если cloud_forecast.json не обновился с прошлого запуска
+(тот сам гейтится 15 мин, а этот скрипт может быть вызван чаще), просто
+ничего не делает — иначе один и тот же кадр учтётся как "новая точка" с
+dt≈0 и заведомо мусорной скоростью.
+
+Персистентное состояние: data/eumetsat_frontal_track_state.json — полная
+история точек по каждому треку (ограничена MAX_POINTS_PER_TRACK), плюс
+счётчик track_id (монотонный, не переиспользуется, чтобы id не путались
+между разными физическими системами).
+
+Публичный выход: data/eumetsat_frontal_track.json — сводка по активным
+трекам (только что подтверждённым в этом цикле) для потребителей
+(target_summary/фронтенд — подключение отдельным шагом, не в этом файле).
+
+Сопоставление кадр-к-кадру (matching) — простое "жадное ближайший сосед"
+(не Hungarian): при обычно 0-6 фронтоподобных объектов за цикл разница
+пренебрежима, а код на порядок проще. max_dist_km растёт с dt (реальные
+фронты движутся быстро) + минимальный пол на джиттер измерения:
+  max_dist_km = JITTER_FLOOR_KM + SPEED_CAP_KMH * dt_hours
+SPEED_CAP_KMH=100 — щедрый потолок (типичный холодный фронт 20-50км/ч,
+с запасом на редкие быстрые случаи и на неточность самого centroid при
+объединении/разделении пятен между кадрами).
+"""
+
+import json
+import math
+import os
+from datetime import datetime, timezone
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(BASE_DIR, "data")
+CLOUD_FORECAST_FILE = os.path.join(DATA_DIR, "eumetsat_cloud_forecast.json")
+STATE_FILE = os.path.join(DATA_DIR, "eumetsat_frontal_track_state.json")
+OUT_FILE = os.path.join(DATA_DIR, "eumetsat_frontal_track.json")
+
+MAX_POINTS_PER_TRACK = 12     # ~2-3ч истории при обычном шаге 10-15 мин
+STALE_TRACK_MINUTES = 90      # трек без новых точек дольше этого — удаляется
+JITTER_FLOOR_KM = 40          # допуск на шум centroid даже при dt->0
+SPEED_CAP_KMH = 100           # потолок правдоподобной скорости движения фронта
+MIN_POINTS_FOR_VELOCITY = 3   # меньше — публикуем трек, но без velocity (шумно)
+
+COMPASS = ["С", "СВ", "В", "ЮВ", "Ю", "ЮЗ", "З", "СЗ"]
+
+
+def _compass(bearing_deg):
+    idx = int(((bearing_deg + 22.5) % 360) // 45)
+    return COMPASS[idx]
+
+
+def _bearing_compass(dx_km, dy_km):
+    bearing = (math.degrees(math.atan2(dx_km, dy_km)) + 360) % 360
+    return bearing, _compass(bearing)
+
+
+def _axis_angle_diff(a_deg, b_deg):
+    """Кратчайшая разница между двумя ОСЕВЫМИ (0..180, линия, не вектор)
+    углами — например 5° и 175° отличаются на 10°, не на 170°."""
+    d = abs(a_deg - b_deg) % 180
+    return min(d, 180 - d)
+
+
+def _parse_ts(ts_str):
+    return datetime.strptime(ts_str, "%Y-%m-%dT%H:%M:%S.%fZ" if "." in ts_str
+                              else "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+
+
+def _load_json(path, default):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return default
+
+
+def _save_json(path, data):
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, path)
+
+
+def main():
+    cf = _load_json(CLOUD_FORECAST_FILE, None)
+    if not cf or "timestamp" not in cf:
+        print("  [WARN] eumetsat_frontal_track: eumetsat_cloud_forecast.json недоступен/пуст")
+        return
+
+    cf_ts_str = cf["timestamp"]
+    cf_ts = _parse_ts(cf_ts_str)
+
+    state = _load_json(STATE_FILE, {"last_processed_timestamp": None, "next_track_id": 0, "tracks": []})
+
+    # Идемпотентность — cloud_forecast.py не обновлялся с прошлого запуска
+    # (собственный гейт 15 мин), нет смысла и вредно считать это новым кадром.
+    if state.get("last_processed_timestamp") == cf_ts_str:
+        return
+
+    frontlike_now = [
+        c for c in cf.get("candidates", [])
+        if c.get("class") == "system" and c.get("frontlike") is True
+        and not c.get("window_spanning", False)
+    ]
+
+    tracks = state.get("tracks", [])
+    next_track_id = state.get("next_track_id", 0)
+
+    # Гейт устаревания — трек без новых точек дольше STALE_TRACK_MINUTES
+    # считается распавшимся/ушедшим из окна обзора, удаляем, чтобы не расти
+    # бесконечно и не путать будущий matching с призраками.
+    fresh_tracks = []
+    for t in tracks:
+        last_pt = t["points"][-1]
+        last_ts = _parse_ts(last_pt["ts"])
+        age_min = (cf_ts - last_ts).total_seconds() / 60.0
+        if age_min <= STALE_TRACK_MINUTES:
+            fresh_tracks.append(t)
+    tracks = fresh_tracks
+
+    # Matching: жадный ближайший сосед, каждый трек и каждый текущий
+    # кандидат используются не больше одного раза.
+    used_track_idx = set()
+    used_cand_idx = set()
+    pairs = []  # (dist_km, track_idx, cand_idx)
+    for ti, t in enumerate(tracks):
+        last_pt = t["points"][-1]
+        last_ts = _parse_ts(last_pt["ts"])
+        dt_hours = max((cf_ts - last_ts).total_seconds() / 3600.0, 1e-6)
+        max_dist_km = JITTER_FLOOR_KM + SPEED_CAP_KMH * dt_hours
+        for ci, c in enumerate(frontlike_now):
+            dist_km = math.hypot(
+                c["centroid_dx_km"] - last_pt["dx_km"],
+                c["centroid_dy_km"] - last_pt["dy_km"],
+            )
+            if dist_km <= max_dist_km:
+                pairs.append((dist_km, ti, ci))
+    pairs.sort(key=lambda p: p[0])
+    for dist_km, ti, ci in pairs:
+        if ti in used_track_idx or ci in used_cand_idx:
+            continue
+        used_track_idx.add(ti)
+        used_cand_idx.add(ci)
+        c = frontlike_now[ci]
+        tracks[ti]["points"].append({
+            "ts": cf_ts_str,
+            "dx_km": c["centroid_dx_km"],
+            "dy_km": c["centroid_dy_km"],
+            "axis_deg": c.get("elongation_axis_deg"),
+            "area_km2": c.get("area_km2"),
+        })
+        tracks[ti]["points"] = tracks[ti]["points"][-MAX_POINTS_PER_TRACK:]
+        tracks[ti]["last_seen"] = cf_ts_str
+
+    # Непойманные кандидаты этого кадра — новые треки.
+    for ci, c in enumerate(frontlike_now):
+        if ci in used_cand_idx:
+            continue
+        tracks.append({
+            "track_id": next_track_id,
+            "first_seen": cf_ts_str,
+            "last_seen": cf_ts_str,
+            "points": [{
+                "ts": cf_ts_str,
+                "dx_km": c["centroid_dx_km"],
+                "dy_km": c["centroid_dy_km"],
+                "axis_deg": c.get("elongation_axis_deg"),
+                "area_km2": c.get("area_km2"),
+            }],
+        })
+        next_track_id += 1
+
+    state = {
+        "last_processed_timestamp": cf_ts_str,
+        "next_track_id": next_track_id,
+        "tracks": tracks,
+    }
+    _save_json(STATE_FILE, state)
+
+    # Публичный выход — только треки, ПОЙМАННЫЕ в ЭТОМ кадре (last_seen ==
+    # текущий timestamp); устаревшие треки в состоянии остаются (для
+    # будущего matching), но наружу как "активные" не показываем.
+    out_tracks = []
+    for t in tracks:
+        if t["last_seen"] != cf_ts_str:
+            continue
+        pts = t["points"]
+        latest = pts[-1]
+        entry = {
+            "track_id": t["track_id"],
+            "first_seen": t["first_seen"],
+            "last_seen": t["last_seen"],
+            "points_count": len(pts),
+            "age_minutes": round((cf_ts - _parse_ts(t["first_seen"])).total_seconds() / 60.0, 1),
+            "distance_from_odessa_km": round(math.hypot(latest["dx_km"], latest["dy_km"]), 1),
+            "area_km2": round(latest["area_km2"], 1) if latest.get("area_km2") is not None else None,
+            "axis_deg": latest.get("axis_deg"),
+            "velocity_kmh": None,
+            "movement_bearing_deg": None,
+            "movement_bearing_compass": None,
+            "axis_rotation_deg": None,
+        }
+        _, entry["direction_compass"] = _bearing_compass(latest["dx_km"], latest["dy_km"])
+
+        if len(pts) >= MIN_POINTS_FOR_VELOCITY:
+            first = pts[0]
+            dt_hours = (cf_ts - _parse_ts(first["ts"])).total_seconds() / 3600.0
+            if dt_hours > 1e-6:
+                ddx = latest["dx_km"] - first["dx_km"]
+                ddy = latest["dy_km"] - first["dy_km"]
+                dist_km = math.hypot(ddx, ddy)
+                entry["velocity_kmh"] = round(dist_km / dt_hours, 1)
+                bearing, compass = _bearing_compass(ddx, ddy)
+                entry["movement_bearing_deg"] = round(bearing, 1)
+                entry["movement_bearing_compass"] = compass
+                if first.get("axis_deg") is not None and latest.get("axis_deg") is not None:
+                    entry["axis_rotation_deg"] = round(
+                        _axis_angle_diff(first["axis_deg"], latest["axis_deg"]), 1
+                    )
+        out_tracks.append(entry)
+
+    out = {
+        "timestamp": cf_ts_str,
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "tracks": out_tracks,
+    }
+    _save_json(OUT_FILE, out)
+    print(f"  [OK] eumetsat_frontal_track: {len(out_tracks)} активных трек(ов) "
+          f"из {len(frontlike_now)} frontlike-кандидатов кадра")
+
+
+if __name__ == "__main__":
+    main()
