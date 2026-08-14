@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-14T04:06:15Z",
+  "timestamp": "2026-08-14T04:20:22Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-08-14T04:05:03Z",
   "target_id": 1,
@@ -19,7 +19,7 @@
     "frontlike": false,
     "window_spanning": false,
     "phase_label": "безоблачно",
-    "cloud_fraction": 0.492,
+    "cloud_fraction": 0.796,
     "has_precip": true,
     "has_lightning": false
   },
@@ -51,7 +51,7 @@
       "elongation_axis_deg": 21.0,
       "elongation_axis_compass": "С-Ю",
       "frontlike": false,
-      "phase_label": "смешанная фаза",
+      "phase_label": "безоблачно",
       "type_label": "низкая/средняя",
       "has_precip": false,
       "has_lightning": false,
@@ -69,7 +69,7 @@
       "elongation_axis_compass": "СВ-ЮЗ",
       "frontlike": false,
       "phase_label": "безоблачно",
-      "type_label": "низкая/средняя",
+      "type_label": "плотная/высокая",
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
@@ -85,7 +85,7 @@
       "elongation_axis_deg": 76.0,
       "elongation_axis_compass": "В-З",
       "frontlike": false,
-      "phase_label": "смешанная фаза",
+      "phase_label": "плотная водяная",
       "type_label": "низкая/средняя",
       "has_precip": false,
       "has_lightning": false,
@@ -98,26 +98,26 @@
   "system_suppressed_count": 10,
   "target_phase": {
     "label": "безоблачно",
-    "cloud_fraction": 0.237
+    "cloud_fraction": 1.0
   },
   "existence": {
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-08-14T04:05:53Z"
+        "timestamp": "2026-08-14T04:19:51Z"
       },
       "geocolour_motion": {
         "confirmed": false,
-        "timestamp": "2026-08-14T04:06:03Z"
+        "timestamp": "2026-08-14T04:20:11Z"
       },
       "cloud_phase_type": {
-        "confirmed": false,
-        "timestamp": "2026-08-14T04:05:16Z"
+        "confirmed": true,
+        "timestamp": "2026-08-14T04:18:50Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -126,8 +126,8 @@
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-08-14T04:05:50Z"
+      "timestamp": "2026-08-14T04:19:40Z"
     }
   },
-  "verdict": "CLM отметил цель в 65км Ю, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (43604км²) в 35км СЗ (осадки)."
+  "verdict": "Цель в 65км Ю, безоблачно — каналы расходятся: cloud_phase_type подтверждают, ir_motion/geocolour_motion нет. Отдельно: система синоптического масштаба (43604км²) в 35км СЗ (осадки)."
 }
