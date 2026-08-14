@@ -230,6 +230,14 @@ def main():
             "points_count": len(pts),
             "age_minutes": round((cf_ts - _parse_ts(t["first_seen"])).total_seconds() / 60.0, 1),
             "distance_from_odessa_km": round(math.hypot(latest["dx_km"], latest["dy_km"]), 1),
+            # Точные координаты (не только округлённое расстояние + 8-секторное
+            # направление) — нужны для точной отрисовки на снимке GeoColour
+            # (см. field_motion_common.draw_frontal_tracks_overlay(), запрос
+            # 2026-08-14 "подсветить найденные фронты"). Та же система
+            # координат, что везде в проекте (km от центра Одессы, dx=восток,
+            # dy=север) — см. fc.pixel_to_km_offset().
+            "dx_km": round(latest["dx_km"], 2),
+            "dy_km": round(latest["dy_km"], 2),
             "area_km2": round(latest["area_km2"], 1) if latest.get("area_km2") is not None else None,
             "axis_deg": latest.get("axis_deg"),
             "aspect_ratio": latest.get("aspect_ratio"),
