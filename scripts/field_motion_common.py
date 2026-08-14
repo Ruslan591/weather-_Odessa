@@ -1091,3 +1091,78 @@ def draw_view_radius_circle(base_image, radius_km=None, color=(255, 210, 90), al
     return Image.alpha_composite(base_image.convert("RGBA"), overlay).convert("RGB")
 
 
+FRONTAL_TRACK_COLORS = [
+    (255, 59, 48),    # красный
+    (52, 199, 89),    # зелёный
+    (10, 132, 255),   # синий
+    (255, 149, 0),    # оранжевый
+    (191, 90, 242),   # фиолетовый
+    (255, 45, 149),   # розовый
+    (100, 210, 255),  # голубой
+]  # жёлтый намеренно не включён — слишком близок к цвету окружности обзора
+   # (255,210,90), легко спутать на глаз
+
+
+def draw_frontal_tracks_overlay(base_image, tracks, alpha=220, width=5):
+    """Подсвечивает найденные frontlike-треки цветными отрезками поверх
+    снимка (запрос 2026-08-14: "подсветить найденные фронты, разными
+    цветами"). Источник — data/eumetsat_frontal_track.json ("tracks",
+    поля dx_km/dy_km/axis_deg/aspect_ratio/area_km2 — см.
+    eumetsat_frontal_track.py). Каждый трек — отрезок вдоль его оси
+    (axis_deg, конвенция atan2(dx,dy) — 0=С/90=В, ЛИНИЯ 0..180, не вектор,
+    поэтому отрезок рисуется симметрично в обе стороны от центроида).
+    Длина отрезка — большая ось эллипса, восстановленная из area_km2 и
+    aspect_ratio (area=π·a·b, aspect_ratio=a/b ⇒ a=sqrt(area·aspect_ratio/π),
+    длина отрезка = 2a) — приближение реальной формы одним числом, не точный
+    контур блоба (тот в frontal_track.json не хранится, только сводные
+    PCA-параметры).
+
+    Цвет закреплён за track_id (не за позицией в списке `tracks`) через
+    FRONTAL_TRACK_COLORS[track_id % len(...)] — один и тот же физический
+    трек между кадрами (разными снимками во времени) сохраняет свой цвет,
+    что позволяет визуально следить за одним и тем же фронтом по мере его
+    движения на последовательных снимках.
+
+    Треки без axis_deg/aspect_ratio (вырожденный PCA, < 5 пикселей —
+    см. _blob_elongation) рисуются маленьким кружком-маркером на месте
+    центроида вместо отрезка — не пропускаются молча.
+
+    Возвращает НОВОЕ Image (режим RGB), не мутирует переданное — тот же
+    контракт, что draw_view_radius_circle."""
+    overlay = Image.new("RGBA", base_image.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    cx = (base_image.width - 1) / 2.0
+    cy = (base_image.height - 1) / 2.0
+    for t in (tracks or []):
+        dx_km = t.get("dx_km")
+        dy_km = t.get("dy_km")
+        if dx_km is None or dy_km is None:
+            continue
+        track_id = t.get("track_id", 0)
+        color = FRONTAL_TRACK_COLORS[track_id % len(FRONTAL_TRACK_COLORS)]
+        px = cx + dx_km / KM_PER_PX_X
+        py = cy - dy_km / KM_PER_PX_Y
+        axis_deg = t.get("axis_deg")
+        aspect_ratio = t.get("aspect_ratio")
+        area_km2 = t.get("area_km2")
+        if axis_deg is None or aspect_ratio is None or not area_km2:
+            # Вырожденный случай — маркер вместо отрезка, не пропускаем.
+            r = 6
+            draw.ellipse([px - r, py - r, px + r, py + r], outline=color + (alpha,), width=3)
+            continue
+        semi_major_km = math.sqrt(area_km2 * aspect_ratio / math.pi)
+        theta = math.radians(axis_deg)
+        step_dx_km = semi_major_km * math.sin(theta)
+        step_dy_km = semi_major_km * math.cos(theta)
+        step_px = step_dx_km / KM_PER_PX_X
+        step_py = -step_dy_km / KM_PER_PX_Y
+        draw.line(
+            [(px - step_px, py - step_py), (px + step_px, py + step_py)],
+            fill=color + (alpha,), width=width,
+        )
+        r = max(4, width)
+        draw.ellipse([px - r, py - r, px + r, py + r], fill=color + (alpha,))
+    return Image.alpha_composite(base_image.convert("RGBA"), overlay).convert("RGB")
+
+
+
