@@ -87,6 +87,24 @@ def check_eumetsat_cloud_forecast():
         print(f"  [WARN] eumetsat_cloud_forecast.py: {e}")
 
 
+def check_eumetsat_frontal_track():
+    # Трекинг фронтоподобных систем во времени (шаг 3 плана "Отслеживание
+    # фронтов", см. docs/topics/eumetsat.md, 2026-08-14) — читает уже
+    # готовый eumetsat_cloud_forecast.json (никаких WMS-запросов, чистая
+    # локальная обработка), поэтому отдельный гейт по времени не нужен —
+    # скрипт сам идемпотентен: если cloud_forecast.py не обновлялся с
+    # прошлого запуска, тихо ничего не делает (см. докстринг скрипта).
+    # Вызывается СРАЗУ после check_eumetsat_cloud_forecast(), чтобы всегда
+    # видеть самые свежие candidates этого же цикла.
+    try:
+        subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "eumetsat_frontal_track.py")],
+            cwd=BASE_DIR, capture_output=False, timeout=30
+        )
+    except Exception as e:
+        print(f"  [WARN] eumetsat_frontal_track.py: {e}")
+
+
 def check_eumetsat_precip_forecast():
     # Мини-прогноз движения осадков (msg_fes:h60b, 4 кадра). Гейт 15 мин.
     out_file = os.path.join(BASE_DIR, "data", "eumetsat_precip_forecast.json")
@@ -457,6 +475,7 @@ def main():
     # оставлена в файле неиспользуемой — если понадобится, легко вернуть
     # вызов обратно.
     check_eumetsat_cloud_forecast()
+    check_eumetsat_frontal_track()
     check_eumetsat_cloud_phase_type()
     check_eumetsat_precip_forecast()
     check_eumetsat_lightning_forecast()
