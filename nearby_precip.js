@@ -933,6 +933,12 @@ function _renderFrontalTracksTable(tracks){
         const velocity = hasVelocity ? `${Math.round(t.velocity_kmh)} км/ч` : "—";
         const moveDir = hasVelocity && t.movement_bearing_compass ? t.movement_bearing_compass : "—";
         const rotation = t.axis_rotation_deg != null ? `${Math.round(t.axis_rotation_deg)}°` : "—";
+        // Осадки/гроза (2026-08-14) — та же трёхзначная логика, что везде
+        // в проекте: true/false/null различаются, "?" ≠ "—" (см. систему
+        // подавления и системную таблицу выше). null означает "канал не
+        // отработал в этом кадре для этого target_id", НЕ "точно нет".
+        const precip = t.has_precip === true ? "🌧️" : (t.has_precip === false ? "—" : "?");
+        const lightning = t.has_lightning === true ? "⚡" : (t.has_lightning === false ? "—" : "?");
         // Молодые треки (<3 точек) ещё не публикуют скорость — приглушаем
         // строку, чтобы визуально не путать "пока нет данных" с "стоит на
         // месте" (velocity_kmh=0 выглядело бы так же, как отсутствие поля,
@@ -950,6 +956,8 @@ function _renderFrontalTracksTable(tracks){
             <td style="padding:3px 10px; color:#ccc; text-align:right;">${velocityLabel}</td>
             <td style="padding:3px 10px; color:#ccc;">${moveDir}</td>
             <td style="padding:3px 10px; color:#ccc; text-align:right;">${rotation}</td>
+            <td style="padding:3px 0; text-align:center;">${precip}</td>
+            <td style="padding:3px 0; text-align:center;">${lightning}</td>
             <td style="padding:3px 0; color:#888; text-align:right;">${age}</td>
         </tr>`;
     }).join("");
@@ -965,6 +973,8 @@ function _renderFrontalTracksTable(tracks){
                 <th style="padding:3px 10px; font-weight:600; text-align:right;" title="Скорость смещения центроида">Скорость</th>
                 <th style="padding:3px 10px; font-weight:600;" title="Куда движется (не ось, а направление смещения)">Движение</th>
                 <th style="padding:3px 10px; font-weight:600; text-align:right;" title="Поворот оси за время трека">Поворот</th>
+                <th style="padding:3px 0; font-weight:600; text-align:center;">🌧️</th>
+                <th style="padding:3px 0; font-weight:600; text-align:center;">⚡</th>
                 <th style="padding:3px 0; font-weight:600; text-align:right;">Возраст</th>
             </tr></thead>
             <tbody>${trs}</tbody>
