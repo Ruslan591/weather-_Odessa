@@ -26,6 +26,90 @@ from urllib.parse import quote
 
 log = logging.getLogger(__name__)
 
+# ── Осадки (группа 6RRRtr) и текущая погода (группа 7wwW1W2) ────────────
+# Добавлено 2026-08-15 (продолжение) по запросу: "информации об осадках,
+# ветре и экстремальных явлениях не хватает" — ветер уже был в essentials
+# (wind_dir_deg/wind_speed_ms), тут добор осадков и опасных явлений.
+
+PRECIP_PERIOD_HOURS = {
+    "0": 6, "1": 12, "2": 18, "3": 24,
+    "4": 1, "5": 2, "6": 3, "7": 9, "8": 15,
+}
+
+# Присутствующая погода (код ww, таблица ВМО 4677) — НЕ полная таблица,
+# только опасные/значимые явления (нужные для is_extreme_weather) плюс их
+# читаемые подписи. Остальные коды (00-16 без явлений в срок, 20-28
+# явления в предыдущий час без грозы/шквала, обычные дождь/снег/морось/
+# туман без усиления) для задачи верификации фронта не критичны, дают
+# generic "явление ww=NN" вместо расшифровки.
+WW_LABELS = {
+    17: "гроза (без осадков в срок наблюдения)",
+    18: "шквал(ы)",
+    19: "смерч/торнадо",
+    29: "гроза в предыдущий час",
+    30: "пыльная/песчаная буря (слабая, ослабевает)",
+    31: "пыльная/песчаная буря (слабая-умеренная)",
+    32: "пыльная/песчаная буря (слабая-умеренная, усиливается)",
+    33: "сильная пыльная/песчаная буря (ослабевает)",
+    34: "сильная пыльная/песчаная буря (без изменений)",
+    35: "сильная пыльная/песчаная буря (усиливается)",
+    36: "позёмок снега (слабый-умеренный)",
+    37: "позёмок снега (сильный)",
+    38: "низовая метель (слабая-умеренная)",
+    39: "низовая метель (сильная)",
+    56: "переохлаждённая морось (слабая)",
+    57: "переохлаждённая морось (умеренная-сильная)",
+    66: "переохлаждённый дождь (слабый)",
+    67: "переохлаждённый дождь (умеренный-сильный)",
+    82: "сильный ливень",
+    84: "очень сильный ливень",
+    86: "сильный ливневый снег",
+    87: "слабая/умеренная ледяная/снежная крупа",
+    88: "сильная ледяная/снежная крупа",
+    89: "слабый/умеренный град",
+    90: "сильный град",
+    91: "гроза слабая/умеренная с дождём/снегом",
+    92: "гроза сильная с дождём/снегом",
+    93: "гроза слабая/умеренная с градом",
+    94: "гроза сильная с градом",
+    95: "гроза слабая/умеренная",
+    96: "гроза слабая/умеренная с градом",
+    97: "гроза сильная с дождём/снегом",
+    98: "гроза с пыльной/песчаной бурей",
+    99: "гроза сильная с градом",
+}
+
+# ww-коды, при которых явление считается ОПАСНЫМ для верификации фронта
+# (гроза, шквал, смерч, сильные ливни/град/метели/бури, переохлаждённые
+# осадки). Отдельно от WW_LABELS (та шире, справочная).
+EXTREME_WW_CODES = {
+    17, 18, 19, 29, 33, 34, 35, 37, 39, 56, 57, 66, 67,
+    82, 84, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99,
+}
+
+
+def _decode_precip_group(g):
+    """g — токен '6RRRtr' (5 символов). Код таблицы ВМО 3590: 000-988 —
+    осадки в мм (целое число); 989 — 989мм и более; 990 — след осадков
+    (<0.1мм, приближённо возвращаем 0.05); 991-999 — (RRR-990)/10 мм.
+    tr — код периода накопления (таблица 4019, см. PRECIP_PERIOD_HOURS).
+    '/' в RRR — измерение недоступно (mm=None, период всё равно вернём,
+    если tr читаем)."""
+    rrr, tr = g[1:4], g[4]
+    period = PRECIP_PERIOD_HOURS.get(tr)
+    if not rrr.isdigit():
+        return None, period
+    rrr_i = int(rrr)
+    if rrr_i <= 988:
+        mm = float(rrr_i)
+    elif rrr_i == 989:
+        mm = 989.0
+    elif rrr_i == 990:
+        mm = 0.05
+    else:
+        mm = (rrr_i - 990) / 10.0
+    return mm, period
+
 OGIMET_PROXIES = [
     "https://api.allorigins.win/raw?url=",
     "https://corsproxy.io/?",
@@ -101,13 +185,17 @@ def latest_telegram_line(raw_text, station_id):
 
 
 def parse_synop_essentials(line):
-    """Разбирает ТОЛЬКО поля, нужные для верификации термодинамической
-    подписи фронта (давление + 3ч-тенденция, температура, ветер, общая
-    облачность) — НЕ полный парсер, как parseSynop() в synop.js (там для
-    отображения на фронтенде нужно всё; здесь — только сигнал "похоже на
-    фронт или нет" для станций впереди/позади трека). Секции 333/444/555
-    сознательно не разбираются — не нужны для этой задачи. Возвращает
-    dict или None если AAXX не найден (телеграмма битая/NIL)."""
+    """Разбирает поля, нужные для верификации термодинамической подписи
+    фронта: давление + 3ч-тенденция, температура, ветер, общая облачность,
+    ОСАДКИ (группа 6RRRtr) и ТЕКУЩАЯ ПОГОДА/опасные явления (группа
+    7wwW1W2 — гроза/шквал/град/сильные ливни и т.п., см. WW_LABELS/
+    EXTREME_WW_CODES выше) — добавлено 2026-08-15 по запросу "не хватает
+    осадков/ветра/экстремальных явлений" (ветер уже был). НЕ полный
+    парсер, как parseSynop() в synop.js (там для отображения на фронтенде
+    нужно всё; здесь — только сигнал "похоже на фронт или нет" для станций
+    впереди/позади трека). Секции 333/444/555 сознательно не разбираются —
+    не нужны для этой задачи. Возвращает dict или None если AAXX не найден
+    (телеграмма битая/NIL)."""
     if not line:
         return None
     telegram = line.split(",", 6)[-1] if "," in line else line
@@ -126,6 +214,9 @@ def parse_synop_essentials(line):
 
     temp = station_pressure = sea_pressure = None
     tendency_code = tendency_value = None
+    precip_mm = precip_period_hours = None
+    ww_code = present_weather_label = None
+    is_extreme_weather = False
 
     for g in parts[i + 5:]:
         g = g.rstrip("=")
@@ -146,6 +237,14 @@ def parse_synop_essentials(line):
             tendency_code = g[1]
             t_raw = int(g[2:]) / 10
             tendency_value = -t_raw if g[1] in "5678" else t_raw
+        elif re.fullmatch(r"6[\d/]{4}", g):
+            precip_mm, precip_period_hours = _decode_precip_group(g)
+        elif re.fullmatch(r"7[\d/]{4}", g):
+            ww_raw = g[1:3]
+            if ww_raw.isdigit():
+                ww_code = int(ww_raw)
+                present_weather_label = WW_LABELS.get(ww_code, f"явление ww={ww_code}")
+                is_extreme_weather = ww_code in EXTREME_WW_CODES
 
     return {
         "temp": temp,
@@ -156,6 +255,11 @@ def parse_synop_essentials(line):
         "total_cloud_okta": total_cloud,
         "wind_dir_deg": wind_dir,
         "wind_speed_ms": wind_speed,
+        "precip_mm": precip_mm,
+        "precip_period_hours": precip_period_hours,
+        "present_weather_code": ww_code,
+        "present_weather_label": present_weather_label,
+        "is_extreme_weather": is_extreme_weather,
     }
 
 
@@ -239,5 +343,32 @@ if __name__ == "__main__":
     essentials_0300 = parse_synop_essentials(line_0300)
     print("essentials (с секцией 333):", essentials_0300)
     assert essentials_0300["temp"] == 11.8, essentials_0300  # 1(0)118
+
+    # Синтетическая проверка групп 6RRRtr (осадки) и 7wwW1W2 (текущая
+    # погода/опасные явления) — 2026-08-15, реальных телеграмм с этими
+    # группами в SAMPLE не оказалось, поэтому синтетика. 60063 → RRR=006,
+    # tr=3 (24ч) → 6.0мм/24ч. 791// → ww=91 (гроза слабая/умеренная с
+    # дождём/снегом) → is_extreme_weather=True.
+    line_precip = (
+        "33745,2026,08,15,03,00,AAXX 15031 33745 42997 00501 10121 20095 "
+        "30051 40242 52001 60063 791// 333 8/// 555 10014="
+    )
+    ess_precip = parse_synop_essentials(line_precip)
+    print("essentials (осадки+явление):", ess_precip)
+    assert ess_precip["precip_mm"] == 6.0, ess_precip
+    assert ess_precip["precip_period_hours"] == 24, ess_precip
+    assert ess_precip["present_weather_code"] == 91, ess_precip
+    assert ess_precip["present_weather_label"] == WW_LABELS[91], ess_precip
+    assert ess_precip["is_extreme_weather"] is True, ess_precip
+    # temp/pressure/tendency должны продолжать парситься как раньше, группы
+    # 6/7 не должны их ломать.
+    assert ess_precip["temp"] == 12.1, ess_precip
+    assert ess_precip["sea_pressure"] == 1024.2, ess_precip
+
+    # Обычное явление (не в EXTREME_WW_CODES) — is_extreme_weather=False.
+    line_normal = line_precip.replace("791//", "761//")  # ww=61 (обычный дождь)
+    ess_normal = parse_synop_essentials(line_normal)
+    assert ess_normal["present_weather_code"] == 61, ess_normal
+    assert ess_normal["is_extreme_weather"] is False, ess_normal
 
     print("\nOK: все assert прошли (офлайн-тест парсинга на реальных телеграммах).")
