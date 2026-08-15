@@ -954,8 +954,7 @@ function _renderStationObsPanel(sideLabel, station, obs){
     const cloud = obs.total_cloud_okta != null ? `${obs.total_cloud_okta}/8` : "—";
     let wind = "—";
     if(obs.wind_speed_ms != null){
-        wind = obs.wind_dir_deg != null ? `${obs.wind_dir_deg}° ${obs.wind_speed_ms}м/с`
-             : (obs.wind_speed_ms === 0 ? "штиль" : `${obs.wind_speed_ms}м/с (напр. н/д)`);
+        wind = obs.wind_dir_deg != null ? `${obs.wind_dir_deg}° ${obs.wind_speed_ms}м/с` : `${obs.wind_speed_ms}м/с (штиль/неопр.)`;
     }
     let precip = "—";
     if(obs.precip_mm != null){
@@ -1096,6 +1095,30 @@ function _renderIrSnapshot(irData){
     </div>`;
 }
 
+// Последний снимок Cloud Mask (CLM) — бинарная маска облако/ясно, ТО, ЧТО
+// РЕАЛЬНО является входом детектора кандидатов/frontlike (см.
+// eumetsat_cloud_forecast.py::_classify_cloud_mask/_significant_blobs) —
+// в отличие от GC/ИК выше, которые лишь ПОДТВЕРЖДАЮЩИЕ каналы
+// (area_fraction_now = CLM & (IR|GC)). Добавлено 2026-08-15 по прямому
+// запросу пользователя: ночной трек не был виден ни на GC (ночью только
+// огни городов), ни на ИК (низкий контраст тонкой облачности), хотя CLM
+// его детектировал — этот снимок объясняет почему, без гадания по другим
+// каналам. Timestamp берём из _eumetsatForecastData (тот же кадр, на
+// котором считался is_cloud_now в питоне) — у CLM своего отдельного JSON
+// с timestamp нет, снимок пишется сбоку в eumetsat_cloud_forecast.py.
+function _renderClmSnapshot(forecastData){
+    if(!forecastData || !forecastData.timestamp) return "";
+    const ts = _obsTimeTag(forecastData.timestamp, 20);
+    const src = `https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_clm_snapshot.png?v=${encodeURIComponent(forecastData.timestamp)}`;
+    return `<div style="margin-top:10px;">
+        <div style="color:#72c8ff; font-size:13px; font-weight:600; margin-bottom:4px;">🗺️ Cloud Mask (вход детектора) ${ts}</div>
+        <img src="${src}" alt="Cloud Mask"
+             style="width:100%; border-radius:8px; display:block;"
+             onerror="this.parentElement.style.display='none';">
+        <div style="color:#777; font-size:11px; margin-top:3px;">Белое — облако, тёмно-синее — ясно, серое — нет данных. Это ТО, ЧТО реально видит детектор кандидатов/фронтов — не GC/ИК (те лишь подтверждают)</div>
+    </div>`;
+}
+
 function _renderFarWatchLines(farData, veryFarData){
     if(!farData && !veryFarData) return "";
     return _hr()
@@ -1179,6 +1202,7 @@ function renderNearbyPrecipCard(){
         ${_renderFrontalTracksTable(_eumetsatTargetSummaryData && _eumetsatTargetSummaryData.frontal_tracks)}
         ${_renderGeocolourSnapshot(_eumetsatGeocolourMotionData)}
         ${_renderIrSnapshot(_eumetsatIrMotionData)}
+        ${_renderClmSnapshot(_eumetsatForecastData)}
         ${_renderHistoryTable(_eumetsatPrecipHistoryData, "📜", "Хронология осадков")}
         ${_renderHistoryTable(_eumetsatLightningHistoryData, "⛈️", "Хронология грозы")}
         <details style="margin-top:10px;">
