@@ -105,6 +105,28 @@ def check_eumetsat_frontal_track():
         print(f"  [WARN] eumetsat_frontal_track.py: {e}")
 
 
+def check_eumetsat_ground_station_verify():
+    # Реальные наблюдения (SYNOP) по станциям "впереди"/"позади" активных
+    # треков — план шага 5, пункт 4 (2026-08-15). Единственный шаг во всей
+    # цепочке шага 5, который трогает сеть (ogimet + proxy-fallback), см.
+    # докстринг eumetsat_ground_station_verify.py. Вызывается СРАЗУ после
+    # check_eumetsat_frontal_track(), чтобы читать ahead_station/
+    # behind_station из самого свежего кадра этого же цикла — результат
+    # (ahead_obs/behind_obs) сам eumetsat_frontal_track.py подмешает в свой
+    # вывод уже на СЛЕДУЮЩЕМ цикле (тот же принцип лага в один цикл, что у
+    # has_precip/has_lightning). Таймаут 90с — как у остальных сетевых
+    # шагов в этом файле; скрипт сам гейтит повторные запросы кешем
+    # (STALE_MINUTES=45), так что за 90с почти всегда укладывается (fetch
+    # нужен редко, чаще срабатывает кеш).
+    try:
+        subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "eumetsat_ground_station_verify.py")],
+            cwd=BASE_DIR, capture_output=False, timeout=90
+        )
+    except Exception as e:
+        print(f"  [WARN] eumetsat_ground_station_verify.py: {e}")
+
+
 def check_eumetsat_precip_forecast():
     # Мини-прогноз движения осадков (msg_fes:h60b, 4 кадра). Гейт 15 мин.
     out_file = os.path.join(BASE_DIR, "data", "eumetsat_precip_forecast.json")
@@ -366,6 +388,7 @@ def git_push_satellite():
             "data/eumetsat_cloud_buffer.npz",
             "data/eumetsat_frontal_track.json",
             "data/eumetsat_frontal_track_state.json",
+            "data/eumetsat_ground_station_verify.json",
             "data/eumetsat_cloud_phase_type.json",
             "data/eumetsat_cloud_phase_type_debug.json",
             "data/eumetsat_cloud_phase_type_buffer.npz",
@@ -478,6 +501,7 @@ def main():
     # вызов обратно.
     check_eumetsat_cloud_forecast()
     check_eumetsat_frontal_track()
+    check_eumetsat_ground_station_verify()
     check_eumetsat_cloud_phase_type()
     check_eumetsat_precip_forecast()
     check_eumetsat_lightning_forecast()
