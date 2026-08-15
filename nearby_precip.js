@@ -1019,7 +1019,7 @@ function _renderFrontalTracksTable(tracks){
         // (иначе ahead_station/behind_station всегда null, см.
         // ground_station_selector.select_ahead_behind).
         const stationsBlock = hasVelocity ? `<tr${rowStyle}>
-            <td colspan="10" style="padding:0 0 6px 0;">
+            <td colspan="11" style="padding:0 0 6px 0;">
                 <details style="margin-top:2px;">
                     <summary style="cursor:pointer; color:#666; font-size:11.5px;">Станции вдоль курса</summary>
                     <div style="margin-top:4px; padding-left:6px; border-left:2px solid #333;">
@@ -1030,6 +1030,7 @@ function _renderFrontalTracksTable(tracks){
             </td>
         </tr>` : "";
         return `<tr${rowStyle}>
+            <td style="padding:3px 10px 3px 0; color:#666; font-family:monospace;">#${t.track_id != null ? t.track_id : "?"}</td>
             <td style="padding:3px 10px 3px 0; color:#bbb; text-align:right;">${dist}</td>
             <td style="padding:3px 10px; color:#bbb;">${dir}</td>
             <td style="padding:3px 10px; color:#bbb; text-align:right;">${area}</td>
@@ -1047,6 +1048,7 @@ function _renderFrontalTracksTable(tracks){
         <div style="overflow-x:auto; margin-top:6px;">
         <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
             <thead><tr style="color:#777; text-align:left;">
+                <th style="padding:3px 10px 3px 0; font-weight:600;" title="Условный номер трека — сквозной счётчик, не переиспользуется">#</th>
                 <th style="padding:3px 10px 3px 0; font-weight:600; text-align:right;">Км</th>
                 <th style="padding:3px 10px; font-weight:600;">Напр.</th>
                 <th style="padding:3px 10px; font-weight:600; text-align:right;">Площадь</th>
