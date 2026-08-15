@@ -86,6 +86,7 @@ import math
 import os
 
 import numpy as np
+from PIL import Image
 from scipy import ndimage
 
 import field_motion_common as fc
@@ -94,6 +95,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_cloud_forecast.json")
 DEBUG_FILE = os.path.join(BASE_DIR, "data", "eumetsat_cloud_forecast_debug.json")
 BUFFER_FILE = os.path.join(BASE_DIR, "data", "eumetsat_cloud_buffer.npz")
+CLM_SNAPSHOT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_clm_snapshot.png")
 
 LAYER_CLM = "msg_fes:clm"
 LAYER_CTH = "msg_fes:cth"
@@ -653,6 +655,48 @@ def _buffer_status(n_frames):
     }
 
 
+def _save_clm_snapshot(is_cloud, valid):
+    """Чистый снимок бинарной Cloud Mask (CLM) — ЧТО РЕАЛЬНО является
+    входом детектора кандидатов/frontlike (см. _classify_cloud_mask() и
+    _significant_blobs() выше), а не GeoColour/ИК (те лишь ПОДТВЕРЖДАЮЩИЕ
+    каналы для area_fraction_now — CLM & (IR|GC), см. докстринг main()).
+    Добавлено 2026-08-15 по прямому запросу пользователя после того, как
+    ночной трек оказался не виден ни на GC (ночью — только огни городов,
+    без облачного сигнала), ни на ИК (низкий контраст у тонкой/рассеянной
+    облачности), хотя CLM его детектировал как frontlike — эта картинка
+    показывает ПОЧЕМУ, без гадания по другим каналам.
+
+    Кодировка: светло-серый/белый = облако (is_cloud), тёмно-синий =
+    ясно (валидный пиксель, не облако), средне-серый = нет данных
+    (valid=False). Тот же geometry-контракт, что у GC/ИК снимков (общие
+    fc.draw_view_radius_circle()/draw_frontal_tracks_overlay(), TILE_SIZE
+    одинаковый на всех трёх слоях WMS).
+
+    ВАЖНО про треки на оверлее: cloud_forecast.py в порядке пайплайна
+    (см. gh_satellite_pipeline.py) запускается ПЕРЕД frontal_track.py —
+    значит data/eumetsat_frontal_track.json тут читается ещё СТАРЫЙ (с
+    прошлого цикла), тот же лаг в 1 цикл, что уже принят у has_precip/
+    ahead_obs и задокументирован как норма, не баг."""
+    try:
+        rgb = np.zeros((TILE_SIZE, TILE_SIZE, 3), dtype=np.uint8)
+        rgb[:, :] = (60, 60, 68)                  # нет данных
+        rgb[valid & ~is_cloud] = (18, 22, 40)     # ясно
+        rgb[valid & is_cloud] = (232, 232, 238)   # облако
+        base = Image.fromarray(rgb, mode="RGB")
+        base = fc.draw_view_radius_circle(base)
+        ft_path = os.path.join(BASE_DIR, "data", "eumetsat_frontal_track.json")
+        tracks = []
+        if os.path.exists(ft_path):
+            import json as _json
+            with open(ft_path, "r", encoding="utf-8") as f:
+                tracks = (_json.load(f) or {}).get("tracks", [])
+        if tracks:
+            base = fc.draw_frontal_tracks_overlay(base, tracks)
+        base.save(CLM_SNAPSHOT_FILE)
+    except Exception as e:
+        print(f"  [WARN] eumetsat_cloud_forecast.py: не удалось сохранить CLM snapshot: {e}")
+
+
 def main():
     now = fc.datetime.now(fc.timezone.utc)
     debug = {}
@@ -762,6 +806,7 @@ def main():
 
     is_cloud_now = is_cloud_frames[-1]
     valid_now = valid_frames[-1]
+    _save_clm_snapshot(is_cloud_now, valid_now)
     local_mask = _local_area_mask()
     station_mask = _station_area_mask()
 
