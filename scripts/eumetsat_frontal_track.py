@@ -47,6 +47,7 @@ PRECIP_FORECAST_FILE = os.path.join(DATA_DIR, "eumetsat_precip_forecast.json")
 LIGHTNING_FORECAST_FILE = os.path.join(DATA_DIR, "eumetsat_lightning_forecast.json")
 GEO_CONFIG_FILE = os.path.join(DATA_DIR, "geo_config.json")
 GROUND_STATIONS_FILE = os.path.join(DATA_DIR, "ground_stations.json")
+GROUND_VERIFY_FILE = os.path.join(DATA_DIR, "eumetsat_ground_station_verify.json")
 
 # CENTER_LAT/CENTER_LON/KM_PER_DEG_* — та же геометрия, что в
 # field_motion_common.py (единый источник правды — geo_config.json), но
@@ -239,6 +240,18 @@ def main():
     # behind_station будут None у всех треков, остальной вывод не ломается.
     ground_stations = _load_json(GROUND_STATIONS_FILE, [])
 
+    # Реальные наблюдения (SYNOP) по ahead_station/behind_station — план
+    # шага 5, пункт 4, продолжение (2026-08-15). Пишутся ОТДЕЛЬНЫМ скриптом
+    # eumetsat_ground_station_verify.py (там же сеть, здесь её нет — тот же
+    # принцип лага в один цикл, что у precip_by_id/lightning_by_id выше:
+    # verify-скрипт видел ahead_station/behind_station из ПРЕДЫДУЩЕГО
+    # прогона этого файла, потому что должен прочитать их отсюда, а не
+    # заново пересчитывать; значит здесь мы читаем его результат тоже с
+    # отставанием в один цикл). Ключ — track_id (не target_id, как у
+    # precip/lightning — verify-скрипт работает по трекам целиком, а не по
+    # отдельным кадрам-кандидатам).
+    ground_verify = _load_json(GROUND_VERIFY_FILE, {"tracks": {}}).get("tracks", {})
+
     out_tracks = []
     for t in tracks:
         if t["last_seen"] != cf_ts_str:
@@ -282,6 +295,17 @@ def main():
         lt = lightning_by_id.get(latest_tid) if latest_tid is not None else None
         entry["has_precip"] = pr.get("has_precip") if pr else None
         entry["has_lightning"] = lt.get("has_lightning") if lt else None
+
+        # ahead_obs/behind_obs — подмешиваются здесь, но РЕАЛЬНЫЕ значения
+        # появятся только со следующего цикла: verify-скрипт ещё не видел
+        # ahead_station/behind_station, посчитанные в ЭТОМ прогоне (см.
+        # комментарий про ground_verify выше). Пока станция впереди/позади
+        # не менялась между циклами — обычно так и есть, трек живёт
+        # десятки минут — старые obs всё ещё релевантны, это не "мусорные"
+        # данные, а тот же лаг в один цикл, что уже есть у has_precip.
+        gv = ground_verify.get(str(t["track_id"]))
+        entry["ahead_obs"] = gv.get("ahead_obs") if gv else None
+        entry["behind_obs"] = gv.get("behind_obs") if gv else None
 
         if len(pts) >= MIN_POINTS_FOR_VELOCITY:
             first = pts[0]
