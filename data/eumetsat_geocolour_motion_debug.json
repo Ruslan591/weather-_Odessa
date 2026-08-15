@@ -1,27 +1,27 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-08-15T16:00:00.000Z",
+  "server_latest_time": "2026-08-15T16:10:00.000Z",
   "bootstrap": true,
   "buffer_before": 6,
   "buffer_size": 6,
   "buffer_times": [
-    "2026-08-15T15:10:00.000Z",
     "2026-08-15T15:20:00.000Z",
     "2026-08-15T15:30:00.000Z",
     "2026-08-15T15:40:00.000Z",
     "2026-08-15T15:50:00.000Z",
-    "2026-08-15T16:00:00.000Z"
+    "2026-08-15T16:00:00.000Z",
+    "2026-08-15T16:10:00.000Z"
   ],
   "frame_std": [
-    21.2,
     20.4,
     19.7,
     19.3,
     18.7,
-    18.5
+    18.5,
+    18.2
   ],
   "result": {
-    "timestamp": "2026-08-15T16:27:53Z",
+    "timestamp": "2026-08-15T16:38:39Z",
     "buffer_size": 6,
     "buffer_span_minutes": 50,
     "observed_area": {
@@ -50,11 +50,21 @@
     "station_area_fraction": 0.0,
     "cloud_mass_distance_km": null,
     "target_confirmation": {
-      "confirmed": null,
-      "reason": "candidates пуст или отсутствует (снапшот от старой версии cloud_forecast.py?)"
+      "confirmed": false,
+      "target_id": 0,
+      "target_area_km2": 89.4,
+      "roi_cloud_fraction": 0.0,
+      "verdict": "GeoColour НЕ подтверждает: в ROI CLM-цели облачность не преобладает — возможно расхождение слоёв"
     },
     "system_analysis_all": [],
-    "local_analysis_all": [],
+    "local_analysis_all": [
+      {
+        "target_id": 0,
+        "available": true,
+        "roi_cloud_fraction": 0.0,
+        "confirmed": false
+      }
+    ],
     "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
   }
 }
