@@ -920,6 +920,69 @@ function _renderSystemCandidatesTable(rows, suppressedCount){
 // velocity/movement_bearing присутствуют только при points_count>=3
 // (см. MIN_POINTS_FOR_VELOCITY в скрипте) — до этого строка показывает
 // только текущее положение/ось, без "куда и как быстро едет".
+// Наблюдения наземных станций "впереди"/"позади" трека — план шага 5
+// "Наземные наблюдения вдоль траектории фронта" (2026-08-14/15), пункт 5.
+// По запросу 2026-08-15 ("не хватает осадков/ветра/экстремальных явлений")
+// показываем не только давление+тенденцию+температуру+облачность, но и
+// осадки (precip_mm/precip_period_hours) и текущую погоду
+// (present_weather_label/is_extreme_weather из группы 7wwW1W2, см.
+// ground_station_obs_fetch.py). station — запись из ahead_station/
+// behind_station (name/along_km/perp_km/wmo_synop_id/...), obs — запись
+// из ahead_obs/behind_obs (может быть null — станция выбрана геометрией,
+// но SYNOP ещё не подтянут, лаг в 1 цикл, см. eumetsat_frontal_track.py).
+function _renderStationObsPanel(sideLabel, station, obs){
+    if(!station) return `<div style="color:#666; font-size:12px; margin-top:4px;">${sideLabel}: станция не найдена (нет подходящей в радиусе курса)</div>`;
+    const along = station.along_km != null ? Math.round(Math.abs(station.along_km)) : "—";
+    const name = station.name || "—";
+    const header = `<div style="color:#9fd6ff; font-size:12.5px; font-weight:600;">${sideLabel}: ${name} <span style="color:#777; font-weight:400;">(${along}км)</span></div>`;
+
+    if(!obs || !obs.obs_time){
+        return `<div style="margin-top:4px;">${header}<div style="color:#777; font-size:11.5px; margin-top:2px;">наблюдение ещё не получено</div></div>`;
+    }
+
+    const timeTag = _obsTimeTag(obs.obs_time, 200); // SYNOP раз в ~3ч, порог "устарело" пошире
+    const temp = obs.temp != null ? `${obs.temp > 0 ? "+" : ""}${obs.temp}°C` : "—";
+    let pressure = "—";
+    if(obs.sea_pressure != null){
+        pressure = `${obs.sea_pressure} гПа`;
+        if(obs.pressure_tendency_value != null){
+            const tv = obs.pressure_tendency_value;
+            const arrow = tv > 0.1 ? "↑" : (tv < -0.1 ? "↓" : "→");
+            pressure += ` ${arrow}${Math.abs(tv).toFixed(1)}`;
+        }
+    }
+    const cloud = obs.total_cloud_okta != null ? `${obs.total_cloud_okta}/8` : "—";
+    let wind = "—";
+    if(obs.wind_speed_ms != null){
+        wind = obs.wind_dir_deg != null ? `${obs.wind_dir_deg}° ${obs.wind_speed_ms}м/с` : `${obs.wind_speed_ms}м/с (штиль/неопр.)`;
+    }
+    let precip = "—";
+    if(obs.precip_mm != null){
+        const period = obs.precip_period_hours != null ? `/${obs.precip_period_hours}ч` : "";
+        precip = `${obs.precip_mm}мм${period}`;
+    }
+
+    let weatherLine = "";
+    if(obs.present_weather_label){
+        const badgeColor = obs.is_extreme_weather ? "#ff5555" : "#e0a030";
+        const badgeBg = obs.is_extreme_weather ? "rgba(255,85,85,0.12)" : "rgba(224,160,48,0.10)";
+        const icon = obs.is_extreme_weather ? "⚠️ " : "";
+        weatherLine = `<div style="margin-top:3px;"><span style="color:${badgeColor}; background:${badgeBg}; border-radius:4px; padding:1px 6px; font-size:11.5px;">${icon}${obs.present_weather_label}</span></div>`;
+    }
+
+    return `<div style="margin-top:4px;">
+        ${header}${timeTag ? `<span style="font-size:11px;">${timeTag}</span>` : ""}
+        <div style="color:#ccc; font-size:11.5px; margin-top:2px; display:flex; gap:12px; flex-wrap:wrap;">
+            <span>🌡️ ${temp}</span>
+            <span>📈 ${pressure}</span>
+            <span>☁️ ${cloud}</span>
+            <span>💨 ${wind}</span>
+            <span>🌧️ ${precip}</span>
+        </div>
+        ${weatherLine}
+    </div>`;
+}
+
 function _renderFrontalTracksTable(tracks){
     if(!tracks || !tracks.length) return "";
     const trs = tracks.map(t => {
@@ -948,6 +1011,24 @@ function _renderFrontalTracksTable(tracks){
         const velocityLabel = pending
             ? `<span title="Меньше 3 подтверждений подряд — скорость ещё не публикуется">${velocity}</span>`
             : velocity;
+        // Станции вдоль курса — план шага 5, пункт 5 (2026-08-15). Под
+        // спойлером на строку трека (не отдельной таблицей, не прямо в
+        // строке) — по решению Claude при отсутствии предпочтения
+        // пользователя, тот же паттерн, что уже принят для "Подробности
+        // по каналам". Показываются только когда известно движение трека
+        // (иначе ahead_station/behind_station всегда null, см.
+        // ground_station_selector.select_ahead_behind).
+        const stationsBlock = hasVelocity ? `<tr${rowStyle}>
+            <td colspan="10" style="padding:0 0 6px 0;">
+                <details style="margin-top:2px;">
+                    <summary style="cursor:pointer; color:#666; font-size:11.5px;">Станции вдоль курса</summary>
+                    <div style="margin-top:4px; padding-left:6px; border-left:2px solid #333;">
+                        ${_renderStationObsPanel("Впереди", t.ahead_station, t.ahead_obs)}
+                        ${_renderStationObsPanel("Позади", t.behind_station, t.behind_obs)}
+                    </div>
+                </details>
+            </td>
+        </tr>` : "";
         return `<tr${rowStyle}>
             <td style="padding:3px 10px 3px 0; color:#bbb; text-align:right;">${dist}</td>
             <td style="padding:3px 10px; color:#bbb;">${dir}</td>
@@ -959,7 +1040,7 @@ function _renderFrontalTracksTable(tracks){
             <td style="padding:3px 0; text-align:center;">${precip}</td>
             <td style="padding:3px 0; text-align:center;">${lightning}</td>
             <td style="padding:3px 0; color:#888; text-align:right;">${age}</td>
-        </tr>`;
+        </tr>${stationsBlock}`;
     }).join("");
     return `<details style="margin-top:10px;">
         <summary style="cursor:pointer; color:#72c8ff; font-size:13px; font-weight:600;">🌩️ Треки фронтов (${tracks.length})</summary>
