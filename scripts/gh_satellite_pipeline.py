@@ -412,6 +412,7 @@ def git_push_satellite():
             "data/eumetsat_geocolour_debug_preview.png",
             "data/eumetsat_geocolour_snapshot.png",
             "data/eumetsat_ir_snapshot.png",
+            "data/eumetsat_clm_snapshot.png",
             "data/eumetsat_local_channel_suppression_log.json",
             "data/eumetsat_system_channel_suppression_log.json",
             "data/eumetsat_far_watch.json",
