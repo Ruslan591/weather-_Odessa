@@ -954,7 +954,8 @@ function _renderStationObsPanel(sideLabel, station, obs){
     const cloud = obs.total_cloud_okta != null ? `${obs.total_cloud_okta}/8` : "—";
     let wind = "—";
     if(obs.wind_speed_ms != null){
-        wind = obs.wind_dir_deg != null ? `${obs.wind_dir_deg}° ${obs.wind_speed_ms}м/с` : `${obs.wind_speed_ms}м/с (штиль/неопр.)`;
+        wind = obs.wind_dir_deg != null ? `${obs.wind_dir_deg}° ${obs.wind_speed_ms}м/с`
+             : (obs.wind_speed_ms === 0 ? "штиль" : `${obs.wind_speed_ms}м/с (напр. н/д)`);
     }
     let precip = "—";
     if(obs.precip_mm != null){
