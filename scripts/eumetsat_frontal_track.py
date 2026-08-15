@@ -35,6 +35,8 @@ import math
 import os
 from datetime import datetime, timezone
 
+from ground_station_selector import select_ahead_behind
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 CLOUD_FORECAST_FILE = os.path.join(DATA_DIR, "eumetsat_cloud_forecast.json")
@@ -43,6 +45,20 @@ OUT_FILE = os.path.join(DATA_DIR, "eumetsat_frontal_track.json")
 
 PRECIP_FORECAST_FILE = os.path.join(DATA_DIR, "eumetsat_precip_forecast.json")
 LIGHTNING_FORECAST_FILE = os.path.join(DATA_DIR, "eumetsat_lightning_forecast.json")
+GEO_CONFIG_FILE = os.path.join(DATA_DIR, "geo_config.json")
+GROUND_STATIONS_FILE = os.path.join(DATA_DIR, "ground_stations.json")
+
+# CENTER_LAT/CENTER_LON/KM_PER_DEG_* — та же геометрия, что в
+# field_motion_common.py (единый источник правды — geo_config.json), но
+# читаем geo_config.json НАПРЯМУЮ, а не импортируем field_motion_common —
+# он тянет numpy/PIL/scipy/requests, а этот скрипт по замыслу лёгкий и
+# сеть/тяжёлые зависимости не трогает (см. докстринг модуля выше).
+with open(GEO_CONFIG_FILE, "r", encoding="utf-8") as _f:
+    _GEO = json.load(_f)
+CENTER_LAT = _GEO["center_lat"]
+CENTER_LON = _GEO["center_lon"]
+KM_PER_DEG_LAT = 111.32
+KM_PER_DEG_LON = 111.32 * math.cos(math.radians(CENTER_LAT))
 
 MAX_POINTS_PER_TRACK = 12     # ~2-3ч истории при обычном шаге 10-15 мин
 STALE_TRACK_MINUTES = 90      # трек без новых точек дольше этого — удаляется
@@ -217,6 +233,12 @@ def main():
     precip_by_id = _by_target_id(PRECIP_FORECAST_FILE)
     lightning_by_id = _by_target_id(LIGHTNING_FORECAST_FILE)
 
+    # База наземных станций — план шага 5, пункт 2/4 (2026-08-15). Читается
+    # один раз на весь запуск (140 станций, копеечный файл), не в цикле по
+    # трекам. Если файла нет (ещё не сгенерирован) — ahead_station/
+    # behind_station будут None у всех треков, остальной вывод не ломается.
+    ground_stations = _load_json(GROUND_STATIONS_FILE, [])
+
     out_tracks = []
     for t in tracks:
         if t["last_seen"] != cf_ts_str:
@@ -245,6 +267,13 @@ def main():
             "movement_bearing_deg": None,
             "movement_bearing_compass": None,
             "axis_rotation_deg": None,
+            # Станция "впереди"/"позади" вдоль оси движения трека (план
+            # шага 5, пункт 4, 2026-08-15) — заполняются ниже, только если
+            # movement_bearing_deg известен (нужна скорость/направление,
+            # см. select_ahead_behind: без bearing выбор станции "по
+            # курсу" не имеет смысла). Пока None по умолчанию.
+            "ahead_station": None,
+            "behind_station": None,
         }
         _, entry["direction_compass"] = _bearing_compass(latest["dx_km"], latest["dy_km"])
 
@@ -269,6 +298,23 @@ def main():
                     entry["axis_rotation_deg"] = round(
                         _axis_angle_diff(first["axis_deg"], latest["axis_deg"]), 1
                     )
+
+                # Станции вдоль курса трека — план шага 5, пункт 4. Только
+                # чистая геометрия (см. ground_station_selector.py), сеть
+                # НЕ трогается — реальные наблюдения (SYNOP) по выбранным
+                # станциям забирает отдельный скрипт
+                # eumetsat_ground_station_verify.py (тот же паттерн
+                # разделения, что precip_forecast/lightning_forecast:
+                # отдельный файл, читается здесь по id, не по прямому
+                # вызову сети).
+                if ground_stations:
+                    selection = select_ahead_behind(
+                        entry["dx_km"], entry["dy_km"], entry["movement_bearing_deg"],
+                        ground_stations, CENTER_LAT, CENTER_LON,
+                        KM_PER_DEG_LAT, KM_PER_DEG_LON,
+                    )
+                    entry["ahead_station"] = selection["ahead"]
+                    entry["behind_station"] = selection["behind"]
         out_tracks.append(entry)
 
     out = {
