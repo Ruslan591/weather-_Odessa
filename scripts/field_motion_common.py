@@ -128,6 +128,29 @@ VERY_FAR_TARGET_KM_PER_PX = _GEO["very_far_window"]["target_km_per_px"]
 # _save_clean_snapshot() — запрос 2026-08-10 ("дорисуй окружность обзора").
 NEAR_RADIUS_KM = _GEO["control_tiers"]["near"]["radius_km"]
 
+# Западный тайл (пилот, план "мозаика тайлов" для дальнего детекта фронтов,
+# обсуждение с пользователем 2026-08-16) — тот же half_window_deg/TILE_SIZE,
+# что и motion_window (то же разрешение км/px), bbox сдвинут на запад
+# впритык к near-tier с нахлёстом overlap_km (для склейки объектов на
+# границе в eumetsat_frontal_track.py). ВАЖНО: WEST_TILE_OFFSET_DX_KM/DY_KM —
+# смещение ЦЕНТРА западного тайла относительно Одессы. Кандидаты детектора
+# считаются локально относительно центра западного тайла ТОЙ ЖЕ формулой,
+# что pixel_to_km_offset() для near-tier, а затем к ним прибавляется это
+# смещение — так координаты западного тайла оказываются в ТОЙ ЖЕ системе
+# "км от Одессы", что и near-tier, без отдельного converter'а через
+# абсолютные lat/lon (проще и меньше риска ошибки, т.к. широта тайлов
+# одинакова — WEST_CENTER_LAT == CENTER_LAT, поэтому DY-смещение равно 0).
+_west_overlap_km = _GEO["west_window"]["overlap_km"]
+_west_tile_width_km = 2 * HALF_WINDOW_DEG * KM_PER_DEG_LON
+_west_offset_km = _west_tile_width_km - _west_overlap_km
+_west_offset_deg_lon = _west_offset_km / KM_PER_DEG_LON
+WEST_CENTER_LON = CENTER_LON - _west_offset_deg_lon
+WEST_CENTER_LAT = CENTER_LAT
+WEST_BBOX = (WEST_CENTER_LON - HALF_WINDOW_DEG, WEST_CENTER_LAT - HALF_WINDOW_DEG,
+             WEST_CENTER_LON + HALF_WINDOW_DEG, WEST_CENTER_LAT + HALF_WINDOW_DEG)
+WEST_TILE_OFFSET_DX_KM = (WEST_CENTER_LON - CENTER_LON) * KM_PER_DEG_LON
+WEST_TILE_OFFSET_DY_KM = (WEST_CENTER_LAT - CENTER_LAT) * KM_PER_DEG_LAT
+
 AFFECT_THRESHOLD_KM = 15.0
 STATIONARY_SPEED_KMH = 3.0
 MIN_FRACTION_FOR_CORR = 0.02
