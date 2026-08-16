@@ -260,6 +260,7 @@ def parse_synop_essentials(line):
         "present_weather_code": ww_code,
         "present_weather_label": present_weather_label,
         "is_extreme_weather": is_extreme_weather,
+        "obs_source": "SYNOP",
     }
 
 
@@ -364,6 +365,7 @@ if __name__ == "__main__":
     # 6/7 не должны их ломать.
     assert ess_precip["temp"] == 12.1, ess_precip
     assert ess_precip["sea_pressure"] == 1024.2, ess_precip
+    assert ess_precip["obs_source"] == "SYNOP", ess_precip
 
     # Обычное явление (не в EXTREME_WW_CODES) — is_extreme_weather=False.
     line_normal = line_precip.replace("791//", "761//")  # ww=61 (обычный дождь)
