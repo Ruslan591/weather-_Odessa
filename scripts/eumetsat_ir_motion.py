@@ -122,12 +122,14 @@ def _save_ir_snapshot(gray):
     приводится к uint8 и дублируется в 3 канала (PIL 'L'->'RGB'), чтобы
     draw_view_radius_circle работал одинаково что к GeoColour, что к ИК.
 
-    Контур береговой линии + точка Одессы (fc.draw_coastline_overlay()/
-    fc.draw_odessa_marker()) — по запросу 2026-08-16 ("ориентир"), на ИК
-    особенно ценно — своей географии нет вообще, только яркость облаков."""
+    Контур береговой линии (fc.draw_coastline_overlay()) НЕ используется
+    здесь — добавлен было 2026-08-16 по запросу "контур для ориентира", но
+    в тот же день откачен по уточнению пользователя: на ИК контур не
+    нужен. Оставлен только на CLM (eumetsat_cloud_forecast.py) — там нет
+    вообще никакой альтернативной привязки к местности. Точка Одессы
+    (fc.draw_odessa_marker()) осталась на всех трёх снимках."""
     try:
         base = Image.fromarray(np.clip(gray, 0, 255).astype(np.uint8), mode="L").convert("RGB")
-        base = fc.draw_coastline_overlay(base)
         base = fc.draw_view_radius_circle(base)
         base = fc.draw_odessa_marker(base)
         base.save(SNAPSHOT_FILE)
