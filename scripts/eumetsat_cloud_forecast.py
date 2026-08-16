@@ -676,13 +676,18 @@ def _save_clm_snapshot(is_cloud, valid):
     (см. gh_satellite_pipeline.py) запускается ПЕРЕД frontal_track.py —
     значит data/eumetsat_frontal_track.json тут читается ещё СТАРЫЙ (с
     прошлого цикла), тот же лаг в 1 цикл, что уже принят у has_precip/
-    ahead_obs и задокументирован как норма, не баг."""
+    ahead_obs и задокументирован как норма, не баг.
+
+    Контур береговой линии + точка Одессы (fc.draw_coastline_overlay()/
+    fc.draw_odessa_marker()) — по запросу 2026-08-16 ("ориентир"), на CLM
+    особенно ценно — своей географии нет вообще, только облако/ясно."""
     try:
         rgb = np.zeros((TILE_SIZE, TILE_SIZE, 3), dtype=np.uint8)
         rgb[:, :] = (60, 60, 68)                  # нет данных
         rgb[valid & ~is_cloud] = (18, 22, 40)     # ясно
         rgb[valid & is_cloud] = (232, 232, 238)   # облако
         base = Image.fromarray(rgb, mode="RGB")
+        base = fc.draw_coastline_overlay(base)
         base = fc.draw_view_radius_circle(base)
         ft_path = os.path.join(BASE_DIR, "data", "eumetsat_frontal_track.json")
         tracks = []
@@ -692,6 +697,7 @@ def _save_clm_snapshot(is_cloud, valid):
                 tracks = (_json.load(f) or {}).get("tracks", [])
         if tracks:
             base = fc.draw_frontal_tracks_overlay(base, tracks)
+        base = fc.draw_odessa_marker(base)
         base.save(CLM_SNAPSHOT_FILE)
     except Exception as e:
         print(f"  [WARN] eumetsat_cloud_forecast.py: не удалось сохранить CLM snapshot: {e}")
