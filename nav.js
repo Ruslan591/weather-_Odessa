@@ -4,10 +4,12 @@
 var TABS = [
     { label: "Прогноз",  icon: "📅", href: "forecast.html", match: ["forecast.html"] },
     { label: "По городу",icon: "🌆", href: "pws.html",      match: ["pws.html"] },
-    { label: "Осадки",   icon: "🌦️", href: null, match: ["radar.html", "eumetsat.html", "nearby.html"],
+    { label: "Осадки",   icon: "🌦️", href: null, match: ["radar.html", "nearby.html"],
+      // "Спутник" (eumetsat.html) убран из меню 2026-08-16 — решение сосредоточиться
+      // на nearby.html и детекте фронтов. Страница/скрипт не удалены из репозитория,
+      // легко вернуть пункт submenu обратно, если понадобится визуальный браузер снимков.
       submenu: [
           { label: "Радар",       href: "radar.html" },
-          { label: "Спутник",     href: "eumetsat.html" },
           { label: "Поблизости",  href: "nearby.html" },
       ]
     },
