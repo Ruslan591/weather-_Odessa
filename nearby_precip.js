@@ -940,7 +940,14 @@ function _renderStationObsPanel(sideLabel, station, obs){
         return `<div style="margin-top:4px;">${header}<div style="color:#777; font-size:11.5px; margin-top:2px;">наблюдение ещё не получено</div></div>`;
     }
 
-    const timeTag = _obsTimeTag(obs.obs_time, 200); // SYNOP раз в ~3ч, порог "устарело" пошире
+    const timeTag = _obsTimeTag(obs.obs_time, obs.obs_source === "BUFR" ? 90 : 200); // BUFR почасовой — порог строже, чем у SYNOP (~3ч)
+    // Метка источника — 2026-08-16, BUFR-фолбэк (Meteomanz) подключён для
+    // станций, переставших слать классический SYNOP на ogimet (найдено на
+    // FETESTI/MAHMUDIA); показываем явно, чтобы не выглядело как обычный
+    // SYNOP — набор полей чуть уже (нет периода осадков и т.п.).
+    const sourceTag = obs.obs_source === "BUFR"
+        ? `<span style="color:#8899aa; font-size:10.5px; margin-left:4px;" title="Данные получены не из SYNOP (станция его не шлёт), а из часового автоматического BUFR (Meteomanz)">· BUFR</span>`
+        : "";
     const temp = obs.temp != null ? `${obs.temp > 0 ? "+" : ""}${obs.temp}°C` : "—";
     let pressure = "—";
     if(obs.sea_pressure != null){
@@ -971,7 +978,7 @@ function _renderStationObsPanel(sideLabel, station, obs){
     }
 
     return `<div style="margin-top:4px;">
-        ${header}${timeTag ? `<span style="font-size:11px;">${timeTag}</span>` : ""}
+        ${header}${timeTag ? `<span style="font-size:11px;">${timeTag}</span>` : ""}${sourceTag}
         <div style="color:#ccc; font-size:11.5px; margin-top:2px; display:flex; gap:12px; flex-wrap:wrap;">
             <span>🌡️ ${temp}</span>
             <span>📈 ${pressure}</span>
