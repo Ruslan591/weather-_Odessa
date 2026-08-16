@@ -1,33 +1,46 @@
 {
-  "timestamp": "2026-08-16T18:10:17Z",
+  "timestamp": "2026-08-16T18:29:50Z",
   "status": "ok",
-  "cloud_forecast_timestamp": "2026-08-16T18:08:58Z",
-  "target_id": 0,
-  "target_area_km2": 189.5,
-  "target_distance_km": 121.7,
-  "target_bearing_deg": 62.0,
+  "cloud_forecast_timestamp": "2026-08-16T18:29:11Z",
+  "target_id": 1,
+  "target_area_km2": 56.0,
+  "target_distance_km": 118.9,
+  "target_bearing_deg": 50.0,
   "target_compass": "СВ",
-  "system": null,
+  "system": {
+    "target_id": 0,
+    "area_km2": 413.6,
+    "distance_km": 117.6,
+    "bearing_deg": 70.0,
+    "compass": "В",
+    "elongation_aspect_ratio": 1.35,
+    "elongation_axis_deg": 63.0,
+    "elongation_axis_compass": "СВ-ЮЗ",
+    "frontlike": false,
+    "window_spanning": false,
+    "has_precip": false,
+    "has_lightning": false
+  },
   "local_candidates": [
     {
-      "target_id": 0,
-      "area_km2": 189.5,
-      "distance_km": 121.7,
-      "bearing_deg": 62.0,
-      "compass": "СВ",
-      "elongation_aspect_ratio": 1.8,
-      "elongation_axis_deg": 114.0,
-      "elongation_axis_compass": "ЮВ-СЗ",
+      "target_id": 5,
+      "area_km2": 214.8,
+      "distance_km": 164.9,
+      "bearing_deg": 223.0,
+      "compass": "ЮЗ",
+      "elongation_aspect_ratio": 2.06,
+      "elongation_axis_deg": 83.0,
+      "elongation_axis_compass": "В-З",
       "frontlike": false,
-      "phase_label": "безоблачно",
-      "type_label": "безоблачно",
+      "phase_label": null,
+      "type_label": null,
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": true,
       "geocolour_confirmed": false
     },
     {
-      "target_id": 4,
+      "target_id": 7,
       "area_km2": 121.4,
       "distance_km": 185.9,
       "bearing_deg": 213.0,
@@ -44,7 +57,24 @@
       "geocolour_confirmed": false
     },
     {
-      "target_id": 6,
+      "target_id": 8,
+      "area_km2": 53.4,
+      "distance_km": 188.0,
+      "bearing_deg": 122.0,
+      "compass": "ЮВ",
+      "elongation_aspect_ratio": 1.77,
+      "elongation_axis_deg": 90.0,
+      "elongation_axis_compass": "В-З",
+      "frontlike": false,
+      "phase_label": null,
+      "type_label": null,
+      "has_precip": false,
+      "has_lightning": false,
+      "ir_confirmed": true,
+      "geocolour_confirmed": false
+    },
+    {
+      "target_id": 12,
       "area_km2": 60.0,
       "distance_km": 203.1,
       "bearing_deg": 117.0,
@@ -61,9 +91,28 @@
       "geocolour_confirmed": false
     }
   ],
-  "local_suppressed_count": 11,
-  "system_candidates": [],
-  "system_suppressed_count": 0,
+  "local_suppressed_count": 19,
+  "system_candidates": [
+    {
+      "target_id": 0,
+      "area_km2": 413.6,
+      "distance_km": 117.6,
+      "bearing_deg": 70.0,
+      "compass": "В",
+      "elongation_aspect_ratio": 1.35,
+      "elongation_axis_deg": 63.0,
+      "elongation_axis_compass": "СВ-ЮЗ",
+      "frontlike": false,
+      "window_spanning": false,
+      "phase_label": null,
+      "type_label": null,
+      "has_precip": false,
+      "has_lightning": false,
+      "ir_confirmed": true,
+      "geocolour_confirmed": false
+    }
+  ],
+  "system_suppressed_count": 2,
   "frontal_tracks": [],
   "target_phase": {
     "label": "безоблачно",
@@ -73,11 +122,11 @@
     "modules": {
       "ir_motion": {
         "confirmed": true,
-        "timestamp": "2026-08-16T18:09:47Z"
+        "timestamp": "2026-08-16T18:29:31Z"
       },
       "geocolour_motion": {
         "confirmed": false,
-        "timestamp": "2026-08-16T18:10:00Z"
+        "timestamp": "2026-08-16T18:29:41Z"
       },
       "cloud_phase_type": {
         "confirmed": false,
@@ -91,12 +140,12 @@
   "phenomena": {
     "precip_forecast": {
       "confirmed": false,
-      "timestamp": "2026-08-16T18:09:41Z"
+      "timestamp": "2026-08-16T18:29:25Z"
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-08-16T18:09:44Z"
+      "timestamp": "2026-08-16T18:29:28Z"
     }
   },
-  "verdict": "Цель в 122км СВ, безоблачно — каналы расходятся: ir_motion подтверждают, geocolour_motion/cloud_phase_type нет (ночь — rgb_cloudphase/rgb_cloudtype дают систематическое ложное «безоблачно» без солнечного света, см. docs/topics/eumetsat.md)."
+  "verdict": "Цель в 119км СВ, безоблачно — каналы расходятся: ir_motion подтверждают, geocolour_motion/cloud_phase_type нет (ночь — rgb_cloudphase/rgb_cloudtype дают систематическое ложное «безоблачно» без солнечного света, см. docs/topics/eumetsat.md). Отдельно: система синоптического масштаба (414км²) в 118км В."
 }
