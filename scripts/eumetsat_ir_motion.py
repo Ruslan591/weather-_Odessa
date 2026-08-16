@@ -120,11 +120,16 @@ def _save_ir_snapshot(gray):
 
     gray — сырой grayscale-кадр (0-255 luminance, см. fc.to_grayscale_luminance())
     приводится к uint8 и дублируется в 3 канала (PIL 'L'->'RGB'), чтобы
-    draw_view_radius_circle (работает с RGB) применился одинаково что к
-    GeoColour, что к ИК."""
+    draw_view_radius_circle работал одинаково что к GeoColour, что к ИК.
+
+    Контур береговой линии + точка Одессы (fc.draw_coastline_overlay()/
+    fc.draw_odessa_marker()) — по запросу 2026-08-16 ("ориентир"), на ИК
+    особенно ценно — своей географии нет вообще, только яркость облаков."""
     try:
         base = Image.fromarray(np.clip(gray, 0, 255).astype(np.uint8), mode="L").convert("RGB")
+        base = fc.draw_coastline_overlay(base)
         base = fc.draw_view_radius_circle(base)
+        base = fc.draw_odessa_marker(base)
         base.save(SNAPSHOT_FILE)
     except Exception as e:
         print(f"  [WARN] eumetsat_ir_motion.py: не удалось сохранить снимок: {e}")
