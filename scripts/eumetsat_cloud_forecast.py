@@ -668,15 +668,24 @@ def _save_clm_snapshot(is_cloud, valid):
 
     Кодировка: светло-серый/белый = облако (is_cloud), тёмно-синий =
     ясно (валидный пиксель, не облако), средне-серый = нет данных
-    (valid=False). Тот же geometry-контракт, что у GC/ИК снимков (общие
-    fc.draw_view_radius_circle()/draw_frontal_tracks_overlay(), TILE_SIZE
-    одинаковый на всех трёх слоях WMS).
+    (valid=False). Тот же geometry-контракт, что у GC/ИК снимков (общий
+    fc.draw_view_radius_circle(), TILE_SIZE одинаковый на всех трёх слоях
+    WMS).
 
-    ВАЖНО про треки на оверлее: cloud_forecast.py в порядке пайплайна
-    (см. gh_satellite_pipeline.py) запускается ПЕРЕД frontal_track.py —
-    значит data/eumetsat_frontal_track.json тут читается ещё СТАРЫЙ (с
-    прошлого цикла), тот же лаг в 1 цикл, что уже принят у has_precip/
-    ahead_obs и задокументирован как норма, не баг."""
+    БЕЗ оверлея треков (2026-08-16, было и убрано в тот же день). Пробовал
+    рисовать линии треков как на GC — оказалось СТРУКТУРНО не может быть
+    синхронно с таблицей/GC: cloud_forecast.py в пайплайне идёт ПЕРЕД
+    frontal_track.py (тот использует candidates ИЗ ЭТОГО скрипта как
+    вход — раньше физически не может), поэтому CLM всегда рисовал бы
+    треки с ПРЕДЫДУЩЕГО цикла. Пойманный на живых данных случай (история
+    коммитов data/eumetsat_frontal_track.json): цикл A — 3 трека, цикл B
+    — пересчитал в 0 (трек на 1 кадр не прошёл frontlike-фильтр), цикл C
+    — снова 3. CLM цикла B нарисовал бы треки цикла A (3, хотя таблица
+    уже показывала 0), CLM цикла C нарисовал бы 0 треков цикла B (хотя
+    таблица уже снова показывала 3) — выглядит как "то фронт есть, то
+    нет", хотя это просто рассинхрон на 1 цикл, не баг детекции. Решили:
+    честнее показывать только сырую маску без интерпретации сверху,
+    сверять положение с треком визуально по форме облака."""
     try:
         rgb = np.zeros((TILE_SIZE, TILE_SIZE, 3), dtype=np.uint8)
         rgb[:, :] = (60, 60, 68)                  # нет данных
@@ -684,14 +693,6 @@ def _save_clm_snapshot(is_cloud, valid):
         rgb[valid & is_cloud] = (232, 232, 238)   # облако
         base = Image.fromarray(rgb, mode="RGB")
         base = fc.draw_view_radius_circle(base)
-        ft_path = os.path.join(BASE_DIR, "data", "eumetsat_frontal_track.json")
-        tracks = []
-        if os.path.exists(ft_path):
-            import json as _json
-            with open(ft_path, "r", encoding="utf-8") as f:
-                tracks = (_json.load(f) or {}).get("tracks", [])
-        if tracks:
-            base = fc.draw_frontal_tracks_overlay(base, tracks)
         base.save(CLM_SNAPSHOT_FILE)
     except Exception as e:
         print(f"  [WARN] eumetsat_cloud_forecast.py: не удалось сохранить CLM snapshot: {e}")
