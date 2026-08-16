@@ -39,5 +39,9 @@
         "_comment": "Точечный GetFeatureInfo-запрос в eumetsat_point.py — отдельная маленькая геометрия, не путать с motion_window.",
         "half_window_deg": 0.05,
         "grid": 101
+    },
+    "west_window": {
+        "_comment": "Пилотный западный тайл (2026-08-16, план 'мозаика тайлов' для дальнего детекта фронтов) — тот же half_window_deg/tile_size, что и motion_window (то же разрешение км/px), но bbox сдвинут на запад впритык к near-тайлу с нахлёстом overlap_km (для склейки объектов на границе в eumetsat_frontal_track.py). Координаты кандидатов из этого тайла считаются НЕ от геометрического центра тайла, а от Одессы (center_lat/center_lon выше) — единая система координат для склейки с near-tier и для трекера. bbox вычисляется в field_motion_common.py (WEST_BBOX), не хранится тут литералом, чтобы не рассинхронизироваться при правке center_lon/half_window_deg.",
+        "overlap_km": 25.0
     }
 }
