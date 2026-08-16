@@ -1,11 +1,10 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-08-16T06:30:00.000Z",
+  "server_latest_time": "2026-08-16T06:45:00.000Z",
   "bootstrap": true,
   "buffer_before": 9,
   "buffer_size": 9,
   "buffer_times": [
-    "2026-08-16T04:30:00.000Z",
     "2026-08-16T04:45:00.000Z",
     "2026-08-16T05:00:00.000Z",
     "2026-08-16T05:15:00.000Z",
@@ -13,23 +12,24 @@
     "2026-08-16T05:45:00.000Z",
     "2026-08-16T06:00:00.000Z",
     "2026-08-16T06:15:00.000Z",
-    "2026-08-16T06:30:00.000Z"
+    "2026-08-16T06:30:00.000Z",
+    "2026-08-16T06:45:00.000Z"
   ],
   "state_source": "clm_and_ir_or_gc_confirmed",
   "state_area_fraction": 0.0,
   "result": {
-    "timestamp": "2026-08-16T06:58:59Z",
+    "timestamp": "2026-08-16T07:16:35Z",
     "current_state": "clear",
     "station_area_fraction": 0.0,
     "target_type": "cloud_mass",
-    "distance_km_now": 235.0,
-    "bearing_deg": 199.0,
-    "compass": "Ю",
-    "blob_area_km2": 145.0,
+    "distance_km_now": 57.4,
+    "bearing_deg": 84.0,
+    "compass": "В",
+    "blob_area_km2": 56.0,
     "target_id": 0,
     "class": "local",
     "verdict": "скорость посчитать не удалось (поле слишком однородно во всех кадрах)",
-    "probability_percent": 8,
+    "probability_percent": 7,
     "probability_note": "база — близость (скорость не посчиталась, доверие снижено), не физическая модель осадков",
     "trend": {
       "density_fraction_now": 0.0,
@@ -51,40 +51,58 @@
     },
     "candidates": [
       {
-        "centroid_dx_km": -77.19,
-        "centroid_dy_km": -221.94,
-        "area_km2": 145.4,
+        "centroid_dx_km": 57.05,
+        "centroid_dy_km": 6.26,
+        "area_km2": 56.0,
         "class": "local",
         "bbox_km": {
-          "dx_min": -92.53,
-          "dx_max": -77.19,
-          "dy_min": -238.64,
-          "dy_max": -221.94
+          "dx_min": 57.05,
+          "dx_max": 62.81,
+          "dy_min": 6.26,
+          "dy_max": 13.22
         },
-        "elongation_aspect_ratio": 2.68,
-        "elongation_axis_deg": 33.0,
-        "elongation_axis_compass": "СВ-ЮЗ",
+        "elongation_aspect_ratio": 1.24,
+        "elongation_axis_deg": 0.0,
+        "elongation_axis_compass": "С-Ю",
         "frontlike": false,
         "window_spanning": false,
         "target_id": 0
       },
       {
-        "centroid_dx_km": -4.32,
-        "centroid_dy_km": -235.86,
-        "area_km2": 246.8,
-        "class": "local",
+        "centroid_dx_km": -8.15,
+        "centroid_dy_km": -240.03,
+        "area_km2": 338.9,
+        "class": "system",
         "bbox_km": {
-          "dx_min": -35.0,
-          "dx_max": -4.32,
-          "dy_min": -256.73,
-          "dy_max": -235.86
+          "dx_min": -44.59,
+          "dx_max": -7.19,
+          "dy_min": -262.3,
+          "dy_max": -240.03
         },
-        "elongation_aspect_ratio": 3.4,
-        "elongation_axis_deg": 64.0,
+        "elongation_aspect_ratio": 3.63,
+        "elongation_axis_deg": 60.0,
         "elongation_axis_compass": "СВ-ЮЗ",
-        "frontlike": false,
+        "frontlike": true,
         "window_spanning": false,
         "target_id": 1
+      },
+      {
+        "centroid_dx_km": -81.03,
+        "centroid_dy_km": -226.12,
+        "area_km2": 154.8,
+        "class": "local",
+        "bbox_km": {
+          "dx_min": -92.53,
+          "dx_max": -81.03,
+          "dy_min": -248.38,
+          "dy_max": -226.12
+        },
+        "elongation_aspect_ratio": 2.6,
+        "elongation_axis_deg": 18.0,
+        "elongation_axis_compass": "С-Ю",
+        "frontlike": false,
+        "window_spanning": false,
+        "target_id": 2
       }
     ],
     "method_note": "Персистентный буфер до 9 кадров Cloud Mask + CTH (шаг 15 мин, до 2 часов истории), хранится между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр вместо всех заново. Скорость усреднена по всем парам кадров буфера с реальным dt (phase correlation всего поля). Край облака/просвета ищется только среди связных областей >= 40px (~53км²) с учётом прозрачных no-data пикселей. Тренды плотности/высоты/формы — сравнение первого и последнего кадра БУФЕРА в радиусе 50км (окно растёт по мере наполнения буфера, см. buffer_status). Высота — ординальный индекс по цвету (не метры, официальной таблицы нет). Вероятность (только когда сейчас ясно/переменная облачность и есть значимое приближающееся поле) — эвристическая оценка по близости/размеру/уверенности в скорости, не физическая модель осадков. Линейная экстраполяция, годится на ~1 час."
