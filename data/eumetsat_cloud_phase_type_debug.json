@@ -1,14 +1,11 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-08-16T15:40:00.000Z",
+  "server_latest_time": "2026-08-16T16:10:00.000Z",
   "mode": "day",
   "bootstrap": true,
   "buffer_before": 13,
   "buffer_size": 13,
   "buffer_times": [
-    "2026-08-16T13:40:00.000Z",
-    "2026-08-16T13:50:00.000Z",
-    "2026-08-16T14:00:00.000Z",
     "2026-08-16T14:10:00.000Z",
     "2026-08-16T14:20:00.000Z",
     "2026-08-16T14:30:00.000Z",
@@ -18,12 +15,15 @@
     "2026-08-16T15:10:00.000Z",
     "2026-08-16T15:20:00.000Z",
     "2026-08-16T15:30:00.000Z",
-    "2026-08-16T15:40:00.000Z"
+    "2026-08-16T15:40:00.000Z",
+    "2026-08-16T15:50:00.000Z",
+    "2026-08-16T16:00:00.000Z",
+    "2026-08-16T16:10:00.000Z"
   ],
   "result": {
-    "timestamp": "2026-08-16T16:03:15Z",
+    "timestamp": "2026-08-16T16:33:02Z",
     "mode": "day",
-    "unclassified_fraction_now": 0.487,
+    "unclassified_fraction_now": 0.433,
     "phase_ordinal_now": 0.0,
     "phase_ordinal_delta": 0.0,
     "phase_verdict": "без существенных изменений",
@@ -31,29 +31,15 @@
     "type_group_delta": 0.03,
     "type_verdict": "без существенных изменений",
     "target_confirmation": {
-      "confirmed": false,
-      "target_id": 0,
-      "target_area_km2": 109.4,
-      "roi_cloud_fraction": 0.1,
-      "roi_dominant_phase_ordinal": 0.0,
-      "roi_dominant_phase_label": "безоблачно",
-      "verdict": "Phase/Type НЕ подтверждает: в ROI CLM-цели облачность не преобладает — возможно расхождение слоёв"
+      "confirmed": null,
+      "reason": "candidates пуст или отсутствует (снапшот от старой версии cloud_forecast.py?)"
     },
     "system_analysis": {
       "available": false,
-      "reason": "среди кандидатов нет систем синоптического масштаба (только локальные массы)"
+      "reason": "candidates пуст или отсутствует"
     },
     "system_analysis_all": [],
-    "local_analysis_all": [
-      {
-        "target_id": 0,
-        "available": true,
-        "roi_cloud_fraction": 0.1,
-        "confirmed": false,
-        "roi_dominant_phase_label": "безоблачно",
-        "roi_dominant_type_label": "плотная/высокая"
-      }
-    ],
+    "local_analysis_all": [],
     "buffer_status": {
       "frames_in_memory": 13,
       "frames_target": 13,
