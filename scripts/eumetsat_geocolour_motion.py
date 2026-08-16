@@ -184,9 +184,13 @@ def _save_clean_snapshot(rgba):
     ... → geocolour_motion, так что к этому моменту в ТЕКУЩЕМ цикле файл
     уже свежий). Отсутствие файла/пустой список треков — не ошибка,
     просто ничего не подсвечивается (частый случай — активных
-    frontlike-треков может не быть вообще)."""
+    frontlike-треков может не быть вообще).
+
+    Контур береговой линии + точка Одессы (fc.draw_coastline_overlay()/
+    fc.draw_odessa_marker()) — по запросу 2026-08-16 ("ориентир")."""
     try:
         base = Image.fromarray(rgba[:, :, :3], mode="RGB").convert("RGB")
+        base = fc.draw_coastline_overlay(base)
         base = fc.draw_view_radius_circle(base)
         ft_path = os.path.join(BASE_DIR, "data", "eumetsat_frontal_track.json")
         tracks = []
@@ -195,6 +199,7 @@ def _save_clean_snapshot(rgba):
                 tracks = (json.load(f) or {}).get("tracks", [])
         if tracks:
             base = fc.draw_frontal_tracks_overlay(base, tracks)
+        base = fc.draw_odessa_marker(base)
         base.save(SNAPSHOT_FILE)
     except Exception as e:
         print(f"  [WARN] eumetsat_geocolour_motion.py: не удалось сохранить чистый снимок: {e}")
