@@ -183,14 +183,16 @@ def _save_clean_snapshot(rgba):
     порядок в gh_satellite_pipeline.py: cloud_forecast → frontal_track →
     ... → geocolour_motion, так что к этому моменту в ТЕКУЩЕМ цикле файл
     уже свежий). Отсутствие файла/пустой список треков — не ошибка,
-    просто ничего не подсвечивается (частый случай — активных
-    frontlike-треков может не быть вообще).
-
-    Контур береговой линии + точка Одессы (fc.draw_coastline_overlay()/
-    fc.draw_odessa_marker()) — по запросу 2026-08-16 ("ориентир")."""
+    Контур береговой линии (fc.draw_coastline_overlay()) НЕ используется
+    здесь — добавлен было 2026-08-16 по запросу "контур для ориентира", но
+    в тот же день откачен по уточнению: на GC и так натуральный цвет,
+    реальная география УЖЕ видна на снимке днём, а ночью контур
+    накладывается на неточные городские огни и только мешает. Контур
+    оставлен только на CLM (eumetsat_cloud_forecast.py) — там своей
+    географии нет вовсе. Точка Одессы (fc.draw_odessa_marker()) осталась
+    на всех трёх снимках."""
     try:
         base = Image.fromarray(rgba[:, :, :3], mode="RGB").convert("RGB")
-        base = fc.draw_coastline_overlay(base)
         base = fc.draw_view_radius_circle(base)
         ft_path = os.path.join(BASE_DIR, "data", "eumetsat_frontal_track.json")
         tracks = []
