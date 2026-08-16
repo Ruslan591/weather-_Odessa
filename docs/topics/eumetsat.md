@@ -4091,3 +4091,87 @@ tooltip "Условный номер трека — сквозной счётч�
 `eumetsat_target_summary.json` — трек `#43` отрисовался в нужном столбце,
 `colspan="11"` на месте. GitHub API: GET sha → PUT → верифицирующий GET
 + regex — подтверждено.
+
+## 2026-08-16: BUFR-фолбэк для станций, переставших слать SYNOP (FETESTI/MAHMUDIA)
+
+Расследование "наблюдение ещё не получено" у обеих станций трека #43
+(FETESTI, MAHMUDIA). Web-проверка (Meteostat) показала: у WMO 15444
+(FETESTI) архив обрывается на 2021-12-18 — станция, судя по всему,
+перестала слать классический SYNOP на ogimet. Пользователь параллельно
+проверил напрямую и подтвердил: обе станции (15444, 15337) продолжают
+слать **почасовой автоматический BUFR** тем же WMO-индексом. В проекте
+уже был готовый парсер BUFR с Meteomanz (`fetch_bufr_obs.py`,
+`bufr.html`), но захардкоженный под одну станцию (33837, для локальной
+сверки, не для ahead/behind). Обобщили под произвольную станцию и
+подключили как fallback.
+
+**`scripts/fetch_bufr_obs.py`:**
+- `fetch_html()`/`parse_obs()`/`fetch_and_append()` — добавлен параметр
+  `station` (по умолчанию `None` → старое поведение `STATION="33837"`,
+  обратная совместимость с штатным запуском не нарушена — подтверждено
+  diff'ом, вся regex-логика парсинга полей не тронута).
+- Новая `_essentials_from_bufr(obs, dt)` — адаптер BUFR→ТА ЖЕ форма
+  словаря, что `parse_synop_essentials()` в `ground_station_obs_fetch.py`
+  (temp/sea_pressure/pressure_tendency_value/total_cloud_okta/
+  wind_dir_deg/wind_speed_ms/precip_mm/present_weather_code/
+  present_weather_label/is_extreme_weather + `obs_source: "BUFR"`).
+  **Важная находка:** `weather_now` в BUFR-парсере уже использует ТОТ ЖЕ
+  код ВМО 4677, что и ручной SYNOP `ww` (таблица `WW_RU` в
+  `fetch_bufr_obs.py` совпадает по значениям с `WW_LABELS` в
+  `ground_station_obs_fetch.py`) — переиспользовали `WW_LABELS`/
+  `EXTREME_WW_CODES` оттуда вместо дублирования классификации опасных
+  явлений. `cloud_amount` (код ВМО 2700) — почти прямая okta (0-8), 9
+  (небо не видно) намеренно не мапится в `total_cloud_okta`. Период
+  накопления осадков (дескриптор 004024) пока НЕ парсится — `precip_mm`
+  без периода, `precip_period_hours=None`.
+- Новая `fetch_latest_bufr_essentials(station_id, hours_back=4)` — идёт
+  назад по одному часу (BUFR у этих станций почасовой, не 3ч, как
+  SYNOP), возвращает первый успешный essentials или `None`.
+
+**`scripts/ground_station_obs_fetch.py`:** `parse_synop_essentials()`
+теперь тоже возвращает `obs_source: "SYNOP"` — для симметрии, фронтенд
+различает источник по этому полю.
+
+**`scripts/eumetsat_ground_station_verify.py`:** `_get_or_fetch()` — если
+`fetch_latest_obs()` (ogimet/SYNOP) вернул `None`, пробует
+`fetch_latest_bufr_essentials()`; исключение из BUFR-фолбэка ловится и
+не роняет весь цикл верификации (просто `obs=None`, как раньше).
+
+**`nearby_precip.js`:** в `_renderStationObsPanel()` — метка `· BUFR`
+(приглушённая, с tooltip) рядом с временем наблюдения, когда
+`obs.obs_source === "BUFR"`; порог "устарело" для `_obsTimeTag` тоже
+адаптивный — 90 мин для BUFR (почасовой) вместо 200 мин у SYNOP (~3ч).
+
+**Проверено (всё офлайн, meteomanz.com и view.eumetsat.int не в network
+allowlist песочницы — тот же принятый лимит, что раньше):**
+- Diff `fetch_bufr_obs.py` до/после — подтверждено, что существующая
+  regex-логика парсинга полей не тронута, изменения только
+  параметризация станции + новый код.
+- `_essentials_from_bufr()` — изолированный тест на вручную собранном
+  `obs`-словаре (форма подтверждена чтением исходника `parse_obs`):
+  маппинг полей, `cloud_amount=9`→`total_cloud_okta=None`,
+  `weather_now=61`→`is_extreme_weather=False`, `weather_now=None`→не
+  падает. Все прошли.
+- `_get_or_fetch()` в `eumetsat_ground_station_verify.py` — 4 сценария с
+  моками (SYNOP=None→BUFR fallback; оба None; BUFR кинул исключение→не
+  роняет цикл; SYNOP есть→BUFR вообще не вызывается) — все прошли.
+- `nearby_precip.js::_renderStationObsPanel` — BUFR-обс показывает
+  метку, SYNOP-обс не показывает, старые записи без `obs_source` не
+  падают. Все прошли.
+- `py_compile`+`ast.parse` на всех трёх изменённых `.py` — чисто.
+  `node --check` на JS — чисто.
+
+**НЕ проверено на живых данных** — реальный HTML-формат страницы
+Meteomanz для сборки synthetic-теста угадать не удалось (первая попытка
+дала неверные предположения про скобки в `_ext_val`, отброшена; тестировал
+адаптер в обход, минуя вопрос точного формата страницы). Настоящая
+проверка — на следующем прогоне пайплайна, когда `eumetsat_ground_station_verify.py`
+реально дёрнет Meteomanz для FETESTI/MAHMUDIA. Если формат страницы для
+БУФР-станций (автоматических, не главных синоптических) отличается от
+уже проверенного для ст. 33837 — возможны сюрпризы, смотреть логи
+`gh_pipeline.py`/данные `eumetsat_ground_station_verify.json` на
+`obs_source: "BUFR"` и непустые поля.
+
+**Открыто:** период накопления осадков в BUFR (дескриптор 004024) не
+парсится — если понадобится точный `precip_period_hours` для BUFR-обс,
+надо добавить.
