@@ -11,6 +11,12 @@ eumetsat_frontal_track.py). Для каждой станции с известн
 вынесен из eumetsat_frontal_track.py (тот остаётся "чистой локальной
 обработкой", как и был задуман изначально, см. докстринг там).
 
+BUFR-фолбэк (2026-08-16): если ogimet за 9ч ничего не вернул, пробуем
+fetch_bufr_obs.py::fetch_latest_bufr_essentials() (Meteomanz, почасовой
+BUFR) — см. докстринг _get_or_fetch() ниже. Обе ветки возвращают ту же
+форму словаря (parse_synop_essentials()-совместимую, поле obs_source
+различает источник), фронтенд не должен знать разницы.
+
 Пишет data/eumetsat_ground_station_verify.json — {"track_id": {ahead_obs,
 behind_obs}}. eumetsat_frontal_track.py читает этот файл НА СЛЕДУЮЩЕМ
 цикле и подмешивает в свой публичный вывод — тот же паттерн лага в один
@@ -29,6 +35,7 @@ import os
 from datetime import datetime, timezone
 
 from ground_station_obs_fetch import fetch_latest_obs
+from fetch_bufr_obs import fetch_latest_bufr_essentials
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
@@ -72,12 +79,27 @@ def _fresh_enough(fetched_at_str, now):
 
 def _get_or_fetch(existing_entry, wmo_synop_id, now):
     """existing_entry — прошлый результат для ЭТОЙ ЖЕ станции (или None).
-    Возвращает (obs_dict_или_None, fetched_at_str, from_cache_bool)."""
+    Возвращает (obs_dict_или_None, fetched_at_str, from_cache_bool).
+
+    BUFR-фолбэк (2026-08-16): часть станций (найдено на FETESTI/WMO 15444
+    и MAHMUDIA/WMO 15337) больше не шлют классический SYNOP на ogimet
+    (Meteostat подтверждает: данные оборвались в 2021), но продолжают
+    слать почасовой автоматический BUFR тем же WMO-индексом на Meteomanz
+    — см. fetch_bufr_obs.py::fetch_latest_bufr_essentials(). Если SYNOP
+    вернул None, пробуем BUFR; сетевая/парсинг-ошибка BUFR НЕ должна
+    ронять весь цикл верификации — ловим и просто оставляем obs=None
+    (фронтенд уже умеет показывать "наблюдение ещё не получено")."""
     if existing_entry and existing_entry.get("wmo_synop_id") == wmo_synop_id:
         if _fresh_enough(existing_entry.get("fetched_at"), now):
             return existing_entry.get("obs"), existing_entry.get("fetched_at"), True
 
     obs = fetch_latest_obs(wmo_synop_id)
+    if obs is None:
+        try:
+            obs = fetch_latest_bufr_essentials(wmo_synop_id)
+        except Exception as e:
+            print(f"  [WARN] eumetsat_ground_station_verify: BUFR-фолбэк для {wmo_synop_id} не сработал: {e}")
+            obs = None
     fetched_at = now.strftime("%Y-%m-%dT%H:%M:%SZ")
     return obs, fetched_at, False
 
