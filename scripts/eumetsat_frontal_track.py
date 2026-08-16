@@ -1,15 +1,27 @@
 """
 eumetsat_frontal_track.py — трекинг фронтоподобных систем во времени
-(см. docs/topics/eumetsat.md, план "Отслеживание фронтов", шаг 3, 2026-08-14).
+(см. docs/topics/eumetsat.md, план "Отслеживание фронтов", шаг 3, 2026-08-14;
+план "мозаика тайлов" — западный тайл, 2026-08-16).
 
-Читает ТОЛЬКО data/eumetsat_cloud_forecast.json (candidates с class="system",
-frontlike=True, window_spanning=False — ненадёжные по площади/форме объекты
-в трек не берём, см. шаг 1 плана). WMS/сеть не трогает, чистая локальная
-обработка уже посчитанных полей — дёшево, гейта по времени не требует, но
-идемпотентно: если cloud_forecast.json не обновился с прошлого запуска
-(тот сам гейтится 15 мин, а этот скрипт может быть вызван чаще), просто
-ничего не делает — иначе один и тот же кадр учтётся как "новая точка" с
-dt≈0 и заведомо мусорной скоростью.
+Читает data/eumetsat_cloud_forecast.json (near-tier, candidates с
+class="system", frontlike=True, window_spanning=False — ненадёжные по
+площади/форме объекты в трек не берём, см. шаг 1 плана) И
+data/eumetsat_west_watch.json (west-tier, пилотный западный тайл — там
+УЖЕ отфильтровано до frontlike в самом eumetsat_west_watch.py, читаем как
+есть). Оба тайла размечены полем "tile" ("near"/"west"), объекты у границы
+между ними, оказавшиеся ближе MERGE_DIST_KM друг к другу, СКЛЕИВАЮТСЯ в
+один (см. _merge_near_west() — первая версия: оставляем объект с большей
+площадью, настоящего объединения геометрии двух блобов нет, см. коммент
+там). WMS/сеть не трогает, чистая локальная обработка уже посчитанных
+полей — дёшево, гейта по времени не требует, но идемпотентно: если
+cloud_forecast.json не обновился с прошлого запуска (тот сам гейтится
+15 мин, а этот скрипт может быть вызван чаще), просто ничего не делает —
+иначе один и тот же кадр учтётся как "новая точка" с dt≈0 и заведомо
+мусорной скоростью. (west_watch.json гейтится отдельно и независимо
+внутри eumetsat_west_watch.py — читаем его "как есть" на момент запуска,
+без отдельной проверки идемпотентности по его timestamp, см. докстринг
+_merge_near_west() и eumetsat_west_watch.py про почти всегда совпадающие
+timestamp у обоих тиров.)
 
 Персистентное состояние: data/eumetsat_frontal_track_state.json — полная
 история точек по каждому треку (ограничена MAX_POINTS_PER_TRACK), плюс
@@ -40,6 +52,7 @@ from ground_station_selector import select_ahead_behind
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 CLOUD_FORECAST_FILE = os.path.join(DATA_DIR, "eumetsat_cloud_forecast.json")
+WEST_WATCH_FILE = os.path.join(DATA_DIR, "eumetsat_west_watch.json")
 STATE_FILE = os.path.join(DATA_DIR, "eumetsat_frontal_track_state.json")
 OUT_FILE = os.path.join(DATA_DIR, "eumetsat_frontal_track.json")
 
@@ -120,6 +133,52 @@ def _by_target_id(path, key_name="system_analysis_all"):
     return {r["target_id"]: r for r in rows}
 
 
+def _merge_near_west(near_list, west_list):
+    """Склейка кандидатов near-tier и west-tier на границе тайлов (нахлёст
+    WEST_TILE_OFFSET, см. field_motion_common.py) — план "мозаика тайлов",
+    обсуждение с пользователем 2026-08-16. Первая версия: если near- и
+    west-кандидат оказались ближе MERGE_DIST_KM друг к другу, считаем их
+    ОДНИМ физическим объектом (сегментация независимая в двух тайлах,
+    поэтому один и тот же фронт у самой границы может дать два centroid
+    с небольшим расхождением) — оставляем только тот с БОЛЬШЕЙ площадью
+    (не настоящее объединение геометрии двух блобов — это заявленное
+    ограничение первой версии, см. докстринг модуля; уточнить после того,
+    как накопятся живые случаи в зоне нахлёста).
+    MERGE_DIST_KM=80: ширина нахлёста 25км + запас на типичный радиус
+    крупной системы (наблюдались area_km2 в разы больше LARGE_SYSTEM_AREA_KM2
+    у near-tier, что даёт эффективный радиус в десятки км) — подобрано на
+    глаз, не откалибровано по живым данным двух тайлов (их пока просто нет).
+    Дубли ВНУТРИ одного тайла невозможны — каждый тайл сегментируется
+    независимо и один раз за кадр."""
+    MERGE_DIST_KM = 80.0
+    combined = near_list + west_list
+    used = set()
+    result = []
+    for i, a in enumerate(combined):
+        if i in used:
+            continue
+        group = [i]
+        for j in range(i + 1, len(combined)):
+            if j in used or combined[j].get("tile") == a.get("tile"):
+                continue
+            b = combined[j]
+            dist_km = math.hypot(
+                a["centroid_dx_km"] - b["centroid_dx_km"],
+                a["centroid_dy_km"] - b["centroid_dy_km"],
+            )
+            if dist_km <= MERGE_DIST_KM:
+                group.append(j)
+        used.update(group)
+        if len(group) > 1:
+            best = max(group, key=lambda k: combined[k].get("area_km2") or 0)
+            rep = dict(combined[best])
+            rep["merged_tiles"] = sorted({combined[k]["tile"] for k in group})
+            result.append(rep)
+        else:
+            result.append(a)
+    return result
+
+
 def main():
     cf = _load_json(CLOUD_FORECAST_FILE, None)
     if not cf or "timestamp" not in cf:
@@ -137,10 +196,29 @@ def main():
         return
 
     frontlike_now = [
-        c for c in cf.get("candidates", [])
+        {**c, "tile": "near"} for c in cf.get("candidates", [])
         if c.get("class") == "system" and c.get("frontlike") is True
         and not c.get("window_spanning", False)
     ]
+
+    # west-tier — читаем что бы то ни было СВЕЖЕЕ в eumetsat_west_watch.json
+    # прямо сейчас (у него свой независимый гейт по времени кадра CLM внутри
+    # eumetsat_west_watch.py, см. докстринг там — НЕ синхронизирован жёстко
+    # с cf_ts_str, но оба тира читают тот же слой msg_fes:clm с того же
+    # сервера, поэтому на практике их timestamp почти всегда совпадает,
+    # когда оба успешно отработали в одном цикле пайплайна). Кандидаты там
+    # УЖЕ отфильтрованы до frontlike (см. eumetsat_west_watch.py) — фильтр
+    # ниже просто защитный, на случай будущих изменений формата.
+    west_data = _load_json(WEST_WATCH_FILE, None)
+    west_frontlike = []
+    if west_data:
+        west_frontlike = [
+            {**c, "tile": c.get("tile", "west")} for c in west_data.get("candidates", [])
+            if c.get("class") == "system" and c.get("frontlike") is True
+            and not c.get("window_spanning", False)
+        ]
+
+    frontlike_now = _merge_near_west(frontlike_now, west_frontlike)
 
     tracks = state.get("tracks", [])
     next_track_id = state.get("next_track_id", 0)
@@ -189,6 +267,7 @@ def main():
             "aspect_ratio": c.get("elongation_aspect_ratio"),
             "area_km2": c.get("area_km2"),
             "target_id": c.get("target_id"),
+            "tile": c.get("tile"),
         })
         tracks[ti]["points"] = tracks[ti]["points"][-MAX_POINTS_PER_TRACK:]
         tracks[ti]["last_seen"] = cf_ts_str
@@ -209,6 +288,7 @@ def main():
                 "aspect_ratio": c.get("elongation_aspect_ratio"),
                 "area_km2": c.get("area_km2"),
                 "target_id": c.get("target_id"),
+                "tile": c.get("tile"),
             }],
         })
         next_track_id += 1
