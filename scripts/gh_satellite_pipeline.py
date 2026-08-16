@@ -510,7 +510,12 @@ def main():
     check_eumetsat_precip_motion()
     check_eumetsat_geocolour_motion()
     check_eumetsat_target_summary()
-    check_eumetsat_anim_render()
+    # check_eumetsat_anim_render() убран из цикла 2026-08-16 (решение: закрыть
+    # eumetsat.html/визуальный браузер снимков, сосредоточиться на nearby.html
+    # и детекте фронтов — самый тяжёлый шаг пайплайна, до 600с, 12 слоёв x
+    # до 13 GetMap-запросов). Функция и её выход (data/anim/*) НЕ удалены —
+    # оставлена возможность вернуть вызов обратно одной строкой, если
+    # понадобится визуальный браузер снова.
     check_eumetsat_far_watch()
     check_eumetsat_very_far_watch()
 
