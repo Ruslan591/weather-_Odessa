@@ -26,9 +26,10 @@ HEADERS = {
 
 # ── HTML-парсинг ──────────────────────────────────────────────────────────────
 
-def fetch_html(dt: datetime.datetime) -> str:
+def fetch_html(dt: datetime.datetime, station: str = None) -> str:
+    station = station or STATION
     url = (
-        f"https://www.meteomanz.com/sy1?ty=hd&ind={STATION}&l=1"
+        f"https://www.meteomanz.com/sy1?ty=hd&ind={station}&l=1"
         f"&d1={dt.day:02d}&m1={dt.month:02d}&y1={dt.year}"
         f"&d2={dt.day:02d}&m2={dt.month:02d}&y2={dt.year}"
         f"&h1={dt.hour:02d}Z&h2={dt.hour:02d}Z&min=0&rt=0&ext=1"
@@ -76,7 +77,8 @@ def _txt(html: str, label: str):
     txt = re.sub(r'\s*\(-?[\d.]+\)\s*$', '', raw).strip()
     return txt or None
 
-def parse_obs(html: str, dt: datetime.datetime) -> dict | None:
+def parse_obs(html: str, dt: datetime.datetime, station: str = None) -> dict | None:
+    station = station or STATION
     if "BUFR report" not in html or "No data for the selected dates" in html:
         return None
 
@@ -291,7 +293,7 @@ def parse_obs(html: str, dt: datetime.datetime) -> dict | None:
 
     obs = {
         "dt":      dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "station": STATION,
+        "station": station,
 
         # Давление (Па → гПа, тенденция Па*10 → гПа)
         "station_pressure":       round(_ext_val(html, "010004") / 100, 1) if _ext_val(html, "010004") else None,
@@ -396,21 +398,97 @@ def dt_exists(records: list, dt: datetime.datetime) -> bool:
     key = dt.strftime("%Y-%m-%dT%H:%M:%SZ")
     return any(r.get("dt") == key for r in records)
 
-# ── Основная логика ───────────────────────────────────────────────────────────
+# ── BUFR как fallback для произвольной станции (не только 33837) ─────────
+# Добавлено 2026-08-16. Находка: FETESTI (WMO 15444) и MAHMUDIA (WMO
+# 15337) — станции ahead/behind трека фронта — больше не шлют классический
+# SYNOP на ogimet (Meteostat подтверждает: данные оборвались в 2021), но
+# продолжают слать почасовой АВТОМАТИЧЕСКИЙ BUFR через тот же WMO-индекс
+# на Meteomanz. Ниже — обобщение fetch_html()/parse_obs() (уже сделано
+# выше, station-параметр) плюс адаптер к той же форме словаря, что
+# ground_station_obs_fetch.py::parse_synop_essentials() — чтобы
+# eumetsat_ground_station_verify.py и фронтенд не знали разницы между
+# SYNOP и BUFR-фолбэком, кроме поля obs_source.
 
-def fetch_and_append(dt: datetime.datetime, dry_run=False) -> bool:
+def _essentials_from_bufr(obs: dict, dt: datetime.datetime) -> dict:
+    """Адаптер BUFR (Meteomanz, см. parse_obs) -> essentials-словарь той
+    же формы, что parse_synop_essentials() в ground_station_obs_fetch.py.
+    weather_now в BUFR закодирован ТЕМ ЖЕ кодом ВМО 4677, что и ручной
+    SYNOP ww (проверено — таблица WW_RU выше совпадает по значениям с
+    WW_LABELS), поэтому переиспользуем WW_LABELS/EXTREME_WW_CODES оттуда,
+    а не заводим вторую копию классификации опасных явлений."""
+    from ground_station_obs_fetch import WW_LABELS, EXTREME_WW_CODES
+
+    cloud_okta = None
+    ca = obs.get("cloud_amount")
+    if ca is not None and 0 <= ca <= 8:
+        cloud_okta = int(ca)
+
+    ww_raw = obs.get("weather_now")
+    ww_code = int(ww_raw) if ww_raw is not None else None
+    present_weather_label = WW_LABELS.get(ww_code, f"явление ww={ww_code}") if ww_code is not None else None
+    is_extreme = ww_code in EXTREME_WW_CODES if ww_code is not None else False
+
+    wind_dir_raw = obs.get("wind_dir")
+
+    return {
+        "obs_time": dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "temp": obs.get("temp"),
+        "station_pressure": obs.get("station_pressure"),
+        "sea_pressure": obs.get("slp"),
+        "pressure_tendency_code": None,  # BUFR даёт готовое число (010061), не код 0-8, как в SYNOP
+        "pressure_tendency_value": obs.get("pressure_tendency_val"),
+        "total_cloud_okta": cloud_okta,
+        "wind_dir_deg": int(wind_dir_raw) if wind_dir_raw is not None else None,
+        "wind_speed_ms": obs.get("wind_spd_ms"),
+        "precip_mm": obs.get("precip_period1_mm"),
+        "precip_period_hours": None,  # BUFR период накопления (004024) пока не парсится
+        "present_weather_code": ww_code,
+        "present_weather_label": present_weather_label,
+        "is_extreme_weather": is_extreme,
+        "obs_source": "BUFR",
+    }
+
+
+def fetch_latest_bufr_essentials(station_id: str, hours_back: int = 4):
+    """Идёт назад от текущего часа по одному часу (BUFR у этих станций —
+    почасовой), до hours_back попыток, возвращает essentials-словарь на
+    первом успешном часе или None, если ничего не нашлось за это окно.
+    Используется как fallback в eumetsat_ground_station_verify.py, когда
+    fetch_latest_obs() (SYNOP/ogimet) вернул None."""
+    now = datetime.datetime.now(datetime.timezone.utc).replace(
+        tzinfo=None, minute=0, second=0, microsecond=0
+    )
+    for h in range(hours_back):
+        dt = now - datetime.timedelta(hours=h)
+        try:
+            html = fetch_html(dt, station=station_id)
+        except Exception as e:
+            log.debug(f"[BUFR fallback] {station_id} {dt:%Y-%m-%d %H}:00 UTC fetch ошибка: {e}")
+            time.sleep(0.3)
+            continue
+        obs = parse_obs(html, dt, station=station_id)
+        if obs is None:
+            time.sleep(0.3)
+            continue
+        return _essentials_from_bufr(obs, dt)
+    return None
+
+# ── Основная логика (штатный запуск для ст. 33837, без изменений) ────────
+
+def fetch_and_append(dt: datetime.datetime, dry_run=False, station: str = None) -> bool:
+    station = station or STATION
     records = load_bufr_json(dt.year)
     if dt_exists(records, dt):
         log.info(f"[BUFR] уже есть: {dt:%Y-%m-%d %H}:00 UTC")
         return False
 
     try:
-        html = fetch_html(dt)
+        html = fetch_html(dt, station=station)
     except Exception as e:
         log.warning(f"[BUFR] fetch ошибка {dt:%Y-%m-%d %H}:00 UTC: {e}")
         return False
 
-    obs = parse_obs(html, dt)
+    obs = parse_obs(html, dt, station=station)
     if obs is None:
         log.info(f"[BUFR] нет данных: {dt:%Y-%m-%d %H}:00 UTC")
         return False
