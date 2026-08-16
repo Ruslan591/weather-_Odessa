@@ -87,6 +87,26 @@ def check_eumetsat_cloud_forecast():
         print(f"  [WARN] eumetsat_cloud_forecast.py: {e}")
 
 
+def check_eumetsat_west_watch():
+    # Пилотный западный тайл (2026-08-16, план "мозаика тайлов") — детект
+    # ТОЛЬКО frontlike-систем (см. докстринг eumetsat_west_watch.py), без
+    # multi-frame буфера. Собственный гейт ВНУТРИ скрипта — по времени
+    # кадра CLM, объявленному сервером (не искусственный wall-clock
+    # интервал, тот же принцип, что у *_motion.py/cloud_forecast.py), тут
+    # только подстраховка по subprocess-таймауту. До 3 WMS-запросов на
+    # непустой цикл (CLM+IR+GC), 0 — на холостой. Вызывается ДО
+    # check_eumetsat_frontal_track(), чтобы трекер видел свежий
+    # eumetsat_west_watch.json в том же цикле (тот же порядок, что near-tier
+    # cloud_forecast -> frontal_track).
+    try:
+        subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "eumetsat_west_watch.py")],
+            cwd=BASE_DIR, capture_output=False, timeout=90
+        )
+    except Exception as e:
+        print(f"  [WARN] eumetsat_west_watch.py: {e}")
+
+
 def check_eumetsat_frontal_track():
     # Трекинг фронтоподобных систем во времени (шаг 3 плана "Отслеживание
     # фронтов", см. docs/topics/eumetsat.md, 2026-08-14) — читает уже
@@ -386,6 +406,7 @@ def git_push_satellite():
             "data/eumetsat_cloud_forecast.json",
             "data/eumetsat_cloud_forecast_debug.json",
             "data/eumetsat_cloud_buffer.npz",
+            "data/eumetsat_west_watch.json",
             "data/eumetsat_frontal_track.json",
             "data/eumetsat_frontal_track_state.json",
             "data/eumetsat_ground_station_verify.json",
@@ -501,6 +522,7 @@ def main():
     # оставлена в файле неиспользуемой — если понадобится, легко вернуть
     # вызов обратно.
     check_eumetsat_cloud_forecast()
+    check_eumetsat_west_watch()
     check_eumetsat_frontal_track()
     check_eumetsat_ground_station_verify()
     check_eumetsat_cloud_phase_type()
