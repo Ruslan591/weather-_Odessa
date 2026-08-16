@@ -42,6 +42,19 @@ CENTER_LAT = _GEO["center_lat"]
 CENTER_LON = _GEO["center_lon"]
 STATION_LABEL = _GEO["station_label"]
 
+# Контур побережья near-окна — data/coastline_near.json, статичные точки,
+# см. комментарий в самом файле (посчитан один раз 2026-08-16, не
+# runtime-зависимость). Не критично, если файла нет (старый checkout,
+# ручной запуск) — тогда просто пустой список, draw_coastline_overlay()
+# рисовать нечего, но не падает.
+_COASTLINE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                "data", "coastline_near.json")
+try:
+    with open(_COASTLINE_PATH, "r", encoding="utf-8") as _f:
+        COASTLINE_NEAR = json.load(_f).get("polylines", [])
+except FileNotFoundError:
+    COASTLINE_NEAR = []
+
 
 def get_layer_latest_time(layer_name, timeout=25):
     """Спрашивает GetCapabilities и возвращает (default_iso, period_iso) для
@@ -1063,6 +1076,52 @@ def load_geocolour_confirmed_mask():
         return None, False
     packed = frames[-1]
     return packed[1] > 0.5, True
+
+
+def draw_coastline_overlay(base_image, color=(140, 165, 130), alpha=130, width=1):
+    """Дорисовывает контур береговой линии (суша/море) поверх снимка — по
+    запросу 2026-08-16 ("не считаешь нужным добавить контур? для
+    ориентира") — ночью/на CLM/ИК географию иначе не разобрать (нет
+    натурального цвета, только маска облака/яркость). Источник —
+    COASTLINE_NEAR (data/coastline_near.json, статичные точки [lon,lat],
+    посчитаны один раз через global-land-mask, см. комментарий в файле).
+    Та же RGBA-оверлей-техника, что у draw_view_radius_circle() —
+    полупрозрачная линия, не навязчивая поверх снимка. Возвращает НОВОЕ
+    Image (режим RGB), не мутирует переданное."""
+    if not COASTLINE_NEAR:
+        return base_image
+    overlay = Image.new("RGBA", base_image.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    cx = (base_image.width - 1) / 2.0
+    cy = (base_image.height - 1) / 2.0
+    for polyline in COASTLINE_NEAR:
+        pts = []
+        for lon, lat in polyline:
+            dx_km = (lon - CENTER_LON) * KM_PER_DEG_LON
+            dy_km = (CENTER_LAT - lat) * KM_PER_DEG_LAT  # y растёт вниз на изображении
+            pts.append((cx + dx_km / KM_PER_PX_X, cy + dy_km / KM_PER_PX_Y))
+        if len(pts) >= 2:
+            draw.line(pts, fill=color + (alpha,), width=width)
+    return Image.alpha_composite(base_image.convert("RGBA"), overlay).convert("RGB")
+
+
+def draw_odessa_marker(base_image, color=(255, 255, 255), radius_px=4, outline_color=(20, 20, 30), outline_width=1):
+    """Точка-маркер Одессы (станция СИНОП 33837) — по тому же запросу
+    2026-08-16, что и draw_coastline_overlay(). Центр снимка ВСЕГДА и есть
+    Одесса (CENTER_LAT/CENTER_LON из geo_config.json — та же точка, от
+    которой считаются dx_km/dy_km для всех кандидатов/треков/станций),
+    поэтому маркер рисуется прямо в центре кадра, без пересчёта координат.
+    Тонкая тёмная обводка — чтобы белая точка не терялась на светлом фоне
+    (облако на CLM/дневной GC тоже светлые). Возвращает НОВОЕ Image
+    (режим RGB), не мутирует переданное."""
+    overlay = Image.new("RGBA", base_image.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    cx = (base_image.width - 1) / 2.0
+    cy = (base_image.height - 1) / 2.0
+    r = radius_px
+    draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=color + (255,),
+                 outline=outline_color + (255,), width=outline_width)
+    return Image.alpha_composite(base_image.convert("RGBA"), overlay).convert("RGB")
 
 
 def draw_view_radius_circle(base_image, radius_km=None, color=(255, 210, 90), alpha=110, width=2):
