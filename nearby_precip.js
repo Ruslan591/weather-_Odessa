@@ -37,6 +37,8 @@ let _eumetsatVeryFarWatchData      = null;
 let _eumetsatVeryFarWatchFetchedAt = 0;
 let _eumetsatTargetSummaryData      = null;
 let _eumetsatTargetSummaryFetchedAt = 0;
+let _eumetsatWestWatchData      = null;
+let _eumetsatWestWatchFetchedAt = 0;
 let _eumetsatPrecipHistoryData      = null;
 let _eumetsatPrecipHistoryFetchedAt = 0;
 let _eumetsatLightningHistoryData      = null;
@@ -266,6 +268,29 @@ async function loadEumetsatVeryFarWatch(){
         renderNearbyPrecipCard();
     } catch(e){
         _eumetsatVeryFarWatchFetchedAt = 0;
+    }
+}
+
+// Западный тайл (пилот, план "мозаика тайлов", 2026-08-16/17) — гейт по
+// времени кадра CLM внутри eumetsat_west_watch.py (не искусственный
+// wall-clock интервал, см. докстринг там), но качает данные не каждый
+// цикл (жёсткий IR+GC-фильтр + STALE_TRACK_MINUTES означают, что кадры
+// могут быть редкими) — 20 мин клиентского опроса как у far_watch,
+// с запасом.
+async function loadEumetsatWestWatch(){
+    if(Date.now() - _eumetsatWestWatchFetchedAt < 20 * 60000) return;
+    _eumetsatWestWatchFetchedAt = Date.now();
+    try {
+        const r = await fetch(
+            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_west_watch.json",
+            { cache: "no-store" }
+        );
+        if(!r.ok) return;
+        const j = await r.json();
+        if(j && j.timestamp) _eumetsatWestWatchData = j;
+        renderNearbyPrecipCard();
+    } catch(e){
+        _eumetsatWestWatchFetchedAt = 0;
     }
 }
 
@@ -1104,6 +1129,37 @@ function _renderIrSnapshot(irData){
     </div>`;
 }
 
+// Снимки ЗАПАДНОГО тайла (пилот, план "мозаика тайлов", 2026-08-16) —
+// В АККОРДЕОНЕ (свёрнут по умолчанию), по прямому запросу пользователя
+// 2026-08-17 ("Снимки выводим в аккордеоне") — в отличие от near-tier
+// снимков выше (всегда развёрнуты, это основной тайл), west — вторичный/
+// диагностический, не должен быть на виду по умолчанию. GeoColour и CLM
+// сохраняются КАЖДЫЙ непустой цикл eumetsat_west_watch.py вместе (тот же
+// момент времени = тот же timestamp), в отличие от near-tier, где это два
+// разных файла/скрипта — здесь один источник data (geocolourData==clmData
+// по факту, оставлено одним параметром для ясности).
+function _renderWestSnapshot(westData){
+    if(!westData || !westData.timestamp) return "";
+    const ts = _obsTimeTag(westData.timestamp, 20);
+    const n = (westData.candidates || []).length;
+    const gcSrc = `https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_west_snapshot_geocolour.png?v=${encodeURIComponent(westData.timestamp)}`;
+    const clmSrc = `https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_west_snapshot_clm.png?v=${encodeURIComponent(westData.timestamp)}`;
+    return `<details style="margin-top:10px;">
+        <summary style="cursor:pointer; color:#72c8ff; font-size:13px; font-weight:600;">🧩 Западный тайл — снимки ${ts} (кандидатов: ${n})</summary>
+        <div style="margin-top:6px;">
+            <div style="color:#777; font-size:11px; margin-bottom:3px;">GeoColour</div>
+            <img src="${gcSrc}" alt="Западный тайл — GeoColour"
+                 style="width:100%; border-radius:8px; display:block;"
+                 onerror="this.parentElement.style.display='none';">
+            <div style="color:#777; font-size:11px; margin:8px 0 3px;">Cloud Mask (CLM)</div>
+            <img src="${clmSrc}" alt="Западный тайл — CLM"
+                 style="width:100%; border-radius:8px; display:block;"
+                 onerror="this.parentElement.style.display='none';">
+            <div style="color:#777; font-size:11px; margin-top:3px;">Пилотный тайл впритык к near-tier, западнее Одессы (~190-570км) — детектит ТОЛЬКО frontlike-системы для блока "Треки фронтов" выше, локальные очаги и синоптические системы здесь не считаются.</div>
+        </div>
+    </details>`;
+}
+
 // Последний снимок Cloud Mask (CLM) — бинарная маска облако/ясно, ТО, ЧТО
 // РЕАЛЬНО является входом детектора кандидатов/frontlike (см.
 // eumetsat_cloud_forecast.py::_classify_cloud_mask/_significant_blobs) —
@@ -1209,6 +1265,7 @@ function renderNearbyPrecipCard(){
         ${_renderLocalCandidatesTable(_eumetsatTargetSummaryData && _eumetsatTargetSummaryData.local_candidates, _eumetsatTargetSummaryData && _eumetsatTargetSummaryData.local_suppressed_count)}
         ${_renderSystemCandidatesTable(_eumetsatTargetSummaryData && _eumetsatTargetSummaryData.system_candidates, _eumetsatTargetSummaryData && _eumetsatTargetSummaryData.system_suppressed_count)}
         ${_renderFrontalTracksTable(_eumetsatTargetSummaryData && _eumetsatTargetSummaryData.frontal_tracks)}
+        ${_renderWestSnapshot(_eumetsatWestWatchData)}
         ${_renderGeocolourSnapshot(_eumetsatGeocolourMotionData)}
         ${_renderIrSnapshot(_eumetsatIrMotionData)}
         ${_renderClmSnapshot(_eumetsatForecastData)}
