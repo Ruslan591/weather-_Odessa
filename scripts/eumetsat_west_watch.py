@@ -74,6 +74,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_west_watch.json")
 CLM_SNAPSHOT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_west_snapshot_clm.png")
 GEOCOLOUR_SNAPSHOT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_west_snapshot_geocolour.png")
+IR_SNAPSHOT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_west_snapshot_ir.png")
 
 LAYER_CLM = "msg_fes:clm"
 LAYER_IR105 = "mtg_fd:ir105_hrfi"
@@ -267,6 +268,21 @@ def _detect_frontlike_systems(is_cloud_mask, valid_mask):
     return result
 
 
+def _build_clm_snapshot_image(is_cloud, valid):
+    """Тот же кастомный рекол-стайлинг, что у near-tier
+    (eumetsat_cloud_forecast.py::_save_clm_snapshot) — НЕ сырые пиксели
+    WMS-сервера (те дают синий=вода/зелёный=суша/белый=облако — у
+    западного тайла суши намного больше, чем у near-tier у моря, отсюда
+    и был вопрос "почему у west фон зелёный, а не синий" 2026-08-17: это
+    была не намеренная разница, а забытая перекраска). Тёмно-синий=ясно,
+    белый=облако, серый=нет данных — ОДИНАКОВО на обоих тайрах теперь."""
+    rgb = np.zeros((TILE_SIZE, TILE_SIZE, 3), dtype=np.uint8)
+    rgb[:, :] = (60, 60, 68)
+    rgb[valid & ~is_cloud] = (18, 22, 40)
+    rgb[valid & is_cloud] = (232, 232, 238)
+    return Image.fromarray(rgb, mode="RGB")
+
+
 def _confirm_ir(system, ir_gray):
     frame_median = float(np.median(ir_gray))
     frame_std = float(ir_gray.std()) or 1.0
@@ -323,35 +339,70 @@ def main():
         print(f"  [WARN] eumetsat_west_watch: CLM недоступен ({e}), пропуск цикла")
         return
 
-    # Снимки для визуальной проверки границ тайла (запрос пользователя
-    # 2026-08-16, "выведешь снимки нового квадрата") — сохраняются КАЖДЫЙ
-    # непустой (не-SKIP) цикл, независимо от того, найдены ли frontlike-
-    # системы. CLM бесплатен (уже качаем для детекта). GeoColour — ДОПОЛНИТЕЛЬНЫЙ
-    # запрос по сравнению с прежней логикой (раньше GC качался, только если
-    # нашлись frontlike-системы, экономя запрос на пустых циклах) — осознанный
-    # компромисс по прямому запросу пользователя: без него не на что смотреть
-    # при "0 систем". Если снимки перестанут быть нужны — просто убрать
-    # обе Image.fromarray(...).save(...) секции ниже, на детект это не влияет.
+    is_cloud, valid = _classify_clm(clm_arr)
+    systems = _detect_frontlike_systems(is_cloud, valid)
+
+    # --- Снимки для визуальной проверки границ тайла (запрос пользователя
+    # 2026-08-16/17) — CLM, GeoColour, ИК сохраняются КАЖДЫЙ непустой цикл,
+    # независимо от того, найдены ли frontlike-системы. Все три — теперь
+    # ДОРОГЕ по сети, чем раньше (было: CLM всегда + GC только при
+    # найденных системах; стало: CLM+GC+ИК ВСЕГДА, до 3 запросов на
+    # холостой цикл вместо 1-2) — осознанный компромисс по прямому запросу
+    # пользователя ("добавь ИК снимок"), продолжающий компромисс с GC от
+    # 2026-08-16. Если снимки станут не нужны — просто убрать блок ниже,
+    # на детект/подтверждение это не влияет (ir_gray/gc_is_cloud всё равно
+    # нужны для _confirm_ir/_confirm_gc, если есть кандидаты).
+    #
+    # Оверлеи (запрос 2026-08-17: "хоть какие-то ориентиры в GeoColour
+    # есть, а в ИК и CLM никаких" + "дорисуй окружность обзора" + "границы
+    # (контуры) нарисуй"; та же origin_dx_km/dy_km-генерализация в
+    # field_motion_common.py, что у трёх draw_*-функций) — политика
+    # СКОПИРОВАНА 1-в-1 с near-tier (см. eumetsat_geocolour_motion.py/
+    # eumetsat_ir_motion.py/eumetsat_cloud_forecast.py): GeoColour/ИК —
+    # только окружность+маркер Одессы (натуральная картинка/яркостный
+    # контраст уже дают ориентиры, контур береговой линии избыточен и на
+    # west-тайле всё равно почти ничего не покажет — там нет моря в кадре);
+    # CLM — окружность+маркер+КОНТУР БЕРЕГОВОЙ ЛИНИИ (своей географии нет
+    # вообще). Маркер Одессы и бо́льшая часть окружности физически ВНЕ
+    # кадра западного тайла (Одесса ~360км восточнее его центра) — виден
+    # только небольшой кусок дуги окружности у восточного края (там же,
+    # где near-tier и west-tier перекрываются) — это ожидаемо, не ошибка.
     try:
-        Image.fromarray(clm_arr).save(CLM_SNAPSHOT_FILE)
+        clm_img = _build_clm_snapshot_image(is_cloud, valid)
+        clm_img = fc.draw_coastline_overlay(clm_img, origin_dx_km=OFFSET_DX_KM, origin_dy_km=OFFSET_DY_KM)
+        clm_img = fc.draw_view_radius_circle(clm_img, origin_dx_km=OFFSET_DX_KM, origin_dy_km=OFFSET_DY_KM)
+        clm_img = fc.draw_odessa_marker(clm_img, origin_dx_km=OFFSET_DX_KM, origin_dy_km=OFFSET_DY_KM)
+        clm_img.save(CLM_SNAPSHOT_FILE)
     except Exception as e:
         print(f"  [WARN] eumetsat_west_watch: не удалось сохранить CLM snapshot ({e})")
 
     is_day = fc.is_daytime(server_latest_iso)
+
     gc_arr = None
     try:
         gc_arr = fc.fetch_map_custom(LAYER_GEOCOLOUR, WEST_BBOX, TILE_SIZE, TILE_SIZE, time_iso=server_latest_iso)
-        Image.fromarray(gc_arr).save(GEOCOLOUR_SNAPSHOT_FILE)
+        gc_img = Image.fromarray(gc_arr).convert("RGB")
+        gc_img = fc.draw_view_radius_circle(gc_img, origin_dx_km=OFFSET_DX_KM, origin_dy_km=OFFSET_DY_KM)
+        gc_img = fc.draw_odessa_marker(gc_img, origin_dx_km=OFFSET_DX_KM, origin_dy_km=OFFSET_DY_KM)
+        gc_img.save(GEOCOLOUR_SNAPSHOT_FILE)
     except Exception as e:
         print(f"  [WARN] eumetsat_west_watch: GeoColour/snapshot недоступен ({e})")
 
-    is_cloud, valid = _classify_clm(clm_arr)
-    systems = _detect_frontlike_systems(is_cloud, valid)
+    ir_arr = None
+    ir_gray = None
+    try:
+        ir_arr = fc.fetch_map_custom(LAYER_IR105, WEST_BBOX, TILE_SIZE, TILE_SIZE,
+                                      time_iso=server_latest_iso, style=STYLE_IR105, crs="EPSG:4326")
+        ir_gray = fc.to_grayscale_luminance(ir_arr)
+        ir_img = Image.fromarray(ir_arr).convert("RGB")
+        ir_img = fc.draw_view_radius_circle(ir_img, origin_dx_km=OFFSET_DX_KM, origin_dy_km=OFFSET_DY_KM)
+        ir_img = fc.draw_odessa_marker(ir_img, origin_dx_km=OFFSET_DX_KM, origin_dy_km=OFFSET_DY_KM)
+        ir_img.save(IR_SNAPSHOT_FILE)
+    except Exception as e:
+        print(f"  [WARN] eumetsat_west_watch: ИК/snapshot недоступен ({e}), ir_confirmation=None для всех")
+        ir_gray = None
 
     if not systems:
-        # Нет ни одной frontlike-системы в этом кадре — не тратим доп.
-        # запрос на IR-подтверждение пустого списка (GC уже скачан выше —
-        # для снимка, см. коммент про снимки).
         out = {
             "timestamp": server_latest_iso,
             "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -365,16 +416,6 @@ def main():
         print("  [OK] eumetsat_west_watch: 0 frontlike-систем")
         return
 
-    try:
-        ir_arr = fc.fetch_map_custom(LAYER_IR105, WEST_BBOX, TILE_SIZE, TILE_SIZE,
-                                      time_iso=server_latest_iso, style=STYLE_IR105, crs="EPSG:4326")
-        ir_gray = fc.to_grayscale_luminance(ir_arr)
-    except Exception as e:
-        print(f"  [WARN] eumetsat_west_watch: IR недоступен ({e}), ir_confirmation=None для всех")
-        ir_gray = None
-
-    # GeoColour для confirmation — переиспользуем УЖЕ скачанный gc_arr выше
-    # (снимок), второй запрос не делаем.
     gc_is_cloud = None
     if gc_arr is not None:
         try:
