@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-17T06:18:04Z",
+  "timestamp": "2026-08-17T06:33:59Z",
   "buffer_size": 6,
   "buffer_span_minutes": 50,
   "observed_area": {
@@ -15,25 +15,25 @@
   "valid": false,
   "verdict": "нет значимой облачности для оценки движения",
   "area_fraction_over_time": [
-    0.773,
-    0.478,
     0.278,
     0.129,
     0.042,
-    0.009
+    0.009,
+    0.003,
+    0.002
   ],
-  "area_trend_delta": -0.764,
+  "area_trend_delta": -0.276,
   "area_trend_verdict": "сокращается",
   "station_state": "clear",
   "station_area_fraction": 0.0,
-  "cloud_mass_distance_km": 115.6,
-  "cloud_mass_bearing_deg": 103.0,
+  "cloud_mass_distance_km": 141.5,
+  "cloud_mass_bearing_deg": 89.0,
   "cloud_mass_compass": "В",
-  "cloud_mass_area_km2": 1393,
+  "cloud_mass_area_km2": 109,
   "target_confirmation": {
     "confirmed": false,
     "target_id": 0,
-    "target_area_km2": 56.0,
+    "target_area_km2": 84.1,
     "roi_cloud_fraction": 0.0,
     "verdict": "GeoColour НЕ подтверждает: в ROI CLM-цели облачность не преобладает — возможно расхождение слоёв"
   },
@@ -41,7 +41,13 @@
     {
       "target_id": 5,
       "available": true,
-      "roi_cloud_fraction": 0.831,
+      "roi_cloud_fraction": 0.576,
+      "confirmed": true
+    },
+    {
+      "target_id": 6,
+      "available": true,
+      "roi_cloud_fraction": 0.695,
       "confirmed": true
     }
   ],
@@ -75,12 +81,6 @@
       "available": true,
       "roi_cloud_fraction": 0.0,
       "confirmed": false
-    },
-    {
-      "target_id": 6,
-      "available": true,
-      "roi_cloud_fraction": 0.956,
-      "confirmed": true
     }
   ],
   "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
