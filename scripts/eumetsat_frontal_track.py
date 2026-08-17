@@ -133,6 +133,34 @@ def _by_target_id(path, key_name="system_analysis_all"):
     return {r["target_id"]: r for r in rows}
 
 
+def _west_confirmed(c):
+    """Фильтр по IR/GC ROI-подтверждению (запрос пользователя 2026-08-17,
+    "нереально много фронтов, надо фильтровать") — эти поля СЧИТАЛИСЬ в
+    eumetsat_west_watch.py с самого начала, но по недосмотру никогда не
+    использовались здесь как реальный фильтр (были только полем в JSON,
+    "класть в карман"). На живых данных 06:30Z из 4 CLM-кандидатов у 3 НИ
+    ИК, НИ GeoColour не подтвердили облачность вообще (оба confirmed=False)
+    — чистый шум сегментации CLM в чужом/незнакомом географическом тайле,
+    без такой калибровки, как у near-tier. Политика: если оба канала
+    доступны — нужно подтверждение ОБОИХ (строже, чем "хотя бы один", т.к.
+    именно расхождение CLM vs IR/GC и есть сигнал шума); если доступен
+    только один — требуем подтверждения от него; если НИ ОДИН не доступен
+    (оба слоя не скачались в этом цикле) — не показываем непроверенный
+    кандидат вообще (лучше пропустить цикл для этого объекта, чем засорять
+    вывод)."""
+    ir = c.get("ir_confirmation") or {}
+    gc = c.get("gc_confirmation") or {}
+    ir_ok = ir.get("confirmed") if ir.get("available") else None
+    gc_ok = gc.get("confirmed") if gc.get("available") else None
+    if ir_ok is None and gc_ok is None:
+        return False
+    if ir_ok is None:
+        return bool(gc_ok)
+    if gc_ok is None:
+        return bool(ir_ok)
+    return bool(ir_ok) and bool(gc_ok)
+
+
 def _merge_near_west(near_list, west_list):
     """Склейка кандидатов near-tier и west-tier на границе тайлов (нахлёст
     WEST_TILE_OFFSET, см. field_motion_common.py) — план "мозаика тайлов",
@@ -207,8 +235,9 @@ def main():
     # с cf_ts_str, но оба тира читают тот же слой msg_fes:clm с того же
     # сервера, поэтому на практике их timestamp почти всегда совпадает,
     # когда оба успешно отработали в одном цикле пайплайна). Кандидаты там
-    # УЖЕ отфильтрованы до frontlike (см. eumetsat_west_watch.py) — фильтр
-    # ниже просто защитный, на случай будущих изменений формата.
+    # Кандидаты там УЖЕ отфильтрованы до frontlike (см. eumetsat_west_watch.py)
+    # — но НЕ отфильтрованы по IR/GC-подтверждению (см. _west_confirmed(),
+    # добавлено 2026-08-17 — было упущено при первой реализации).
     west_data = _load_json(WEST_WATCH_FILE, None)
     west_frontlike = []
     if west_data:
@@ -216,6 +245,7 @@ def main():
             {**c, "tile": c.get("tile", "west")} for c in west_data.get("candidates", [])
             if c.get("class") == "system" and c.get("frontlike") is True
             and not c.get("window_spanning", False)
+            and _west_confirmed(c)
         ]
 
     frontlike_now = _merge_near_west(frontlike_now, west_frontlike)
@@ -337,6 +367,17 @@ def main():
         if t["last_seen"] != cf_ts_str:
             continue
         pts = t["points"]
+        # Мин. 2 точки (подтверждён минимум в двух ПОСЛЕДОВАТЕЛЬНЫХ кадрах)
+        # прежде чем показывать трек публично — та же причина, что и
+        # _west_confirmed() выше (запрос 2026-08-17 "нереально много
+        # фронтов"): единичный кадр слишком часто оказывается шумом
+        # сегментации (особенно у west-tier, без калибровки near-tier),
+        # а трек всё равно продолжает копиться в СОСТОЯНИИ с первой же
+        # точки — просто не публикуется наружу, пока не подтвердится вторым
+        # кадром. Ничего не теряем: если объект реальный, он появится в
+        # выводе на следующем цикле сам.
+        if len(pts) < 2:
+            continue
         latest = pts[-1]
         entry = {
             "track_id": t["track_id"],
