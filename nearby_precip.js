@@ -1015,9 +1015,24 @@ function _renderStationObsPanel(sideLabel, station, obs){
     </div>`;
 }
 
-function _renderFrontalTracksTable(tracks){
-    if(!tracks || !tracks.length) return "";
-    const trs = tracks.map(t => {
+// opts.tileFilter — "west" | "near" | undefined(все). Треки без поля tile
+// (старые записи, до 2026-08-17) считаются "near" — тайл near был основным
+// с самого начала, west подключён позже. opts.title переопределяет
+// заголовок аккордеона (используется, когда таблица встраивается ВНУТРЬ
+// уже существующего аккордея своего тайла — запрос пользователя
+// 2026-08-17: "раздельная таблица только для фронтов западного тайла" /
+// "только для фронтов центрального тайла", вместо одной общей таблицы).
+function _renderFrontalTracksTable(tracks, opts){
+    opts = opts || {};
+    const tileFilter = opts.tileFilter;
+    const filtered = (tracks || []).filter(t => {
+        if(!tileFilter) return true;
+        const tile = t.tile || "near";
+        return tile === tileFilter;
+    });
+    if(!filtered.length) return "";
+    const titleText = opts.title || "Треки фронтов";
+    const trs = filtered.map(t => {
         const dist = t.distance_from_odessa_km != null ? t.distance_from_odessa_km : "—";
         const dir = t.direction_compass || "—";
         const area = t.area_km2 != null ? Math.round(t.area_km2).toLocaleString("ru-RU") : "—";
@@ -1076,7 +1091,7 @@ function _renderFrontalTracksTable(tracks){
         </tr>${stationsBlock}`;
     }).join("");
     return `<details style="margin-top:10px;">
-        <summary style="cursor:pointer; color:#72c8ff; font-size:13px; font-weight:600;">🌩️ Треки фронтов (${tracks.length})</summary>
+        <summary style="cursor:pointer; color:#72c8ff; font-size:13px; font-weight:600;">🌩️ ${titleText} (${filtered.length})</summary>
         <div style="overflow-x:auto; margin-top:6px;">
         <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
             <thead><tr style="color:#777; text-align:left;">
@@ -1138,16 +1153,21 @@ function _renderIrSnapshot(irData){
 // момент времени = тот же timestamp), в отличие от near-tier, где это два
 // разных файла/скрипта — здесь один источник data (geocolourData==clmData
 // по факту, оставлено одним параметром для ясности).
-function _renderWestSnapshot(westData){
+function _renderWestSnapshot(westData, tracks){
     if(!westData || !westData.timestamp) return "";
     const ts = _obsTimeTag(westData.timestamp, 20);
     const n = (westData.candidates || []).length;
     const gcSrc = `https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_west_snapshot_geocolour.png?v=${encodeURIComponent(westData.timestamp)}`;
     const irSrc = `https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_west_snapshot_ir.png?v=${encodeURIComponent(westData.timestamp)}`;
     const clmSrc = `https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_west_snapshot_clm.png?v=${encodeURIComponent(westData.timestamp)}`;
+    // Отдельная таблица ТОЛЬКО фронтов западного тайла (запрос пользователя
+    // 2026-08-17) — раньше "Треки фронтов" была одной общей таблицей (near+
+    // west вперемешку, различить можно было только по чтению координат).
+    const tracksHtml = _renderFrontalTracksTable(tracks, {tileFilter: "west", title: "Треки фронтов (западный тайл)"});
     return `<details style="margin-top:10px;">
         <summary style="cursor:pointer; color:#72c8ff; font-size:13px; font-weight:600;">🧩 Западный тайл — снимки ${ts} (кандидатов: ${n})</summary>
         <div style="margin-top:6px;">
+            ${tracksHtml}
             <div style="color:#777; font-size:11px; margin-bottom:3px;">GeoColour</div>
             <img src="${gcSrc}" alt="Западный тайл — GeoColour"
                  style="width:100%; border-radius:8px; display:block;"
@@ -1196,8 +1216,12 @@ function _renderClmSnapshot(forecastData){
 // _renderGeocolourSnapshot/_renderIrSnapshot/_renderClmSnapshot НЕ
 // менялись — просто их объединённый вывод завёрнут в <details> снаружи,
 // вместо трёх отдельных всегда-развёрнутых <div> прямо в карточке.
-function _renderNearSnapshotsAccordion(geocolourData, irData, forecastData){
-    const inner = _renderGeocolourSnapshot(geocolourData)
+function _renderNearSnapshotsAccordion(geocolourData, irData, forecastData, tracks){
+    // Отдельная таблица ТОЛЬКО фронтов центрального (near) тайла — пара к
+    // west-таблице в _renderWestSnapshot(), тот же запрос 2026-08-17.
+    const tracksHtml = _renderFrontalTracksTable(tracks, {tileFilter: "near", title: "Треки фронтов (центральный тайл)"});
+    const inner = tracksHtml
+        + _renderGeocolourSnapshot(geocolourData)
         + _renderIrSnapshot(irData)
         + _renderClmSnapshot(forecastData);
     if(!inner) return "";
@@ -1288,9 +1312,8 @@ function renderNearbyPrecipCard(){
         ${_renderTargetSummaryLines(_eumetsatTargetSummaryData)}
         ${_renderLocalCandidatesTable(_eumetsatTargetSummaryData && _eumetsatTargetSummaryData.local_candidates, _eumetsatTargetSummaryData && _eumetsatTargetSummaryData.local_suppressed_count)}
         ${_renderSystemCandidatesTable(_eumetsatTargetSummaryData && _eumetsatTargetSummaryData.system_candidates, _eumetsatTargetSummaryData && _eumetsatTargetSummaryData.system_suppressed_count)}
-        ${_renderFrontalTracksTable(_eumetsatTargetSummaryData && _eumetsatTargetSummaryData.frontal_tracks)}
-        ${_renderWestSnapshot(_eumetsatWestWatchData)}
-        ${_renderNearSnapshotsAccordion(_eumetsatGeocolourMotionData, _eumetsatIrMotionData, _eumetsatForecastData)}
+        ${_renderWestSnapshot(_eumetsatWestWatchData, _eumetsatTargetSummaryData && _eumetsatTargetSummaryData.frontal_tracks)}
+        ${_renderNearSnapshotsAccordion(_eumetsatGeocolourMotionData, _eumetsatIrMotionData, _eumetsatForecastData, _eumetsatTargetSummaryData && _eumetsatTargetSummaryData.frontal_tracks)}
         ${_renderHistoryTable(_eumetsatPrecipHistoryData, "📜", "Хронология осадков")}
         ${_renderHistoryTable(_eumetsatLightningHistoryData, "⛈️", "Хронология грозы")}
         <details style="margin-top:10px;">
