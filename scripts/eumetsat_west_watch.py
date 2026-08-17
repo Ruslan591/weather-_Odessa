@@ -28,14 +28,22 @@ near-tier буфер (eumetsat_cloud_buffer.npz) нужен для сравне�
 операции (contrast/классификация относительно статистики ТЕКУЩЕГО кадра),
 истории не требуют. Поэтому это цельный однопроходный скрипт: CLM+IR+GC
 одного момента времени → сегментация → фильтр frontlike → ROI-подтверждение
-→ запись результата. 3 WMS-запроса на цикл (не считая GetCapabilities для
-гейта), СТРОГО РЕЖЕ near-tier по требованию "максимально зажать нагрузку".
+→ запись результата. До 3 WMS-запросов на непустой цикл (не считая
+GetCapabilities для гейта) — CLM всегда, GeoColour всегда (2026-08-16,
+для визуального снимка тайла, см. CLM_SNAPSHOT_FILE/GEOCOLOUR_SNAPSHOT_FILE
+ниже — запрос пользователя "выведешь снимки нового квадрата"; ДО этого GC
+качался только при найденных frontlike-системах, экономя запрос на пустых
+циклах — сознательно пожертвовали этой экономией ради снимков), IR — ТОЛЬКО
+если нашлись frontlike-системы (единственная оставшаяся экономия). СТРОГО
+РЕЖЕ near-tier (3 слоя vs имитация непрерывного моушена по 5+ слоям) по
+требованию "максимально зажать нагрузку".
 
 ГЕЙТ: тот же принцип, что у *_motion.py/cloud_forecast.py — НЕ искусственный
 wall-clock интервал, а сравнение с последним временем кадра CLM, ОБЪЯВЛЕННЫМ
 СЕРВЕРОМ (fc.get_layer_latest_time, дешёвый GetCapabilities-запрос). Если
 сервер не опубликовал кадр новее последнего сохранённого — выходим, не
-делая тяжёлых GetMap-запросов вообще (0 доп. запросов на холостой цикл).
+делая тяжёлых GetMap-запросов вообще (0 запросов на холостой цикл — гейт
+срабатывает ДО снимков тоже, снимки просто не обновляются лишний раз).
 
 КООРДИНАТЫ: centroid_dx_km/dy_km и bbox_km кандидатов — в ЕДИНОЙ системе
 "км от Одессы" (fc.WEST_TILE_OFFSET_DX_KM/DY_KM прибавляется к локальному
@@ -57,12 +65,15 @@ import os
 from datetime import datetime, timezone
 
 import numpy as np
+from PIL import Image
 from scipy import ndimage
 
 import field_motion_common as fc
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_west_watch.json")
+CLM_SNAPSHOT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_west_snapshot_clm.png")
+GEOCOLOUR_SNAPSHOT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_west_snapshot_geocolour.png")
 
 LAYER_CLM = "msg_fes:clm"
 LAYER_IR105 = "mtg_fd:ir105_hrfi"
@@ -312,12 +323,35 @@ def main():
         print(f"  [WARN] eumetsat_west_watch: CLM недоступен ({e}), пропуск цикла")
         return
 
+    # Снимки для визуальной проверки границ тайла (запрос пользователя
+    # 2026-08-16, "выведешь снимки нового квадрата") — сохраняются КАЖДЫЙ
+    # непустой (не-SKIP) цикл, независимо от того, найдены ли frontlike-
+    # системы. CLM бесплатен (уже качаем для детекта). GeoColour — ДОПОЛНИТЕЛЬНЫЙ
+    # запрос по сравнению с прежней логикой (раньше GC качался, только если
+    # нашлись frontlike-системы, экономя запрос на пустых циклах) — осознанный
+    # компромисс по прямому запросу пользователя: без него не на что смотреть
+    # при "0 систем". Если снимки перестанут быть нужны — просто убрать
+    # обе Image.fromarray(...).save(...) секции ниже, на детект это не влияет.
+    try:
+        Image.fromarray(clm_arr).save(CLM_SNAPSHOT_FILE)
+    except Exception as e:
+        print(f"  [WARN] eumetsat_west_watch: не удалось сохранить CLM snapshot ({e})")
+
+    is_day = fc.is_daytime(server_latest_iso)
+    gc_arr = None
+    try:
+        gc_arr = fc.fetch_map_custom(LAYER_GEOCOLOUR, WEST_BBOX, TILE_SIZE, TILE_SIZE, time_iso=server_latest_iso)
+        Image.fromarray(gc_arr).save(GEOCOLOUR_SNAPSHOT_FILE)
+    except Exception as e:
+        print(f"  [WARN] eumetsat_west_watch: GeoColour/snapshot недоступен ({e})")
+
     is_cloud, valid = _classify_clm(clm_arr)
     systems = _detect_frontlike_systems(is_cloud, valid)
 
     if not systems:
-        # Нет ни одной frontlike-системы в этом кадре — не тратим 2 доп.
-        # запроса (IR+GC) на подтверждение пустого списка.
+        # Нет ни одной frontlike-системы в этом кадре — не тратим доп.
+        # запрос на IR-подтверждение пустого списка (GC уже скачан выше —
+        # для снимка, см. коммент про снимки).
         out = {
             "timestamp": server_latest_iso,
             "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -339,13 +373,14 @@ def main():
         print(f"  [WARN] eumetsat_west_watch: IR недоступен ({e}), ir_confirmation=None для всех")
         ir_gray = None
 
-    is_day = fc.is_daytime(server_latest_iso)
-    try:
-        gc_arr = fc.fetch_map_custom(LAYER_GEOCOLOUR, WEST_BBOX, TILE_SIZE, TILE_SIZE, time_iso=server_latest_iso)
-        gc_is_cloud, _ = _classify_geocolour(gc_arr, is_day)
-    except Exception as e:
-        print(f"  [WARN] eumetsat_west_watch: GeoColour недоступен ({e}), gc_confirmation=None для всех")
-        gc_is_cloud = None
+    # GeoColour для confirmation — переиспользуем УЖЕ скачанный gc_arr выше
+    # (снимок), второй запрос не делаем.
+    gc_is_cloud = None
+    if gc_arr is not None:
+        try:
+            gc_is_cloud, _ = _classify_geocolour(gc_arr, is_day)
+        except Exception as e:
+            print(f"  [WARN] eumetsat_west_watch: классификация GeoColour не удалась ({e}), gc_confirmation=None для всех")
 
     for s in systems:
         s["ir_confirmation"] = _confirm_ir(s, ir_gray) if ir_gray is not None else {"available": False, "reason": "слой недоступен в этом цикле"}
