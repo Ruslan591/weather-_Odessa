@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-08-17T16:19:08Z",
+  "timestamp": "2026-08-17T16:32:53Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-08-17T16:16:37Z",
-  "target_id": 0,
-  "target_area_km2": 92.1,
-  "target_distance_km": 6.6,
-  "target_bearing_deg": 71.0,
-  "target_compass": "В",
+  "target_id": 2,
+  "target_area_km2": 53.4,
+  "target_distance_km": 84.8,
+  "target_bearing_deg": 216.0,
+  "target_compass": "ЮЗ",
   "system": {
     "target_id": 1,
     "area_km2": 20115.9,
@@ -204,12 +204,9 @@
       "behind_obs": null
     }
   ],
-  "target_movement": {
-    "speed_kmh": 0.0,
-    "direction_compass": "В",
-    "cpa_km": 6.6,
-    "eta_min": null,
-    "verdict": "почти стоит на месте"
+  "also_suppressed_nearby": {
+    "signature": "5_0",
+    "area_km2": 92.1
   },
   "target_phase": {
     "label": "безоблачно",
@@ -218,21 +215,21 @@
   "existence": {
     "modules": {
       "ir_motion": {
-        "confirmed": false,
-        "timestamp": "2026-08-17T16:18:28Z"
+        "confirmed": true,
+        "timestamp": "2026-08-17T16:32:12Z"
       },
       "geocolour_motion": {
         "confirmed": false,
-        "timestamp": "2026-08-17T16:18:54Z"
+        "timestamp": "2026-08-17T16:32:36Z"
       },
       "cloud_phase_type": {
         "confirmed": false,
         "timestamp": "2026-08-17T16:17:17Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -241,8 +238,8 @@
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-08-17T16:18:24Z"
+      "timestamp": "2026-08-17T16:32:06Z"
     }
   },
-  "verdict": "CLM отметил цель в 7км В, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (20116км²) в 26км СЗ (осадки)."
+  "verdict": "Цель в 85км ЮЗ, безоблачно — каналы расходятся: ir_motion подтверждают, geocolour_motion/cloud_phase_type нет. Отдельно: система синоптического масштаба (20116км²) в 26км СЗ (осадки)."
 }
