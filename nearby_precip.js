@@ -1143,6 +1143,7 @@ function _renderWestSnapshot(westData){
     const ts = _obsTimeTag(westData.timestamp, 20);
     const n = (westData.candidates || []).length;
     const gcSrc = `https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_west_snapshot_geocolour.png?v=${encodeURIComponent(westData.timestamp)}`;
+    const irSrc = `https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_west_snapshot_ir.png?v=${encodeURIComponent(westData.timestamp)}`;
     const clmSrc = `https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_west_snapshot_clm.png?v=${encodeURIComponent(westData.timestamp)}`;
     return `<details style="margin-top:10px;">
         <summary style="cursor:pointer; color:#72c8ff; font-size:13px; font-weight:600;">🧩 Западный тайл — снимки ${ts} (кандидатов: ${n})</summary>
@@ -1151,11 +1152,15 @@ function _renderWestSnapshot(westData){
             <img src="${gcSrc}" alt="Западный тайл — GeoColour"
                  style="width:100%; border-radius:8px; display:block;"
                  onerror="this.parentElement.style.display='none';">
+            <div style="color:#777; font-size:11px; margin:8px 0 3px;">ИК 10.5 мкм</div>
+            <img src="${irSrc}" alt="Западный тайл — ИК"
+                 style="width:100%; border-radius:8px; display:block;"
+                 onerror="this.parentElement.style.display='none';">
             <div style="color:#777; font-size:11px; margin:8px 0 3px;">Cloud Mask (CLM)</div>
             <img src="${clmSrc}" alt="Западный тайл — CLM"
                  style="width:100%; border-radius:8px; display:block;"
                  onerror="this.parentElement.style.display='none';">
-            <div style="color:#777; font-size:11px; margin-top:3px;">Пилотный тайл впритык к near-tier, западнее Одессы (~190-570км) — детектит ТОЛЬКО frontlike-системы для блока "Треки фронтов" выше, локальные очаги и синоптические системы здесь не считаются.</div>
+            <div style="color:#777; font-size:11px; margin-top:3px;">Пилотный тайл впритык к near-tier, западнее Одессы (~190-570км) — детектит ТОЛЬКО frontlike-системы для блока "Треки фронтов" выше, локальные очаги и синоптические системы здесь не считаются. Жёлтая дуга у правого края — кусочек окружности обзора near-tier (~192км от Одессы, она сама далеко за кадром справа); зелёная линия на CLM — контур берега.</div>
         </div>
     </details>`;
 }
@@ -1182,6 +1187,25 @@ function _renderClmSnapshot(forecastData){
              onerror="this.parentElement.style.display='none';">
         <div style="color:#777; font-size:11px; margin-top:3px;">Белое — облако, тёмно-синее — ясно, серое — нет данных. Это ТО, ЧТО реально видит детектор кандидатов/фронтов — не GC/ИК (те лишь подтверждают)</div>
     </div>`;
+}
+
+// Все три снимка near-tier (GC/ИК/CLM) — В ОДНОМ АККОРДЕОНЕ, свёрнутом по
+// умолчанию (запрос пользователя 2026-08-17: "сделай такой же аккордеон
+// для одесского (центрального) пайла" — по образцу west-аккордеона,
+// добавленного чуть раньше в этом же диалоге). Сами функции
+// _renderGeocolourSnapshot/_renderIrSnapshot/_renderClmSnapshot НЕ
+// менялись — просто их объединённый вывод завёрнут в <details> снаружи,
+// вместо трёх отдельных всегда-развёрнутых <div> прямо в карточке.
+function _renderNearSnapshotsAccordion(geocolourData, irData, forecastData){
+    const inner = _renderGeocolourSnapshot(geocolourData)
+        + _renderIrSnapshot(irData)
+        + _renderClmSnapshot(forecastData);
+    if(!inner) return "";
+    const ts = _obsTimeTag((geocolourData && geocolourData.timestamp) || (forecastData && forecastData.timestamp), 20);
+    return `<details style="margin-top:10px;">
+        <summary style="cursor:pointer; color:#72c8ff; font-size:13px; font-weight:600;">🛰️ Центральный тайл — снимки ${ts}</summary>
+        <div style="margin-top:2px;">${inner}</div>
+    </details>`;
 }
 
 function _renderFarWatchLines(farData, veryFarData){
@@ -1266,9 +1290,7 @@ function renderNearbyPrecipCard(){
         ${_renderSystemCandidatesTable(_eumetsatTargetSummaryData && _eumetsatTargetSummaryData.system_candidates, _eumetsatTargetSummaryData && _eumetsatTargetSummaryData.system_suppressed_count)}
         ${_renderFrontalTracksTable(_eumetsatTargetSummaryData && _eumetsatTargetSummaryData.frontal_tracks)}
         ${_renderWestSnapshot(_eumetsatWestWatchData)}
-        ${_renderGeocolourSnapshot(_eumetsatGeocolourMotionData)}
-        ${_renderIrSnapshot(_eumetsatIrMotionData)}
-        ${_renderClmSnapshot(_eumetsatForecastData)}
+        ${_renderNearSnapshotsAccordion(_eumetsatGeocolourMotionData, _eumetsatIrMotionData, _eumetsatForecastData)}
         ${_renderHistoryTable(_eumetsatPrecipHistoryData, "📜", "Хронология осадков")}
         ${_renderHistoryTable(_eumetsatLightningHistoryData, "⛈️", "Хронология грозы")}
         <details style="margin-top:10px;">
