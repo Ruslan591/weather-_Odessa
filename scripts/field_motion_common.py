@@ -1101,7 +1101,8 @@ def load_geocolour_confirmed_mask():
     return packed[1] > 0.5, True
 
 
-def draw_coastline_overlay(base_image, color=(140, 165, 130), alpha=130, width=1):
+def draw_coastline_overlay(base_image, color=(140, 165, 130), alpha=130, width=1,
+                            origin_dx_km=0.0, origin_dy_km=0.0):
     """Дорисовывает контур береговой линии (суша/море) поверх снимка — по
     запросу 2026-08-16 ("не считаешь нужным добавить контур? для
     ориентира") — ночью/на CLM/ИК географию иначе не разобрать (нет
@@ -1110,7 +1111,16 @@ def draw_coastline_overlay(base_image, color=(140, 165, 130), alpha=130, width=1
     посчитаны один раз через global-land-mask, см. комментарий в файле).
     Та же RGBA-оверлей-техника, что у draw_view_radius_circle() —
     полупрозрачная линия, не навязчивая поверх снимка. Возвращает НОВОЕ
-    Image (режим RGB), не мутирует переданное."""
+    Image (режим RGB), не мутирует переданное.
+
+    origin_dx_km/origin_dy_km (добавлено 2026-08-17, план "мозаика тайлов",
+    western tile) — смещение ЦЕНТРА снимка относительно Одессы, в системе
+    координат "восток/север положительные" (та же, что candidate/track
+    dx_km/dy_km, см. fc.WEST_TILE_OFFSET_DX_KM/DY_KM) — ВНУТРИ функции для
+    точек береговой линии используется своя south-positive dy-конвенция
+    (dy_km = (CENTER_LAT-lat)*KM_PER_DEG_LAT), пересчёт знака сделан здесь.
+    Default 0.0 — НЕ МЕНЯЕТ поведение near-tier (его снимок и так
+    центрирован на Одессе, тот же результат, что и раньше)."""
     if not COASTLINE_NEAR:
         return base_image
     overlay = Image.new("RGBA", base_image.size, (0, 0, 0, 0))
@@ -1122,18 +1132,21 @@ def draw_coastline_overlay(base_image, color=(140, 165, 130), alpha=130, width=1
         for lon, lat in polyline:
             dx_km = (lon - CENTER_LON) * KM_PER_DEG_LON
             dy_km = (CENTER_LAT - lat) * KM_PER_DEG_LAT  # y растёт вниз на изображении
-            pts.append((cx + dx_km / KM_PER_PX_X, cy + dy_km / KM_PER_PX_Y))
+            pts.append((cx + (dx_km - origin_dx_km) / KM_PER_PX_X,
+                        cy + (dy_km + origin_dy_km) / KM_PER_PX_Y))
         if len(pts) >= 2:
             draw.line(pts, fill=color + (alpha,), width=width)
     return Image.alpha_composite(base_image.convert("RGBA"), overlay).convert("RGB")
 
 
-def draw_odessa_marker(base_image, color=(225, 225, 230), radius_px=3, outline_color=(0, 0, 0), outline_width=2):
+def draw_odessa_marker(base_image, color=(225, 225, 230), radius_px=3, outline_color=(0, 0, 0), outline_width=2,
+                        origin_dx_km=0.0, origin_dy_km=0.0):
     """Точка-маркер Одессы (станция СИНОП 33837) — по тому же запросу
     2026-08-16, что и draw_coastline_overlay(). Центр снимка ВСЕГДА и есть
     Одесса (CENTER_LAT/CENTER_LON из geo_config.json — та же точка, от
-    которой считаются dx_km/dy_km для всех кандидатов/треков/станций),
-    поэтому маркер рисуется прямо в центре кадра, без пересчёта координат.
+    которой считаются dx_km/dy_km для всех кандидатов/треков/станций) —
+    ДЛЯ NEAR-TIER, маркер рисуется прямо в центре кадра, без пересчёта
+    координат (origin_dx_km/dy_km=0.0 по умолчанию, см. ниже).
 
     Правка 2026-08-16 (было и в тот же день): пользователь заметил — точка
     "не того цвета, особенно на CLM" и "слишком яркая". Причина —
@@ -1147,18 +1160,25 @@ def draw_odessa_marker(base_image, color=(225, 225, 230), radius_px=3, outline_c
     чуть притушена (225,225,230 вместо чистого 255,255,255) и радиус
     уменьшен (3px вместо 4) — менее "кричащая" точка.
 
-    Возвращает НОВОЕ Image (режим RGB), не мутирует переданное."""
+    origin_dx_km/origin_dy_km (добавлено 2026-08-17, план "мозаика тайлов")
+    — тот же контракт, что у draw_coastline_overlay()/draw_view_radius_circle():
+    смещение ЦЕНТРА снимка относительно Одессы (восток/север положительные).
+    Для near-tier центр снимка = Одесса, поэтому default 0.0 не меняет
+    поведение. Для смещённого тайла (запад) маркер уедет за край кадра
+    (Одесса далеко за пределами западного тайла) — PIL просто не нарисует
+    видимых пикселей, без ошибки, вызывать безопасно."""
     overlay = Image.new("RGBA", base_image.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
-    cx = (base_image.width - 1) / 2.0
-    cy = (base_image.height - 1) / 2.0
+    cx = (base_image.width - 1) / 2.0 - origin_dx_km / KM_PER_PX_X
+    cy = (base_image.height - 1) / 2.0 + origin_dy_km / KM_PER_PX_Y
     r = radius_px
     draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=color + (255,),
                  outline=outline_color + (255,), width=outline_width)
     return Image.alpha_composite(base_image.convert("RGBA"), overlay).convert("RGB")
 
 
-def draw_view_radius_circle(base_image, radius_km=None, color=(255, 210, 90), alpha=110, width=2):
+def draw_view_radius_circle(base_image, radius_km=None, color=(255, 210, 90), alpha=110, width=2,
+                             origin_dx_km=0.0, origin_dy_km=0.0):
     """Дорисовывает ПОЛУПРОЗРАЧНУЮ окружность зоны обзора тира 'near' поверх
     RGB-снимка (PIL Image, режим RGB) — общая для GeoColour и ИК снимков на
     nearby.html (см. eumetsat_geocolour_motion.py, eumetsat_ir_motion.py).
@@ -1170,14 +1190,23 @@ def draw_view_radius_circle(base_image, radius_km=None, color=(255, 210, 90), al
     линия вместо сплошной.
 
     radius_km по умолчанию NEAR_RADIUS_KM (тир 'near' ≈192км — та же зона,
-    откуda таблицы local_candidates/system_candidates берут кандидатов).
-    Возвращает НОВОЕ Image (режим RGB), не мутирует переданное."""
+    откуда таблицы local_candidates/system_candidates берут кандидатов).
+    Возвращает НОВОЕ Image (режим RGB), не мутирует переданное.
+
+    origin_dx_km/origin_dy_km (добавлено 2026-08-17, план "мозаика тайлов")
+    — тот же контракт, что у draw_odessa_marker(): сдвигает ЦЕНТР
+    окружности (реальный центр окружности всегда Одесса, а не центр
+    снимка), радиус не меняется. Для западного тайла центр Одессы лежит
+    далеко за правым краем кадра — на снимке появится только небольшая ДУГА
+    окружности у восточного края (там, где near-tier и west-tier
+    перекрываются, см. WEST_TILE_OFFSET_DX_KM/overlap_km в geo_config.json)
+    — это ожидаемо, не ошибка отрисовки."""
     if radius_km is None:
         radius_km = NEAR_RADIUS_KM
     overlay = Image.new("RGBA", base_image.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
-    cx = (base_image.width - 1) / 2.0
-    cy = (base_image.height - 1) / 2.0
+    cx = (base_image.width - 1) / 2.0 - origin_dx_km / KM_PER_PX_X
+    cy = (base_image.height - 1) / 2.0 + origin_dy_km / KM_PER_PX_Y
     rx = radius_km / KM_PER_PX_X
     ry = radius_km / KM_PER_PX_Y
     draw.ellipse([cx - rx, cy - ry, cx + rx, cy + ry], outline=color + (alpha,), width=width)
