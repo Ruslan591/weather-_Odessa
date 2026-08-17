@@ -409,6 +409,7 @@ def git_push_satellite():
             "data/eumetsat_west_watch.json",
             "data/eumetsat_west_snapshot_clm.png",
             "data/eumetsat_west_snapshot_geocolour.png",
+            "data/eumetsat_west_snapshot_ir.png",
             "data/eumetsat_frontal_track.json",
             "data/eumetsat_frontal_track_state.json",
             "data/eumetsat_ground_station_verify.json",
