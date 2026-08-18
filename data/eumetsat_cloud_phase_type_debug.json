@@ -1,14 +1,11 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-08-18T10:30:00.000Z",
+  "server_latest_time": "2026-08-18T11:00:00.000Z",
   "mode": "day",
   "bootstrap": true,
   "buffer_before": 13,
   "buffer_size": 13,
   "buffer_times": [
-    "2026-08-18T08:30:00.000Z",
-    "2026-08-18T08:40:00.000Z",
-    "2026-08-18T08:50:00.000Z",
     "2026-08-18T09:00:00.000Z",
     "2026-08-18T09:10:00.000Z",
     "2026-08-18T09:20:00.000Z",
@@ -18,44 +15,51 @@
     "2026-08-18T10:00:00.000Z",
     "2026-08-18T10:10:00.000Z",
     "2026-08-18T10:20:00.000Z",
-    "2026-08-18T10:30:00.000Z"
+    "2026-08-18T10:30:00.000Z",
+    "2026-08-18T10:40:00.000Z",
+    "2026-08-18T10:50:00.000Z",
+    "2026-08-18T11:00:00.000Z"
   ],
   "result": {
-    "timestamp": "2026-08-18T11:00:02Z",
+    "timestamp": "2026-08-18T11:21:11Z",
     "mode": "day",
-    "unclassified_fraction_now": 0.486,
+    "unclassified_fraction_now": 0.494,
     "phase_ordinal_now": 0.0,
     "phase_ordinal_delta": 0.0,
     "phase_verdict": "без существенных изменений",
     "type_group_now": 0.0,
-    "type_group_delta": -0.09,
+    "type_group_delta": 0.0,
     "type_verdict": "без существенных изменений",
     "target_confirmation": {
-      "confirmed": null,
-      "reason": "мало классифицированных пикселей в ROI цели CLM (облачно, но цвет неуверенный, либо вне окна)",
-      "target_id": 5
+      "confirmed": false,
+      "target_id": 2,
+      "target_area_km2": 56.0,
+      "roi_cloud_fraction": 0.0,
+      "roi_dominant_phase_ordinal": 0.0,
+      "roi_dominant_phase_label": "безоблачно",
+      "verdict": "Phase/Type НЕ подтверждает: в ROI CLM-цели облачность не преобладает — возможно расхождение слоёв"
     },
     "system_analysis": {
       "available": true,
       "target_id": 4,
-      "area_km2": 31166.5,
-      "roi_cloud_fraction": 0.825,
+      "area_km2": 36445.0,
+      "roi_cloud_fraction": 0.645,
       "roi_dominant_phase_ordinal": 3.0,
       "roi_dominant_phase_label": "плотная водяная",
-      "roi_dominant_type_label": "плотная/высокая"
+      "roi_dominant_type_label": "низкая/средняя"
     },
     "system_analysis_all": [
       {
         "target_id": 4,
         "available": true,
-        "roi_cloud_fraction": 0.825,
+        "roi_cloud_fraction": 0.645,
         "roi_dominant_phase_label": "плотная водяная",
-        "roi_dominant_type_label": "плотная/высокая"
+        "roi_dominant_type_label": "низкая/средняя"
       },
       {
-        "target_id": 7,
+        "target_id": 11,
         "available": true,
-        "roi_cloud_fraction": 0.974,
+        "roi_cloud_fraction": 0.937,
         "roi_dominant_phase_label": "безоблачно",
         "roi_dominant_type_label": "плотная/высокая"
       }
@@ -101,6 +105,14 @@
       {
         "target_id": 6,
         "available": true,
+        "roi_cloud_fraction": 1.0,
+        "confirmed": true,
+        "roi_dominant_phase_label": "безоблачно",
+        "roi_dominant_type_label": "плотная/высокая"
+      },
+      {
+        "target_id": 7,
+        "available": true,
         "roi_cloud_fraction": 0.0,
         "confirmed": false,
         "roi_dominant_phase_label": "безоблачно",
@@ -110,6 +122,30 @@
         "target_id": 8,
         "available": false,
         "reason": "мало классифицированных пикселей в ROI (облачно, но цвет неуверенный, либо вне окна)"
+      },
+      {
+        "target_id": 9,
+        "available": true,
+        "roi_cloud_fraction": 1.0,
+        "confirmed": true,
+        "roi_dominant_phase_label": "безоблачно",
+        "roi_dominant_type_label": "плотная/высокая"
+      },
+      {
+        "target_id": 10,
+        "available": true,
+        "roi_cloud_fraction": 0.0,
+        "confirmed": false,
+        "roi_dominant_phase_label": "безоблачно",
+        "roi_dominant_type_label": "безоблачно"
+      },
+      {
+        "target_id": 12,
+        "available": true,
+        "roi_cloud_fraction": 1.0,
+        "confirmed": true,
+        "roi_dominant_phase_label": "безоблачно",
+        "roi_dominant_type_label": "плотная/высокая"
       }
     ],
     "buffer_status": {
