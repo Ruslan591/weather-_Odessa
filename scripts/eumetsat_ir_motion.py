@@ -110,31 +110,12 @@ AREA_CHANGE_THRESHOLD = 0.10    # 10 п.п. — "существенное" из�
 MIN_CLOUD_CONTRAST_SIGMA = fc.MIN_CLOUD_CONTRAST_SIGMA
 
 
-def _save_ir_snapshot(gray):
-    """Последний ИК-кадр (10.5 мкм) как снимок для nearby.html — по
-    запросу 2026-08-10 ('под этим снимком добавь ИК, такой же, с кругом').
-    Тот же принцип, что у eumetsat_geocolour_motion.py._save_clean_snapshot():
-    чистое изображение (тут по определению без оверлея — ИК не имеет
-    отдельного debug preview с классификацией) + та же полупрозрачная
-    окружность зоны обзора (fc.draw_view_radius_circle()).
-
-    gray — сырой grayscale-кадр (0-255 luminance, см. fc.to_grayscale_luminance())
-    приводится к uint8 и дублируется в 3 канала (PIL 'L'->'RGB'), чтобы
-    draw_view_radius_circle работал одинаково что к GeoColour, что к ИК.
-
-    Контур береговой линии (fc.draw_coastline_overlay()) НЕ используется
-    здесь — добавлен было 2026-08-16 по запросу "контур для ориентира", но
-    в тот же день откачен по уточнению пользователя: на ИК контур не
-    нужен. Оставлен только на CLM (eumetsat_cloud_forecast.py) — там нет
-    вообще никакой альтернативной привязки к местности. Точка Одессы
-    (fc.draw_odessa_marker()) осталась на всех трёх снимках."""
-    try:
-        base = Image.fromarray(np.clip(gray, 0, 255).astype(np.uint8), mode="L").convert("RGB")
-        base = fc.draw_view_radius_circle(base)
-        base = fc.draw_odessa_marker(base)
-        base.save(SNAPSHOT_FILE)
-    except Exception as e:
-        print(f"  [WARN] eumetsat_ir_motion.py: не удалось сохранить снимок: {e}")
+# _save_ir_snapshot()/SNAPSHOT_FILE УБРАНЫ отсюда 2026-08-17 — снимок для
+# nearby.html теперь пишет eumetsat_cloud_forecast.py (см.
+# _save_synced_gc_ir_snapshots() там, синхронизирован по времени с CLM —
+# тот же переезд и та же причина, что у eumetsat_geocolour_motion.py, см.
+# комментарий там). Сам моушен-анализ (буфер, скорость, area_fraction)
+# этой правки не касается — гейт 10 мин не менялся.
 
 
 def _fmt_time(dt):
@@ -195,7 +176,6 @@ def main():
                 continue
             new_times.append(t_iso or _fmt_time(now))
             new_frames.append(fc.to_grayscale_luminance(arr))
-            _save_ir_snapshot(new_frames[-1])  # перезаписываем каждую итерацию — останется последний кадр
 
         if len(new_frames) < 2:
             fc.write_debug(DEBUG_FILE, {"status": "error", "stage": "bootstrap", "failed": failed,
@@ -236,7 +216,6 @@ def main():
             print(f"  [SKIP] eumetsat_ir_motion.py: следующий кадр ({next_t_iso}) ещё не опубликован: {e}")
             return
         gray_new = fc.to_grayscale_luminance(arr)
-        _save_ir_snapshot(gray_new)
         if fc.is_duplicate_pair(frames[-1], gray_new):
             debug["skipped_duplicate"] = True
             fc.write_debug(DEBUG_FILE, {"status": "skipped", **debug,
