@@ -198,6 +198,7 @@ def main():
                 fc.log_skip_event("eumetsat_ir_motion.py", "source_stale",
                                    layer=LAYER_IR105, server_latest_time=server_latest_iso,
                                    extra={"last_known_frame": times[-1]})
+                fc.record_pipeline_health("eumetsat_ir_motion.py", ok=False)
                 print(f"  [SKIP] eumetsat_ir_motion.py: новых кадров пока нет (server default={server_latest_iso})")
                 return
             next_t_iso = server_latest_iso  # подтверждено сервером — гарантированно существует
@@ -228,6 +229,7 @@ def main():
                                          "note": "новых данных ещё нет (дубль последнего кадра — задержка публикации)"})
             fc.log_skip_event("eumetsat_ir_motion.py", "duplicate_frame",
                                layer=LAYER_IR105, server_latest_time=server_latest_iso)
+            fc.record_pipeline_health("eumetsat_ir_motion.py", ok=False)
             print("  [SKIP] eumetsat_ir_motion.py: новых данных ещё нет (дубль)")
             return
         times = (times + [next_t_iso])[-MAX_FRAMES:]
@@ -531,6 +533,7 @@ def main():
         json.dump(out, f, ensure_ascii=False, indent=2)
 
     fc.write_debug(DEBUG_FILE, {"status": "ok", **debug, "result": out})
+    fc.record_pipeline_health("eumetsat_ir_motion.py", ok=True)
     print(f"  [OK] eumetsat_ir_motion.py: {out.get('verdict', out.get('speed_kmh'))}")
 
 
