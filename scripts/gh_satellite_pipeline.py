@@ -451,6 +451,8 @@ def git_push_satellite():
             "data/eumetsat_target_summary.json",
             "data/eumetsat_target_false_positive_log.json",
             "data/eumetsat_skip_log.jsonl",
+            "data/eumetsat_pipeline_health.json",
+            "data/eumetsat_pipeline_alert_state.json",
         ]
         _to_add = [p for p in _candidates if os.path.exists(os.path.join(BASE_DIR, p))]
         if not _to_add:
@@ -513,6 +515,58 @@ def check_eumetsat_target_summary():
         print(f"  [WARN] eumetsat_target_summary.py: {e}")
 
 
+def check_pipeline_health_alert():
+    # Алерт "источник (EUMETSAT) застрял" — реакция на инцидент 2026-08-18
+    # (см. docs/topics/eumetsat.md): ~75 мин без новых кадров msg_fes:clm
+    # совпали с проходом реального фронта, пайплайн ничего не написал и
+    # никто об этом не узнал до разбора постфактум. Порог — обсуждён и
+    # согласован явно: 3 подряд "источник не дал данных" (source_stale/
+    # duplicate_frame, см. field_motion_common.record_pipeline_health) на
+    # ЛЮБОМ из 6 скриптов с инкрементальным буфером = ~45 мин простоя.
+    # next_frame_not_ready/capabilities_unavailable в счётчик НЕ входят —
+    # это единичные сетевые сбои запроса, сами разрешаются на следующем
+    # прогоне, включать их сделало бы алерт слишком шумным.
+    N_CONSECUTIVE_STALE_FOR_ALERT = 3
+    health_file = os.path.join(BASE_DIR, "data", "eumetsat_pipeline_health.json")
+    alert_file = os.path.join(BASE_DIR, "data", "eumetsat_pipeline_alert_state.json")
+
+    health = {}
+    try:
+        if os.path.exists(health_file):
+            with open(health_file, "r", encoding="utf-8") as f:
+                health = json.load(f)
+    except Exception:
+        health = {}
+
+    stuck = [
+        {"script": script, **entry}
+        for script, entry in health.items()
+        if entry.get("consecutive_skips", 0) >= N_CONSECUTIVE_STALE_FOR_ALERT
+    ]
+    is_alert = len(stuck) > 0
+
+    prev_alert = False
+    try:
+        if os.path.exists(alert_file):
+            with open(alert_file, "r", encoding="utf-8") as f:
+                prev_alert = bool(json.load(f).get("alert"))
+    except Exception:
+        prev_alert = False
+
+    alert_state = {
+        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "alert": is_alert,
+        "just_triggered": bool(is_alert and not prev_alert),
+        "just_recovered": bool(prev_alert and not is_alert),
+        "stuck_scripts": stuck,
+    }
+    try:
+        with open(alert_file, "w", encoding="utf-8") as f:
+            json.dump(alert_state, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"  [WARN] check_pipeline_health_alert: alert state write failed: {e}")
+
+
 def main():
     print(f"\n{'─'*52}")
     print(f"  [SATELLITE] Цикл спутникового модуля  {datetime.now(timezone.utc).strftime('%d.%m %H:%M UTC')}")
@@ -545,6 +599,7 @@ def main():
     check_eumetsat_far_watch()
     check_eumetsat_very_far_watch()
 
+    check_pipeline_health_alert()
     git_push_satellite()
 
 
