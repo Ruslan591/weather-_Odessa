@@ -337,6 +337,7 @@ def main():
         fc.log_skip_event("eumetsat_west_watch.py", "source_stale",
                            layer=LAYER_CLM, server_latest_time=server_latest_iso,
                            extra={"last_known_frame": prev.get("timestamp")})
+        fc.record_pipeline_health("eumetsat_west_watch.py", ok=False)
         return
 
     try:
@@ -423,6 +424,7 @@ def main():
             json.dump(out, f, ensure_ascii=False, indent=2)
         os.replace(tmp, OUT_FILE)
         print("  [OK] eumetsat_west_watch: 0 frontlike-систем")
+        fc.record_pipeline_health("eumetsat_west_watch.py", ok=True)
         return
 
     gc_is_cloud = None
@@ -452,6 +454,7 @@ def main():
         json.dump(out, f, ensure_ascii=False, indent=2)
     os.replace(tmp, OUT_FILE)
     print(f"  [OK] eumetsat_west_watch: {len(systems)} frontlike-систем(а)")
+    fc.record_pipeline_health("eumetsat_west_watch.py", ok=True)
 
 
 if __name__ == "__main__":
