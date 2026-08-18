@@ -408,6 +408,7 @@ def main():
                 fc.log_skip_event("eumetsat_cloud_phase_type.py", "source_stale",
                                    layer=LAYER_A, server_latest_time=server_latest_iso,
                                    extra={"last_known_frame": times[-1]})
+                fc.record_pipeline_health("eumetsat_cloud_phase_type.py", ok=False)
                 print(f"  [SKIP] eumetsat_cloud_phase_type.py: новых кадров пока нет")
                 return
             next_t_iso = server_latest_iso
@@ -437,6 +438,7 @@ def main():
                                          "note": "новых данных ещё нет (дубль последнего кадра)"})
             fc.log_skip_event("eumetsat_cloud_phase_type.py", "duplicate_frame",
                                layer=LAYER_A, server_latest_time=server_latest_iso)
+            fc.record_pipeline_health("eumetsat_cloud_phase_type.py", ok=False)
             print("  [SKIP] eumetsat_cloud_phase_type.py: новых данных ещё нет (дубль)")
             return
 
@@ -735,6 +737,7 @@ def main():
         json.dump(out, f, ensure_ascii=False, indent=2)
 
     fc.write_debug(DEBUG_FILE, {"status": "ok", **debug, "result": out})
+    fc.record_pipeline_health("eumetsat_cloud_phase_type.py", ok=True)
     print(f"  [OK] eumetsat_cloud_phase_type.py: mode={mode}, phase={out.get('phase_ordinal_now')}, "
           f"type={out.get('type_group_now')}, unclassified={out['unclassified_fraction_now']}")
 
