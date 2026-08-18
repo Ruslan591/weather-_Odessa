@@ -221,6 +221,44 @@ def log_skip_event(script, reason, layer=None, server_latest_time=None, extra=No
         pass
 
 
+# Счётчик подряд идущих "источник не дал новых данных" по каждому скрипту —
+# используется для алерта "пайплайн застрял" (gh_satellite_pipeline.py,
+# порог N_CONSECUTIVE_STALE_FOR_ALERT=3, см. docs/topics/eumetsat.md,
+# инцидент 2026-08-18). В счётчик идут ТОЛЬКО реальные "сервер не публикует"
+# случаи (source_stale/duplicate_frame) — не next_frame_not_ready/
+# capabilities_unavailable (единичные сетевые сбои запроса, сами разрешаются
+# на следующем прогоне и не значат, что источник встал). Отдельный файл от
+# SKIP_LOG_FILE, потому что это текущее состояние (перезаписывается), а не
+# история.
+PIPELINE_HEALTH_FILE = os.path.join(_SKIP_LOG_BASE_DIR, "data", "eumetsat_pipeline_health.json")
+
+
+def record_pipeline_health(script, ok):
+    """ok=True — сброс счётчика (был успешный прогон). ok=False — инкремент
+    (реальный stale/duplicate skip). Никогда не бросает исключение наружу."""
+    try:
+        state = {}
+        if os.path.exists(PIPELINE_HEALTH_FILE):
+            with open(PIPELINE_HEALTH_FILE, "r", encoding="utf-8") as f:
+                state = json.load(f)
+    except Exception:
+        state = {}
+    entry = state.get(script, {})
+    if ok:
+        entry["consecutive_skips"] = 0
+    else:
+        entry["consecutive_skips"] = entry.get("consecutive_skips", 0) + 1
+        if entry["consecutive_skips"] == 1:
+            entry["stuck_since"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    entry["last_update"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    state[script] = entry
+    try:
+        with open(PIPELINE_HEALTH_FILE, "w", encoding="utf-8") as f:
+            json.dump(state, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
 def fetch_tile(layer_name, time_iso=None, retries=2, delay=4, style="", crs="CRS:84"):
     """crs="CRS:84" (по умолчанию, как раньше) — порядок осей lon,lat.
     crs="EPSG:4326" — используется для mtg_fd:ir105_hrfi (подтверждённый
