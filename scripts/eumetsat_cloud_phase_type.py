@@ -405,6 +405,9 @@ def main():
             if server_min <= last_t_min:
                 fc.write_debug(DEBUG_FILE, {"status": "skipped", **debug,
                                              "note": f"сервер ещё не объявил кадр новее {times[-1]}"})
+                fc.log_skip_event("eumetsat_cloud_phase_type.py", "source_stale",
+                                   layer=LAYER_A, server_latest_time=server_latest_iso,
+                                   extra={"last_known_frame": times[-1]})
                 print(f"  [SKIP] eumetsat_cloud_phase_type.py: новых кадров пока нет")
                 return
             next_t_iso = server_latest_iso
@@ -419,6 +422,9 @@ def main():
             debug["awaited_time"] = next_t_iso
             fc.write_debug(DEBUG_FILE, {"status": "skipped", **debug,
                                          "note": f"следующий кадр ({next_t_iso}) ещё не опубликован"})
+            fc.log_skip_event("eumetsat_cloud_phase_type.py", "next_frame_not_ready",
+                               layer=LAYER_A, server_latest_time=server_latest_iso,
+                               extra={"awaited_time": next_t_iso, "error": str(e)})
             print(f"  [SKIP] eumetsat_cloud_phase_type.py: следующий кадр ({next_t_iso}) ещё не опубликован: {e}")
             return
 
@@ -429,6 +435,8 @@ def main():
             debug["skipped_duplicate"] = True
             fc.write_debug(DEBUG_FILE, {"status": "skipped", **debug,
                                          "note": "новых данных ещё нет (дубль последнего кадра)"})
+            fc.log_skip_event("eumetsat_cloud_phase_type.py", "duplicate_frame",
+                               layer=LAYER_A, server_latest_time=server_latest_iso)
             print("  [SKIP] eumetsat_cloud_phase_type.py: новых данных ещё нет (дубль)")
             return
 
@@ -759,3 +767,4 @@ if __name__ == "__main__":
             pass
         print(f"  [ERROR] eumetsat_cloud_phase_type.py: {e}")
         raise
+
