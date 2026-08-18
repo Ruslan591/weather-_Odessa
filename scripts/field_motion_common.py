@@ -179,6 +179,48 @@ def write_debug(path, payload):
         pass
 
 
+# Постоянный (append-only) лог skip-событий по всем eumetsat_*.py-скриптам с
+# инкрементальным буфером. В отличие от write_debug() выше (перезаписывается
+# каждый прогон, история пропусков теряется), этот лог копится между
+# прогонами — нужен, чтобы находить окна, когда источник (EUMETSAT WMS) не
+# публиковал новые кадры продолжительное время и пайплайн честно ничего не
+# писал (см. инцидент 2026-08-18: 75 мин без новых кадров msg_fes:clm совпали
+# с проходом реального фронта над станцией, разбор — docs/topics/eumetsat.md).
+# Один файл на все скрипты (не по файлу на скрипт), чтобы разрывы источника
+# было видно сразу по всем каналам, а не листать N файлов.
+_SKIP_LOG_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SKIP_LOG_FILE = os.path.join(_SKIP_LOG_BASE_DIR, "data", "eumetsat_skip_log.jsonl")
+MAX_SKIP_LOG_LINES = 1000  # ~10+ суток при обычной частоте skip-событий
+
+
+def log_skip_event(script, reason, layer=None, server_latest_time=None, extra=None):
+    """Дописывает одну строку в data/eumetsat_skip_log.jsonl (append+trim, тот
+    же паттерн, что и eumetsat_lightning_history.jsonl). Никогда не бросает
+    исключение наружу — сбой логирования не должен ронять сам прогон."""
+    entry = {
+        "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "script": script,
+        "reason": reason,
+    }
+    if layer is not None:
+        entry["layer"] = layer
+    if server_latest_time is not None:
+        entry["server_latest_time"] = server_latest_time
+    if extra:
+        entry.update(extra)
+    try:
+        lines = []
+        if os.path.exists(SKIP_LOG_FILE):
+            with open(SKIP_LOG_FILE, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+        lines.append(json.dumps(entry, ensure_ascii=False) + "\n")
+        lines = lines[-MAX_SKIP_LOG_LINES:]
+        with open(SKIP_LOG_FILE, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+    except Exception:
+        pass
+
+
 def fetch_tile(layer_name, time_iso=None, retries=2, delay=4, style="", crs="CRS:84"):
     """crs="CRS:84" (по умолчанию, как раньше) — порядок осей lon,lat.
     crs="EPSG:4326" — используется для mtg_fd:ir105_hrfi (подтверждённый
@@ -1285,6 +1327,7 @@ def draw_frontal_tracks_overlay(base_image, tracks, alpha=220, width=5):
         r = max(4, width)
         draw.ellipse([px - r, py - r, px + r, py + r], fill=color + (alpha,))
     return Image.alpha_composite(base_image.convert("RGBA"), overlay).convert("RGB")
+
 
 
 
