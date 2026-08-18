@@ -100,6 +100,15 @@ CLM_SNAPSHOT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_clm_snapshot.png")
 LAYER_CLM = "msg_fes:clm"
 LAYER_CTH = "msg_fes:cth"
 
+# GC/ИК-слои — ТОЛЬКО для синхронизированных снимков ниже (см.
+# _save_synced_gc_ir_snapshots), не для анализа/буферов (те остаются у
+# eumetsat_geocolour_motion.py/eumetsat_ir_motion.py на своих 10-мин гейтах).
+LAYER_GEOCOLOUR = "mtg_fd:rgb_geocolour"
+LAYER_IR105 = "mtg_fd:ir105_hrfi"
+STYLE_IR105 = "mtg_fd:mtg_fd_ir105_hrfi_grayscale"
+GEOCOLOUR_SNAPSHOT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_geocolour_snapshot.png")
+IR_SNAPSHOT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_ir_snapshot.png")
+
 CENTER_LABEL = "Одесса (СИНОП 33837)"
 
 TILE_SIZE = fc.TILE_SIZE
@@ -703,6 +712,67 @@ def _save_clm_snapshot(is_cloud, valid):
         print(f"  [WARN] eumetsat_cloud_forecast.py: не удалось сохранить CLM snapshot: {e}")
 
 
+def _save_synced_gc_ir_snapshots(clm_ts_iso):
+    """GC+ИК снимки для 'Центральный тайл' — ВСЕ ТРИ снимка (CLM здесь же
+    выше + эти два) теперь одного момента времени: clm_ts_iso — тот же
+    таймстемп, что использован для CLM в этом прогоне (times[-1] в main()).
+
+    Решение пользователя 2026-08-17: раньше CLM/GC/ИК на nearby.html были
+    каждый со своим, максимально свежим временем (raw-гейты geocolour_motion
+    10 мин / ir_motion 10 мин / cloud_forecast 15 мин по отдельности —
+    несогласованные картинки, "какой момент на самом деле?"). West-тайл уже
+    делал наоборот — жертвовал свежестью ради одного момента на все 3
+    снимка (см. eumetsat_west_watch.py). Выбор пользователя: сделать то же
+    самое и здесь — Central станет обновляться раз в 15 мин (частота CLM,
+    самого редкого из трёх слоёв) вместо раза в 10, зато все 3 снимка будут
+    гарантированно с одного и того же момента.
+
+    ВАЖНО: это ТОЛЬКО снимки для отображения — к анализу/трендам/буферам
+    eumetsat_geocolour_motion.py и eumetsat_ir_motion.py (моушен, площадь,
+    target confirmation) отношения не имеет, те скрипты продолжают жить на
+    своих прежних 10-минутных гейтах как раньше. Раньше ЭТИ ЖЕ файлы
+    (eumetsat_geocolour_snapshot.png/eumetsat_ir_snapshot.png) писали они —
+    теперь пишет только этот скрипт (см. правки в geocolour_motion.py/
+    ir_motion.py — там вызовы _save_clean_snapshot()/_save_ir_snapshot()
+    убраны, иначе оба скрипта конкурировали бы за одни и те же файлы и
+    результат зависел бы от того, кто в пайплайне отработал последним).
+
+    Пишет напрямую в файлы GC/ИК из eumetsat_geocolour_motion.py/
+    eumetsat_ir_motion.py (тот же контракт: overlay-круг обзора + точка
+    Одессы + треки фронтов на GC, без контура берега — см. докстринги
+    исходных _save_clean_snapshot()/_save_ir_snapshot(), логика overlay'ев
+    скопирована оттуда 1-в-1, коастлайн по-прежнему только на CLM).
+    Отдельная сетевая ошибка на GC ИЛИ ИК не должна убивать другую — ловим
+    исключения независимо."""
+    ft_path = os.path.join(BASE_DIR, "data", "eumetsat_frontal_track.json")
+    tracks = []
+    if os.path.exists(ft_path):
+        import json as _json
+        with open(ft_path, "r", encoding="utf-8") as f:
+            tracks = (_json.load(f) or {}).get("tracks", [])
+
+    try:
+        gc_arr = fc.fetch_tile(LAYER_GEOCOLOUR, clm_ts_iso)
+        gc_img = Image.fromarray(gc_arr[:, :, :3], mode="RGB").convert("RGB")
+        gc_img = fc.draw_view_radius_circle(gc_img)
+        if tracks:
+            gc_img = fc.draw_frontal_tracks_overlay(gc_img, tracks)
+        gc_img = fc.draw_odessa_marker(gc_img)
+        gc_img.save(GEOCOLOUR_SNAPSHOT_FILE)
+    except Exception as e:
+        print(f"  [WARN] eumetsat_cloud_forecast.py: не удалось сохранить синхронизированный GC snapshot: {e}")
+
+    try:
+        ir_arr = fc.fetch_tile(LAYER_IR105, clm_ts_iso, style=STYLE_IR105, crs="EPSG:4326")
+        ir_gray = fc.to_grayscale_luminance(ir_arr)
+        ir_img = Image.fromarray(np.clip(ir_gray, 0, 255).astype(np.uint8), mode="L").convert("RGB")
+        ir_img = fc.draw_view_radius_circle(ir_img)
+        ir_img = fc.draw_odessa_marker(ir_img)
+        ir_img.save(IR_SNAPSHOT_FILE)
+    except Exception as e:
+        print(f"  [WARN] eumetsat_cloud_forecast.py: не удалось сохранить синхронизированный ИК snapshot: {e}")
+
+
 def main():
     now = fc.datetime.now(fc.timezone.utc)
     debug = {}
@@ -813,6 +883,11 @@ def main():
     is_cloud_now = is_cloud_frames[-1]
     valid_now = valid_frames[-1]
     _save_clm_snapshot(is_cloud_now, valid_now)
+    # times[-1] — таймстемп КОНКРЕТНОГО CLM-кадра, который только что стал
+    # is_cloud_now (совпадает с server_latest_iso в incremental-ветке, и с
+    # последним элементом times_iso в bootstrap-ветке) — единый момент для
+    # всех трёх снимков Центрального тайла (см. докстринг функции ниже).
+    _save_synced_gc_ir_snapshots(times[-1])
     local_mask = _local_area_mask()
     station_mask = _station_area_mask()
 
