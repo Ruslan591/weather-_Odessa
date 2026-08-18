@@ -105,6 +105,44 @@ jobs:
             echo "тревоги по грозе нет либо уже уведомляли — пропуск"
           fi
 
+      - name: Push-уведомление (ntfy) — пайплайн застрял / отпустило
+        # Отдельная тема от погодных алертов (odessa-storm-x7k2m9qp4h) —
+        # это сигнал про здоровье пайплайна, не про погоду, смешивать нельзя.
+        # Реакция на инцидент 2026-08-18 (см. docs/topics/eumetsat.md):
+        # EUMETSAT ~75 мин не публиковал новые кадры, и это прошло незамеченным
+        # до разбора постфактум. Порог — 3 подряд "источник не дал данных"
+        # (см. gh_satellite_pipeline.py: check_pipeline_health_alert). Топик —
+        # тот же принцип, что и odessa-storm-x7k2m9qp4h: случайная нечитаемая
+        # строка вместо auth, приемлемо для личных алертов.
+        if: always()
+        continue-on-error: true
+        run: |
+          if [ ! -f data/eumetsat_pipeline_alert_state.json ]; then
+            echo "нет pipeline_alert_state.json — пропуск"
+            exit 0
+          fi
+          just_triggered=$(jq -r '.just_triggered' data/eumetsat_pipeline_alert_state.json)
+          just_recovered=$(jq -r '.just_recovered' data/eumetsat_pipeline_alert_state.json)
+          if [ "$just_triggered" = "true" ]; then
+            scripts=$(jq -r '[.stuck_scripts[].script] | join(", ")' data/eumetsat_pipeline_alert_state.json)
+            since=$(jq -r '.stuck_scripts[0].stuck_since // "?"' data/eumetsat_pipeline_alert_state.json)
+            curl -sS --retry 3 --retry-delay 2 --retry-all-errors --max-time 15 -X POST "https://ntfy.sh/odessa-pipeline-health-k7m2q9wx4h" \
+              -H "Title: ⚠️ Спутниковый пайплайн застрял" \
+              -H "Priority: default" \
+              -H "Tags: warning" \
+              -d "Источник не даёт новых кадров (3+ прогона подряд): ${scripts}. Застряло с ${since} UTC."
+            echo "push (пайплайн застрял) отправлен"
+          elif [ "$just_recovered" = "true" ]; then
+            curl -sS --retry 3 --retry-delay 2 --retry-all-errors --max-time 15 -X POST "https://ntfy.sh/odessa-pipeline-health-k7m2q9wx4h" \
+              -H "Title: ✅ Спутниковый пайплайн отпустило" \
+              -H "Priority: low" \
+              -H "Tags: white_check_mark" \
+              -d "Источник снова даёт новые кадры, данные обновляются."
+            echo "push (пайплайн отпустило) отправлен"
+          else
+            echo "состояние пайплайна не изменилось — пропуск"
+          fi
+
       - name: Проверка тревоги — досрочный повтор через 5 минут
         # Android job scheduler (job 1001) не позволяет учащать триггер
         # чаще 15 мин, поэтому во время тревоги каденс ускоряет сам GitHub:
@@ -144,3 +182,4 @@ jobs:
           else
             echo "тревоги нет или цепочка исчерпана — обычный каденс"
           fi
+
