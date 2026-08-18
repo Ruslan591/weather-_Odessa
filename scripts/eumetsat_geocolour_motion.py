@@ -235,6 +235,7 @@ def main():
                 fc.log_skip_event("eumetsat_geocolour_motion.py", "source_stale",
                                    layer=LAYER_GEOCOLOUR, server_latest_time=server_latest_iso,
                                    extra={"last_known_frame": times[-1]})
+                fc.record_pipeline_health("eumetsat_geocolour_motion.py", ok=False)
                 print("  [SKIP] eumetsat_geocolour_motion.py: новых кадров пока нет")
                 return
             next_t_iso = server_latest_iso
@@ -263,6 +264,7 @@ def main():
                                          "note": "новых данных ещё нет (дубль последнего кадра)"})
             fc.log_skip_event("eumetsat_geocolour_motion.py", "duplicate_frame",
                                layer=LAYER_GEOCOLOUR, server_latest_time=server_latest_iso)
+            fc.record_pipeline_health("eumetsat_geocolour_motion.py", ok=False)
             print("  [SKIP] eumetsat_geocolour_motion.py: новых данных ещё нет (дубль)")
             return
 
@@ -507,6 +509,7 @@ def main():
         json.dump(out, f, ensure_ascii=False, indent=2)
 
     fc.write_debug(DEBUG_FILE, {"status": "ok", **debug, "result": out})
+    fc.record_pipeline_health("eumetsat_geocolour_motion.py", ok=True)
     print(f"  [OK] eumetsat_geocolour_motion.py: {out.get('verdict', out.get('speed_kmh'))}")
 
 
