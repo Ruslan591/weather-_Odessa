@@ -843,6 +843,7 @@ def main():
                 fc.log_skip_event("eumetsat_cloud_forecast.py", "source_stale",
                                    layer=LAYER_CLM, server_latest_time=server_latest_iso,
                                    extra={"last_known_frame": times[-1]})
+                fc.record_pipeline_health("eumetsat_cloud_forecast.py", ok=False)
                 print(f"  [SKIP] eumetsat_cloud_forecast.py: новых кадров пока нет (server default={server_latest_iso})")
                 return
             next_t_iso = server_latest_iso
@@ -872,6 +873,7 @@ def main():
                                          "note": "новых данных ещё нет (дубль последнего кадра — задержка публикации)"})
             fc.log_skip_event("eumetsat_cloud_forecast.py", "duplicate_frame",
                                layer=LAYER_CLM, server_latest_time=server_latest_iso)
+            fc.record_pipeline_health("eumetsat_cloud_forecast.py", ok=False)
             print("  [SKIP] eumetsat_cloud_forecast.py: новых данных ещё нет (дубль)")
             return
 
@@ -1176,6 +1178,7 @@ def main():
         json.dump(out, f, ensure_ascii=False, indent=2)
 
     fc.write_debug(DEBUG_FILE, {"status": "ok", **debug, "result": out})
+    fc.record_pipeline_health("eumetsat_cloud_forecast.py", ok=True)
     print(f"  [OK] eumetsat_cloud_forecast.py: {out.get('verdict')}, buffer={len(packed_frames)}/{MAX_FRAMES}")
 
 
