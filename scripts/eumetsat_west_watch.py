@@ -319,6 +319,7 @@ def _confirm_gc(system, gc_is_cloud):
 def main():
     server_latest_iso, _ = fc.get_layer_latest_time(LAYER_CLM)
     if server_latest_iso is None:
+        fc.log_skip_event("eumetsat_west_watch.py", "capabilities_unavailable", layer=LAYER_CLM)
         print("  [WARN] eumetsat_west_watch: GetCapabilities недоступен, пропуск цикла")
         return
 
@@ -331,11 +332,19 @@ def main():
         prev = None
 
     if prev is not None and prev.get("timestamp") == server_latest_iso:
-        return  # сервер не объявил кадр новее — SKIP, без единого GetMap-запроса
+        # сервер не объявил кадр новее — SKIP, без единого GetMap-запроса.
+        # Раньше не логировалось вообще нигде (ни print, ни файл) — тихий SKIP.
+        fc.log_skip_event("eumetsat_west_watch.py", "source_stale",
+                           layer=LAYER_CLM, server_latest_time=server_latest_iso,
+                           extra={"last_known_frame": prev.get("timestamp")})
+        return
 
     try:
         clm_arr = fc.fetch_map_custom(LAYER_CLM, WEST_BBOX, TILE_SIZE, TILE_SIZE, time_iso=server_latest_iso)
     except Exception as e:
+        fc.log_skip_event("eumetsat_west_watch.py", "next_frame_not_ready",
+                           layer=LAYER_CLM, server_latest_time=server_latest_iso,
+                           extra={"error": str(e)})
         print(f"  [WARN] eumetsat_west_watch: CLM недоступен ({e}), пропуск цикла")
         return
 
@@ -447,3 +456,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
