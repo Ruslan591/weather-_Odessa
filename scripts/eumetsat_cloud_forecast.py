@@ -96,6 +96,12 @@ OUT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_cloud_forecast.json")
 DEBUG_FILE = os.path.join(BASE_DIR, "data", "eumetsat_cloud_forecast_debug.json")
 BUFFER_FILE = os.path.join(BASE_DIR, "data", "eumetsat_cloud_buffer.npz")
 CLM_SNAPSHOT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_clm_snapshot.png")
+# [ДОБАВЛЕНО 2026-08-19] Scratch-файлы для покраски реальной формы фронта
+# вместо PCA-эллипса (см. docs/topics/eumetsat.md) — НЕ коммитятся в git,
+# читаются в том же прогоне job'а скриптом eumetsat_render_track_overlay.py
+# (идёт в оркестраторе ПОСЛЕ frontal_track.py, у него уже свежий target_id).
+CLM_SCRATCH_BASE_FILE = os.path.join(BASE_DIR, "data", "_scratch_clm_base.png")
+CLM_SCRATCH_PIXELMAP_FILE = os.path.join(BASE_DIR, "data", "_scratch_clm_pixelmap.npy")
 
 LAYER_CLM = "msg_fes:clm"
 LAYER_CTH = "msg_fes:cth"
@@ -346,6 +352,17 @@ def _significant_blobs(is_cloud_mask, valid_mask, want_cloud, min_blob_px=MIN_SI
     а не отдельная нумерация внутри класса; кто из них "primary" для
     ROI-подтверждения решает fc.load_primary_target() (берёт ближайший именно
     class=="local", пропуская system, если тот оказался ближе).
+
+    [ИЗМЕНЕНО 2026-08-19] Возвращает (blobs, pixel_map) — pixel_map — это
+    (TILE_SIZE, TILE_SIZE) int32-массив, значение = target_id+1 для пикселей,
+    принадлежащих этому блобу, 0 = фон/не попал в список (мельче min_blob_px
+    или не тот класс/площадь). Нужен для покраски РЕАЛЬНОЙ формы фронта на
+    снимке (см. eumetsat_render_track_overlay.py) вместо PCA-эллипса —
+    см. docs/topics/eumetsat.md, обсуждение 2026-08-19. Если один пиксель
+    формально входит и в local-, и в system-блоб (диагональная склейка,
+    см. коммент про 8-связность ниже) — приоритет у system (перезаписывается
+    после local при построении карты), так как именно system+frontlike
+    становится треком.
     """
     raw_target = is_cloud_mask if want_cloud else (~is_cloud_mask & valid_mask)
     center_row = center_col = (TILE_SIZE - 1) / 2
@@ -415,6 +432,11 @@ def _significant_blobs(is_cloud_mask, valid_mask, want_cloud, min_blob_px=MIN_SI
                     and not (spans_x or spans_y)
                 ),
                 "window_spanning": bool(spans_x or spans_y),
+                "_pixel_ys": ys,   # [ИЗМЕНЕНО 2026-08-19] координаты пикселей
+                "_pixel_xs": xs,   # блоба — нужны ниже для построения карты
+                                   # target_id->пиксели (раскраска реальной
+                                   # формы фронта, не PCA-эллипса). Ключи с "_"
+                                   # снимаются перед записью в JSON (см. main()).
             })
         return result
 
@@ -462,7 +484,21 @@ def _significant_blobs(is_cloud_mask, valid_mask, want_cloud, min_blob_px=MIN_SI
     blobs.sort(key=lambda b: math.hypot(b["centroid_dx_km"], b["centroid_dy_km"]))
     for i, b in enumerate(blobs):
         b["target_id"] = i  # 0 = primary (ближайшая, как раньше выбирал _nearest_of_type)
-    return blobs
+    pixel_map = np.zeros((TILE_SIZE, TILE_SIZE), dtype=np.int32)
+    # Два прохода — сначала local, потом system поверх (гарантированный
+    # приоритет system при перекрытии пикселей, НЕ зависящий от того, кто
+    # из них оказался ближе к центру и получил меньший target_id при
+    # сортировке выше).
+    for b in blobs:
+        if b["class"] == "local":
+            pixel_map[b["_pixel_ys"], b["_pixel_xs"]] = b["target_id"] + 1
+    for b in blobs:
+        if b["class"] == "system":
+            pixel_map[b["_pixel_ys"], b["_pixel_xs"]] = b["target_id"] + 1
+    for b in blobs:
+        del b["_pixel_ys"]
+        del b["_pixel_xs"]
+    return blobs, pixel_map
 
 
 def _parabolic_subpixel(c_minus, c_zero, c_plus):
@@ -681,15 +717,21 @@ def _save_clm_snapshot(is_cloud, valid):
     fc.draw_view_radius_circle()/draw_frontal_tracks_overlay(), TILE_SIZE
     одинаковый на всех трёх слоях WMS).
 
-    ВАЖНО про треки на оверлее: cloud_forecast.py в порядке пайплайна
-    (см. gh_satellite_pipeline.py) запускается ПЕРЕД frontal_track.py —
-    значит data/eumetsat_frontal_track.json тут читается ещё СТАРЫЙ (с
-    прошлого цикла), тот же лаг в 1 цикл, что уже принят у has_precip/
-    ahead_obs и задокументирован как норма, не баг.
-
-    Контур береговой линии + точка Одессы (fc.draw_coastline_overlay()/
-    fc.draw_odessa_marker()) — по запросу 2026-08-16 ("ориентир"), на CLM
-    особенно ценно — своей географии нет вообще, только облако/ясно."""
+    [ИЗМЕНЕНО 2026-08-19] Раньше эта функция сама рисовала треки поверх
+    (PCA-эллипс, устаревший на 1 цикл — cloud_forecast.py в оркестраторе
+    идёт ДО frontal_track.py) и сохраняла сразу в CLM_SNAPSHOT_FILE. По
+    запросу пользователя — красим РЕАЛЬНЫЕ пиксели блоба вместо линии, и
+    без цикла отставания. Для этого сама покраска переехала в отдельный
+    финальный шаг eumetsat_render_track_overlay.py, который в оркестраторе
+    идёт ПОСЛЕ frontal_track.py (свежий target_id уже есть). Эта функция
+    теперь только готовит и складывает "полуфабрикат" — контур берега +
+    круг обзора, БЕЗ треков и БЕЗ маркера Одессы (тот тоже должен быть
+    поверх покраски, иначе покраска перекрыла бы его) — в scratch-файл
+    CLM_SCRATCH_BASE_FILE. Карту target_id-пикселей (blob_pixel_map)
+    сохраняет отдельно caller в main(), сразу после _significant_blobs()
+    (там, где эта карта появляется) — см. docs/topics/eumetsat.md.
+    Оба scratch-файла НЕ коммитятся в git — живут только в рамках одного
+    прогона job'а (все шаги пайплайна работают в общей рабочей папке)."""
     try:
         rgb = np.zeros((TILE_SIZE, TILE_SIZE, 3), dtype=np.uint8)
         rgb[:, :] = (60, 60, 68)                  # нет данных
@@ -698,18 +740,9 @@ def _save_clm_snapshot(is_cloud, valid):
         base = Image.fromarray(rgb, mode="RGB")
         base = fc.draw_coastline_overlay(base)
         base = fc.draw_view_radius_circle(base)
-        ft_path = os.path.join(BASE_DIR, "data", "eumetsat_frontal_track.json")
-        tracks = []
-        if os.path.exists(ft_path):
-            import json as _json
-            with open(ft_path, "r", encoding="utf-8") as f:
-                tracks = (_json.load(f) or {}).get("tracks", [])
-        if tracks:
-            base = fc.draw_frontal_tracks_overlay(base, tracks)
-        base = fc.draw_odessa_marker(base)
-        base.save(CLM_SNAPSHOT_FILE)
+        base.save(CLM_SCRATCH_BASE_FILE)
     except Exception as e:
-        print(f"  [WARN] eumetsat_cloud_forecast.py: не удалось сохранить CLM snapshot: {e}")
+        print(f"  [WARN] eumetsat_cloud_forecast.py: не удалось сохранить CLM scratch-базу: {e}")
 
 
 def _save_synced_gc_ir_snapshots(clm_ts_iso):
@@ -998,7 +1031,11 @@ def main():
     # ROI-контракт для остальных модулей пайплайна (ИК/GeoColour/Phase-Type/
     # осадки/гроза читают candidates вместо собственного независимого поиска
     # "ближайшего пятна" — см. docs/topics/eumetsat.md, план от 2026-08-04)
-    candidates = _significant_blobs(is_cloud_now, valid_now, want_cloud_target)
+    candidates, blob_pixel_map = _significant_blobs(is_cloud_now, valid_now, want_cloud_target)
+    try:
+        np.save(CLM_SCRATCH_PIXELMAP_FILE, blob_pixel_map)
+    except Exception as e:
+        print(f"  [WARN] eumetsat_cloud_forecast.py: не удалось сохранить pixel_map: {e}")
     # Выбор "ближайшего облака" СИНХРОНИЗИРОВАН с реестром повторяющихся
     # ложных срабатываний CLM (data/eumetsat_target_false_positive_log.json,
     # см. docs/topics/eumetsat.md, запись 2026-08-08) — раньше этот блок
