@@ -17,6 +17,33 @@
 
 const STATION_LABEL = "Одесса (СИНОП 33837)";
 
+// Зеркало Python field_motion_common.FRONTAL_TRACK_COLORS (2026-08-19) —
+// тот же track_id должен быть того же цвета и на снимке (реальные пиксели
+// блоба, см. eumetsat_render_track_overlay.py), и здесь, в номере трека
+// таблицы. Порядок и состав ОБЯЗАНЫ совпадать 1-в-1 с Python-списком —
+// при правке одного менять оба. Жёлтый намеренно не включён (см. коммент
+// в Python-версии — слишком похож на цвет окружности обзора на снимке).
+const FRONTAL_TRACK_COLORS = [
+    "rgb(255,59,48)",   // красный
+    "rgb(52,199,89)",   // зелёный
+    "rgb(10,132,255)",  // синий
+    "rgb(255,149,0)",   // оранжевый
+    "rgb(191,90,242)",  // фиолетовый
+    "rgb(255,45,149)",  // розовый
+    "rgb(100,210,255)", // голубой
+];
+
+function _trackColor(trackId){
+    if(trackId == null) return "#666";
+    const idx = ((trackId % FRONTAL_TRACK_COLORS.length) + FRONTAL_TRACK_COLORS.length) % FRONTAL_TRACK_COLORS.length;
+    return FRONTAL_TRACK_COLORS[idx];
+}
+
+function _trackColorDot(trackId){
+    const color = _trackColor(trackId);
+    return `<span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:${color}; margin-right:5px; vertical-align:middle;"></span>`;
+}
+
 let _eumetsatForecastData      = null;
 let _eumetsatForecastFetchedAt = 0;
 let _eumetsatPrecipForecastData      = null;
@@ -1077,7 +1104,7 @@ function _renderFrontalTracksTable(tracks, opts){
             </td>
         </tr>` : "";
         return `<tr${rowStyle}>
-            <td style="padding:3px 10px 3px 0; color:#666; font-family:monospace;">#${t.track_id != null ? t.track_id : "?"}</td>
+            <td style="padding:3px 10px 3px 0; color:#666; font-family:monospace;">${_trackColorDot(t.track_id)}#${t.track_id != null ? t.track_id : "?"}</td>
             <td style="padding:3px 10px 3px 0; color:#bbb; text-align:right;">${dist}</td>
             <td style="padding:3px 10px; color:#bbb;">${dir}</td>
             <td style="padding:3px 10px; color:#bbb; text-align:right;">${area}</td>
@@ -1095,7 +1122,7 @@ function _renderFrontalTracksTable(tracks, opts){
         <div style="overflow-x:auto; margin-top:6px;">
         <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
             <thead><tr style="color:#777; text-align:left;">
-                <th style="padding:3px 10px 3px 0; font-weight:600;" title="Условный номер трека — сквозной счётчик, не переиспользуется">#</th>
+                <th style="padding:3px 10px 3px 0; font-weight:600;" title="Условный номер трека — сквозной счётчик, не переиспользуется. Цвет кружка = цвет покраски этого фронта на снимке выше (реальная форма блоба, не эллипс)">#</th>
                 <th style="padding:3px 10px 3px 0; font-weight:600; text-align:right;">Км</th>
                 <th style="padding:3px 10px; font-weight:600;">Напр.</th>
                 <th style="padding:3px 10px; font-weight:600; text-align:right;">Площадь</th>
@@ -1325,3 +1352,4 @@ function renderNearbyPrecipCard(){
             Data: <a href="https://www.eumetsat.int/" target="_blank" rel="noopener" style="color:#72c8ff;">EUMETSAT</a>
         </div>`;
 }
+
