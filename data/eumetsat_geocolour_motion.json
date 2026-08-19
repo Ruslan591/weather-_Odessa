@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-19T04:50:51Z",
+  "timestamp": "2026-08-19T05:07:45Z",
   "buffer_size": 6,
   "buffer_span_minutes": 50,
   "observed_area": {
@@ -13,71 +13,65 @@
     "state_radius_km": 12
   },
   "valid": true,
-  "speed_kmh": 72.0,
+  "speed_kmh": 91.4,
   "direction_compass": "СВ",
-  "bearing_deg": 51.5,
+  "bearing_deg": 49.9,
   "frame_pairs_used": 5,
-  "acceleration_kmh": 30.0,
-  "turning_deg": -1.5,
-  "acceleration_verdict": "ускоряется",
+  "acceleration_kmh": 2.7,
+  "turning_deg": -2.0,
+  "acceleration_verdict": "скорость стабильна",
   "turning_verdict": "направление стабильно",
   "forecast_displacement": {
     "30min": {
-      "distance_km": 54.0,
-      "bearing_deg": 50.0,
+      "distance_km": 47.3,
+      "bearing_deg": 47.0,
       "compass": "СВ"
     },
     "60min": {
-      "distance_km": 126.1,
-      "bearing_deg": 50.0,
+      "distance_km": 96.4,
+      "bearing_deg": 46.0,
       "compass": "СВ"
     },
     "120min": {
-      "distance_km": 324.3,
-      "bearing_deg": 49.0,
+      "distance_km": 199.7,
+      "bearing_deg": 44.0,
       "compass": "СВ"
     }
   },
   "area_fraction_over_time": [
-    0.464,
-    0.809,
     0.97,
+    1.0,
+    1.0,
     1.0,
     1.0,
     1.0
   ],
-  "area_trend_delta": 0.536,
-  "area_trend_verdict": "растёт",
+  "area_trend_delta": 0.03,
+  "area_trend_verdict": "без существенных изменений",
   "station_state": "cloud",
   "station_area_fraction": 1.0,
   "cloud_mass_distance_km": 0.8,
   "cloud_mass_bearing_deg": 325.0,
   "cloud_mass_compass": "СЗ",
-  "cloud_mass_area_km2": 210543,
+  "cloud_mass_area_km2": 211121,
   "target_confirmation": {
     "confirmed": true,
     "target_id": 0,
-    "target_area_km2": 93.4,
+    "target_area_km2": 56.0,
     "roi_cloud_fraction": 1.0,
     "verdict": "GeoColour подтверждает: в ROI CLM-цели преобладает облачность"
   },
   "system_analysis_all": [
     {
-      "target_id": 5,
+      "target_id": 2,
       "available": true,
       "roi_cloud_fraction": 1.0,
       "confirmed": true
     },
     {
-      "target_id": 6,
+      "target_id": 3,
       "available": true,
-      "roi_cloud_fraction": 0.235,
-      "confirmed": false
-    },
-    {
-      "target_id": 10,
-      "available": true,
-      "roi_cloud_fraction": 1.0,
+      "roi_cloud_fraction": 0.727,
       "confirmed": true
     }
   ],
@@ -93,42 +87,6 @@
       "available": true,
       "roi_cloud_fraction": 1.0,
       "confirmed": true
-    },
-    {
-      "target_id": 2,
-      "available": true,
-      "roi_cloud_fraction": 1.0,
-      "confirmed": true
-    },
-    {
-      "target_id": 3,
-      "available": true,
-      "roi_cloud_fraction": 1.0,
-      "confirmed": true
-    },
-    {
-      "target_id": 4,
-      "available": true,
-      "roi_cloud_fraction": 1.0,
-      "confirmed": true
-    },
-    {
-      "target_id": 7,
-      "available": true,
-      "roi_cloud_fraction": 1.0,
-      "confirmed": true
-    },
-    {
-      "target_id": 8,
-      "available": true,
-      "roi_cloud_fraction": 0.111,
-      "confirmed": false
-    },
-    {
-      "target_id": 9,
-      "available": true,
-      "roi_cloud_fraction": 0.381,
-      "confirmed": false
     }
   ],
   "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
