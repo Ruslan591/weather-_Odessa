@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-19T04:18:48Z",
+  "timestamp": "2026-08-19T04:32:38Z",
   "buffer_size": 6,
   "buffer_span_minutes": 50,
   "observed_area": {
@@ -13,91 +13,91 @@
     "state_radius_km": 12
   },
   "valid": true,
-  "speed_kmh": 17.9,
+  "speed_kmh": 54.2,
   "direction_compass": "СВ",
-  "bearing_deg": 53.8,
+  "bearing_deg": 52.0,
   "frame_pairs_used": 5,
-  "acceleration_kmh": 44.6,
-  "turning_deg": -43.2,
+  "acceleration_kmh": 61.2,
+  "turning_deg": -2.7,
   "acceleration_verdict": "ускоряется",
-  "turning_verdict": "меняет направление (против часовой)",
+  "turning_verdict": "направление стабильно",
   "forecast_displacement": {
     "30min": {
-      "distance_km": 35.7,
-      "bearing_deg": 54.0,
+      "distance_km": 63.8,
+      "bearing_deg": 51.0,
       "compass": "СВ"
     },
     "60min": {
-      "distance_km": 98.2,
-      "bearing_deg": 54.0,
+      "distance_km": 164.4,
+      "bearing_deg": 51.0,
       "compass": "СВ"
     },
     "120min": {
-      "distance_km": 303.5,
-      "bearing_deg": 54.0,
+      "distance_km": 475.7,
+      "bearing_deg": 50.0,
       "compass": "СВ"
     }
   },
   "area_fraction_over_time": [
-    0.353,
-    0.372,
     0.328,
     0.464,
     0.809,
-    0.97
+    0.97,
+    1.0,
+    1.0
   ],
-  "area_trend_delta": 0.617,
+  "area_trend_delta": 0.672,
   "area_trend_verdict": "растёт",
   "station_state": "cloud",
   "station_area_fraction": 1.0,
   "cloud_mass_distance_km": 0.8,
   "cloud_mass_bearing_deg": 325.0,
   "cloud_mass_compass": "СЗ",
-  "cloud_mass_area_km2": 196579,
+  "cloud_mass_area_km2": 210572,
   "target_confirmation": {
     "confirmed": true,
     "target_id": 0,
     "target_area_km2": 89.4,
-    "roi_cloud_fraction": 0.589,
+    "roi_cloud_fraction": 1.0,
     "verdict": "GeoColour подтверждает: в ROI CLM-цели преобладает облачность"
   },
   "system_analysis_all": [
     {
       "target_id": 1,
       "available": true,
-      "roi_cloud_fraction": 0.577,
+      "roi_cloud_fraction": 1.0,
       "confirmed": true
     },
     {
       "target_id": 3,
       "available": true,
-      "roi_cloud_fraction": 0.147,
-      "confirmed": false
+      "roi_cloud_fraction": 1.0,
+      "confirmed": true
     },
     {
       "target_id": 4,
       "available": true,
-      "roi_cloud_fraction": 0.439,
-      "confirmed": false
+      "roi_cloud_fraction": 0.999,
+      "confirmed": true
     },
     {
       "target_id": 5,
       "available": true,
-      "roi_cloud_fraction": 0.976,
+      "roi_cloud_fraction": 1.0,
       "confirmed": true
     },
     {
       "target_id": 8,
       "available": true,
-      "roi_cloud_fraction": 0.242,
-      "confirmed": false
+      "roi_cloud_fraction": 0.971,
+      "confirmed": true
     }
   ],
   "local_analysis_all": [
     {
       "target_id": 0,
       "available": true,
-      "roi_cloud_fraction": 0.589,
+      "roi_cloud_fraction": 1.0,
       "confirmed": true
     },
     {
@@ -109,20 +109,20 @@
     {
       "target_id": 6,
       "available": true,
-      "roi_cloud_fraction": 0.284,
-      "confirmed": false
+      "roi_cloud_fraction": 1.0,
+      "confirmed": true
     },
     {
       "target_id": 7,
       "available": true,
-      "roi_cloud_fraction": 0.0,
-      "confirmed": false
+      "roi_cloud_fraction": 0.556,
+      "confirmed": true
     },
     {
       "target_id": 9,
       "available": true,
-      "roi_cloud_fraction": 0.094,
-      "confirmed": false
+      "roi_cloud_fraction": 0.659,
+      "confirmed": true
     }
   ],
   "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
