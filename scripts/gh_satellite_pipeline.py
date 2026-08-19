@@ -40,6 +40,21 @@ def _is_daytime_utc(now_utc):
     return 5 <= local_hour < 20
 
 
+def _parse_ts_flexible(ts):
+    """Парсит "timestamp" из data/eumetsat_{cloud_forecast,geocolour_motion,
+    ir_motion}.json — с 2026-08-19 это время КАДРА (формат
+    "...T%H:%M:00.000Z", как в остальном пайплайне), раньше было время
+    генерации ("...T%H:%M:%SZ", без миллисекунд). Пробуем оба формата —
+    нужно для первого прогона после деплоя, пока в закоммиченном файле ещё
+    старый формат от предыдущего запуска. См. docs/topics/eumetsat.md."""
+    for fmt in ("%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%dT%H:%M:%SZ"):
+        try:
+            return datetime.strptime(ts, fmt).replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+    raise ValueError(f"не удалось распарсить timestamp: {ts!r}")
+
+
 def check_eumetsat_point():
     # Значения EUMETSAT (облачность/высота/молнии) в точке Одессы, для
     # сравнения с RainViewer-прокси. Гейт 12 мин (реальные данные — 5-15 мин).
@@ -49,7 +64,7 @@ def check_eumetsat_point():
         if os.path.exists(out_file):
             with open(out_file, "r", encoding="utf-8") as f:
                 prev = json.load(f)
-            last_time = datetime.strptime(prev["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            last_time = _parse_ts_flexible(prev["timestamp"])
             if (now_utc - last_time).total_seconds() < 12 * 60:
                 return
     except Exception:
@@ -73,7 +88,7 @@ def check_eumetsat_cloud_forecast():
         if os.path.exists(out_file):
             with open(out_file, "r", encoding="utf-8") as f:
                 prev = json.load(f)
-            last_time = datetime.strptime(prev["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            last_time = _parse_ts_flexible(prev["timestamp"])
             if (now_utc - last_time).total_seconds() < 15 * 60:
                 return
     except Exception:
@@ -155,7 +170,7 @@ def check_eumetsat_precip_forecast():
         if os.path.exists(out_file):
             with open(out_file, "r", encoding="utf-8") as f:
                 prev = json.load(f)
-            last_time = datetime.strptime(prev["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            last_time = _parse_ts_flexible(prev["timestamp"])
             if (now_utc - last_time).total_seconds() < 15 * 60:
                 return
     except Exception:
@@ -178,7 +193,7 @@ def check_eumetsat_lightning_forecast():
         if os.path.exists(out_file):
             with open(out_file, "r", encoding="utf-8") as f:
                 prev = json.load(f)
-            last_time = datetime.strptime(prev["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            last_time = _parse_ts_flexible(prev["timestamp"])
             if (now_utc - last_time).total_seconds() < 5 * 60:
                 return
     except Exception:
@@ -202,7 +217,7 @@ def check_eumetsat_ir_motion():
         if os.path.exists(out_file):
             with open(out_file, "r", encoding="utf-8") as f:
                 prev = json.load(f)
-            last_time = datetime.strptime(prev["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            last_time = _parse_ts_flexible(prev["timestamp"])
             if (now_utc - last_time).total_seconds() < 10 * 60:
                 return
     except Exception:
@@ -227,7 +242,7 @@ def check_eumetsat_precip_motion():
         if os.path.exists(out_file):
             with open(out_file, "r", encoding="utf-8") as f:
                 prev = json.load(f)
-            last_time = datetime.strptime(prev["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            last_time = _parse_ts_flexible(prev["timestamp"])
             if (now_utc - last_time).total_seconds() < 10 * 60:
                 return
     except Exception:
@@ -265,7 +280,7 @@ def check_eumetsat_cloud_phase_type():
         if os.path.exists(out_file):
             with open(out_file, "r", encoding="utf-8") as f:
                 prev = json.load(f)
-            last_time = datetime.strptime(prev["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            last_time = _parse_ts_flexible(prev["timestamp"])
             if (now_utc - last_time).total_seconds() < 10 * 60:
                 return
     except Exception:
@@ -289,7 +304,7 @@ def check_eumetsat_geocolour_motion():
         if os.path.exists(out_file):
             with open(out_file, "r", encoding="utf-8") as f:
                 prev = json.load(f)
-            last_time = datetime.strptime(prev["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            last_time = _parse_ts_flexible(prev["timestamp"])
             if (now_utc - last_time).total_seconds() < 10 * 60:
                 return
     except Exception:
