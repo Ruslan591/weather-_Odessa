@@ -241,7 +241,7 @@ def main():
     debug["frame_std"] = [round(float(g.std()), 1) for g in frames]
 
     out = {
-        "timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "timestamp": times[-1],  # [ИЗМЕНЕНО 2026-08-19] было now.strftime(...) — время генерации, не время кадра. См. docs/topics/eumetsat.md.
         "buffer_size": len(frames),
         "buffer_span_minutes": round((fc._parse_iso_minutes(times[-1]) - fc._parse_iso_minutes(times[0]))
                                       if len(times) >= 2 else 0),
