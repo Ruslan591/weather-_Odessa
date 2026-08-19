@@ -1055,7 +1055,7 @@ def main():
                 f"настоящих облаков в радиусе не найдено"
             )
         out = {
-            "timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "timestamp": times[-1],  # [ИЗМЕНЕНО 2026-08-19] было now.strftime(...) — время генерации, не время кадра. См. docs/topics/eumetsat.md.
             "current_state": current_state_str,
             "station_area_fraction": round(area_fraction_now, 3),
             "target_type": target_type,
@@ -1067,7 +1067,7 @@ def main():
 
         if vx is None:
             out = {
-                "timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "timestamp": times[-1],  # [ИЗМЕНЕНО 2026-08-19] было now.strftime(...) — время генерации, не время кадра. См. docs/topics/eumetsat.md.
                 "current_state": current_state_str,
                 "station_area_fraction": round(area_fraction_now, 3),
                 "target_type": target_type,
@@ -1118,7 +1118,7 @@ def main():
             bearing_v = (math.degrees(math.atan2(vx, vy)) + 360) % 360
 
             out = {
-                "timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "timestamp": times[-1],  # [ИЗМЕНЕНО 2026-08-19] было now.strftime(...) — время генерации, не время кадра. См. docs/topics/eumetsat.md.
                 "current_state": current_state_str,
                 "station_area_fraction": round(area_fraction_now, 3),
                 "target_type": target_type,
