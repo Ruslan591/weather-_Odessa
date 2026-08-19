@@ -140,6 +140,26 @@ def check_eumetsat_frontal_track():
         print(f"  [WARN] eumetsat_frontal_track.py: {e}")
 
 
+def check_eumetsat_render_track_overlay():
+    # [ДОБАВЛЕНО 2026-08-19] Финальная покраска РЕАЛЬНОЙ формы фронта на
+    # CLM-снимках (near+west) вместо PCA-эллипса — см. докстринг самого
+    # скрипта и docs/topics/eumetsat.md, обсуждение 2026-08-19. Вызывается
+    # СРАЗУ после check_eumetsat_frontal_track() — на этот момент
+    # data/eumetsat_frontal_track.json уже содержит current_target_id для
+    # треков этого кадра (без него красить нечего). Как и frontal_track.py,
+    # чистая локальная обработка (без сети) — читает scratch-файлы,
+    # написанные cloud_forecast.py/eumetsat_west_watch.py В ЭТОМ ЖЕ
+    # прогоне, идемпотентен (если scratch-файлов нет — тихо пропускает
+    # тайл, см. докстринг скрипта), отдельный гейт по времени не нужен.
+    try:
+        subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "eumetsat_render_track_overlay.py")],
+            cwd=BASE_DIR, capture_output=False, timeout=30
+        )
+    except Exception as e:
+        print(f"  [WARN] eumetsat_render_track_overlay.py: {e}")
+
+
 def check_eumetsat_ground_station_verify():
     # Реальные наблюдения (SYNOP) по станциям "впереди"/"позади" активных
     # треков — план шага 5, пункт 4 (2026-08-15). Единственный шаг во всей
@@ -597,6 +617,7 @@ def main():
     check_eumetsat_cloud_forecast()
     check_eumetsat_west_watch()
     check_eumetsat_frontal_track()
+    check_eumetsat_render_track_overlay()
     check_eumetsat_ground_station_verify()
     check_eumetsat_cloud_phase_type()
     check_eumetsat_precip_forecast()
