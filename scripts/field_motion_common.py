@@ -167,7 +167,10 @@ LOCAL_RADIUS_KM = _GEO["local_radius_km"]
 # station_state тем же способом (area_fraction в локальном круге).
 STATE_RADIUS_KM = _GEO["state_radius_km"]
 
-TIMEOUT = 25
+TIMEOUT = 10  # [ИЗМЕНЕНО 2026-08-19] было 25. Обычный ответ WMS — пара
+# секунд; 25с уже явно "висит". Вместе со снижением retries (см. ниже) это
+# убирает накопление таймаутов за один прогон (было до ~20 мин при нескольких
+# медленных тайлах подряд, см. docs/topics/eumetsat.md, разбор 2026-08-19).
 COMPASS = ["С", "СВ", "В", "ЮВ", "Ю", "ЮЗ", "З", "СЗ"]
 
 
@@ -259,12 +262,20 @@ def record_pipeline_health(script, ok):
         pass
 
 
-def fetch_tile(layer_name, time_iso=None, retries=2, delay=4, style="", crs="CRS:84"):
+def fetch_tile(layer_name, time_iso=None, retries=1, delay=4, style="", crs="CRS:84"):
     """crs="CRS:84" (по умолчанию, как раньше) — порядок осей lon,lat.
     crs="EPSG:4326" — используется для mtg_fd:ir105_hrfi (подтверждённый
     рабочий вариант, см. eumetsat_ir_motion.py); ВАЖНО: по спеке WMS 1.3.0
     у EPSG:4326 порядок осей в bbox lat,lon (обратный CRS:84), иначе запрос
-    уйдёт с перепутанными широтой/долготой."""
+    уйдёт с перепутанными широтой/долготой.
+
+    retries=1 (без повтора) с 2026-08-19: единичный транзиторный сетевой
+    сбой почти всегда либо разрешается при следующем прогоне пайплайна
+    (каденс 15 мин), либо это не сбой, а "сцена ещё не опубликована" —
+    ретрай через 4с её тоже не найдёт. Ретрай был больше защитой от
+    единичного сбоя, но стоил слишком дорого по суммарному времени прогона
+    при нескольких медленных тайлах подряд (см. docs/topics/eumetsat.md).
+    """
     min_lon = CENTER_LON - HALF_WINDOW_DEG
     max_lon = CENTER_LON + HALF_WINDOW_DEG
     min_lat = CENTER_LAT - HALF_WINDOW_DEG
@@ -314,11 +325,12 @@ def fetch_tile(layer_name, time_iso=None, retries=2, delay=4, style="", crs="CRS
 
 
 def fetch_map_custom(layer_name, bbox_lonlat, width, height, time_iso=None,
-                      retries=2, delay=4, style="", crs="CRS:84"):
+                      retries=1, delay=4, style="", crs="CRS:84"):
     """Как fetch_tile(), но с произвольным bbox/размером картинки — для
     рендера широкого обзорного кадра (eumetsat_anim_render.py), а не
     маленького квадрата анализа вокруг Одессы. bbox_lonlat — кортеж
-    (min_lon, min_lat, max_lon, max_lat)."""
+    (min_lon, min_lat, max_lon, max_lat). retries=1 — см. docstring
+    fetch_tile() выше, тот же resoning (изменено 2026-08-19)."""
     min_lon, min_lat, max_lon, max_lat = bbox_lonlat
     if crs == "EPSG:4326":
         bbox = f"{min_lat},{min_lon},{max_lat},{max_lon}"
