@@ -32,7 +32,25 @@ jobs:
         run: sleep "${{ inputs.delay_seconds }}"
 
       - name: Повторно запустить спутниковый пайплайн
+        # [ДОБАВЛЕНО 2026-08-19] Та же защита, что и в full_pipeline.yml —
+        # не диспетчить, если satellite_pipeline.yml уже queued/in_progress.
+        # Оба источника диспетча (этот + явный из full_pipeline.yml) бьют в
+        # один concurrency-group; без проверки они взаимно устраивали
+        # шторм отмен (инцидент 2026-08-18, см. docs/topics/eumetsat.md).
         run: |
+          existing=$(curl -sS -H "Authorization: token ${{ secrets.GH_PAT }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/satellite_pipeline.yml/runs?status=in_progress&per_page=1")
+          existing_count=$(echo "$existing" | python3 -c "import json,sys; print(json.load(sys.stdin).get('total_count', 0))" 2>/dev/null || echo 0)
+          queued=$(curl -sS -H "Authorization: token ${{ secrets.GH_PAT }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/satellite_pipeline.yml/runs?status=queued&per_page=1")
+          queued_count=$(echo "$queued" | python3 -c "import json,sys; print(json.load(sys.stdin).get('total_count', 0))" 2>/dev/null || echo 0)
+          echo "in_progress=$existing_count queued=$queued_count"
+          if [ "$existing_count" != "0" ] || [ "$queued_count" != "0" ]; then
+            echo "satellite_pipeline.yml уже выполняется/в очереди — пропуск диспетча (защита от шторма)"
+            exit 0
+          fi
           code=$(curl -sS -o /tmp/dispatch_resp.json -w "%{http_code}" -X POST \
             -H "Authorization: token ${{ secrets.GH_PAT }}" \
             -H "Accept: application/vnd.github+json" \
@@ -44,3 +62,4 @@ jobs:
             echo "::error::Диспетч satellite_pipeline.yml вернул HTTP $code вместо 204"
             exit 1
           fi
+
