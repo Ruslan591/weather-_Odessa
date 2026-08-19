@@ -75,6 +75,10 @@ OUT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_west_watch.json")
 CLM_SNAPSHOT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_west_snapshot_clm.png")
 GEOCOLOUR_SNAPSHOT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_west_snapshot_geocolour.png")
 IR_SNAPSHOT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_west_snapshot_ir.png")
+# [ДОБАВЛЕНО 2026-08-19] Та же схема, что у near-tier (eumetsat_cloud_forecast.py)
+# — покраска реальной формы фронта вместо PCA-эллипса, см. docs/topics/eumetsat.md.
+CLM_SCRATCH_BASE_FILE = os.path.join(BASE_DIR, "data", "_scratch_west_clm_base.png")
+WEST_SCRATCH_PIXELMAP_FILE = os.path.join(BASE_DIR, "data", "_scratch_west_pixelmap.npy")
 
 LAYER_CLM = "msg_fes:clm"
 LAYER_IR105 = "mtg_fd:ir105_hrfi"
@@ -352,6 +356,31 @@ def main():
     is_cloud, valid = _classify_clm(clm_arr)
     systems = _detect_frontlike_systems(is_cloud, valid)
 
+    # [ИЗМЕНЕНО 2026-08-19] target_id раньше присваивался ниже (после
+    # ir/gc-подтверждения, см. систему координат в near-tier для того же
+    # решения) — перенесено сюда, СРАЗУ после детекции: pixel_map ниже
+    # строится по этому target_id, а сама покраска (в отдельном шаге
+    # eumetsat_render_track_overlay.py, после frontal_track.py) должна
+    # видеть тот же target_id, что попадёт в data/eumetsat_west_watch.json.
+    # Порядок сортировки не меняется (тот же key), список systems между
+    # этой точкой и записью JSON ниже не фильтруется — итоговые target_id
+    # идентичны прежним.
+    systems.sort(key=lambda s: math.hypot(s["centroid_dx_km"], s["centroid_dy_km"]))
+    for i, s in enumerate(systems):
+        s["target_id"] = i
+
+    # Карта пикселей "какой target_id" — для покраски РЕАЛЬНОЙ формы фронта
+    # вместо PCA-эллипса (см. docs/topics/eumetsat.md, обсуждение 2026-08-19).
+    # West раньше вообще не рисовал треки на снимке (в отличие от near-tier
+    # со старым PCA-line подходом) — это НОВАЯ функциональность, не фикс.
+    west_pixel_map = np.zeros((TILE_SIZE, TILE_SIZE), dtype=np.int32)
+    for s in systems:
+        west_pixel_map[s["_pixel_mask"]] = s["target_id"] + 1
+    try:
+        np.save(WEST_SCRATCH_PIXELMAP_FILE, west_pixel_map)
+    except Exception as e:
+        print(f"  [WARN] eumetsat_west_watch: не удалось сохранить pixel_map: {e}")
+
     # --- Снимки для визуальной проверки границ тайла (запрос пользователя
     # 2026-08-16/17) — CLM, GeoColour, ИК сохраняются КАЖДЫЙ непустой цикл,
     # независимо от того, найдены ли frontlike-системы. Все три — теперь
@@ -377,14 +406,20 @@ def main():
     # кадра западного тайла (Одесса ~360км восточнее его центра) — виден
     # только небольшой кусок дуги окружности у восточного края (там же,
     # где near-tier и west-tier перекрываются) — это ожидаемо, не ошибка.
+    #
+    # [ИЗМЕНЕНО 2026-08-19] Маркер Одессы убран отсюда — переезжает в
+    # финальный шаг eumetsat_render_track_overlay.py (должен быть ПОВЕРХ
+    # покраски треков, иначе покраска перекрыла бы его). Сохраняем в
+    # scratch-файл (не в CLM_SNAPSHOT_FILE напрямую) — тот пишется финальным
+    # шагом после frontal_track.py.
     try:
         clm_img = _build_clm_snapshot_image(is_cloud, valid)
         clm_img = fc.draw_coastline_overlay(clm_img, origin_dx_km=OFFSET_DX_KM, origin_dy_km=OFFSET_DY_KM)
         clm_img = fc.draw_view_radius_circle(clm_img, origin_dx_km=OFFSET_DX_KM, origin_dy_km=OFFSET_DY_KM)
-        clm_img = fc.draw_odessa_marker(clm_img, origin_dx_km=OFFSET_DX_KM, origin_dy_km=OFFSET_DY_KM)
-        clm_img.save(CLM_SNAPSHOT_FILE)
+        clm_img.save(CLM_SCRATCH_BASE_FILE)
     except Exception as e:
-        print(f"  [WARN] eumetsat_west_watch: не удалось сохранить CLM snapshot ({e})")
+        print(f"  [WARN] eumetsat_west_watch: не удалось сохранить CLM scratch-базу ({e})")
+
 
     is_day = fc.is_daytime(server_latest_iso)
 
@@ -439,9 +474,9 @@ def main():
         s["gc_confirmation"] = _confirm_gc(s, gc_is_cloud) if gc_is_cloud is not None else {"available": False, "reason": "слой недоступен в этом цикле"}
         del s["_pixel_mask"]
 
-    systems.sort(key=lambda s: math.hypot(s["centroid_dx_km"], s["centroid_dy_km"]))
-    for i, s in enumerate(systems):
-        s["target_id"] = i
+    # target_id уже присвоен выше (см. коммент там, 2026-08-19) — sort/enumerate
+    # здесь больше не нужны, список не переупорядочивается между теми двумя
+    # точками.
 
     out = {
         "timestamp": server_latest_iso,
