@@ -459,6 +459,15 @@ def main():
         _, entry["direction_compass"] = _bearing_compass(latest["dx_km"], latest["dy_km"])
 
         latest_tid = latest.get("target_id")
+        # [ДОБАВЛЕНО 2026-08-19] target_id ПОСЛЕДНЕЙ точки — нужен
+        # eumetsat_render_track_overlay.py для покраски реальных пикселей
+        # блоба (вместо PCA-эллипса). Всегда относится к ЭТОМУ кадру — цикл
+        # выше уже отфильтровал t["last_seen"] == cf_ts_str, так что здесь
+        # latest — точка именно из текущего прогона, не старая (см.
+        # docs/topics/eumetsat.md, обсуждение 2026-08-19). Единый механизм
+        # для near и west — оба тира матчатся в одном цикле с cf_ts_str как
+        # референсом (см. коммент в main() про frontlike_now/_merge_near_west).
+        entry["current_target_id"] = latest_tid
         pr = precip_by_id.get(latest_tid) if latest_tid is not None else None
         lt = lightning_by_id.get(latest_tid) if latest_tid is not None else None
         entry["has_precip"] = pr.get("has_precip") if pr else None
@@ -521,3 +530,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
