@@ -1,8 +1,12 @@
 name: Полный облачный пайплайн (verification + AI + PWS)
 
 on:
-  workflow_dispatch:   # запускается ТОЛЬКО по триггеру с телефона (точное время),
-                        # собственного schedule здесь нет специально
+  workflow_dispatch:   # [ИЗМЕНЕНО 2026-08-20] Раньше запускался ТОЛЬКО по
+                        # триггеру с телефона напрямую. Теперь телефон
+                        # триггерит satellite_pipeline.yml, а тот явным
+                        # диспетчем (последний шаг в нём) запускает этот —
+                        # см. docs/topics/main_pipeline.md. Собственного
+                        # schedule здесь по-прежнему нет.
 
 concurrency:
   group: full-pipeline
@@ -22,48 +26,13 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Восстановление шрифта Carlito из кэша
-        id: font-cache
-        uses: actions/cache@v4
-        with:
-          path: /usr/share/fonts/truetype/crosextra
-          key: fonts-crosextra-carlito-v1
-
-      - name: Установка шрифта (только при промахе кэша)
-        if: steps.font-cache.outputs.cache-hit != 'true'
-        env:
-          DEBIAN_FRONTEND: noninteractive
-          NEEDRESTART_MODE: a
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y fonts-crosextra-carlito
-
-      - name: Обновление кэша шрифтов ОС
-        run: sudo fc-cache -f
-
-      - name: Восстановление apt-архивов ffmpeg из кэша
-        uses: actions/cache@v4
-        with:
-          path: /var/cache/apt/archives
-          key: apt-archives-ffmpeg-v1
-
-      - name: Проверка/установка ffmpeg
-        timeout-minutes: 4
-        continue-on-error: true
-        env:
-          DEBIAN_FRONTEND: noninteractive
-          NEEDRESTART_MODE: a
-        run: |
-          if command -v ffmpeg >/dev/null 2>&1; then
-            echo "ffmpeg уже есть: $(ffmpeg -version | head -1)"
-          else
-            echo "ffmpeg не найден в образе — ставлю (из кэша apt-архивов, если он тёплый)"
-            sudo apt-get update -y
-            sudo apt-get install -y ffmpeg
-          fi
-
       - name: Установка Python-зависимостей
-        run: pip install edge-tts Pillow requests numpy scipy
+        # [ИЗМЕНЕНО 2026-08-20] edge-tts и scipy убраны — нужны были только
+        # AI-блоку (TTS, make_blocks_*), который переехал в ai_pipeline.yml.
+        # Pillow остаётся: использует nearby_precip.py (не AI-скрипт).
+        # ffmpeg и шрифт Carlito туда же переехали — нужны были только
+        # make_video.py, который здесь больше не вызывается.
+        run: pip install requests numpy Pillow
 
       - name: Настройка git для коммитов
         run: |
@@ -73,64 +42,64 @@ jobs:
       - name: Запуск облачного пайплайна
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          CLAUDE_ANALYSIS_ENABLED: "true"
-          GEMINI_ANALYSIS_ENABLED: "true"
           PYTHONUNBUFFERED: "1"
         run: python scripts/gh_pipeline.py
 
-      - name: Явный запуск спутникового пайплайна
-        # workflow_run в satellite_pipeline.yml документированно ненадёжен
-        # (GitHub Community: "one of the least reliable and least observable
-        # parts of Actions") — на практике ни разу не сработал после
-        # вынесения спутникового модуля в отдельный workflow 2026-07-26,
-        # хотя имя workflow и default-branch совпадают. Явный вызов через
-        # API тем же способом, каким телефон дёргает этот пайплайн —
-        # детерминирован и не зависит от этой недокументированной эвристики.
-        # workflow_run оставлен в satellite_pipeline.yml как резервный путь
-        # на случай, если когда-нибудь заработает — не мешает этому шагу.
+      - name: Явный запуск AI-пайплайна
+        # [ИЗМЕНЕНО 2026-08-20] Раньше этим последним шагом диспетчился
+        # satellite_pipeline.yml (см. историю ниже — тот же паттерн
+        # сохранён). Порядок цепочки перевёрнут: теперь спутниковый
+        # пайплайн — первое звено (триггерится телефоном напрямую) и сам
+        # диспетчит ЭТОТ workflow последним своим шагом. См.
+        # docs/topics/main_pipeline.md.
         #
-        # [ДОБАВЛЕНО 2026-08-19] Проверка перед диспетчем: если satellite_
-        # pipeline.yml уже queued/in_progress — не диспетчить повторно.
-        # Реакция на инцидент 2026-08-18 (docs/topics/eumetsat.md): этот
-        # безусловный диспетч, накладываясь на self-redispatch цепочку
-        # (eumetsat_alert_redispatch.yml, работает во время тревоги каждые
-        # 5 мин), устраивал шторм — 8 отменённых прогонов подряд за час,
-        # и как следствие — дублирующиеся push-уведомления со старыми
-        # данными (см. разбор в eumetsat.md). concurrency-группа сама по
-        # себе это не решает: cancel-in-progress:false не отменяет ИДУЩИЙ
-        # прогон, но отменяет ОЖИДАЮЩИЙ в очереди при новом диспетче — то
-        # есть каждый лишний диспетч всё равно "съедал" уже поставленный
-        # в очередь прогон и начинал заново.
+        # ai_pipeline.yml — отдельный workflow для AI-анализа (Claude/
+        # Gemini + TTS + видео), вынесен из этого пайплайна 2026-08-20 по
+        # аналогии со спутниковым модулем (вынесен 2026-07-26). Диспетчится
+        # тем же проверенным паттерном: явный workflow_dispatch вместо
+        # workflow_run (документированно ненадёжен, ни разу не сработал на
+        # практике для спутникового модуля), с guard на in_progress/queued
+        # (урок инцидента 2026-08-18 — шторм из-за безусловного диспетча
+        # поверх self-redispatch цепочки, см. docs/topics/eumetsat.md) и
+        # debug-коммитом ответа для диагностики.
+        #
+        # if: always() — этот шаг того же рода, что и все "передай эстафему
+        # дальше" диспетчи в проекте: безусловен, потому что ai_pipeline.yml
+        # сам самодостаточно решает, есть ли ему работа (очередь
+        # data/_ai_pending_models.json, которую наполняет только
+        # scripts/gh_pipeline.py и только при успешном run_pipeline() — см.
+        # докстринг scripts/gh_ai_pipeline.py). Это отличает такие шаги от
+        # push-уведомлений/redispatch-цепочки в satellite_pipeline.yml,
+        # которые читают "just_triggered"-флаги и поэтому обязаны быть
+        # гейтованы success() — именно так раскрутился шторм 2026-08-18.
         if: always()
         run: |
           existing=$(curl -sS -H "Authorization: token ${{ secrets.GH_PAT }}" \
             -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/satellite_pipeline.yml/runs?status=in_progress&per_page=1")
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/ai_pipeline.yml/runs?status=in_progress&per_page=1")
           existing_count=$(echo "$existing" | python3 -c "import json,sys; print(json.load(sys.stdin).get('total_count', 0))" 2>/dev/null || echo 0)
           queued=$(curl -sS -H "Authorization: token ${{ secrets.GH_PAT }}" \
             -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/satellite_pipeline.yml/runs?status=queued&per_page=1")
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/ai_pipeline.yml/runs?status=queued&per_page=1")
           queued_count=$(echo "$queued" | python3 -c "import json,sys; print(json.load(sys.stdin).get('total_count', 0))" 2>/dev/null || echo 0)
           echo "in_progress=$existing_count queued=$queued_count"
           if [ "$existing_count" != "0" ] || [ "$queued_count" != "0" ]; then
-            echo "satellite_pipeline.yml уже выполняется/в очереди — пропуск диспетча (защита от шторма)"
+            echo "ai_pipeline.yml уже выполняется/в очереди — пропуск диспетча (защита от шторма)"
             exit 0
           fi
           code=$(curl -sS -o /tmp/dispatch_resp.json -w "%{http_code}" -X POST \
             -H "Authorization: token ${{ secrets.GH_PAT }}" \
             -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/satellite_pipeline.yml/dispatches" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/ai_pipeline.yml/dispatches" \
             -d '{"ref":"main"}')
           echo "HTTP: $code"
           cat /tmp/dispatch_resp.json || true
-          echo "{\"http_code\": \"$code\", \"body\": $(cat /tmp/dispatch_resp.json | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')}" > data/_debug_satellite_dispatch.json
-          git add data/_debug_satellite_dispatch.json
-          git commit -m "debug: satellite dispatch response" || true
+          echo "{\"http_code\": \"$code\", \"body\": $(cat /tmp/dispatch_resp.json | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')}" > data/_debug_ai_dispatch.json
+          git add data/_debug_ai_dispatch.json
+          git commit -m "debug: ai dispatch response" || true
           git push || true
           if [ "$code" != "204" ]; then
-            echo "::error::Диспетч satellite_pipeline.yml вернул HTTP $code вместо 204 — см. data/_debug_satellite_dispatch.json"
+            echo "::error::Диспетч ai_pipeline.yml вернул HTTP $code вместо 204 — см. data/_debug_ai_dispatch.json"
             exit 1
           fi
 
