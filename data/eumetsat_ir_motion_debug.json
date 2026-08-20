@@ -1,27 +1,27 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-08-20T01:00:00.000Z",
+  "server_latest_time": "2026-08-20T01:10:00.000Z",
   "bootstrap": true,
   "buffer_before": 6,
   "buffer_size": 6,
   "buffer_times": [
-    "2026-08-20T00:10:00.000Z",
     "2026-08-20T00:20:00.000Z",
     "2026-08-20T00:30:00.000Z",
     "2026-08-20T00:40:00.000Z",
     "2026-08-20T00:50:00.000Z",
-    "2026-08-20T01:00:00.000Z"
+    "2026-08-20T01:00:00.000Z",
+    "2026-08-20T01:10:00.000Z"
   ],
   "frame_std": [
-    8.3,
     8.3,
     8.4,
     8.7,
     9.1,
-    9.3
+    9.3,
+    9.2
   ],
   "result": {
-    "timestamp": "2026-08-20T01:00:00.000Z",
+    "timestamp": "2026-08-20T01:10:00.000Z",
     "buffer_size": 6,
     "buffer_span_minutes": 50,
     "observed_area": {
@@ -34,82 +34,88 @@
       "local_trend_radius_km": 50
     },
     "valid": true,
-    "speed_kmh": 0.5,
+    "speed_kmh": 0.7,
     "direction_compass": "Ю",
-    "bearing_deg": 166.4,
+    "bearing_deg": 201.1,
     "frame_pairs_used": 5,
-    "acceleration_kmh": -0.1,
-    "turning_deg": 58.9,
+    "acceleration_kmh": -0.4,
+    "turning_deg": -3.9,
     "acceleration_verdict": "скорость стабильна",
-    "turning_verdict": "меняет направление (по часовой)",
+    "turning_verdict": "направление стабильно",
     "forecast_displacement": {
       "30min": {
-        "distance_km": 0.3,
-        "bearing_deg": 233.0,
-        "compass": "ЮЗ"
+        "distance_km": 0.2,
+        "bearing_deg": 192.0,
+        "compass": "Ю"
       },
       "60min": {
-        "distance_km": 0.9,
-        "bearing_deg": 247.0,
-        "compass": "ЮЗ"
+        "distance_km": 0.1,
+        "bearing_deg": 164.0,
+        "compass": "Ю"
       },
       "120min": {
-        "distance_km": 2.9,
-        "bearing_deg": 260.0,
-        "compass": "З"
+        "distance_km": 0.7,
+        "bearing_deg": 43.0,
+        "compass": "СВ"
       }
     },
     "area_fraction_over_time": [
-      0.283,
       0.289,
       0.297,
-      0.31,
+      0.308,
       0.319,
-      0.327
+      0.327,
+      0.334
     ],
-    "area_trend_delta": 0.044,
+    "area_trend_delta": 0.045,
     "area_trend_verdict": "без существенных изменений",
     "mean_brightness_over_time": [
       36.8,
-      36.8,
-      37.0,
       37.0,
       37.1,
-      37.2
+      37.1,
+      37.2,
+      37.3
     ],
-    "brightness_trend_delta": 0.4,
+    "brightness_trend_delta": 0.5,
     "station_state": "variable",
-    "station_area_fraction": 0.158,
-    "cloud_mass_distance_km": 182.9,
+    "station_area_fraction": 0.176,
+    "cloud_mass_distance_km": 182.5,
     "cloud_mass_bearing_deg": 335.0,
     "cloud_mass_compass": "СЗ",
-    "cloud_mass_area_km2": 79,
-    "cloud_mass_contrast_sigma": 0.86,
+    "cloud_mass_area_km2": 83,
+    "cloud_mass_contrast_sigma": 0.87,
     "temperature_trend_verdict": "без существенных изменений",
     "target_confirmation": {
       "confirmed": false,
       "target_id": 2,
-      "target_area_km2": 270.9,
-      "roi_contrast_sigma": -0.05,
+      "target_area_km2": 165.5,
+      "roi_contrast_sigma": 0.06,
       "verdict": "ИК НЕ подтверждает: в ROI CLM-цели нет значимого контраста — возможна тонкая/низкая облачность, невидимая на ИК, либо расхождение слоёв"
     },
     "system_analysis_all": [
       {
         "target_id": 1,
         "available": true,
-        "roi_contrast_sigma": 0.43,
+        "roi_contrast_sigma": 0.44,
         "confirmed": false
       },
       {
         "target_id": 6,
         "available": true,
-        "roi_contrast_sigma": 1.07,
+        "roi_contrast_sigma": 1.16,
         "confirmed": true
       },
       {
         "target_id": 8,
         "available": true,
-        "roi_contrast_sigma": 2.64,
+        "roi_contrast_sigma": 1.18,
+        "confirmed": true
+      },
+      {
+        "target_id": 9,
+        "available": true,
+        "roi_contrast_sigma": 2.26,
         "confirmed": true
       }
     ],
@@ -117,43 +123,49 @@
       {
         "target_id": 0,
         "available": true,
-        "roi_contrast_sigma": 0.5,
+        "roi_contrast_sigma": 0.48,
         "confirmed": false
       },
       {
         "target_id": 2,
         "available": true,
-        "roi_contrast_sigma": -0.05,
+        "roi_contrast_sigma": 0.06,
         "confirmed": false
       },
       {
         "target_id": 3,
         "available": true,
-        "roi_contrast_sigma": 0.94,
-        "confirmed": true
+        "roi_contrast_sigma": 0.22,
+        "confirmed": false
       },
       {
         "target_id": 4,
         "available": true,
-        "roi_contrast_sigma": 0.22,
+        "roi_contrast_sigma": 0.1,
         "confirmed": false
       },
       {
         "target_id": 5,
         "available": true,
-        "roi_contrast_sigma": 0.09,
-        "confirmed": false
+        "roi_contrast_sigma": 0.87,
+        "confirmed": true
       },
       {
         "target_id": 7,
         "available": true,
-        "roi_contrast_sigma": 0.99,
+        "roi_contrast_sigma": 1.12,
         "confirmed": true
       },
       {
-        "target_id": 9,
+        "target_id": 10,
         "available": true,
-        "roi_contrast_sigma": 0.07,
+        "roi_contrast_sigma": 0.97,
+        "confirmed": true
+      },
+      {
+        "target_id": 11,
+        "available": true,
+        "roi_contrast_sigma": 0.1,
         "confirmed": false
       }
     ],
