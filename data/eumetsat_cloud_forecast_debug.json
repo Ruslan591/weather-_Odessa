@@ -1,14 +1,16 @@
 {
-  "status": "error",
-  "stage": "bootstrap",
-  "failed": [
+  "status": "ok",
+  "server_latest_time": "2026-08-20T08:15:00.000Z",
+  "bootstrap": true,
+  "buffer_before": 9,
+  "bootstrap_failed_frames": [
     {
-      "time": "2026-08-20T06:45:00.000Z",
+      "time": "2026-08-20T06:15:00.000Z",
       "error": "попытка 1: HTTP 200, content-type='text/xml;charset=UTF-8', len=649: <?xml version=\"1.0\" encoding=\"UTF-8\"?><ServiceExceptionReport version=\"1.3.0\" xmlns=\"http://www.opengis.net/ogc\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.opengis.net/ogc https://view.eumetsat.int/geoserver/schemas/wms/1.3.0/exceptions_1_3_0.xsd\">   <Servic"
     },
     {
       "time": "2026-08-20T07:00:00.000Z",
-      "error": "попытка 1: HTTP 200, content-type='text/xml;charset=UTF-8', len=649: <?xml version=\"1.0\" encoding=\"UTF-8\"?><ServiceExceptionReport version=\"1.3.0\" xmlns=\"http://www.opengis.net/ogc\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.opengis.net/ogc https://view.eumetsat.int/geoserver/schemas/wms/1.3.0/exceptions_1_3_0.xsd\">   <Servic"
+      "error": "попытка 1: HTTP 200, content-type='text/xml;charset=UTF-8', len=4257: <?xml version=\"1.0\" encoding=\"UTF-8\"?><ServiceExceptionReport version=\"1.3.0\" xmlns=\"http://www.opengis.net/ogc\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.opengis.net/ogc https://view.eumetsat.int/geoserver/schemas/wms/1.3.0/exceptions_1_3_0.xsd\">   <Servic"
     },
     {
       "time": "2026-08-20T07:15:00.000Z",
@@ -21,19 +23,164 @@
     {
       "time": "2026-08-20T07:45:00.000Z",
       "error": "попытка 1: HTTP 200, content-type='text/xml;charset=UTF-8', len=649: <?xml version=\"1.0\" encoding=\"UTF-8\"?><ServiceExceptionReport version=\"1.3.0\" xmlns=\"http://www.opengis.net/ogc\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.opengis.net/ogc https://view.eumetsat.int/geoserver/schemas/wms/1.3.0/exceptions_1_3_0.xsd\">   <Servic"
-    },
-    {
-      "time": "2026-08-20T08:15:00.000Z",
-      "error": "попытка 1: HTTP 200, content-type='text/xml;charset=UTF-8', len=649: <?xml version=\"1.0\" encoding=\"UTF-8\"?><ServiceExceptionReport version=\"1.3.0\" xmlns=\"http://www.opengis.net/ogc\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.opengis.net/ogc https://view.eumetsat.int/geoserver/schemas/wms/1.3.0/exceptions_1_3_0.xsd\">   <Servic"
-    },
-    {
-      "time": "2026-08-20T08:30:00.000Z",
-      "error": "попытка 1: HTTP 200, content-type='text/xml;charset=UTF-8', len=649: <?xml version=\"1.0\" encoding=\"UTF-8\"?><ServiceExceptionReport version=\"1.3.0\" xmlns=\"http://www.opengis.net/ogc\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.opengis.net/ogc https://view.eumetsat.int/geoserver/schemas/wms/1.3.0/exceptions_1_3_0.xsd\">   <Servic"
-    },
-    {
-      "time": "2026-08-20T08:45:00.000Z",
-      "error": "попытка 1: HTTP 200, content-type='text/xml;charset=UTF-8', len=463: <?xml version=\"1.0\" encoding=\"UTF-8\"?><ServiceExceptionReport version=\"1.3.0\" xmlns=\"http://www.opengis.net/ogc\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.opengis.net/ogc https://view.eumetsat.int/geoserver/schemas/wms/1.3.0/exceptions_1_3_0.xsd\">   <Servic"
     }
   ],
-  "note": "годных кадров 1/9 — недостаточно для анализа"
+  "buffer_size": 4,
+  "buffer_times": [
+    "2026-08-20T06:30:00.000Z",
+    "2026-08-20T06:45:00.000Z",
+    "2026-08-20T08:00:00.000Z",
+    "2026-08-20T08:15:00.000Z"
+  ],
+  "state_source": "clm_and_ir_or_gc_confirmed",
+  "state_area_fraction": 0.089,
+  "result": {
+    "timestamp": "2026-08-20T08:15:00.000Z",
+    "current_state": "mostly_clear",
+    "station_area_fraction": 0.089,
+    "target_type": "cloud_mass",
+    "distance_km_now": 4.9,
+    "bearing_deg": 186.0,
+    "compass": "Ю",
+    "speed_kmh": 0.0,
+    "direction_compass": "В",
+    "cpa_km": 4.7,
+    "eta_min": null,
+    "blob_area_km2": 60.0,
+    "target_id": 0,
+    "class": "local",
+    "verdict": "почти стоит на месте",
+    "frame_pairs_used": 1,
+    "probability_percent": 67,
+    "probability_note": "база берётся из категории движения ('почти стоит на месте'), затем немного корректируется площадью поля и уверенностью в оценке скорости — у 'удаляется'/'пройдёт мимо' база низкая, у 'приближается'/'уже у города' высокая; не физическая модель осадков",
+    "trend": {
+      "density_fraction_now": 0.02,
+      "density_delta": 0.01,
+      "density_verdict": "без существенных изменений",
+      "height_ordinal_delta": 0.0,
+      "height_verdict": "без существенных изменений",
+      "shape_aspect_ratio_now": 1.43,
+      "shape_aspect_delta": 0.43,
+      "shape_verdict": "без существенных изменений"
+    },
+    "buffer_status": {
+      "frames_in_memory": 4,
+      "frames_target": 9,
+      "span_minutes_now": 45,
+      "span_minutes_target": 120,
+      "eta_full_window_min": 75,
+      "note": "в памяти 4/9 снимков (~45 мин истории), полное 120-минутное окно накопится через ~75 мин"
+    },
+    "candidates": [
+      {
+        "centroid_dx_km": -0.48,
+        "centroid_dy_km": -4.87,
+        "area_km2": 60.0,
+        "class": "local",
+        "bbox_km": {
+          "dx_min": -3.36,
+          "dx_max": 2.4,
+          "dy_min": -17.39,
+          "dy_max": -4.87
+        },
+        "elongation_aspect_ratio": 2.58,
+        "elongation_axis_deg": 21.0,
+        "elongation_axis_compass": "С-Ю",
+        "frontlike": false,
+        "window_spanning": false,
+        "target_id": 0
+      },
+      {
+        "centroid_dx_km": 73.36,
+        "centroid_dy_km": 57.75,
+        "area_km2": 568.4,
+        "class": "system",
+        "bbox_km": {
+          "dx_min": 73.36,
+          "dx_max": 106.92,
+          "dy_min": 52.18,
+          "dy_max": 92.53
+        },
+        "elongation_aspect_ratio": 1.26,
+        "elongation_axis_deg": 13.0,
+        "elongation_axis_compass": "С-Ю",
+        "frontlike": false,
+        "window_spanning": false,
+        "target_id": 1
+      },
+      {
+        "centroid_dx_km": 124.18,
+        "centroid_dy_km": 49.4,
+        "area_km2": 3913.5,
+        "class": "system",
+        "bbox_km": {
+          "dx_min": 117.46,
+          "dx_max": 191.3,
+          "dy_min": 38.27,
+          "dy_max": 166.28
+        },
+        "elongation_aspect_ratio": 2.26,
+        "elongation_axis_deg": 30.0,
+        "elongation_axis_compass": "СВ-ЮЗ",
+        "frontlike": true,
+        "window_spanning": false,
+        "target_id": 2
+      },
+      {
+        "centroid_dx_km": 133.77,
+        "centroid_dy_km": -4.87,
+        "area_km2": 214.8,
+        "class": "local",
+        "bbox_km": {
+          "dx_min": 133.77,
+          "dx_max": 157.74,
+          "dy_min": -11.83,
+          "dy_max": 13.22
+        },
+        "elongation_aspect_ratio": 3.68,
+        "elongation_axis_deg": 48.0,
+        "elongation_axis_compass": "СВ-ЮЗ",
+        "frontlike": false,
+        "window_spanning": false,
+        "target_id": 3
+      },
+      {
+        "centroid_dx_km": 136.64,
+        "centroid_dy_km": 28.53,
+        "area_km2": 53.4,
+        "class": "local",
+        "bbox_km": {
+          "dx_min": 136.64,
+          "dx_max": 145.27,
+          "dy_min": 28.53,
+          "dy_max": 32.7
+        },
+        "elongation_aspect_ratio": 1.77,
+        "elongation_axis_deg": 90.0,
+        "elongation_axis_compass": "В-З",
+        "frontlike": false,
+        "window_spanning": false,
+        "target_id": 4
+      },
+      {
+        "centroid_dx_km": 159.66,
+        "centroid_dy_km": -244.21,
+        "area_km2": 378.9,
+        "class": "system",
+        "bbox_km": {
+          "dx_min": 146.23,
+          "dx_max": 170.2,
+          "dy_min": -277.6,
+          "dy_max": -240.03
+        },
+        "elongation_aspect_ratio": 3.32,
+        "elongation_axis_deg": 26.0,
+        "elongation_axis_compass": "СВ-ЮЗ",
+        "frontlike": true,
+        "window_spanning": false,
+        "target_id": 5
+      }
+    ],
+    "method_note": "Персистентный буфер до 9 кадров Cloud Mask + CTH (шаг 15 мин, до 2 часов истории), хранится между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр вместо всех заново. Скорость усреднена по всем парам кадров буфера с реальным dt (phase correlation всего поля). Край облака/просвета ищется только среди связных областей >= 40px (~53км²) с учётом прозрачных no-data пикселей. Тренды плотности/высоты/формы — сравнение первого и последнего кадра БУФЕРА в радиусе 50км (окно растёт по мере наполнения буфера, см. buffer_status). Высота — ординальный индекс по цвету (не метры, официальной таблицы нет). Вероятность (только когда сейчас ясно/переменная облачность и есть значимое приближающееся поле) — эвристическая оценка по близости/размеру/уверенности в скорости, не физическая модель осадков. Линейная экстраполяция, годится на ~1 час."
+  }
 }
