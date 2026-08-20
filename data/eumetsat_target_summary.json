@@ -1,73 +1,39 @@
 {
-  "timestamp": "2026-08-20T02:16:51Z",
+  "timestamp": "2026-08-20T02:32:07Z",
   "status": "ok",
-  "cloud_forecast_timestamp": "2026-08-20T01:45:00.000Z",
-  "target_id": 4,
-  "target_area_km2": 117.4,
-  "target_distance_km": 238.7,
-  "target_bearing_deg": 29.0,
-  "target_compass": "СВ",
+  "cloud_forecast_timestamp": "2026-08-20T02:00:00.000Z",
+  "target_id": 3,
+  "target_area_km2": 69.4,
+  "target_distance_km": 284.6,
+  "target_bearing_deg": 16.0,
+  "target_compass": "С",
   "system": {
     "target_id": 0,
-    "area_km2": 1881.4,
+    "area_km2": 1746.6,
     "distance_km": 124.6,
     "bearing_deg": 95.0,
     "compass": "В",
-    "elongation_aspect_ratio": 1.89,
-    "elongation_axis_deg": 73.0,
+    "elongation_aspect_ratio": 2.04,
+    "elongation_axis_deg": 78.0,
     "elongation_axis_compass": "В-З",
     "frontlike": false,
     "window_spanning": false,
     "phase_label": "безоблачно",
     "cloud_fraction": 0.0,
+    "has_precip": false,
     "has_lightning": false
   },
-  "local_candidates": [
-    {
-      "target_id": 4,
-      "area_km2": 117.4,
-      "distance_km": 238.7,
-      "bearing_deg": 29.0,
-      "compass": "СВ",
-      "elongation_aspect_ratio": 1.84,
-      "elongation_axis_deg": 22.0,
-      "elongation_axis_compass": "С-Ю",
-      "frontlike": false,
-      "phase_label": "безоблачно",
-      "type_label": "безоблачно",
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": true,
-      "geocolour_confirmed": false
-    },
-    {
-      "target_id": 6,
-      "area_km2": 253.5,
-      "distance_km": 275.2,
-      "bearing_deg": 12.0,
-      "compass": "С",
-      "elongation_aspect_ratio": 4.67,
-      "elongation_axis_deg": 87.0,
-      "elongation_axis_compass": "В-З",
-      "frontlike": false,
-      "phase_label": "безоблачно",
-      "type_label": "безоблачно",
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": true,
-      "geocolour_confirmed": false
-    }
-  ],
-  "local_suppressed_count": 3,
+  "local_candidates": [],
+  "local_suppressed_count": 2,
   "system_candidates": [
     {
-      "target_id": 3,
-      "area_km2": 715.2,
-      "distance_km": 217.3,
-      "bearing_deg": 15.0,
+      "target_id": 2,
+      "area_km2": 356.3,
+      "distance_km": 220.3,
+      "bearing_deg": 21.0,
       "compass": "С",
-      "elongation_aspect_ratio": 1.96,
-      "elongation_axis_deg": 56.0,
+      "elongation_aspect_ratio": 1.71,
+      "elongation_axis_deg": 36.0,
       "elongation_axis_compass": "СВ-ЮЗ",
       "frontlike": false,
       "window_spanning": false,
@@ -92,31 +58,31 @@
   "existence": {
     "modules": {
       "ir_motion": {
-        "confirmed": true,
-        "timestamp": "2026-08-20T01:50:00.000Z"
+        "confirmed": false,
+        "timestamp": "2026-08-20T02:10:00.000Z"
       },
       "geocolour_motion": {
         "confirmed": false,
-        "timestamp": "2026-08-20T01:50:00.000Z"
+        "timestamp": "2026-08-20T02:10:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": false,
-        "timestamp": "2026-08-20T02:16:13Z"
+        "timestamp": "2026-08-20T02:31:06Z"
       }
     },
-    "votes_confirmed": 1,
-    "votes_not_confirmed": 2,
-    "consensus": "disputed"
+    "votes_confirmed": 0,
+    "votes_not_confirmed": 3,
+    "consensus": "not_confirmed"
   },
   "phenomena": {
     "precip_forecast": {
       "confirmed": false,
-      "timestamp": "2026-08-20T02:02:30Z"
+      "timestamp": "2026-08-20T02:31:30Z"
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-08-20T02:16:31Z"
+      "timestamp": "2026-08-20T02:31:37Z"
     }
   },
-  "verdict": "Цель в 239км СВ, безоблачно — каналы расходятся: ir_motion подтверждают, geocolour_motion/cloud_phase_type нет. Отдельно: система синоптического масштаба (1881км²) в 125км В."
+  "verdict": "CLM отметил цель в 285км С, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (1747км²) в 125км В."
 }
