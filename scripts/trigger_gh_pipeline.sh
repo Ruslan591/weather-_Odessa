@@ -1,16 +1,26 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# trigger_gh_pipeline.sh — лёгкий триггер full_pipeline.yml через workflow_dispatch.
+# trigger_gh_pipeline.sh — лёгкий триггер satellite_pipeline.yml через workflow_dispatch.
 #
-# Новый файл специально под замену расписания телефона. Не запускает пайплайн
-# сам — только "нажимает кнопку" запуска в GitHub Actions (полный пайплайн
-# теперь выполняется в облаке, см. scripts/gh_pipeline.py и
-# .github/workflows/full_pipeline.yml).
+# [ИЗМЕНЕНО 2026-08-20] Раньше дёргал full_pipeline.yml напрямую. Теперь
+# спутниковый пайплайн — первое звено цепочки: satellite_pipeline.yml сам
+# явным диспетчем (последний шаг в нём) тянет за собой full_pipeline.yml,
+# а тот — ai_pipeline.yml. См. docs/topics/main_pipeline.md. Имя файла
+# оставлено прежним намеренно — job 1001 ссылается на него по ПУТИ, не по
+# содержимому, переименование ничего не даёт и добавляет риск.
+#
+# Не запускает пайплайн сам — только "нажимает кнопку" запуска в GitHub
+# Actions.
 #
 # Регистрируется вместо check_model_runs.py в job 1001:
 #   termux-job-scheduler --job-id 1001 --persisted --period-ms 900000 \
 #       --script ~/bin/run_trigger_gh_pipeline.sh
 #
 # Требует переменную GH_DISPATCH_TOKEN в .env (токен с правами repo+workflow).
+#
+# ВАЖНО: этот файл выполняется ЛОКАЛЬНО на телефоне (Termux) из локального
+# checkout'а по пути $BASE_DIR — правка через GitHub API обновляет только
+# репозиторий. Чтобы изменение реально заработало, на телефоне нужно
+# `git pull` в $BASE_DIR.
 
 set -e
 BASE_DIR="/storage/emulated/0/Documents/weather"
@@ -32,7 +42,7 @@ fi
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
     -H "Authorization: Bearer $TOKEN" \
     -H "Accept: application/vnd.github+json" \
-    "https://api.github.com/repos/Ruslan591/weather-_Odessa/actions/workflows/full_pipeline.yml/dispatches" \
+    "https://api.github.com/repos/Ruslan591/weather-_Odessa/actions/workflows/satellite_pipeline.yml/dispatches" \
     -d '{"ref":"main"}')
 
 if [ "$HTTP_CODE" = "204" ]; then
