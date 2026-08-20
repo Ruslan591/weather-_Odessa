@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-08-20T05:55:17Z",
+  "timestamp": "2026-08-20T06:02:50Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-08-20T05:30:00.000Z",
-  "target_id": 0,
-  "target_area_km2": 142.8,
-  "target_distance_km": 37.1,
-  "target_bearing_deg": 256.0,
-  "target_compass": "З",
+  "target_id": 1,
+  "target_area_km2": 53.4,
+  "target_distance_km": 40.5,
+  "target_bearing_deg": 204.0,
+  "target_compass": "ЮЗ",
   "system": null,
   "local_candidates": [],
   "local_suppressed_count": 7,
@@ -68,12 +68,9 @@
       "behind_obs": null
     }
   ],
-  "target_movement": {
-    "speed_kmh": 0.0,
-    "direction_compass": "ЮВ",
-    "cpa_km": 36.2,
-    "eta_min": null,
-    "verdict": "почти стоит на месте"
+  "also_suppressed_nearby": {
+    "signature": "-35_-10",
+    "area_km2": 142.8
   },
   "target_phase": {
     "label": "безоблачно",
@@ -82,8 +79,8 @@
   "existence": {
     "modules": {
       "ir_motion": {
-        "confirmed": false,
-        "timestamp": "2026-08-20T05:30:00.000Z"
+        "confirmed": true,
+        "timestamp": "2026-08-20T05:40:00.000Z"
       },
       "geocolour_motion": {
         "confirmed": false,
@@ -94,19 +91,19 @@
         "timestamp": "2026-08-20T05:53:16Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
       "confirmed": false,
-      "timestamp": "2026-08-20T05:41:13Z"
+      "timestamp": "2026-08-20T06:02:14Z"
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-08-20T05:54:28Z"
+      "timestamp": "2026-08-20T06:02:20Z"
     }
   },
-  "verdict": "CLM отметил цель в 37км З, но остальные каналы облачность там не видят — вероятно, ложное срабатывание."
+  "verdict": "Цель в 40км ЮЗ, безоблачно — каналы расходятся: ir_motion подтверждают, geocolour_motion/cloud_phase_type нет."
 }
