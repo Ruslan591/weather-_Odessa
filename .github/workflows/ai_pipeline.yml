@@ -1,0 +1,97 @@
+name: AI-анализ прогноза (Claude + Gemini)
+
+# Вынесен из full_pipeline.yml 2026-08-20 — по аналогии со спутниковым
+# модулем (satellite_pipeline.yml, вынесен 2026-07-26). Явно диспетчится
+# последним шагом full_pipeline.yml (workflow_dispatch, с guard на
+# in_progress/queued — тот же паттерн, каким full_pipeline.yml раньше
+# диспетчил satellite_pipeline.yml). Сам решает, есть ли работа — см.
+# докстринг scripts/gh_ai_pipeline.py (очередь data/_ai_pending_models.json,
+# которую наполняет только gh_pipeline.py, + самостоятельная проверка
+# pending Gemini).
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Форсировать AI-анализ (в обход расписания ai_schedule.json) — для ручного теста"
+        default: "false"
+
+concurrency:
+  group: ai-pipeline
+  cancel-in-progress: false
+
+jobs:
+  run-ai:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Восстановление шрифта Carlito из кэша
+        id: font-cache
+        uses: actions/cache@v4
+        with:
+          path: /usr/share/fonts/truetype/crosextra
+          key: fonts-crosextra-carlito-v1
+
+      - name: Установка шрифта (только при промахе кэша)
+        if: steps.font-cache.outputs.cache-hit != 'true'
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          NEEDRESTART_MODE: a
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y fonts-crosextra-carlito
+
+      - name: Обновление кэша шрифтов ОС
+        run: sudo fc-cache -f
+
+      - name: Восстановление apt-архивов ffmpeg из кэша
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/apt/archives
+          key: apt-archives-ffmpeg-v1
+
+      - name: Проверка/установка ffmpeg
+        timeout-minutes: 4
+        continue-on-error: true
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          NEEDRESTART_MODE: a
+        run: |
+          if command -v ffmpeg >/dev/null 2>&1; then
+            echo "ffmpeg уже есть: $(ffmpeg -version | head -1)"
+          else
+            echo "ffmpeg не найден в образе — ставлю (из кэша apt-архивов, если он тёплый)"
+            sudo apt-get update -y
+            sudo apt-get install -y ffmpeg
+          fi
+
+      - name: Установка Python-зависимостей
+        run: pip install edge-tts Pillow
+
+      - name: Настройка git для коммитов
+        run: |
+          git config user.name "gh-ai-bot"
+          git config user.email "actions@users.noreply.github.com"
+
+      - name: Запуск AI-пайплайна
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          CLAUDE_ANALYSIS_ENABLED: "true"
+          GEMINI_ANALYSIS_ENABLED: "true"
+          PYTHONUNBUFFERED: "1"
+        run: |
+          if [ "${{ inputs.force }}" = "true" ]; then
+            python scripts/gh_ai_pipeline.py --force
+          else
+            python scripts/gh_ai_pipeline.py
+          fi
