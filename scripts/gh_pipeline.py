@@ -16,22 +16,36 @@ check_model_runs.py на телефоне НЕ используется и не 
   1. calc_model_bias_cloud.py
   2. calc_weights.py (без LOCAL=1 — пишет через GitHub API сам)
   3. update_local.py --no-model
-  4. generate_ai_analysis.py
-  5. make_blocks_cloud.py / make_blocks_gemini_cloud.py (если изменилось)
-  6. git commit + push (без force, без лока — единственный писатель)
+  4. если шаги 1-3 отработали успешно — ставит новые модели в очередь
+     data/_ai_pending_models.json (AI-анализ сам НЕ запускает, см. ниже)
+  5. git commit + push (без force, без лока — единственный писатель)
 
 Плюс каждый цикл: PWS-синк (pws_sync.py), калибровка давления PWS,
 полная морская история — SST/волны/ветер/давление/течение (marine_history.py).
 
 Спутниковый модуль (EUMETSAT: cloud/precip/lightning/ir motion, point) вынесен
 2026-07-26 в отдельный scripts/gh_satellite_pipeline.py + workflow
-satellite_pipeline.yml — он был слишком тяжёл/частотен и раздувал
-длительность этого пайплайна (10-17 мин), из-за чего triggers с телефона
-вставали в очередь (concurrency: full-pipeline). Спутниковый workflow
-запускается автоматически после этого (workflow_run), в своей группе.
+satellite_pipeline.yml. AI-блок (обращения к Claude/Gemini, TTS, видео)
+вынесен 2026-08-20 в scripts/gh_ai_pipeline.py + workflow ai_pipeline.yml —
+по той же причине (утяжелял/удлинял этот пайплайн). ai_pipeline.yml
+диспетчится явно последним шагом full_pipeline.yml (workflow_dispatch +
+guard на in_progress/queued) — НЕ через workflow_run, он документированно
+ненадёжен и ни разу не сработал на практике (см. историю в
+docs/topics/eumetsat.md).
+
+[ИЗМЕНЕНО 2026-08-20] Порядок цепочки перевёрнут: раньше телефон триггерил
+ЭТОТ workflow напрямую, а он последним шагом диспетчил спутниковый. Теперь
+телефон триггерит satellite_pipeline.yml, а тот последним шагом диспетчит
+этот (который, в свою очередь, диспетчит ai_pipeline.yml). Причина —
+решение пользователя перераспределить порядок цепочки; функциональной
+зависимости по данным между спутниковым модулем и этим пайплайном как не
+было, так и нет.
 
 Расписание: .github/workflows/full_pipeline.yml, триггер только
-workflow_dispatch (время держит телефон, см. scripts/trigger_gh_pipeline.sh)
+workflow_dispatch — запускается явным диспетчем из последнего шага
+satellite_pipeline.yml (время в конечном счёте держит телефон, см.
+scripts/trigger_gh_pipeline.sh — он с 2026-08-20 диспетчит
+satellite_pipeline.yml, а не этот workflow напрямую)
 """
 
 import json
@@ -46,6 +60,10 @@ BASE_DIR     = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HISTORY_FILE = os.path.join(BASE_DIR, "data", "model_runs_history.json")
 LOG_DIR      = os.path.join(BASE_DIR, "logs")
 MAX_ENTRIES  = 60
+
+# Очередь для gh_ai_pipeline.py (отдельный workflow, вынесен 2026-08-20) —
+# наполняется ТОЛЬКО отсюда, см. queue_ai_models() ниже.
+AI_QUEUE_FILE = os.path.join(BASE_DIR, "data", "_ai_pending_models.json")
 
 PYTHON       = sys.executable
 SCRIPTS_DIR  = os.path.join(BASE_DIR, "scripts")
@@ -126,12 +144,12 @@ def git_push_history():
                         "data/model_runs_history.json",
                         f"data/synop_{year}.txt",
                         "data/model_bias.json",
-                        "data/forecast_analysis_claude.json", "data/forecast_analysis_claude.mp3",
-                        "data/blocks",
-                        "data/forecast_analysis_gemini.json", "data/forecast_analysis_gemini.mp3",
-                        "data/blocks_gemini",
-                        "data/ai_schedule.json",
-                        "data/ai_schedule_gemini.json",
+                        # AI/видео-пути (forecast_analysis_*, blocks*, ai_schedule*,
+                        # forecast_video*) УБРАНЫ отсюда 2026-08-20 — их теперь
+                        # коммитит git_push_ai() в scripts/gh_ai_pipeline.py,
+                        # отдельный workflow (ai_pipeline.yml). Этот процесс их
+                        # больше не пишет, коммитить нечего.
+                        "data/_ai_pending_models.json",
                         "data/marine_history.json",
                         "data/nearby_precip.json",
                         "data/nearby_precip_debug.json",
@@ -139,8 +157,6 @@ def git_push_history():
                         "data/hmcbas_telegram_sea_temp.json",
                         "data/hmcbas_telegram_debug.json",
                         "data/pws_sync_state.json",
-                        "data/forecast_video.mp4",
-                        "data/forecast_video_gemini.mp4",
                         ]
         _to_add = [p for p in _candidates if os.path.exists(os.path.join(BASE_DIR, p))]
         subprocess.run(["git", "-C", BASE_DIR, "add"] + _to_add,
@@ -217,6 +233,30 @@ def run_pipeline(new_models):
 
     print("  ✅ Пайплайн завершён успешно.")
     return True
+
+
+def queue_ai_models(models):
+    """Ставит labels в очередь на AI-анализ — вызывается ТОЛЬКО когда
+    run_pipeline() выше уже отработал успешно (реальная зависимость по
+    данным: generate_ai_analysis.py читает то, что посчитали
+    calc_model_bias_cloud/calc_weights/update_local). Читает и опустошает
+    очередь scripts/gh_ai_pipeline.py в отдельном workflow (ai_pipeline.yml),
+    диспетчится последним шагом full_pipeline.yml. Слияние (не перезапись) —
+    на случай, если предыдущая пачка ещё не была разобрана AI-пайплайном."""
+    existing = []
+    if os.path.exists(AI_QUEUE_FILE):
+        try:
+            with open(AI_QUEUE_FILE, "r", encoding="utf-8") as f:
+                existing = json.load(f).get("models", [])
+        except Exception:
+            pass
+    merged = sorted(set(existing) | set(models))
+    try:
+        with open(AI_QUEUE_FILE, "w", encoding="utf-8") as f:
+            json.dump({"models": merged, "queued_at": now_utc_iso()}, f, ensure_ascii=False, indent=2)
+        print(f"  ✓ AI-очередь: {', '.join(merged)}")
+    except Exception as e:
+        print(f"  [WARN] не удалось записать AI-очередь: {e}")
 
 # ── PWS-синк (cloud: пишет через API pws_sync.py напрямую) ───────────────────
 
@@ -373,10 +413,6 @@ def check_marine_history():
 # ── основная логика ───────────────────────────────────────────────────────────
 
 def main():
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--force-ai", action="store_true")
-    args, _ = parser.parse_known_args()
     os.makedirs(LOG_DIR, exist_ok=True)
     now = now_utc_iso()
     history = load_history()
@@ -413,82 +449,18 @@ def main():
         save_history(history)
         ok = run_pipeline(new_models)
         if ok:
-            ai_cmd = [PYTHON, os.path.join(SCRIPTS_DIR, "generate_ai_analysis.py")]
-            if args.force_ai:
-                ai_cmd.append("--force")
-            ai_cmd += ["--models", ",".join(new_models)]
-            ai_result = subprocess.run(ai_cmd, cwd=BASE_DIR, capture_output=False)
-            if ai_result.returncode == 0:
-                _ai_file = os.path.join(BASE_DIR, "data", "forecast_analysis_claude.json")
-                _ai_changed = False
-                try:
-                    with open(_ai_file, encoding="utf-8") as _f:
-                        _ai_changed = json.load(_f).get("changed", False)
-                except Exception:
-                    pass
-                if _ai_changed:
-                    subprocess.run(
-                        [PYTHON, os.path.join(SCRIPTS_DIR, "make_blocks_cloud.py")],
-                        cwd=BASE_DIR, capture_output=False
-                    )
-
-                _ai_file_g = os.path.join(BASE_DIR, "data", "forecast_analysis_gemini.json")
-                _ai_changed_g = False
-                try:
-                    with open(_ai_file_g, encoding="utf-8") as _fg:
-                        _ai_changed_g = json.load(_fg).get("changed", False)
-                except Exception:
-                    pass
-                if _ai_changed_g:
-                    _blocks_result_g = subprocess.run(
-                        [PYTHON, os.path.join(SCRIPTS_DIR, "make_blocks_gemini_cloud.py")],
-                        cwd=BASE_DIR, capture_output=False
-                    )
-                    if _blocks_result_g.returncode != 0:
-                        print("  [AI-Gemini] make_blocks_gemini_cloud упал")
-                    else:
-                        _video_result_g = subprocess.run(
-                            [PYTHON, os.path.join(SCRIPTS_DIR, "make_video.py"), "gemini"],
-                            cwd=BASE_DIR, capture_output=False
-                        )
-                        if _video_result_g.returncode != 0:
-                            print("  [AI-Gemini] make_video.py (gemini) упал")
-
+            # AI-анализ (generate_ai_analysis.py + make_blocks_*/make_video.py)
+            # вынесен 2026-08-20 в отдельный gh_ai_pipeline.py/ai_pipeline.yml.
+            # Здесь только ставим в очередь — реальный вызов там, диспетчится
+            # последним шагом full_pipeline.yml.
+            queue_ai_models(new_models)
         git_push_history()
     else:
         print("  Новых прогонов нет.\n")
 
-        _gemini_file = os.path.join(BASE_DIR, "data", "forecast_analysis_gemini.json")
-        _gemini_pending = False
-        if os.path.exists(_gemini_file):
-            try:
-                with open(_gemini_file, encoding="utf-8") as _fg:
-                    _gd = json.load(_fg)
-                _gemini_pending = _gd.get("pending", False)
-            except Exception:
-                pass
-        if _gemini_pending:
-            print("  [AI-Gemini] Найден pending — повторная попытка Gemini...")
-            _gr = subprocess.run(
-                [PYTHON, os.path.join(SCRIPTS_DIR, "generate_ai_analysis.py"), "--force-gemini"],
-                cwd=BASE_DIR, capture_output=False
-            )
-            if _gr.returncode == 0:
-                try:
-                    with open(_gemini_file, encoding="utf-8") as _fg2:
-                        _gd2 = json.load(_fg2)
-                    if _gd2.get("changed") and not _gd2.get("pending"):
-                        _blocks_r = subprocess.run(
-                            [PYTHON, os.path.join(SCRIPTS_DIR, "make_blocks_gemini_cloud.py")],
-                            cwd=BASE_DIR, capture_output=False
-                        )
-                        if _blocks_r.returncode == 0:
-                            subprocess.run(
-                                [PYTHON, os.path.join(SCRIPTS_DIR, "make_video.py"), "gemini"],
-                                cwd=BASE_DIR, capture_output=False
-                            )
-                except Exception:
-                    pass
+        # Повтор Gemini при pending (rate-limit) переехал в
+        # gh_ai_pipeline.py:check_ai_gemini_pending() 2026-08-20 — проверяется
+        # там каждый цикл, независимо от очереди новых моделей.
 
         subprocess.run(
             [PYTHON, os.path.join(SCRIPTS_DIR, "update_local.py"), "--no-model", "--no-fill"],
