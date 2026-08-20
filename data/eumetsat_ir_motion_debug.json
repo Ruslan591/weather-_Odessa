@@ -1,27 +1,27 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-08-20T11:10:00.000Z",
+  "server_latest_time": "2026-08-20T11:20:00.000Z",
   "bootstrap": true,
   "buffer_before": 6,
   "buffer_size": 6,
   "buffer_times": [
-    "2026-08-20T10:20:00.000Z",
     "2026-08-20T10:30:00.000Z",
     "2026-08-20T10:40:00.000Z",
     "2026-08-20T10:50:00.000Z",
     "2026-08-20T11:00:00.000Z",
-    "2026-08-20T11:10:00.000Z"
+    "2026-08-20T11:10:00.000Z",
+    "2026-08-20T11:20:00.000Z"
   ],
   "frame_std": [
-    10.8,
     11.3,
     11.9,
     12.5,
     13.3,
-    13.9
+    13.9,
+    14.3
   ],
   "result": {
-    "timestamp": "2026-08-20T11:10:00.000Z",
+    "timestamp": "2026-08-20T11:20:00.000Z",
     "buffer_size": 6,
     "buffer_span_minutes": 50,
     "observed_area": {
@@ -34,199 +34,197 @@
       "local_trend_radius_km": 50
     },
     "valid": true,
-    "speed_kmh": 0.4,
+    "speed_kmh": 0.3,
     "direction_compass": "С",
-    "bearing_deg": 338.7,
+    "bearing_deg": 351.8,
     "frame_pairs_used": 5,
-    "acceleration_kmh": 0.2,
-    "turning_deg": 12.5,
+    "acceleration_kmh": 0.5,
+    "turning_deg": -102.7,
     "acceleration_verdict": "скорость стабильна",
-    "turning_verdict": "направление стабильно",
+    "turning_verdict": "меняет направление (против часовой)",
     "forecast_displacement": {
       "30min": {
-        "distance_km": 0.3,
-        "bearing_deg": 348.0,
-        "compass": "С"
+        "distance_km": 0.7,
+        "bearing_deg": 315.0,
+        "compass": "СЗ"
       },
       "60min": {
-        "distance_km": 0.7,
-        "bearing_deg": 350.0,
-        "compass": "С"
+        "distance_km": 1.8,
+        "bearing_deg": 312.0,
+        "compass": "СЗ"
       },
       "120min": {
-        "distance_km": 1.9,
-        "bearing_deg": 353.0,
-        "compass": "С"
+        "distance_km": 5.8,
+        "bearing_deg": 310.0,
+        "compass": "СЗ"
       }
     },
     "area_fraction_over_time": [
-      0.273,
       0.253,
       0.234,
       0.23,
       0.212,
-      0.201
+      0.201,
+      0.192
     ],
-    "area_trend_delta": -0.072,
+    "area_trend_delta": -0.062,
     "area_trend_verdict": "без существенных изменений",
     "mean_brightness_over_time": [
-      21.8,
       21.9,
       21.8,
       21.7,
       21.8,
+      21.9,
       21.9
     ],
     "brightness_trend_delta": 0.1,
     "station_state": "variable",
-    "station_area_fraction": 0.473,
-    "cloud_mass_distance_km": 1.6,
-    "cloud_mass_bearing_deg": 64.0,
-    "cloud_mass_compass": "СВ",
-    "cloud_mass_area_km2": 3278,
-    "cloud_mass_contrast_sigma": 0.86,
+    "station_area_fraction": 0.47,
+    "cloud_mass_distance_km": null,
+    "cloud_mass_contrast_sigma": 0.7,
+    "cloud_mass_verdict": "значимой облачной массы в поле зрения нет (кадр однородный)",
     "temperature_trend_verdict": "без существенных изменений",
     "target_confirmation": {
-      "confirmed": true,
+      "confirmed": false,
       "target_id": 0,
       "target_area_km2": 60.0,
-      "roi_contrast_sigma": 0.9,
-      "verdict": "ИК подтверждает: в ROI CLM-цели повышенная яркость (облако)"
+      "roi_contrast_sigma": 0.72,
+      "verdict": "ИК НЕ подтверждает: в ROI CLM-цели нет значимого контраста — возможна тонкая/низкая облачность, невидимая на ИК, либо расхождение слоёв"
     },
     "system_analysis_all": [
       {
         "target_id": 8,
         "available": true,
-        "roi_contrast_sigma": 0.43,
+        "roi_contrast_sigma": 0.29,
         "confirmed": false
       },
       {
         "target_id": 9,
         "available": true,
-        "roi_contrast_sigma": 1.3,
+        "roi_contrast_sigma": 1.24,
         "confirmed": true
       },
       {
         "target_id": 12,
         "available": true,
-        "roi_contrast_sigma": 0.19,
+        "roi_contrast_sigma": -0.01,
         "confirmed": false
       },
       {
         "target_id": 18,
         "available": true,
-        "roi_contrast_sigma": 1.36,
+        "roi_contrast_sigma": 1.49,
         "confirmed": true
       },
       {
         "target_id": 19,
         "available": true,
-        "roi_contrast_sigma": 0.29,
-        "confirmed": false
+        "roi_contrast_sigma": 2.02,
+        "confirmed": true
       }
     ],
     "local_analysis_all": [
       {
         "target_id": 0,
         "available": true,
-        "roi_contrast_sigma": 0.9,
-        "confirmed": true
+        "roi_contrast_sigma": 0.72,
+        "confirmed": false
       },
       {
         "target_id": 1,
         "available": true,
-        "roi_contrast_sigma": 0.46,
+        "roi_contrast_sigma": 0.3,
         "confirmed": false
       },
       {
         "target_id": 2,
         "available": true,
-        "roi_contrast_sigma": 0.86,
-        "confirmed": true
+        "roi_contrast_sigma": 0.7,
+        "confirmed": false
       },
       {
         "target_id": 3,
         "available": true,
-        "roi_contrast_sigma": 0.42,
+        "roi_contrast_sigma": 0.26,
         "confirmed": false
       },
       {
         "target_id": 4,
         "available": true,
-        "roi_contrast_sigma": 0.93,
-        "confirmed": true
+        "roi_contrast_sigma": 0.77,
+        "confirmed": false
       },
       {
         "target_id": 5,
         "available": true,
-        "roi_contrast_sigma": 0.59,
+        "roi_contrast_sigma": 0.45,
         "confirmed": false
       },
       {
         "target_id": 6,
         "available": true,
-        "roi_contrast_sigma": 0.93,
-        "confirmed": true
+        "roi_contrast_sigma": 0.76,
+        "confirmed": false
       },
       {
         "target_id": 7,
         "available": true,
-        "roi_contrast_sigma": 0.54,
+        "roi_contrast_sigma": 0.15,
         "confirmed": false
       },
       {
         "target_id": 10,
         "available": true,
-        "roi_contrast_sigma": -0.35,
+        "roi_contrast_sigma": -0.29,
         "confirmed": false
       },
       {
         "target_id": 11,
         "available": true,
-        "roi_contrast_sigma": 0.34,
+        "roi_contrast_sigma": 0.2,
         "confirmed": false
       },
       {
         "target_id": 13,
         "available": true,
-        "roi_contrast_sigma": -0.41,
+        "roi_contrast_sigma": 0.22,
         "confirmed": false
       },
       {
         "target_id": 14,
         "available": true,
-        "roi_contrast_sigma": 0.7,
+        "roi_contrast_sigma": 0.79,
         "confirmed": false
       },
       {
         "target_id": 15,
         "available": true,
-        "roi_contrast_sigma": 0.43,
+        "roi_contrast_sigma": 0.39,
         "confirmed": false
       },
       {
         "target_id": 16,
         "available": true,
-        "roi_contrast_sigma": -0.28,
+        "roi_contrast_sigma": -0.05,
         "confirmed": false
       },
       {
         "target_id": 17,
         "available": true,
-        "roi_contrast_sigma": 0.6,
+        "roi_contrast_sigma": 0.37,
         "confirmed": false
       },
       {
         "target_id": 20,
         "available": true,
-        "roi_contrast_sigma": 0.72,
+        "roi_contrast_sigma": 0.56,
         "confirmed": false
       },
       {
         "target_id": 21,
         "available": true,
-        "roi_contrast_sigma": 0.17,
-        "confirmed": false
+        "roi_contrast_sigma": 0.84,
+        "confirmed": true
       }
     ],
     "method_note": "Буфер 6/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин, crs=EPSG:4326, всегда явный TIME — не 'latest'), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. cloud_mass_* — положение (не движение) ближайшей значимой облачной массы относительно станции. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
