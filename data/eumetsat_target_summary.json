@@ -1,44 +1,143 @@
 {
-  "timestamp": "2026-08-21T04:12:23Z",
-  "status": "system_only",
-  "reason": "локальных компактных масс нет, есть только система(ы) синоптического масштаба",
-  "cloud_forecast_timestamp": "2026-08-21T03:45:00.000Z",
+  "timestamp": "2026-08-21T04:58:03Z",
+  "status": "ok",
+  "cloud_forecast_timestamp": "2026-08-21T04:30:00.000Z",
+  "target_id": 0,
+  "target_area_km2": 218.8,
+  "target_distance_km": 254.7,
+  "target_bearing_deg": 27.0,
+  "target_compass": "СВ",
   "system": {
-    "target_id": 0,
-    "area_km2": 366.9,
-    "distance_km": 317.6,
-    "bearing_deg": 329.0,
-    "compass": "СЗ",
-    "elongation_aspect_ratio": 1.53,
-    "elongation_axis_deg": 36.0,
-    "elongation_axis_compass": "СВ-ЮЗ",
-    "frontlike": false,
+    "target_id": 3,
+    "area_km2": 1072.8,
+    "distance_km": 288.7,
+    "bearing_deg": 339.0,
+    "compass": "С",
+    "elongation_aspect_ratio": 2.99,
+    "elongation_axis_deg": 88.0,
+    "elongation_axis_compass": "В-З",
+    "frontlike": true,
     "window_spanning": false,
     "phase_label": "смешанная фаза",
     "cloud_fraction": 1.0,
     "has_precip": false,
     "has_lightning": false
   },
-  "system_candidates": [
+  "local_candidates": [
     {
       "target_id": 0,
-      "area_km2": 366.9,
-      "distance_km": 317.6,
-      "bearing_deg": 329.0,
-      "compass": "СЗ",
-      "elongation_aspect_ratio": 1.53,
-      "elongation_axis_deg": 36.0,
+      "area_km2": 218.8,
+      "distance_km": 254.7,
+      "bearing_deg": 27.0,
+      "compass": "СВ",
+      "elongation_aspect_ratio": 1.42,
+      "elongation_axis_deg": 32.0,
       "elongation_axis_compass": "СВ-ЮЗ",
       "frontlike": false,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
+      "has_precip": false,
+      "has_lightning": false,
+      "ir_confirmed": true,
+      "geocolour_confirmed": true
+    },
+    {
+      "target_id": 1,
+      "area_km2": 81.4,
+      "distance_km": 265.6,
+      "bearing_deg": 25.0,
+      "compass": "СВ",
+      "elongation_aspect_ratio": 1.26,
+      "elongation_axis_deg": 39.0,
+      "elongation_axis_compass": "СВ-ЮЗ",
+      "frontlike": false,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
+      "has_precip": false,
+      "has_lightning": false,
+      "ir_confirmed": true,
+      "geocolour_confirmed": true
+    },
+    {
+      "target_id": 2,
+      "area_km2": 133.4,
+      "distance_km": 285.2,
+      "bearing_deg": 26.0,
+      "compass": "СВ",
+      "elongation_aspect_ratio": 1.45,
+      "elongation_axis_deg": 0.0,
+      "elongation_axis_compass": "С-Ю",
+      "frontlike": false,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
+      "has_precip": false,
+      "has_lightning": false,
+      "ir_confirmed": true,
+      "geocolour_confirmed": true
+    }
+  ],
+  "local_suppressed_count": 0,
+  "system_candidates": [
+    {
+      "target_id": 3,
+      "area_km2": 1072.8,
+      "distance_km": 288.7,
+      "bearing_deg": 339.0,
+      "compass": "С",
+      "elongation_aspect_ratio": 2.99,
+      "elongation_axis_deg": 88.0,
+      "elongation_axis_compass": "В-З",
+      "frontlike": true,
       "window_spanning": false,
       "phase_label": "смешанная фаза",
       "type_label": "низкая/средняя",
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": true,
-      "geocolour_confirmed": false
+      "geocolour_confirmed": true
     }
   ],
   "system_suppressed_count": 0,
-  "verdict": "Локальных облачных масс нет. Система синоптического масштаба (367км²) в 318км СЗ (смешанная фаза)."
+  "frontal_tracks": [],
+  "target_movement": {
+    "speed_kmh": 0.0,
+    "direction_compass": "ЮЗ",
+    "cpa_km": 9.4,
+    "eta_min": null,
+    "verdict": "почти стоит на месте"
+  },
+  "target_phase": {
+    "label": "безоблачно",
+    "cloud_fraction": 0.882
+  },
+  "existence": {
+    "modules": {
+      "ir_motion": {
+        "confirmed": true,
+        "timestamp": "2026-08-21T04:30:00.000Z"
+      },
+      "geocolour_motion": {
+        "confirmed": true,
+        "timestamp": "2026-08-21T04:30:00.000Z"
+      },
+      "cloud_phase_type": {
+        "confirmed": true,
+        "timestamp": "2026-08-21T04:56:46Z"
+      }
+    },
+    "votes_confirmed": 3,
+    "votes_not_confirmed": 0,
+    "consensus": "confirmed"
+  },
+  "phenomena": {
+    "precip_forecast": {
+      "confirmed": false,
+      "timestamp": "2026-08-21T04:57:39Z"
+    },
+    "lightning_forecast": {
+      "confirmed": false,
+      "timestamp": "2026-08-21T04:57:41Z"
+    }
+  },
+  "verdict": "Облачная масса (219км², безоблачно) в 255км СВ подтверждена всеми доступными каналами. Почти не движется. Отдельно: система синоптического масштаба (1073км²) в 289км С (вытянута В-З (88°), похоже на фронт, смешанная фаза)."
 }
