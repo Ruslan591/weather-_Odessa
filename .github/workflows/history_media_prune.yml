@@ -1,0 +1,79 @@
+name: History media prune
+
+# Еженедельно вырезает из git-истории старые версии мультимедиа-файлов
+# (mp4/mp3/png/jpg/jpeg/gif/webp), оставляя последние 24 часа + последнюю
+# версию каждого пути (чтобы файл не исчез из HEAD). JSON/npz/код/docs не трогает.
+#
+# Безопасность:
+#  - Ручной запуск (workflow_dispatch) по умолчанию идёт в mode=analyze
+#    (только отчёт, ничего не меняет) — нужно явно выбрать execute.
+#  - Еженедельный автозапуск (schedule) идёт в execute ТОЛЬКО если в репозитории
+#    существует файл .github/HISTORY_PRUNE_CONFIRMED — иначе тоже analyze.
+#    Это даёт возможность посмотреть отчёт хотя бы один раз до первого
+#    реального force-push.
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'  # воскресенье, 03:00 UTC
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'analyze = только отчёт, execute = переписать историю и force-push'
+        type: choice
+        options:
+          - analyze
+          - execute
+        default: analyze
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost \
+                      "$AGENT_TOOLSDIRECTORY" /usr/local/lib/android /opt/hostedtoolcache || true
+          docker system prune -af || true
+          df -h
+
+      - name: Checkout (для скрипта и проверки маркера)
+        uses: actions/checkout@v4
+        with:
+          path: work
+
+      - name: Determine mode
+        id: mode
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "mode=${{ github.event.inputs.mode }}" >> "$GITHUB_OUTPUT"
+          elif [ -f work/.github/HISTORY_PRUNE_CONFIRMED ]; then
+            echo "mode=execute" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=analyze" >> "$GITHUB_OUTPUT"
+          fi
+          cat "$GITHUB_OUTPUT"
+
+      - name: Install git-filter-repo
+        run: pip install --user git-filter-repo
+
+      - name: Mirror clone target repo
+        run: |
+          git clone --mirror https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git mirror.git
+          du -sh mirror.git
+
+      - name: Run prune
+        working-directory: mirror.git
+        run: |
+          python3 "${{ github.workspace }}/work/scripts/gh_history_prune.py" --mode "${{ steps.mode.outputs.mode }}"
+
+      - name: Repo size after
+        if: steps.mode.outputs.mode == 'execute'
+        working-directory: mirror.git
+        run: du -sh .
+
+      - name: Push rewritten history
+        if: steps.mode.outputs.mode == 'execute'
+        working-directory: mirror.git
+        run: |
+          git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          git push --force --mirror origin
