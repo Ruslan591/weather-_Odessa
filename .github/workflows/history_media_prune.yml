@@ -74,38 +74,14 @@ jobs:
 
       - name: Publish report to repo
         if: always()
-        working-directory: repo
-        run: |
-          # Публикуем из ТОГО ЖЕ чекаута, что и сам прунинг (уже синхронизирован
-          # с origin/main и уже аутентифицирован через GH_PAT) — без отдельного
-          # чекаута/rebase, которые ловили гонку сразу после переписанной истории.
-          git config user.email "actions@github.com"
-          git config user.name "history-prune-bot"
-          git remote get-url origin >/dev/null 2>&1 || git remote add origin "$REPO_PUSH_URL"
-          ok=0
-          for i in 1 2 3 4 5; do
-            git fetch origin main
-            git reset --hard origin/main
-            mkdir -p .github
-            {
-              echo "# History prune report"
-              echo "run: ${{ github.run_id }} | trigger: ${{ github.event_name }} | mode: ${{ steps.mode.outputs.mode }} | when: $(date -u +%FT%TZ)"
-              echo
-              cat "${{ github.workspace }}/prune_report.txt"
-            } > .github/history_prune_last_report.txt
-            git add .github/history_prune_last_report.txt
-            git commit -m "History prune report (mode=${{ steps.mode.outputs.mode }})" || { echo "nothing to commit"; ok=1; break; }
-            if git push origin HEAD:main; then
-              echo "push OK (попытка $i)"
-              ok=1
-              break
-            fi
-            echo "попытка $i не удалась, жду и повторяю"
-            sleep 5
-          done
-          [ "$ok" = "1" ] || { echo "не удалось опубликовать отчёт за 5 попыток"; exit 1; }
         env:
-          REPO_PUSH_URL: https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
+          GH_PAT: ${{ secrets.GH_PAT }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          EVENT_NAME: ${{ github.event_name }}
+          MODE: ${{ steps.mode.outputs.mode }}
+          REPORT_FILE: ${{ github.workspace }}/prune_report.txt
+        run: python3 "${{ github.workspace }}/work/scripts/publish_report.py"
 
       - name: Repo size after
         if: steps.mode.outputs.mode == 'execute'
