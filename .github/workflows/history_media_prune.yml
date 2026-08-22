@@ -64,7 +64,25 @@ jobs:
       - name: Run prune
         working-directory: mirror.git
         run: |
-          python3 "${{ github.workspace }}/work/scripts/gh_history_prune.py" --mode "${{ steps.mode.outputs.mode }}"
+          python3 "${{ github.workspace }}/work/scripts/gh_history_prune.py" --mode "${{ steps.mode.outputs.mode }}" \
+            2>&1 | tee "${{ github.workspace }}/prune_report.txt"
+
+      - name: Publish report to repo
+        if: always()
+        working-directory: work
+        run: |
+          mkdir -p .github
+          {
+            echo "# History prune report"
+            echo "run: ${{ github.run_id }} | trigger: ${{ github.event_name }} | mode: ${{ steps.mode.outputs.mode }} | when: $(date -u +%FT%TZ)"
+            echo
+            cat "${{ github.workspace }}/prune_report.txt"
+          } > .github/history_prune_last_report.txt
+          git config user.email "actions@github.com"
+          git config user.name "history-prune-bot"
+          git add .github/history_prune_last_report.txt
+          git commit -m "History prune report (mode=${{ steps.mode.outputs.mode }})" || echo "nothing to commit"
+          git push origin HEAD:main
 
       - name: Repo size after
         if: steps.mode.outputs.mode == 'execute'
