@@ -58,13 +58,13 @@ jobs:
 
       - name: Clone target repo
         run: |
-          git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git repo
+          git clone https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git repo
           du -sh repo
 
       - name: Run prune
         working-directory: repo
         env:
-          REPO_PUSH_URL: https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          REPO_PUSH_URL: https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
         run: |
           set -o pipefail
           git config user.email "actions@github.com"
