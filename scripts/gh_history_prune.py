@@ -25,9 +25,11 @@ MEDIA_EXTS = {".mp4", ".mp3", ".png", ".jpg", ".jpeg", ".gif", ".webp"}
 
 
 def sh(cmd: str) -> str:
-    return subprocess.run(
-        cmd, shell=True, check=True, text=True, capture_output=True
-    ).stdout
+    r = subprocess.run(cmd, shell=True, text=True, capture_output=True)
+    if r.returncode != 0:
+        print(f"КОМАНДА УПАЛА: {cmd}\n--- stdout ---\n{r.stdout}\n--- stderr ---\n{r.stderr}")
+        raise subprocess.CalledProcessError(r.returncode, cmd, r.stdout, r.stderr)
+    return r.stdout
 
 
 def is_media(path: str) -> bool:
