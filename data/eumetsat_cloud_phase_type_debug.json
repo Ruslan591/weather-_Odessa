@@ -1,13 +1,17 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-08-22T12:50:00.000Z",
+  "server_latest_time": "2026-08-22T13:10:00.000Z",
   "mode": "day",
   "bootstrap": true,
   "buffer_before": 13,
-  "buffer_size": 13,
+  "bootstrap_failed_frames": [
+    {
+      "time": "2026-08-22T13:00:00.000Z",
+      "error": "попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)"
+    }
+  ],
+  "buffer_size": 12,
   "buffer_times": [
-    "2026-08-22T10:50:00.000Z",
-    "2026-08-22T11:00:00.000Z",
     "2026-08-22T11:10:00.000Z",
     "2026-08-22T11:20:00.000Z",
     "2026-08-22T11:30:00.000Z",
@@ -18,12 +22,13 @@
     "2026-08-22T12:20:00.000Z",
     "2026-08-22T12:30:00.000Z",
     "2026-08-22T12:40:00.000Z",
-    "2026-08-22T12:50:00.000Z"
+    "2026-08-22T12:50:00.000Z",
+    "2026-08-22T13:10:00.000Z"
   ],
   "result": {
-    "timestamp": "2026-08-22T13:14:39Z",
+    "timestamp": "2026-08-22T13:29:13Z",
     "mode": "day",
-    "unclassified_fraction_now": 0.506,
+    "unclassified_fraction_now": 0.504,
     "phase_ordinal_now": 0.0,
     "phase_ordinal_delta": 0.0,
     "phase_verdict": "без существенных изменений",
@@ -42,7 +47,7 @@
     "system_analysis": {
       "available": true,
       "target_id": 4,
-      "area_km2": 460.3,
+      "area_km2": 565.7,
       "roi_cloud_fraction": 0.0,
       "roi_dominant_phase_ordinal": 0.0,
       "roi_dominant_phase_label": "безоблачно",
@@ -116,12 +121,12 @@
       }
     ],
     "buffer_status": {
-      "frames_in_memory": 13,
+      "frames_in_memory": 12,
       "frames_target": 13,
-      "span_minutes_now": 120,
+      "span_minutes_now": 110,
       "span_minutes_target": 120,
-      "eta_full_window_min": 0,
-      "note": "буфер заполнен (13/13), тренд по полному окну ~120 мин"
+      "eta_full_window_min": 10,
+      "note": "в памяти 12/13 снимков (~110 мин истории), полное 120-минутное окно накопится через ~10 мин"
     },
     "method_note": "[День] Персистентный буфер до 13 кадров Cloud Phase RGB + Cloud Type RGB (шаг 10 мин, до 2 часов). Анкеры цвета — HSV-диапазоны, ПЕРВАЯ, не откалиброванная по реальным сценам версия (у обоих слоёв нет официальной легенды — это настоящие RGB-композиты, GetLegendGraphic возвращает не легенду). phase_ordinal (0..8) — безоблачно -> вода (низкая/средняя/плотная) -> лёд (тонкий/плотный) -> смешанная фаза -> холодные верхушки Cb -> гроза. type_group (0..2) — безоблачно/низкая-средняя/плотная-высокая. Тренд — сравнение первого и последнего кадра буфера в радиусе 50км. unclassified_fraction_now — доля пикселей, не попавших уверенно ни в одно цветовое правило: при большом значении анкеры нужно пересматривать."
   }
