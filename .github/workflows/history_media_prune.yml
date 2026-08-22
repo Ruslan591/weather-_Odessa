@@ -56,14 +56,19 @@ jobs:
       - name: Install git-filter-repo
         run: pip install --user git-filter-repo
 
-      - name: Mirror clone target repo
+      - name: Clone target repo
         run: |
-          git clone --mirror https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git mirror.git
-          du -sh mirror.git
+          git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git repo
+          du -sh repo
 
       - name: Run prune
-        working-directory: mirror.git
+        working-directory: repo
+        env:
+          REPO_PUSH_URL: https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
         run: |
+          set -o pipefail
+          git config user.email "actions@github.com"
+          git config user.name "history-prune-bot"
           python3 "${{ github.workspace }}/work/scripts/gh_history_prune.py" --mode "${{ steps.mode.outputs.mode }}" \
             2>&1 | tee "${{ github.workspace }}/prune_report.txt"
 
@@ -82,16 +87,23 @@ jobs:
           git config user.name "history-prune-bot"
           git add .github/history_prune_last_report.txt
           git commit -m "History prune report (mode=${{ steps.mode.outputs.mode }})" || echo "nothing to commit"
-          git push origin HEAD:main
+          # За время клонирования 20 ГБ основной пайплайн (коммиты каждые ~15 мин)
+          # почти наверняка уйдёт вперёд -> обычный push будет non-fast-forward.
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            if git rebase origin/main; then
+              if git push origin HEAD:main; then
+                echo "push OK (попытка $i)"
+                break
+              fi
+            else
+              git rebase --abort || true
+            fi
+            echo "попытка $i не удалась, жду и повторяю"
+            sleep 5
+          done
 
       - name: Repo size after
         if: steps.mode.outputs.mode == 'execute'
-        working-directory: mirror.git
-        run: du -sh .
-
-      - name: Push rewritten history
-        if: steps.mode.outputs.mode == 'execute'
-        working-directory: mirror.git
-        run: |
-          git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
-          git push --force --mirror origin
+        working-directory: repo
+        run: du -sh .git
