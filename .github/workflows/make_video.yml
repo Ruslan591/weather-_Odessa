@@ -32,22 +32,51 @@ jobs:
         run: |
           python3 scripts/make_video.py > /tmp/video_debug.log 2>&1
           echo "exit=$?" >> "$GITHUB_OUTPUT"
-          tail -c 60000 /tmp/video_debug.log > data/_debug_video_log.txt || true
+          tail -c 60000 /tmp/video_debug.log > /tmp/debug_trimmed.log || true
 
-      - name: Commit debug log (temporary diagnostics)
+      - name: Push debug log via API (temporary diagnostics, no working-tree touch)
         if: always()
+        env:
+          GH_TOKEN_DEBUG: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          EXITCODE: ${{ steps.genvideo.outputs.exit }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/_debug_video_log.txt || true
-          git diff --cached --quiet && echo "No debug changes" && exit 0
-          git commit -m "debug: video generation log (temporary)"
-          for i in 1 2 3; do
-            git pull --rebase origin main
-            git push && break
-            echo "Retry $i..."
-            sleep 5
-          done
+          python3 << 'PYEOF'
+          import json, base64, os, urllib.request
+
+          token = os.environ["GH_TOKEN_DEBUG"]
+          repo = os.environ["REPO"]
+          exitcode = os.environ.get("EXITCODE", "?")
+
+          with open("/tmp/debug_trimmed.log", "rb") as f:
+              content = f.read()
+
+          url = f"https://api.github.com/repos/{repo}/contents/data/_debug_video_log.txt"
+          req = urllib.request.Request(url, headers={"Authorization": f"token {token}"})
+          sha = None
+          try:
+              with urllib.request.urlopen(req) as r:
+                  sha = json.load(r).get("sha")
+          except Exception:
+              pass
+
+          payload = {
+              "message": f"debug: video generation log (temporary, exit={exitcode})",
+              "content": base64.b64encode(content).decode(),
+              "branch": "main",
+          }
+          if sha:
+              payload["sha"] = sha
+
+          req2 = urllib.request.Request(
+              url,
+              data=json.dumps(payload).encode(),
+              headers={"Authorization": f"token {token}", "Content-Type": "application/json"},
+              method="PUT",
+          )
+          with urllib.request.urlopen(req2) as r2:
+              print(r2.status)
+          PYEOF
 
       - name: Fail job if video generation failed
         if: steps.genvideo.outputs.exit != '0'
