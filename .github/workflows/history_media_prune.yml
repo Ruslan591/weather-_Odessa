@@ -76,32 +76,32 @@ jobs:
         if: always()
         working-directory: work
         run: |
-          mkdir -p .github
-          {
-            echo "# History prune report"
-            echo "run: ${{ github.run_id }} | trigger: ${{ github.event_name }} | mode: ${{ steps.mode.outputs.mode }} | when: $(date -u +%FT%TZ)"
-            echo
-            cat "${{ github.workspace }}/prune_report.txt"
-          } > .github/history_prune_last_report.txt
           git config user.email "actions@github.com"
           git config user.name "history-prune-bot"
-          git add .github/history_prune_last_report.txt
-          git commit -m "History prune report (mode=${{ steps.mode.outputs.mode }})" || echo "nothing to commit"
-          # За время клонирования 20 ГБ основной пайплайн (коммиты каждые ~15 мин)
-          # почти наверняка уйдёт вперёд -> обычный push будет non-fast-forward.
+          ok=0
           for i in 1 2 3 4 5; do
             git fetch origin main
-            if git rebase origin/main; then
-              if git push origin HEAD:main; then
-                echo "push OK (попытка $i)"
-                break
-              fi
-            else
-              git rebase --abort || true
+            # reset, а не rebase: после успешного execute у main нет общего предка
+            # со старой историей (она полностью переписана) — rebase тут бессмыслен.
+            git reset --hard origin/main
+            mkdir -p .github
+            {
+              echo "# History prune report"
+              echo "run: ${{ github.run_id }} | trigger: ${{ github.event_name }} | mode: ${{ steps.mode.outputs.mode }} | when: $(date -u +%FT%TZ)"
+              echo
+              cat "${{ github.workspace }}/prune_report.txt"
+            } > .github/history_prune_last_report.txt
+            git add .github/history_prune_last_report.txt
+            git commit -m "History prune report (mode=${{ steps.mode.outputs.mode }})" || { echo "nothing to commit"; ok=1; break; }
+            if git push origin HEAD:main; then
+              echo "push OK (попытка $i)"
+              ok=1
+              break
             fi
             echo "попытка $i не удалась, жду и повторяю"
             sleep 5
           done
+          [ "$ok" = "1" ] || { echo "не удалось опубликовать отчёт за 5 попыток"; exit 1; }
 
       - name: Repo size after
         if: steps.mode.outputs.mode == 'execute'
