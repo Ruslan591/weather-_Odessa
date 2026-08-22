@@ -87,6 +87,36 @@ def analyze(latest_commit_for_path, recent_shas, hours: int):
     print("\nЭто ТОЛЬКО отчёт. История не изменена. Для реального прогона: mode=execute")
 
 
+def chunked_push(batch_size: int = 1500) -> None:
+    """
+    GitHub рвёт соединение (HTTP 500 / unexpected disconnect) на одном
+    гигантском force-push, если переписана вся история (тысячи новых
+    commit/tree-объектов разом). Решение: продвигаем служебную ветку
+    чекпоинтами по batch_size коммитов (каждый чекпоинт передаёт только
+    новые объекты с прошлого раза), и только в конце дёшево (объекты уже
+    на сервере, это просто перестановка ref) обновляем main.
+    """
+    sh("git config http.postBuffer 524288000")
+    sh("git config http.version HTTP/1.1")
+
+    commits = sh("git rev-list --reverse main").strip().splitlines()
+    total = len(commits)
+    scratch = "__prune_progress__"
+    checkpoints = list(range(batch_size - 1, total, batch_size))
+    if not checkpoints or checkpoints[-1] != total - 1:
+        checkpoints.append(total - 1)
+
+    print(f"Пушу {total} коммитов чанками по {batch_size}, чекпоинтов: {len(checkpoints)}")
+    for n, idx in enumerate(checkpoints, 1):
+        csha = commits[idx]
+        print(f"  чекпоинт {n}/{len(checkpoints)} ({idx + 1}/{total} коммитов): {csha[:10]}")
+        sh(f"git push origin +{csha}:refs/heads/{scratch}")
+
+    print("Все объекты уже на сервере — финальный (дешёвый) апдейт main.")
+    sh("git push --force origin main")
+    sh(f"git push origin --delete {scratch}")
+
+
 def execute(latest_commit_for_path, recent_shas):
     import os
     import git_filter_repo as fr  # type: ignore
@@ -141,7 +171,7 @@ def execute(latest_commit_for_path, recent_shas):
         sh("git checkout main")
         sh("git branch -D __live_check__")
 
-    sh("git push --force origin main")
+    chunked_push()
     print("Готово: прореженная история (с учётом свежих коммитов) запушена в main.")
 
 
