@@ -1,37 +1,38 @@
 # History prune report
-run: 32563936946 | trigger: workflow_dispatch | mode: execute | when: 2026-08-22T09:17:06Z
+run: 32577581689 | trigger: workflow_dispatch | mode: analyze | when: 2026-08-22T14:06:36Z
 
-main до прунинга: 9ed4f09a49e3df8d8e2b69d250882640e1f7646b
-NOTICE: Removing 'origin' remote; see 'Why is my origin removed?'
-        in the manual if you want to push back there.
-        (was https://x-access-token:ghs_15368_eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRobmQiLCJjdHgiOiJ0YmtKcTR0cW1iM2dQU2oxLTFTOTlMWGNzZUx5eDNObFhWOUdHd2pMR29EaC13WnFIOHpPS3VVIiwiZXhwIjoxNzg3MzkzMDM4LCJpYXQiOjE3ODczODk0MzgsImlzcyI6ImdpdGh1YiIsImp0aSI6ImNjN2YxNmFkLTc5MWQtNDNmNC04MDMyLTUzMDg0NzI3YjJmZiIsInZlciI6M30.FrwQytGB3LYr_6wbRRLW-EDCmbtHvP19T5BwvDnstvYODDohUNq1H7ET2YyZFPGs30oy55SJoPJMRQHR9ZCRyQ@github.com/Ruslan591/weather-_Odessa.git)
-Parsed 1 commitsParsed 859 commitsParsed 1802 commitsParsed 2760 commitsParsed 4084 commitsParsed 4924 commitsParsed 5227 commitsParsed 5585 commitsParsed 5933 commitsParsed 6210 commitsParsed 6441 commitsParsed 6672 commitsParsed 6892 commitsParsed 7205 commitsParsed 7511 commitsParsed 7799 commitsParsed 8112 commitsParsed 8332 commitsParsed 8644 commitsParsed 8990 commitsParsed 9344 commitsParsed 9635 commitsParsed 9929 commitsParsed 10207 commitsParsed 10476 commitsParsed 10755 commitsParsed 11096 commitsParsed 11364 commitsParsed 11675 commitsParsed 12010 commitsParsed 12298 commitsParsed 12536 commitsParsed 12829 commitsParsed 13152 commitsParsed 13447 commitsParsed 13720 commitsParsed 13998 commitsParsed 14304 commitsParsed 14588 commitsParsed 14867 commitsParsed 15129 commitsParsed 15369 commitsParsed 15597 commitsParsed 15804 commitsParsed 16028 commitsParsed 16250 commitsParsed 16517 commitsParsed 16742 commitsParsed 16979 commitsParsed 17209 commitsParsed 17400 commitsParsed 17605 commitsParsed 17834 commitsParsed 18089 commitsParsed 18363 commitsParsed 18622 commitsParsed 18842 commitsParsed 19065 commitsParsed 19302 commitsParsed 19504 commitsParsed 19716 commitsParsed 19930 commitsParsed 20148 commitsParsed 20362 commitsParsed 20626 commitsParsed 20900 commitsParsed 21174 commitsParsed 21453 commitsParsed 21726 commitsParsed 22047 commitsParsed 22330 commitsParsed 22378 commitsHEAD is now at 76be942b12 Fix HTTP 500 on force-push: push rewritten history in chunks to a scratch ref, then cheap ref-move for main
+Медиа-путей всего в истории: 412
+Коммитов моложе 24ч (не трогаются вообще): 369
+Commit-touches к удалению: 138 (по 28 путям)
 
-New history written in 7.31 seconds; now repacking/cleaning...
-Repacking your repo and cleaning out old unneeded objects
-Completely finished after 29.61 seconds.
-История переписана ЛОКАЛЬНО. filter-repo удаляет remote 'origin' — добавляю заново.
-Новых коммитов на main за время прогона не появилось.
-Пушу 22292 коммитов чанками по 1500, чекпоинтов: 15
-  чекпоинт 1/15 (1500/22292 коммитов): 57492187ab
-КОМАНДА УПАЛА: git push origin +57492187abf87bf5a55ddc47254447e1f797cb7a:refs/heads/__prune_progress__
---- stdout ---
+Пути, которые будут прорежены:
+ - data/anim/far_geocolour.png
+ - data/anim/very_far_geocolour.png
+ - data/blocks_gemini/block_0_today.mp3
+ - data/blocks_gemini/block_0_today_p1.mp3
+ - data/blocks_gemini/block_1_tomorrow.mp3
+ - data/blocks_gemini/block_1_tomorrow_p1.mp3
+ - data/blocks_gemini/block_1_tomorrow_p2.mp3
+ - data/blocks_gemini/block_2_next3.mp3
+ - data/blocks_gemini/block_2_next3_p1.mp3
+ - data/blocks_gemini/block_2_next3_p2.mp3
+ - data/blocks_gemini/block_2_next3_p3.mp3
+ - data/blocks_gemini/block_3_warnings.mp3
+ - data/blocks_gemini/block_3_warnings_p1.mp3
+ - data/blocks_gemini/block_4_marine.mp3
+ - data/blocks_gemini/block_4_marine_p1.mp3
+ - data/blocks_gemini/block_4_marine_p2.mp3
+ - data/blocks_gemini/block_5_trend.mp3
+ - data/blocks_gemini/block_5_trend_p1.mp3
+ - data/blocks_gemini/block_5_trend_p2.mp3
+ - data/blocks_gemini/block_v_verification.mp3
+ - data/blocks_gemini/block_v_verification_p1.mp3
+ - data/eumetsat_clm_snapshot.png
+ - data/eumetsat_geocolour_debug_preview.png
+ - data/eumetsat_geocolour_snapshot.png
+ - data/eumetsat_ir_snapshot.png
+ - data/eumetsat_west_snapshot_clm.png
+ - data/eumetsat_west_snapshot_geocolour.png
+ - data/eumetsat_west_snapshot_ir.png
 
---- stderr ---
-To https://github.com/Ruslan591/weather-_Odessa.git
- ! [remote rejected]       57492187abf87bf5a55ddc47254447e1f797cb7a -> __prune_progress__ (refusing to allow a GitHub App to create or update workflow `.github/workflows/deploy.yml` without `workflows` permission)
-error: failed to push some refs to 'https://github.com/Ruslan591/weather-_Odessa.git'
-
-Traceback (most recent call last):
-  File "/home/runner/work/weather-_Odessa/weather-_Odessa/work/scripts/gh_history_prune.py", line 194, in <module>
-    sys.exit(main())
-             ^^^^^^
-  File "/home/runner/work/weather-_Odessa/weather-_Odessa/work/scripts/gh_history_prune.py", line 190, in main
-    execute(latest_commit_for_path, recent_shas)
-  File "/home/runner/work/weather-_Odessa/weather-_Odessa/work/scripts/gh_history_prune.py", line 174, in execute
-    chunked_push()
-  File "/home/runner/work/weather-_Odessa/weather-_Odessa/work/scripts/gh_history_prune.py", line 113, in chunked_push
-    sh(f"git push origin +{csha}:refs/heads/{scratch}")
-  File "/home/runner/work/weather-_Odessa/weather-_Odessa/work/scripts/gh_history_prune.py", line 31, in sh
-    raise subprocess.CalledProcessError(r.returncode, cmd, r.stdout, r.stderr)
-subprocess.CalledProcessError: Command 'git push origin +57492187abf87bf5a55ddc47254447e1f797cb7a:refs/heads/__prune_progress__' returned non-zero exit status 1.
+Это ТОЛЬКО отчёт. История не изменена. Для реального прогона: mode=execute
