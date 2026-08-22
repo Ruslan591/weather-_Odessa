@@ -86,7 +86,11 @@ def analyze(latest_commit_for_path, recent_shas, hours: int):
 
 
 def execute(latest_commit_for_path, recent_shas):
+    import os
     import git_filter_repo as fr  # type: ignore
+
+    old_main = sh("git rev-parse main").strip()
+    print(f"main до прунинга: {old_main}")
 
     def commit_cb(commit, _metadata):
         sha = commit.original_id.decode("ascii")
@@ -100,7 +104,43 @@ def execute(latest_commit_for_path, recent_shas):
     args = fr.FilteringOptions.parse_args(["--force"])
     filt = fr.RepoFilter(args, commit_callback=commit_cb)
     filt.run()
-    print("История переписана ЛОКАЛЬНО (в этом клоне). Push делает следующий шаг workflow.")
+    print("История переписана ЛОКАЛЬНО. filter-repo удаляет remote 'origin' — добавляю заново.")
+
+    push_url = os.environ.get("REPO_PUSH_URL")
+    if not push_url:
+        raise SystemExit("REPO_PUSH_URL не задан — не могу запушить результат.")
+
+    sh(f"git remote add origin {push_url!r}")
+
+    # Пока клонировались/прунились ~20 ГБ (много минут), основной пайплайн
+    # (коммиты каждые ~15 мин) почти наверняка успел уйти вперёд на реальном
+    # main. Нужно перенести эти новые коммиты поверх прореженной истории,
+    # иначе force-push их сотрёт.
+    sh("git fetch origin '+refs/heads/main:refs/heads/__live_check__'")
+    new_main = sh("git rev-parse refs/heads/__live_check__").strip()
+
+    if new_main == old_main:
+        print("Новых коммитов на main за время прогона не появилось.")
+    else:
+        ahead = sh(f"git rev-list --count {old_main}..{new_main}").strip()
+        print(f"На main появилось {ahead} новых коммитов за время прогона — переношу поверх прореженной истории.")
+        try:
+            sh(f"git rebase --onto main {old_main} refs/heads/__live_check__")
+        except subprocess.CalledProcessError as e:
+            sh("git rebase --abort")
+            print("STDOUT:", e.stdout)
+            print("STDERR:", e.stderr)
+            raise SystemExit(
+                "Не удалось перенести новые коммиты поверх прореженной истории "
+                "(конфликт при rebase). Push отменён, ничего не сломано на "
+                "удалённом репозитории — нужно разобраться руками."
+            )
+        sh("git branch -f main __live_check__")
+        sh("git checkout main")
+        sh("git branch -D __live_check__")
+
+    sh("git push --force origin main")
+    print("Готово: прореженная история (с учётом свежих коммитов) запушена в main.")
 
 
 def main():
