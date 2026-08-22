@@ -27,7 +27,31 @@ jobs:
           pip install Pillow numpy
 
       - name: Generate video
-        run: python3 scripts/make_video.py
+        id: genvideo
+        continue-on-error: true
+        run: |
+          python3 scripts/make_video.py > /tmp/video_debug.log 2>&1
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+          tail -c 60000 /tmp/video_debug.log > data/_debug_video_log.txt || true
+
+      - name: Commit debug log (temporary diagnostics)
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/_debug_video_log.txt || true
+          git diff --cached --quiet && echo "No debug changes" && exit 0
+          git commit -m "debug: video generation log (temporary)"
+          for i in 1 2 3; do
+            git pull --rebase origin main
+            git push && break
+            echo "Retry $i..."
+            sleep 5
+          done
+
+      - name: Fail job if video generation failed
+        if: steps.genvideo.outputs.exit != '0'
+        run: exit 1
 
       - name: Commit video
         run: |
