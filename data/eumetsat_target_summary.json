@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-23T06:56:29Z",
+  "timestamp": "2026-08-23T07:04:36Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-08-23T06:30:00.000Z",
   "target_id": 1,
@@ -19,7 +19,7 @@
     "frontlike": false,
     "window_spanning": true,
     "phase_label": "средняя водяная",
-    "cloud_fraction": 0.094,
+    "cloud_fraction": 0.088,
     "has_precip": true,
     "has_lightning": false
   },
@@ -51,8 +51,8 @@
       "elongation_axis_deg": 57.0,
       "elongation_axis_compass": "СВ-ЮЗ",
       "frontlike": false,
-      "phase_label": "безоблачно",
-      "type_label": "безоблачно",
+      "phase_label": null,
+      "type_label": null,
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
@@ -68,8 +68,8 @@
       "elongation_axis_deg": 74.0,
       "elongation_axis_compass": "В-З",
       "frontlike": false,
-      "phase_label": null,
-      "type_label": null,
+      "phase_label": "безоблачно",
+      "type_label": "безоблачно",
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
@@ -89,9 +89,9 @@
       "elongation_axis_compass": "СВ-ЮЗ",
       "frontlike": true,
       "window_spanning": false,
-      "phase_label": null,
-      "type_label": null,
-      "has_precip": null,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
+      "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
       "geocolour_confirmed": true
@@ -109,31 +109,13 @@
       "window_spanning": false,
       "phase_label": "безоблачно",
       "type_label": "плотная/высокая",
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": false,
-      "geocolour_confirmed": true
-    },
-    {
-      "target_id": 7,
-      "area_km2": 31757.6,
-      "distance_km": 149.5,
-      "bearing_deg": 335.0,
-      "compass": "СЗ",
-      "elongation_aspect_ratio": 2.0,
-      "elongation_axis_deg": 59.0,
-      "elongation_axis_compass": "СВ-ЮЗ",
-      "frontlike": false,
-      "window_spanning": false,
-      "phase_label": null,
-      "type_label": null,
-      "has_precip": null,
+      "has_precip": true,
       "has_lightning": false,
       "ir_confirmed": false,
       "geocolour_confirmed": true
     }
   ],
-  "system_suppressed_count": 1,
+  "system_suppressed_count": 2,
   "frontal_tracks": [
     {
       "track_id": 306,
@@ -348,37 +330,37 @@
     }
   ],
   "target_phase": {
-    "label": "безоблачно",
-    "cloud_fraction": 0.229
+    "label": "средняя водяная",
+    "cloud_fraction": 0.122
   },
   "existence": {
     "modules": {
       "ir_motion": {
-        "confirmed": false,
-        "timestamp": "2026-08-23T06:30:00.000Z"
+        "confirmed": true,
+        "timestamp": "2026-08-23T06:40:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-08-23T06:30:00.000Z"
+        "confirmed": true,
+        "timestamp": "2026-08-23T06:40:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": false,
-        "timestamp": "2026-08-23T06:47:17Z"
+        "timestamp": "2026-08-23T07:03:44Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 2,
+    "votes_not_confirmed": 1,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
       "confirmed": false,
-      "timestamp": "2026-08-23T06:47:54Z"
+      "timestamp": "2026-08-23T07:04:13Z"
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-08-23T06:56:13Z"
+      "timestamp": "2026-08-23T07:04:15Z"
     }
   },
-  "verdict": "CLM отметил цель в 39км Ю, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (106360км²) в 34км Ю (площадь/форма ненадёжны — объект упирается в границы окна обзора, средняя водяная, осадки)."
+  "verdict": "Цель в 39км Ю, средняя водяная — каналы расходятся: ir_motion/geocolour_motion подтверждают, cloud_phase_type нет. Отдельно: система синоптического масштаба (106360км²) в 34км Ю (площадь/форма ненадёжны — объект упирается в границы окна обзора, средняя водяная, осадки)."
 }
