@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-23T07:39:43Z",
+  "timestamp": "2026-08-23T07:43:42Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-08-23T07:15:00.000Z",
   "target_id": 2,
@@ -18,29 +18,12 @@
     "elongation_axis_compass": "Ю-С",
     "frontlike": false,
     "window_spanning": true,
-    "phase_label": "средняя водяная",
-    "cloud_fraction": 0.093,
+    "phase_label": "плотная водяная",
+    "cloud_fraction": 0.091,
     "has_precip": true,
     "has_lightning": false
   },
   "local_candidates": [
-    {
-      "target_id": 3,
-      "area_km2": 93.4,
-      "distance_km": 163.5,
-      "bearing_deg": 270.0,
-      "compass": "З",
-      "elongation_aspect_ratio": 2.08,
-      "elongation_axis_deg": 0.0,
-      "elongation_axis_compass": "С-Ю",
-      "frontlike": false,
-      "phase_label": null,
-      "type_label": null,
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": false,
-      "geocolour_confirmed": true
-    },
     {
       "target_id": 4,
       "area_km2": 194.8,
@@ -52,50 +35,15 @@
       "elongation_axis_compass": "СВ-ЮЗ",
       "frontlike": false,
       "phase_label": "безоблачно",
-      "type_label": "плотная/высокая",
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": false,
-      "geocolour_confirmed": true
-    },
-    {
-      "target_id": 6,
-      "area_km2": 56.0,
-      "distance_km": 199.7,
-      "bearing_deg": 17.0,
-      "compass": "С",
-      "elongation_aspect_ratio": 1.24,
-      "elongation_axis_deg": 0.0,
-      "elongation_axis_compass": "С-Ю",
-      "frontlike": false,
-      "phase_label": "безоблачно",
-      "type_label": "плотная/высокая",
+      "type_label": "безоблачно",
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
       "geocolour_confirmed": true
     }
   ],
-  "local_suppressed_count": 2,
+  "local_suppressed_count": 4,
   "system_candidates": [
-    {
-      "target_id": 1,
-      "area_km2": 557.7,
-      "distance_km": 59.3,
-      "bearing_deg": 264.0,
-      "compass": "З",
-      "elongation_aspect_ratio": 1.64,
-      "elongation_axis_deg": 28.0,
-      "elongation_axis_compass": "СВ-ЮЗ",
-      "frontlike": false,
-      "window_spanning": false,
-      "phase_label": null,
-      "type_label": null,
-      "has_precip": null,
-      "has_lightning": false,
-      "ir_confirmed": false,
-      "geocolour_confirmed": true
-    },
     {
       "target_id": 5,
       "area_km2": 312.2,
@@ -115,7 +63,7 @@
       "geocolour_confirmed": true
     }
   ],
-  "system_suppressed_count": 1,
+  "system_suppressed_count": 2,
   "frontal_tracks": [
     {
       "track_id": 291,
@@ -260,7 +208,7 @@
   ],
   "target_phase": {
     "label": "безоблачно",
-    "cloud_fraction": 0.64
+    "cloud_fraction": 0.0
   },
   "existence": {
     "modules": {
@@ -270,26 +218,26 @@
       },
       "geocolour_motion": {
         "confirmed": false,
-        "timestamp": "2026-08-23T07:10:00.000Z"
+        "timestamp": "2026-08-23T07:20:00.000Z"
       },
       "cloud_phase_type": {
-        "confirmed": true,
-        "timestamp": "2026-08-23T07:31:54Z"
+        "confirmed": false,
+        "timestamp": "2026-08-23T07:42:43Z"
       }
     },
-    "votes_confirmed": 1,
-    "votes_not_confirmed": 2,
-    "consensus": "disputed"
+    "votes_confirmed": 0,
+    "votes_not_confirmed": 3,
+    "consensus": "not_confirmed"
   },
   "phenomena": {
     "precip_forecast": {
       "confirmed": false,
-      "timestamp": "2026-08-23T07:25:23Z"
+      "timestamp": "2026-08-23T07:43:23Z"
     },
     "lightning_forecast": {
       "confirmed": false,
       "timestamp": "2026-08-23T07:39:19Z"
     }
   },
-  "verdict": "Цель в 103км Ю, безоблачно — каналы расходятся: cloud_phase_type подтверждают, ir_motion/geocolour_motion нет. Отдельно: система синоптического масштаба (141672км²) в 29км Ю (площадь/форма ненадёжны — объект упирается в границы окна обзора, средняя водяная, осадки)."
+  "verdict": "CLM отметил цель в 103км Ю, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (141672км²) в 29км Ю (площадь/форма ненадёжны — объект упирается в границы окна обзора, плотная водяная, осадки)."
 }
