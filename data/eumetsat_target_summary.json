@@ -1,41 +1,155 @@
 {
-  "timestamp": "2026-08-23T17:43:39Z",
-  "status": "system_only",
-  "reason": "локальных компактных масс нет, есть только система(ы) синоптического масштаба",
-  "cloud_forecast_timestamp": "2026-08-23T17:15:00.000Z",
+  "timestamp": "2026-08-23T17:59:01Z",
+  "status": "ok",
+  "cloud_forecast_timestamp": "2026-08-23T17:30:00.000Z",
+  "target_id": 1,
+  "target_area_km2": 109.4,
+  "target_distance_km": 200.2,
+  "target_bearing_deg": 313.0,
+  "target_compass": "СЗ",
   "system": {
     "target_id": 0,
-    "area_km2": 1353.0,
-    "distance_km": 217.5,
+    "area_km2": 1888.0,
+    "distance_km": 196.9,
     "bearing_deg": 225.0,
     "compass": "ЮЗ",
-    "elongation_aspect_ratio": 1.68,
-    "elongation_axis_deg": 7.0,
-    "elongation_axis_compass": "С-Ю",
-    "frontlike": false,
+    "elongation_aspect_ratio": 2.3,
+    "elongation_axis_deg": 34.0,
+    "elongation_axis_compass": "СВ-ЮЗ",
+    "frontlike": true,
     "window_spanning": false,
+    "has_precip": false,
     "has_lightning": false
   },
+  "local_candidates": [
+    {
+      "target_id": 1,
+      "area_km2": 109.4,
+      "distance_km": 200.2,
+      "bearing_deg": 313.0,
+      "compass": "СЗ",
+      "elongation_aspect_ratio": 1.4,
+      "elongation_axis_deg": 67.0,
+      "elongation_axis_compass": "СВ-ЮЗ",
+      "frontlike": false,
+      "phase_label": "безоблачно",
+      "type_label": "безоблачно",
+      "has_precip": false,
+      "has_lightning": false,
+      "ir_confirmed": true,
+      "geocolour_confirmed": false
+    }
+  ],
+  "local_suppressed_count": 0,
   "system_candidates": [
     {
       "target_id": 0,
-      "area_km2": 1353.0,
-      "distance_km": 217.5,
+      "area_km2": 1888.0,
+      "distance_km": 196.9,
       "bearing_deg": 225.0,
       "compass": "ЮЗ",
-      "elongation_aspect_ratio": 1.68,
-      "elongation_axis_deg": 7.0,
-      "elongation_axis_compass": "С-Ю",
-      "frontlike": false,
+      "elongation_aspect_ratio": 2.3,
+      "elongation_axis_deg": 34.0,
+      "elongation_axis_compass": "СВ-ЮЗ",
+      "frontlike": true,
       "window_spanning": false,
       "phase_label": null,
       "type_label": null,
-      "has_precip": null,
+      "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": true,
       "geocolour_confirmed": false
     }
   ],
   "system_suppressed_count": 0,
-  "verdict": "Локальных облачных масс нет. Система синоптического масштаба (1353км²) в 218км ЮЗ."
+  "frontal_tracks": [
+    {
+      "track_id": 356,
+      "first_seen": "2026-08-23T15:45:00.000Z",
+      "last_seen": "2026-08-23T17:30:00.000Z",
+      "points_count": 5,
+      "age_minutes": 105.0,
+      "distance_from_odessa_km": 196.9,
+      "dx_km": -138.56,
+      "dy_km": -139.85,
+      "area_km2": 1888.0,
+      "axis_deg": 34.0,
+      "aspect_ratio": 2.3,
+      "velocity_kmh": 28.0,
+      "movement_bearing_deg": 73.5,
+      "movement_bearing_compass": "В",
+      "axis_rotation_deg": 47.0,
+      "tile": "near",
+      "ahead_station": {
+        "name": "GORGOVA",
+        "ctry": "RO",
+        "lat": 45.183,
+        "lon": 29.167,
+        "elev_m": "+0004.0",
+        "dist_km_from_odessa": 187.1,
+        "wmo_synop_id": "15336",
+        "icao": null,
+        "usaf_raw": "153360",
+        "source": "synop",
+        "along_km": 14.9,
+        "perp_km": -4.6,
+        "dist_km": 15.6
+      },
+      "behind_station": {
+        "name": "CATALOI / TULCEA",
+        "ctry": "RO",
+        "lat": 45.062,
+        "lon": 28.714,
+        "elev_m": "+0061.0",
+        "dist_km_from_odessa": 221.2,
+        "wmo_synop_id": "15335",
+        "icao": "LRTC",
+        "usaf_raw": "153350",
+        "source": "synop+metar",
+        "along_km": -22.3,
+        "perp_km": -7.6,
+        "dist_km": 23.5
+      },
+      "direction_compass": "ЮЗ",
+      "current_target_id": 0,
+      "has_precip": null,
+      "has_lightning": false,
+      "ahead_obs": null,
+      "behind_obs": null
+    }
+  ],
+  "target_phase": {
+    "label": "безоблачно",
+    "cloud_fraction": 0.0
+  },
+  "existence": {
+    "modules": {
+      "ir_motion": {
+        "confirmed": true,
+        "timestamp": "2026-08-23T17:30:00.000Z"
+      },
+      "geocolour_motion": {
+        "confirmed": false,
+        "timestamp": "2026-08-23T17:30:00.000Z"
+      },
+      "cloud_phase_type": {
+        "confirmed": false,
+        "timestamp": "2026-08-23T16:45:16Z"
+      }
+    },
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
+  },
+  "phenomena": {
+    "precip_forecast": {
+      "confirmed": false,
+      "timestamp": "2026-08-23T17:58:41Z"
+    },
+    "lightning_forecast": {
+      "confirmed": false,
+      "timestamp": "2026-08-23T17:58:44Z"
+    }
+  },
+  "verdict": "Цель в 200км СЗ, безоблачно — каналы расходятся: ir_motion подтверждают, geocolour_motion/cloud_phase_type нет. Отдельно: система синоптического масштаба (1888км²) в 197км ЮЗ (вытянута СВ-ЮЗ (34°), похоже на фронт)."
 }
