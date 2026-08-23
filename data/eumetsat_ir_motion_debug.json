@@ -2,32 +2,28 @@
   "status": "ok",
   "server_latest_time": "2026-08-23T07:30:00.000Z",
   "bootstrap": true,
-  "buffer_before": 6,
-  "bootstrap_failed_frames": [
-    {
-      "time": "2026-08-23T07:30:00.000Z",
-      "error": "попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)"
-    }
-  ],
-  "buffer_size": 5,
+  "buffer_before": 5,
+  "buffer_size": 6,
   "buffer_times": [
     "2026-08-23T06:40:00.000Z",
     "2026-08-23T06:50:00.000Z",
     "2026-08-23T07:00:00.000Z",
     "2026-08-23T07:10:00.000Z",
-    "2026-08-23T07:20:00.000Z"
+    "2026-08-23T07:20:00.000Z",
+    "2026-08-23T07:30:00.000Z"
   ],
   "frame_std": [
     26.8,
     26.9,
     27.0,
     27.1,
-    27.3
+    27.3,
+    27.5
   ],
   "result": {
-    "timestamp": "2026-08-23T07:20:00.000Z",
-    "buffer_size": 5,
-    "buffer_span_minutes": 40,
+    "timestamp": "2026-08-23T07:30:00.000Z",
+    "buffer_size": 6,
+    "buffer_span_minutes": 50,
     "observed_area": {
       "center_lat": 46.4406,
       "center_lon": 30.7703,
@@ -38,27 +34,27 @@
       "local_trend_radius_km": 50
     },
     "valid": true,
-    "speed_kmh": 36.0,
+    "speed_kmh": 37.9,
     "direction_compass": "В",
-    "bearing_deg": 91.7,
-    "frame_pairs_used": 4,
-    "acceleration_kmh": -1.9,
-    "turning_deg": 1.4,
+    "bearing_deg": 91.3,
+    "frame_pairs_used": 5,
+    "acceleration_kmh": -4.2,
+    "turning_deg": 1.5,
     "acceleration_verdict": "скорость стабильна",
     "turning_verdict": "направление стабильно",
     "forecast_displacement": {
       "30min": {
-        "distance_km": 16.8,
-        "bearing_deg": 94.0,
+        "distance_km": 16.4,
+        "bearing_deg": 93.0,
         "compass": "В"
       },
       "60min": {
-        "distance_km": 32.2,
+        "distance_km": 30.4,
         "bearing_deg": 95.0,
         "compass": "В"
       },
       "120min": {
-        "distance_km": 58.8,
+        "distance_km": 51.0,
         "bearing_deg": 98.0,
         "compass": "В"
       }
@@ -68,85 +64,87 @@
       0.398,
       0.432,
       0.48,
-      0.523
+      0.523,
+      0.554
     ],
-    "area_trend_delta": 0.152,
+    "area_trend_delta": 0.184,
     "area_trend_verdict": "растёт",
     "mean_brightness_over_time": [
       76.6,
       79.9,
       80.6,
       82.7,
-      85.1
+      85.1,
+      86.8
     ],
-    "brightness_trend_delta": 8.5,
-    "station_state": "variable",
-    "station_area_fraction": 0.551,
+    "brightness_trend_delta": 10.2,
+    "station_state": "cloud",
+    "station_area_fraction": 0.824,
     "cloud_mass_distance_km": 0.8,
     "cloud_mass_bearing_deg": 325.0,
     "cloud_mass_compass": "СЗ",
-    "cloud_mass_area_km2": 15481,
-    "cloud_mass_contrast_sigma": 1.91,
+    "cloud_mass_area_km2": 15111,
+    "cloud_mass_contrast_sigma": 1.97,
     "temperature_trend_verdict": "без существенных изменений",
     "target_confirmation": {
       "confirmed": true,
       "target_id": 2,
       "target_area_km2": 197.5,
-      "roi_contrast_sigma": 1.3,
+      "roi_contrast_sigma": 0.86,
       "verdict": "ИК подтверждает: в ROI CLM-цели повышенная яркость (облако)"
     },
     "system_analysis_all": [
       {
         "target_id": 0,
         "available": true,
-        "roi_contrast_sigma": 0.38,
+        "roi_contrast_sigma": 0.44,
         "confirmed": false
       },
       {
         "target_id": 1,
         "available": true,
-        "roi_contrast_sigma": 1.05,
-        "confirmed": true
+        "roi_contrast_sigma": 0.71,
+        "confirmed": false
       },
       {
         "target_id": 4,
         "available": true,
-        "roi_contrast_sigma": 0.84,
-        "confirmed": true
+        "roi_contrast_sigma": 0.72,
+        "confirmed": false
       }
     ],
     "local_analysis_all": [
       {
         "target_id": 2,
         "available": true,
-        "roi_contrast_sigma": 1.3,
+        "roi_contrast_sigma": 0.86,
         "confirmed": true
       },
       {
         "target_id": 3,
         "available": true,
-        "roi_contrast_sigma": 0.4,
+        "roi_contrast_sigma": 0.35,
         "confirmed": false
       },
       {
         "target_id": 5,
         "available": true,
-        "roi_contrast_sigma": 0.71,
+        "roi_contrast_sigma": 0.49,
         "confirmed": false
       },
       {
         "target_id": 6,
         "available": true,
-        "roi_contrast_sigma": 1.29,
-        "confirmed": true
+        "roi_contrast_sigma": 0.56,
+        "confirmed": false
       },
       {
         "target_id": 7,
         "available": true,
-        "roi_contrast_sigma": 1.19,
+        "roi_contrast_sigma": 0.9,
         "confirmed": true
       }
     ],
-    "method_note": "Буфер 5/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин, crs=EPSG:4326, всегда явный TIME — не 'latest'), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. cloud_mass_* — положение (не движение) ближайшей значимой облачной массы относительно станции. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
+    "method_note": "Буфер 6/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин, crs=EPSG:4326, всегда явный TIME — не 'latest'), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. cloud_mass_* — положение (не движение) ближайшей значимой облачной массы относительно станции. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
   }
 }
