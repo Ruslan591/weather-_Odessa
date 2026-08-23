@@ -1,27 +1,27 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-08-23T23:20:00.000Z",
+  "server_latest_time": "2026-08-23T23:40:00.000Z",
   "bootstrap": true,
   "buffer_before": 6,
   "buffer_size": 6,
   "buffer_times": [
-    "2026-08-23T22:30:00.000Z",
-    "2026-08-23T22:40:00.000Z",
     "2026-08-23T22:50:00.000Z",
     "2026-08-23T23:00:00.000Z",
     "2026-08-23T23:10:00.000Z",
-    "2026-08-23T23:20:00.000Z"
+    "2026-08-23T23:20:00.000Z",
+    "2026-08-23T23:30:00.000Z",
+    "2026-08-23T23:40:00.000Z"
   ],
   "frame_std": [
-    10.1,
-    10.2,
     10.3,
     10.5,
     10.6,
-    10.8
+    10.8,
+    11.2,
+    11.4
   ],
   "result": {
-    "timestamp": "2026-08-23T23:20:00.000Z",
+    "timestamp": "2026-08-23T23:40:00.000Z",
     "buffer_size": 6,
     "buffer_span_minutes": 50,
     "observed_area": {
@@ -34,80 +34,68 @@
       "local_trend_radius_km": 50
     },
     "valid": true,
-    "speed_kmh": 1.5,
+    "speed_kmh": 0.5,
     "direction_compass": "Ю",
-    "bearing_deg": 191.1,
+    "bearing_deg": 187.0,
     "frame_pairs_used": 5,
-    "acceleration_kmh": -0.5,
-    "turning_deg": 66.3,
+    "acceleration_kmh": -0.1,
+    "turning_deg": -112.1,
     "acceleration_verdict": "скорость стабильна",
-    "turning_verdict": "меняет направление (по часовой)",
+    "turning_verdict": "меняет направление (против часовой)",
     "forecast_displacement": {
       "30min": {
-        "distance_km": 1.1,
-        "bearing_deg": 267.0,
-        "compass": "З"
+        "distance_km": 0.8,
+        "bearing_deg": 94.0,
+        "compass": "В"
       },
       "60min": {
-        "distance_km": 3.2,
-        "bearing_deg": 280.0,
-        "compass": "З"
+        "distance_km": 2.3,
+        "bearing_deg": 87.0,
+        "compass": "В"
       },
       "120min": {
-        "distance_km": 10.9,
-        "bearing_deg": 291.0,
-        "compass": "З"
+        "distance_km": 7.9,
+        "bearing_deg": 83.0,
+        "compass": "В"
       }
     },
     "area_fraction_over_time": [
-      0.378,
-      0.386,
-      0.402,
+      0.399,
       0.403,
       0.41,
-      0.413
+      0.413,
+      0.419,
+      0.426
     ],
-    "area_trend_delta": 0.035,
+    "area_trend_delta": 0.026,
     "area_trend_verdict": "без существенных изменений",
     "mean_brightness_over_time": [
-      35.2,
-      35.4,
-      35.6,
+      35.5,
       35.7,
       35.8,
-      36.0
+      36.0,
+      36.2,
+      36.3
     ],
     "brightness_trend_delta": 0.8,
     "station_state": "clear",
-    "station_area_fraction": 0.048,
-    "cloud_mass_distance_km": 112.7,
-    "cloud_mass_bearing_deg": 341.0,
+    "station_area_fraction": 0.122,
+    "cloud_mass_distance_km": 112.1,
+    "cloud_mass_bearing_deg": 347.0,
     "cloud_mass_compass": "С",
-    "cloud_mass_area_km2": 6854,
-    "cloud_mass_contrast_sigma": 1.11,
+    "cloud_mass_area_km2": 55,
+    "cloud_mass_contrast_sigma": 1.05,
     "temperature_trend_verdict": "без существенных изменений",
     "target_confirmation": {
       "confirmed": false,
-      "target_id": 6,
-      "target_area_km2": 157.4,
-      "roi_contrast_sigma": 0.48,
+      "target_id": 0,
+      "target_area_km2": 182.8,
+      "roi_contrast_sigma": -0.91,
       "verdict": "ИК НЕ подтверждает: в ROI CLM-цели нет значимого контраста — возможна тонкая/низкая облачность, невидимая на ИК, либо расхождение слоёв"
     },
     "system_analysis_all": [
       {
-        "target_id": 1,
-        "available": true,
-        "roi_contrast_sigma": 0.39,
-        "confirmed": false
-      },
-      {
         "target_id": 2,
-        "available": true,
-        "roi_contrast_sigma": 0.96,
-        "confirmed": true
-      },
-      {
-        "target_id": 3,
         "available": true,
         "roi_contrast_sigma": 0.25,
         "confirmed": false
@@ -115,37 +103,49 @@
       {
         "target_id": 4,
         "available": true,
-        "roi_contrast_sigma": -0.14,
+        "roi_contrast_sigma": 0.39,
         "confirmed": false
       },
       {
         "target_id": 5,
         "available": true,
-        "roi_contrast_sigma": 0.74,
+        "roi_contrast_sigma": 1.04,
+        "confirmed": true
+      },
+      {
+        "target_id": 6,
+        "available": true,
+        "roi_contrast_sigma": 0.72,
         "confirmed": false
       },
       {
         "target_id": 7,
         "available": true,
-        "roi_contrast_sigma": 0.53,
+        "roi_contrast_sigma": -0.25,
         "confirmed": false
       },
       {
-        "target_id": 8,
+        "target_id": 10,
         "available": true,
-        "roi_contrast_sigma": 0.69,
+        "roi_contrast_sigma": -1.4,
         "confirmed": false
       },
       {
-        "target_id": 9,
+        "target_id": 12,
         "available": true,
-        "roi_contrast_sigma": 1.05,
-        "confirmed": true
+        "roi_contrast_sigma": 0.41,
+        "confirmed": false
       },
       {
-        "target_id": 11,
+        "target_id": 13,
         "available": true,
-        "roi_contrast_sigma": 0.71,
+        "roi_contrast_sigma": 0.52,
+        "confirmed": false
+      },
+      {
+        "target_id": 15,
+        "available": true,
+        "roi_contrast_sigma": 0.59,
         "confirmed": false
       }
     ],
@@ -153,37 +153,91 @@
       {
         "target_id": 0,
         "available": true,
-        "roi_contrast_sigma": -0.81,
+        "roi_contrast_sigma": -0.91,
         "confirmed": false
       },
       {
-        "target_id": 6,
+        "target_id": 1,
         "available": true,
-        "roi_contrast_sigma": 0.48,
+        "roi_contrast_sigma": -0.99,
         "confirmed": false
       },
       {
-        "target_id": 10,
+        "target_id": 3,
         "available": true,
-        "roi_contrast_sigma": 0.71,
+        "roi_contrast_sigma": 0.16,
         "confirmed": false
       },
       {
-        "target_id": 12,
+        "target_id": 8,
         "available": true,
-        "roi_contrast_sigma": -0.97,
+        "roi_contrast_sigma": 0.15,
         "confirmed": false
       },
       {
-        "target_id": 13,
+        "target_id": 9,
         "available": true,
-        "roi_contrast_sigma": 1.07,
-        "confirmed": true
+        "roi_contrast_sigma": 0.69,
+        "confirmed": false
+      },
+      {
+        "target_id": 11,
+        "available": true,
+        "roi_contrast_sigma": 0.32,
+        "confirmed": false
       },
       {
         "target_id": 14,
         "available": true,
-        "roi_contrast_sigma": 0.67,
+        "roi_contrast_sigma": -1.37,
+        "confirmed": false
+      },
+      {
+        "target_id": 16,
+        "available": true,
+        "roi_contrast_sigma": 0.25,
+        "confirmed": false
+      },
+      {
+        "target_id": 17,
+        "available": true,
+        "roi_contrast_sigma": -1.4,
+        "confirmed": false
+      },
+      {
+        "target_id": 18,
+        "available": true,
+        "roi_contrast_sigma": 0.58,
+        "confirmed": false
+      },
+      {
+        "target_id": 19,
+        "available": true,
+        "roi_contrast_sigma": -1.18,
+        "confirmed": false
+      },
+      {
+        "target_id": 20,
+        "available": true,
+        "roi_contrast_sigma": -1.11,
+        "confirmed": false
+      },
+      {
+        "target_id": 21,
+        "available": true,
+        "roi_contrast_sigma": 0.78,
+        "confirmed": false
+      },
+      {
+        "target_id": 22,
+        "available": true,
+        "roi_contrast_sigma": 0.92,
+        "confirmed": true
+      },
+      {
+        "target_id": 23,
+        "available": true,
+        "roi_contrast_sigma": 0.52,
         "confirmed": false
       }
     ],
