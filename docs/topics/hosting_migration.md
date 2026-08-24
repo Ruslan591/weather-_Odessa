@@ -32,6 +32,12 @@
 
 ## On the horizon
 
+- [ ] **Retry-скрипт для захвата ARM-капасити (в работе)** — Create instance упал с `Out of capacity for shape VM.Standard.A1.Flex in availability domain AD-1` (Frankfurt). Это известная и хронически частая проблема Oracle Free Tier: Ampere A1 — самый популярный бесплатный shape, пул физических ARM-хостов на регион общий для всех Free Tier пользователей, и спрос обычно превышает предложение. Место освобождается непредсказуемо (от минут до недель) когда кто-то удаляет свой инстанс или Oracle добавляет мощности — гарантий по времени нет.
+  - План: scheduled GitHub Actions workflow (cron каждые ~5 мин), дёргающий OCI API `LaunchInstance` через OCI CLI/SDK с retry-логикой; при успехе — push через ntfy.sh (использовать существующую инфраструктуру уведомлений), затем сам себя отключить (или просто перестать шедулиться).
+  - Требуется: отдельная API signing key pair в консоли Oracle (User Settings → API Keys → Add API Key), НЕ путать с SSH-ключом инстанса. После генерации Oracle показывает config file preview с user OCID, fingerprint, tenancy OCID, region — эти данные пойдут в GitHub Secrets репозитория.
+  - Также нужны: OCID compartment (rus3212/root), OCID subnet (создан автоматически как часть vcn-20260824-2154 / subnet-20260824-2154), OCID image (Canonical Ubuntu 24.04, ARM build), Availability Domain name (пробовать по очереди все AD во Frankfurt, не только AD-1).
+  - **Статус: ожидается скриншот Configuration file preview от Руслана** для сбора нужных значений.
+
 Чек-лист регистрации и переноса (по порядку):
 
 - [x] Открыть `https://www.oracle.com/cloud/free/` → «Start for free»
