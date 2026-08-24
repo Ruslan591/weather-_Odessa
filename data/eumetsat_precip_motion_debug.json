@@ -1,19 +1,19 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-08-24T21:50:00.000Z",
+  "server_latest_time": "2026-08-24T22:00:00.000Z",
   "bootstrap": true,
   "buffer_before": 6,
   "buffer_after": 6,
   "buffer_times": [
-    "2026-08-24T21:00:00.000Z",
     "2026-08-24T21:10:00.000Z",
     "2026-08-24T21:20:00.000Z",
     "2026-08-24T21:30:00.000Z",
     "2026-08-24T21:40:00.000Z",
-    "2026-08-24T21:50:00.000Z"
+    "2026-08-24T21:50:00.000Z",
+    "2026-08-24T22:00:00.000Z"
   ],
   "result": {
-    "timestamp": "2026-08-24T22:12:37Z",
+    "timestamp": "2026-08-24T22:25:15Z",
     "buffer_size": 6,
     "buffer_span_minutes": 50,
     "observed_area": {
@@ -26,17 +26,17 @@
     },
     "current_state": "no_precip",
     "target_type": "precip_mass",
-    "distance_km_now": 6.3,
-    "bearing_deg": 356.0,
-    "compass": "С",
-    "blob_area_km2": 2510.0,
-    "speed_kmh": 70.3,
+    "distance_km_now": 13.0,
+    "bearing_deg": 273.0,
+    "compass": "З",
+    "blob_area_km2": 1945.0,
+    "speed_kmh": 79.7,
     "direction_compass": "В",
-    "cpa_km": 6.3,
-    "eta_min": 0.0,
-    "verdict": "уже у города",
+    "cpa_km": 4.9,
+    "eta_min": 9.0,
+    "verdict": "приближается",
     "frame_pairs_used": 5,
-    "probability_percent": 90,
+    "probability_percent": 91,
     "probability_note": "эвристика (близость точки сближения + размер поля + уверенность в скорости), не физическая модель осадков",
     "method_note": "Буфер 6/6 масок mtg_fd:h40b (шаг 10 мин, crs=EPSG:4326, всегда явный TIME из GetCapabilities — не floor(now)), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Presence = непрозрачный пиксель. Край ищется только среди связных областей >= 40px (~53км²). Скорость — из реальных интервалов буфера (не фиксированный шаг). Линейная экстраполяция, годится на ~1 час."
   }
