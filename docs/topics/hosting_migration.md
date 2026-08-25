@@ -36,7 +36,9 @@
   - План: scheduled GitHub Actions workflow (cron каждые ~5 мин), дёргающий OCI API `LaunchInstance` через OCI CLI/SDK с retry-логикой; при успехе — push через ntfy.sh (использовать существующую инфраструктуру уведомлений), затем сам себя отключить (или просто перестать шедулиться).
   - Требуется: отдельная API signing key pair в консоли Oracle (User Settings → API Keys → Add API Key), НЕ путать с SSH-ключом инстанса. После генерации Oracle показывает config file preview с user OCID, fingerprint, tenancy OCID, region — эти данные пойдут в GitHub Secrets репозитория.
   - Также нужны: OCID compartment (rus3212/root), OCID subnet (создан автоматически как часть vcn-20260824-2154 / subnet-20260824-2154), OCID image (Canonical Ubuntu 24.04, ARM build), Availability Domain name (пробовать по очереди все AD во Frankfurt, не только AD-1).
-  - **Статус: ожидается скриншот Configuration file preview от Руслана** для сбора нужных значений.
+  - **Статус: API signing key получен и записан.** Руслан сгенерировал API key pair в консоли Oracle, прислал приватный ключ (PEM) и Configuration file preview. Claude зашифровал и записал 5 GitHub Secrets: `OCI_USER_OCID`, `OCI_FINGERPRINT`, `OCI_TENANCY_OCID`, `OCI_REGION` (eu-frankfurt-1), `OCI_PRIVATE_KEY` (через libsodium sealed box + Actions secrets API, подтверждено 201 Created на все 5).
+  - **Ещё не хватает:** `OCI_COMPARTMENT_OCID`, `OCI_SUBNET_OCID`, `OCI_IMAGE_OCID` (Ubuntu 24.04 ARM), `OCI_AVAILABILITY_DOMAINS` (список AD Frankfurt), `OCI_SSH_PUBLIC_KEY` (публичный SSH-ключ инстанса, скачанный на шаге Networking → Add SSH keys — НЕ путать с API signing key выше).
+  - Скрипт `scripts/oci_capacity_retry.py` и workflow `.github/workflows/oci_capacity_retry.yml` уже в репозитории, сейчас только на `workflow_dispatch`; после добавления оставшихся secrets — раскомментировать `schedule` (cron каждые 10 мин).
 
 Чек-лист регистрации и переноса (по порядку):
 
