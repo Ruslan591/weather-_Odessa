@@ -1,0 +1,42 @@
+name: OCI Capacity Retry
+
+# ВРЕМЕННО только workflow_dispatch (ручной запуск).
+# Секреты OCI_* ещё не настроены в репозитории - до их появления
+# scheduled-запуск будет просто спамить фейлами каждые несколько минут.
+# Как только Руслан пришлёт данные API signing key и OCID-ы,
+# Claude настроит secrets и раскомментирует блок schedule ниже.
+on:
+  workflow_dispatch: {}
+  # schedule:
+  #   - cron: '*/10 * * * *'
+
+jobs:
+  retry:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install oci SDK
+        run: pip install oci
+
+      - name: Attempt LaunchInstance across ADs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
+          OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
+          OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
+          OCI_REGION: ${{ secrets.OCI_REGION }}
+          OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+          OCI_COMPARTMENT_OCID: ${{ secrets.OCI_COMPARTMENT_OCID }}
+          OCI_SUBNET_OCID: ${{ secrets.OCI_SUBNET_OCID }}
+          OCI_IMAGE_OCID: ${{ secrets.OCI_IMAGE_OCID }}
+          OCI_AVAILABILITY_DOMAINS: ${{ secrets.OCI_AVAILABILITY_DOMAINS }}
+          OCI_SSH_PUBLIC_KEY: ${{ secrets.OCI_SSH_PUBLIC_KEY }}
+          NTFY_TOPIC_HEALTH: ${{ secrets.NTFY_TOPIC_HEALTH }}
+        run: python scripts/oci_capacity_retry.py
