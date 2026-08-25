@@ -18,13 +18,19 @@ Availability Domains региона; при успехе шлёт push чере�
   OCI_PRIVATE_KEY         - содержимое приватного API signing key (PEM), НЕ SSH-ключ инстанса
   OCI_COMPARTMENT_OCID    - OCID compartment (root тенанси, если отдельный не создавался)
   OCI_SUBNET_OCID         - OCID subnet (vcn-20260824-2154 / subnet-20260824-2154)
-  OCI_IMAGE_OCID          - OCID образа Canonical Ubuntu 24.04 ARM (aarch64)
   OCI_AVAILABILITY_DOMAINS- список AD через запятую, например:
                             "kIdk:EU-FRANKFURT-1-AD-1,kIdk:EU-FRANKFURT-1-AD-2,kIdk:EU-FRANKFURT-1-AD-3"
   OCI_SSH_PUBLIC_KEY      - публичный SSH-ключ ИНСТАНСА (тот самый, который скачивали
                             на шаге "Add SSH keys" - не путать с API signing key выше)
   OCI_INSTANCE_DISPLAY_NAME (опционально) - имя инстанса, по умолчанию "weather-odessa-vps"
   NTFY_TOPIC_HEALTH       - тема ntfy.sh для уведомлений о здоровье пайплайна (уже используется проектом)
+
+OCID образа НЕ передаётся секретом - скрипт сам находит самый свежий образ
+Canonical Ubuntu 24.04, совместимый с shape VM.Standard.A1.Flex, через
+ComputeClient.list_images (сортировка по времени создания, берём первый).
+Это устраняет протухание OCID при обновлении образа Oracle и избавляет
+от необходимости искать OCID вручную в консоли (которая на мобильном
+интерфейсе не всегда показывает эту колонку).
 
 Маркер успеха: data/oci_instance_created.json в репозитории. Если файл существует
 и содержит instance_id - скрипт сразу завершается (капасити уже захвачена, инстанс создан).
@@ -109,6 +115,28 @@ def send_ntfy(topic, title, message, priority="high"):
         print(f"ntfy отправка не удалась: {e}")
 
 
+def get_latest_ubuntu_2404_image_id(compute_client, compartment_id):
+    """Находит самый свежий образ Canonical Ubuntu 24.04, совместимый с A1.Flex."""
+    import oci
+    images = oci.pagination.list_call_get_all_results(
+        compute_client.list_images,
+        compartment_id=compartment_id,
+        operating_system="Canonical Ubuntu",
+        operating_system_version="24.04",
+        shape="VM.Standard.A1.Flex",
+        sort_by="TIMECREATED",
+        sort_order="DESC",
+    ).data
+    if not images:
+        raise RuntimeError(
+            "Не найдено ни одного образа Canonical Ubuntu 24.04, "
+            "совместимого с VM.Standard.A1.Flex"
+        )
+    chosen = images[0]
+    print(f"Выбран образ: {chosen.display_name} ({chosen.id}), создан {chosen.time_created}")
+    return chosen.id
+
+
 def already_created():
     content, _ = gh_get_file(MARKER_PATH)
     if content is None:
@@ -134,7 +162,7 @@ def main():
     required_env = [
         "OCI_USER_OCID", "OCI_FINGERPRINT", "OCI_TENANCY_OCID", "OCI_REGION",
         "OCI_PRIVATE_KEY", "OCI_COMPARTMENT_OCID", "OCI_SUBNET_OCID",
-        "OCI_IMAGE_OCID", "OCI_AVAILABILITY_DOMAINS", "OCI_SSH_PUBLIC_KEY",
+        "OCI_AVAILABILITY_DOMAINS", "OCI_SSH_PUBLIC_KEY",
     ]
     missing = [v for v in required_env if not os.environ.get(v)]
     if missing:
@@ -153,9 +181,12 @@ def main():
     ads = [a.strip() for a in os.environ["OCI_AVAILABILITY_DOMAINS"].split(",") if a.strip()]
     display_name = os.environ.get("OCI_INSTANCE_DISPLAY_NAME", "weather-odessa-vps")
     ntfy_topic = os.environ.get("NTFY_TOPIC_HEALTH")
+    compartment_id = os.environ["OCI_COMPARTMENT_OCID"]
+
+    image_id = get_latest_ubuntu_2404_image_id(compute_client, compartment_id)
 
     launch_details = oci.core.models.LaunchInstanceDetails(
-        compartment_id=os.environ["OCI_COMPARTMENT_OCID"],
+        compartment_id=compartment_id,
         display_name=display_name,
         shape="VM.Standard.A1.Flex",
         shape_config=oci.core.models.LaunchInstanceShapeConfigDetails(
@@ -163,7 +194,7 @@ def main():
             memory_in_gbs=24,
         ),
         source_details=oci.core.models.InstanceSourceViaImageDetails(
-            image_id=os.environ["OCI_IMAGE_OCID"],
+            image_id=image_id,
         ),
         create_vnic_details=oci.core.models.CreateVnicDetails(
             subnet_id=os.environ["OCI_SUBNET_OCID"],
