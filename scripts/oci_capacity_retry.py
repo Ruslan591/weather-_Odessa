@@ -190,8 +190,12 @@ def main():
         display_name=display_name,
         shape="VM.Standard.A1.Flex",
         shape_config=oci.core.models.LaunchInstanceShapeConfigDetails(
-            ocpus=4,
-            memory_in_gbs=24,
+            # ВАЖНО: с июня 2026 Oracle сократил Always Free лимит для A1.Flex
+            # с 4 OCPU/24GB до 2 OCPU/12GB. Запрос выше лимита рискует либо
+            # получить отказ по квоте, либо (хуже) создаться как платный
+            # instance за счёт триальных кредитов. Держим ровно в рамках лимита.
+            ocpus=2,
+            memory_in_gbs=12,
         ),
         source_details=oci.core.models.InstanceSourceViaImageDetails(
             image_id=image_id,
