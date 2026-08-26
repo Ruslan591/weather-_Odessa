@@ -1,5 +1,5 @@
 {
-  "task_id": "git-push-test-1787781934",
-  "cmd": "set -e\ncd /opt/weather-pipeline/repo\ngit fetch origin main --depth 1\ngit reset --hard origin/main\necho \"VPS test push $(date -u +%Y-%m-%dT%H:%M:%SZ)\" > docs/topics/_vps_test_push.md\ngit add docs/topics/_vps_test_push.md\ngit commit -m \"test: \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u043f\u0440\u044f\u043c\u043e\u0433\u043e git push \u0441 VPS (\u0431\u0443\u0434\u0435\u0442 \u0443\u0434\u0430\u043b\u0435\u043d\u043e)\"\ngit push origin main\necho PUSH_OK\ngit log -1 --format=\"%H\"",
-  "timeout": 60
+  "task_id": "cleanup-1787782035",
+  "cmd": "set -e\ncd /opt/weather-pipeline/repo\ngit remote set-url origin https://github.com/Ruslan591/weather-_Odessa.git\ngit rm docs/topics/_vps_test_push.md\ngit commit -m \"cleanup: \u0443\u0431\u0440\u0430\u043d \u0442\u0435\u0441\u0442\u043e\u0432\u044b\u0439 \u0444\u0430\u0439\u043b \u043f\u043e\u0441\u043b\u0435 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0438 git push \u0441 VPS\"\ngit push origin main\ngit remote -v\necho CLEANUP_OK",
+  "timeout": 30
 }
