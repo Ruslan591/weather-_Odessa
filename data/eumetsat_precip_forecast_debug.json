@@ -2,45 +2,55 @@
   "status": "ok",
   "frames_fetched": 4,
   "times_requested": [
-    "2026-08-26T09:15:00.000Z",
-    "2026-08-26T09:30:00.000Z",
     "2026-08-26T09:45:00.000Z",
+    "2026-08-26T10:00:00.000Z",
+    "2026-08-26T10:15:00.000Z",
     null
   ],
   "result": {
-    "timestamp": "2026-08-26T10:06:49Z",
+    "timestamp": "2026-08-26T10:31:03Z",
     "current_state": "precip",
     "target_type": "clearing",
-    "distance_km_now": 100.1,
-    "bearing_deg": 174.0,
-    "compass": "Ю",
-    "speed_kmh": 0.0,
-    "direction_compass": "З",
-    "cpa_km": 100.0,
+    "distance_km_now": 85.9,
+    "bearing_deg": 19.0,
+    "compass": "С",
+    "speed_kmh": 252.6,
+    "direction_compass": "С",
+    "cpa_km": 85.9,
     "eta_min": null,
-    "blob_area_km2": 45565.0,
-    "verdict": "почти стоит на месте",
+    "blob_area_km2": 3160.0,
+    "verdict": "удаляется",
     "frame_pairs_used": 3,
     "method_note": "Скорость усреднена по 4 кадрам msg_fes:h60b (шаг 15 мин, phase correlation). Presence = непрозрачный пиксель. Край ищется только среди связных областей >= 40px (~53км²). Линейная экстраполяция, годится на ~1 час.",
     "target_confirmation": {
-      "confirmed": null,
-      "reason": "среди кандидатов нет локальных масс (только системы синоптического масштаба)"
+      "confirmed": false,
+      "target_id": 1,
+      "target_area_km2": 68.0,
+      "roi_precip_fraction": 0.0,
+      "verdict": "Осадков из этой конкретной массы не наблюдается (сухое облако либо осадки не достигают земли)"
     },
     "system_analysis": {
       "available": true,
       "target_id": 0,
-      "area_km2": 27270.4,
-      "roi_precip_fraction": 0.227,
+      "area_km2": 26951.5,
+      "roi_precip_fraction": 0.197,
       "has_precip": true
     },
     "system_analysis_all": [
       {
         "target_id": 0,
         "available": true,
-        "roi_precip_fraction": 0.227,
+        "roi_precip_fraction": 0.197,
         "has_precip": true
       }
     ],
-    "local_analysis_all": []
+    "local_analysis_all": [
+      {
+        "target_id": 1,
+        "available": true,
+        "roi_precip_fraction": 0.0,
+        "has_precip": false
+      }
+    ]
   }
 }
