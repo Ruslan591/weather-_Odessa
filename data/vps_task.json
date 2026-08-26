@@ -1,5 +1,5 @@
 {
-  "task_id": "cron-test-1787780253",
-  "cmd": "echo cron-works && date -u",
-  "timeout": 30
+  "task_id": "shallow-clone-1787781734",
+  "cmd": "sudo mkdir -p /opt/weather-pipeline && sudo chown ubuntu:ubuntu /opt/weather-pipeline && cd /opt/weather-pipeline && if [ ! -d repo/.git ]; then   git clone --depth 1 https://github.com/ruslan591/weather-_Odessa.git repo; else   echo 'repo already exists, skipping clone'; fi && du -sh /opt/weather-pipeline/repo && ls /opt/weather-pipeline/repo | head -20",
+  "timeout": 120
 }
