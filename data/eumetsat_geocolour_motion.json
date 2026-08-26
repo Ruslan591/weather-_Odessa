@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-08-26T14:00:00.000Z",
-  "buffer_size": 5,
+  "timestamp": "2026-08-26T14:20:00.000Z",
+  "buffer_size": 6,
   "buffer_span_minutes": 50,
   "observed_area": {
     "center_lat": 46.4406,
@@ -13,32 +13,33 @@
     "state_radius_km": 12
   },
   "valid": true,
-  "speed_kmh": 37.2,
+  "speed_kmh": 39.2,
   "direction_compass": "В",
-  "bearing_deg": 70.8,
-  "frame_pairs_used": 4,
-  "acceleration_kmh": 2.3,
-  "turning_deg": -1.8,
+  "bearing_deg": 70.0,
+  "frame_pairs_used": 5,
+  "acceleration_kmh": -3.3,
+  "turning_deg": 4.9,
   "acceleration_verdict": "скорость стабильна",
   "turning_verdict": "направление стабильно",
   "forecast_displacement": {
     "30min": {
-      "distance_km": 19.9,
-      "bearing_deg": 69.0,
+      "distance_km": 17.7,
+      "bearing_deg": 76.0,
       "compass": "В"
     },
     "60min": {
-      "distance_km": 41.4,
-      "bearing_deg": 68.0,
+      "distance_km": 33.8,
+      "bearing_deg": 80.0,
       "compass": "В"
     },
     "120min": {
-      "distance_km": 88.9,
-      "bearing_deg": 66.0,
-      "compass": "СВ"
+      "distance_km": 61.8,
+      "bearing_deg": 89.0,
+      "compass": "В"
     }
   },
   "area_fraction_over_time": [
+    1.0,
     1.0,
     1.0,
     1.0,
@@ -52,19 +53,25 @@
   "cloud_mass_distance_km": 0.8,
   "cloud_mass_bearing_deg": 325.0,
   "cloud_mass_compass": "СЗ",
-  "cloud_mass_area_km2": 199000,
+  "cloud_mass_area_km2": 200678,
   "target_confirmation": {
     "confirmed": false,
     "target_id": 0,
-    "target_area_km2": 118.8,
-    "roi_cloud_fraction": 0.09,
+    "target_area_km2": 53.4,
+    "roi_cloud_fraction": 0.119,
     "verdict": "GeoColour НЕ подтверждает: в ROI CLM-цели облачность не преобладает — возможно расхождение слоёв"
   },
   "system_analysis_all": [
     {
+      "target_id": 2,
+      "available": true,
+      "roi_cloud_fraction": 0.234,
+      "confirmed": false
+    },
+    {
       "target_id": 4,
       "available": true,
-      "roi_cloud_fraction": 0.114,
+      "roi_cloud_fraction": 0.096,
       "confirmed": false
     }
   ],
@@ -72,27 +79,33 @@
     {
       "target_id": 0,
       "available": true,
-      "roi_cloud_fraction": 0.09,
+      "roi_cloud_fraction": 0.119,
       "confirmed": false
     },
     {
       "target_id": 1,
       "available": true,
-      "roi_cloud_fraction": 0.02,
-      "confirmed": false
-    },
-    {
-      "target_id": 2,
-      "available": true,
-      "roi_cloud_fraction": 0.06,
+      "roi_cloud_fraction": 0.0,
       "confirmed": false
     },
     {
       "target_id": 3,
       "available": true,
-      "roi_cloud_fraction": 0.061,
+      "roi_cloud_fraction": 0.0,
+      "confirmed": false
+    },
+    {
+      "target_id": 5,
+      "available": true,
+      "roi_cloud_fraction": 0.407,
+      "confirmed": false
+    },
+    {
+      "target_id": 6,
+      "available": true,
+      "roi_cloud_fraction": 0.369,
       "confirmed": false
     }
   ],
-  "method_note": "Буфер 5/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
+  "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
 }
