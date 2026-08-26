@@ -1,5 +1,5 @@
 {
-  "task_id": "git-setup-1787781835",
-  "cmd": "set -e\ncd /opt/weather-pipeline/repo\ngit config user.name \"weather-odessa-vps\"\ngit config user.email \"vps-bot@weather-odessa.local\"\nTOKEN=$(grep GITHUB_TOKEN /etc/vps-github-bridge/token | cut -d= -f2-)\necho \"https://x-access-token:${TOKEN}@github.com\" > ~/.git-credentials\nchmod 600 ~/.git-credentials\ngit config --global credential.helper store\ngit remote -v\ngit log -1 --format=\"%H %ci\"\necho GIT_CONFIG_OK",
-  "timeout": 30
+  "task_id": "git-push-test-1787781934",
+  "cmd": "set -e\ncd /opt/weather-pipeline/repo\ngit fetch origin main --depth 1\ngit reset --hard origin/main\necho \"VPS test push $(date -u +%Y-%m-%dT%H:%M:%SZ)\" > docs/topics/_vps_test_push.md\ngit add docs/topics/_vps_test_push.md\ngit commit -m \"test: \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u043f\u0440\u044f\u043c\u043e\u0433\u043e git push \u0441 VPS (\u0431\u0443\u0434\u0435\u0442 \u0443\u0434\u0430\u043b\u0435\u043d\u043e)\"\ngit push origin main\necho PUSH_OK\ngit log -1 --format=\"%H\"",
+  "timeout": 60
 }
