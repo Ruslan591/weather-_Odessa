@@ -1,25 +1,83 @@
 {
-  "timestamp": "2026-08-26T12:32:30Z",
-  "status": "system_only",
-  "reason": "локальных компактных масс нет, есть только система(ы) синоптического масштаба",
-  "cloud_forecast_timestamp": "2026-08-26T12:00:00.000Z",
+  "timestamp": "2026-08-26T12:43:31Z",
+  "status": "ok",
+  "cloud_forecast_timestamp": "2026-08-26T12:15:00.000Z",
+  "target_id": 1,
+  "target_area_km2": 124.1,
+  "target_distance_km": 198.8,
+  "target_bearing_deg": 115.0,
+  "target_compass": "ЮВ",
   "system": {
     "target_id": 0,
-    "area_km2": 17209.8,
-    "distance_km": 162.2,
-    "bearing_deg": 152.0,
+    "area_km2": 15527.2,
+    "distance_km": 167.9,
+    "bearing_deg": 155.0,
     "compass": "ЮВ",
-    "elongation_aspect_ratio": 1.35,
-    "elongation_axis_deg": 49.0,
+    "elongation_aspect_ratio": 1.27,
+    "elongation_axis_deg": 47.0,
     "elongation_axis_compass": "СВ-ЮЗ",
     "frontlike": false,
     "window_spanning": false,
     "phase_label": "средняя водяная",
-    "cloud_fraction": 0.166,
+    "cloud_fraction": 0.11,
     "has_precip": true,
     "has_lightning": false
   },
+  "local_candidates": [
+    {
+      "target_id": 1,
+      "area_km2": 124.1,
+      "distance_km": 198.8,
+      "bearing_deg": 115.0,
+      "compass": "ЮВ",
+      "elongation_aspect_ratio": 1.07,
+      "elongation_axis_deg": 11.0,
+      "elongation_axis_compass": "С-Ю",
+      "frontlike": false,
+      "phase_label": "средняя водяная",
+      "type_label": "плотная/высокая",
+      "has_precip": null,
+      "has_lightning": false,
+      "ir_confirmed": false,
+      "geocolour_confirmed": true
+    }
+  ],
+  "local_suppressed_count": 0,
   "system_candidates": [],
   "system_suppressed_count": 1,
-  "verdict": "Локальных облачных масс нет. Система синоптического масштаба (17210км²) в 162км ЮВ (средняя водяная, осадки)."
+  "frontal_tracks": [],
+  "target_phase": {
+    "label": "средняя водяная",
+    "cloud_fraction": 1.0
+  },
+  "existence": {
+    "modules": {
+      "ir_motion": {
+        "confirmed": false,
+        "timestamp": "2026-08-26T12:20:00.000Z"
+      },
+      "geocolour_motion": {
+        "confirmed": true,
+        "timestamp": "2026-08-26T12:10:00.000Z"
+      },
+      "cloud_phase_type": {
+        "confirmed": true,
+        "timestamp": "2026-08-26T12:42:36Z"
+      }
+    },
+    "votes_confirmed": 2,
+    "votes_not_confirmed": 1,
+    "consensus": "disputed"
+  },
+  "phenomena": {
+    "precip_forecast": {
+      "confirmed": null,
+      "timestamp": "2026-08-26T12:31:58Z"
+    },
+    "lightning_forecast": {
+      "confirmed": false,
+      "timestamp": "2026-08-26T12:43:06Z"
+    }
+  },
+  "verdict": "Цель в 199км ЮВ, средняя водяная — каналы расходятся: geocolour_motion/cloud_phase_type подтверждают, ir_motion нет. Отдельно: система синоптического масштаба (15527км²) в 168км ЮВ (средняя водяная, осадки)."
 }
