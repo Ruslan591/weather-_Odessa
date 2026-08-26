@@ -1,28 +1,32 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-08-26T14:30:00.000Z",
+  "server_latest_time": "2026-08-26T15:20:00.000Z",
   "bootstrap": true,
   "buffer_before": 6,
-  "buffer_size": 6,
+  "bootstrap_failed_frames": [
+    {
+      "time": "2026-08-26T14:40:00.000Z",
+      "error": "попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)"
+    }
+  ],
+  "buffer_size": 5,
   "buffer_times": [
-    "2026-08-26T13:40:00.000Z",
-    "2026-08-26T13:50:00.000Z",
-    "2026-08-26T14:00:00.000Z",
-    "2026-08-26T14:10:00.000Z",
-    "2026-08-26T14:20:00.000Z",
-    "2026-08-26T14:30:00.000Z"
+    "2026-08-26T14:30:00.000Z",
+    "2026-08-26T14:50:00.000Z",
+    "2026-08-26T15:00:00.000Z",
+    "2026-08-26T15:10:00.000Z",
+    "2026-08-26T15:20:00.000Z"
   ],
   "frame_std": [
-    36.6,
-    35.4,
-    34.6,
-    33.7,
-    33.4,
-    33.3
+    33.3,
+    34.4,
+    35.0,
+    35.5,
+    36.0
   ],
   "result": {
-    "timestamp": "2026-08-26T14:30:00.000Z",
-    "buffer_size": 6,
+    "timestamp": "2026-08-26T15:20:00.000Z",
+    "buffer_size": 5,
     "buffer_span_minutes": 50,
     "observed_area": {
       "center_lat": 46.4406,
@@ -35,33 +39,32 @@
       "state_radius_km": 12
     },
     "valid": true,
-    "speed_kmh": 37.5,
+    "speed_kmh": 35.0,
     "direction_compass": "В",
-    "bearing_deg": 73.9,
-    "frame_pairs_used": 5,
-    "acceleration_kmh": -5.2,
-    "turning_deg": 6.9,
-    "acceleration_verdict": "замедляется",
+    "bearing_deg": 75.9,
+    "frame_pairs_used": 4,
+    "acceleration_kmh": 8.2,
+    "turning_deg": -12.7,
+    "acceleration_verdict": "ускоряется",
     "turning_verdict": "направление стабильно",
     "forecast_displacement": {
       "30min": {
-        "distance_km": 15.8,
-        "bearing_deg": 83.0,
-        "compass": "В"
+        "distance_km": 22.7,
+        "bearing_deg": 65.0,
+        "compass": "СВ"
       },
       "60min": {
-        "distance_km": 29.1,
-        "bearing_deg": 90.0,
-        "compass": "В"
+        "distance_km": 51.7,
+        "bearing_deg": 60.0,
+        "compass": "СВ"
       },
       "120min": {
-        "distance_km": 50.6,
-        "bearing_deg": 105.0,
-        "compass": "В"
+        "distance_km": 129.9,
+        "bearing_deg": 55.0,
+        "compass": "СВ"
       }
     },
     "area_fraction_over_time": [
-      1.0,
       1.0,
       1.0,
       1.0,
@@ -75,54 +78,48 @@
     "cloud_mass_distance_km": 0.8,
     "cloud_mass_bearing_deg": 325.0,
     "cloud_mass_compass": "СЗ",
-    "cloud_mass_area_km2": 201141,
+    "cloud_mass_area_km2": 200081,
     "target_confirmation": {
-      "confirmed": false,
-      "target_id": 0,
-      "target_area_km2": 86.7,
-      "roi_cloud_fraction": 0.031,
-      "verdict": "GeoColour НЕ подтверждает: в ROI CLM-цели облачность не преобладает — возможно расхождение слоёв"
+      "confirmed": true,
+      "target_id": 2,
+      "target_area_km2": 184.1,
+      "roi_cloud_fraction": 0.936,
+      "verdict": "GeoColour подтверждает: в ROI CLM-цели преобладает облачность"
     },
     "system_analysis_all": [
       {
-        "target_id": 2,
-        "available": true,
-        "roi_cloud_fraction": 0.077,
-        "confirmed": false
-      }
-    ],
-    "local_analysis_all": [
-      {
         "target_id": 0,
         "available": true,
-        "roi_cloud_fraction": 0.031,
+        "roi_cloud_fraction": 0.083,
         "confirmed": false
       },
       {
         "target_id": 1,
         "available": true,
-        "roi_cloud_fraction": 0.0,
-        "confirmed": false
+        "roi_cloud_fraction": 1.0,
+        "confirmed": true
       },
       {
         "target_id": 3,
         "available": true,
-        "roi_cloud_fraction": 0.0,
+        "roi_cloud_fraction": 0.007,
         "confirmed": false
       },
       {
         "target_id": 4,
         "available": true,
-        "roi_cloud_fraction": 0.474,
-        "confirmed": false
-      },
-      {
-        "target_id": 5,
-        "available": true,
-        "roi_cloud_fraction": 0.19,
+        "roi_cloud_fraction": 0.003,
         "confirmed": false
       }
     ],
-    "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
+    "local_analysis_all": [
+      {
+        "target_id": 2,
+        "available": true,
+        "roi_cloud_fraction": 0.936,
+        "confirmed": true
+      }
+    ],
+    "method_note": "Буфер 5/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
   }
 }
