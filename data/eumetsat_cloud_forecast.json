@@ -1,28 +1,28 @@
 {
-  "timestamp": "2026-08-26T22:15:00.000Z",
-  "current_state": "mostly_clear",
-  "station_area_fraction": 0.173,
+  "timestamp": "2026-08-26T22:30:00.000Z",
+  "current_state": "variable",
+  "station_area_fraction": 0.417,
   "target_type": "cloud_mass",
   "distance_km_now": 0.8,
   "bearing_deg": 326.0,
   "compass": "СЗ",
   "speed_kmh": 0.1,
-  "direction_compass": "Ю",
-  "cpa_km": 0.7,
+  "direction_compass": "В",
+  "cpa_km": 0.5,
   "eta_min": null,
-  "blob_area_km2": 207763.0,
+  "blob_area_km2": 207527.0,
   "target_id": 0,
   "class": "system",
   "verdict": "почти стоит на месте",
-  "frame_pairs_used": 3,
-  "probability_percent": 46,
+  "frame_pairs_used": 4,
+  "probability_percent": 47,
   "probability_note": "база берётся из категории движения ('почти стоит на месте'), затем немного корректируется площадью поля и уверенностью в оценке скорости — у 'удаляется'/'пройдёт мимо' база низкая, у 'приближается'/'уже у города' высокая; не физическая модель осадков",
   "cross_check_warning": "на последней проверке остальные каналы (ИК/GeoColour/Phase-Type) эту цель НЕ подтвердили (6/3 до автоисключения) — возможно, ложное срабатывание CLM",
   "trend": {
     "density_fraction_now": 1.0,
     "density_delta": 0.0,
     "density_verdict": "без существенных изменений",
-    "height_ordinal_delta": 0.16,
+    "height_ordinal_delta": -0.43,
     "height_verdict": "без существенных изменений",
     "shape_aspect_ratio_now": 1.44,
     "shape_aspect_delta": 0.0,
@@ -40,7 +40,7 @@
     {
       "centroid_dx_km": -0.48,
       "centroid_dy_km": 0.7,
-      "area_km2": 207763.4,
+      "area_km2": 207527.3,
       "class": "system",
       "bbox_km": {
         "dx_min": -191.3,
@@ -49,11 +49,47 @@
         "dy_max": 277.6
       },
       "elongation_aspect_ratio": 1.42,
-      "elongation_axis_deg": 179.0,
+      "elongation_axis_deg": 178.0,
       "elongation_axis_compass": "Ю-С",
       "frontlike": false,
       "window_spanning": true,
       "target_id": 0
+    },
+    {
+      "centroid_dx_km": 21.58,
+      "centroid_dy_km": -263.69,
+      "area_km2": 117.4,
+      "class": "local",
+      "bbox_km": {
+        "dx_min": 15.82,
+        "dx_max": 27.33,
+        "dy_min": -277.6,
+        "dy_max": -263.69
+      },
+      "elongation_aspect_ratio": 1.4,
+      "elongation_axis_deg": 31.0,
+      "elongation_axis_compass": "СВ-ЮЗ",
+      "frontlike": false,
+      "window_spanning": false,
+      "target_id": 1
+    },
+    {
+      "centroid_dx_km": -185.55,
+      "centroid_dy_km": -263.69,
+      "area_km2": 114.7,
+      "class": "local",
+      "bbox_km": {
+        "dx_min": -191.3,
+        "dx_max": -182.67,
+        "dy_min": -277.6,
+        "dy_max": -263.69
+      },
+      "elongation_aspect_ratio": 1.85,
+      "elongation_axis_deg": 168.0,
+      "elongation_axis_compass": "Ю-С",
+      "frontlike": false,
+      "window_spanning": false,
+      "target_id": 2
     }
   ],
   "method_note": "Персистентный буфер до 9 кадров Cloud Mask + CTH (шаг 15 мин, до 2 часов истории), хранится между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр вместо всех заново. Скорость усреднена по всем парам кадров буфера с реальным dt (phase correlation всего поля). Край облака/просвета ищется только среди связных областей >= 40px (~53км²) с учётом прозрачных no-data пикселей. Тренды плотности/высоты/формы — сравнение первого и последнего кадра БУФЕРА в радиусе 50км (окно растёт по мере наполнения буфера, см. buffer_status). Высота — ординальный индекс по цвету (не метры, официальной таблицы нет). Вероятность (только когда сейчас ясно/переменная облачность и есть значимое приближающееся поле) — эвристическая оценка по близости/размеру/уверенности в скорости, не физическая модель осадков. Линейная экстраполяция, годится на ~1 час."
