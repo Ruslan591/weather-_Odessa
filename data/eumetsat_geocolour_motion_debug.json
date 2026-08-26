@@ -1,27 +1,27 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-08-26T20:00:00.000Z",
+  "server_latest_time": "2026-08-26T20:20:00.000Z",
   "bootstrap": true,
   "buffer_before": 6,
   "buffer_size": 6,
   "buffer_times": [
-    "2026-08-26T19:10:00.000Z",
-    "2026-08-26T19:20:00.000Z",
     "2026-08-26T19:30:00.000Z",
     "2026-08-26T19:40:00.000Z",
     "2026-08-26T19:50:00.000Z",
-    "2026-08-26T20:00:00.000Z"
+    "2026-08-26T20:00:00.000Z",
+    "2026-08-26T20:10:00.000Z",
+    "2026-08-26T20:20:00.000Z"
   ],
   "frame_std": [
-    33.4,
-    32.9,
     32.8,
     32.0,
     32.2,
-    32.5
+    32.5,
+    32.3,
+    32.4
   ],
   "result": {
-    "timestamp": "2026-08-26T20:00:00.000Z",
+    "timestamp": "2026-08-26T20:20:00.000Z",
     "buffer_size": 6,
     "buffer_span_minutes": 50,
     "observed_area": {
@@ -35,74 +35,74 @@
       "state_radius_km": 12
     },
     "valid": true,
-    "speed_kmh": 19.4,
+    "speed_kmh": 16.2,
     "direction_compass": "В",
-    "bearing_deg": 106.2,
+    "bearing_deg": 99.2,
     "frame_pairs_used": 5,
-    "acceleration_kmh": -2.4,
-    "turning_deg": -8.3,
-    "acceleration_verdict": "скорость стабильна",
+    "acceleration_kmh": -9.1,
+    "turning_deg": -13.0,
+    "acceleration_verdict": "замедляется",
     "turning_verdict": "направление стабильно",
     "forecast_displacement": {
       "30min": {
-        "distance_km": 8.4,
-        "bearing_deg": 95.0,
-        "compass": "В"
+        "distance_km": 3.2,
+        "bearing_deg": 65.0,
+        "compass": "СВ"
       },
       "60min": {
-        "distance_km": 15.8,
-        "bearing_deg": 88.0,
-        "compass": "В"
+        "distance_km": 5.4,
+        "bearing_deg": 6.0,
+        "compass": "С"
       },
       "120min": {
-        "distance_km": 29.1,
-        "bearing_deg": 72.0,
-        "compass": "В"
+        "distance_km": 28.9,
+        "bearing_deg": 318.0,
+        "compass": "СЗ"
       }
     },
     "area_fraction_over_time": [
-      0.992,
-      0.981,
       0.969,
       0.963,
       0.904,
-      0.868
+      0.868,
+      0.821,
+      0.794
     ],
-    "area_trend_delta": -0.123,
+    "area_trend_delta": -0.175,
     "area_trend_verdict": "сокращается",
     "station_state": "variable",
-    "station_area_fraction": 0.67,
-    "cloud_mass_distance_km": 1.6,
-    "cloud_mass_bearing_deg": 64.0,
-    "cloud_mass_compass": "СВ",
-    "cloud_mass_area_km2": 168415,
+    "station_area_fraction": 0.277,
+    "cloud_mass_distance_km": 4.4,
+    "cloud_mass_bearing_deg": 81.0,
+    "cloud_mass_compass": "В",
+    "cloud_mass_area_km2": 167468,
     "target_confirmation": {
       "confirmed": true,
       "target_id": 0,
-      "target_area_km2": 292.2,
-      "roi_cloud_fraction": 0.75,
+      "target_area_km2": 141.4,
+      "roi_cloud_fraction": 0.509,
       "verdict": "GeoColour подтверждает: в ROI CLM-цели преобладает облачность"
     },
     "system_analysis_all": [
       {
-        "target_id": 1,
+        "target_id": 2,
         "available": true,
-        "roi_cloud_fraction": 0.476,
-        "confirmed": false
+        "roi_cloud_fraction": 0.525,
+        "confirmed": true
       }
     ],
     "local_analysis_all": [
       {
         "target_id": 0,
         "available": true,
-        "roi_cloud_fraction": 0.75,
+        "roi_cloud_fraction": 0.509,
         "confirmed": true
       },
       {
-        "target_id": 2,
+        "target_id": 1,
         "available": true,
-        "roi_cloud_fraction": 0.0,
-        "confirmed": false
+        "roi_cloud_fraction": 0.822,
+        "confirmed": true
       }
     ],
     "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
