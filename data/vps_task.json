@@ -1,5 +1,5 @@
 {
-  "task_id": "snapshot-1787783091",
-  "cmd": "echo === DISK === && df -h / && echo === DU OPT === && du -sh /opt/* 2>/dev/null && echo === DU ETC === && du -sh /etc/vps-agent /etc/vps-github-bridge /etc/caddy 2>/dev/null && echo === MEMORY === && free -h && echo === CRON === && sudo crontab -l 2>/dev/null && echo === SERVICES === && sudo systemctl is-active vps-agent caddy 2>/dev/null && echo === REPO FILES === && ls -la /opt/weather-pipeline/repo | head -15 && echo === BRIDGE LOG TAIL === && tail -20 /var/log/vps-github-bridge.log 2>/dev/null && echo === UPTIME === && uptime",
+  "task_id": "snapshot2-1787783575",
+  "cmd": "echo === DISK === && df -h / && echo === DU OPT === && du -sh /opt/* 2>/dev/null && echo === DU ETC === && du -sh /etc/vps-agent /etc/vps-github-bridge /etc/caddy 2>/dev/null && echo === DU VAR LOG === && du -sh /var/log 2>/dev/null && ls -la /var/log/*.log 2>/dev/null | grep -i vps && echo === MEMORY === && free -h && echo === NETWORK === && ip -brief addr show && echo === CRON === && sudo crontab -l 2>/dev/null && echo === SERVICES === && sudo systemctl is-active vps-agent caddy 2>/dev/null && echo === REPO FILES === && ls -la /opt/weather-pipeline/repo | head -20 && echo === BRIDGE LOG TAIL === && sudo tail -30 /var/log/vps-github-bridge.log 2>/dev/null && echo === UPTIME === && uptime",
   "timeout": 30
 }
