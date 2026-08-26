@@ -1,5 +1,5 @@
 {
-  "task_id": "cleanup2-1787782133",
-  "cmd": "set -e\ncd /opt/weather-pipeline/repo\ngit fetch origin main --depth 1\ngit reset --hard origin/main\nif [ -f docs/topics/_vps_test_push.md ]; then\n  git rm docs/topics/_vps_test_push.md\n  git commit -m \"cleanup: \u0443\u0431\u0440\u0430\u043d \u0442\u0435\u0441\u0442\u043e\u0432\u044b\u0439 \u0444\u0430\u0439\u043b \u043f\u043e\u0441\u043b\u0435 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0438 git push \u0441 VPS\"\n  git push origin main\n  echo CLEANUP_PUSHED\nelse\n  echo \"\u0444\u0430\u0439\u043b\u0430 \u0443\u0436\u0435 \u043d\u0435\u0442 \u0432 \u0441\u0432\u0435\u0436\u0435\u043c origin/main, \u043d\u0435\u0447\u0435\u0433\u043e \u0447\u0438\u0441\u0442\u0438\u0442\u044c\"\nfi\ngit log -1 --format=\"%H %s\"",
+  "task_id": "snapshot-1787783091",
+  "cmd": "echo === DISK === && df -h / && echo === DU OPT === && du -sh /opt/* 2>/dev/null && echo === DU ETC === && du -sh /etc/vps-agent /etc/vps-github-bridge /etc/caddy 2>/dev/null && echo === MEMORY === && free -h && echo === CRON === && sudo crontab -l 2>/dev/null && echo === SERVICES === && sudo systemctl is-active vps-agent caddy 2>/dev/null && echo === REPO FILES === && ls -la /opt/weather-pipeline/repo | head -15 && echo === BRIDGE LOG TAIL === && tail -20 /var/log/vps-github-bridge.log 2>/dev/null && echo === UPTIME === && uptime",
   "timeout": 30
 }
