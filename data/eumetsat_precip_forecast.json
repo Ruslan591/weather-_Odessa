@@ -1,36 +1,46 @@
 {
-  "timestamp": "2026-08-26T12:31:58Z",
+  "timestamp": "2026-08-26T13:02:39Z",
   "current_state": "precip",
   "target_type": "clearing",
-  "distance_km_now": 38.2,
-  "bearing_deg": 228.0,
-  "compass": "ЮЗ",
+  "distance_km_now": 12.0,
+  "bearing_deg": 273.0,
+  "compass": "З",
   "speed_kmh": 22.5,
   "direction_compass": "СВ",
-  "cpa_km": 8.6,
-  "eta_min": 99.0,
-  "blob_area_km2": 67624.0,
+  "cpa_km": 10.3,
+  "eta_min": 17.0,
+  "blob_area_km2": 75368.0,
   "verdict": "приближается",
   "frame_pairs_used": 3,
   "method_note": "Скорость усреднена по 4 кадрам msg_fes:h60b (шаг 15 мин, phase correlation). Presence = непрозрачный пиксель. Край ищется только среди связных областей >= 40px (~53км²). Линейная экстраполяция, годится на ~1 час.",
   "target_confirmation": {
-    "confirmed": null,
-    "reason": "среди кандидатов нет локальных масс (только системы синоптического масштаба)"
+    "confirmed": false,
+    "target_id": 1,
+    "target_area_km2": 56.0,
+    "roi_precip_fraction": 0.0,
+    "verdict": "Осадков из этой конкретной массы не наблюдается (сухое облако либо осадки не достигают земли)"
   },
   "system_analysis": {
     "available": true,
     "target_id": 0,
-    "area_km2": 17209.8,
-    "roi_precip_fraction": 0.165,
+    "area_km2": 14431.8,
+    "roi_precip_fraction": 0.065,
     "has_precip": true
   },
   "system_analysis_all": [
     {
       "target_id": 0,
       "available": true,
-      "roi_precip_fraction": 0.165,
+      "roi_precip_fraction": 0.065,
       "has_precip": true
     }
   ],
-  "local_analysis_all": []
+  "local_analysis_all": [
+    {
+      "target_id": 1,
+      "available": true,
+      "roi_precip_fraction": 0.0,
+      "has_precip": false
+    }
+  ]
 }
