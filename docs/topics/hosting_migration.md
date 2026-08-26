@@ -60,8 +60,12 @@
 - [x] Вход в консоль cloud.oracle.com подтверждён — tenancy `rus3212`, регион Germany Central (Frankfurt), Free Trial активен (30 дней/$300, дальше — Always Free)
 - [x] Создать Compute-инстанс: shape **«VM.Standard.A1.Flex» (Ampere ARM, Always Free eligible)**, образ — **Ubuntu ARM64** (не x86!) — создан 26.08.2026, IP `130.61.25.212`
 - [x] Ошибка «Out of host capacity» преодолена — retry-скрипт поймал капасити в AD-1 Frankfurt, cron-retry отключён вручную после успеха
-- [ ] Сохранить SSH-ключ (Oracle сгенерирует пару или даст загрузить свой публичный) — приватный ключ понадобится Claude для входа на сервер (сгенерирован ранее заранее по паттерну из «Key learnings», нужно подтвердить, что это тот же ключ, что был передан в `OCI_SSH_PUBLIC_KEY`)
-- [ ] **Руслану нужно будет добавить IP `130.61.25.212` в network settings Claude** (allowed_domains) — иначе песочница Claude физически не сможет достучаться до сервера по SSH
+- [x] **Выяснено: SSH-доступ через network settings Claude невозможен в принципе.** allowed_domains в песочнице Claude — это фильтрующий HTTP(S)-прокси на уровне доменных имён, а не универсальный TCP-роутинг. SSH (порт 22) — сырой TCP-протокол, который через такой прокси не проходит вообще, даже если IP/домен явно в списке. Решение — HTTP-мост (см. ниже), а не SSH.
+- [x] **HTTP-мост вместо SSH — реализован.** `scripts/vps_agent.py` (FastAPI, эндпоинты `/exec`, `/read`, `/write`, `/upload`, `/health`, Bearer-токен) + `scripts/vps_agent_install.sh` (ставит Python/FastAPI/uvicorn, Caddy с авто-TLS через Let's Encrypt, systemd unit `vps-agent.service`, домен вида `130-61-25-212.nip.io` — бесплатный wildcard-DNS на IP, не требует покупки домена).
+- [ ] **Разовый запуск `vps_agent_install.sh` на сервере** — через Oracle Cloud Shell (или Instance Console Connection в консоли Oracle), т.к. обычный SSH-доступ у Claude невозможен. Нужны файлы `scripts/vps_agent.py` и `scripts/vps_agent_install.sh` рядом (скачать через `curl -O https://raw.githubusercontent.com/.../vps_agent.py` и т.п.), затем `chmod +x vps_agent_install.sh && ./vps_agent_install.sh`.
+- [ ] **Проверить security list VCN в консоли Oracle** — по умолчанию wizard «Create VCN with internet connectivity» открывает только порт 22, порты 80/443 для Caddy/Let's Encrypt почти наверняка придётся добавить вручную (Ingress Rules: 0.0.0.0/0, TCP, 80 и 443).
+- [ ] После запуска скрипта — Руслан передаёт Claude в чат: домен агента (`https://<ip-с-дефисами>.nip.io`) и токен (`VPS_AGENT_TOKEN`) из вывода скрипта
+- [ ] **Руслану нужно будет добавить домен агента (`*.nip.io` или конкретный поддомен) в network settings Claude** (allowed_domains) — это HTTP(S)-домен, а не IP, поэтому впишется в модель allowed_domains корректно
 - [ ] После получения VPS — миграция скриптов: убрать `git add/commit/push` из `gh_pipeline.py`/`gh_satellite_pipeline.py`/`gh_ai_pipeline.py`, заменить на прямую запись файлов на диск
 - [ ] Настроить cron/systemd timers на сервере вместо цепочки `workflow_dispatch` (satellite → full → ai)
 - [ ] Решить судьбу Termux job 1001 — скорее всего на пенсию, триггер берёт на себя cron сервера
@@ -77,6 +81,9 @@
 - **Ценовой трюк CityHost и подобных хостеров:** headline-цена «от X грн/мес» обычно требует предоплаты на максимальный срок (36 мес); реальная помесячная цена — то, что зачёркнуто рядом. При сравнении хостингов всегда смотреть на реальный month-to-month тариф, а не на «от».
 - **Hetzner Cloud:** без минимального контракта, счёт выставляется по факту (почасовая ставка, но не выше месячного потолка), Украина явно в списке стран для биллинга — надёжный fallback, если Oracle не взлетит.
 - **Корень сегодняшних архитектурных проблем (гонки пушей, недоступные логи, git-как-БД)** — структурная особенность GitHub Actions (эфемерные раннеры без диска), не лечится в рамках текущей архитектуры. Отсюда и решение переезжать, а не патчить симптомы.
+- **allowed_domains в песочнице Claude — это HTTP(S)-фильтрующий прокси по доменному имени, не универсальный TCP-firewall.** SSH и другой сырой TCP через него не проходит независимо от того, что в списке — IP или домен. Единственный рабочий паттерн для удалённого управления сервером — HTTP(S)-эндпоинт на самом сервере (свой агент + TLS), который затем добавляется в allowed_domains как обычный домен. Это применимо к любому будущему VPS/серверу, не только к текущему.
+- **`nip.io` — бесплатный wildcard DNS-трюк**: `<IP-с-дефисами-вместо-точек>.nip.io` резолвится ровно в этот IP без регистрации домена, этого достаточно для Let's Encrypt (которому для сертификата нужно доменное имя, а не голый IP).
+- **Oracle VCN security list по умолчанию (wizard «Create VCN with internet connectivity») открывает только порт 22** — под HTTP(S)-сервисы (80/443) нужно добавлять Ingress Rules вручную в консоли Oracle, это не то же самое, что ufw/iptables на самой машине (два независимых уровня фильтрации).
 
 ## Approach & patterns
 
