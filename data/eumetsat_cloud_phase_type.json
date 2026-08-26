@@ -1,72 +1,88 @@
 {
-  "timestamp": "2026-08-26T04:58:08Z",
+  "timestamp": "2026-08-26T05:12:21Z",
   "mode": "day",
-  "unclassified_fraction_now": 0.705,
-  "phase_ordinal_now": 3.13,
-  "phase_ordinal_delta": 3.13,
+  "unclassified_fraction_now": 0.712,
+  "phase_ordinal_now": 2.92,
+  "phase_ordinal_delta": 2.92,
   "phase_verdict": "смещается к льду/мощной конвекции",
-  "type_group_now": 1.8,
-  "type_group_delta": 1.8,
+  "type_group_now": 1.69,
+  "type_group_delta": 1.69,
   "type_verdict": "становится плотнее/выше",
   "target_confirmation": {
     "confirmed": true,
-    "target_id": 1,
-    "target_area_km2": 89.4,
+    "target_id": 0,
+    "target_area_km2": 145.4,
     "roi_cloud_fraction": 1.0,
-    "roi_dominant_phase_ordinal": 2.0,
-    "roi_dominant_phase_label": "средняя водяная",
+    "roi_dominant_phase_ordinal": 6.0,
+    "roi_dominant_phase_label": "смешанная фаза",
     "verdict": "Phase/Type подтверждает: в ROI CLM-цели преобладает облачность"
   },
   "system_analysis": {
     "available": true,
-    "target_id": 0,
-    "area_km2": 35325.5,
-    "roi_cloud_fraction": 0.832,
+    "target_id": 3,
+    "area_km2": 32762.3,
+    "roi_cloud_fraction": 0.662,
     "roi_dominant_phase_ordinal": 3.0,
     "roi_dominant_phase_label": "плотная водяная",
     "roi_dominant_type_label": "низкая/средняя"
   },
   "system_analysis_all": [
     {
-      "target_id": 0,
+      "target_id": 3,
       "available": true,
-      "roi_cloud_fraction": 0.832,
+      "roi_cloud_fraction": 0.662,
       "roi_dominant_phase_label": "плотная водяная",
       "roi_dominant_type_label": "низкая/средняя"
     },
     {
-      "target_id": 2,
+      "target_id": 5,
       "available": true,
-      "roi_cloud_fraction": 0.799,
-      "roi_dominant_phase_label": "средняя водяная",
+      "roi_cloud_fraction": 0.676,
+      "roi_dominant_phase_label": "безоблачно",
       "roi_dominant_type_label": "плотная/высокая"
     }
   ],
   "local_analysis_all": [
     {
+      "target_id": 0,
+      "available": true,
+      "roi_cloud_fraction": 1.0,
+      "confirmed": true,
+      "roi_dominant_phase_label": "смешанная фаза",
+      "roi_dominant_type_label": "низкая/средняя"
+    },
+    {
       "target_id": 1,
       "available": true,
       "roi_cloud_fraction": 1.0,
       "confirmed": true,
-      "roi_dominant_phase_label": "средняя водяная",
-      "roi_dominant_type_label": "плотная/высокая"
+      "roi_dominant_phase_label": "смешанная фаза",
+      "roi_dominant_type_label": "низкая/средняя"
     },
     {
-      "target_id": 3,
+      "target_id": 2,
       "available": true,
-      "roi_cloud_fraction": 0.958,
+      "roi_cloud_fraction": 0.579,
       "confirmed": true,
       "roi_dominant_phase_label": "безоблачно",
+      "roi_dominant_type_label": "низкая/средняя"
+    },
+    {
+      "target_id": 4,
+      "available": true,
+      "roi_cloud_fraction": 0.75,
+      "confirmed": true,
+      "roi_dominant_phase_label": "смешанная фаза",
       "roi_dominant_type_label": "низкая/средняя"
     }
   ],
   "buffer_status": {
-    "frames_in_memory": 12,
+    "frames_in_memory": 13,
     "frames_target": 13,
-    "span_minutes_now": 110,
+    "span_minutes_now": 120,
     "span_minutes_target": 120,
-    "eta_full_window_min": 10,
-    "note": "в памяти 12/13 снимков (~110 мин истории), полное 120-минутное окно накопится через ~10 мин"
+    "eta_full_window_min": 0,
+    "note": "буфер заполнен (13/13), тренд по полному окну ~120 мин"
   },
   "method_note": "[День] Персистентный буфер до 13 кадров Cloud Phase RGB + Cloud Type RGB (шаг 10 мин, до 2 часов). Анкеры цвета — HSV-диапазоны, ПЕРВАЯ, не откалиброванная по реальным сценам версия (у обоих слоёв нет официальной легенды — это настоящие RGB-композиты, GetLegendGraphic возвращает не легенду). phase_ordinal (0..8) — безоблачно -> вода (низкая/средняя/плотная) -> лёд (тонкий/плотный) -> смешанная фаза -> холодные верхушки Cb -> гроза. type_group (0..2) — безоблачно/низкая-средняя/плотная-высокая. Тренд — сравнение первого и последнего кадра буфера в радиусе 50км. unclassified_fraction_now — доля пикселей, не попавших уверенно ни в одно цветовое правило: при большом значении анкеры нужно пересматривать."
 }
