@@ -175,9 +175,58 @@ def fetch_run_time(meta_id):
 
 # ── git push (fetch+rebase retry — без force, без лока) ──────────────────────
 
+def ensure_repo_healthy():
+    """Самолечение перед каждым commit/push (найдено 27.08.2026).
+
+    sync_repo() чинит detached HEAD только В НАЧАЛЕ цикла. Но update_local.py
+    внутри себя делает свой git stash/pull --rebase/stash pop — и если ЭТОТ
+    rebase конфликтует (гонка с параллельным GH Actions), может: (а) оставить
+    HEAD detached (сорванный rebase), (б) оставить unmerged paths (сорванный
+    stash pop). Оба состояния ломают ЛЮБОЙ следующий git commit/push в этом
+    же цикле — наблюдалось как систематический провал push (16 из 20 циклов).
+
+    Раз данные здесь — идемпотентно пересчитываемая статистика (bias/weights),
+    жертвовать одним циклом ради устойчивости — не проблема: следующий цикл
+    пересчитает всё заново с нуля.
+    """
+    try:
+        # прерванный rebase/merge — бросаем, если есть
+        subprocess.run(["git", "-C", BASE_DIR, "rebase", "--abort"],
+                       capture_output=True, text=True, timeout=15)
+        subprocess.run(["git", "-C", BASE_DIR, "merge", "--abort"],
+                       capture_output=True, text=True, timeout=15)
+
+        status = subprocess.run(
+            ["git", "-C", BASE_DIR, "status", "--porcelain"],
+            capture_output=True, text=True, timeout=15)
+        has_unmerged = any(line.startswith(("U", "AA", "DD"))
+                           for line in status.stdout.splitlines())
+        is_detached = subprocess.run(
+            ["git", "-C", BASE_DIR, "symbolic-ref", "-q", "HEAD"],
+            capture_output=True, text=True, timeout=10).returncode != 0
+
+        if has_unmerged or is_detached:
+            print(f"  [WARN] repo нездоров (unmerged={has_unmerged}, "
+                  f"detached={is_detached}) — пересобираю на origin/main")
+            subprocess.run(
+                ["git", "-C", BASE_DIR, "fetch", "origin", "main", "--depth", "1"],
+                capture_output=True, text=True, timeout=60)
+            subprocess.run(
+                ["git", "-C", BASE_DIR, "checkout", "-B", "main", "origin/main"],
+                capture_output=True, text=True, timeout=30)
+            subprocess.run(["git", "-C", BASE_DIR, "stash", "clear"],
+                           capture_output=True, text=True, timeout=10)
+            return False  # локальные несохранённые изменения этого цикла потеряны
+        return True
+    except Exception as e:
+        print(f"  [WARN] ensure_repo_healthy error: {e}")
+        return False
+
+
 def git_push_history():
     import time as _time
     try:
+        ensure_repo_healthy()
         year = datetime.now(timezone.utc).year
         _candidates = [
                         "data/model_runs_history.json",
