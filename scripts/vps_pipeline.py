@@ -309,8 +309,31 @@ def git_push_history():
                 _time.sleep(_delays[_attempt])
                 subprocess.run(["git", "-C", BASE_DIR, "fetch", "origin", "main"],
                                capture_output=True)
-                subprocess.run(["git", "-C", BASE_DIR, "rebase", "origin/main"],
-                               capture_output=True)
+                # НАХОДКА (27.08.2026, вечер): обычный `git rebase origin/main`
+                # при КОНФЛИКТЕ содержимого (гонка с параллельным GH Actions
+                # по тем же derived-файлам) сам оставляет HEAD detached до
+                # ручного разрешения — а retry-цикл просто идёт на следующую
+                # попытку, которая тут же валится с "not on a branch",
+                # оставляя detached HEAD висеть до следующего вызова
+                # sync_repo()/ensure_repo_healthy(). Раз эти файлы —
+                # идемпотентно пересчитываемая статистика, конфликт можно
+                # смело авто-резолвить в пользу СВОИХ данных этого цикла:
+                # `-X theirs` для git rebase значит "предпочесть коммит,
+                # который перекладываем" (наш), а не upstream — семантика
+                # theirs/ours у rebase обратная по сравнению с merge.
+                rebase = subprocess.run(
+                    ["git", "-C", BASE_DIR, "rebase", "-X", "theirs", "origin/main"],
+                    capture_output=True, text=True)
+                if rebase.returncode != 0:
+                    # rebase не смог даже с авторазрешением — не оставляем
+                    # висеть detached HEAD до следующего цикла, чиним сразу.
+                    print(f"  [WARN] rebase -X theirs не прошёл: "
+                          f"{rebase.stderr.strip()[:200]} — abort+reset")
+                    subprocess.run(["git", "-C", BASE_DIR, "rebase", "--abort"],
+                                   capture_output=True)
+                    subprocess.run(
+                        ["git", "-C", BASE_DIR, "checkout", "-B", "main", "origin/main"],
+                        capture_output=True)
         print("  history push failed after 3 attempts")
     except Exception as e:
         print(f"  history git error: {e}")
