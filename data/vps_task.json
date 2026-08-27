@@ -1,1 +1,1 @@
-{"task_id": "vps-check-stash-1787824961", "cmd": "cd /opt/weather-pipeline/repo && echo \"=== git stash list ===\" && git stash list && echo \"=== git status ===\" && git status --short && echo \"=== stash count ===\" && git stash list | wc -l"}
+{"task_id": "vps-inspect-stash-1787825061", "cmd": "cd /opt/weather-pipeline/repo && echo \"=== stash show ===\" && git stash show -p stash@{0} 2>&1 | head -100 && echo \"=== try pop now ===\" && git stash pop 2>&1 && echo \"=== status after pop ===\" && git status --short"}
