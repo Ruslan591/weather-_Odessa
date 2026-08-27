@@ -2,12 +2,20 @@
 """
 calc_weights.py — пересчёт model_weights.json из месячных файлов.
 
-Режимы запуска:
-  GitHub Actions (cron):  python calc_weights.py
-  Локально:               LOCAL=1 python calc_weights.py
+Режимы запуска (определяются автоматически):
+  Телефон/Termux (LOCAL=1):        python calc_weights.py
+  GitHub Actions (env GITHUB_TOKEN задан):  python calc_weights.py
+  VPS/репозиторий (иначе):         python calc_weights.py
 
-В GitHub Actions читает data/modeldata/YYYY_MM.json из репозитория и пишет обратно.
-Локально читает из LOCAL_DATA_DIR и пишет в LOCAL_OUT.
+LOCAL=1 читает из LOCAL_DATA_DIR и пишет в LOCAL_OUT (телефонные пути).
+Если задан GITHUB_TOKEN — читает/пишет data/modeldata и model_weights.json
+через GitHub Contents API (режим GitHub Actions, без доступа к диску репо).
+[ДОБАВЛЕНО 2026-08-27] Иначе (VPS-режим) — читает и пишет те же файлы
+напрямую с диска, предполагая, что скрипт запущен внутри полного checkout'а
+репозитория (BASE_DIR = родитель scripts/). Коммит и push делает вызывающий
+процесс (vps_pipeline.py), не этот скрипт — тут только чтение/запись файлов.
+Причина: на VPS нет GITHUB_TOKEN, а анонимные запросы к GitHub API быстро
+упираются в rate limit (44 файла modeldata каждый цикл).
 """
 
 import os, json, base64, logging, time
@@ -78,6 +86,14 @@ WEIGHTS_PATH   = "data/model_weights.json"
 LOCAL_MODE     = os.environ.get("LOCAL") == "1"
 LOCAL_DATA_DIR = Path("/storage/emulated/0/Documents/weather/data/modeldata")
 LOCAL_OUT      = Path("/storage/emulated/0/Documents/weather/data/model_weights.json")
+
+# [ДОБАВЛЕНО 2026-08-27] VPS-режим — используется, когда не LOCAL и нет
+# GITHUB_TOKEN. Пути вычисляются от расположения самого скрипта
+# (scripts/calc_weights.py -> BASE_DIR = родитель scripts/), т.к. на VPS
+# это полный checkout репозитория, а не эфемерный раннер.
+REPO_BASE     = Path(__file__).resolve().parent.parent
+REPO_DATA_DIR = REPO_BASE / MODELDATA_DIR
+REPO_OUT      = REPO_BASE / WEIGHTS_PATH
 
 SEASON_MAP = {
     12: "DJF", 1: "DJF", 2: "DJF",
@@ -334,6 +350,28 @@ def load_records_local():
         all_records.extend(recs)
     return all_records
 
+def load_records_repo():
+    """[ДОБАВЛЕНО 2026-08-27] VPS-режим: читает data/modeldata напрямую с
+    диска (полный checkout репозитория), без обращений к GitHub API."""
+    all_records = []
+    if not REPO_DATA_DIR.exists():
+        log.error("Папка не найдена: %s", REPO_DATA_DIR)
+        return []
+    files = sorted(REPO_DATA_DIR.glob("*.json"))
+    gist_log(f"  Файлов в репозитории (диск): {len(files)}")
+    for path in files:
+        ts = datetime.now(timezone.utc).strftime("%H:%M")
+        try:
+            with open(path, encoding="utf-8") as f:
+                recs = json.load(f)
+        except Exception as e:
+            gist_log(f"  [{ts}] ✗ {path.name} — ошибка чтения: {e}")
+            continue
+        size_kb = path.stat().st_size / 1024
+        gist_log(f"  [{ts}] {path.name}: {len(recs)} записей · {size_kb:.1f} КБ")
+        all_records.extend(recs)
+    return all_records
+
 def load_records_github():
     all_records = []
     files = sorted(gh_list_dir(MODELDATA_DIR))
@@ -362,9 +400,12 @@ if __name__ == "__main__":
     if LOCAL_MODE:
         gist_log("Режим: локальный")
         all_records = load_records_local()
-    else:
+    elif os.environ.get("GITHUB_TOKEN"):
         gist_log("Режим: GitHub Actions")
         all_records = load_records_github()
+    else:
+        gist_log("Режим: VPS (диск репозитория)")
+        all_records = load_records_repo()
 
     if not all_records:
         log.error("Нет данных. Завершение.")
@@ -377,14 +418,25 @@ if __name__ == "__main__":
         with open(LOCAL_OUT, "w", encoding="utf-8") as f:
             json.dump(weights, f, ensure_ascii=False, indent=2)
         gist_log(f"✓ Готово локально. {LOCAL_OUT}")
-    else:
+    elif os.environ.get("GITHUB_TOKEN"):
         _, mw_sha = gh_get(WEIGHTS_PATH)
         content = json.dumps(weights, ensure_ascii=False, indent=2)
         gh_put(WEIGHTS_PATH, content, mw_sha, "update model_weights.json")
         ts = datetime.now(timezone.utc).strftime("%H:%M")
         size_kb = len(content.encode("utf-8")) / 1024
         gist_log(f"  [{ts}] ✓ model_weights.json обновлён · {size_kb:.1f} КБ")
+    else:
+        # VPS-режим: пишем на диск, коммит+push делает вызывающий процесс
+        # (vps_pipeline.py) — не этот скрипт.
+        content = json.dumps(weights, ensure_ascii=False, indent=2)
+        REPO_OUT.parent.mkdir(parents=True, exist_ok=True)
+        with open(REPO_OUT, "w", encoding="utf-8") as f:
+            f.write(content)
+        ts = datetime.now(timezone.utc).strftime("%H:%M")
+        size_kb = len(content.encode("utf-8")) / 1024
+        gist_log(f"  [{ts}] ✓ model_weights.json записан на диск (VPS) · {size_kb:.1f} КБ")
 
     gist_log(f"  Период: {weights['coverage']['from']} → {weights['coverage']['to']}, дней: {weights['coverage']['days']}")
     gist_log("=== calc_weights.py готово ===")
     _gist_queue.join()  # ждём отправки последнего сообщения перед выходом
+
