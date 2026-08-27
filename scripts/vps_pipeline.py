@@ -84,7 +84,25 @@ def age_str(iso_str):
 # ── синхронизация репозитория (НОВОЕ для VPS-версии) ──────────────────────────
 
 def sync_repo():
-    """Обязательная ресинхронизация в начале КАЖДОГО цикла — см. docstring."""
+    """Обязательная ресинхронизация в начале КАЖДОГО цикла — см. docstring.
+
+    ВАЖНО (найдено 27.08.2026): `git reset --hard origin/main` НЕ гарантирует,
+    что HEAD прикреплён к локальной ветке main. Если HEAD хоть раз "отвязался"
+    (detached) — например, из-за прерванного `git rebase`/`stash pop` где-то
+    в update_local.py — reset --hard просто двигает detached HEAD дальше,
+    оставляя его detached навсегда. Итог: `git push` начинает падать со
+    `fatal: You are not currently on a branch` на ВСЕХ трёх retry-попытках
+    (наблюдалось: 16 из 20 циклов подряд потеряли push). Заодно
+    `git stash` внутри update_local.py в detached-состоянии создаёт записи
+    "WIP on (no branch)", которые не удаляются автоматически и копятся.
+
+    Фикс: `git checkout -B main origin/main` вместо reset --hard — эта
+    команда идемпотентно (пере)создаёт локальную ветку main и переключает
+    на неё HEAD, гарантируя attached-состояние независимо от того, что было
+    раньше. Дополнительно чистим осиротевшие stash-записи на старте цикла —
+    they can't collide with anything since reset выполняется до самого
+    начала работы скрипта.
+    """
     try:
         fetch = subprocess.run(
             ["git", "-C", BASE_DIR, "fetch", "origin", "main", "--depth", "1"],
@@ -92,12 +110,34 @@ def sync_repo():
         if fetch.returncode != 0:
             print(f"  [WARN] git fetch failed: {fetch.stderr.strip()}")
             return False
-        reset = subprocess.run(
-            ["git", "-C", BASE_DIR, "reset", "--hard", "origin/main"],
+
+        was_detached = subprocess.run(
+            ["git", "-C", BASE_DIR, "symbolic-ref", "-q", "HEAD"],
+            capture_output=True, text=True, timeout=10).returncode != 0
+
+        checkout = subprocess.run(
+            ["git", "-C", BASE_DIR, "checkout", "-B", "main", "origin/main"],
             capture_output=True, text=True, timeout=30)
-        if reset.returncode != 0:
-            print(f"  [WARN] git reset failed: {reset.stderr.strip()}")
+        if checkout.returncode != 0:
+            print(f"  [WARN] git checkout -B main failed: {checkout.stderr.strip()}")
             return False
+
+        if was_detached:
+            print("  [WARN] HEAD был detached — переприкреплён к main")
+
+        # Защита от накопления осиротевших stash-записей (см. докстринг).
+        # Дропаем всё, что скопилось: свежие данные всё равно пересчитываются
+        # заново каждым циклом, восстанавливать устаревший stash смысла нет.
+        stash_list = subprocess.run(
+            ["git", "-C", BASE_DIR, "stash", "list"],
+            capture_output=True, text=True, timeout=10)
+        if stash_list.stdout.strip():
+            n = len(stash_list.stdout.strip().splitlines())
+            subprocess.run(
+                ["git", "-C", BASE_DIR, "stash", "clear"],
+                capture_output=True, text=True, timeout=10)
+            print(f"  [WARN] очищено {n} осиротевших stash-записей")
+
         print("  ✓ repo synced with origin/main")
         return True
     except Exception as e:
