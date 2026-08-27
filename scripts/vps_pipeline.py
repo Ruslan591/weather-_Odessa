@@ -143,6 +143,12 @@ def git_push_history():
                         "data/model_runs_history.json",
                         f"data/synop_{year}.txt",
                         "data/model_bias.json",
+                        # [ДОБАВЛЕНО 2026-08-27] calc_weights.py и pws_sync.py
+                        # теперь в VPS-режиме пишут эти файлы напрямую на диск
+                        # (без GITHUB_TOKEN, см. их докстринги) — коммит и push
+                        # этих файлов делает этот процесс, не они сами.
+                        "data/model_weights.json",
+                        "data/pws_raw.json",
                         "data/_ai_pending_models.json",
                         "data/marine_history.json",
                         "data/nearby_precip.json",
