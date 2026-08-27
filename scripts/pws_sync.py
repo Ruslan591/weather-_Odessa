@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 """
 pws_sync.py — почасовая загрузка наблюдений PWS-станций.
-Запускается GitHub Actions каждый час.
+Запускается GitHub Actions или VPS-cron.
 Пишет в data/pws_raw.json.
+
+Режим определяется автоматически: если задан GITHUB_TOKEN — читает/пишет
+через GitHub Contents API (GH Actions, эфемерный раннер без диска).
+[ДОБАВЛЕНО 2026-08-27] Иначе (VPS-режим) — читает и пишет data/pws_raw.json
+напрямую с диска, коммит+push делает вызывающий процесс (vps_pipeline.py).
 """
 
 import os, json, base64, math, logging
@@ -18,11 +23,17 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 # ── Конфиг ──────────────────────────────────────────────────────────────────
-GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 GITHUB_OWNER = "ruslan591"
 GITHUB_REPO  = "weather-_Odessa"
 FILE_PATH    = "data/pws_raw.json"
 KEEP_DAYS    = 30
+
+# [ДОБАВЛЕНО 2026-08-27] VPS-режим: путь на диске (полный checkout репо).
+REPO_FILE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    FILE_PATH
+)
 
 PWS_STATIONS = [
     {"id": "IODESA137", "name": "пос. Котовского",  "pressureOffset": -5.3  },
@@ -111,6 +122,26 @@ def gh_put(data, sha):
     with urlopen(req, timeout=30) as r:
         resp = json.loads(r.read())
     return resp["content"]["sha"]
+
+# ── VPS-режим: работа с диском (без GitHub API) ──────────────────────────────
+def repo_get():
+    """[ДОБАВЛЕНО 2026-08-27] Читает data/pws_raw.json напрямую с диска."""
+    if not os.path.exists(REPO_FILE):
+        return [], None
+    try:
+        with open(REPO_FILE, "r", encoding="utf-8") as f:
+            return json.load(f), None
+    except Exception as e:
+        log.warning("  repo_get: не удалось прочитать %s: %s", REPO_FILE, e)
+        return [], None
+
+def repo_put(data):
+    """[ДОБАВЛЕНО 2026-08-27] Пишет data/pws_raw.json напрямую на диск —
+    коммит+push делает вызывающий процесс (vps_pipeline.py)."""
+    content = "[\n" + ",\n".join(json.dumps(r, ensure_ascii=False) for r in data) + "\n]"
+    os.makedirs(os.path.dirname(REPO_FILE), exist_ok=True)
+    with open(REPO_FILE, "w", encoding="utf-8") as f:
+        f.write(content)
 
 # ── Weather Underground API ──────────────────────────────────────────────────
 def fetch_station(station_id, date_ymd, is_current):
@@ -208,7 +239,10 @@ def main():
     log.info("=== pws_sync.py запущен %s ===", now.isoformat())
 
     # Загружаем существующие данные
-    existing, sha = gh_get()
+    if GITHUB_TOKEN:
+        existing, sha = gh_get()
+    else:
+        existing, sha = repo_get()
     log.info("  Загружено %d записей из pws_raw.json", len(existing))
 
     exist_keys = {(r["hourKey"], r.get("stationId", "")) for r in existing}
@@ -285,10 +319,14 @@ def main():
     merged.sort(key=lambda r: (r["hourKey"], r.get("stationId", "")))
 
     log.info("  Сохраняем %d записей (+%d новых)...", len(merged), len(new_recs))
-    gh_put(merged, sha)
+    if GITHUB_TOKEN:
+        gh_put(merged, sha)
+    else:
+        repo_put(merged)
     log.info("  ✓ pws_raw.json обновлён")
     log.info("=== Готово ===")
 
 
 if __name__ == "__main__":
     main()
+
