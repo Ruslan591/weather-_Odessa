@@ -1,1 +1,1 @@
-{"task_id": "vps-install-pillow-1787822329", "cmd": "pip install Pillow --break-system-packages 2>&1 | tail -20 && echo \"=== verify ===\" && python3 -c \"import PIL; print(PIL.__version__)\" && echo \"=== verify numpy too ===\" && python3 -c \"import numpy; print(numpy.__version__)\""}
+{"task_id": "vps-check-clean-cycle-1787822737", "cmd": "tail -n 150 /var/log/vps-pipeline.log && echo \"=== errors in last cycle ===\" && tail -n 150 /var/log/vps-pipeline.log | grep -iE \"rejected|error|\u2717|traceback|fatal|ModuleNotFound\" || echo \"NO_ERRORS_FOUND\""}
