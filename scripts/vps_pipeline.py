@@ -525,9 +525,48 @@ def check_marine_history():
 
 # ── основная логика ───────────────────────────────────────────────────────────
 
+LOCK_FILE = "/tmp/vps_pipeline.lock"
+
+
+def acquire_lock():
+    """Файловая блокировка (найдено 27.08.2026, поздний вечер).
+
+    Гипотеза о повторяющихся повреждениях .git/rebase-merge: если какой-то
+    сетевой вызов внутри цикла (subprocess.run БЕЗ timeout — calc_weights.py,
+    update_local.py, git fetch/push) зависает дольше 15 минут, cron всё
+    равно запускает СЛЕДУЮЩИЙ экземпляр этого скрипта поверх ещё работающего
+    — и два процесса одновременно трогают один и тот же .git в одной рабочей
+    директории. Это правдоподобно объясняет полу-записанные rebase-merge
+    директории, которые не лечились обычным `rebase --abort` (см. sync_repo).
+    Пересекающихся процессов при проверке не застали, но лок дёшев и
+    правильно закрывает саму возможность гонки — не полагаемся на удачу.
+    """
+    import fcntl
+    lock_fd = open(LOCK_FILE, "w")
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return lock_fd
+    except OSError:
+        return None
+
+
 def main():
     os.makedirs(LOG_DIR, exist_ok=True)
 
+    lock_fd = acquire_lock()
+    if lock_fd is None:
+        print("  ⏭ предыдущий цикл ещё выполняется — пропускаю (lock занят)")
+        return
+
+    try:
+        _main_body()
+    finally:
+        import fcntl
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        lock_fd.close()
+
+
+def _main_body():
     if not sync_repo():
         print("  ✗ sync_repo failed — цикл пропущен, попробуем в следующий раз.")
         return
