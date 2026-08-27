@@ -1,5 +1,1 @@
-{
-  "task_id": "snapshot2-1787783575",
-  "cmd": "echo === DISK === && df -h / && echo === DU OPT === && du -sh /opt/* 2>/dev/null && echo === DU ETC === && du -sh /etc/vps-agent /etc/vps-github-bridge /etc/caddy 2>/dev/null && echo === DU VAR LOG === && du -sh /var/log 2>/dev/null && ls -la /var/log/*.log 2>/dev/null | grep -i vps && echo === MEMORY === && free -h && echo === NETWORK === && ip -brief addr show && echo === CRON === && sudo crontab -l 2>/dev/null && echo === SERVICES === && sudo systemctl is-active vps-agent caddy 2>/dev/null && echo === REPO FILES === && ls -la /opt/weather-pipeline/repo | head -20 && echo === BRIDGE LOG TAIL === && sudo tail -30 /var/log/vps-github-bridge.log 2>/dev/null && echo === UPTIME === && uptime",
-  "timeout": 30
-}
+{"task_id": "vps-pipeline-setup-1787814153", "cmd": "cd /opt/weather-pipeline/repo && git fetch origin main --depth 1 && git reset --hard origin/main && ls -la scripts/vps_pipeline.py && python3 -m py_compile scripts/vps_pipeline.py && echo COMPILE_OK && (crontab -l 2>/dev/null | grep -v vps_pipeline.py; echo \"*/15 * * * * /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_pipeline.py >> /var/log/vps-pipeline.log 2>&1\") | crontab - && crontab -l"}
