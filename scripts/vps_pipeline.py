@@ -125,8 +125,35 @@ def sync_repo():
                        capture_output=True, text=True, timeout=15)
         subprocess.run(["git", "-C", BASE_DIR, "cherry-pick", "--abort"],
                        capture_output=True, text=True, timeout=15)
-        # Сброс индекса убирает "unmerged"-записи независимо от их причины.
-        subprocess.run(["git", "-C", BASE_DIR, "reset", "--mixed", "HEAD"],
+
+        # НАХОДКА (27.08.2026, поздний вечер): `reset --mixed HEAD` НЕ всегда
+        # убирает unmerged-записи (UU) из индекса — если процесс был прерван
+        # (например, cron убил зависший rebase) ДО того, как git успел
+        # записать полное состояние конфликта, `.git/rebase-merge` может
+        # остаться на диске в частично валидном виде, из-за чего `rebase
+        # --abort`/`merge --abort` тихо завершаются с ошибкой и НИЧЕГО не
+        # чистят, а `reset --mixed` не трогает stage 1/2/3 записи в индексе,
+        # если git всё ещё считает репозиторий "в процессе rebase".
+        # Наблюдалось: 3 цикла подряд получали одну и ту же ошибку
+        # "you need to resolve your current index first" несмотря на
+        # предыдущую версию самолечения. Единственное, что реально помогло —
+        # ручное удаление .git/rebase-merge и т.п. НАПРЯМУЮ с диска плюс
+        # `reset --hard` (не --mixed). Делаем то же самое автоматически:
+        for _leftover in ("rebase-merge", "rebase-apply"):
+            _p = os.path.join(BASE_DIR, ".git", _leftover)
+            if os.path.isdir(_p):
+                import shutil as _shutil
+                _shutil.rmtree(_p, ignore_errors=True)
+        for _leftover in ("MERGE_HEAD", "MERGE_MSG", "CHERRY_PICK_HEAD", "AUTO_MERGE"):
+            _p = os.path.join(BASE_DIR, ".git", _leftover)
+            if os.path.isfile(_p):
+                try:
+                    os.remove(_p)
+                except OSError:
+                    pass
+        # reset --hard (не --mixed!) — единственное, что гарантированно
+        # убирает unmerged (UU) записи из индекса в этом сценарии.
+        subprocess.run(["git", "-C", BASE_DIR, "reset", "--hard", "HEAD"],
                        capture_output=True, text=True, timeout=15)
 
         fetch = subprocess.run(
