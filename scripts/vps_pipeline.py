@@ -99,11 +99,36 @@ def sync_repo():
     Фикс: `git checkout -B main origin/main` вместо reset --hard — эта
     команда идемпотентно (пере)создаёт локальную ветку main и переключает
     на неё HEAD, гарантируя attached-состояние независимо от того, что было
-    раньше. Дополнительно чистим осиротевшие stash-записи на старте цикла —
-    they can't collide with anything since reset выполняется до самого
-    начала работы скрипта.
+    раньше.
+
+    ВТОРАЯ НАХОДКА (27.08.2026, тот же день): `checkout -B` сам по себе
+    требует ЧИСТОГО индекса — если предыдущий цикл закончился с unmerged-
+    записями (сорванный `git stash pop`/rebase где-то в update_local.py),
+    checkout падает с `error: you need to resolve your current index first`,
+    sync_repo() возвращает False, и весь цикл пропускается ОДНОЙ строкой
+    в лог, ничего не почистив. Конфликт остаётся — следующий цикл падает
+    ровно так же. Итог: пайплайн молчал 5+ часов подряд (17:15-17:30),
+    хотя cron исправно стрелял каждые 15 минут — просто каждый раз падал
+    почти мгновенно на этом шаге, и `ensure_repo_healthy()` (см. ниже),
+    вызываемая только из git_push_history(), даже не успевала отработать,
+    потому что до неё сам sync_repo() уже возвращал False.
+
+    Поэтому самолечение (abort rebase/merge + сброс индекса) теперь стоит
+    ЗДЕСЬ, до checkout -B — а не только в git_push_history().
     """
     try:
+        # Самолечение ДО checkout -B: чистим любой мусор, оставленный
+        # предыдущим циклом, иначе checkout -B откажется работать.
+        subprocess.run(["git", "-C", BASE_DIR, "rebase", "--abort"],
+                       capture_output=True, text=True, timeout=15)
+        subprocess.run(["git", "-C", BASE_DIR, "merge", "--abort"],
+                       capture_output=True, text=True, timeout=15)
+        subprocess.run(["git", "-C", BASE_DIR, "cherry-pick", "--abort"],
+                       capture_output=True, text=True, timeout=15)
+        # Сброс индекса убирает "unmerged"-записи независимо от их причины.
+        subprocess.run(["git", "-C", BASE_DIR, "reset", "--mixed", "HEAD"],
+                       capture_output=True, text=True, timeout=15)
+
         fetch = subprocess.run(
             ["git", "-C", BASE_DIR, "fetch", "origin", "main", "--depth", "1"],
             capture_output=True, text=True, timeout=60)
@@ -119,8 +144,19 @@ def sync_repo():
             ["git", "-C", BASE_DIR, "checkout", "-B", "main", "origin/main"],
             capture_output=True, text=True, timeout=30)
         if checkout.returncode != 0:
-            print(f"  [WARN] git checkout -B main failed: {checkout.stderr.strip()}")
-            return False
+            # Крайний случай: даже после чистки checkout не прошёл.
+            # Форсируем через reset --hard как последнюю линию защиты,
+            # чтобы цикл НЕ пропускался молча (см. находку выше).
+            print(f"  [WARN] git checkout -B main failed: {checkout.stderr.strip()}"
+                  f" — форсирую reset --hard")
+            subprocess.run(["git", "-C", BASE_DIR, "reset", "--hard", "origin/main"],
+                           capture_output=True, text=True, timeout=30)
+            checkout2 = subprocess.run(
+                ["git", "-C", BASE_DIR, "checkout", "-B", "main", "origin/main"],
+                capture_output=True, text=True, timeout=30)
+            if checkout2.returncode != 0:
+                print(f"  [WARN] checkout -B всё ещё падает: {checkout2.stderr.strip()}")
+                return False
 
         if was_detached:
             print("  [WARN] HEAD был detached — переприкреплён к main")
