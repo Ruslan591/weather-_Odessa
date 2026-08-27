@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-27T04:05:36Z",
+  "timestamp": "2026-08-27T04:15:50Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-08-27T03:45:00.000Z",
   "target_id": 0,
@@ -19,7 +19,8 @@
     "frontlike": true,
     "window_spanning": false,
     "phase_label": "безоблачно",
-    "cloud_fraction": 0.158,
+    "cloud_fraction": 0.471,
+    "has_precip": false,
     "has_lightning": false
   },
   "local_candidates": [],
@@ -36,36 +37,36 @@
   },
   "target_phase": {
     "label": "безоблачно",
-    "cloud_fraction": 0.16
+    "cloud_fraction": 0.505
   },
   "existence": {
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-08-27T03:40:00.000Z"
+        "timestamp": "2026-08-27T03:50:00.000Z"
       },
       "geocolour_motion": {
         "confirmed": false,
-        "timestamp": "2026-08-27T03:40:00.000Z"
+        "timestamp": "2026-08-27T03:50:00.000Z"
       },
       "cloud_phase_type": {
-        "confirmed": false,
-        "timestamp": "2026-08-27T04:03:55Z"
+        "confirmed": true,
+        "timestamp": "2026-08-27T04:14:06Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
       "confirmed": false,
-      "timestamp": "2026-08-27T03:51:45Z"
+      "timestamp": "2026-08-27T04:14:56Z"
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-08-27T04:04:49Z"
+      "timestamp": "2026-08-27T04:15:03Z"
     }
   },
-  "verdict": "CLM отметил цель в 140км ЮЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (3314км²) в 160км ЮЗ (вытянута В-З (111°), похоже на фронт)."
+  "verdict": "Цель в 140км ЮЗ, безоблачно — каналы расходятся: cloud_phase_type подтверждают, ir_motion/geocolour_motion нет. Почти не движется. Отдельно: система синоптического масштаба (3314км²) в 160км ЮЗ (вытянута В-З (111°), похоже на фронт)."
 }
