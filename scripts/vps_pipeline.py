@@ -408,6 +408,60 @@ def run_pipeline(new_models):
     return True
 
 
+def dispatch_ai_pipeline():
+    """Диспетч ai_pipeline.yml через GitHub Actions API (28.08.2026).
+
+    Раньше это делал последний шаг full_pipeline.yml (в GH Actions) — тем же
+    паттерном (guard на in_progress/queued + явный workflow_dispatch), что
+    описан в докстринге scripts/gh_ai_pipeline.py. Теперь, когда
+    full_pipeline.yml отключается (VPS — основной писатель), диспетч
+    переезжает сюда, иначе очередь `data/_ai_pending_models.json` продолжит
+    наполняться, но AI-анализ (Claude/Gemini) никогда не запустится.
+
+    Токен для диспетча (`GH_PAT`, PAT с scope repo+workflow) читается ТОЛЬКО
+    из переменной окружения — не хардкодится в этом файле, т.к. файл
+    закоммичен в публичный репозиторий. Настраивается в crontab на VPS.
+    """
+    token = os.environ.get("GH_PAT")
+    if not token:
+        print("  [WARN] GH_PAT не задан в env — диспетч ai_pipeline.yml пропущен")
+        return
+
+    repo = "ruslan591/weather-_Odessa"
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github+json",
+    }
+
+    def _gh_get(url):
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read().decode())
+
+    try:
+        for status in ("in_progress", "queued"):
+            data = _gh_get(
+                f"https://api.github.com/repos/{repo}/actions/workflows/"
+                f"ai_pipeline.yml/runs?status={status}&per_page=1")
+            if data.get("total_count", 0) != 0:
+                print(f"  ai_pipeline.yml уже {status} — пропуск диспетча")
+                return
+
+        body = json.dumps({"ref": "main"}).encode()
+        req = urllib.request.Request(
+            f"https://api.github.com/repos/{repo}/actions/workflows/"
+            f"ai_pipeline.yml/dispatches",
+            data=body, headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            code = resp.status
+        if code == 204:
+            print("  ✓ ai_pipeline.yml задиспетчен")
+        else:
+            print(f"  [WARN] диспетч ai_pipeline.yml вернул HTTP {code}")
+    except Exception as e:
+        print(f"  [WARN] dispatch_ai_pipeline error: {e}")
+
+
 def queue_ai_models(models):
     existing = []
     if os.path.exists(AI_QUEUE_FILE):
@@ -423,6 +477,8 @@ def queue_ai_models(models):
         print(f"  ✓ AI-очередь: {', '.join(merged)}")
     except Exception as e:
         print(f"  [WARN] не удалось записать AI-очередь: {e}")
+        return
+    dispatch_ai_pipeline()
 
 # ── PWS-синк ───────────────────────────────────────────────────────────────
 
