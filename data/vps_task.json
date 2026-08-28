@@ -1,1 +1,1 @@
-{"task_id": "vps-check-actual-file-version-1787947935", "cmd": "cd /opt/weather-pipeline/repo && md5sum scripts/vps_pipeline.py && git log --oneline -3 -- scripts/vps_pipeline.py"}
+{"task_id": "vps-manual-sync-debug-1787948078", "cmd": "cd /opt/weather-pipeline/repo && echo \"=== before ===\" && md5sum scripts/vps_pipeline.py && git symbolic-ref -q HEAD && git status --short && echo \"=== fetch ===\" && git fetch origin main --depth 1 2>&1 && echo \"=== checkout -B ===\" && git checkout -B main origin/main 2>&1 && echo \"=== after ===\" && md5sum scripts/vps_pipeline.py"}
