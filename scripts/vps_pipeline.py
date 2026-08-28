@@ -28,6 +28,7 @@ vps_pipeline.py — версия full_pipeline для постоянного VPS
 
 import json
 import os
+import re
 import subprocess
 import sys
 import urllib.request
@@ -422,9 +423,28 @@ def dispatch_ai_pipeline():
     из переменной окружения — не хардкодится в этом файле, т.к. файл
     закоммичен в публичный репозиторий. Настраивается в crontab на VPS.
     """
+    # Порядок поиска токена: сперва env (GH_PAT), затем — уже существующий
+    # git credential store на VPS (~/.git-credentials), которым и так
+    # пользуется `git push` в этом же скрипте. Второй вариант позволяет
+    # не передавать секрет через data/vps_task.json (канал моста
+    # vps_github_bridge, который сам коммитится в git — GitHub secret
+    # scanning справедливо блокирует такие коммиты, см. находку 28.08.2026).
     token = os.environ.get("GH_PAT")
     if not token:
-        print("  [WARN] GH_PAT не задан в env — диспетч ai_pipeline.yml пропущен")
+        cred_file = os.path.expanduser("~/.git-credentials")
+        if os.path.isfile(cred_file):
+            try:
+                with open(cred_file, "r", encoding="utf-8") as f:
+                    for line in f:
+                        m = re.search(r"://[^:]+:([^@]+)@github\.com", line)
+                        if m:
+                            token = m.group(1)
+                            break
+            except Exception:
+                pass
+    if not token:
+        print("  [WARN] токен для диспетча ai_pipeline.yml не найден "
+              "(ни GH_PAT в env, ни ~/.git-credentials) — пропуск")
         return
 
     repo = "ruslan591/weather-_Odessa"
