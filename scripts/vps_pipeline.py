@@ -312,10 +312,10 @@ def git_push_history():
                         ]
         _to_add = [p for p in _candidates if os.path.exists(os.path.join(BASE_DIR, p))]
         subprocess.run(["git", "-C", BASE_DIR, "add"] + _to_add,
-                      check=True, capture_output=True)
+                      check=True, capture_output=True, timeout=30)
         result = subprocess.run(
             ["git", "-C", BASE_DIR, "commit", "-m", "vps: synop + history update"],
-            capture_output=True, text=True)
+            capture_output=True, text=True, timeout=30)
         if result.returncode != 0:
             msg = result.stdout.strip() or result.stderr.strip()
             if "nothing to commit" not in msg and "nothing added" not in msg:
@@ -325,7 +325,7 @@ def git_push_history():
         for _attempt in range(3):
             push = subprocess.run(
                 ["git", "-C", BASE_DIR, "push"],
-                capture_output=True, text=True)
+                capture_output=True, text=True, timeout=60)
             if push.returncode == 0:
                 suffix = f" (attempt {_attempt+1})" if _attempt > 0 else ""
                 print(f"  history push ✓{suffix}")
@@ -335,7 +335,7 @@ def git_push_history():
             if _attempt < 2:
                 _time.sleep(_delays[_attempt])
                 subprocess.run(["git", "-C", BASE_DIR, "fetch", "origin", "main"],
-                               capture_output=True)
+                               capture_output=True, timeout=60)
                 # НАХОДКА (27.08.2026, вечер): обычный `git rebase origin/main`
                 # при КОНФЛИКТЕ содержимого (гонка с параллельным GH Actions
                 # по тем же derived-файлам) сам оставляет HEAD detached до
@@ -350,18 +350,20 @@ def git_push_history():
                 # theirs/ours у rebase обратная по сравнению с merge.
                 rebase = subprocess.run(
                     ["git", "-C", BASE_DIR, "rebase", "-X", "theirs", "origin/main"],
-                    capture_output=True, text=True)
+                    capture_output=True, text=True, timeout=60)
                 if rebase.returncode != 0:
                     # rebase не смог даже с авторазрешением — не оставляем
                     # висеть detached HEAD до следующего цикла, чиним сразу.
                     print(f"  [WARN] rebase -X theirs не прошёл: "
                           f"{rebase.stderr.strip()[:200]} — abort+reset")
                     subprocess.run(["git", "-C", BASE_DIR, "rebase", "--abort"],
-                                   capture_output=True)
+                                   capture_output=True, timeout=15)
                     subprocess.run(
                         ["git", "-C", BASE_DIR, "checkout", "-B", "main", "origin/main"],
-                        capture_output=True)
+                        capture_output=True, timeout=30)
         print("  history push failed after 3 attempts")
+    except subprocess.TimeoutExpired as e:
+        print(f"  history git timeout: {e}")
     except Exception as e:
         print(f"  history git error: {e}")
 
@@ -382,7 +384,20 @@ def run_pipeline(new_models):
 
     for step in steps:
         print(f"  ▶ {step['name']}")
-        result = subprocess.run(step["cmd"], cwd=BASE_DIR, capture_output=False)
+        try:
+            result = subprocess.run(step["cmd"], cwd=BASE_DIR,
+                                     capture_output=False, timeout=300)
+        except subprocess.TimeoutExpired:
+            # НАХОДКА (27.08.2026): без timeout зависший шаг (напр. сетевой
+            # вызов к open-meteo/GitHub API) мог блокировать процесс дольше
+            # 15 минут — тогда cron запускал СЛЕДУЮЩИЙ экземпляр поверх ещё
+            # работающего, и два процесса ломали один .git одновременно
+            # (см. серию detached-HEAD патчей выше). Lock (flock) уже
+            # закрывает саму гонку, но таймаут здесь убирает первопричину:
+            # шаг не может висеть бесконечно.
+            print(f"  ✗ {step['name']} завис дольше 300с — прерван по таймауту")
+            print(  "    Пайплайн остановлен.")
+            return False
         if result.returncode != 0:
             print(f"  ✗ {step['name']} завершился с ошибкой (код {result.returncode})")
             print(  "    Пайплайн остановлен.")
@@ -445,10 +460,14 @@ def check_pws_sync():
 
     print(f"\n  🔄 PWS: нет данных за {cur_hk}, запускаю синк "
           f"(попытка {retries + 1}/{MAX_PWS_RETRIES})...")
-    result = subprocess.run(
-        [PYTHON, os.path.join(SCRIPTS_DIR, "pws_sync.py")],
-        cwd=BASE_DIR, capture_output=False
-    )
+    try:
+        result = subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "pws_sync.py")],
+            cwd=BASE_DIR, capture_output=False, timeout=120
+        )
+    except subprocess.TimeoutExpired:
+        print("  ✗ pws_sync.py завис дольше 120с — прерван по таймауту")
+        return
     if result.returncode == 0:
         print("  ✓ pws_sync.py")
     else:
@@ -610,10 +629,13 @@ def _main_body():
         git_push_history()
     else:
         print("  Новых прогонов нет.\n")
-        subprocess.run(
-            [PYTHON, os.path.join(SCRIPTS_DIR, "update_local.py"), "--no-model", "--no-fill"],
-            cwd=BASE_DIR, capture_output=False
-        )
+        try:
+            subprocess.run(
+                [PYTHON, os.path.join(SCRIPTS_DIR, "update_local.py"), "--no-model", "--no-fill"],
+                cwd=BASE_DIR, capture_output=False, timeout=300
+            )
+        except subprocess.TimeoutExpired:
+            print("  ✗ update_local.py завис дольше 300с — прерван по таймауту")
         git_push_history()
 
     check_pws_sync()
