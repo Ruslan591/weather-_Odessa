@@ -459,13 +459,33 @@ def dispatch_ai_pipeline():
             return json.loads(resp.read().decode())
 
     try:
+        # НАХОДКА (28.08.2026): обнаружен ran ai_pipeline.yml, застрявший в
+        # статусе "queued" с 26.08.2026 15:03 UTC (~2 суток, 0 джобов) — не
+        # снимается ни через POST /cancel ("not queued yet", 409), ни через
+        # DELETE (403). Похоже на баг/аномалию на стороне GitHub Actions.
+        # Пока этот ran существует, guard "уже queued" блокирует АБСОЛЮТНО
+        # ЛЮБОЙ новый диспетч навсегда — AI-анализ был мёртв ~44 часа
+        # незамеченным (это скрывал тот же guard в full_pipeline.yml).
+        # Раз нормальный ran должен подхватываться раннером почти сразу,
+        # игнорируем queued/in_progress runs старше 30 минут как зомби —
+        # не полагаемся на то, что GitHub гарантированно почистит их сам.
+        ZOMBIE_THRESHOLD_MIN = 30
+        now = datetime.now(timezone.utc)
         for status in ("in_progress", "queued"):
             data = _gh_get(
                 f"https://api.github.com/repos/{repo}/actions/workflows/"
-                f"ai_pipeline.yml/runs?status={status}&per_page=1")
-            if data.get("total_count", 0) != 0:
-                print(f"  ai_pipeline.yml уже {status} — пропуск диспетча")
-                return
+                f"ai_pipeline.yml/runs?status={status}&per_page=5")
+            for run in data.get("workflow_runs", []):
+                created = datetime.strptime(
+                    run["created_at"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                age_min = (now - created).total_seconds() / 60
+                if age_min < ZOMBIE_THRESHOLD_MIN:
+                    print(f"  ai_pipeline.yml уже {status} "
+                          f"({age_min:.0f} мин) — пропуск диспетча")
+                    return
+                print(f"  [WARN] ran {run['id']} висит в {status} "
+                      f"{age_min:.0f} мин (>{ZOMBIE_THRESHOLD_MIN}) — "
+                      f"похоже на зомби, игнорирую при проверке guard")
 
         body = json.dumps({"ref": "main"}).encode()
         req = urllib.request.Request(
