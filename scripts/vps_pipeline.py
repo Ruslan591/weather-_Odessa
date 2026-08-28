@@ -152,6 +152,28 @@ def sync_repo():
                     os.remove(_p)
                 except OSError:
                     pass
+        # НАХОДКА (28.08.2026, вечер): `.git/shallow.lock` (и другие *.lock —
+        # index.lock, HEAD.lock, config.lock) — это ВНУТРЕННИЙ git-лок для
+        # конкретной операции (fetch/commit/etc), НЕ путать с нашим
+        # /tmp/vps_pipeline.lock (flock на уровне процесса). Если git-процесс
+        # был прерван на середине операции (напр. столкнулся с ручной
+        # отладочной командой в этой же рабочей директории), файл-лок
+        # остаётся навсегда и блокирует ЛЮБОЙ следующий `git fetch` кодом
+        # ошибки 128 ("Unable to create ... File exists"). В отличие от
+        # unmerged-индекса это не даёт вообще никакой ошибки в основном теле
+        # цикла — просто тихо роняет sync_repo() на fetch ещё ДО того, как
+        # успевает попасть в лог что-то кроме "sync_repo failed". Наблюдалось:
+        # пайплайн продолжал работать на СТАРОЙ версии кода несколько часов,
+        # потому что каждый checkout -B срывался на fetch раньше, чем успевал
+        # подтянуть новый скрипт с GitHub.
+        for _lockname in ("shallow.lock", "index.lock", "HEAD.lock", "config.lock"):
+            _p = os.path.join(BASE_DIR, ".git", _lockname)
+            if os.path.isfile(_p):
+                try:
+                    os.remove(_p)
+                    print(f"  [WARN] удалён зависший .git/{_lockname}")
+                except OSError:
+                    pass
         # reset --hard (не --mixed!) — единственное, что гарантированно
         # убирает unmerged (UU) записи из индекса в этом сценарии.
         subprocess.run(["git", "-C", BASE_DIR, "reset", "--hard", "HEAD"],
