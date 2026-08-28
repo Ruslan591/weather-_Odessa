@@ -2,39 +2,34 @@
   "status": "ok",
   "frames_fetched": 4,
   "times_requested": [
-    "2026-08-28T06:55:00.000Z",
-    "2026-08-28T07:00:00.000Z",
-    "2026-08-28T07:05:00.000Z",
+    "2026-08-28T07:15:00.000Z",
+    "2026-08-28T07:20:00.000Z",
+    "2026-08-28T07:25:00.000Z",
     null
   ],
   "result": {
-    "timestamp": "2026-08-28T07:13:16Z",
+    "timestamp": "2026-08-28T07:34:33Z",
     "current_state": "no_storm",
     "target_type": "storm_mass",
-    "distance_km_now": 28.5,
-    "bearing_deg": 149.0,
+    "distance_km_now": 106.7,
+    "bearing_deg": 150.0,
     "compass": "ЮВ",
-    "speed_kmh": 0.1,
-    "direction_compass": "З",
-    "cpa_km": 17.2,
-    "eta_min": null,
-    "blob_area_km2": 467.0,
-    "verdict": "почти стоит на месте",
-    "frame_pairs_used": 3,
-    "probability_percent": 66,
-    "probability_note": "эвристика (близость точки сближения + размер очага + уверенность в скорости), не физическая модель грозовой активности",
+    "blob_area_km2": 1668.0,
+    "verdict": "скорость посчитать не удалось (ячейка слишком мала/разрежена для оценки)",
+    "probability_percent": 36,
+    "probability_note": "эвристика (близость + размер очага), скорость не посчиталась",
     "method_note": "Скорость усреднена по 4 кадрам mtg_fd:li_afa (шаг 5 мин). Presence = непрозрачный пиксель (накопленная площадь вспышек за 5 мин). Порог значимости снижен до 8px — грозовые ячейки компактнее осадков/облаков. Скорость часто не считается (поле слишком разреженное) — это ограничение метода, не ошибка.",
     "target_confirmation": {
       "confirmed": false,
-      "target_id": 1,
-      "target_area_km2": 96.1,
+      "target_id": 2,
+      "target_area_km2": 114.7,
       "roi_lightning_fraction": 0.0,
       "verdict": "Грозовой активности в этой конкретной массе не наблюдается"
     },
     "system_analysis": {
       "available": true,
       "target_id": 0,
-      "area_km2": 43508.8,
+      "area_km2": 39456.5,
       "roi_lightning_fraction": 0.0,
       "has_lightning": false
     },
@@ -46,7 +41,7 @@
         "has_lightning": false
       },
       {
-        "target_id": 2,
+        "target_id": 1,
         "available": true,
         "roi_lightning_fraction": 0.0,
         "has_lightning": false
@@ -54,7 +49,7 @@
     ],
     "local_analysis_all": [
       {
-        "target_id": 1,
+        "target_id": 2,
         "available": true,
         "roi_lightning_fraction": 0.0,
         "has_lightning": false
@@ -68,11 +63,17 @@
       {
         "target_id": 4,
         "available": true,
-        "roi_lightning_fraction": 0.5,
-        "has_lightning": true
+        "roi_lightning_fraction": 0.0,
+        "has_lightning": false
       },
       {
         "target_id": 5,
+        "available": true,
+        "roi_lightning_fraction": 0.38,
+        "has_lightning": true
+      },
+      {
+        "target_id": 6,
         "available": true,
         "roi_lightning_fraction": 0.0,
         "has_lightning": false
