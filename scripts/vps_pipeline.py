@@ -702,9 +702,29 @@ def _main_body():
 
         run_time = fetch_run_time(meta_id)
 
+        # НАХОДКА (28.08.2026): open-meteo отдаёт last_run_availability_time
+        # с разных backend-серверов за балансировщиком нагрузки — значения
+        # для ОДНОГО И ТОГО ЖЕ реального прогона модели колеблются на
+        # секунды-минуты между опросами (напр. 13:09:18 → 13:12:04 →
+        # 13:09:18 туда-сюда). Точное сравнение `run_time == last_run`
+        # ложно детектировало "новый прогон" почти на КАЖДОМ 15-минутном
+        # цикле — это не просто шум в логе, а лишний прогон всего пайплайна
+        # и лишний платный AI-диспетч (Claude/Gemini) на пустом месте.
+        # Реальные прогоны моделей обновляются раз в 6-12 часов, поэтому
+        # разница меньше 30 минут — точно тот же прогон, а не новый.
+        SAME_RUN_TOLERANCE_MIN = 30
+        is_same_run = False
+        if run_time is not None and last_run is not None:
+            try:
+                t_new = datetime.strptime(run_time, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                t_old = datetime.strptime(last_run, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                is_same_run = abs((t_new - t_old).total_seconds()) < SAME_RUN_TOLERANCE_MIN * 60
+            except Exception:
+                is_same_run = (run_time == last_run)
+
         if run_time is None:
             status = "❌ нет ответа"
-        elif run_time == last_run:
+        elif is_same_run:
             status = f"  {iso_to_local(run_time)}  ({age_str(run_time)}) — без изменений"
         else:
             entries.append({"run_time": run_time, "detected_at": now})
