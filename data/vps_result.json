@@ -1,7 +1,7 @@
 {
-  "task_id": "deploy-satellite-1788012737",
+  "task_id": "deploy-satellite2-1788013033",
   "returncode": 0,
-  "stdout": "WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv\n---scipy check---\nscipy OK\n---manual test run---\npython3: can't open file '/opt/weather-pipeline/repo/scripts/vps_satellite_pipeline.py': [Errno 2] No such file or directory\n",
-  "stderr": "",
-  "completed_at_utc": "2026-08-29T14:13:08Z"
+  "stdout": "branch 'main' set up to track 'origin/main'.\nYour branch is up to date with 'origin/main'.\n-rw-r--r-- 1 root root 38032 Aug 29 14:15 scripts/vps_satellite_pipeline.py\n---manual test run---\n  [SKIP] eumetsat_cloud_forecast.py: новых кадров пока нет (server default=2026-08-29T13:45:00.000Z)\n  [OK] eumetsat_render_track_overlay: near=skipped_no_scratch, west=skipped_no_scratch\n  [OK] eumetsat_ground_station_verify: 1 трек(ов), fetch=0 cache=2 skip(нет станции)=0\n  [OK] eumetsat_ir_motion.py: 0.4\n  [OK] eumetsat_geocolour_motion.py: нет значимой облачности для оценки движения\n  [OK] eumetsat_target_summary.py: disputed (1 за / 2 против), Цель в 58км В, безоблачно — каналы расходятся: ir_motion подтверждают, geocolour_motion/cloud_phase_type нет. Отдельно: система синоптического масштаба (18337км²) в 48км С.\n  [SKIP] eumetsat_far_watch.py: far — новых данных пока нет (2026-08-29T13:45:00.000Z)\n\n────────────────────────────────────────────────────\n  [SATELLITE-VPS] Цикл спутникового модуля  29.08 14:18 UTC\n────────────────────────────────────────────────────\n\n  ✓ repo synced with origin/main\n  satellite push ✓\n",
+  "stderr": "From https://github.com/Ruslan591/weather-_Odessa\n * branch            main       -> FETCH_HEAD\n + 44071f9...164d1eb main       -> origin/main  (forced update)\nReset branch 'main'\n",
+  "completed_at_utc": "2026-08-29T14:18:15Z"
 }
