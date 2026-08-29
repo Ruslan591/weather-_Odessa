@@ -1,7 +1,7 @@
 {
-  "task_id": "check-next-expected-1788034219",
+  "task_id": "cron-update-main-1788034340",
   "returncode": 0,
-  "stdout": "{\n  \"ECMWF IFS\": {\n    \"next_expected\": \"2026-08-30T01:43:38Z\",\n    \"update_interval_seconds\": 21600\n  },\n  \"ICON EU\": {\n    \"next_expected\": \"2026-08-29T20:56:07Z\",\n    \"update_interval_seconds\": 10800\n  },\n  \"UKMO\": {\n    \"next_expected\": \"2026-08-30T01:33:38Z\",\n    \"update_interval_seconds\": 21600\n  },\n  \"Arpège\": {\n    \"next_expected\": \"2026-08-29T21:30:45Z\",\n    \"update_interval_seconds\": 21600\n  },\n  \"GFS\": {\n    \"next_expected\": \"2026-08-29T23:34:39Z\",\n    \"update_interval_seconds\": 21600\n  },\n  \"GRAPES\": {\n    \"next_expected\": \"2026-08-30T00:41:15Z\",\n    \"update_interval_seconds\": 21600\n  }\n}",
+  "stdout": "--- crontab now ---\n* * * * * /opt/vps-github-bridge/venv/bin/python3 /opt/vps-github-bridge/vps_github_bridge.py >> /var/log/vps-github-bridge.log 2>&1\n*/5 * * * * /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_pipeline.py >> /var/log/vps-pipeline.log 2>&1\n2,7,12,17,22,27,32,37,42,47,52,57 * * * * /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_satellite_pipeline.py >> /var/log/vps-satellite-pipeline.log 2>&1\n",
   "stderr": "",
-  "completed_at_utc": "2026-08-29T20:11:02Z"
+  "completed_at_utc": "2026-08-29T20:13:01Z"
 }
