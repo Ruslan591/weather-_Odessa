@@ -1,15 +1,18 @@
 name: Спутниковый пайплайн (EUMETSAT)
 
-# [ИЗМЕНЕНО 2026-08-20] С этой даты — ПЕРВОЕ звено цепочки, триггерится
-# телефоном напрямую (termux-job-scheduler, job 1001, каждые 15 мин, через
-# scripts/trigger_gh_pipeline.sh). До этой даты телефон триггерил
+# [ИЗМЕНЕНО 2026-08-20] С этой даты — триггерится телефоном напрямую
+# (termux-job-scheduler, job 1001, каждые 15 мин, через
+# scripts/trigger_gh_pipeline.sh). Раньше телефон триггерил
 # full_pipeline.yml, а этот workflow запускался ВТОРЫМ, явным диспетчем из
-# его последнего шага. Порядок теперь обратный: этот workflow явным
-# диспетчем (см. последний шаг ниже, "Явный запуск полного пайплайна")
-# тянет за собой full_pipeline.yml, который, в свою очередь, тянет
-# ai_pipeline.yml. Решение пользователя перераспределить порядок цепочки,
-# не технически вынужденное — прямой зависимости по данным между этим
-# модулем и full_pipeline.yml как не было, так и нет.
+# его последнего шага.
+#
+# [ИЗМЕНЕНО 2026-08-28] Этот модуль — теперь ЕДИНСТВЕННОЕ звено, которое
+# телефон/GH Actions вообще выполняет из старой цепочки "спутник →
+# full_pipeline → ai_pipeline". full_pipeline.yml отключён (см. пометку у
+# бывшего последнего шага ниже) — основной писатель верификационных данных
+# теперь VPS, независимо от этого workflow. Прямой зависимости по данным
+# между спутниковым модулем и верификацией моделей как не было, так и нет —
+# отключение цепочки от этого workflow ничего здесь не меняет.
 #
 # workflow_run-триггер по завершении full_pipeline.yml УБРАН 2026-08-20: при
 # новом порядке он указывал бы "назад" (full_pipeline теперь запускается
@@ -231,51 +234,26 @@ jobs:
             echo "тревоги нет или цепочка исчерпана — обычный каденс"
           fi
 
-      - name: Явный запуск полного пайплайна
-        # [ДОБАВЛЕНО 2026-08-20] Этот workflow теперь первое звено цепочки
-        # (см. комментарий у триггера в начале файла). Диспетч дальше —
-        # тем же проверенным паттерном, каким full_pipeline.yml раньше (до
-        # 2026-08-20) диспетчил этот workflow: явный workflow_dispatch +
-        # guard на in_progress/queued + debug-коммит ответа.
-        #
-        # if: always() — намеренно, а НЕ success()-гейт, как у push-шагов и
-        # redispatch-шага выше. Это разные категории шагов: push/redispatch
-        # ВЫШЕ читают "just_triggered"-флаги из файлов состояния и поэтому
-        # обязаны быть гейтованы success() (иначе stale-чтение при
-        # отменённом прогоне даёт дубли — см. инцидент 2026-08-18,
-        # docs/topics/eumetsat.md). Этот же шаг просто "передаёт эстафету"
-        # следующей стадии цепочки, которая сама самодостаточна (gh_pipeline.py
-        # решает по своим данным, gh_ai_pipeline.py — по своей очереди) и не
-        # зависит от того, был ли успешен ИМЕННО этот прогон спутникового
-        # модуля — функциональной связи по данным между модулями нет.
-        if: always()
-        run: |
-          existing=$(curl -sS -H "Authorization: token ${{ secrets.GH_PAT }}" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/full_pipeline.yml/runs?status=in_progress&per_page=1")
-          existing_count=$(echo "$existing" | python3 -c "import json,sys; print(json.load(sys.stdin).get('total_count', 0))" 2>/dev/null || echo 0)
-          queued=$(curl -sS -H "Authorization: token ${{ secrets.GH_PAT }}" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/full_pipeline.yml/runs?status=queued&per_page=1")
-          queued_count=$(echo "$queued" | python3 -c "import json,sys; print(json.load(sys.stdin).get('total_count', 0))" 2>/dev/null || echo 0)
-          echo "in_progress=$existing_count queued=$queued_count"
-          if [ "$existing_count" != "0" ] || [ "$queued_count" != "0" ]; then
-            echo "full_pipeline.yml уже выполняется/в очереди — пропуск диспетча (защита от шторма)"
-            exit 0
-          fi
-          code=$(curl -sS -o /tmp/full_dispatch_resp.json -w "%{http_code}" -X POST \
-            -H "Authorization: token ${{ secrets.GH_PAT }}" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/full_pipeline.yml/dispatches" \
-            -d '{"ref":"main"}')
-          echo "HTTP: $code"
-          cat /tmp/full_dispatch_resp.json || true
-          echo "{\"http_code\": \"$code\", \"body\": $(cat /tmp/full_dispatch_resp.json | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')}" > data/_debug_full_dispatch.json
-          git add data/_debug_full_dispatch.json
-          git commit -m "debug: full pipeline dispatch response" || true
-          git push || true
-          if [ "$code" != "204" ]; then
-            echo "::error::Диспетч full_pipeline.yml вернул HTTP $code вместо 204 — см. data/_debug_full_dispatch.json"
-            exit 1
-          fi
+# [УБРАНО 2026-08-28] Шаг "Явный запуск полного пайплайна" (диспетч
+# full_pipeline.yml) удалён. Основной писатель верификационных данных
+# (bias/weights/history) — VPS (scripts/vps_pipeline.py, cron каждые 15
+# мин, см. docs/topics/hosting_migration.md), full_pipeline.yml отключён
+# 2026-08-28 (state: disabled_manually) после ~29 часов параллельной
+# работы и 11 патчей на устойчивость VPS-версии. Диспетч ai_pipeline.yml
+# (AI-анализ Claude+Gemini) тоже перенесён на VPS
+# (dispatch_ai_pipeline() внутри vps_pipeline.py) — без этого переноса
+# отключение full_pipeline.yml тихо убило бы AI-анализ насовсем, т.к.
+# раньше именно его последний шаг диспетчил ai_pipeline.yml.
+#
+# Причина отключения, не только "экономия минут": у full_pipeline.yml
+# (через scripts/gh_pipeline.py) обнаружен баг ложного детектирования
+# "нового прогона модели" почти на КАЖДОМ 15-минутном цикле — open-meteo
+# отдаёт last_run_availability_time с разных backend-серверов за
+# балансировщиком нагрузки, значения колеблются на секунды-минуты для
+# одного и того же реального прогона, а точное сравнение run_time ==
+# last_run ложно считало это новым прогоном. Это не просто шум: каждое
+# такое ложное срабатывание диспетчило ПЛАТНЫЙ AI-анализ (Claude+Gemini)
+# без надобности. В vps_pipeline.py пофикшено (допуск 30 минут вместо
+# точного равенства), в оригинальном gh_pipeline.py — не фикшено (файл
+# больше не используется, поэтому фикс сюда не переносился).
 
