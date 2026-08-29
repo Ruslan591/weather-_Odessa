@@ -1,1 +1,1 @@
-{"task_id": "caddy-restart-1787986709", "cmd": "sudo cat /etc/caddy/Caddyfile; echo ---RESTART---; sudo systemctl restart caddy && sleep 8 && sudo journalctl -u caddy --no-pager -n 25"}
+{"task_id": "verify-final-1787986805", "cmd": "curl -s -o /dev/null -w \"HTTP_CODE:%{http_code}\n\" --max-time 10 \"https://130-61-25-212.nip.io/health\""}
