@@ -309,8 +309,49 @@ def ensure_repo_healthy():
         return False
 
 
+# ── общий git-lock с vps_satellite_pipeline.py (см. его докстринг, п.3) ───
+# [ДОБАВЛЕНО 2026-08-29] Спутниковый пайплайн переезжает на VPS отдельным
+# cron-процессом на своём такте (сдвиг по фазе, не совпадает с этим
+# скриптом) — но оба пишут в один и тот же .git. Без общего лока это тот же
+# класс гонки (detached HEAD, потерянный push), что чинили весь день
+# 28.08.2026 для одного писателя. GIT_LOCK_FILE оборачивает ТОЛЬКО секцию
+# add/commit/push (секунды), не весь цикл — не мешает независимости
+# кадансов между двумя скриптами.
+GIT_LOCK_FILE = "/tmp/vps_git.lock"
+GIT_LOCK_TIMEOUT_SEC = 60
+
+
+def acquire_git_lock():
+    import fcntl
+    lock_fd = open(GIT_LOCK_FILE, "w")
+    waited = 0
+    while waited < GIT_LOCK_TIMEOUT_SEC:
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return lock_fd
+        except OSError:
+            import time as _t
+            _t.sleep(1)
+            waited += 1
+    print(f"  [WARN] git-lock не получен за {GIT_LOCK_TIMEOUT_SEC}с — "
+          f"продолжаю без него (второй писатель, возможна гонка)")
+    lock_fd.close()
+    return None
+
+
+def release_git_lock(lock_fd):
+    if lock_fd is None:
+        return
+    import fcntl
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+    finally:
+        lock_fd.close()
+
+
 def git_push_history():
     import time as _time
+    lock_fd = acquire_git_lock()
     try:
         ensure_repo_healthy()
         year = datetime.now(timezone.utc).year
@@ -411,6 +452,8 @@ def git_push_history():
         print(f"  history git timeout: {e}")
     except Exception as e:
         print(f"  history git error: {e}")
+    finally:
+        release_git_lock(lock_fd)
 
 # ── пайплайн ──────────────────────────────────────────────────────────────────
 
