@@ -1,1 +1,1 @@
-{"task_id": "vps-check-2100-precise-1787950967", "cmd": "grep -A 12 \"28.08 21:00\" /var/log/vps-pipeline.log | tail -15"}
+{"task_id": "snapshot-diag-1787981848", "cmd": "sudo systemctl is-active vps-agent caddy 2>&1; echo ---; ls -la /etc/caddy/ 2>&1; echo ---; cat /etc/caddy/Caddyfile 2>&1; echo ---; sudo find /etc -iname \"*vps-agent*\" -o -iname \"*vps_agent*\" 2>/dev/null; echo ---; sudo find / -maxdepth 4 -iname \"*vps_agent*\" -o -iname \"*vps-agent*\" 2>/dev/null | grep -v proc"}
