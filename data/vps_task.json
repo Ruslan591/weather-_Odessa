@@ -1,1 +1,1 @@
-{"task_id": "cron-update-main-1788034340", "cmd": "crontab -l | sed 's#\\*/15 \\* \\* \\* \\* /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_pipeline.py#*/5 * * * * /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_pipeline.py#' | crontab -; echo '--- crontab now ---'; crontab -l"}
+{"task_id": "watch-reschedule-1788034713", "cmd": "tail -120 /var/log/vps-pipeline.log"}
