@@ -2,8 +2,11 @@
 VPS agent — минимальный HTTP-мост для удалённого управления сервером weather-odessa-vps
 через HTTPS вместо SSH (см. docs/topics/hosting_migration.md).
 
-Эндпоинты (все, кроме /health, требуют заголовок Authorization: Bearer <TOKEN>):
+Эндпоинты (все, кроме /health, требуют токен — заголовок Authorization: Bearer <TOKEN>
+ЛИБО query-параметр ?token=<TOKEN> для /snapshot, чтобы можно было открыть ссылку прямо
+в браузере телефона без ручного проставления заголовков):
   GET  /health                — без авторизации, просто проверка что сервис жив
+  GET  /snapshot?token=..&format=text|html — полный снимок состояния сервера одной ссылкой
   POST /exec   {"cmd": "..."}       — выполнить shell-команду, вернуть stdout/stderr/returncode
   POST /read   {"path": "..."}      — прочитать текстовый файл
   POST /write  {"path": "...", "content": "..."} — записать файл (создаёт директории)
@@ -17,12 +20,15 @@ Let's Encrypt TLS + reverse proxy), см. Caddyfile в этом же комми�
 """
 
 import base64
+import html
 import os
 import subprocess
+import time
 from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, Header, HTTPException
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from pydantic import BaseModel
 
 app = FastAPI(title="weather-odessa-vps-agent")
@@ -40,6 +46,14 @@ def _check_auth(authorization: Optional[str]) -> None:
     provided = authorization.removeprefix("Bearer ").strip()
     if provided != TOKEN:
         raise HTTPException(status_code=403, detail="invalid token")
+
+
+def _check_auth_flexible(authorization: Optional[str], token_qs: Optional[str]) -> None:
+    """Тот же контроль доступа, но допускает токен как query-параметр (?token=..),
+    чтобы ссылку можно было просто открыть в браузере/curl без заголовков."""
+    if token_qs and token_qs == TOKEN:
+        return
+    _check_auth(authorization)
 
 
 class ExecRequest(BaseModel):
@@ -67,6 +81,74 @@ class UploadRequest(BaseModel):
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "weather-odessa-vps-agent"}
+
+
+SNAPSHOT_SECTIONS = [
+    ("DISK", "df -h /"),
+    ("DU /opt", "du -sh /opt/* 2>/dev/null"),
+    ("DU /var/log", "du -sh /var/log 2>/dev/null"),
+    ("MEMORY", "free -h"),
+    ("NETWORK", "ip -brief addr show"),
+    ("CRON", "sudo crontab -l 2>/dev/null"),
+    ("SERVICES", "systemctl is-active vps-agent caddy 2>&1 | paste -sd ' '"),
+    ("REPO (top level)", "ls -la /opt/weather-pipeline/repo 2>/dev/null | head -20"),
+    ("VPS-PIPELINE LOG (tail)", "tail -25 /var/log/vps-pipeline.log 2>/dev/null"),
+    ("GITHUB-BRIDGE LOG (tail)", "tail -15 /var/log/vps-github-bridge.log 2>/dev/null"),
+    ("UPTIME / LOAD", "uptime"),
+    (
+        "ALWAYS FREE LIMITS (справочно, не запрос к Oracle API)",
+        "echo 'Тариф: Oracle Cloud Always Free — оплата не взимается, пока не превышены лимиты.'; "
+        "echo 'Shape: VM.Standard.A1.Flex, лимит аккаунта: <=2 OCPU / <=12GB RAM суммарно.'; "
+        "echo 'Boot+block volume: <=200GB суммарно на аккаунт.'; "
+        "echo 'Проверка фактического биллинга/остатка триал-кредита требует OCI CLI/API ключи'; "
+        "echo '(они есть в GitHub Secrets для oci_capacity_retry.py, на самом VPS не хранятся —'; "
+        "echo 'сознательно, чтобы не расширять поверхность утечки на интернет-смотрящем сервере).'",
+    ),
+]
+
+
+def _collect_snapshot() -> str:
+    parts = []
+    for title, cmd in SNAPSHOT_SECTIONS:
+        try:
+            result = subprocess.run(
+                cmd, shell=True, capture_output=True, text=True, timeout=20
+            )
+            output = (result.stdout or "").rstrip()
+            if result.stderr and not output:
+                output = f"(stderr) {result.stderr.strip()}"
+            if not output:
+                output = "(пусто)"
+        except subprocess.TimeoutExpired:
+            output = "(таймаут)"
+        parts.append(f"=== {title} ===\n{output}")
+    ts = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
+    header = f"weather-odessa-vps snapshot — {ts}"
+    return header + "\n\n" + "\n\n".join(parts) + "\n"
+
+
+@app.get("/snapshot")
+def snapshot(
+    authorization: Optional[str] = Header(None),
+    token: Optional[str] = None,
+    format: str = "text",
+):
+    _check_auth_flexible(authorization, token)
+    text = _collect_snapshot()
+    if format == "html":
+        escaped = html.escape(text)
+        page = f"""<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>weather-odessa-vps snapshot</title>
+<style>
+  body {{ background:#0d1117; color:#c9d1d9; font-family: ui-monospace, monospace;
+          margin:0; padding:16px; }}
+  pre {{ white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height:1.4; }}
+</style></head>
+<body><pre>{escaped}</pre></body></html>"""
+        return HTMLResponse(content=page)
+    return PlainTextResponse(content=text)
 
 
 @app.post("/exec")
