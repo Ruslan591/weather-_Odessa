@@ -1,7 +1,7 @@
 {
-  "task_id": "test-snapshot-1787982203",
-  "returncode": 0,
-  "stdout": "weather-odessa-vps snapshot — 2026-08-29 05:44:01 UTC\n\n=== DISK ===\nFilesystem      Size  Used Avail Use% Mounted on\n/dev/sda1        45G  4.7G   40G  11% /\n\n=== DU /opt ===\n347M\t/opt/unified-monitoring-agent\n54M\t/opt/vps-agent\n16M\t/opt/vps-github-bridge\n979M\t/opt/weather-pipeline\n\n=== DU /var/log ===\n68M\t/var/log\n\n=== MEMORY ===\n               total        used        free      shared  buff/cache   available\nMem:            11Gi       616Mi       7.1Gi       5.3Mi       4.2Gi        11Gi\nSwap:             0B          0B          0B\n\n=== NETWORK ===\nlo               UNKNOWN        127.0.0.1/8 ::1/128 \nenp0s6           UP             10.0.0.131/24 metric 100 fe80::17ff:fe14:5dd3/64\n\n=== CRON ===\n* * * * * /opt/vps-github-bridge/venv/bin/python3 /opt/vps-github-bridge/vps_github_bridge.py >> /var/log/vps-github-bridge.log 2>&1\n*/15 * * * * /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_pipeline.py >> /var/log/vps-pipeline.log 2>&1\n\n=== SERVICES ===\nactive active\n\n=== REPO (top level) ===\ntotal 2176\ndrwxr-xr-x 10 root   root     4096 Aug 29 05:15 .\ndrwxr-xr-x  3 ubuntu ubuntu   4096 Aug 26 22:03 ..\ndrwxr-xr-x  8 root   root     4096 Aug 29 05:42 .git\ndrwxr-xr-x  3 root   root     4096 Aug 26 22:03 .github\n-rw-r--r--  1 root   root      266 Aug 26 22:03 .gitignore\n-rw-r--r--  1 root   root    46395 Aug 26 22:03 ai_analysis.html\n-rw-r--r--  1 root   root    46434 Aug 26 22:03 ai_analysis_gemini.html\n-rw-r--r--  1 root   root    30376 Aug 26 22:03 bufr.html\n-rw-r--r--  1 root   root    29402 Aug 26 22:03 buildHistory.html\ndrwxr-xr-x  2 root   root     4096 Aug 26 22:03 css\n-rw-r--r--  1 root   root    20067 Aug 26 22:03 current_weather.css\ndrwxr-xr-x 10 root   root    12288 Aug 29 05:42 data\ndrwxr-xr-x  3 root   root     4096 Aug 26 22:03 docs\n-rw-r--r--  1 root   root     5449 Aug 26 22:03 ensembleVerify.js\n-rw-r--r--  1 root   root    26408 Aug 26 22:03 ensemble_history.html\n-rw-r--r--  1 root   root    64225 Aug 26 22:03 ensemble_pws.html\n-rw-r--r--  1 root \n---EXTERNAL---\n",
-  "stderr": "",
-  "completed_at_utc": "2026-08-29T05:44:02Z"
+  "task_id": "test-ext-1787982304",
+  "returncode": 1,
+  "stdout": "HTTP_CODE:000 ERR:Failed to connect to 130-61-25-212.nip.io port 443 after 1 ms: Couldn't connect to server\n---BODY---\n",
+  "stderr": "head: cannot open '/tmp/ext_test.txt' for reading: No such file or directory\n",
+  "completed_at_utc": "2026-08-29T05:46:01Z"
 }
