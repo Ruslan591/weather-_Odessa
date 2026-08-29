@@ -64,22 +64,22 @@
   "temperature_trend_verdict": "без существенных изменений",
   "target_confirmation": {
     "confirmed": false,
-    "target_id": 2,
-    "target_area_km2": 109.4,
-    "roi_contrast_sigma": 0.65,
+    "target_id": 1,
+    "target_area_km2": 64.0,
+    "roi_contrast_sigma": 0.4,
     "verdict": "ИК НЕ подтверждает: в ROI CLM-цели нет значимого контраста — возможна тонкая/низкая облачность, невидимая на ИК, либо расхождение слоёв"
   },
   "system_analysis_all": [
     {
       "target_id": 0,
       "available": true,
-      "roi_contrast_sigma": 2.09,
+      "roi_contrast_sigma": 2.26,
       "confirmed": true
     },
     {
-      "target_id": 3,
+      "target_id": 4,
       "available": true,
-      "roi_contrast_sigma": 2.05,
+      "roi_contrast_sigma": 1.69,
       "confirmed": true
     }
   ],
@@ -87,14 +87,20 @@
     {
       "target_id": 1,
       "available": true,
-      "roi_contrast_sigma": 0.63,
+      "roi_contrast_sigma": 0.4,
       "confirmed": false
     },
     {
       "target_id": 2,
       "available": true,
-      "roi_contrast_sigma": 0.65,
-      "confirmed": false
+      "roi_contrast_sigma": 1.01,
+      "confirmed": true
+    },
+    {
+      "target_id": 3,
+      "available": true,
+      "roi_contrast_sigma": 1.08,
+      "confirmed": true
     }
   ],
   "method_note": "Буфер 6/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин, crs=EPSG:4326, всегда явный TIME — не 'latest'), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. cloud_mass_* — положение (не движение) ближайшей значимой облачной массы относительно станции. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
