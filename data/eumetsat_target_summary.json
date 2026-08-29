@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-08-29T17:29:10Z",
+  "timestamp": "2026-08-29T17:32:22Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-08-29T17:00:00.000Z",
-  "target_id": 0,
-  "target_area_km2": 249.5,
-  "target_distance_km": 107.9,
-  "target_bearing_deg": 34.0,
-  "target_compass": "СВ",
+  "target_id": 3,
+  "target_area_km2": 77.4,
+  "target_distance_km": 188.5,
+  "target_bearing_deg": 256.0,
+  "target_compass": "З",
   "system": {
     "target_id": 1,
     "area_km2": 3693.3,
@@ -21,8 +21,26 @@
     "has_precip": false,
     "has_lightning": false
   },
-  "local_candidates": [],
-  "local_suppressed_count": 3,
+  "local_candidates": [
+    {
+      "target_id": 3,
+      "area_km2": 77.4,
+      "distance_km": 188.5,
+      "bearing_deg": 256.0,
+      "compass": "З",
+      "elongation_aspect_ratio": 1.6,
+      "elongation_axis_deg": 0.0,
+      "elongation_axis_compass": "С-Ю",
+      "frontlike": false,
+      "phase_label": null,
+      "type_label": null,
+      "has_precip": false,
+      "has_lightning": false,
+      "ir_confirmed": true,
+      "geocolour_confirmed": false
+    }
+  ],
+  "local_suppressed_count": 2,
   "system_candidates": [
     {
       "target_id": 1,
@@ -135,12 +153,9 @@
       "behind_obs": null
     }
   ],
-  "target_movement": {
-    "speed_kmh": 18.3,
-    "direction_compass": "В",
-    "cpa_km": 107.9,
-    "eta_min": null,
-    "verdict": "удаляется"
+  "also_suppressed_nearby": {
+    "signature": "60_90",
+    "area_km2": 249.5
   },
   "target_phase": {
     "label": "безоблачно",
@@ -154,7 +169,7 @@
       },
       "geocolour_motion": {
         "confirmed": false,
-        "timestamp": "2026-08-29T17:00:00.000Z"
+        "timestamp": "2026-08-29T17:10:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": false,
@@ -175,5 +190,5 @@
       "timestamp": "2026-08-29T17:28:54Z"
     }
   },
-  "verdict": "CLM отметил цель в 108км СВ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (3693км²) в 114км СВ."
+  "verdict": "CLM отметил цель в 188км З, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (3693км²) в 114км СВ."
 }
