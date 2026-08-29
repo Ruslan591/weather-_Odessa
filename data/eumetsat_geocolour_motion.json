@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-29T05:00:00.000Z",
+  "timestamp": "2026-08-29T05:20:00.000Z",
   "buffer_size": 6,
   "buffer_span_minutes": 50,
   "observed_area": {
@@ -12,194 +12,134 @@
     "local_trend_radius_km": 50,
     "state_radius_km": 12
   },
-  "valid": true,
-  "speed_kmh": 0.2,
-  "direction_compass": "Ю",
-  "bearing_deg": 160.3,
-  "frame_pairs_used": 5,
-  "acceleration_kmh": -0.1,
-  "turning_deg": 22.3,
-  "acceleration_verdict": "скорость стабильна",
-  "turning_verdict": "меняет направление (по часовой)",
-  "forecast_displacement": {
-    "30min": {
-      "distance_km": 0.1,
-      "bearing_deg": 194.0,
-      "compass": "Ю"
-    },
-    "60min": {
-      "distance_km": 0.2,
-      "bearing_deg": 213.0,
-      "compass": "ЮЗ"
-    },
-    "120min": {
-      "distance_km": 0.5,
-      "bearing_deg": 242.0,
-      "compass": "ЮЗ"
-    }
-  },
+  "valid": false,
+  "verdict": "нет значимой облачности для оценки движения",
   "area_fraction_over_time": [
-    0.239,
-    1.0,
     1.0,
     0.968,
     0.603,
-    0.425
+    0.425,
+    0.073,
+    0.002
   ],
-  "area_trend_delta": 0.186,
-  "area_trend_verdict": "растёт",
-  "station_state": "variable",
-  "station_area_fraction": 0.36,
-  "cloud_mass_distance_km": 0.8,
-  "cloud_mass_bearing_deg": 325.0,
-  "cloud_mass_compass": "СЗ",
-  "cloud_mass_area_km2": 141577,
+  "area_trend_delta": -0.998,
+  "area_trend_verdict": "сокращается",
+  "station_state": "clear",
+  "station_area_fraction": 0.0,
+  "cloud_mass_distance_km": 68.7,
+  "cloud_mass_bearing_deg": 149.0,
+  "cloud_mass_compass": "ЮВ",
+  "cloud_mass_area_km2": 35434,
   "target_confirmation": {
-    "confirmed": true,
-    "target_id": 0,
-    "target_area_km2": 61.4,
-    "roi_cloud_fraction": 0.765,
-    "verdict": "GeoColour подтверждает: в ROI CLM-цели преобладает облачность"
+    "confirmed": false,
+    "target_id": 1,
+    "target_area_km2": 274.9,
+    "roi_cloud_fraction": 0.425,
+    "verdict": "GeoColour НЕ подтверждает: в ROI CLM-цели облачность не преобладает — возможно расхождение слоёв"
   },
   "system_analysis_all": [
     {
-      "target_id": 2,
-      "available": true,
-      "roi_cloud_fraction": 0.909,
-      "confirmed": true
-    },
-    {
-      "target_id": 7,
-      "available": true,
-      "roi_cloud_fraction": 0.955,
-      "confirmed": true
-    },
-    {
-      "target_id": 9,
-      "available": true,
-      "roi_cloud_fraction": 0.776,
-      "confirmed": true
-    },
-    {
-      "target_id": 10,
-      "available": true,
-      "roi_cloud_fraction": 0.985,
-      "confirmed": true
-    },
-    {
-      "target_id": 12,
-      "available": true,
-      "roi_cloud_fraction": 1.0,
-      "confirmed": true
-    },
-    {
-      "target_id": 13,
-      "available": true,
-      "roi_cloud_fraction": 0.995,
-      "confirmed": true
-    }
-  ],
-  "local_analysis_all": [
-    {
       "target_id": 0,
       "available": true,
-      "roi_cloud_fraction": 0.765,
-      "confirmed": true
-    },
-    {
-      "target_id": 1,
-      "available": true,
-      "roi_cloud_fraction": 0.973,
-      "confirmed": true
-    },
-    {
-      "target_id": 3,
-      "available": true,
-      "roi_cloud_fraction": 1.0,
-      "confirmed": true
-    },
-    {
-      "target_id": 4,
-      "available": true,
-      "roi_cloud_fraction": 1.0,
-      "confirmed": true
-    },
-    {
-      "target_id": 5,
-      "available": true,
-      "roi_cloud_fraction": 1.0,
+      "roi_cloud_fraction": 0.603,
       "confirmed": true
     },
     {
       "target_id": 6,
       "available": true,
-      "roi_cloud_fraction": 1.0,
+      "roi_cloud_fraction": 0.835,
+      "confirmed": true
+    },
+    {
+      "target_id": 7,
+      "available": true,
+      "roi_cloud_fraction": 0.226,
+      "confirmed": false
+    }
+  ],
+  "local_analysis_all": [
+    {
+      "target_id": 1,
+      "available": true,
+      "roi_cloud_fraction": 0.425,
+      "confirmed": false
+    },
+    {
+      "target_id": 2,
+      "available": true,
+      "roi_cloud_fraction": 0.911,
+      "confirmed": true
+    },
+    {
+      "target_id": 3,
+      "available": true,
+      "roi_cloud_fraction": 0.889,
+      "confirmed": true
+    },
+    {
+      "target_id": 4,
+      "available": true,
+      "roi_cloud_fraction": 0.002,
+      "confirmed": false
+    },
+    {
+      "target_id": 5,
+      "available": true,
+      "roi_cloud_fraction": 0.75,
       "confirmed": true
     },
     {
       "target_id": 8,
       "available": true,
-      "roi_cloud_fraction": 0.994,
+      "roi_cloud_fraction": 0.158,
+      "confirmed": false
+    },
+    {
+      "target_id": 9,
+      "available": true,
+      "roi_cloud_fraction": 0.985,
+      "confirmed": true
+    },
+    {
+      "target_id": 10,
+      "available": true,
+      "roi_cloud_fraction": 0.895,
       "confirmed": true
     },
     {
       "target_id": 11,
       "available": true,
-      "roi_cloud_fraction": 1.0,
+      "roi_cloud_fraction": 0.69,
+      "confirmed": true
+    },
+    {
+      "target_id": 12,
+      "available": true,
+      "roi_cloud_fraction": 0.676,
+      "confirmed": true
+    },
+    {
+      "target_id": 13,
+      "available": true,
+      "roi_cloud_fraction": 0.579,
       "confirmed": true
     },
     {
       "target_id": 14,
       "available": true,
-      "roi_cloud_fraction": 0.956,
+      "roi_cloud_fraction": 0.919,
       "confirmed": true
     },
     {
       "target_id": 15,
       "available": true,
-      "roi_cloud_fraction": 1.0,
+      "roi_cloud_fraction": 0.965,
       "confirmed": true
     },
     {
       "target_id": 16,
       "available": true,
-      "roi_cloud_fraction": 0.914,
-      "confirmed": true
-    },
-    {
-      "target_id": 17,
-      "available": true,
-      "roi_cloud_fraction": 0.992,
-      "confirmed": true
-    },
-    {
-      "target_id": 18,
-      "available": true,
-      "roi_cloud_fraction": 1.0,
-      "confirmed": true
-    },
-    {
-      "target_id": 19,
-      "available": true,
-      "roi_cloud_fraction": 0.919,
-      "confirmed": true
-    },
-    {
-      "target_id": 20,
-      "available": true,
-      "roi_cloud_fraction": 1.0,
-      "confirmed": true
-    },
-    {
-      "target_id": 21,
-      "available": true,
-      "roi_cloud_fraction": 1.0,
-      "confirmed": true
-    },
-    {
-      "target_id": 22,
-      "available": true,
-      "roi_cloud_fraction": 1.0,
+      "roi_cloud_fraction": 0.935,
       "confirmed": true
     }
   ],
