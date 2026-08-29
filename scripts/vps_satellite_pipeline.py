@@ -587,16 +587,26 @@ def _ntfy_post(topic_url, title, priority, tags, body, click=None):
     """POST в ntfy.sh с retry (аналог `curl --retry 3 --retry-delay 2` в
     старых YAML-шагах). Ошибки не фатальны для цикла — push-уведомление не
     должно ронять весь пайплайн (та же логика, что была у continue-on-error:
-    true в workflow)."""
+    true в workflow).
+
+    НАХОДКА (29.08.2026, первый прогон на VPS): заголовок Title содержит
+    эмодзи (🌧️/⛈️/⚠️/✅) — `http.client.putheader()` пытается закодировать
+    строковые значения заголовков в latin-1 и падает с UnicodeEncodeError
+    ДО того, как что-либо уходит на сервер (curl в старом YAML этой
+    проблемы не имел — просто шлёт сырые UTF-8 байты без такой проверки).
+    Фикс: передаём значения заголовков как bytes (уже закодированные в
+    UTF-8) — `http.client` пропускает свой latin-1-энкодинг для значений,
+    у которых нет метода .encode (bytes его не имеет, есть только .decode),
+    и отправляет байты как есть — то же самое, что делал curl."""
     import urllib.request
     import urllib.error
     headers = {
-        "Title": title,
-        "Priority": priority,
-        "Tags": tags,
+        "Title": title.encode("utf-8"),
+        "Priority": priority.encode("utf-8"),
+        "Tags": tags.encode("utf-8"),
     }
     if click:
-        headers["Click"] = click
+        headers["Click"] = click.encode("utf-8")
     for attempt in range(3):
         try:
             req = urllib.request.Request(
