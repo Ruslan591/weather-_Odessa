@@ -1,19 +1,11 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-08-29T06:00:00.000Z",
+  "server_latest_time": "2026-08-29T06:20:00.000Z",
   "mode": "day",
   "bootstrap": true,
-  "buffer_before": 13,
-  "bootstrap_failed_frames": [
-    {
-      "time": "2026-08-29T05:50:00.000Z",
-      "error": "попытка 1: HTTP 502, content-type='', len=0: "
-    }
-  ],
-  "buffer_size": 12,
+  "buffer_before": 12,
+  "buffer_size": 13,
   "buffer_times": [
-    "2026-08-29T04:00:00.000Z",
-    "2026-08-29T04:10:00.000Z",
     "2026-08-29T04:20:00.000Z",
     "2026-08-29T04:30:00.000Z",
     "2026-08-29T04:40:00.000Z",
@@ -23,22 +15,25 @@
     "2026-08-29T05:20:00.000Z",
     "2026-08-29T05:30:00.000Z",
     "2026-08-29T05:40:00.000Z",
-    "2026-08-29T06:00:00.000Z"
+    "2026-08-29T05:50:00.000Z",
+    "2026-08-29T06:00:00.000Z",
+    "2026-08-29T06:10:00.000Z",
+    "2026-08-29T06:20:00.000Z"
   ],
   "result": {
-    "timestamp": "2026-08-29T06:22:34Z",
+    "timestamp": "2026-08-29T06:43:04Z",
     "mode": "day",
     "unclassified_fraction_now": 0.435,
     "phase_ordinal_now": 0.0,
-    "phase_ordinal_delta": -0.58,
-    "phase_verdict": "без существенных изменений",
+    "phase_ordinal_delta": -0.91,
+    "phase_verdict": "смещается к воде (распад/ослабление)",
     "type_group_now": 0.0,
-    "type_group_delta": -1.44,
+    "type_group_delta": -1.51,
     "type_verdict": "становится реже/ниже",
     "target_confirmation": {
       "confirmed": false,
-      "target_id": 1,
-      "target_area_km2": 270.9,
+      "target_id": 0,
+      "target_area_km2": 89.4,
       "roi_cloud_fraction": 0.0,
       "roi_dominant_phase_ordinal": 0.0,
       "roi_dominant_phase_label": "безоблачно",
@@ -46,25 +41,25 @@
     },
     "system_analysis": {
       "available": true,
-      "target_id": 0,
-      "area_km2": 26795.4,
+      "target_id": 1,
+      "area_km2": 24261.5,
       "roi_cloud_fraction": 0.0,
-      "roi_dominant_phase_ordinal": 0.0,
-      "roi_dominant_phase_label": "безоблачно",
+      "roi_dominant_phase_ordinal": 3.5,
+      "roi_dominant_phase_label": "тонкий лёд (перистые)",
       "roi_dominant_type_label": "плотная/высокая"
     },
     "system_analysis_all": [
       {
-        "target_id": 0,
+        "target_id": 1,
         "available": true,
         "roi_cloud_fraction": 0.0,
-        "roi_dominant_phase_label": "безоблачно",
+        "roi_dominant_phase_label": "тонкий лёд (перистые)",
         "roi_dominant_type_label": "плотная/высокая"
       }
     ],
     "local_analysis_all": [
       {
-        "target_id": 1,
+        "target_id": 0,
         "available": true,
         "roi_cloud_fraction": 0.0,
         "confirmed": false,
@@ -81,11 +76,8 @@
       },
       {
         "target_id": 3,
-        "available": true,
-        "roi_cloud_fraction": 0.0,
-        "confirmed": false,
-        "roi_dominant_phase_label": "безоблачно",
-        "roi_dominant_type_label": "безоблачно"
+        "available": false,
+        "reason": "мало классифицированных пикселей в ROI (облачно, но цвет неуверенный, либо вне окна)"
       },
       {
         "target_id": 4,
@@ -110,15 +102,31 @@
         "confirmed": false,
         "roi_dominant_phase_label": "безоблачно",
         "roi_dominant_type_label": "безоблачно"
+      },
+      {
+        "target_id": 7,
+        "available": true,
+        "roi_cloud_fraction": 0.0,
+        "confirmed": false,
+        "roi_dominant_phase_label": "безоблачно",
+        "roi_dominant_type_label": "безоблачно"
+      },
+      {
+        "target_id": 8,
+        "available": true,
+        "roi_cloud_fraction": 0.0,
+        "confirmed": false,
+        "roi_dominant_phase_label": "безоблачно",
+        "roi_dominant_type_label": "безоблачно"
       }
     ],
     "buffer_status": {
-      "frames_in_memory": 12,
+      "frames_in_memory": 13,
       "frames_target": 13,
-      "span_minutes_now": 110,
+      "span_minutes_now": 120,
       "span_minutes_target": 120,
-      "eta_full_window_min": 10,
-      "note": "в памяти 12/13 снимков (~110 мин истории), полное 120-минутное окно накопится через ~10 мин"
+      "eta_full_window_min": 0,
+      "note": "буфер заполнен (13/13), тренд по полному окну ~120 мин"
     },
     "method_note": "[День] Персистентный буфер до 13 кадров Cloud Phase RGB + Cloud Type RGB (шаг 10 мин, до 2 часов). Анкеры цвета — HSV-диапазоны, ПЕРВАЯ, не откалиброванная по реальным сценам версия (у обоих слоёв нет официальной легенды — это настоящие RGB-композиты, GetLegendGraphic возвращает не легенду). phase_ordinal (0..8) — безоблачно -> вода (низкая/средняя/плотная) -> лёд (тонкий/плотный) -> смешанная фаза -> холодные верхушки Cb -> гроза. type_group (0..2) — безоблачно/низкая-средняя/плотная-высокая. Тренд — сравнение первого и последнего кадра буфера в радиусе 50км. unclassified_fraction_now — доля пикселей, не попавших уверенно ни в одно цветовое правило: при большом значении анкеры нужно пересматривать."
   }
