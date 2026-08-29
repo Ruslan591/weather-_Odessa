@@ -1,1 +1,1 @@
-{"task_id": "fix-iptables-80-443-1787986614", "cmd": "sudo iptables -I INPUT 4 -p tcp -m state --state NEW -m multiport --dports 80,443 -j ACCEPT && sudo iptables -L INPUT -n --line-numbers && echo ---SAVE--- && sudo netfilter-persistent save && echo ---VERIFY-PERSIST--- && sudo cat /etc/iptables/rules.v4 | grep -E \"80|443\""}
+{"task_id": "caddy-restart-1787986709", "cmd": "sudo cat /etc/caddy/Caddyfile; echo ---RESTART---; sudo systemctl restart caddy && sleep 8 && sudo journalctl -u caddy --no-pager -n 25"}
