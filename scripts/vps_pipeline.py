@@ -463,17 +463,34 @@ def dispatch_ai_pipeline():
     переезжает сюда, иначе очередь `data/_ai_pending_models.json` продолжит
     наполняться, но AI-анализ (Claude/Gemini) никогда не запустится.
 
-    Токен для диспетча (`GH_PAT`, PAT с scope repo+workflow) читается ТОЛЬКО
-    из переменной окружения — не хардкодится в этом файле, т.к. файл
-    закоммичен в публичный репозиторий. Настраивается в crontab на VPS.
+    Токен НЕ хардкодится в этом файле — файл закоммичен в публичный
+    репозиторий. Токен ограничен по сроку жизни (см. docs/topics/
+    hosting_migration.md, раздел «Замена GitHub-токена») — поэтому источник
+    поиска специально сведён к ОДНОМУ каноническому файлу на диске VPS
+    (см. GH_TOKEN_FILE ниже), а не размазан по нескольким местам: раньше
+    здесь был свой отдельный путь поиска (сначала env, потом парсинг
+    ~/.git-credentials) — при ротации токена легко забыть о нём, т.к. он
+    нигде явно не задокументирован как "ещё одно место, где лежит токен".
+    Теперь тут переиспользуется ТОТ ЖЕ файл, что уже читает
+    vps_github_bridge.py (/etc/vps-github-bridge/token) — при ротации
+    достаточно перезаписать этот один файл, и оба потребителя (bridge +
+    диспетч отсюда) сразу видят новый токен без правки кода.
     """
-    # Порядок поиска токена: сперва env (GH_PAT), затем — уже существующий
-    # git credential store на VPS (~/.git-credentials), которым и так
-    # пользуется `git push` в этом же скрипте. Второй вариант позволяет
-    # не передавать секрет через data/vps_task.json (канал моста
-    # vps_github_bridge, который сам коммитится в git — GitHub secret
-    # scanning справедливо блокирует такие коммиты, см. находку 28.08.2026).
+    GH_TOKEN_FILE = "/etc/vps-github-bridge/token"
+    # Порядок поиска: env GH_PAT (явный ручной override для разового теста)
+    # → канонический файл (см. докстринг) → ~/.git-credentials как последний
+    # fallback (на случай, если канонический файл почему-то недоступен).
     token = os.environ.get("GH_PAT")
+    if not token and os.path.isfile(GH_TOKEN_FILE):
+        try:
+            with open(GH_TOKEN_FILE, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("GITHUB_TOKEN="):
+                        token = line.split("=", 1)[1].strip()
+                        break
+        except Exception:
+            pass
     if not token:
         cred_file = os.path.expanduser("~/.git-credentials")
         if os.path.isfile(cred_file):
@@ -487,8 +504,8 @@ def dispatch_ai_pipeline():
             except Exception:
                 pass
     if not token:
-        print("  [WARN] токен для диспетча ai_pipeline.yml не найден "
-              "(ни GH_PAT в env, ни ~/.git-credentials) — пропуск")
+        print(f"  [WARN] токен для диспетча ai_pipeline.yml не найден "
+              f"(ни GH_PAT в env, ни {GH_TOKEN_FILE}, ни ~/.git-credentials) — пропуск")
         return
 
     repo = "ruslan591/weather-_Odessa"
