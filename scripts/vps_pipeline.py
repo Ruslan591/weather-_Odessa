@@ -336,8 +336,30 @@ def git_push_history():
         _to_add = [p for p in _candidates if os.path.exists(os.path.join(BASE_DIR, p))]
         subprocess.run(["git", "-C", BASE_DIR, "add"] + _to_add,
                       check=True, capture_output=True, timeout=30)
+        # [ДОБАВЛЕНО 2026-08-29] Раньше коммит всегда шёл под фиксированным
+        # текстом "vps: synop + history update" (название историческое, ещё
+        # с тех пор, когда это были единственные два файла), хотя реально
+        # сюда попадает от 2 до 13 разных data-файлов — читать `git log` и
+        # понимать, что реально изменилось, без захода внутрь коммита было
+        # невозможно. Теперь имя коммита формируется по факту git status:
+        # только реально изменённые/добавленные файлы из _to_add (не просто
+        # всё, что оказалось в _to_add — многие уже up-to-date и add их не
+        # трогает), короткими именами (basename без расширения).
+        status = subprocess.run(
+            ["git", "-C", BASE_DIR, "diff", "--cached", "--name-only"],
+            capture_output=True, text=True, timeout=15)
+        _changed = [
+            os.path.splitext(os.path.basename(p))[0]
+            for p in status.stdout.strip().splitlines() if p.strip()
+        ]
+        if _changed:
+            commit_msg = "vps: " + ", ".join(_changed)
+            if len(commit_msg) > 200:
+                commit_msg = commit_msg[:197] + "..."
+        else:
+            commit_msg = "vps: data update"
         result = subprocess.run(
-            ["git", "-C", BASE_DIR, "commit", "-m", "vps: synop + history update"],
+            ["git", "-C", BASE_DIR, "commit", "-m", commit_msg],
             capture_output=True, text=True, timeout=30)
         if result.returncode != 0:
             msg = result.stdout.strip() or result.stderr.strip()
