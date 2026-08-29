@@ -246,6 +246,60 @@ def save_history(history):
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
         json.dump(history, f, ensure_ascii=False, indent=2)
 
+# ── планирование проверки моделей без дрейфа (ДОБАВЛЕНО 29.08.2026) ──────────
+#
+# Раньше: слепой опрос всех 6 моделей КАЖДЫЙ цикл (*/15) — сеть дешёвая, но
+# "короткий путь" (update_local --no-fill + push) на "ничего нового" тоже
+# гонялся каждый цикл вхолостую весь день.
+#
+# Обсуждение 29.08.2026: пробовали "next_expected = next_expected_прошлый +
+# interval" — отклонено (Руслан): при нестабильных задержках источника такая
+# схема накапливает дрейф и рано или поздно пропускает реальный прогон.
+# Итоговая схема: next_expected пересчитывается КАЖДЫЙ раз от последнего
+# РЕАЛЬНОГО прочитанного значения (last_run_time + update_interval_seconds
+# из meta.json), никогда не строится поверх своего же прошлого прогноза —
+# дрейф структурно невозможен. До next_expected — тишина (даже сети не
+# трогаем, чтение чисто локальное). После — стучим на каждом тике БЕЗ
+# дедлайна, до факта обнаружения: пропуска целого прогона быть не может,
+# только задержка детекта на величину такта cron.
+NEXT_EXPECTED_FILE = os.path.join(BASE_DIR, "data", "model_next_expected.json")
+DEFAULT_INTERVAL_SEC = 6 * 3600      # если meta.json не отдал update_interval_seconds
+RETRY_ON_FETCH_FAIL_SEC = 5 * 60     # сеть недоступна прямо на "due"-тике — не ждать полный интервал
+
+
+def load_next_expected():
+    if os.path.exists(NEXT_EXPECTED_FILE):
+        try:
+            with open(NEXT_EXPECTED_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def save_next_expected(state):
+    try:
+        with open(NEXT_EXPECTED_FILE, "w", encoding="utf-8") as f:
+            json.dump(state, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"  [WARN] не удалось сохранить {NEXT_EXPECTED_FILE}: {e}")
+
+
+def is_pws_window(now_dt):
+    """PWS-окно: минута часа 0–6 включительно (данные приходят к началу
+    часа). Согласовано 29.08.2026."""
+    return 0 <= now_dt.minute <= 6
+
+
+SYNOP_HOURS_UTC = {0, 3, 6, 9, 12, 15, 18, 21}
+
+
+def is_synop_window(now_dt):
+    """SYNOP-окно: час ∈ {0,3,6,9,12,15,18,21} UTC (именно UTC — обычные
+    синоптические сроки), минута 11–21 включительно (публикация ogimet
+    обычно hh:10–hh:20, окно чуть шире для запаса). Согласовано 29.08.2026."""
+    return now_dt.hour in SYNOP_HOURS_UTC and 11 <= now_dt.minute <= 21
+
 # ── запрос к open-meteo ───────────────────────────────────────────────────────
 
 def fetch_run_time(meta_id):
@@ -258,6 +312,27 @@ def fetch_run_time(meta_id):
         return ts_to_iso(ts) if ts else None
     except Exception:
         return None
+
+
+def fetch_run_time_and_interval(meta_id):
+    """[ДОБАВЛЕНО 29.08.2026, пересмотр расписания] Как fetch_run_time(), но
+    заодно возвращает update_interval_seconds — паспортный интервал
+    обновления модели, который сам open-meteo отдаёт в meta.json (проверено
+    на VPS 29.08.2026: ICON EU — 10800с/3ч, у остальных 5 моделей —
+    21600с/6ч). Используется для планирования следующей проверки БЕЗ
+    отдельной эмпирической таблицы и БЕЗ дрейфа — см. docstring
+    compute_next_expected() ниже."""
+    url = OPEN_METEO_META.format(metaId=meta_id)
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "weather-verifier/1.0"})
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+            data = json.loads(resp.read().decode())
+        ts = data.get("last_run_availability_time")
+        run_time = ts_to_iso(ts) if ts else None
+        interval = data.get("update_interval_seconds")
+        return run_time, interval
+    except Exception:
+        return None, None
 
 # ── git push (fetch+rebase retry — без force, без лока) ──────────────────────
 
@@ -790,8 +865,10 @@ def _main_body():
         print("  ✗ sync_repo failed — цикл пропущен, попробуем в следующий раз.")
         return
 
+    now_dt = datetime.now(timezone.utc)
     now = now_utc_iso()
     history = load_history()
+    next_expected_state = load_next_expected()
     new_models = []
 
     print(f"\n{'─'*52}")
@@ -804,21 +881,56 @@ def _main_body():
         entries  = history.setdefault(label, [])
         last_run = entries[-1]["run_time"] if entries else None
 
-        run_time = fetch_run_time(meta_id)
+        # [ПЕРЕСМОТРЕНО 29.08.2026] Раньше — сетевой запрос к open-meteo на
+        # КАЖДОМ цикле для КАЖДОЙ модели. Теперь — сначала дешёвая локальная
+        # проверка next_expected (без сети); реальный fetch — только когда
+        # действительно пора. См. docstring fetch_run_time_and_interval() и
+        # блок "планирование проверки моделей без дрейфа" выше.
+        st = next_expected_state.get(label, {})
+        next_expected_iso = st.get("next_expected")
+        due = True
+        if next_expected_iso:
+            try:
+                next_expected_dt = datetime.strptime(
+                    next_expected_iso, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                due = now_dt >= next_expected_dt
+            except Exception:
+                due = True
+
+        if not due:
+            status = f"⏳ ждём (след. проверка {iso_to_local(next_expected_iso)})"
+            print(f"  {label:<14}  {status}")
+            continue
+
+        run_time, interval_sec = fetch_run_time_and_interval(meta_id)
+        if interval_sec is None:
+            interval_sec = st.get("update_interval_seconds") or DEFAULT_INTERVAL_SEC
+
+        if run_time is None:
+            status = "❌ нет ответа"
+            # Сеть недоступна прямо на due-тике — короткая переспросная
+            # пауза, не полный интервал (иначе реальный новый прогон,
+            # опубликованный как раз в этот момент, будет обнаружен только
+            # через полные 3-6ч).
+            retry_iso = datetime.fromtimestamp(
+                now_dt.timestamp() + RETRY_ON_FETCH_FAIL_SEC, tz=timezone.utc
+            ).strftime("%Y-%m-%dT%H:%M:%SZ")
+            next_expected_state[label] = {
+                "next_expected": retry_iso,
+                "update_interval_seconds": interval_sec,
+            }
+            print(f"  {label:<14}  {status}")
+            continue
 
         # НАХОДКА (28.08.2026): open-meteo отдаёт last_run_availability_time
         # с разных backend-серверов за балансировщиком нагрузки — значения
         # для ОДНОГО И ТОГО ЖЕ реального прогона модели колеблются на
-        # секунды-минуты между опросами (напр. 13:09:18 → 13:12:04 →
-        # 13:09:18 туда-сюда). Точное сравнение `run_time == last_run`
-        # ложно детектировало "новый прогон" почти на КАЖДОМ 15-минутном
-        # цикле — это не просто шум в логе, а лишний прогон всего пайплайна
-        # и лишний платный AI-диспетч (Claude/Gemini) на пустом месте.
-        # Реальные прогоны моделей обновляются раз в 6-12 часов, поэтому
-        # разница меньше 30 минут — точно тот же прогон, а не новый.
+        # секунды-минуты между опросами. Точное сравнение run_time ==
+        # last_run ложно детектировало "новый прогон". Разница меньше
+        # 30 минут — точно тот же прогон, а не новый.
         SAME_RUN_TOLERANCE_MIN = 30
         is_same_run = False
-        if run_time is not None and last_run is not None:
+        if last_run is not None:
             try:
                 t_new = datetime.strptime(run_time, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
                 t_old = datetime.strptime(last_run, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
@@ -826,19 +938,36 @@ def _main_body():
             except Exception:
                 is_same_run = (run_time == last_run)
 
-        if run_time is None:
-            status = "❌ нет ответа"
-        elif is_same_run:
+        if is_same_run:
+            # Реального нового прогона ещё нет — пересчитываем next_expected
+            # от ФАКТИЧЕСКОГО last_run (не от старого next_expected!), чтобы
+            # дрейф не накапливался. Ретрай на каждом такте cron, пока не
+            # найдём — без дедлайна (см. докстринг блока выше).
+            base_time = last_run
             status = f"  {iso_to_local(run_time)}  ({age_str(run_time)}) — без изменений"
         else:
             entries.append({"run_time": run_time, "detected_at": now})
             if len(entries) > MAX_ENTRIES:
                 history[label] = entries[-MAX_ENTRIES:]
             new_models.append(label)
+            base_time = run_time
             status = f"🆕 {iso_to_local(run_time)}  ({age_str(run_time)}) ← новый прогон"
+
+        try:
+            base_dt = datetime.strptime(base_time, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            next_expected_dt = base_dt.timestamp() + interval_sec
+            next_expected_iso2 = datetime.fromtimestamp(
+                next_expected_dt, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        except Exception:
+            next_expected_iso2 = now
+        next_expected_state[label] = {
+            "next_expected": next_expected_iso2,
+            "update_interval_seconds": interval_sec,
+        }
 
         print(f"  {label:<14}  {status}")
 
+    save_next_expected(next_expected_state)
     print(f"{'─'*52}\n")
 
     if new_models:
@@ -849,6 +978,15 @@ def _main_body():
         git_push_history()
     else:
         print("  Новых прогонов нет.\n")
+
+    # [ПЕРЕСМОТРЕНО 29.08.2026] Раньше update_local.py --no-model --no-fill
+    # (SYNOP-фетч + снимок ансамбля) гонялся КАЖДЫЙ цикл вхолостую — SYNOP
+    # реально появляется раз в 3 часа. Теперь — только в SYNOP-окне
+    # (см. is_synop_window). Заодно снижает частоту коммитов тяжёлых
+    # ensemble_snapshots_*.json (см. docs/topics/hosting_migration.md про
+    # раздутие репозитория историей).
+    if is_synop_window(now_dt):
+        print("  [SYNOP-окно] обновляю SYNOP + снимок ансамбля")
         try:
             subprocess.run(
                 [PYTHON, os.path.join(SCRIPTS_DIR, "update_local.py"), "--no-model", "--no-fill"],
@@ -858,8 +996,18 @@ def _main_body():
             print("  ✗ update_local.py завис дольше 300с — прерван по таймауту")
         git_push_history()
 
-    check_pws_sync()
-    check_pws_calibration()
+    # [ПЕРЕСМОТРЕНО 29.08.2026] check_pws_sync()/check_pws_calibration()
+    # раньше вызывались каждый цикл вхолостую — теперь только в PWS-окне
+    # (см. is_pws_window). Сами функции и так идемпотентны (гейт по
+    # hourKey/retry внутри), окно просто убирает лишние обращения вне
+    # времени реального прихода данных.
+    if is_pws_window(now_dt):
+        print("  [PWS-окно] проверяю синхронизацию PWS")
+        check_pws_sync()
+        check_pws_calibration()
+
+    # Не тронуто по решению 29.08.2026 ("по морю как и было") — свой
+    # внутренний гейт (5 мин), без изменений.
     check_marine_history()
     check_nearby_precip()
     check_hmcbas_telegram()
