@@ -1,1 +1,1 @@
-{"task_id": "time-clone-test-1788078304", "cmd": "rm -rf /tmp/clone_test; S=$(date +%s); git clone --depth 1 https://github.com/Ruslan591/weather-_Odessa.git /tmp/clone_test 2>&1 | tail -5; E=$(date +%s); echo \"CLONE_DURATION: $((E-S))s\"; du -sh /tmp/clone_test; rm -rf /tmp/clone_test"}
+{"task_id": "vps-check-during-truncate-1788096479", "cmd": "tail -20 /var/log/vps-pipeline.log; echo '---'; tail -5 /var/log/vps-durations.log"}
