@@ -1,11 +1,11 @@
 {
-  "timestamp": "2026-08-30T14:32:34Z",
+  "timestamp": "2026-08-30T14:47:33Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-08-30T14:00:00.000Z",
-  "target_id": 1,
-  "target_area_km2": 93.4,
-  "target_distance_km": 100.9,
-  "target_bearing_deg": 109.0,
+  "target_id": 2,
+  "target_area_km2": 81.4,
+  "target_distance_km": 105.8,
+  "target_bearing_deg": 97.0,
   "target_compass": "В",
   "system": {
     "target_id": 0,
@@ -19,30 +19,12 @@
     "frontlike": false,
     "window_spanning": true,
     "phase_label": "безоблачно",
-    "cloud_fraction": 0.369,
+    "cloud_fraction": 0.357,
     "has_precip": false,
     "has_lightning": false
   },
-  "local_candidates": [
-    {
-      "target_id": 2,
-      "area_km2": 81.4,
-      "distance_km": 105.8,
-      "bearing_deg": 97.0,
-      "compass": "В",
-      "elongation_aspect_ratio": 1.53,
-      "elongation_axis_deg": 100.0,
-      "elongation_axis_compass": "В-З",
-      "frontlike": false,
-      "phase_label": "безоблачно",
-      "type_label": "плотная/высокая",
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": false,
-      "geocolour_confirmed": true
-    }
-  ],
-  "local_suppressed_count": 10,
+  "local_candidates": [],
+  "local_suppressed_count": 11,
   "system_candidates": [
     {
       "target_id": 10,
@@ -57,31 +39,13 @@
       "window_spanning": false,
       "phase_label": "безоблачно",
       "type_label": "плотная/высокая",
-      "has_precip": null,
-      "has_lightning": false,
-      "ir_confirmed": false,
-      "geocolour_confirmed": true
-    },
-    {
-      "target_id": 11,
-      "area_km2": 1158.2,
-      "distance_km": 249.9,
-      "bearing_deg": 317.0,
-      "compass": "СЗ",
-      "elongation_aspect_ratio": 2.67,
-      "elongation_axis_deg": 6.0,
-      "elongation_axis_compass": "С-Ю",
-      "frontlike": true,
-      "window_spanning": false,
-      "phase_label": "безоблачно",
-      "type_label": "плотная/высокая",
-      "has_precip": null,
+      "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
       "geocolour_confirmed": true
     }
   ],
-  "system_suppressed_count": 1,
+  "system_suppressed_count": 2,
   "frontal_tracks": [
     {
       "track_id": 687,
@@ -311,38 +275,42 @@
       "behind_obs": null
     }
   ],
+  "also_suppressed_nearby": {
+    "signature": "95_-35",
+    "area_km2": 93.4
+  },
   "target_phase": {
     "label": "безоблачно",
-    "cloud_fraction": 0.052
+    "cloud_fraction": 1.0
   },
   "existence": {
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-08-30T14:10:00.000Z"
+        "timestamp": "2026-08-30T14:20:00.000Z"
       },
       "geocolour_motion": {
         "confirmed": false,
-        "timestamp": "2026-08-30T14:00:00.000Z"
+        "timestamp": "2026-08-30T14:20:00.000Z"
       },
       "cloud_phase_type": {
-        "confirmed": false,
-        "timestamp": "2026-08-30T14:22:23Z"
+        "confirmed": true,
+        "timestamp": "2026-08-30T14:44:46Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
       "confirmed": false,
-      "timestamp": "2026-08-30T14:17:05Z"
+      "timestamp": "2026-08-30T14:45:45Z"
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-08-30T14:32:04Z"
+      "timestamp": "2026-08-30T14:46:04Z"
     }
   },
-  "verdict": "CLM отметил цель в 101км В, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (115978км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора)."
+  "verdict": "Цель в 106км В, безоблачно — каналы расходятся: cloud_phase_type подтверждают, ir_motion/geocolour_motion нет. Отдельно: система синоптического масштаба (115978км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора)."
 }
