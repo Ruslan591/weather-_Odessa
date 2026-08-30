@@ -1,7 +1,7 @@
 {
-  "task_id": "cron-add-timing-1788057496",
+  "task_id": "read-durations-1788058469",
   "returncode": 0,
-  "stdout": "--- crontab now ---\n* * * * * /opt/vps-github-bridge/venv/bin/python3 /opt/vps-github-bridge/vps_github_bridge.py >> /var/log/vps-github-bridge.log 2>&1\n*/5 * * * * bash -c 'S=$(date +%s); /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_pipeline.py >> /var/log/vps-pipeline.log 2>&1; E=$(date +%s); echo \"[$(date -u +%FT%TZ)] main duration: $((E-S))s\" >> /var/log/vps-durations.log'\n2,7,12,17,22,27,32,37,42,47,52,57 * * * * bash -c 'S=$(date +%s); /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_satellite_pipeline.py >> /var/log/vps-satellite-pipeline.log 2>&1; E=$(date +%s); echo \"[$(date -u +%FT%TZ)] satellite duration: $((E-S))s\" >> /var/log/vps-durations.log'\n",
-  "stderr": "",
-  "completed_at_utc": "2026-08-30T02:39:02Z"
+  "stdout": "\n--- stats main ---\n--- stats satellite ---\n",
+  "stderr": "cat: /var/log/vps-durations.log: No such file or directory\ngrep: /var/log/vps-durations.log: No such file or directory\ngrep: /var/log/vps-durations.log: No such file or directory\n",
+  "completed_at_utc": "2026-08-30T02:55:01Z"
 }
