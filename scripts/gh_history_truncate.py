@@ -148,13 +148,27 @@ def main():
         raise SystemExit("commit-tree не создал новый корень — прерываю.")
     print(f"Новый базовый коммит: {new_base}")
 
-    try:
-        sh(f"git rebase --onto {new_base} {parent_of_keep} main")
-    except subprocess.CalledProcessError as e:
-        sh("git rebase --abort")
-        print("STDOUT:", e.stdout)
-        print("STDERR:", e.stderr)
-        raise SystemExit("rebase --onto не прошёл — история НЕ изменена на удалённом репозитории.")
+    # [ИСПРАВЛЕНО 30.08.2026] Первая попытка использовала `git rebase --onto`
+    # — переигрывает историю ПОСЛЕДОВАТЕЛЬНО, по одному коммиту (checkout →
+    # сравнение → коммит). На 11300 коммитах это не уложилось даже в 35
+    # минут и было отменено вручную. Содержимое коммитов при этом реально
+    # НЕ меняется — меняется только родитель у ОДНОГО коммита (keep_from),
+    # остальное просто наследует новый хеш каскадом. Это ровно то, для чего
+    # существует `git replace --graft` + `git filter-repo` — переписывает
+    # граф ОДНИМ проходом, а не тысячей последовательных reбейзов.
+    import git_filter_repo as fr  # type: ignore
+    sh(f"git replace --graft {keep_from} {new_base}")
+    args_fr = fr.FilteringOptions.parse_args(["--force"])
+    filt = fr.RepoFilter(args_fr)
+    filt.run()
+    print("История переписана ЛОКАЛЬНО (граф материализован через filter-repo). "
+          "filter-repo удаляет remote 'origin' — добавляю заново.")
+
+    import os
+    push_url = os.environ.get("REPO_PUSH_URL")
+    if not push_url:
+        raise SystemExit("REPO_PUSH_URL не задан — не могу запушить результат.")
+    sh(f"git remote add origin {push_url!r}")
 
     handle_live_drift(old_main)
     chunked_push()
