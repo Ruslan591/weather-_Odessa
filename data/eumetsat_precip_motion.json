@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-30T02:02:19Z",
+  "timestamp": "2026-08-30T02:17:15Z",
   "buffer_size": 6,
   "buffer_span_minutes": 50,
   "observed_area": {
@@ -12,17 +12,17 @@
   },
   "current_state": "no_precip",
   "target_type": "precip_mass",
-  "distance_km_now": 162.1,
-  "bearing_deg": 1.0,
+  "distance_km_now": 155.2,
+  "bearing_deg": 2.0,
   "compass": "С",
-  "blob_area_km2": 84.0,
-  "speed_kmh": 105.5,
+  "blob_area_km2": 199.0,
+  "speed_kmh": 130.5,
   "direction_compass": "Ю",
-  "cpa_km": 16.3,
-  "eta_min": null,
-  "verdict": "пройдёт мимо, город, скорее всего, не заденет",
+  "cpa_km": 4.4,
+  "eta_min": 71.0,
+  "verdict": "приближается",
   "frame_pairs_used": 3,
-  "probability_percent": 50,
+  "probability_percent": 62,
   "probability_note": "эвристика (близость точки сближения + размер поля + уверенность в скорости), не физическая модель осадков",
   "method_note": "Буфер 6/6 масок mtg_fd:h40b (шаг 10 мин, crs=EPSG:4326, всегда явный TIME из GetCapabilities — не floor(now)), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Presence = непрозрачный пиксель. Край ищется только среди связных областей >= 40px (~53км²). Скорость — из реальных интервалов буфера (не фиксированный шаг). Линейная экстраполяция, годится на ~1 час."
 }
