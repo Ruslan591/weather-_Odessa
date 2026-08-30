@@ -860,23 +860,38 @@ def _main_body():
         print("  ✗ sync_repo failed — цикл пропущен, попробуем в следующий раз.")
         return
 
+    # [ДОБАВЛЕНО 30.08.2026] Замер времени каждого check_eumetsat_* — найдены
+    # циклы 100-132с при том, что "полные" циклы (10-14 шагов) укладываются
+    # в 19-25с; без потайминга по шагам непонятно, кто именно тормозит
+    # (подозрение — retry на флакающем EUMETSAT WMS, но это гадание без
+    # цифр). Печатает только шаги дольше STEP_WARN_SEC, чтобы не засорять
+    # лог на каждом быстром шаге.
+    STEP_WARN_SEC = 5
+
+    def _timed(fn):
+        _t0 = _time.monotonic()
+        fn()
+        _dt = _time.monotonic() - _t0
+        if _dt >= STEP_WARN_SEC:
+            print(f"  ⏱ {fn.__name__}: {_dt:.1f}с")
+
     # check_eumetsat_point() не вызывается — см. комментарий в оригинале
     # gh_satellite_pipeline.py (мёртвый шаг с эпохи RainViewer-сравнения).
-    check_eumetsat_cloud_forecast()
-    check_eumetsat_west_watch()
-    check_eumetsat_frontal_track()
-    check_eumetsat_render_track_overlay()
-    check_eumetsat_ground_station_verify()
-    check_eumetsat_cloud_phase_type()
-    check_eumetsat_precip_forecast()
-    check_eumetsat_lightning_forecast()
-    check_eumetsat_ir_motion()
-    check_eumetsat_precip_motion()
-    check_eumetsat_geocolour_motion()
-    check_eumetsat_target_summary()
+    _timed(check_eumetsat_cloud_forecast)
+    _timed(check_eumetsat_west_watch)
+    _timed(check_eumetsat_frontal_track)
+    _timed(check_eumetsat_render_track_overlay)
+    _timed(check_eumetsat_ground_station_verify)
+    _timed(check_eumetsat_cloud_phase_type)
+    _timed(check_eumetsat_precip_forecast)
+    _timed(check_eumetsat_lightning_forecast)
+    _timed(check_eumetsat_ir_motion)
+    _timed(check_eumetsat_precip_motion)
+    _timed(check_eumetsat_geocolour_motion)
+    _timed(check_eumetsat_target_summary)
     # check_eumetsat_anim_render() не вызывается — см. докстринг файла, п.5.
-    check_eumetsat_far_watch()
-    check_eumetsat_very_far_watch()
+    _timed(check_eumetsat_far_watch)
+    _timed(check_eumetsat_very_far_watch)
 
     check_pipeline_health_alert()
     git_push_satellite()
