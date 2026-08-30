@@ -1,0 +1,103 @@
+name: History truncate (full)
+
+# Еженедельно сжимает ВСЮ историю git старше --days дней в один базовый
+# коммит (см. scripts/gh_history_truncate.py) — заменяет собой избирательную
+# чистку history_media_prune.yml (та резала только media, наш случай был
+# ensemble_snapshots_*.json/marine_history, под неё не подпадавшие).
+# Решено 30.08.2026, см. docs/topics/hosting_migration.md.
+#
+# Почему не 0 3 * * 0 (как было у history_media_prune.yml): по факту тот
+# cron ни разу не сработал за неделю — минута :00 официально в документации
+# GitHub Actions как точка наибольшей нагрузки/задержек. У рабочего
+# tiktok_sea_temp.yml (112 успешных прогонов подряд) стоит минута :17 —
+# используем тот же принцип, не :00.
+#
+# Безопасность — тот же паттерн, что был у history_media_prune.yml:
+#  - Ручной запуск (workflow_dispatch) по умолчанию идёт в mode=analyze.
+#  - Еженедельный автозапуск (schedule) идёт в execute ТОЛЬКО если в
+#    репозитории существует файл .github/HISTORY_TRUNCATE_CONFIRMED.
+
+on:
+  schedule:
+    - cron: '23 3 * * 0'  # воскресенье, 03:23 UTC — не на границе часа
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'analyze = только отчёт, execute = переписать историю и force-push'
+        type: choice
+        options:
+          - analyze
+          - execute
+        default: analyze
+      days:
+        description: 'Сколько дней истории оставить'
+        type: string
+        default: '30'
+
+jobs:
+  truncate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost \
+                      "$AGENT_TOOLSDIRECTORY" /usr/local/lib/android /opt/hostedtoolcache || true
+          docker system prune -af || true
+          df -h
+
+      - name: Checkout (для скрипта и проверки маркера)
+        uses: actions/checkout@v4
+        with:
+          path: work
+
+      - name: Determine mode
+        id: mode
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "mode=${{ github.event.inputs.mode }}" >> "$GITHUB_OUTPUT"
+            echo "days=${{ github.event.inputs.days }}" >> "$GITHUB_OUTPUT"
+          elif [ -f work/.github/HISTORY_TRUNCATE_CONFIRMED ]; then
+            echo "mode=execute" >> "$GITHUB_OUTPUT"
+            echo "days=30" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=analyze" >> "$GITHUB_OUTPUT"
+            echo "days=30" >> "$GITHUB_OUTPUT"
+          fi
+          cat "$GITHUB_OUTPUT"
+
+      - name: Clone target repo
+        run: |
+          git clone https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git repo
+          du -sh repo
+
+      - name: Run truncate
+        working-directory: repo
+        run: |
+          set -o pipefail
+          git config user.email "actions@github.com"
+          git config user.name "history-truncate-bot"
+          python3 "${{ github.workspace }}/work/scripts/gh_history_truncate.py" \
+            --mode "${{ steps.mode.outputs.mode }}" --days "${{ steps.mode.outputs.days }}" \
+            2>&1 | tee "${{ github.workspace }}/truncate_report.txt"
+
+      - name: Publish report to repo
+        if: always()
+        continue-on-error: true  # [ДОБАВЛЕНО 30.08.2026] у history_media_prune.yml
+          # этот шаг падал (вероятная гонка Contents API сразу после
+          # массивного force-push) и красил весь job как failure, хотя
+          # реальная работа (переписывание истории) уже успешно завершилась.
+          # Отчёт — не критичный побочный продукт, не должен маскировать
+          # успех основной операции.
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          EVENT_NAME: ${{ github.event_name }}
+          MODE: ${{ steps.mode.outputs.mode }}
+          REPORT_FILE: ${{ github.workspace }}/truncate_report.txt
+        run: python3 "${{ github.workspace }}/work/scripts/publish_report.py"
+
+      - name: Repo size after
+        if: steps.mode.outputs.mode == 'execute'
+        working-directory: repo
+        run: du -sh .git
