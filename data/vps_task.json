@@ -1,4 +1,4 @@
 {
-  "task_id": "ai-deps-1788156210",
-  "cmd": "echo \"=== apt install ffmpeg + carlito ===\"; sudo DEBIAN_FRONTEND=noninteractive apt-get update -y >/tmp/apt.log 2>&1; sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg fonts-crosextra-carlito >>/tmp/apt.log 2>&1; tail -15 /tmp/apt.log; echo; echo \"=== pip install edge-tts ===\"; pip install edge-tts --break-system-packages 2>&1 | tail -10; echo; echo \"=== verify ===\"; ffmpeg -version | head -1; python3 -c \"import edge_tts; print(\"edge_tts OK\", edge_tts.__file__)\"; find /usr/share/fonts -iname \"Carlito-Regular.ttf\"; python3 -c \"import numpy, PIL; print(\"numpy/PIL OK\")\""
+  "task_id": "ai-verify-1788156335",
+  "cmd": "python3 -c 'import edge_tts, numpy, PIL; print(\"edge_tts\", edge_tts.__version__ if hasattr(edge_tts,\"__version__\") else \"ok\"); print(\"numpy\", numpy.__version__); print(\"PIL ok\")'\nls -la /opt/weather-pipeline/repo/.env 2>&1 || echo \"no .env yet\"\n"
 }
