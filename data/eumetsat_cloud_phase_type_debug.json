@@ -1,13 +1,11 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-08-31T10:30:00.000Z",
+  "server_latest_time": "2026-08-31T10:50:00.000Z",
   "mode": "day",
   "bootstrap": true,
-  "buffer_before": 12,
+  "buffer_before": 13,
   "buffer_size": 13,
   "buffer_times": [
-    "2026-08-31T08:30:00.000Z",
-    "2026-08-31T08:40:00.000Z",
     "2026-08-31T08:50:00.000Z",
     "2026-08-31T09:00:00.000Z",
     "2026-08-31T09:10:00.000Z",
@@ -18,12 +16,14 @@
     "2026-08-31T10:00:00.000Z",
     "2026-08-31T10:10:00.000Z",
     "2026-08-31T10:20:00.000Z",
-    "2026-08-31T10:30:00.000Z"
+    "2026-08-31T10:30:00.000Z",
+    "2026-08-31T10:40:00.000Z",
+    "2026-08-31T10:50:00.000Z"
   ],
   "result": {
-    "timestamp": "2026-08-31T10:52:40Z",
+    "timestamp": "2026-08-31T11:08:41Z",
     "mode": "day",
-    "unclassified_fraction_now": 0.486,
+    "unclassified_fraction_now": 0.497,
     "phase_ordinal_now": 0.0,
     "phase_ordinal_delta": 0.0,
     "phase_verdict": "без существенных изменений",
@@ -42,13 +42,20 @@
     "system_analysis": {
       "available": false,
       "reason": "мало классифицированных пикселей в ROI системы (облачно, но цвет неуверенный, либо вне окна)",
-      "target_id": 6
+      "target_id": 5
     },
     "system_analysis_all": [
       {
-        "target_id": 6,
+        "target_id": 5,
         "available": false,
         "reason": "мало классифицированных пикселей в ROI (облачно, но цвет неуверенный, либо вне окна)"
+      },
+      {
+        "target_id": 7,
+        "available": true,
+        "roi_cloud_fraction": 1.0,
+        "roi_dominant_phase_label": "безоблачно",
+        "roi_dominant_type_label": "плотная/высокая"
       }
     ],
     "local_analysis_all": [
@@ -93,20 +100,17 @@
         "roi_dominant_type_label": "безоблачно"
       },
       {
-        "target_id": 5,
-        "available": true,
-        "roi_cloud_fraction": 0.0,
-        "confirmed": false,
-        "roi_dominant_phase_label": "безоблачно",
-        "roi_dominant_type_label": "безоблачно"
-      },
-      {
-        "target_id": 7,
+        "target_id": 6,
         "available": false,
         "reason": "мало классифицированных пикселей в ROI (облачно, но цвет неуверенный, либо вне окна)"
       },
       {
         "target_id": 8,
+        "available": false,
+        "reason": "мало классифицированных пикселей в ROI (облачно, но цвет неуверенный, либо вне окна)"
+      },
+      {
+        "target_id": 9,
         "available": false,
         "reason": "мало классифицированных пикселей в ROI (облачно, но цвет неуверенный, либо вне окна)"
       }
