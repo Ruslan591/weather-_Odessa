@@ -1,7 +1,7 @@
 {
-  "task_id": "pytest-push-1788218631",
-  "returncode": 0,
-  "stdout": "--- now via git -C directly in shell for comparison ---\nfatal: could not read Username for 'https://github.com': No such device or address\n",
-  "stderr": "  File \"<string>\", line 3\n    r = subprocess.run([git, -C, /opt/weather-pipeline/repo, push], capture_output=True, text=True, timeout=30)\n                                 ^\nSyntaxError: invalid syntax\n",
-  "completed_at_utc": "2026-08-31T23:24:02Z"
+  "task_id": "check-credfile-1788218747",
+  "returncode": 128,
+  "stdout": "59 /root/.git-credentials\n--- git credential fill test ---\n",
+  "stderr": "  File \"<string>\", line 2\n    data = open(/root/.git-credentials, rb).read()\n                ^\nSyntaxError: invalid syntax\nfatal: refusing to work with credential missing protocol field\n",
+  "completed_at_utc": "2026-08-31T23:26:02Z"
 }
