@@ -1,7 +1,7 @@
 {
-  "task_id": "check-credfile-1788218747",
-  "returncode": 128,
-  "stdout": "59 /root/.git-credentials\n--- git credential fill test ---\n",
-  "stderr": "  File \"<string>\", line 2\n    data = open(/root/.git-credentials, rb).read()\n                ^\nSyntaxError: invalid syntax\nfatal: refusing to work with credential missing protocol field\n",
-  "completed_at_utc": "2026-08-31T23:26:02Z"
+  "task_id": "diag-git-script-1788218852",
+  "returncode": 0,
+  "stdout": "=== cred file raw (od -c, first 80 bytes) ===\n0000000   h   t   t   p   s   :   /   /   g   h   p   _   D   h   k   h\n0000020   1   S   w   S   m   d   L   L   X   8   x   n   T   v   d   J\n0000040   f   d   u   M   Q   V   g   f   W   V   2   L   t   2   g   n\n0000060   @   g   i   t   h   u   b   .   c   o   m\n0000073\n\n=== git credential fill (proper multiline input) ===\n\n=== git config -l (full) ===\ncredential.helper=store --file=/root/.git-credentials\n\n=== python3 subprocess push test ===\nreturncode: 128\nstdout: \nstderr: fatal: could not read Username for 'https://github.com': No such device or address\n\n",
+  "stderr": "fatal: could not read Username for 'https://github.com': No such device or address\n",
+  "completed_at_utc": "2026-08-31T23:28:01Z"
 }
