@@ -1,4 +1,4 @@
 {
-  "task_id": "ai-diag2-1788215350",
-  "cmd": "cd /opt/weather-pipeline/repo; echo \"=== model_next_expected.json ===\"; cat data/model_next_expected.json 2>&1; echo; echo \"=== _ai_pending_models.json ===\"; cat data/_ai_pending_models.json 2>&1; echo; echo \"=== git tracked? ===\"; git ls-files data/model_next_expected.json; echo \"(empty = untracked)\"; echo; echo \"=== crontab ===\"; sudo crontab -l; echo; echo \"=== last vps_pipeline runs (systemd/cron log if any) ===\"; find / -maxdepth 4 -iname \"*vps-pipeline*.log\" 2>/dev/null; echo; echo \"=== ps snapshot ===\"; ps aux | grep -E \"vps_pipeline|vps_ai_pipeline\" | grep -v grep"
+  "task_id": "ai-diag3-1788215502",
+  "cmd": "grep -c \"push\" /var/log/vps-pipeline.log; echo \"---last 150 lines---\"; tail -150 /var/log/vps-pipeline.log | grep -iE \"push|fetch|checkout|reset|error|WARN|новый прогон|conflict|rejected\""
 }
