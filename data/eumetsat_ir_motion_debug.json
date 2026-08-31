@@ -1,27 +1,27 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-08-31T08:10:00.000Z",
+  "server_latest_time": "2026-08-31T08:20:00.000Z",
   "bootstrap": true,
   "buffer_before": 6,
   "buffer_size": 6,
   "buffer_times": [
-    "2026-08-31T07:20:00.000Z",
     "2026-08-31T07:30:00.000Z",
     "2026-08-31T07:40:00.000Z",
     "2026-08-31T07:50:00.000Z",
     "2026-08-31T08:00:00.000Z",
-    "2026-08-31T08:10:00.000Z"
+    "2026-08-31T08:10:00.000Z",
+    "2026-08-31T08:20:00.000Z"
   ],
   "frame_std": [
-    10.3,
     10.4,
     10.5,
     10.4,
     10.4,
-    10.3
+    10.3,
+    10.1
   ],
   "result": {
-    "timestamp": "2026-08-31T08:10:00.000Z",
+    "timestamp": "2026-08-31T08:20:00.000Z",
     "buffer_size": 6,
     "buffer_span_minutes": 50,
     "observed_area": {
@@ -34,74 +34,76 @@
       "local_trend_radius_km": 50
     },
     "valid": true,
-    "speed_kmh": 0.2,
+    "speed_kmh": 0.1,
     "direction_compass": "Ю",
-    "bearing_deg": 178.2,
+    "bearing_deg": 167.3,
     "frame_pairs_used": 5,
-    "acceleration_kmh": -0.1,
-    "turning_deg": 13.4,
+    "acceleration_kmh": -0.0,
+    "turning_deg": -72.8,
     "acceleration_verdict": "скорость стабильна",
-    "turning_verdict": "направление стабильно",
+    "turning_verdict": "меняет направление (против часовой)",
     "forecast_displacement": {
       "30min": {
-        "distance_km": 0.0,
-        "bearing_deg": 224.0,
-        "compass": "ЮЗ"
+        "distance_km": 0.1,
+        "bearing_deg": 99.0,
+        "compass": "В"
       },
       "60min": {
-        "distance_km": 0.1,
-        "bearing_deg": 298.0,
-        "compass": "СЗ"
+        "distance_km": 0.2,
+        "bearing_deg": 89.0,
+        "compass": "В"
       },
       "120min": {
-        "distance_km": 0.5,
-        "bearing_deg": 329.0,
-        "compass": "СЗ"
+        "distance_km": 0.7,
+        "bearing_deg": 80.0,
+        "compass": "В"
       }
     },
     "area_fraction_over_time": [
-      0.225,
       0.205,
       0.187,
       0.169,
       0.141,
-      0.122
+      0.122,
+      0.106
     ],
-    "area_trend_delta": -0.103,
-    "area_trend_verdict": "сокращается",
+    "area_trend_delta": -0.1,
+    "area_trend_verdict": "без существенных изменений",
     "mean_brightness_over_time": [
-      21.6,
       20.9,
       20.3,
       19.7,
       19.1,
-      18.5
+      18.5,
+      18.0
     ],
-    "brightness_trend_delta": -3.1,
+    "brightness_trend_delta": -2.9,
     "station_state": "variable",
-    "station_area_fraction": 0.351,
-    "cloud_mass_distance_km": null,
-    "cloud_mass_contrast_sigma": 0.77,
-    "cloud_mass_verdict": "значимой облачной массы в поле зрения нет (кадр однородный)",
+    "station_area_fraction": 0.315,
+    "cloud_mass_distance_km": 2.5,
+    "cloud_mass_bearing_deg": 106.0,
+    "cloud_mass_compass": "В",
+    "cloud_mass_area_km2": 986,
+    "cloud_mass_contrast_sigma": 0.99,
     "temperature_trend_verdict": "без существенных изменений",
     "target_confirmation": {
       "confirmed": false,
       "target_id": 1,
       "target_area_km2": 105.4,
-      "roi_contrast_sigma": 0.1,
+      "roi_contrast_sigma": 0.39,
       "verdict": "ИК НЕ подтверждает: в ROI CLM-цели нет значимого контраста — возможна тонкая/низкая облачность, невидимая на ИК, либо расхождение слоёв"
     },
     "system_analysis_all": [
       {
         "target_id": 0,
         "available": true,
-        "roi_contrast_sigma": 1.07,
+        "roi_contrast_sigma": 1.06,
         "confirmed": true
       },
       {
         "target_id": 2,
         "available": true,
-        "roi_contrast_sigma": 2.66,
+        "roi_contrast_sigma": 2.09,
         "confirmed": true
       }
     ],
@@ -109,13 +111,13 @@
       {
         "target_id": 1,
         "available": true,
-        "roi_contrast_sigma": 0.1,
+        "roi_contrast_sigma": 0.39,
         "confirmed": false
       },
       {
         "target_id": 3,
         "available": true,
-        "roi_contrast_sigma": 4.96,
+        "roi_contrast_sigma": 2.57,
         "confirmed": true
       }
     ],
