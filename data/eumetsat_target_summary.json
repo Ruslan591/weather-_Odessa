@@ -1,11 +1,11 @@
 {
-  "timestamp": "2026-08-31T07:17:14Z",
+  "timestamp": "2026-08-31T07:22:34Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-08-31T07:00:00.000Z",
-  "target_id": 1,
-  "target_area_km2": 109.4,
-  "target_distance_km": 58.6,
-  "target_bearing_deg": 103.0,
+  "target_id": 5,
+  "target_area_km2": 93.4,
+  "target_distance_km": 179.5,
+  "target_bearing_deg": 82.0,
   "target_compass": "В",
   "system": {
     "target_id": 4,
@@ -18,6 +18,8 @@
     "elongation_axis_compass": "СВ-ЮЗ",
     "frontlike": false,
     "window_spanning": false,
+    "phase_label": "безоблачно",
+    "cloud_fraction": 0.75,
     "has_lightning": false
   },
   "local_candidates": [
@@ -31,8 +33,8 @@
       "elongation_axis_deg": 37.0,
       "elongation_axis_compass": "СВ-ЮЗ",
       "frontlike": false,
-      "phase_label": "безоблачно",
-      "type_label": "безоблачно",
+      "phase_label": null,
+      "type_label": null,
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": true,
@@ -48,12 +50,12 @@
       "elongation_axis_deg": 173.0,
       "elongation_axis_compass": "Ю-С",
       "frontlike": false,
-      "phase_label": "безоблачно",
-      "type_label": "плотная/высокая",
+      "phase_label": null,
+      "type_label": null,
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": true,
-      "geocolour_confirmed": true
+      "geocolour_confirmed": false
     }
   ],
   "local_suppressed_count": 7,
@@ -69,8 +71,8 @@
       "elongation_axis_compass": "СВ-ЮЗ",
       "frontlike": false,
       "window_spanning": false,
-      "phase_label": null,
-      "type_label": null,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
       "has_precip": null,
       "has_lightning": false,
       "ir_confirmed": true,
@@ -87,8 +89,8 @@
       "elongation_axis_compass": "В-З",
       "frontlike": false,
       "window_spanning": false,
-      "phase_label": null,
-      "type_label": null,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
       "has_precip": null,
       "has_lightning": false,
       "ir_confirmed": true,
@@ -106,7 +108,7 @@
       "frontlike": false,
       "window_spanning": false,
       "phase_label": "безоблачно",
-      "type_label": "безоблачно",
+      "type_label": "плотная/высокая",
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": true,
@@ -119,35 +121,28 @@
     "signature": "55_5",
     "area_km2": 56.0
   },
-  "target_movement": {
-    "speed_kmh": 0.0,
-    "direction_compass": "С",
-    "cpa_km": 58.6,
-    "eta_min": null,
-    "verdict": "почти стоит на месте"
-  },
   "target_phase": {
     "label": "безоблачно",
-    "cloud_fraction": 0.0
+    "cloud_fraction": 0.912
   },
   "existence": {
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-08-31T06:50:00.000Z"
+        "timestamp": "2026-08-31T07:00:00.000Z"
       },
       "geocolour_motion": {
         "confirmed": false,
-        "timestamp": "2026-08-31T06:50:00.000Z"
+        "timestamp": "2026-08-31T07:00:00.000Z"
       },
       "cloud_phase_type": {
-        "confirmed": false,
-        "timestamp": "2026-08-31T07:07:15Z"
+        "confirmed": true,
+        "timestamp": "2026-08-31T07:22:05Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -156,8 +151,8 @@
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-08-31T07:17:08Z"
+      "timestamp": "2026-08-31T07:22:15Z"
     }
   },
-  "verdict": "CLM отметил цель в 59км В, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (7317км²) в 178км СВ."
+  "verdict": "Цель в 180км В, безоблачно — каналы расходятся: cloud_phase_type подтверждают, ir_motion/geocolour_motion нет. Отдельно: система синоптического масштаба (7317км²) в 178км СВ."
 }
