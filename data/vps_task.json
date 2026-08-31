@@ -1,1 +1,1 @@
-{"task_id": "check-runtimed-1788217010", "cmd": "cat /opt/weather-pipeline/run_timed.sh"}
+{"task_id": "pytest-push-1788218631", "cmd": "python3 -c \"\nimport subprocess\nr = subprocess.run([\"git\", \"-C\", \"/opt/weather-pipeline/repo\", \"push\"], capture_output=True, text=True, timeout=30)\nprint(\"returncode:\", r.returncode)\nprint(\"stdout:\", r.stdout)\nprint(\"stderr:\", r.stderr)\n\"\necho \"--- now via git -C directly in shell for comparison ---\"\ngit -C /opt/weather-pipeline/repo push 2>&1 | tail -5"}
