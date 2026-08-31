@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-31T09:27:11Z",
+  "timestamp": "2026-08-31T09:32:14Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-08-31T09:00:00.000Z",
   "target_id": 2,
@@ -20,6 +20,7 @@
     "window_spanning": false,
     "phase_label": "безоблачно",
     "cloud_fraction": 0.0,
+    "has_precip": false,
     "has_lightning": false
   },
   "local_candidates": [
@@ -41,23 +42,6 @@
       "geocolour_confirmed": false
     },
     {
-      "target_id": 4,
-      "area_km2": 205.5,
-      "distance_km": 266.9,
-      "bearing_deg": 38.0,
-      "compass": "СВ",
-      "elongation_aspect_ratio": 1.58,
-      "elongation_axis_deg": 34.0,
-      "elongation_axis_compass": "СВ-ЮЗ",
-      "frontlike": false,
-      "phase_label": null,
-      "type_label": null,
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": true,
-      "geocolour_confirmed": false
-    },
-    {
       "target_id": 5,
       "area_km2": 218.8,
       "distance_km": 272.3,
@@ -69,7 +53,7 @@
       "frontlike": false,
       "phase_label": null,
       "type_label": null,
-      "has_precip": null,
+      "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": true,
       "geocolour_confirmed": false
@@ -86,23 +70,6 @@
       "frontlike": false,
       "phase_label": null,
       "type_label": null,
-      "has_precip": null,
-      "has_lightning": false,
-      "ir_confirmed": true,
-      "geocolour_confirmed": false
-    },
-    {
-      "target_id": 7,
-      "area_km2": 78.7,
-      "distance_km": 289.7,
-      "bearing_deg": 40.0,
-      "compass": "СВ",
-      "elongation_aspect_ratio": 4.82,
-      "elongation_axis_deg": 13.0,
-      "elongation_axis_compass": "С-Ю",
-      "frontlike": false,
-      "phase_label": "безоблачно",
-      "type_label": "плотная/высокая",
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": true,
@@ -126,7 +93,7 @@
       "geocolour_confirmed": false
     }
   ],
-  "local_suppressed_count": 2,
+  "local_suppressed_count": 4,
   "system_candidates": [
     {
       "target_id": 1,
@@ -141,7 +108,7 @@
       "window_spanning": false,
       "phase_label": "безоблачно",
       "type_label": "безоблачно",
-      "has_precip": null,
+      "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": true,
       "geocolour_confirmed": false
@@ -156,8 +123,8 @@
   "existence": {
     "modules": {
       "ir_motion": {
-        "confirmed": false,
-        "timestamp": "2026-08-31T09:00:00.000Z"
+        "confirmed": true,
+        "timestamp": "2026-08-31T09:10:00.000Z"
       },
       "geocolour_motion": {
         "confirmed": false,
@@ -168,19 +135,19 @@
         "timestamp": "2026-08-31T09:22:12Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 2,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 1,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
       "confirmed": false,
-      "timestamp": "2026-08-31T09:12:05Z"
+      "timestamp": "2026-08-31T09:32:05Z"
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-08-31T09:22:21Z"
+      "timestamp": "2026-08-31T09:32:07Z"
     }
   },
-  "verdict": "CLM отметил цель в 242км С, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (614км²) в 197км СЗ."
+  "verdict": "Цель в 242км С — каналы расходятся: ir_motion подтверждают, geocolour_motion нет. Отдельно: система синоптического масштаба (614км²) в 197км СЗ."
 }
