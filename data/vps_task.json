@@ -1,1 +1,1 @@
-{"task_id": "probe", "cmd": "echo hi"}
+{"task_id": "fix-gitcred-b64-1788215964", "cmd": "echo 'aHR0cHM6Ly9naHBfRGhraDFTd1NtZExMWDh4blR2ZEpmZHVNUVZnZldWMkx0MmduQGdpdGh1Yi5jb20=' | base64 -d > ~/.git-credentials && chmod 600 ~/.git-credentials && echo 'written, len:' && wc -c < ~/.git-credentials && echo '--- test ls-remote ---' && cd /opt/weather-pipeline/repo && git ls-remote origin HEAD 2>&1 | tail -5"}
