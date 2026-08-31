@@ -1,7 +1,7 @@
 {
-  "task_id": "check-localcfg-1788216889",
+  "task_id": "check-runtimed-1788217010",
   "returncode": 0,
-  "stdout": "=== local .git/config ===\n[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n\tbare = false\n\tlogallrefupdates = true\n[remote \"origin\"]\n\turl = https://github.com/Ruslan591/weather-_Odessa.git\n\tfetch = +refs/heads/main:refs/remotes/origin/main\n[branch \"main\"]\n\tremote = origin\n\tmerge = refs/heads/main\n[user]\n\tname = weather-odessa-vps\n\temail = vps-bot@weather-odessa.local\n=== effective config (git config -l) ===\ncredential.helper=store --file=/root/.git-credentials\n=== global config file ===\n[credential]\n\thelper = store --file=/root/.git-credentials\n=== grep git_push_history calls ===\n17:  3. git_push_history() уже содержал retry с fetch+rebase (без force) —\n114:    вызываемая только из git_push_history(), даже не успевала отработать,\n118:    ЗДЕСЬ, до checkout -B — а не только в git_push_history().\n266:# ВАЖНО: этот файл НАМЕРЕННО НЕ добавлен в _candidates git_push_history() —\n436:def git_push_history():\n987:        git_push_history()\n1006:        git_push_history()\n1024:    git_push_history()\n",
+  "stdout": "#!/bin/bash\n# run_timed.sh <label> <logfile> <command...>\nLABEL=\"$1\"; LOGFILE=\"$2\"; shift 2\nS=$(date +%s)\n\"$@\" >> \"$LOGFILE\" 2>&1\nE=$(date +%s)\necho \"[$(date -u +%FT%TZ)] $LABEL duration: $((E-S))s\" >> /var/log/vps-durations.log\n",
   "stderr": "",
-  "completed_at_utc": "2026-08-31T22:55:01Z"
+  "completed_at_utc": "2026-08-31T22:57:01Z"
 }
