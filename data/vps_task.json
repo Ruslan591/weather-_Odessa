@@ -1,4 +1,4 @@
 {
-  "task_id": "ai-test-run-1788177353",
-  "cmd": "cd /opt/weather-pipeline/repo && timeout 280 python3 scripts/vps_ai_pipeline.py 2>&1 | tail -80"
+  "task_id": "ai-check-proc-1788177540",
+  "cmd": "ps aux | grep -E \"vps_ai_pipeline|generate_ai_analysis|make_blocks|make_video|ffmpeg|edge\" | grep -v grep; echo \"---lock---\"; ls -la /tmp/vps_ai_pipeline.lock 2>&1; fuser /tmp/vps_ai_pipeline.lock 2>&1; echo \"---queue---\"; cat /opt/weather-pipeline/repo/data/_ai_pending_models.json 2>&1"
 }
