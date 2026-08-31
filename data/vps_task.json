@@ -1,4 +1,4 @@
 {
-  "task_id": "ai-log-1788178315",
-  "cmd": "ps aux | grep generate_ai_analysis | grep -v grep; echo \"---LOG---\"; cat /tmp/ai_direct.log"
+  "task_id": "ai-blocks-1788178453",
+  "cmd": "cd /opt/weather-pipeline/repo && rm -f /tmp/ai_blocks.log && nohup bash -c \"\npython3 scripts/make_blocks_cloud.py >> /tmp/ai_blocks.log 2>&1\necho \"--- claude blocks done ---\" >> /tmp/ai_blocks.log\npython3 scripts/make_video.py >> /tmp/ai_blocks.log 2>&1\necho \"--- claude video done ---\" >> /tmp/ai_blocks.log\npython3 scripts/make_blocks_gemini_cloud.py >> /tmp/ai_blocks.log 2>&1\necho \"--- gemini blocks done ---\" >> /tmp/ai_blocks.log\npython3 scripts/make_video.py gemini >> /tmp/ai_blocks.log 2>&1\necho \"--- gemini video done ---\" >> /tmp/ai_blocks.log\n\" > /tmp/ai_blocks_wrapper.log 2>&1 &\necho \"started pid $!\""
 }
