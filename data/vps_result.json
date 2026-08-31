@@ -1,7 +1,7 @@
 {
-  "task_id": "diag-git-script-1788218852",
+  "task_id": "diag-git2-1788218963",
   "returncode": 0,
-  "stdout": "=== cred file raw (od -c, first 80 bytes) ===\n0000000   h   t   t   p   s   :   /   /   g   h   p   _   D   h   k   h\n0000020   1   S   w   S   m   d   L   L   X   8   x   n   T   v   d   J\n0000040   f   d   u   M   Q   V   g   f   W   V   2   L   t   2   g   n\n0000060   @   g   i   t   h   u   b   .   c   o   m\n0000073\n\n=== git credential fill (proper multiline input) ===\n\n=== git config -l (full) ===\ncredential.helper=store --file=/root/.git-credentials\n\n=== python3 subprocess push test ===\nreturncode: 128\nstdout: \nstderr: fatal: could not read Username for 'https://github.com': No such device or address\n\n",
+  "stdout": "=== direct credential-store get ===\n(exit code: 0)\n\n=== git --version ===\ngit version 2.43.0\n\n=== which git ===\n/usr/bin/git\n\n=== re-write credentials file with trailing newline, verify ===\n0000040   f   d   u   M   Q   V   g   f   W   V   2   L   t   2   g   n\n0000060   @   g   i   t   h   u   b   .   c   o   m  \\n\n0000074\n\n=== retry credential-store get ===\n(exit code: 0)\n\n=== retry git credential fill ===\n(exit code: 128)\n\n=== retry actual push ===\nfatal: could not read Username for 'https://github.com': No such device or address\n",
   "stderr": "fatal: could not read Username for 'https://github.com': No such device or address\n",
-  "completed_at_utc": "2026-08-31T23:28:01Z"
+  "completed_at_utc": "2026-08-31T23:30:01Z"
 }
