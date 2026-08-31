@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-31T04:22:27Z",
+  "timestamp": "2026-08-31T04:28:10Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-08-31T04:00:00.000Z",
   "target_id": 1,
@@ -19,7 +19,7 @@
     "frontlike": false,
     "window_spanning": false,
     "phase_label": "средняя водяная",
-    "cloud_fraction": 0.402,
+    "cloud_fraction": 0.57,
     "has_precip": false,
     "has_lightning": false
   },
@@ -34,9 +34,9 @@
       "elongation_axis_deg": 0.0,
       "elongation_axis_compass": "С-Ю",
       "frontlike": false,
-      "phase_label": null,
-      "type_label": null,
-      "has_precip": null,
+      "phase_label": "средняя водяная",
+      "type_label": "плотная/высокая",
+      "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
       "geocolour_confirmed": true
@@ -219,7 +219,7 @@
   ],
   "target_phase": {
     "label": "безоблачно",
-    "cloud_fraction": 0.968
+    "cloud_fraction": 0.0
   },
   "existence": {
     "modules": {
@@ -232,23 +232,23 @@
         "timestamp": "2026-08-31T04:00:00.000Z"
       },
       "cloud_phase_type": {
-        "confirmed": true,
-        "timestamp": "2026-08-31T04:13:34Z"
+        "confirmed": false,
+        "timestamp": "2026-08-31T04:27:05Z"
       }
     },
-    "votes_confirmed": 1,
-    "votes_not_confirmed": 2,
-    "consensus": "disputed"
+    "votes_confirmed": 0,
+    "votes_not_confirmed": 3,
+    "consensus": "not_confirmed"
   },
   "phenomena": {
     "precip_forecast": {
       "confirmed": false,
-      "timestamp": "2026-08-31T04:08:40Z"
+      "timestamp": "2026-08-31T04:27:40Z"
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-08-31T04:22:17Z"
+      "timestamp": "2026-08-31T04:27:44Z"
     }
   },
-  "verdict": "Цель в 49км СЗ, безоблачно — каналы расходятся: cloud_phase_type подтверждают, ir_motion/geocolour_motion нет. Отдельно: система синоптического масштаба (39984км²) в 40км С (средняя водяная)."
+  "verdict": "CLM отметил цель в 49км СЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (39984км²) в 40км С (средняя водяная)."
 }
