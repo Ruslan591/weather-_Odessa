@@ -1,4 +1,4 @@
 {
-  "task_id": "ai-check-proc-1788177540",
-  "cmd": "ps aux | grep -E \"vps_ai_pipeline|generate_ai_analysis|make_blocks|make_video|ffmpeg|edge\" | grep -v grep; echo \"---lock---\"; ls -la /tmp/vps_ai_pipeline.lock 2>&1; fuser /tmp/vps_ai_pipeline.lock 2>&1; echo \"---queue---\"; cat /opt/weather-pipeline/repo/data/_ai_pending_models.json 2>&1"
+  "task_id": "ai-check2-1788177825",
+  "cmd": "ps aux | grep -E \"vps_ai_pipeline|generate_ai_analysis|make_blocks|make_video|ffmpeg\" | grep -v grep; echo \"---queue---\"; cat /opt/weather-pipeline/repo/data/_ai_pending_models.json 2>&1; echo; echo \"---claude json---\"; python3 -c \"import json; d=json.load(open(\"/opt/weather-pipeline/repo/data/forecast_analysis_claude.json\")); print({k:v for k,v in d.items() if k in [\"changed\",\"mode\",\"generated_at\",\"model_trigger\"]})\" 2>&1; echo \"---gemini json---\"; python3 -c \"import json; d=json.load(open(\"/opt/weather-pipeline/repo/data/forecast_analysis_gemini.json\")); print({k:v for k,v in d.items() if k in [\"changed\",\"pending\",\"mode\",\"generated_at\",\"model_trigger\"]})\" 2>&1; echo \"---git status---\"; cd /opt/weather-pipeline/repo && git status --short | head -20 && git log --oneline -3"
 }
