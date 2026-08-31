@@ -1,7 +1,7 @@
 {
-  "task_id": "verify-fix2-1788216403",
+  "task_id": "fix-cred-path-1788216531",
   "returncode": 0,
-  "stdout": "  [OK] nearby_precip.py: precip=135.1km ЮЗ, thunder(proxy)=none, precip_motion={'speed_kmh': 52.9, 'direction_compass': 'С', 'cpa_km': 75.0, 'eta_min': None, 'verdict': 'пройдёт мимо, город, скорее всего, не заденет', 'frame_pairs_used': 3}, thunder_motion=None\n  ✓ repo synced with origin/main\n\n────────────────────────────────────────────────────\n  [VPS] Проверка прогонов моделей  31.08 22:45\n────────────────────────────────────────────────────\n  ECMWF IFS       ⏳ ждём (след. проверка 01.09 01:44)\n  ICON EU         ⏳ ждём (след. проверка 01.09 00:42)\n  UKMO            ⏳ ждём (след. проверка 01.09 01:47)\n  Arpège          ⏳ ждём (след. проверка 01.09 04:20)\n  GFS             ⏳ ждём (след. проверка 31.08 23:50)\n  GRAPES          ⏳ ждём (след. проверка 01.09 01:14)\n────────────────────────────────────────────────────\n\n  Новых прогонов нет.\n\n  history push ✗ attempt 1: fatal: could not read Username for 'https://github.com': No such device or address\n  history push ✗ attempt 2: fatal: could not read Username for 'https://github.com': No such device or address\n  history push ✗ attempt 3: fatal: could not read Username for 'https://github.com': No such device or address\n  history push failed after 3 attempts\n---git status---\n?? data/_scratch_clm_base.png\n?? data/_scratch_clm_pixelmap.npy\n?? data/_scratch_west_clm_base.png\n?? data/_scratch_west_pixelmap.npy\n?? data/eumetsat_cloud_phase_type_mode.json\n?? data/model_next_expected.json\n---credentials check---\n-rw------- 1 root root 59 Aug 31 22:40 /root/.git-credentials\n---who runs cron as---\nroot\n",
+  "stdout": "store --file=/root/.git-credentials\n--- test push-dry via env -i (имитация пустого cron-окружения) ---\n3caf543e1cae451a62bea529d7b04a0ca4a1d933\tHEAD\n--- test push-dry БЕЗ HOME вообще ---\n3caf543e1cae451a62bea529d7b04a0ca4a1d933\tHEAD\n",
   "stderr": "",
-  "completed_at_utc": "2026-08-31T22:47:02Z"
+  "completed_at_utc": "2026-08-31T22:49:02Z"
 }
