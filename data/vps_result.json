@@ -1,7 +1,7 @@
 {
-  "task_id": "verify-final-1788216780",
+  "task_id": "check-localcfg-1788216889",
   "returncode": 0,
-  "stdout": "────────────────────────────────────────────────────\n  ECMWF IFS       ⏳ ждём (след. проверка 01.09 01:44)\n  ICON EU         ⏳ ждём (след. проверка 01.09 00:42)\n  UKMO            ⏳ ждём (след. проверка 01.09 01:47)\n  Arpège          ⏳ ждём (след. проверка 01.09 04:20)\n  GFS             ⏳ ждём (след. проверка 31.08 23:50)\n  GRAPES          ⏳ ждём (след. проверка 01.09 01:14)\n────────────────────────────────────────────────────\n\n  Новых прогонов нет.\n\n  history push ✗ attempt 1: fatal: could not read Username for 'https://github.com': No such device or address\n  history push ✗ attempt 2: fatal: could not read Username for 'https://github.com': No such device or address\n  history push ✗ attempt 3: fatal: could not read Username for 'https://github.com': No such device or address\n  history push failed after 3 attempts\n",
+  "stdout": "=== local .git/config ===\n[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n\tbare = false\n\tlogallrefupdates = true\n[remote \"origin\"]\n\turl = https://github.com/Ruslan591/weather-_Odessa.git\n\tfetch = +refs/heads/main:refs/remotes/origin/main\n[branch \"main\"]\n\tremote = origin\n\tmerge = refs/heads/main\n[user]\n\tname = weather-odessa-vps\n\temail = vps-bot@weather-odessa.local\n=== effective config (git config -l) ===\ncredential.helper=store --file=/root/.git-credentials\n=== global config file ===\n[credential]\n\thelper = store --file=/root/.git-credentials\n=== grep git_push_history calls ===\n17:  3. git_push_history() уже содержал retry с fetch+rebase (без force) —\n114:    вызываемая только из git_push_history(), даже не успевала отработать,\n118:    ЗДЕСЬ, до checkout -B — а не только в git_push_history().\n266:# ВАЖНО: этот файл НАМЕРЕННО НЕ добавлен в _candidates git_push_history() —\n436:def git_push_history():\n987:        git_push_history()\n1006:        git_push_history()\n1024:    git_push_history()\n",
   "stderr": "",
-  "completed_at_utc": "2026-08-31T22:53:01Z"
+  "completed_at_utc": "2026-08-31T22:55:01Z"
 }
