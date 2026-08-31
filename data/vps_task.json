@@ -1,4 +1,4 @@
 {
-  "task_id": "ai-direct-1788178109",
-  "cmd": "cd /opt/weather-pipeline/repo && rm -f /tmp/ai_direct.log && nohup python3 scripts/generate_ai_analysis.py --force --models \"Arpège,ECMWF IFS,GFS,GRAPES,ICON EU,UKMO\" > /tmp/ai_direct.log 2>&1 & echo \"started pid $!\"; sleep 3; echo \"still running check:\"; ps aux | grep generate_ai_analysis | grep -v grep"
+  "task_id": "ai-log-1788178315",
+  "cmd": "ps aux | grep generate_ai_analysis | grep -v grep; echo \"---LOG---\"; cat /tmp/ai_direct.log"
 }
