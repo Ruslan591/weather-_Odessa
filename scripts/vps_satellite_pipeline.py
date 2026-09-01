@@ -843,9 +843,12 @@ def main():
         print("  ⏭ предыдущий цикл спутника ещё выполняется — пропускаю (lock занят)")
         return
 
+    _t0 = _time.time()
     try:
         _main_body()
     finally:
+        _dt = _time.time() - _t0
+        print(f"\n  ⏱ [satellite] цикл занял {_dt:.1f}с")
         import fcntl
         fcntl.flock(lock_fd, fcntl.LOCK_UN)
         lock_fd.close()
