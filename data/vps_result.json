@@ -1,7 +1,7 @@
 {
-  "task_id": "check-agent-path",
+  "task_id": "deploy-agent",
   "returncode": 0,
-  "stdout": "total 28\ndrwxr-xr-x 4 root root 4096 Aug 26 16:08 .\ndrwxr-xr-x 6 root root 4096 Aug 26 22:03 ..\ndrwxr-xr-x 2 root root 4096 Aug 29 05:42 __pycache__\ndrwxr-xr-x 5 root root 4096 Aug 26 16:08 venv\n-rw-r--r-- 1 root root 8760 Aug 29 05:42 vps_agent.py\n---systemd unit---\n# /etc/systemd/system/vps-agent.service\n[Unit]\nDescription=weather-odessa-vps HTTP agent\nAfter=network.target\n\n[Service]\nType=simple\nEnvironmentFile=/etc/vps-agent/token\nWorkingDirectory=/opt/vps-agent\nExecStart=/opt/vps-agent/venv/bin/uvicorn vps_agent:app --host 127.0.0.1 --port 8080\nRestart=on-failure\nRestartSec=3\nUser=root\n\n[Install]\nWantedBy=multi-user.target\n",
+  "stdout": "COMPILE_OK\nactive\nhealth check http 200\n",
   "stderr": "",
-  "completed_at_utc": "2026-09-01T21:31:01Z"
+  "completed_at_utc": "2026-09-01T21:35:04Z"
 }
