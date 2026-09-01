@@ -297,17 +297,26 @@ def check_ai_gemini_pending():
         with open(gemini_file, encoding="utf-8") as f:
             gd2 = json.load(f)
         if gd2.get("changed") and not gd2.get("pending"):
-            blocks_r = subprocess.run(
-                [PYTHON, os.path.join(SCRIPTS_DIR, "make_blocks_gemini_cloud.py")],
-                cwd=BASE_DIR, capture_output=False, timeout=180
-            )
-            if blocks_r.returncode == 0:
-                subprocess.run(
-                    [PYTHON, os.path.join(SCRIPTS_DIR, "make_video.py"), "gemini"],
-                    cwd=BASE_DIR, capture_output=False, timeout=240
+            # 01.09.2026: тот же ранний push текста, что и в check_ai_new_models()
+            # — иначе следующий cron-тик (main/satellite) может откатить его
+            # sync_repo()'ом раньше, чем дойдёт очередь до git_push_ai() в конце.
+            git_push_ai(paths=ANALYSIS_PATHS)
+            try:
+                blocks_r = subprocess.run(
+                    [PYTHON, os.path.join(SCRIPTS_DIR, "make_blocks_gemini_cloud.py")],
+                    cwd=BASE_DIR, capture_output=False, timeout=180
                 )
-    except subprocess.TimeoutExpired:
-        print("  [AI-Gemini] retry: блоки/видео зависли — прерваны")
+            except subprocess.TimeoutExpired:
+                print("  [AI-Gemini] retry: make_blocks_gemini_cloud.py завис дольше 180с — прерван")
+                blocks_r = None
+            if blocks_r is not None and blocks_r.returncode == 0:
+                try:
+                    subprocess.run(
+                        [PYTHON, os.path.join(SCRIPTS_DIR, "make_video.py"), "gemini"],
+                        cwd=BASE_DIR, capture_output=False, timeout=700
+                    )
+                except subprocess.TimeoutExpired:
+                    print("  [AI-Gemini] retry: make_video.py завис дольше 700с — прерван")
     except Exception:
         pass
 
