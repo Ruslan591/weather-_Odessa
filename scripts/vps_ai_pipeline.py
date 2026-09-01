@@ -198,14 +198,6 @@ def check_ai_new_models(force=False):
             claude_changed = json.load(f).get("changed", False)
     except Exception:
         pass
-    if claude_changed:
-        try:
-            subprocess.run(
-                [PYTHON, os.path.join(SCRIPTS_DIR, "make_blocks_cloud.py")],
-                cwd=BASE_DIR, capture_output=False, timeout=180
-            )
-        except subprocess.TimeoutExpired:
-            print("  [WARN] make_blocks_cloud.py завис дольше 180с — прерван")
 
     gemini_file = os.path.join(BASE_DIR, "data", "forecast_analysis_gemini.json")
     gemini_changed = False
@@ -214,6 +206,35 @@ def check_ai_new_models(force=False):
             gemini_changed = json.load(f).get("changed", False)
     except Exception:
         pass
+
+    # 01.09.2026: коммитим и пушим свежий текст СРАЗУ, до make_blocks/make_video
+    # (которые вместе могут идти ~10+ минут — дольше 5-минутного такта соседних
+    # cron-скриптов). Иначе их sync_repo() успевает откатить ещё не запушенный
+    # forecast_analysis_*.json обратно к origin/main раньше, чем дойдёт очередь
+    # до git_push_ai() в конце этой функции — см. ANALYSIS_PATHS/MEDIA_PATHS.
+    if claude_changed or gemini_changed:
+        git_push_ai(paths=ANALYSIS_PATHS)
+
+    if claude_changed:
+        try:
+            blocks_result = subprocess.run(
+                [PYTHON, os.path.join(SCRIPTS_DIR, "make_blocks_cloud.py")],
+                cwd=BASE_DIR, capture_output=False, timeout=180
+            )
+        except subprocess.TimeoutExpired:
+            print("  [WARN] make_blocks_cloud.py завис дольше 180с — прерван")
+            blocks_result = None
+        if blocks_result is not None and blocks_result.returncode == 0:
+            try:
+                video_result = subprocess.run(
+                    [PYTHON, os.path.join(SCRIPTS_DIR, "make_video.py")],
+                    cwd=BASE_DIR, capture_output=False, timeout=700
+                )
+                if video_result.returncode != 0:
+                    print("  [WARN] make_video.py (claude) упал")
+            except subprocess.TimeoutExpired:
+                print("  [WARN] make_video.py завис дольше 700с — прерван")
+
     if gemini_changed:
         try:
             blocks_result = subprocess.run(
@@ -228,14 +249,16 @@ def check_ai_new_models(force=False):
                 print("  [AI-Gemini] make_blocks_gemini_cloud.py упал")
             else:
                 try:
+                    # 700с — с запасом от реально измеренных ~592с на этом ARM VPS
+                    # (было 240с — гарантированно убивало рендер на середине).
                     video_result = subprocess.run(
                         [PYTHON, os.path.join(SCRIPTS_DIR, "make_video.py"), "gemini"],
-                        cwd=BASE_DIR, capture_output=False, timeout=240
+                        cwd=BASE_DIR, capture_output=False, timeout=700
                     )
                     if video_result.returncode != 0:
                         print("  [AI-Gemini] make_video.py (gemini) упал")
                 except subprocess.TimeoutExpired:
-                    print("  [AI-Gemini] make_video.py завис дольше 240с — прерван")
+                    print("  [AI-Gemini] make_video.py завис дольше 700с — прерван")
 
     try:
         with open(AI_QUEUE_FILE, "w", encoding="utf-8") as f:
@@ -291,20 +314,35 @@ def check_ai_gemini_pending():
 
 # ── git push (общий лок, самолечение, dynamic commit message) ──────────────
 
-def git_push_ai():
+# Полный список кандидатов на коммит. 01.09.2026: разбит на два подмножества
+# (см. ANALYSIS_PATHS/MEDIA_PATHS ниже) после обнаружения гонки: рендер
+# видео идёт до ~600с (реально измерено), это дольше 5-минутного такта
+# vps_pipeline.py/vps_satellite_pipeline.py — их sync_repo() успевает
+# сделать git reset --hard HEAD + checkout -B ПОКА AI-цикл ещё не
+# закоммитил свежий текстовый анализ, откатывая его обратно к состоянию
+# origin/main. Блоки/видео при этом выживают (дописываются на диск уже
+# ПОСЛЕ отката), а вот forecast_analysis_*.json — нет: он писался в
+# начале цикла и был единственным, что успевало попасть под откат.
+# Поэтому текст теперь коммитится и пушится СРАЗУ после генерации,
+# отдельным вызовом, до старта make_blocks/make_video.
+ANALYSIS_PATHS = [
+    "data/forecast_analysis_claude.json", "data/forecast_analysis_claude.mp3",
+    "data/forecast_analysis_gemini.json", "data/forecast_analysis_gemini.mp3",
+    "data/ai_schedule.json", "data/ai_schedule_gemini.json",
+]
+MEDIA_PATHS = [
+    "data/blocks",
+    "data/blocks_gemini",
+    "data/forecast_video.mp4",
+    "data/forecast_video_gemini.mp4",
+    "data/_ai_pending_models.json",
+]
+
+
+def git_push_ai(paths=None):
     lock_fd = acquire_git_lock()
     try:
-        _candidates = [
-            "data/forecast_analysis_claude.json", "data/forecast_analysis_claude.mp3",
-            "data/blocks",
-            "data/forecast_analysis_gemini.json", "data/forecast_analysis_gemini.mp3",
-            "data/blocks_gemini",
-            "data/ai_schedule.json",
-            "data/ai_schedule_gemini.json",
-            "data/forecast_video.mp4",
-            "data/forecast_video_gemini.mp4",
-            "data/_ai_pending_models.json",
-        ]
+        _candidates = paths if paths is not None else (ANALYSIS_PATHS + MEDIA_PATHS)
         _to_add = [p for p in _candidates if os.path.exists(os.path.join(BASE_DIR, p))]
         if not _to_add:
             print("  Нет файлов для коммита.")
