@@ -1,1 +1,1 @@
-{"task_id": "add-ai-cron-1788233146", "cmd": "(sudo crontab -l; echo \"4,9,14,19,24,29,34,39,44,49,54,59 * * * * /opt/weather-pipeline/run_timed.sh ai /var/log/vps-ai-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_ai_pipeline.py\") | sudo crontab - && sudo crontab -l"}
+{"task_id": "check-ai-cron-1788233578", "cmd": "tail -25 /var/log/vps-ai-pipeline.log 2>&1; echo \"---queue---\"; cat /opt/weather-pipeline/repo/data/_ai_pending_models.json 2>&1"}
