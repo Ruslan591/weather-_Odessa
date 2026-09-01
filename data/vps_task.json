@@ -1,1 +1,1 @@
-{"task_id": "check-timing-result", "cmd": "cat /tmp/mv_timing.log 2>&1; echo \"---done marker---\"; ls -la /tmp/mv_timing.done 2>&1; echo \"---any leftover processes---\"; ps aux | grep -E \"make_video|ffmpeg\" | grep -v grep"}
+{"task_id": "check-push-log", "cmd": "grep -n \"ai push\\|commit warn\\|ai git error\\|ai git timeout\" /var/log/vps-ai-pipeline.log | tail -30"}
