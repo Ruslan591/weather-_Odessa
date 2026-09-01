@@ -1,7 +1,7 @@
 {
-  "task_id": "check-crontab-1788233044",
+  "task_id": "add-ai-cron-1788233146",
   "returncode": 0,
-  "stdout": "* * * * * /opt/vps-github-bridge/venv/bin/python3 /opt/vps-github-bridge/vps_github_bridge.py >> /var/log/vps-github-bridge.log 2>&1\n*/5 * * * * /opt/weather-pipeline/run_timed.sh main /var/log/vps-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_pipeline.py\n2,7,12,17,22,27,32,37,42,47,52,57 * * * * /opt/weather-pipeline/run_timed.sh satellite /var/log/vps-satellite-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_satellite_pipeline.py\n",
+  "stdout": "* * * * * /opt/vps-github-bridge/venv/bin/python3 /opt/vps-github-bridge/vps_github_bridge.py >> /var/log/vps-github-bridge.log 2>&1\n*/5 * * * * /opt/weather-pipeline/run_timed.sh main /var/log/vps-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_pipeline.py\n2,7,12,17,22,27,32,37,42,47,52,57 * * * * /opt/weather-pipeline/run_timed.sh satellite /var/log/vps-satellite-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_satellite_pipeline.py\n4,9,14,19,24,29,34,39,44,49,54,59 * * * * /opt/weather-pipeline/run_timed.sh ai /var/log/vps-ai-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_ai_pipeline.py\n",
   "stderr": "",
-  "completed_at_utc": "2026-09-01T03:25:02Z"
+  "completed_at_utc": "2026-09-01T03:26:01Z"
 }
