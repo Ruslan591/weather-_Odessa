@@ -440,6 +440,7 @@ def main():
         print("  ⏭ предыдущий цикл AI ещё выполняется — пропуск")
         return
 
+    _t0 = _time.time()
     try:
         print(f"\n{'─'*52}")
         print(f"  [AI-VPS] Цикл AI-анализа  {datetime.now(timezone.utc).strftime('%d.%m %H:%M UTC')}")
@@ -453,6 +454,8 @@ def main():
         check_ai_gemini_pending()
         git_push_ai()
     finally:
+        _dt = _time.time() - _t0
+        print(f"\n  ⏱ [ai] цикл занял {_dt:.1f}с")
         import fcntl
         fcntl.flock(lock_fd, fcntl.LOCK_UN)
         lock_fd.close()
