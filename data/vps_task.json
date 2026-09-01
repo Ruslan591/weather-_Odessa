@@ -1,1 +1,1 @@
-{"task_id": "ai-log-full", "cmd": "grep -c \"AI:\" /var/log/vps-ai-pipeline.log 2>&1; echo \"---last 3 AI cycles (грубо, по маркеру AI: в очереди)---\"; grep -n \"AI: в очереди\\|AI-Gemini\\|Промпт:\\|Анализ сохранён\\|pending\\|cooldown\\|Новых прогонов\" /var/log/vps-ai-pipeline.log | tail -40"}
+{"task_id": "check-orphans", "cmd": "ps aux | grep -E \"ffmpeg|make_video|edge_tts\" | grep -v grep; echo \"---load---\"; uptime; echo \"---mem---\"; free -h; echo \"---count ffmpeg---\"; pgrep -c ffmpeg"}
