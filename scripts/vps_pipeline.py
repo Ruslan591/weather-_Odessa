@@ -706,7 +706,14 @@ def queue_ai_models(models):
     except Exception as e:
         print(f"  [WARN] не удалось записать AI-очередь: {e}")
         return
-    dispatch_ai_pipeline()
+    # 01.09.2026: диспетч через GitHub Actions (dispatch_ai_pipeline(), выше)
+    # убран отсюда — теперь очередь читает scripts/vps_ai_pipeline.py на
+    # собственном cron (4,9,14,19,...*/5 на VPS), подхватывает в течение
+    # нескольких минут без обращения к Actions API. dispatch_ai_pipeline()
+    # оставлена в файле как задокументированный fallback (не вызывается),
+    # на случай если vps_ai_pipeline.py придётся временно отключить —
+    # тогда одну строку ниже достаточно раскомментировать.
+    # dispatch_ai_pipeline()
 
 # ── PWS-синк ───────────────────────────────────────────────────────────────
 
