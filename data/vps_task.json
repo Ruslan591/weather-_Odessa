@@ -1,1 +1,1 @@
-{"task_id": "check-ai-sat-logs", "cmd": "echo === AI PIPELINE LOG ===; tail -20 /var/log/vps-ai-pipeline.log; echo; echo === SATELLITE PIPELINE LOG ===; tail -20 /var/log/vps-satellite-pipeline.log"}
+{"task_id": "check-agent-path", "cmd": "ls -la /opt/vps-agent/; echo ---systemd unit---; systemctl cat vps-agent 2>&1 | head -20"}
