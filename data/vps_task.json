@@ -1,1 +1,1 @@
-{"task_id": "check-marine-mp3", "cmd": "cd /opt/weather-pipeline/repo && ls -la data/blocks_gemini/block_4_marine.mp3 && file data/blocks_gemini/block_4_marine.mp3 && ffprobe -v error data/blocks_gemini/block_4_marine.mp3 2>&1 | head -10"}
+{"task_id": "check-ai-sat-logs", "cmd": "echo === AI PIPELINE LOG ===; tail -20 /var/log/vps-ai-pipeline.log; echo; echo === SATELLITE PIPELINE LOG ===; tail -20 /var/log/vps-satellite-pipeline.log"}
