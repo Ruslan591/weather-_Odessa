@@ -93,6 +93,8 @@ SNAPSHOT_SECTIONS = [
     ("SERVICES", "systemctl is-active vps-agent caddy 2>&1 | paste -sd ' '"),
     ("REPO (top level)", "ls -la /opt/weather-pipeline/repo 2>/dev/null | head -20"),
     ("VPS-PIPELINE LOG (tail)", "tail -25 /var/log/vps-pipeline.log 2>/dev/null"),
+    ("AI-PIPELINE LOG (tail)", "tail -20 /var/log/vps-ai-pipeline.log 2>/dev/null"),
+    ("SATELLITE-PIPELINE LOG (tail)", "tail -20 /var/log/vps-satellite-pipeline.log 2>/dev/null"),
     ("GITHUB-BRIDGE LOG (tail)", "tail -15 /var/log/vps-github-bridge.log 2>/dev/null"),
     ("UPTIME / LOAD", "uptime"),
     (
