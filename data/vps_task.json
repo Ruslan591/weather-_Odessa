@@ -1,1 +1,1 @@
-{"task_id": "check-orphans", "cmd": "ps aux | grep -E \"ffmpeg|make_video|edge_tts\" | grep -v grep; echo \"---load---\"; uptime; echo \"---mem---\"; free -h; echo \"---count ffmpeg---\"; pgrep -c ffmpeg"}
+{"task_id": "time-video", "cmd": "cd /opt/weather-pipeline/repo && S=$(date +%s) && timeout 600 python3 scripts/make_video.py gemini > /tmp/mv_timing.log 2>&1; RC=$?; E=$(date +%s); echo \"duration: $((E-S))s, returncode: $RC\"; tail -15 /tmp/mv_timing.log"}
