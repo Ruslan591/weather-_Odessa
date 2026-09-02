@@ -539,8 +539,28 @@ def check_eumetsat_target_summary():
         print(f"  [WARN] eumetsat_target_summary.py: {e}")
 
 
+def check_eumetsat_render_systems_overlay():
+    # [ДОБАВЛЕНО 2026-09-02] Перенесено вслед за gh_satellite_pipeline.py —
+    # покраска РЕАЛЬНЫХ пикселей ВСЕХ систем синоптического масштаба
+    # (снапшот текущего цикла, не персистентные frontlike-треки), см.
+    # докстринг eumetsat_render_systems_overlay.py. Вызывается ПОСЛЕ
+    # check_eumetsat_target_summary() — system_candidates нужны уже
+    # профильтрованными по видимости ИК/GeoColour.
+    try:
+        subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "eumetsat_render_systems_overlay.py")],
+            cwd=BASE_DIR, capture_output=False, timeout=30
+        )
+    except Exception as e:
+        print(f"  [WARN] eumetsat_render_systems_overlay.py: {e}")
+
+
 def check_pipeline_health_alert():
-    N_CONSECUTIVE_STALE_FOR_ALERT = 3
+    # Порог поднят с 3 до 4 (2026-09-02, по запросу пользователя — пуши
+    # "пайплайн застрял" приходили слишком часто при цикле VPS ~5 мин:
+    # 3 подряд = ~15 мин простоя, легко ловилось на обычных паузах публикации
+    # кадра). Теперь 4 подряд = ~20 мин.
+    N_CONSECUTIVE_STALE_FOR_ALERT = 4
     health_file = os.path.join(BASE_DIR, "data", "eumetsat_pipeline_health.json")
     alert_file = os.path.join(BASE_DIR, "data", "eumetsat_pipeline_alert_state.json")
 
@@ -738,6 +758,7 @@ def git_push_satellite():
             "data/eumetsat_geocolour_snapshot.png",
             "data/eumetsat_ir_snapshot.png",
             "data/eumetsat_clm_snapshot.png",
+            "data/eumetsat_systems_snapshot.png",
             "data/eumetsat_local_channel_suppression_log.json",
             "data/eumetsat_system_channel_suppression_log.json",
             "data/eumetsat_far_watch.json",
@@ -892,6 +913,7 @@ def _main_body():
     _timed(check_eumetsat_precip_motion)
     _timed(check_eumetsat_geocolour_motion)
     _timed(check_eumetsat_target_summary)
+    _timed(check_eumetsat_render_systems_overlay)
     # check_eumetsat_anim_render() не вызывается — см. докстринг файла, п.5.
     _timed(check_eumetsat_far_watch)
     _timed(check_eumetsat_very_far_watch)
