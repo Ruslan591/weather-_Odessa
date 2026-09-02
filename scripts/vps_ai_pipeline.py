@@ -225,6 +225,15 @@ def check_ai_new_models(force=False):
             print("  [WARN] make_blocks_cloud.py завис дольше 180с — прерван")
             blocks_result = None
         if blocks_result is not None and blocks_result.returncode == 0:
+            # 02.09.2026: пушим свежие блоки СРАЗУ, до make_video (который может
+            # идти ~600-700с — дольше 5-минутного такта соседних cron-скриптов).
+            # Иначе их sync_repo() (reset --hard HEAD БЕЗ git-лока — см.
+            # GIT_LOCK_FILE) успевает откатить только что записанные, но ещё не
+            # закоммиченные mp3 обратно к origin/main раньше, чем дойдёт очередь
+            # до git_push_ai(MEDIA_PATHS) в конце этой функции. Видео при этом
+            # выживало, т.к. дописывается на диск последним — отсюда баг
+            # "текст и видео обновляются, озвучка блоков стоит на месте".
+            git_push_ai(paths=BLOCKS_CLAUDE_PATHS)
             try:
                 video_result = subprocess.run(
                     [PYTHON, os.path.join(SCRIPTS_DIR, "make_video.py")],
@@ -248,6 +257,11 @@ def check_ai_new_models(force=False):
             if blocks_result.returncode != 0:
                 print("  [AI-Gemini] make_blocks_gemini_cloud.py упал")
             else:
+                # 02.09.2026: тот же ранний push, что и для claude-веток выше —
+                # см. комментарий там же. Без этого data/blocks_gemini годами
+                # стоял на дате последнего успешного окна без гонки (было
+                # 29.08 при ежедневно обновляющемся forecast_video_gemini.mp4).
+                git_push_ai(paths=BLOCKS_GEMINI_PATHS)
                 try:
                     # 700с — с запасом от реально измеренных ~592с на этом ARM VPS
                     # (было 240с — гарантированно убивало рендер на середине).
@@ -310,6 +324,8 @@ def check_ai_gemini_pending():
                 print("  [AI-Gemini] retry: make_blocks_gemini_cloud.py завис дольше 180с — прерван")
                 blocks_r = None
             if blocks_r is not None and blocks_r.returncode == 0:
+                # 02.09.2026: тот же ранний push блоков, что и в check_ai_new_models().
+                git_push_ai(paths=BLOCKS_GEMINI_PATHS)
                 try:
                     subprocess.run(
                         [PYTHON, os.path.join(SCRIPTS_DIR, "make_video.py"), "gemini"],
@@ -346,6 +362,11 @@ MEDIA_PATHS = [
     "data/forecast_video_gemini.mp4",
     "data/_ai_pending_models.json",
 ]
+# 02.09.2026: подмножества MEDIA_PATHS для раннего push блоков сразу после
+# генерации, до старта долгого make_video.py — см. комментарии в
+# check_ai_new_models()/check_ai_gemini_pending().
+BLOCKS_CLAUDE_PATHS = ["data/blocks"]
+BLOCKS_GEMINI_PATHS = ["data/blocks_gemini"]
 
 
 def git_push_ai(paths=None):
