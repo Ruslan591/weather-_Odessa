@@ -948,6 +948,35 @@ function _renderSystemCandidatesTable(rows, suppressedCount){
     </details>${supNote}`;
 }
 
+// Снимок ВСЕХ систем синоптического масштаба (не персистентные frontlike-
+// треки ниже, а СНАПШОТ текущего кадра — все "system"-класс структуры,
+// подтверждённые хотя бы одним из ИК/GeoColour, независимо от вытянутости/
+// накопленной истории). Покраска РЕАЛЬНЫХ пикселей блоба, тем же приёмом,
+// что "Треки фронтов" на Cloud Mask (см. eumetsat_render_track_overlay.py),
+// источник — eumetsat_render_systems_overlay.py + target_summary.
+// system_candidates. По запросу пользователя: абстрактная линия PCA-оси
+// на GeoColour ("Треки фронтов") оказалась малоинформативной ("это всё
+// что угодно, только не фронт") — для систем выбран сразу подход "красим
+// реальную форму".
+// Цвет закреплён за ПОЗИЦИЕЙ в списке (тот же порядок, что в таблице
+// выше), НЕ за физическим объектом — target_id системы не персистентен
+// между циклами (см. докстринг eumetsat_render_systems_overlay.py),
+// поэтому цвет одной и той же реальной системы может смениться при
+// следующем обновлении страницы — это ожидаемо, не баг.
+function _renderSystemsSnapshot(targetSummaryData){
+    const rows = targetSummaryData && targetSummaryData.system_candidates;
+    if(!rows || !rows.length || !targetSummaryData.timestamp) return "";
+    const ts = _obsTimeTag(targetSummaryData.timestamp, 20);
+    const src = `https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_systems_snapshot.png?v=${encodeURIComponent(targetSummaryData.timestamp)}`;
+    return `<div style="margin-top:10px;">
+        <div style="color:#72c8ff; font-size:13px; font-weight:600; margin-bottom:4px;">🎨 Системы синоптического масштаба — на карте ${ts}</div>
+        <img src="${src}" alt="Системы синоптического масштаба"
+             style="width:100%; border-radius:8px; display:block;"
+             onerror="this.parentElement.style.display='none';">
+        <div style="color:#777; font-size:11px; margin-top:3px;">Реальная форма каждой системы из таблицы выше; цвет = позиция в таблице (сверху вниз), может смениться при следующем обновлении — это не тот же трекинг, что у "Треков фронтов" ниже.</div>
+    </div>`;
+}
+
 // Последний снимок GeoColour — чистый натуральный цвет (без оверлея
 // классификации, тот отдельно, только для внутренней калибровки, см.
 // eumetsat_geocolour_debug_preview.png) — по запросу 2026-08-10,
@@ -1339,6 +1368,7 @@ function renderNearbyPrecipCard(){
         ${_renderTargetSummaryLines(_eumetsatTargetSummaryData)}
         ${_renderLocalCandidatesTable(_eumetsatTargetSummaryData && _eumetsatTargetSummaryData.local_candidates, _eumetsatTargetSummaryData && _eumetsatTargetSummaryData.local_suppressed_count)}
         ${_renderSystemCandidatesTable(_eumetsatTargetSummaryData && _eumetsatTargetSummaryData.system_candidates, _eumetsatTargetSummaryData && _eumetsatTargetSummaryData.system_suppressed_count)}
+        ${_renderSystemsSnapshot(_eumetsatTargetSummaryData)}
         ${_renderWestSnapshot(_eumetsatWestWatchData, _eumetsatTargetSummaryData && _eumetsatTargetSummaryData.frontal_tracks)}
         ${_renderNearSnapshotsAccordion(_eumetsatGeocolourMotionData, _eumetsatIrMotionData, _eumetsatForecastData, _eumetsatTargetSummaryData && _eumetsatTargetSummaryData.frontal_tracks)}
         ${_renderHistoryTable(_eumetsatPrecipHistoryData, "📜", "Хронология осадков")}
