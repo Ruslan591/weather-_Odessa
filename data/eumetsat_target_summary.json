@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-02T12:59:00Z",
+  "timestamp": "2026-09-02T13:03:48Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-09-02T12:30:00.000Z",
   "target_id": 3,
@@ -23,23 +23,6 @@
     "has_lightning": false
   },
   "local_candidates": [
-    {
-      "target_id": 5,
-      "area_km2": 78.7,
-      "distance_km": 188.2,
-      "bearing_deg": 101.0,
-      "compass": "В",
-      "elongation_aspect_ratio": 1.97,
-      "elongation_axis_deg": 178.0,
-      "elongation_axis_compass": "Ю-С",
-      "frontlike": false,
-      "phase_label": "безоблачно",
-      "type_label": "плотная/высокая",
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": false,
-      "geocolour_confirmed": true
-    },
     {
       "target_id": 14,
       "area_km2": 208.2,
@@ -75,7 +58,7 @@
       "geocolour_confirmed": true
     }
   ],
-  "local_suppressed_count": 11,
+  "local_suppressed_count": 12,
   "system_candidates": [
     {
       "target_id": 0,
@@ -362,17 +345,17 @@
         "timestamp": "2026-09-02T12:40:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-09-02T12:30:00.000Z"
+        "confirmed": true,
+        "timestamp": "2026-09-02T12:40:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": null,
         "timestamp": "2026-09-02T12:58:38Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 2,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 1,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -384,5 +367,5 @@
       "timestamp": "2026-09-02T12:58:51Z"
     }
   },
-  "verdict": "CLM отметил цель в 109км СЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (63595км²) в 9км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора, средняя водяная)."
+  "verdict": "Цель в 109км СЗ — каналы расходятся: geocolour_motion подтверждают, ir_motion нет. Отдельно: система синоптического масштаба (63595км²) в 9км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора, средняя водяная)."
 }
