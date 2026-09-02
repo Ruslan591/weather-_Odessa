@@ -965,9 +965,19 @@ function _renderSystemCandidatesTable(rows, suppressedCount){
 // следующем обновлении страницы — это ожидаемо, не баг.
 function _renderSystemsSnapshot(targetSummaryData){
     const rows = targetSummaryData && targetSummaryData.system_candidates;
-    if(!rows || !rows.length || !targetSummaryData.timestamp) return "";
-    const ts = _obsTimeTag(targetSummaryData.timestamp, 20);
-    const src = `https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_systems_snapshot.png?v=${encodeURIComponent(targetSummaryData.timestamp)}`;
+    // ВАЖНО: targetSummaryData.timestamp — это время ЗАПУСКА
+    // eumetsat_target_summary.py (он выполняется КАЖДЫЙ цикл, даже когда
+    // cloud_forecast.py застрял/скипнут), а не время самого кадра CLM, на
+    // основе которого построена картинка. Реальное время кадра —
+    // cloud_forecast_timestamp (тот же таймстемп, что показан под
+    // "Центральный тайл — снимки" ниже). Раньше здесь ошибочно стоял
+    // .timestamp — из-за этого подпись могла показывать "23:23", когда
+    // картинка на самом деле построена по кадру 23:00 (несоответствие
+    // замечено пользователем на скриншоте 2026-09-02).
+    const frameTs = targetSummaryData && targetSummaryData.cloud_forecast_timestamp;
+    if(!rows || !rows.length || !frameTs) return "";
+    const ts = _obsTimeTag(frameTs, 20);
+    const src = `https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_systems_snapshot.png?v=${encodeURIComponent(frameTs)}`;
     return `<div style="margin-top:10px;">
         <div style="color:#72c8ff; font-size:13px; font-weight:600; margin-bottom:4px;">🎨 Системы синоптического масштаба — на карте ${ts}</div>
         <img src="${src}" alt="Системы синоптического масштаба"
