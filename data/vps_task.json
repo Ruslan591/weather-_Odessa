@@ -1,1 +1,1 @@
-{"task_id": "verify-snapshot-local", "cmd": "curl -s \"http://127.0.0.1:8080/snapshot?token=$(grep VPS_AGENT_TOKEN /etc/vps-agent/token | cut -d= -f2)\" | grep -A3 \"=== AI-PIPELINE\\|=== SATELLITE-PIPELINE\""}
+{"task":"diagnostic-video-check","cmd":"ps aux | grep -E \"make_video|make_blocks\" | grep -v grep; echo ---LOCKS---; ls -la /tmp/*.lock 2>/dev/null; echo ---LASTLOG---; tail -n 60 /opt/weather-pipeline/repo/vps-ai-pipeline.log 2>/dev/null || tail -n 60 ~/vps-ai-pipeline.log 2>/dev/null; echo ---CRON---; sudo crontab -l"}
