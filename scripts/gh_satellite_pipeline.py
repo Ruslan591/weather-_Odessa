@@ -472,6 +472,7 @@ def git_push_satellite():
             "data/eumetsat_geocolour_snapshot.png",
             "data/eumetsat_ir_snapshot.png",
             "data/eumetsat_clm_snapshot.png",
+            "data/eumetsat_systems_snapshot.png",
             "data/eumetsat_local_channel_suppression_log.json",
             "data/eumetsat_system_channel_suppression_log.json",
             "data/eumetsat_far_watch.json",
@@ -550,6 +551,28 @@ def check_eumetsat_target_summary():
         print(f"  [WARN] eumetsat_target_summary.py: {e}")
 
 
+def check_eumetsat_render_systems_overlay():
+    # [ДОБАВЛЕНО 2026-09-02] Покраска РЕАЛЬНЫХ пикселей ВСЕХ систем
+    # синоптического масштаба (снапшот текущего цикла, не персистентные
+    # frontlike-треки) — см. докстринг eumetsat_render_systems_overlay.py.
+    # ВАЖНО: вызывается ПОСЛЕ check_eumetsat_target_summary() (не сразу
+    # после check_eumetsat_render_track_overlay(), как для треков) —
+    # system_candidates нужны уже ПРОФИЛЬТРОВАННЫМИ по видимости ИК/
+    # GeoColour (это делает eumetsat_target_summary.py), иначе красили бы
+    # неподтверждённый шум, который таблица на фронтенде и так не
+    # показывает. Near-tier scratch-файлы (_scratch_clm_base.png/
+    # _scratch_clm_pixelmap.npy), записанные check_eumetsat_cloud_forecast()
+    # в начале ЭТОГО ЖЕ прогона, к этому моменту ещё не тронуты — ни один
+    # промежуточный шаг их не удаляет и не перезаписывает.
+    try:
+        subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "eumetsat_render_systems_overlay.py")],
+            cwd=BASE_DIR, capture_output=False, timeout=30
+        )
+    except Exception as e:
+        print(f"  [WARN] eumetsat_render_systems_overlay.py: {e}")
+
+
 def check_pipeline_health_alert():
     # Алерт "источник (EUMETSAT) застрял" — реакция на инцидент 2026-08-18
     # (см. docs/topics/eumetsat.md): ~75 мин без новых кадров msg_fes:clm
@@ -626,6 +649,7 @@ def main():
     check_eumetsat_precip_motion()
     check_eumetsat_geocolour_motion()
     check_eumetsat_target_summary()
+    check_eumetsat_render_systems_overlay()
     # check_eumetsat_anim_render() убран из цикла 2026-08-16 (решение: закрыть
     # eumetsat.html/визуальный браузер снимков, сосредоточиться на nearby.html
     # и детекте фронтов — самый тяжёлый шаг пайплайна, до 600с, 12 слоёв x
