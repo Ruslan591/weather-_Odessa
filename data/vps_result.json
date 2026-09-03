@@ -1,7 +1,7 @@
 {
-  "task_id": "swap-repo-1788411700",
+  "task_id": "remove-backup-and-resume-cron-1788411800",
   "returncode": 0,
-  "stdout": "===FINAL-DU-GIT===\n100M\trepo/.git\n===FINAL-DU-TOTAL===\n3.8G\t/opt/weather-pipeline\n===DF===\nFilesystem      Size  Used Avail Use% Mounted on\n/dev/sda1        45G  8.5G   36G  20% /\n===GIT-STATUS===\nOn branch main\nYour branch is up to date with 'origin/main'.\n\nnothing to commit, working tree clean\n===GIT-LOG===\ncommit 15941aee935a78e8951c5d5732cd9cd394874a22\nAuthor: Ruslan591 <rus3212@gmail.com>\nDate:   Thu Sep 3 07:57:34 2026 +0300\n\n    vps task: fresh shallow re-clone into repo_new to reclaim disk\n===GIT-CONFIG-CRED===\nstore --file=/root/.git-credentials\n",
+  "stdout": "===DU-TOTAL===\n276M\t/opt/weather-pipeline\n===DF===\nFilesystem      Size  Used Avail Use% Mounted on\n/dev/sda1        45G  5.0G   40G  12% /\n===RESTORE-CRONTAB===\n===NEW-CRONTAB===\n* * * * * /opt/vps-github-bridge/venv/bin/python3 /opt/vps-github-bridge/vps_github_bridge.py >> /var/log/vps-github-bridge.log 2>&1\n*/5 * * * * /opt/weather-pipeline/run_timed.sh main /var/log/vps-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_pipeline.py\n2,7,12,17,22,27,32,37,42,47,52,57 * * * * /opt/weather-pipeline/run_timed.sh satellite /var/log/vps-satellite-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_satellite_pipeline.py\n4,9,14,19,24,29,34,39,44,49,54,59 * * * * /opt/weather-pipeline/run_timed.sh ai /var/log/vps-ai-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_ai_pipeline.py\n",
   "stderr": "",
-  "completed_at_utc": "2026-09-03T05:00:02Z"
+  "completed_at_utc": "2026-09-03T05:01:02Z"
 }
