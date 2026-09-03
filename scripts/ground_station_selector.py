@@ -115,6 +115,55 @@ def select_ahead_behind(track_dx_km, track_dy_km, movement_bearing_deg,
     }
 
 
+def generate_axis_samples(track_dx_km, track_dy_km, axis_deg, area_km2, aspect_ratio,
+                           step_km=60.0, min_half_km=60.0, max_half_km=300.0,
+                           extend_factor=1.3):
+    """[Добавлено 2026-09-03, см. docs/topics/frontal_line_stations.md]
+    Возвращает список (offset_km, dx_km, dy_km) точек вдоль оси
+    вытянутости системы (axis_deg) — не одна пара ahead/behind в центре
+    трека, а несколько, разнесённых вдоль фронта, чтобы потом соединить их
+    в кривую (сама сборка кривой — отдельный шаг, не здесь, здесь только
+    геометрия точек отбора).
+
+    Половина длины оси оценивается из area_km2/aspect_ratio, приближая
+    систему эллипсом (area = π·a·b, aspect_ratio = a/b ⇒
+    a = sqrt(area·aspect_ratio/π) — большая полуось), с запасом
+    extend_factor: near-tier сам обрезан окном ~192км, реальный фронт
+    обычно длиннее видимого куска. Результат зажат в [min_half_km,
+    max_half_km] — если area_km2/aspect_ratio отсутствуют или некорректны
+    (<=0), используется min_half_km как половина длины.
+
+    axis_deg — тот же bearing-convention, что и movement_bearing_deg
+    (atan2(dx,dy), 0°=С, 90°=В) — см. докстринг модуля. У оси эллипса
+    направление определено с точностью до 180° (ось 12° и 192° — одна и
+    та же линия), для симметричного сэмплирования в обе стороны это
+    неважно.
+
+    Если axis_deg is None — вернёт только сам центр трека (одна точка,
+    offset_km=0.0), без попытки разнести вдоль неизвестной оси."""
+    if axis_deg is None:
+        return [(0.0, round(track_dx_km, 2), round(track_dy_km, 2))]
+
+    if area_km2 and aspect_ratio and area_km2 > 0 and aspect_ratio > 0:
+        semi_major_km = math.sqrt(area_km2 * aspect_ratio / math.pi)
+        half_len_km = semi_major_km * extend_factor
+    else:
+        half_len_km = min_half_km
+    half_len_km = max(min_half_km, min(max_half_km, half_len_km))
+
+    rad = math.radians(axis_deg)
+    ux, uy = math.sin(rad), math.cos(rad)  # та же конвенция, что bearing_compass
+
+    n_steps = max(1, int(round(half_len_km / step_km)))
+    samples = []
+    for i in range(-n_steps, n_steps + 1):
+        offset_km = i * step_km
+        dx = track_dx_km + offset_km * ux
+        dy = track_dy_km + offset_km * uy
+        samples.append((round(offset_km, 1), round(dx, 2), round(dy, 2)))
+    return samples
+
+
 if __name__ == "__main__":
     # Автономный смоук-тест (не требует сети/файлов) — синтетический трек и
     # горстка синтетических станций, чтобы руками проверить геометрию перед
@@ -162,3 +211,23 @@ if __name__ == "__main__":
     assert result["ahead"] is not None and result["ahead"]["name"] == "Дальше по прямой, но почти на курсе", result["ahead"]
     assert result["behind"] is not None and result["behind"]["name"] == "Точно позади (З, 50км)"
     print("\nOK: все assert прошли (выбор по perp_km подтверждён, не по dist_km).")
+
+    print("\n=== Смоук-тест: generate_axis_samples ===")
+    # Ось строго на восток-запад (90°), система area=9888.5 aspect=2.27
+    # (реальные значения track_id=892 на момент написания, см.
+    # docs/topics/frontal_line_stations.md) ⇒ semi_major≈84.5км,
+    # half_len с запасом 1.3× ≈ 109.9км ⇒ зажимается в [60,300] без
+    # изменений ⇒ при step=60км это n_steps=round(109.9/60)=2 ⇒ 5 точек
+    # offset -120,-60,0,60,120.
+    samples = generate_axis_samples(0.0, 0.0, 90.0, 9888.5, 2.27, step_km=60.0)
+    offsets = [s[0] for s in samples]
+    print("offsets_km:", offsets)
+    assert offsets == [-120.0, -60.0, 0.0, 60.0, 120.0], offsets
+    # При axis_deg=90° (восток) точка offset=60 должна сдвинуться на
+    # dx=+60, dy=0 (а не наоборот) — проверка конвенции bearing.
+    off60 = [s for s in samples if s[0] == 60.0][0]
+    assert abs(off60[1] - 60.0) < 0.01 and abs(off60[2] - 0.0) < 0.01, off60
+    # axis_deg=None ⇒ одна точка, сам центр.
+    single = generate_axis_samples(10.0, -5.0, None, 1000.0, 2.0)
+    assert single == [(0.0, 10.0, -5.0)], single
+    print("OK: generate_axis_samples — offsets и dx/dy-конвенция подтверждены.")
