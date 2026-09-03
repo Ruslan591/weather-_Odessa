@@ -1,5 +1,5 @@
 {
-  "task_id": "fix-git-identity-1788425300",
-  "cmd": "\nset -e\ngit config --global user.name \"weather-odessa-vps\"\ngit config --global user.email \"vps-bot@weather-odessa.local\"\necho ===VERIFY===\ngit config --global --get user.name\ngit config --global --get user.email\necho ===TEST-COMMIT===\ncd /opt/weather-pipeline/repo\ngit fetch origin main --depth 1 --update-shallow\ngit checkout -B main origin/main\necho test > /tmp/_git_identity_test.txt\ncp /tmp/_git_identity_test.txt data/_git_identity_test.txt 2>/dev/null || true\nrm -f data/_git_identity_test.txt\ngit status --short\n",
-  "timeout": 40
+  "task_id": "verify-natural-cycle-1788425700",
+  "cmd": "\necho ===DATE===; date -u\necho ===TAIL-MAIN===; tail -25 /var/log/vps-pipeline.log\necho ===TAIL-SAT===; tail -25 /var/log/vps-satellite-pipeline.log\necho ===GIT-LOG===; cd /opt/weather-pipeline/repo && git log -5 --oneline\n",
+  "timeout": 20
 }
