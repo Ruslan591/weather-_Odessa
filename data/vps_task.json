@@ -1,5 +1,5 @@
 {
-  "task_id": "reclone-1788411600",
-  "cmd": "\nset -e\ncd /opt/weather-pipeline\nrm -rf repo_new\ngit clone --depth 1 --branch main https://github.com/Ruslan591/weather-_Odessa.git repo_new\necho ===NEW-DU===\ndu -sh repo_new/.git\necho ===NEW-SHALLOW-LINES===\ncat repo_new/.git/shallow | wc -l\necho ===NEW-LOG===\ngit -C repo_new log -1 --format=%H+%ai\necho ===OLD-LOG===\ngit -C repo/  log -1 --format=%H+%ai\n",
-  "timeout": 55
+  "task_id": "swap-repo-1788411700",
+  "cmd": "\nset -e\ncd /opt/weather-pipeline\nmv repo repo_old_backup\nmv repo_new repo\necho ===FINAL-DU-GIT===\ndu -sh repo/.git\necho ===FINAL-DU-TOTAL===\ndu -sh /opt/weather-pipeline\necho ===DF===\ndf -h /\necho ===GIT-STATUS===\ngit -C repo status\necho ===GIT-LOG===\ngit -C repo log -1\necho ===GIT-CONFIG-CRED===\ngit -C repo config --get credential.helper\n",
+  "timeout": 30
 }
