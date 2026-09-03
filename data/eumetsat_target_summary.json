@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-03T14:46:16Z",
+  "timestamp": "2026-09-03T14:49:49Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-09-03T13:45:00.000Z",
   "target_id": 0,
@@ -38,7 +38,7 @@
       "type_label": "плотная/высокая",
       "has_precip": true,
       "has_lightning": false,
-      "ir_confirmed": true,
+      "ir_confirmed": false,
       "geocolour_confirmed": true
     },
     {
@@ -161,6 +161,23 @@
       "geocolour_confirmed": true
     },
     {
+      "target_id": 24,
+      "area_km2": 213.5,
+      "distance_km": 267.7,
+      "bearing_deg": 201.0,
+      "compass": "Ю",
+      "elongation_aspect_ratio": 3.34,
+      "elongation_axis_deg": 59.0,
+      "elongation_axis_compass": "СВ-ЮЗ",
+      "frontlike": false,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
+      "has_precip": true,
+      "has_lightning": false,
+      "ir_confirmed": true,
+      "geocolour_confirmed": false
+    },
+    {
       "target_id": 25,
       "area_km2": 266.9,
       "distance_km": 269.0,
@@ -229,7 +246,7 @@
       "geocolour_confirmed": true
     }
   ],
-  "local_suppressed_count": 12,
+  "local_suppressed_count": 11,
   "system_candidates": [
     {
       "target_id": 6,
@@ -485,8 +502,8 @@
   "existence": {
     "modules": {
       "ir_motion": {
-        "confirmed": true,
-        "timestamp": "2026-09-03T14:20:00.000Z"
+        "confirmed": false,
+        "timestamp": "2026-09-03T14:30:00.000Z"
       },
       "geocolour_motion": {
         "confirmed": true,
@@ -497,9 +514,9 @@
         "timestamp": "2026-09-03T14:44:01Z"
       }
     },
-    "votes_confirmed": 3,
-    "votes_not_confirmed": 0,
-    "consensus": "confirmed"
+    "votes_confirmed": 2,
+    "votes_not_confirmed": 1,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -511,5 +528,5 @@
       "timestamp": "2026-09-03T14:45:20Z"
     }
   },
-  "verdict": "Облачная масса (65км², средняя водяная) в 10км С подтверждена всеми доступными каналами. Почти не движется. Наблюдаются осадки. Отдельно: система синоптического масштаба (28510км²) в 17км СЗ."
+  "verdict": "Цель в 10км С, средняя водяная — каналы расходятся: geocolour_motion/cloud_phase_type подтверждают, ir_motion нет. Почти не движется. Наблюдаются осадки. Отдельно: система синоптического масштаба (28510км²) в 17км СЗ."
 }
