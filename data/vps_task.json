@@ -1,5 +1,5 @@
 {
-  "task_id": "pause-cron-1788410400",
-  "cmd": "\nsudo crontab -l > /tmp/crontab_backup.txt\ngrep -v \"vps_pipeline.py\\|vps_satellite_pipeline.py\\|vps_ai_pipeline.py\" /tmp/crontab_backup.txt | sudo crontab -\necho ===NEW-CRONTAB===\nsudo crontab -l\necho ===LOCKS===\nls -la /tmp/vps_pipeline.lock /tmp/vps_satellite_pipeline.lock /tmp/vps_ai_pipeline.lock 2>&1\n",
-  "timeout": 30
+  "task_id": "check-running-1788410600",
+  "cmd": "\necho ===PS===\nps aux | grep -E 'vps_(pipeline|satellite_pipeline|ai_pipeline).py' | grep -v grep\necho ===FLOCK-CHECK===\nfor f in /tmp/vps_pipeline.lock /tmp/vps_satellite_pipeline.lock /tmp/vps_ai_pipeline.lock; do\n  flock -n \"$f\" -c \"echo $f: FREE\" || echo \"$f: BUSY\"\ndone\n",
+  "timeout": 20
 }
