@@ -41,14 +41,11 @@ npz с полными полями) — не оптический поток, а
 """
 
 import json
-import math
 import os
 import sys
 from datetime import datetime, timezone
 
 import numpy as np
-from PIL import Image, ImageDraw
-from scipy import ndimage
 
 import field_motion_common as fc
 
@@ -177,120 +174,6 @@ def _save_json(path, payload):
     os.replace(tmp, path)
 
 
-def _mark_found_systems_on_far_image(frame, bbox, width, height, is_cloud):
-    """Отмечает на geocolour-визуале far/very_far тира РЕАЛЬНУЮ форму
-    облачного блоба под позицией систем, найденных near-tier'ом
-    (data/eumetsat_target_summary.json -> system_candidates) — тот же
-    приём покраски реальных пикселей, что eumetsat_render_systems_overlay.py
-    (не абстрактный маркер). По запросу пользователя 2026-09-02: "Дальний
-    контроль (~1000км)" показывал только голую картинку без привязки к
-    уже найденной near-tier системе.
-
-    is_cloud — булева маска ЭТОГО тира (far ИЛИ very_far), уже посчитанная
-    в run_tier() для собственного посекторного детектора — используется
-    здесь ПОВТОРНО, без пересчёта.
-
-    [ИСПРАВЛЕНО 2026-09-03] Первая версия искала связную компоненту ПО ВСЕМУ
-    снимку (ndimage.label по всему is_cloud) — на масштабе ~1000-2500км
-    подавляющее большинство видимой облачности физически представляет
-    собой ОДИН слипшийся континентальный массив (соседние облачные системы
-    касаются друг друга где-то на снимке), поэтому закрашивалась чуть ли
-    не половина кадра, а не конкретный фронт (см. скриншот пользователя —
-    сравнение с эталонным "вот что должно было получиться", где нужна
-    только вытянутая полоса фронта). Исправление: связность ищем ТОЛЬКО
-    ЛОКАЛЬНО, в окне заданного радиуса вокруг проекции системы — окно режет
-    компоненту по своим границам, не давая заливке "перетечь" в
-    несвязанные по смыслу облачные поля где-то ещё в Европе. Радиус окна —
-    подобранная вручную константа (не физический расчёт формы фронта):
-    пошире (_CROP_HALF_KM_SPANNING), если near-tier явно сообщил, что
-    объект не поместился в его 192-км окно (window_spanning=True, значит
-    настоящий размер системы больше), и поуже иначе. Это эвристика, не
-    точный контур фронта — при необходимости подправить в первую очередь
-    именно эти две константы.
-
-    near-tier system_candidates хранят distance_km/bearing_deg (округлённые)
-    от Одессы (fc.CENTER_LAT/CENTER_LON — тот же центр, от которого считан
-    is_cloud этого тира, см. _pixel_grid_bearing_km) — переводим обратно в
-    dx_km/dy_km, затем в lon/lat, затем в col/row этого тира по его bbox.
-
-    Если под позицией системы в ЭТОМ (далёком) кадре нет облачных пикселей
-    в радиусе поиска (рассинхрон времени кадров near/far — у них разные
-    циклы обновления, см. докстринг файла) — рисует маленький крестик-
-    маркер вместо формы, тихо, без ошибки."""
-    _CROP_HALF_KM_DEFAULT = 220.0    # система уместилась в near-tier окне (192км) целиком
-    _CROP_HALF_KM_SPANNING = 420.0   # near-tier сообщил window_spanning=True — объект точно больше своего окна
-
-    ts_data = _load_json(os.path.join(BASE_DIR, "data", "eumetsat_target_summary.json"))
-    systems = (ts_data or {}).get("system_candidates") or []
-    if not systems:
-        return frame
-
-    min_lon, min_lat, max_lon, max_lat = bbox
-    km_per_px_x = (max_lon - min_lon) * fc.KM_PER_DEG_LON / width
-    km_per_px_y = (max_lat - min_lat) * fc.KM_PER_DEG_LAT / height
-    arr = np.array(frame.convert("RGB"))
-    fallback_points = []  # (col, row, color) — рядом вообще нет облака
-
-    for i, s in enumerate(systems):
-        dist_km, bearing_deg = s.get("distance_km"), s.get("bearing_deg")
-        if dist_km is None or bearing_deg is None:
-            continue
-        rad = math.radians(bearing_deg)
-        dx_km, dy_km = dist_km * math.sin(rad), dist_km * math.cos(rad)
-        lon = fc.CENTER_LON + dx_km / fc.KM_PER_DEG_LON
-        lat = fc.CENTER_LAT + dy_km / fc.KM_PER_DEG_LAT
-        col = (lon - min_lon) / (max_lon - min_lon) * width - 0.5
-        row = (max_lat - lat) / (max_lat - min_lat) * height - 0.5
-        col_i, row_i = int(round(col)), int(round(row))
-        if not (0 <= row_i < height and 0 <= col_i < width):
-            continue  # система вне окна этого тира — не должно случаться для far/very_far (радиус >> near), но безопасно пропустить
-
-        color = fc.FRONTAL_TRACK_COLORS[i % len(fc.FRONTAL_TRACK_COLORS)]
-
-        half_km = _CROP_HALF_KM_SPANNING if s.get("window_spanning") else _CROP_HALF_KM_DEFAULT
-        half_px_x = max(15, int(round(half_km / km_per_px_x)))
-        half_px_y = max(15, int(round(half_km / km_per_px_y)))
-        rr0, rr1 = max(0, row_i - half_px_y), min(height, row_i + half_px_y + 1)
-        cc0, cc1 = max(0, col_i - half_px_x), min(width, col_i + half_px_x + 1)
-        window = is_cloud[rr0:rr1, cc0:cc1]
-        local_row, local_col = row_i - rr0, col_i - cc0
-
-        window_labeled, _wn = ndimage.label(window)
-        label_here = int(window_labeled[local_row, local_col]) if window[local_row, local_col] else 0
-        if not label_here:
-            # ищем ближайший облачный пиксель, но НЕ выходя за пределы того
-            # же локального окна (иначе теряется весь смысл ограничения)
-            max_r = min(window.shape[0], window.shape[1]) // 2
-            for r in range(3, max(4, max_r), 3):
-                lr0, lr1 = max(0, local_row - r), min(window.shape[0], local_row + r + 1)
-                lc0, lc1 = max(0, local_col - r), min(window.shape[1], local_col + r + 1)
-                sub = window[lr0:lr1, lc0:lc1]
-                if sub.any():
-                    yy, xx = np.nonzero(sub)
-                    d2 = (yy + lr0 - local_row) ** 2 + (xx + lc0 - local_col) ** 2
-                    j = int(np.argmin(d2))
-                    label_here = int(window_labeled[yy[j] + lr0, xx[j] + lc0])
-                    break
-
-        if label_here:
-            mask_local = (window_labeled == label_here)
-            sub_arr = arr[rr0:rr1, cc0:cc1]
-            sub_arr[mask_local] = color
-            arr[rr0:rr1, cc0:cc1] = sub_arr
-        else:
-            fallback_points.append((col_i, row_i, color))
-
-    out = Image.fromarray(arr, mode="RGB")
-    if fallback_points:
-        overlay = Image.new("RGBA", out.size, (0, 0, 0, 0))
-        d = ImageDraw.Draw(overlay)
-        for col_i, row_i, color in fallback_points:
-            d.line([(col_i - 6, row_i), (col_i + 6, row_i)], fill=color + (255,), width=2)
-            d.line([(col_i, row_i - 6), (col_i, row_i + 6)], fill=color + (255,), width=2)
-        out = Image.alpha_composite(out.convert("RGBA"), overlay).convert("RGB")
-    return out
-
-
 def run_tier(tier_key):
     cfg = TIERS[tier_key]
     bbox = fc.FAR_BBOX if tier_key == "far" else fc.VERY_FAR_BBOX
@@ -402,7 +285,6 @@ def run_tier(tier_key):
         from eumetsat_anim_render import _composite_frame  # тот же способ подложки, что у mp4/png слоёв
         geo_arr = fc.fetch_map_custom(LAYER_GEOCOLOUR, bbox, width, height, time_iso=time_iso)
         frame = _composite_frame(geo_arr)
-        frame = _mark_found_systems_on_far_image(frame, bbox, width, height, is_cloud)
         os.makedirs(ANIM_DIR, exist_ok=True)
         out_img = os.path.join(ANIM_DIR, f"{tier_key}_geocolour.png")
         tmp_img = out_img.replace(".png", ".tmp.png")  # см. баг 2026-08-03 про расширение у tmp-файла в eumetsat_anim_render.py — тот же приём
