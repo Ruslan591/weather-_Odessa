@@ -714,8 +714,7 @@ function _renderOneFarTier(data, label){
     const imgHtml = img
         ? `<img src="https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/${img}?v=${encodeURIComponent(data.timestamp || "")}"
                 alt="${label}" style="width:100%; border-radius:8px; margin:6px 0; display:block;"
-                onerror="this.style.display='none';">
-           <div style="color:#777; font-size:11px; margin:-3px 0 6px;">Цветное пятно (если есть) — реальная форма системы, найденной near-tier-детектором (см. "Системы синоптического масштаба" выше), спроецированная на этот дальний снимок; см. eumetsat_far_watch.py::_mark_found_systems_on_far_image().</div>`
+                onerror="this.style.display='none';">`
         : "";
 
     const sectorBullets = _COMPASS_RU
