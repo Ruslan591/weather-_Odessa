@@ -1,5 +1,5 @@
 {
-  "task_id": "diag-nopush-1788425000",
-  "cmd": "\necho ===DATE===; date -u\necho ===CRONTAB===; sudo crontab -l\necho ===LOCKS===; ls -la /tmp/vps_pipeline.lock /tmp/vps_satellite_pipeline.lock /tmp/vps_ai_pipeline.lock 2>&1\necho ===PS===; ps aux | grep -E \"vps_(pipeline|satellite_pipeline|ai_pipeline).py\" | grep -v grep\necho ===GIT-STATUS===; cd /opt/weather-pipeline/repo && git status\necho ===GIT-LOG===; git log -3 --oneline\necho ===GIT-REMOTE===; git remote -v\necho ===TAIL-MAIN===; tail -40 /var/log/vps-pipeline.log\necho ===TAIL-SAT===; tail -60 /var/log/vps-satellite-pipeline.log\necho ===TAIL-AI===; tail -30 /var/log/vps-ai-pipeline.log\n",
-  "timeout": 30
+  "task_id": "fix-git-identity-1788425300",
+  "cmd": "\nset -e\ngit config --global user.name \"weather-odessa-vps\"\ngit config --global user.email \"vps-bot@weather-odessa.local\"\necho ===VERIFY===\ngit config --global --get user.name\ngit config --global --get user.email\necho ===TEST-COMMIT===\ncd /opt/weather-pipeline/repo\ngit fetch origin main --depth 1 --update-shallow\ngit checkout -B main origin/main\necho test > /tmp/_git_identity_test.txt\ncp /tmp/_git_identity_test.txt data/_git_identity_test.txt 2>/dev/null || true\nrm -f data/_git_identity_test.txt\ngit status --short\n",
+  "timeout": 40
 }
