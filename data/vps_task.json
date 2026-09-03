@@ -1,5 +1,5 @@
 {
-  "task_id": "check-running-1788410600",
+  "task_id": "check-running2-1788411500",
   "cmd": "\necho ===PS===\nps aux | grep -E 'vps_(pipeline|satellite_pipeline|ai_pipeline).py' | grep -v grep\necho ===FLOCK-CHECK===\nfor f in /tmp/vps_pipeline.lock /tmp/vps_satellite_pipeline.lock /tmp/vps_ai_pipeline.lock; do\n  flock -n \"$f\" -c \"echo $f: FREE\" || echo \"$f: BUSY\"\ndone\n",
   "timeout": 20
 }
