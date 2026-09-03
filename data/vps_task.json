@@ -1,5 +1,5 @@
 {
-  "task_id": "swap-repo-1788411700",
-  "cmd": "\nset -e\ncd /opt/weather-pipeline\nmv repo repo_old_backup\nmv repo_new repo\necho ===FINAL-DU-GIT===\ndu -sh repo/.git\necho ===FINAL-DU-TOTAL===\ndu -sh /opt/weather-pipeline\necho ===DF===\ndf -h /\necho ===GIT-STATUS===\ngit -C repo status\necho ===GIT-LOG===\ngit -C repo log -1\necho ===GIT-CONFIG-CRED===\ngit -C repo config --get credential.helper\n",
+  "task_id": "remove-backup-and-resume-cron-1788411800",
+  "cmd": "\nset -e\nrm -rf /opt/weather-pipeline/repo_old_backup\necho ===DU-TOTAL===\ndu -sh /opt/weather-pipeline\necho ===DF===\ndf -h /\necho ===RESTORE-CRONTAB===\nsudo crontab /tmp/crontab_backup.txt\necho ===NEW-CRONTAB===\nsudo crontab -l\n",
   "timeout": 30
 }
