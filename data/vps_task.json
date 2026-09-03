@@ -1,5 +1,5 @@
 {
-  "task_id": "diskgrowth2-1788410018",
-  "cmd": "\ncd /opt/weather-pipeline/repo\necho ===DU-GIT===; du -sh .git\necho ===DU-TOP===; du -sh --max-depth=1 . 2>/dev/null | sort -rh\necho ===PACK-COUNT===; ls .git/objects/pack/*.pack 2>/dev/null | wc -l\necho ===PACK-TOTAL===; du -sh .git/objects/pack\necho ===COUNT-OBJECTS===; git count-objects -v\necho ===SHALLOW-FILE===; cat .git/shallow 2>/dev/null | wc -l\necho ===REMOTE-FETCH-CONFIG===; git config --get-all remote.origin.fetch; git config --get remote.origin.url\necho ===GC-AUTO===; git config --get gc.auto\necho ===CRONTAB===; sudo crontab -l 2>/dev/null | grep -v \"^#\"\necho ===DF===; df -h /\n",
-  "timeout": 60
+  "task_id": "pause-cron-1788410400",
+  "cmd": "\nsudo crontab -l > /tmp/crontab_backup.txt\ngrep -v \"vps_pipeline.py\\|vps_satellite_pipeline.py\\|vps_ai_pipeline.py\" /tmp/crontab_backup.txt | sudo crontab -\necho ===NEW-CRONTAB===\nsudo crontab -l\necho ===LOCKS===\nls -la /tmp/vps_pipeline.lock /tmp/vps_satellite_pipeline.lock /tmp/vps_ai_pipeline.lock 2>&1\n",
+  "timeout": 30
 }
