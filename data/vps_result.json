@@ -1,7 +1,7 @@
 {
-  "task_id": "diskgrowth2-1788410018",
+  "task_id": "pause-cron-1788410400",
   "returncode": 0,
-  "stdout": "===DU-GIT===\n3.3G\t.git\n===DU-TOP===\n===PACK-COUNT===\n15\n===PACK-TOTAL===\n3.1G\t.git/objects/pack\n===COUNT-OBJECTS===\ncount: 4853\nsize: 236488\nin-pack: 59167\npacks: 15\nsize-pack: 3152060\nprune-packable: 0\ngarbage: 0\nsize-garbage: 0\n===SHALLOW-FILE===\n2353\n===REMOTE-FETCH-CONFIG===\n+refs/heads/main:refs/remotes/origin/main\nhttps://github.com/Ruslan591/weather-_Odessa.git\n===GC-AUTO===\n===CRONTAB===\n* * * * * /opt/vps-github-bridge/venv/bin/python3 /opt/vps-github-bridge/vps_github_bridge.py >> /var/log/vps-github-bridge.log 2>&1\n*/5 * * * * /opt/weather-pipeline/run_timed.sh main /var/log/vps-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_pipeline.py\n2,7,12,17,22,27,32,37,42,47,52,57 * * * * /opt/weather-pipeline/run_timed.sh satellite /var/log/vps-satellite-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_satellite_pipeline.py\n4,9,14,19,24,29,34,39,44,49,54,59 * * * * /opt/weather-pipeline/run_timed.sh ai /var/log/vps-ai-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_ai_pipeline.py\n===DF===\nFilesystem      Size  Used Avail Use% Mounted on\n/dev/sda1        45G  8.2G   36G  19% /\n",
+  "stdout": "===NEW-CRONTAB===\n* * * * * /opt/vps-github-bridge/venv/bin/python3 /opt/vps-github-bridge/vps_github_bridge.py >> /var/log/vps-github-bridge.log 2>&1\n===LOCKS===\n-rw-r--r-- 1 root root 0 Sep  3 04:39 /tmp/vps_ai_pipeline.lock\n-rw-r--r-- 1 root root 0 Sep  3 04:35 /tmp/vps_pipeline.lock\n-rw-r--r-- 1 root root 0 Sep  3 04:37 /tmp/vps_satellite_pipeline.lock\n",
   "stderr": "",
-  "completed_at_utc": "2026-09-03T04:34:01Z"
+  "completed_at_utc": "2026-09-03T04:39:01Z"
 }
