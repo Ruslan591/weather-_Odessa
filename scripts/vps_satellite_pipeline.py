@@ -124,7 +124,7 @@ def sync_repo():
                        capture_output=True, text=True, timeout=15)
 
         fetch = subprocess.run(
-            ["git", "-C", BASE_DIR, "fetch", "origin", "main", "--depth", "1", "--update-shallow"],
+            ["git", "-C", BASE_DIR, "fetch", "origin", "main", "--depth", "1"],
             capture_output=True, text=True, timeout=60)
         if fetch.returncode != 0:
             print(f"  [WARN] git fetch failed: {fetch.stderr.strip()}")
@@ -189,7 +189,7 @@ def ensure_repo_healthy():
             print(f"  [WARN] repo нездоров (unmerged={has_unmerged}, "
                   f"detached={is_detached}) — пересобираю на origin/main")
             subprocess.run(
-                ["git", "-C", BASE_DIR, "fetch", "origin", "main", "--depth", "1", "--update-shallow"],
+                ["git", "-C", BASE_DIR, "fetch", "origin", "main", "--depth", "1"],
                 capture_output=True, text=True, timeout=60)
             subprocess.run(
                 ["git", "-C", BASE_DIR, "checkout", "-B", "main", "origin/main"],
@@ -325,6 +325,25 @@ def check_eumetsat_ground_station_verify():
         )
     except Exception as e:
         print(f"  [WARN] eumetsat_ground_station_verify.py: {e}")
+
+
+def check_ground_station_field_fetch():
+    # [ДОБАВЛЕНО 2026-09-03] Исследование найденного фронта через сеть
+    # наземных станций вдоль оси трека (BUFR-first) — см. докстринг
+    # ground_station_field_fetch.py и docs/topics/frontal_line_stations.md.
+    # timeout щедрый (240с): на "холодном" кэше несколько треков × до
+    # ~11 сэмплов каждый могут дать десятки УНИКАЛЬНЫХ станций (кэш
+    # дедуплицирует повторы В ПРЕДЕЛАХ одного прогона, но не между
+    # прогонами при истёкшем TTL), каждая — до ~20с на BUFR-запрос в
+    # худшем случае (timeout внутри fetch_bufr_obs.py). После прогрева
+    # кэша (TTL=45мин) большинство станций будут отдаваться мгновенно.
+    try:
+        subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "ground_station_field_fetch.py")],
+            cwd=BASE_DIR, capture_output=False, timeout=240
+        )
+    except Exception as e:
+        print(f"  [WARN] ground_station_field_fetch.py: {e}")
 
 
 def check_eumetsat_precip_forecast():
@@ -734,6 +753,7 @@ def git_push_satellite():
             "data/eumetsat_frontal_track.json",
             "data/eumetsat_frontal_track_state.json",
             "data/eumetsat_ground_station_verify.json",
+            "data/ground_station_field.json",
             "data/eumetsat_cloud_phase_type.json",
             "data/eumetsat_cloud_phase_type_debug.json",
             "data/eumetsat_cloud_phase_type_buffer.npz",
@@ -906,6 +926,7 @@ def _main_body():
     _timed(check_eumetsat_frontal_track)
     _timed(check_eumetsat_render_track_overlay)
     _timed(check_eumetsat_ground_station_verify)
+    _timed(check_ground_station_field_fetch)
     _timed(check_eumetsat_cloud_phase_type)
     _timed(check_eumetsat_precip_forecast)
     _timed(check_eumetsat_lightning_forecast)
