@@ -359,6 +359,18 @@ def check_open_meteo_field_fetch():
         print(f"  [WARN] open_meteo_field_fetch.py: {e}")
 
 
+def check_frontal_line_score():
+    # Шаг 4 плана — сверка Open-Meteo с реальными станциями, лёгкий (без
+    # сети), короткий timeout.
+    try:
+        subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "frontal_line_score.py")],
+            cwd=BASE_DIR, capture_output=False, timeout=30
+        )
+    except Exception as e:
+        print(f"  [WARN] frontal_line_score.py: {e}")
+
+
 def check_eumetsat_precip_forecast():
     out_file = os.path.join(BASE_DIR, "data", "eumetsat_precip_forecast.json")
     now_utc = datetime.now(timezone.utc)
@@ -768,6 +780,7 @@ def git_push_satellite():
             "data/eumetsat_ground_station_verify.json",
             "data/ground_station_field.json",
             "data/open_meteo_field.json",
+            "data/frontal_line_score.json",
             "data/eumetsat_cloud_phase_type.json",
             "data/eumetsat_cloud_phase_type_debug.json",
             "data/eumetsat_cloud_phase_type_buffer.npz",
@@ -942,6 +955,7 @@ def _main_body():
     _timed(check_eumetsat_ground_station_verify)
     _timed(check_ground_station_field_fetch)
     _timed(check_open_meteo_field_fetch)
+    _timed(check_frontal_line_score)
     _timed(check_eumetsat_cloud_phase_type)
     _timed(check_eumetsat_precip_forecast)
     _timed(check_eumetsat_lightning_forecast)
