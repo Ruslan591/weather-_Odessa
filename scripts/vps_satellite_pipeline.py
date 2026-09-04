@@ -551,19 +551,9 @@ def check_eumetsat_far_watch():
 
 
 def check_eumetsat_very_far_watch():
-    out_file = os.path.join(BASE_DIR, "data", "eumetsat_very_far_watch.json")
-    now_utc = datetime.now(timezone.utc)
-    try:
-        if os.path.exists(out_file):
-            with open(out_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            ts = data.get("timestamp")
-            if ts:
-                last_time = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
-                if (now_utc - last_time).total_seconds() < 180 * 60:
-                    return
-    except Exception:
-        pass
+    # [ИЗМЕНЕНО 2026-09-03] Гейт 180мин убран — по запросу пользователя
+    # для эксперимента с open_meteo_very_far_line.py нужно обновление
+    # снимка каждый прогон, а не раз в 3ч.
     try:
         subprocess.run(
             [PYTHON, os.path.join(SCRIPTS_DIR, "eumetsat_far_watch.py"), "very_far"],
