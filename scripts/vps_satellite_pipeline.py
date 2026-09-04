@@ -346,6 +346,19 @@ def check_ground_station_field_fetch():
         print(f"  [WARN] ground_station_field_fetch.py: {e}")
 
 
+def check_open_meteo_field_fetch():
+    # Шаг 3 плана (docs/topics/frontal_line_stations.md) — плотное поле
+    # 8 моделей вокруг найденного трека, timeout щедрый: до 8 запросов на
+    # трек, каждый батчем до ~90 точек.
+    try:
+        subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "open_meteo_field_fetch.py")],
+            cwd=BASE_DIR, capture_output=False, timeout=180
+        )
+    except Exception as e:
+        print(f"  [WARN] open_meteo_field_fetch.py: {e}")
+
+
 def check_eumetsat_precip_forecast():
     out_file = os.path.join(BASE_DIR, "data", "eumetsat_precip_forecast.json")
     now_utc = datetime.now(timezone.utc)
@@ -754,6 +767,7 @@ def git_push_satellite():
             "data/eumetsat_frontal_track_state.json",
             "data/eumetsat_ground_station_verify.json",
             "data/ground_station_field.json",
+            "data/open_meteo_field.json",
             "data/eumetsat_cloud_phase_type.json",
             "data/eumetsat_cloud_phase_type_debug.json",
             "data/eumetsat_cloud_phase_type_buffer.npz",
@@ -927,6 +941,7 @@ def _main_body():
     _timed(check_eumetsat_render_track_overlay)
     _timed(check_eumetsat_ground_station_verify)
     _timed(check_ground_station_field_fetch)
+    _timed(check_open_meteo_field_fetch)
     _timed(check_eumetsat_cloud_phase_type)
     _timed(check_eumetsat_precip_forecast)
     _timed(check_eumetsat_lightning_forecast)
