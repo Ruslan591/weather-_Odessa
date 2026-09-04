@@ -24,10 +24,11 @@ eumetsat_*_snapshot_clm.png остаётся как есть. Это обычн�
 не ошибка.
 """
 import json
+import math
 import os
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 
 import field_motion_common as fc
 
@@ -44,8 +45,45 @@ WEST_SCRATCH_PIXELMAP = os.path.join(BASE_DIR, "data", "_scratch_west_pixelmap.n
 WEST_OUT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_west_snapshot_clm.png")
 
 
+FRONTAL_LINE_SCORE_FILE = os.path.join(BASE_DIR, "data", "frontal_line_score.json")
+
+
+def _draw_score_checkpoints(base_img, tracks_for_tile, score_data):
+    """Шаг 5 плана (frontal_line_stations.md): точки ahead/behind поверх
+    уже отрисованного near-tier снимка — зелёная, если предсказание
+    best_model близко к реальности (|ошибка|<=1.5°C), иначе красная.
+    along_km/perp_km -> dx/dy та же формула, что generate_axis_samples()."""
+    if not score_data:
+        return base_img
+    overlay = Image.new("RGBA", base_img.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    for t in tracks_for_tile:
+        tid = str(t["track_id"])
+        track_score = score_data.get("tracks", {}).get(tid)
+        axis_deg = t.get("axis_deg")
+        if not track_score or axis_deg is None:
+            continue
+        best_model = track_score.get("best_model")
+        rad = math.radians(axis_deg)
+        ax_x, ax_y = math.sin(rad), math.cos(rad)
+        pp_x, pp_y = math.cos(rad), -math.sin(rad)
+        for cp in track_score.get("checkpoints", []):
+            if best_model not in cp.get("model_predicted", {}):
+                continue
+            err = abs(cp["model_predicted"][best_model] - cp["real_diff"])
+            color = (60, 220, 60, 255) if err <= 1.5 else (230, 60, 60, 255)
+            for perp_sign in (1, -1):  # ahead/behind по разные стороны оси
+                along_km, perp_km = cp["offset_km"], perp_sign * 40.0
+                dx = t.get("dx_km", 0.0) + along_km * ax_x + perp_km * pp_x
+                dy = t.get("dy_km", 0.0) + along_km * ax_y + perp_km * pp_y
+                cx = (base_img.width - 1) / 2.0 - dx / fc.KM_PER_PX_X
+                cy = (base_img.height - 1) / 2.0 + dy / fc.KM_PER_PX_Y
+                draw.ellipse([cx - 4, cy - 4, cx + 4, cy + 4], fill=color, outline=(0, 0, 0, 255))
+    return Image.alpha_composite(base_img.convert("RGBA"), overlay).convert("RGB")
+
+
 def _render_tile(scratch_base_path, scratch_pixelmap_path, out_path,
-                  tracks_for_tile, origin_dx_km, origin_dy_km):
+                  tracks_for_tile, origin_dx_km, origin_dy_km, score_data=None):
     """Красит реальные пиксели блоба (по pixel_map == current_target_id+1)
     в цвет трека, поверх сохранённой базы (уже с контуром берега/кругом
     обзора, без треков/маркера — см. cloud_forecast.py/west_watch.py),
@@ -69,6 +107,7 @@ def _render_tile(scratch_base_path, scratch_pixelmap_path, out_path,
             painted += 1
         out_img = Image.fromarray(arr, mode="RGB")
         out_img = fc.draw_odessa_marker(out_img, origin_dx_km=origin_dx_km, origin_dy_km=origin_dy_km)
+        out_img = _draw_score_checkpoints(out_img, tracks_for_tile, score_data)
         out_img.save(out_path)
         return f"ok_{painted}_tracks"
     except Exception as e:
@@ -89,9 +128,17 @@ def main():
     near_tracks = [t for t in tracks if t.get("tile") == "near"]
     west_tracks = [t for t in tracks if t.get("tile") == "west"]
 
+    score_data = None
+    if os.path.exists(FRONTAL_LINE_SCORE_FILE):
+        try:
+            with open(FRONTAL_LINE_SCORE_FILE, "r", encoding="utf-8") as f:
+                score_data = json.load(f)
+        except Exception:
+            pass
+
     near_status = _render_tile(
         NEAR_SCRATCH_BASE, NEAR_SCRATCH_PIXELMAP, NEAR_OUT_FILE,
-        near_tracks, origin_dx_km=0.0, origin_dy_km=0.0,
+        near_tracks, origin_dx_km=0.0, origin_dy_km=0.0, score_data=score_data,
     )
     west_status = _render_tile(
         WEST_SCRATCH_BASE, WEST_SCRATCH_PIXELMAP, WEST_OUT_FILE,
