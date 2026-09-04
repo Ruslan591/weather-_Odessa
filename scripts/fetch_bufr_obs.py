@@ -449,6 +449,223 @@ def _essentials_from_bufr(obs: dict, dt: datetime.datetime) -> dict:
     }
 
 
+# ── SYNOP-ветка той же страницы Meteomanz (не BUFR) ──────────────────────
+# Добавлено 2026-09-03. Находка: `sy1?ty=hd&ind=...` — ОДИН И ТОТ ЖЕ URL,
+# что уже используется выше для BUFR — отдаёт ВТОРОЙ вариант разметки для
+# станций без автоматического BUFR (ручной SYNOP), маркер в HTML —
+# "Synop, reported by a manned station." (в отличие от "BUFR report, by
+# an automatic station." у автоматических). Подтверждено вживую через
+# Termux пользователя (сеть Meteomanz недоступна из песочницы Claude) на
+# станции TIRASPOL/33829, срок 03Z 2026-09-02 — см. SAMPLE_SYNOP_METEOMANZ
+# в офлайн-тесте ниже, это дословный реальный образец.
+#
+# Разметка полей ЗЕРКАЛЬНАЯ относительно BUFR-ветки: <i><b>Label: </b></i>
+# значение<br> (у BUFR — <b><i>Label: </i></b>, italic внутри bold, здесь
+# наоборот) — поэтому отдельные _val_synop()/_label_pattern(), а не общие
+# с _val()/_txt() выше.
+#
+# Схема возвращаемого словаря — ТА ЖЕ, что parse_synop_essentials() в
+# ground_station_obs_fetch.py (ogimet), чтобы код-потребитель
+# (ground_station_field_fetch.py, фронтенд) не видел разницы, откуда
+# пришёл SYNOP.
+
+EXTREME_WEATHER_KEYWORDS_EN = (
+    "thunderstorm", "hail", "tornado", "waterspout", "squall",
+    "blizzard", "duststorm", "dust storm", "sandstorm", "sand storm",
+    "freezing rain", "freezing drizzle", "heavy shower", "heavy rain",
+    "heavy snow",
+)
+
+
+def _label_pattern(label):
+    """Собирает regex-паттерн из текста лейбла, заменяя пробелы между
+    словами на \\s+ — у SYNOP-разметки Meteomanz внутри самого лейбла
+    иногда лишние пробелы (реальный образец: "Present and past" затем
+    ~20 пробелов, затем "weather") — обычный re.escape(label) целиком
+    такое не поймает."""
+    return r"\s+".join(re.escape(w) for w in label.split())
+
+
+def _val_synop(html, label):
+    """Аналог _val()/_txt() выше, но под зеркальный порядок тегов SYNOP-
+    ветки: <i><b>Label\\s*:\\s*</b></i>значение<br>. Возвращает сырую
+    строку значения БЕЗ попытки распарсить число — у этой ветки слишком
+    разнородные форматы (диапазоны, составные значения, октаты словом),
+    единую числовую логику как у BUFR-ветки сделать нельзя, разбор чисел
+    делает каждый вызывающий код сам под свой формат поля."""
+    pat = r"<i><b>\s*" + _label_pattern(label) + r"\s*:\s*</b></i>\s*(.*?)<br>"
+    m = re.search(pat, html, re.DOTALL)
+    if not m:
+        return None
+    raw = m.group(1).strip()
+    return raw if raw not in ("-", "", "\u2014") else None
+
+
+def _num_synop(raw):
+    if raw is None:
+        return None
+    m = re.match(r"^[+-]?\d+(?:\.\d+)?", raw)
+    return float(m.group()) if m else None
+
+
+def _pressure_tendency_code_from_text(text):
+    """Сопоставляет текстовое описание тенденции давления с кодом ВМО
+    (таблица 0200, 0-8). ПОДТВЕРЖДЕНО ВЖИВУЮ только простое "increasing"
+    (без "then") + "higher" -> 2 (реальный образец 2026-09-03: "Increasing
+    steadily; resultant pressure higher"). Симметричный простой случай
+    "decreasing"+"lower" -> 7 и "steady"+"same" -> 4 добавлены по прямой
+    симметрии таблицы, тоже не встречались вживую, но простые (без "then")
+    и логически однозначные. СОСТАВНЫЕ варианты (коды 0,1,3,5,6,8 — "then
+    decreasing"/"then steady"/"then increasing" и т.п., см. WMO table 0200)
+    сознательно НЕ реализованы — ни одного реального образца текста для
+    них от Meteomanz ещё не видели, гадать по общей формулировке таблицы
+    не буду. Возвращает None и для них, и для нераспознанного текста —
+    отсутствие кода лучше, чем неверный код."""
+    if not text:
+        return None
+    low = text.lower()
+    if "then" in low:
+        return None
+    if "increasing" in low and "higher" in low:
+        return 2
+    if "decreasing" in low and "lower" in low:
+        return 7
+    if "steady" in low and "same" in low:
+        return 4
+    return None
+
+
+def parse_synop_essentials_from_meteomanz(html):
+    """Парсит РУЧНОЙ SYNOP-вариант страницы Meteomanz (маркер "Synop,
+    reported by a manned station.") в essentials-словарь той же формы,
+    что parse_synop_essentials() в ground_station_obs_fetch.py (ogimet).
+    Возвращает None, если это не та ветка (BUFR-страница или "нет
+    данных") — тогда вызывающий код должен пробовать parse_obs() (BUFR)
+    отдельно, см. fetch_latest_meteomanz_essentials() ниже, где оба
+    парсера пробуются на ОДНОМ И ТОМ ЖЕ HTML-ответе.
+
+    present_weather_code сознательно оставлен None — эта ветка Meteomanz
+    отдаёт только ТЕКСТОВОЕ описание погодного явления (например "no
+    significant weather"), не числовой код ВМО ww (таблица 4677/4680),
+    поэтому обратно восстановить код нельзя без риска ошибки. Вместо
+    этого is_extreme_weather определяется поиском англоязычных ключевых
+    слов (EXTREME_WEATHER_KEYWORDS_EN) прямо в тексте — это эвристика под
+    задачу проекта ("похоже ли на опасное явление рядом с фронтом"), не
+    точное соответствие таблице ВМО."""
+    if "Synop, reported by a manned station" not in html:
+        return None
+    if "No data for the selected dates" in html:
+        return None
+
+    temp = _num_synop(_val_synop(html, "Air Temperature"))
+    station_pressure = _num_synop(_val_synop(html, "Station pressure"))
+    sea_pressure = _num_synop(_val_synop(html, "Sea level pressure"))
+
+    tendency_raw = _val_synop(html, "Pressure change")
+    tendency_value = _num_synop(tendency_raw) if tendency_raw else None
+    tendency_code = _pressure_tendency_code_from_text(tendency_raw)
+
+    wind_dir_raw = _val_synop(html, "Wind direction")
+    wind_dir_deg = None
+    if wind_dir_raw:
+        nums = re.findall(r"(\d+)\s*\u00ba", wind_dir_raw)
+        if len(nums) == 2:
+            wind_dir_deg = int(round((int(nums[0]) + int(nums[1])) / 2))
+        elif len(nums) == 1:
+            wind_dir_deg = int(nums[0])
+
+    wind_speed_raw = _val_synop(html, "Wind speed")
+    wind_speed_ms = None
+    if wind_speed_raw:
+        m = re.match(r"^(\d+(?:\.\d+)?)\s*m/s", wind_speed_raw)
+        if m:
+            wind_speed_ms = float(m.group(1))
+
+    cloud_raw = _val_synop(html, "Total cloud cover")
+    total_cloud_okta = None
+    if cloud_raw:
+        m = re.match(r"^(\d+)", cloud_raw)
+        if m:
+            total_cloud_okta = int(m.group(1))
+
+    precip_raw = _val_synop(html, "Precipitation data")
+    precip_mm = None
+    if precip_raw and "not available" not in precip_raw.lower():
+        m = re.search(r"([\d.]+)\s*mm", precip_raw, re.IGNORECASE)
+        if m:
+            precip_mm = float(m.group(1))
+
+    ww_text = _val_synop(html, "Present and past weather")
+    is_extreme_weather = False
+    if ww_text:
+        low = ww_text.lower()
+        is_extreme_weather = any(kw in low for kw in EXTREME_WEATHER_KEYWORDS_EN)
+
+    day_raw = _val_synop(html, "Day")
+    hour_raw = _val_synop(html, "Hour")
+    obs_time = None
+    if day_raw and hour_raw:
+        m_day = re.match(r"(\d{2})/(\d{2})/(\d{4})", day_raw)
+        m_hour = re.match(r"(\d{2})", hour_raw)
+        if m_day and m_hour:
+            dd, mm, yyyy = m_day.groups()
+            obs_time = f"{yyyy}-{mm}-{dd}T{m_hour.group(1)}:00:00Z"
+
+    return {
+        "obs_time": obs_time,
+        "temp": temp,
+        "station_pressure": station_pressure,
+        "sea_pressure": sea_pressure,
+        "pressure_tendency_code": tendency_code,
+        "pressure_tendency_value": tendency_value,
+        "total_cloud_okta": total_cloud_okta,
+        "wind_dir_deg": wind_dir_deg,
+        "wind_speed_ms": wind_speed_ms,
+        "precip_mm": precip_mm,
+        "precip_period_hours": None,  # период накопления не парсится из этого текстового поля — не критично для задачи
+        "present_weather_code": None,  # см. докстринг — эта ветка не даёт числовой код
+        "present_weather_label": ww_text,
+        "is_extreme_weather": is_extreme_weather,
+        "obs_source": "SYNOP",
+    }
+
+
+def fetch_latest_meteomanz_essentials(station_id, hours_back=4):
+    """Единый fetch с Meteomanz: ОДИН HTTP-запрос на попытку (не два
+    отдельных BUFR-first/SYNOP-fallback запроса, как было бы при
+    обращении к разным источникам) — пробует распарсить ответ И как BUFR
+    (parse_obs), И как ручной SYNOP (parse_synop_essentials_from_
+    meteomanz) на ОДНОМ И ТОМ ЖЕ HTML, поскольку это буквально одна и та
+    же страница с разной разметкой в зависимости от станции/срока (см.
+    докстринг раздела выше). Идёт назад по часу до hours_back попыток.
+    Возвращает essentials-словарь или None, если ни один час не дал ни
+    BUFR, ни SYNOP."""
+    now = datetime.datetime.now(datetime.timezone.utc).replace(
+        tzinfo=None, minute=0, second=0, microsecond=0
+    )
+    for h in range(hours_back):
+        dt = now - datetime.timedelta(hours=h)
+        try:
+            html = fetch_html(dt, station=station_id)
+        except Exception as e:
+            log.debug(f"[Meteomanz] {station_id} {dt:%Y-%m-%d %H}:00 UTC fetch ошибка: {e}")
+            time.sleep(0.3)
+            continue
+
+        obs = parse_obs(html, dt, station=station_id)
+        if obs is not None:
+            return _essentials_from_bufr(obs, dt)
+
+        synop_ess = parse_synop_essentials_from_meteomanz(html)
+        if synop_ess is not None:
+            if not synop_ess.get("obs_time"):
+                synop_ess["obs_time"] = dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+            return synop_ess
+
+        time.sleep(0.3)
+    return None
+
+
 def fetch_latest_bufr_essentials(station_id: str, hours_back: int = 4):
     """Идёт назад от текущего часа по одному часу (BUFR у этих станций —
     почасовой), до hours_back попыток, возвращает essentials-словарь на
