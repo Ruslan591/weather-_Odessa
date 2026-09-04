@@ -573,6 +573,20 @@ def check_eumetsat_very_far_watch():
         print(f"  [WARN] eumetsat_far_watch.py very_far: {e}")
 
 
+def check_open_meteo_very_far_line():
+    # Эксперимент 2026-09-03 (см. docs/topics/frontal_line_stations.md) —
+    # линия по Open-Meteo (1 модель, без подтверждения станциями) поверх
+    # very_far_geocolour.png. Нужен ГОТОВЫЙ файл (пишется поверх), поэтому
+    # строго после check_eumetsat_very_far_watch.
+    try:
+        subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "open_meteo_very_far_line.py")],
+            cwd=BASE_DIR, capture_output=False, timeout=30
+        )
+    except Exception as e:
+        print(f"  [WARN] open_meteo_very_far_line.py: {e}")
+
+
 def check_eumetsat_target_summary():
     try:
         subprocess.run(
@@ -967,6 +981,7 @@ def _main_body():
     # check_eumetsat_anim_render() не вызывается — см. докстринг файла, п.5.
     _timed(check_eumetsat_far_watch)
     _timed(check_eumetsat_very_far_watch)
+    _timed(check_open_meteo_very_far_line)
 
     check_pipeline_health_alert()
     git_push_satellite()
