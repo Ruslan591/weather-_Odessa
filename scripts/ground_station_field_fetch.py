@@ -8,18 +8,20 @@ ground_station_field_fetch.py — исследование УЖЕ НАЙДЕНН
 eumetsat_ground_station_verify.py), сравнение их обсервов.
 
 Решение и план — docs/topics/frontal_line_stations.md. Ключевое отличие
-от eumetsat_ground_station_verify.py:
-  1. Несколько точек вдоль оси, не одна пара в центре трека — цель
-     собрать в итоге кривую вдоль фронта, а не одну точку.
-  2. Порядок источников ОБРАТНЫЙ: BUFR (Meteomanz, fetch_bufr_obs.py)
-     ПЕРВЫМ — многие европейские станции шлют его автоматически
-     почасово; SYNOP (ogimet) — фолбэк, и то только если BUFR пуст И
-     сейчас достаточно близко к синоптическому сроку (00/03/06/09/12/
-     15/18/21 UTC ± окно публикации). В eumetsat_ground_station_verify.py
-     порядок наоборот (SYNOP первым) — это сделано СОЗНАТЕЛЬНО и НЕ
-     меняется, та узкая ahead/behind-верификация — отдельная, более
-     старая задача, см. docs/topics/frontal_line_stations.md, раздел
-     "ВАЖНО, чтобы не перепутать с существующим кодом".
+от eumetsat_ground_station_verify.py: несколько точек вдоль оси, не одна
+пара в центре трека — цель собрать в итоге кривую вдоль фронта, а не
+одну точку.
+
+[ИЗМЕНЕНО 2026-09-03] Раньше здесь был отдельный BUFR-first (Meteomanz) /
+SYNOP-fallback-у-синоптического-срока (ogimet) — ДВА разных источника,
+ДВА возможных сетевых запроса на станцию. Заменено на ОДНУ функцию
+`fetch_bufr_obs.py::fetch_latest_meteomanz_essentials()` — находка
+2026-09-03 (подтверждена вживую через Termux пользователя): BUFR и ручной
+SYNOP приходят с ОДНОГО И ТОГО ЖЕ URL Meteomanz (`sy1?ty=hd&ind=...`),
+просто с разной разметкой в зависимости от станции/срока — значит нет
+смысла в двух источниках и в гейте по синоптическому сроку, один запрос
+на попытку уже пробует оба варианта разбора. ogimet в этом файле больше
+не используется вообще.
 
 Кэш обсервов — ПО СТАНЦИИ (wmo_synop_id), не по сэмплу/треку: одна и та
 же станция может оказаться ближайшей ahead/behind сразу для нескольких
@@ -43,10 +45,9 @@ select_ahead_behind — соседние сэмплы вполне могут "�
 import json
 import math
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
-from fetch_bufr_obs import fetch_latest_bufr_essentials
-from ground_station_obs_fetch import fetch_latest_obs
+from fetch_bufr_obs import fetch_latest_meteomanz_essentials
 from ground_station_selector import generate_axis_samples, select_ahead_behind
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -57,8 +58,6 @@ GEO_CONFIG_FILE = os.path.join(DATA_DIR, "geo_config.json")
 OUT_FILE = os.path.join(DATA_DIR, "ground_station_field.json")
 
 STALE_MINUTES = 45  # тот же TTL, что в eumetsat_ground_station_verify.py — не дёргать станцию чаще
-SYNOP_HOURS = (0, 3, 6, 9, 12, 15, 18, 21)
-SYNOP_WINDOW_MIN_AFTER = 50  # ogimet обычно публикует срок в течение ~30-50 минут после него
 
 SAMPLE_STEP_KM = 60.0
 MIN_HALF_LEN_KM = 60.0
@@ -80,28 +79,6 @@ def _save_json(path, data):
     os.replace(tmp, path)
 
 
-def _minutes_since_last_synoptic_hour(now):
-    """Минут с БЛИЖАЙШЕГО прошедшего синоптического срока (ищет среди
-    сегодняшних и вчерашних часов из SYNOP_HOURS, чтобы корректно
-    обработать переход через полночь — например now=00:10 должно найти
-    вчерашние 21:00, а не только сегодняшние часы)."""
-    best = None
-    for days_back in (0, 1):
-        day = (now - timedelta(days=days_back)).replace(minute=0, second=0, microsecond=0)
-        for h in SYNOP_HOURS:
-            candidate = day.replace(hour=h)
-            if candidate <= now:
-                diff_min = (now - candidate).total_seconds() / 60.0
-                if best is None or diff_min < best:
-                    best = diff_min
-    return best
-
-
-def _near_synoptic_hour(now):
-    m = _minutes_since_last_synoptic_hour(now)
-    return m is not None and m <= SYNOP_WINDOW_MIN_AFTER
-
-
 def _fresh_enough(fetched_at_str, now):
     if not fetched_at_str:
         return False
@@ -113,26 +90,20 @@ def _fresh_enough(fetched_at_str, now):
 
 
 def _get_or_fetch_station(wmo_id, cache, now):
-    """BUFR-first / SYNOP-fallback-у-синоптического-срока (порядок
-    ОБРАТНЫЙ относительно eumetsat_ground_station_verify.py — см.
-    докстринг файла). cache — словарь {wmo_id: {"obs":..., "fetched_at":
-    ...}}, мутируется на месте и возвращается вызывающим кодом целиком в
-    выходной JSON (переиспользуется как кэш на следующем прогоне)."""
+    """Один источник — Meteomanz (BUFR и ручной SYNOP пробуются на ОДНОМ
+    запросе, см. докстринг файла). cache — словарь {wmo_id: {"obs":...,
+    "fetched_at": ...}}, мутируется на месте и возвращается вызывающим
+    кодом целиком в выходной JSON (переиспользуется как кэш на следующем
+    прогоне)."""
     cached = cache.get(wmo_id)
     if cached and _fresh_enough(cached.get("fetched_at"), now):
         return cached
 
     obs = None
     try:
-        obs = fetch_latest_bufr_essentials(wmo_id)
+        obs = fetch_latest_meteomanz_essentials(wmo_id)
     except Exception as e:
-        print(f"  [WARN] ground_station_field_fetch: BUFR для {wmo_id} не сработал: {e}")
-
-    if obs is None and _near_synoptic_hour(now):
-        try:
-            obs = fetch_latest_obs(wmo_id)
-        except Exception as e:
-            print(f"  [WARN] ground_station_field_fetch: SYNOP-фолбэк для {wmo_id} не сработал: {e}")
+        print(f"  [WARN] ground_station_field_fetch: Meteomanz для {wmo_id} не сработал: {e}")
 
     entry = {"obs": obs, "fetched_at": now.strftime("%Y-%m-%dT%H:%M:%SZ")}
     cache[wmo_id] = entry
