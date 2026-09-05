@@ -986,7 +986,13 @@ def _main_body():
     _timed(check_eumetsat_render_track_overlay)
     _timed(check_eumetsat_ground_station_verify)
     _timed(check_ground_station_field_fetch)
-    _timed(check_open_meteo_field_fetch)
+    # [ОТКЛЮЧЕНО 2026-09-05, ЭКСТРЕННО] check_open_meteo_field_fetch() —
+    # эксперимент бьёт по общему рейт-лимиту Open-Meteo на IP VPS и
+    # блокирует БОЕВОЕ обновление 8 моделей в update.py (пользователь
+    # сообщил: "5 часов не может обновиться ни одна модель"). НЕ включать
+    # обратно без пересмотра частоты/объёма запросов — см.
+    # docs/topics/frontal_line_stations.md.
+    # _timed(check_open_meteo_field_fetch)
     _timed(check_frontal_line_score)
     _timed(check_eumetsat_cloud_phase_type)
     _timed(check_eumetsat_precip_forecast)
@@ -999,7 +1005,10 @@ def _main_body():
     # check_eumetsat_anim_render() не вызывается — см. докстринг файла, п.5.
     _timed(check_eumetsat_far_watch)
     _timed(check_eumetsat_very_far_watch)
-    _timed(check_open_meteo_very_far_line)
+    # [ОТКЛЮЧЕНО 2026-09-05, ЭКСТРЕННО] check_open_meteo_very_far_line() —
+    # см. причину у check_open_meteo_field_fetch() выше, тот же общий
+    # рейт-лимит на IP VPS.
+    # _timed(check_open_meteo_very_far_line)
 
     check_pipeline_health_alert()
     git_push_satellite()
