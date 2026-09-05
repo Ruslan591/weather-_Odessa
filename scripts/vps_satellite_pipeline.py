@@ -819,6 +819,7 @@ def git_push_satellite():
             "data/eumetsat_very_far_watch_state.json",
             "data/eumetsat_very_far_watch_debug.json",
             "data/anim/manifest.json",
+            "data/eumetsat_very_far_line_debug.json",
             "data/anim/debug.json",
             "data/fog_calibration_log.jsonl",
             "data/eumetsat_target_summary.json",
