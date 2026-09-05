@@ -346,10 +346,33 @@ def check_ground_station_field_fetch():
         print(f"  [WARN] ground_station_field_fetch.py: {e}")
 
 
+def _throttle_ok(key, interval_minutes):
+    # [ДОБАВЛЕНО 2026-09-05] Общий гейт для Open-Meteo шагов — найдено
+    # вживую: open_meteo_field_fetch.py (до 8 моделей × N треков) +
+    # open_meteo_very_far_line.py КАЖДЫЙ 5-минутный цикл VPS всё вместе
+    # словили HTTP 429 (Too Many Requests) от Open-Meteo. Локальный
+    # файл-метка (НЕ коммитится — VPS-диск персистентный между cron-
+    # запусками, в отличие от GH Actions с чистым чекаутом каждый раз,
+    # см. docs/topics/hosting_migration.md), просто пейсинг на месте.
+    path = os.path.join(BASE_DIR, "data", f"_throttle_{key}.json")
+    now = datetime.now(timezone.utc)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            last = datetime.strptime(json.load(f)["last_run"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        if (now - last).total_seconds() < interval_minutes * 60:
+            return False
+    except Exception:
+        pass
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"last_run": now.strftime("%Y-%m-%dT%H:%M:%SZ")}, f)
+    return True
+
+
 def check_open_meteo_field_fetch():
     # Шаг 3 плана (docs/topics/frontal_line_stations.md) — плотное поле
-    # 8 моделей вокруг найденного трека, timeout щедрый: до 8 запросов на
-    # трек, каждый батчем до ~90 точек.
+    # 8 моделей вокруг найденного трека. Throttle 15мин — см. _throttle_ok.
+    if not _throttle_ok("open_meteo_field", 15):
+        return
     try:
         subprocess.run(
             [PYTHON, os.path.join(SCRIPTS_DIR, "open_meteo_field_fetch.py")],
@@ -567,7 +590,11 @@ def check_open_meteo_very_far_line():
     # Эксперимент 2026-09-03 (см. docs/topics/frontal_line_stations.md) —
     # линия по Open-Meteo (1 модель, без подтверждения станциями) поверх
     # very_far_geocolour.png. Нужен ГОТОВЫЙ файл (пишется поверх), поэтому
-    # строго после check_eumetsat_very_far_watch.
+    # строго после check_eumetsat_very_far_watch. Throttle 15мин — см.
+    # _throttle_ok (изначально "каждый цикл" по запросу пользователя для
+    # отладки, но вместе с open_meteo_field_fetch поймали HTTP 429).
+    if not _throttle_ok("open_meteo_very_far_line", 15):
+        return
     try:
         subprocess.run(
             [PYTHON, os.path.join(SCRIPTS_DIR, "open_meteo_very_far_line.py")],
