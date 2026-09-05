@@ -1,12 +1,17 @@
 {
-  "timestamp": "2026-09-05T18:52:36Z",
-  "status": "ok",
+  "timestamp": "2026-09-05T18:57:11Z",
+  "status": "suppressed_known_false_positive",
   "cloud_forecast_timestamp": "2026-09-05T18:30:00.000Z",
-  "target_id": 1,
-  "target_area_km2": 68.0,
-  "target_distance_km": 127.2,
-  "target_bearing_deg": 234.0,
-  "target_compass": "ЮЗ",
+  "suppressed_target": {
+    "signature": "-105_-75",
+    "area_km2": 68.0,
+    "distance_km": 127.2,
+    "bearing_deg": 234.0,
+    "compass": "ЮЗ",
+    "not_confirmed_streak": 9,
+    "total_not_confirmed": 9,
+    "excluded_since": "2026-09-05T18:52:36Z"
+  },
   "system": {
     "target_id": 0,
     "area_km2": 111244.4,
@@ -46,35 +51,6 @@
     }
   ],
   "system_suppressed_count": 0,
-  "frontal_tracks": [],
-  "existence": {
-    "modules": {
-      "ir_motion": {
-        "confirmed": false,
-        "timestamp": "2026-09-05T18:30:00.000Z"
-      },
-      "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-09-05T18:20:00.000Z"
-      },
-      "cloud_phase_type": {
-        "confirmed": null,
-        "timestamp": "2026-09-05T16:52:22Z"
-      }
-    },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 2,
-    "consensus": "not_confirmed"
-  },
-  "phenomena": {
-    "precip_forecast": {
-      "confirmed": null,
-      "timestamp": "2026-09-05T18:47:10Z"
-    },
-    "lightning_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-09-05T18:52:19Z"
-    }
-  },
-  "verdict": "CLM отметил цель в 127км ЮЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (111244км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора, осадки, гроза)."
+  "verdict": "Известный шумовой объект в 127км ЮЗ (~68км²) — подавлено (не подтверждался 9 раз подряд). Отдельно: система синоптического масштаба (111244км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора, осадки, гроза).",
+  "frontal_tracks": []
 }
