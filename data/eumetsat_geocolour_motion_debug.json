@@ -77,30 +77,40 @@
     "cloud_mass_compass": "СЗ",
     "cloud_mass_area_km2": 23510,
     "target_confirmation": {
-      "confirmed": null,
-      "reason": "среди кандидатов нет локальных масс (только системы синоптического масштаба)"
+      "confirmed": false,
+      "target_id": 2,
+      "target_area_km2": 105.4,
+      "roi_cloud_fraction": 0.0,
+      "verdict": "GeoColour НЕ подтверждает: в ROI CLM-цели облачность не преобладает — возможно расхождение слоёв"
     },
     "system_analysis_all": [
       {
         "target_id": 0,
         "available": true,
-        "roi_cloud_fraction": 0.24,
+        "roi_cloud_fraction": 0.236,
         "confirmed": false
       },
       {
         "target_id": 1,
         "available": true,
-        "roi_cloud_fraction": 0.032,
-        "confirmed": false
-      },
-      {
-        "target_id": 2,
-        "available": true,
-        "roi_cloud_fraction": 0.053,
+        "roi_cloud_fraction": 0.03,
         "confirmed": false
       }
     ],
-    "local_analysis_all": [],
+    "local_analysis_all": [
+      {
+        "target_id": 2,
+        "available": true,
+        "roi_cloud_fraction": 0.0,
+        "confirmed": false
+      },
+      {
+        "target_id": 3,
+        "available": true,
+        "roi_cloud_fraction": 0.092,
+        "confirmed": false
+      }
+    ],
     "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
   }
 }

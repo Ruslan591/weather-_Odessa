@@ -1,16 +1,20 @@
 {
-  "timestamp": "2026-09-05T17:47:50Z",
-  "status": "system_only",
-  "reason": "локальных компактных масс нет, есть только система(ы) синоптического масштаба",
-  "cloud_forecast_timestamp": "2026-09-05T17:15:00.000Z",
+  "timestamp": "2026-09-05T17:52:47Z",
+  "status": "ok",
+  "cloud_forecast_timestamp": "2026-09-05T17:30:00.000Z",
+  "target_id": 2,
+  "target_area_km2": 105.4,
+  "target_distance_km": 125.2,
+  "target_bearing_deg": 257.0,
+  "target_compass": "З",
   "system": {
     "target_id": 0,
-    "area_km2": 91281.9,
-    "distance_km": 28.5,
-    "bearing_deg": 329.0,
-    "compass": "СЗ",
-    "elongation_aspect_ratio": 1.61,
-    "elongation_axis_deg": 71.0,
+    "area_km2": 95227.5,
+    "distance_km": 10.5,
+    "bearing_deg": 357.0,
+    "compass": "С",
+    "elongation_aspect_ratio": 1.54,
+    "elongation_axis_deg": 68.0,
     "elongation_axis_compass": "В-З",
     "frontlike": false,
     "window_spanning": true,
@@ -19,15 +23,17 @@
     "has_precip": true,
     "has_lightning": true
   },
+  "local_candidates": [],
+  "local_suppressed_count": 2,
   "system_candidates": [
     {
       "target_id": 0,
-      "area_km2": 91281.9,
-      "distance_km": 28.5,
-      "bearing_deg": 329.0,
-      "compass": "СЗ",
-      "elongation_aspect_ratio": 1.61,
-      "elongation_axis_deg": 71.0,
+      "area_km2": 95227.5,
+      "distance_km": 10.5,
+      "bearing_deg": 357.0,
+      "compass": "С",
+      "elongation_aspect_ratio": 1.54,
+      "elongation_axis_deg": 68.0,
       "elongation_axis_compass": "В-З",
       "frontlike": false,
       "window_spanning": true,
@@ -39,6 +45,36 @@
       "geocolour_confirmed": false
     }
   ],
-  "system_suppressed_count": 2,
-  "verdict": "Локальных облачных масс нет. Система синоптического масштаба (91282км²) в 28км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора, осадки, гроза)."
+  "system_suppressed_count": 1,
+  "frontal_tracks": [],
+  "existence": {
+    "modules": {
+      "ir_motion": {
+        "confirmed": false,
+        "timestamp": "2026-09-05T17:20:00.000Z"
+      },
+      "geocolour_motion": {
+        "confirmed": false,
+        "timestamp": "2026-09-05T17:20:00.000Z"
+      },
+      "cloud_phase_type": {
+        "confirmed": null,
+        "timestamp": "2026-09-05T16:52:22Z"
+      }
+    },
+    "votes_confirmed": 0,
+    "votes_not_confirmed": 2,
+    "consensus": "not_confirmed"
+  },
+  "phenomena": {
+    "precip_forecast": {
+      "confirmed": false,
+      "timestamp": "2026-09-05T17:52:32Z"
+    },
+    "lightning_forecast": {
+      "confirmed": false,
+      "timestamp": "2026-09-05T17:52:34Z"
+    }
+  },
+  "verdict": "CLM отметил цель в 125км З, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (95228км²) в 10км С (площадь/форма ненадёжны — объект упирается в границы окна обзора, осадки, гроза)."
 }
