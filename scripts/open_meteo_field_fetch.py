@@ -26,6 +26,8 @@ frontal_line_stations.md). Проверка реальностью — отде�
 import json
 import math
 import os
+import time
+import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 
@@ -113,12 +115,19 @@ def build_grid(track_dx_km, track_dy_km, axis_deg, area_km2, aspect_ratio,
     return grid
 
 
-def fetch_model_current(model_id, flat_points, timeout=25):
+def fetch_model_current(model_id, flat_points, timeout=25, _retry=True):
     """Один батч-запрос current= для ВСЕХ точек сетки сразу (Open-Meteo
     принимает списки latitude/longitude через запятую — до 100 точек).
     flat_points — плоский список {"lat":, "lon":} (порядок сохраняется,
     важно для последующей сборки обратно в сетку). Возвращает список
-    dict той же длины и порядка, что flat_points, или None при ошибке."""
+    dict той же длины и порядка, что flat_points, или None при ошибке.
+
+    [ДОБАВЛЕНО 2026-09-05] На 429 (Too Many Requests) — ОДИН повторный
+    запрос после паузы (см. Retry-After, если есть, иначе 5с). Найдено
+    вживую: open_meteo_very_far_line.py упал именно на 429 — вероятно
+    совокупная нагрузка ЭТОГО скрипта (до 8 моделей × N треков КАЖДЫЙ
+    5-минутный цикл VPS) вместе с ним. Только 1 повтор — не бороться со
+    стеной, а быстро сдаться и залогировать (см. вызывающий код)."""
     lats = ",".join(str(p["lat"]) for p in flat_points)
     lons = ",".join(str(p["lon"]) for p in flat_points)
     url = (
@@ -128,8 +137,19 @@ def fetch_model_current(model_id, flat_points, timeout=25):
         f"&models={model_id}&wind_speed_unit=ms&timezone=UTC"
     )
     req = urllib.request.Request(url, headers={"User-Agent": "weather-odessa-frontal-line/1.0"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        data = json.loads(r.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            data = json.loads(r.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        if e.code == 429 and _retry:
+            wait_s = 5
+            try:
+                wait_s = int(e.headers.get("Retry-After", "5"))
+            except (TypeError, ValueError):
+                pass
+            time.sleep(min(wait_s, 30))
+            return fetch_model_current(model_id, flat_points, timeout=timeout, _retry=False)
+        raise
     # Множественные локации -> Open-Meteo возвращает СПИСОК объектов
     # (по одному на точку), а не единый current-объект как для одной точки.
     if isinstance(data, dict):
