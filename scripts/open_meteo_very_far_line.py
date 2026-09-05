@@ -27,7 +27,14 @@ IMG_FILE = os.path.join(BASE_DIR, "data", "anim", "very_far_geocolour.png")
 DEBUG_FILE = os.path.join(BASE_DIR, "data", "eumetsat_very_far_line_debug.json")
 
 GRID_N = 10  # 10x10=100 точек — лимит батча Open-Meteo
-MODEL_ID = "ecmwf_ifs"
+# [ИЗМЕНЕНО 2026-09-05] ecmwf_ifs -> icon_eu, по прямому запросу
+# пользователя "возьми из рейтинга": data/model_bias.json::overall.temp.mae
+# среди всех 8 моделей проекта — icon_eu=0.948 (лучшая), ecmwf_ifs=1.063,
+# ukmo=1.131, gfs=1.152, icon_global=1.228, arpege=1.301, cma=1.811,
+# gem=1.835. Домен ICON-EU (Европа/С.Атлантика) покрывает bbox very_far
+# целиком. Также 1 модель вместо 8 (как в open_meteo_field_fetch.py) —
+# часть причины HTTP 429, отдельно от throttle.
+MODEL_ID = "icon_eu"
 
 
 def _write_debug(status, **extra):
