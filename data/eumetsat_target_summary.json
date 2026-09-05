@@ -1,12 +1,17 @@
 {
-  "timestamp": "2026-09-05T21:12:24Z",
-  "status": "ok",
+  "timestamp": "2026-09-05T21:17:19Z",
+  "status": "suppressed_known_false_positive",
   "cloud_forecast_timestamp": "2026-09-05T20:45:00.000Z",
-  "target_id": 2,
-  "target_area_km2": 80.1,
-  "target_distance_km": 180.5,
-  "target_bearing_deg": 215.0,
-  "target_compass": "ЮЗ",
+  "suppressed_target": {
+    "signature": "-105_-150",
+    "area_km2": 80.1,
+    "distance_km": 180.5,
+    "bearing_deg": 215.0,
+    "compass": "ЮЗ",
+    "not_confirmed_streak": 3,
+    "total_not_confirmed": 3,
+    "excluded_since": "2026-09-05T21:12:24Z"
+  },
   "system": {
     "target_id": 0,
     "area_km2": 130671.7,
@@ -27,6 +32,7 @@
   "local_suppressed_count": 1,
   "system_candidates": [],
   "system_suppressed_count": 2,
+  "verdict": "Известный шумовой объект в 180км ЮЗ (~80км²) — подавлено (не подтверждался 3 раз подряд). Отдельно: система синоптического масштаба (130672км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора, осадки, гроза).",
   "frontal_tracks": [
     {
       "track_id": 1013,
@@ -99,35 +105,5 @@
       },
       "behind_obs": null
     }
-  ],
-  "existence": {
-    "modules": {
-      "ir_motion": {
-        "confirmed": false,
-        "timestamp": "2026-09-05T20:50:00.000Z"
-      },
-      "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-09-05T20:50:00.000Z"
-      },
-      "cloud_phase_type": {
-        "confirmed": null,
-        "timestamp": "2026-09-05T16:52:22Z"
-      }
-    },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 2,
-    "consensus": "not_confirmed"
-  },
-  "phenomena": {
-    "precip_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-09-05T21:12:08Z"
-    },
-    "lightning_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-09-05T21:07:23Z"
-    }
-  },
-  "verdict": "CLM отметил цель в 180км ЮЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (130672км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора, осадки, гроза)."
+  ]
 }
