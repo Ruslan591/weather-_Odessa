@@ -1,27 +1,27 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-09-06T06:00:00.000Z",
+  "server_latest_time": "2026-09-06T06:10:00.000Z",
   "bootstrap": true,
   "buffer_before": 6,
   "buffer_size": 6,
   "buffer_times": [
-    "2026-09-06T05:10:00.000Z",
     "2026-09-06T05:20:00.000Z",
     "2026-09-06T05:30:00.000Z",
     "2026-09-06T05:40:00.000Z",
     "2026-09-06T05:50:00.000Z",
-    "2026-09-06T06:00:00.000Z"
+    "2026-09-06T06:00:00.000Z",
+    "2026-09-06T06:10:00.000Z"
   ],
   "frame_std": [
-    49.7,
     49.9,
     50.1,
     50.4,
     50.8,
-    51.2
+    51.2,
+    51.4
   ],
   "result": {
-    "timestamp": "2026-09-06T06:00:00.000Z",
+    "timestamp": "2026-09-06T06:10:00.000Z",
     "buffer_size": 6,
     "buffer_span_minutes": 50,
     "observed_area": {
@@ -34,32 +34,70 @@
       "local_trend_radius_km": 50,
       "state_radius_km": 12
     },
-    "valid": false,
-    "verdict": "нет значимой облачности для оценки движения",
+    "valid": true,
+    "speed_kmh": 66.2,
+    "direction_compass": "В",
+    "bearing_deg": 85.0,
+    "frame_pairs_used": 5,
+    "acceleration_kmh": 14.1,
+    "turning_deg": -1.9,
+    "acceleration_verdict": "ускоряется",
+    "turning_verdict": "направление стабильно",
+    "forecast_displacement": {
+      "30min": {
+        "distance_km": 41.6,
+        "bearing_deg": 83.0,
+        "compass": "В"
+      },
+      "60min": {
+        "distance_km": 91.7,
+        "bearing_deg": 82.0,
+        "compass": "В"
+      },
+      "120min": {
+        "distance_km": 217.5,
+        "bearing_deg": 81.0,
+        "compass": "В"
+      }
+    },
     "area_fraction_over_time": [
-      0.209,
       0.151,
       0.069,
       0.012,
       0.004,
-      0.008
+      0.008,
+      0.061
     ],
-    "area_trend_delta": -0.202,
-    "area_trend_verdict": "сокращается",
+    "area_trend_delta": -0.089,
+    "area_trend_verdict": "без существенных изменений",
     "station_state": "clear",
     "station_area_fraction": 0.0,
-    "cloud_mass_distance_km": 48.9,
-    "cloud_mass_bearing_deg": 342.0,
+    "cloud_mass_distance_km": 39.3,
+    "cloud_mass_bearing_deg": 347.0,
     "cloud_mass_compass": "С",
-    "cloud_mass_area_km2": 39742,
+    "cloud_mass_area_km2": 9011,
     "target_confirmation": {
       "confirmed": false,
-      "target_id": 3,
-      "target_area_km2": 133.4,
-      "roi_cloud_fraction": 0.048,
+      "target_id": 0,
+      "target_area_km2": 266.9,
+      "roi_cloud_fraction": 0.0,
       "verdict": "GeoColour НЕ подтверждает: в ROI CLM-цели облачность не преобладает — возможно расхождение слоёв"
     },
     "system_analysis_all": [
+      {
+        "target_id": 1,
+        "available": true,
+        "roi_cloud_fraction": 0.535,
+        "confirmed": true
+      },
+      {
+        "target_id": 3,
+        "available": true,
+        "roi_cloud_fraction": 0.464,
+        "confirmed": false
+      }
+    ],
+    "local_analysis_all": [
       {
         "target_id": 0,
         "available": true,
@@ -67,35 +105,33 @@
         "confirmed": false
       },
       {
-        "target_id": 1,
-        "available": true,
-        "roi_cloud_fraction": 0.517,
-        "confirmed": true
-      },
-      {
         "target_id": 2,
         "available": true,
-        "roi_cloud_fraction": 0.48,
-        "confirmed": false
-      }
-    ],
-    "local_analysis_all": [
-      {
-        "target_id": 3,
-        "available": true,
-        "roi_cloud_fraction": 0.048,
+        "roi_cloud_fraction": 0.0,
         "confirmed": false
       },
       {
         "target_id": 4,
         "available": true,
-        "roi_cloud_fraction": 0.068,
+        "roi_cloud_fraction": 0.063,
         "confirmed": false
       },
       {
         "target_id": 5,
         "available": true,
-        "roi_cloud_fraction": 0.017,
+        "roi_cloud_fraction": 0.587,
+        "confirmed": true
+      },
+      {
+        "target_id": 6,
+        "available": true,
+        "roi_cloud_fraction": 0.208,
+        "confirmed": false
+      },
+      {
+        "target_id": 7,
+        "available": true,
+        "roi_cloud_fraction": 0.184,
         "confirmed": false
       }
     ],
