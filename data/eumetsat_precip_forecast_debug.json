@@ -2,21 +2,27 @@
   "status": "ok",
   "frames_fetched": 4,
   "times_requested": [
-    "2026-09-06T07:45:00.000Z",
     "2026-09-06T08:00:00.000Z",
     "2026-09-06T08:15:00.000Z",
+    "2026-09-06T08:30:00.000Z",
     null
   ],
   "result": {
-    "timestamp": "2026-09-06T08:37:27Z",
+    "timestamp": "2026-09-06T08:54:22Z",
     "current_state": "no_precip",
     "target_type": "precip_mass",
-    "verdict": "однородно в радиусе ~192км, осадков не найдено",
+    "distance_km_now": 196.8,
+    "bearing_deg": 338.0,
+    "compass": "С",
+    "blob_area_km2": 243.0,
+    "verdict": "скорость посчитать не удалось (поле слишком однородно во всех кадрах)",
+    "probability_percent": 15,
+    "probability_note": "эвристика (близость + размер поля), скорость не посчиталась",
     "method_note": "Скорость усреднена по 4 кадрам msg_fes:h60b (шаг 15 мин, phase correlation). Presence = непрозрачный пиксель. Край ищется только среди связных областей >= 40px (~53км²). Линейная экстраполяция, годится на ~1 час.",
     "target_confirmation": {
       "confirmed": false,
-      "target_id": 1,
-      "target_area_km2": 80.1,
+      "target_id": 3,
+      "target_area_km2": 145.4,
       "roi_precip_fraction": 0.0,
       "verdict": "Осадков из этой конкретной массы не наблюдается (сухое облако либо осадки не достигают земли)"
     },
@@ -24,14 +30,14 @@
       "available": true,
       "target_id": 0,
       "area_km2": 67217.9,
-      "roi_precip_fraction": 0.0,
+      "roi_precip_fraction": 0.003,
       "has_precip": false
     },
     "system_analysis_all": [
       {
         "target_id": 0,
         "available": true,
-        "roi_precip_fraction": 0.0,
+        "roi_precip_fraction": 0.003,
         "has_precip": false
       },
       {
@@ -55,7 +61,7 @@
       {
         "target_id": 10,
         "available": true,
-        "roi_precip_fraction": 0.0,
+        "roi_precip_fraction": 0.028,
         "has_precip": false
       },
       {
