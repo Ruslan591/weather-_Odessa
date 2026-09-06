@@ -307,6 +307,20 @@ def check_eumetsat_frontal_track():
         print(f"  [WARN] eumetsat_frontal_track.py: {e}")
 
 
+def check_open_meteo_frontal_confirm():
+    # Согласовано с пользователем 2026-09-06 (docs/topics/frontal_line_
+    # stations.md). Событийный гейт ВНУТРИ скрипта (новый прогон модели +
+    # наличие кандидата) — можно звать каждый цикл, лишней сети не будет.
+    # timeout щедрый: 5 моделей x REQUEST_INTERVAL=30с пауз + сами запросы.
+    try:
+        subprocess.run(
+            [PYTHON, os.path.join(SCRIPTS_DIR, "open_meteo_frontal_confirm.py")],
+            cwd=BASE_DIR, capture_output=False, timeout=210
+        )
+    except Exception as e:
+        print(f"  [WARN] open_meteo_frontal_confirm.py: {e}")
+
+
 def check_eumetsat_render_track_overlay():
     try:
         subprocess.run(
@@ -807,6 +821,7 @@ def git_push_satellite():
             "data/eumetsat_west_snapshot_geocolour.png",
             "data/eumetsat_west_snapshot_ir.png",
             "data/eumetsat_frontal_track.json",
+            "data/open_meteo_frontal_confirm.json",
             "data/eumetsat_frontal_track_state.json",
             "data/eumetsat_ground_station_verify.json",
             "data/ground_station_field.json",
@@ -983,6 +998,7 @@ def _main_body():
     _timed(check_eumetsat_cloud_forecast)
     _timed(check_eumetsat_west_watch)
     _timed(check_eumetsat_frontal_track)
+    _timed(check_open_meteo_frontal_confirm)
     _timed(check_eumetsat_render_track_overlay)
     _timed(check_eumetsat_ground_station_verify)
     _timed(check_ground_station_field_fetch)
