@@ -1,19 +1,19 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-09-06T08:40:00.000Z",
+  "server_latest_time": "2026-09-06T08:50:00.000Z",
   "bootstrap": true,
   "buffer_before": 6,
   "buffer_after": 6,
   "buffer_times": [
-    "2026-09-06T07:50:00.000Z",
     "2026-09-06T08:00:00.000Z",
     "2026-09-06T08:10:00.000Z",
     "2026-09-06T08:20:00.000Z",
     "2026-09-06T08:30:00.000Z",
-    "2026-09-06T08:40:00.000Z"
+    "2026-09-06T08:40:00.000Z",
+    "2026-09-06T08:50:00.000Z"
   ],
   "result": {
-    "timestamp": "2026-09-06T09:08:47Z",
+    "timestamp": "2026-09-06T09:18:47Z",
     "buffer_size": 6,
     "buffer_span_minutes": 50,
     "observed_area": {
@@ -26,12 +26,12 @@
     },
     "current_state": "no_precip",
     "target_type": "precip_mass",
-    "distance_km_now": 193.9,
-    "bearing_deg": 342.0,
+    "distance_km_now": 182.0,
+    "bearing_deg": 341.0,
     "compass": "С",
-    "blob_area_km2": 379.0,
+    "blob_area_km2": 568.0,
     "verdict": "скорость посчитать не удалось (поле слишком однородно во всех кадрах)",
-    "probability_percent": 18,
+    "probability_percent": 22,
     "probability_note": "эвристика (близость + размер поля), скорость не посчиталась",
     "method_note": "Буфер 6/6 масок mtg_fd:h40b (шаг 10 мин, crs=EPSG:4326, всегда явный TIME из GetCapabilities — не floor(now)), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Presence = непрозрачный пиксель. Край ищется только среди связных областей >= 40px (~53км²). Скорость — из реальных интервалов буфера (не фиксированный шаг). Линейная экстраполяция, годится на ~1 час."
   }
