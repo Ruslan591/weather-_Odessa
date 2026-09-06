@@ -1,7 +1,239 @@
 {
-  "status": "skipped",
-  "server_latest_time": "2026-09-06T03:15:00.000Z",
-  "bootstrap": false,
+  "status": "ok",
+  "server_latest_time": "2026-09-06T03:30:00.000Z",
+  "bootstrap": true,
   "buffer_before": 9,
-  "note": "сервер ещё не объявил кадр новее 2026-09-06T03:15:00.000Z (default=2026-09-06T03:15:00.000Z)"
+  "buffer_size": 9,
+  "buffer_times": [
+    "2026-09-06T01:30:00.000Z",
+    "2026-09-06T01:45:00.000Z",
+    "2026-09-06T02:00:00.000Z",
+    "2026-09-06T02:15:00.000Z",
+    "2026-09-06T02:30:00.000Z",
+    "2026-09-06T02:45:00.000Z",
+    "2026-09-06T03:00:00.000Z",
+    "2026-09-06T03:15:00.000Z",
+    "2026-09-06T03:30:00.000Z"
+  ],
+  "state_source": "clm_and_ir_or_gc_confirmed",
+  "state_area_fraction": 0.61,
+  "result": {
+    "timestamp": "2026-09-06T03:30:00.000Z",
+    "current_state": "considerable",
+    "station_area_fraction": 0.61,
+    "target_type": "clearing",
+    "distance_km_now": 6.7,
+    "bearing_deg": 339.0,
+    "compass": "С",
+    "speed_kmh": 76.7,
+    "direction_compass": "В",
+    "cpa_km": 6.3,
+    "eta_min": 2.0,
+    "blob_area_km2": 84863.0,
+    "target_id": 0,
+    "class": "system",
+    "verdict": "уже у города",
+    "frame_pairs_used": 8,
+    "trend": {
+      "density_fraction_now": 0.67,
+      "density_delta": -0.33,
+      "density_verdict": "рассеивается",
+      "height_ordinal_delta": -2.34,
+      "height_verdict": "вершины опускаются (возможно ослабление)",
+      "shape_aspect_ratio_now": 2.0,
+      "shape_aspect_delta": 0.56,
+      "shape_verdict": "вытягивается (возможно формирование линии/фронта)"
+    },
+    "buffer_status": {
+      "frames_in_memory": 9,
+      "frames_target": 9,
+      "span_minutes_now": 120,
+      "span_minutes_target": 120,
+      "eta_full_window_min": 0,
+      "note": "буфер заполнен (9/9), тренды считаются по полному окну ~120 мин"
+    },
+    "candidates": [
+      {
+        "centroid_dx_km": -2.4,
+        "centroid_dy_km": 6.26,
+        "area_km2": 84862.6,
+        "class": "system",
+        "bbox_km": {
+          "dx_min": -191.3,
+          "dx_max": 191.3,
+          "dy_min": -86.97,
+          "dy_max": 277.6
+        },
+        "elongation_aspect_ratio": 1.74,
+        "elongation_axis_deg": 53.0,
+        "elongation_axis_compass": "СВ-ЮЗ",
+        "frontlike": false,
+        "window_spanning": true,
+        "target_id": 0
+      },
+      {
+        "centroid_dx_km": 57.05,
+        "centroid_dy_km": -142.63,
+        "area_km2": 65.4,
+        "class": "local",
+        "bbox_km": {
+          "dx_min": 57.05,
+          "dx_max": 62.81,
+          "dy_min": -150.98,
+          "dy_max": -142.63
+        },
+        "elongation_aspect_ratio": 1.45,
+        "elongation_axis_deg": 0.0,
+        "elongation_axis_compass": "С-Ю",
+        "frontlike": false,
+        "window_spanning": false,
+        "target_id": 1
+      },
+      {
+        "centroid_dx_km": -147.19,
+        "centroid_dy_km": -46.62,
+        "area_km2": 64.0,
+        "class": "local",
+        "bbox_km": {
+          "dx_min": -155.82,
+          "dx_max": -147.19,
+          "dy_min": -53.57,
+          "dy_max": -46.62
+        },
+        "elongation_aspect_ratio": 1.41,
+        "elongation_axis_deg": 54.0,
+        "elongation_axis_compass": "СВ-ЮЗ",
+        "frontlike": false,
+        "window_spanning": false,
+        "target_id": 2
+      },
+      {
+        "centroid_dx_km": 0.48,
+        "centroid_dy_km": -156.54,
+        "area_km2": 25278.3,
+        "class": "system",
+        "bbox_km": {
+          "dx_min": -70.48,
+          "dx_max": 191.3,
+          "dy_min": -277.6,
+          "dy_max": -110.62
+        },
+        "elongation_aspect_ratio": 1.96,
+        "elongation_axis_deg": 77.0,
+        "elongation_axis_compass": "В-З",
+        "frontlike": false,
+        "window_spanning": false,
+        "target_id": 3
+      },
+      {
+        "centroid_dx_km": 40.75,
+        "centroid_dy_km": -156.54,
+        "area_km2": 65.4,
+        "class": "local",
+        "bbox_km": {
+          "dx_min": 40.75,
+          "dx_max": 49.38,
+          "dy_min": -164.89,
+          "dy_max": -156.54
+        },
+        "elongation_aspect_ratio": 1.08,
+        "elongation_axis_deg": 115.0,
+        "elongation_axis_compass": "ЮВ-СЗ",
+        "frontlike": false,
+        "window_spanning": false,
+        "target_id": 4
+      },
+      {
+        "centroid_dx_km": -46.51,
+        "centroid_dy_km": -189.94,
+        "area_km2": 354.9,
+        "class": "system",
+        "bbox_km": {
+          "dx_min": -76.23,
+          "dx_max": -45.55,
+          "dy_min": -214.99,
+          "dy_max": -189.94
+        },
+        "elongation_aspect_ratio": 2.5,
+        "elongation_axis_deg": 54.0,
+        "elongation_axis_compass": "СВ-ЮЗ",
+        "frontlike": true,
+        "window_spanning": false,
+        "target_id": 5
+      },
+      {
+        "centroid_dx_km": 21.58,
+        "centroid_dy_km": -208.03,
+        "area_km2": 100.1,
+        "class": "local",
+        "bbox_km": {
+          "dx_min": 15.82,
+          "dx_max": 24.45,
+          "dy_min": -224.73,
+          "dy_max": -208.03
+        },
+        "elongation_aspect_ratio": 3.02,
+        "elongation_axis_deg": 22.0,
+        "elongation_axis_compass": "С-Ю",
+        "frontlike": false,
+        "window_spanning": false,
+        "target_id": 6
+      },
+      {
+        "centroid_dx_km": -78.15,
+        "centroid_dy_km": -203.85,
+        "area_km2": 8866.4,
+        "class": "system",
+        "bbox_km": {
+          "dx_min": -191.3,
+          "dx_max": -77.19,
+          "dy_min": -277.6,
+          "dy_max": -110.62
+        },
+        "elongation_aspect_ratio": 1.69,
+        "elongation_axis_deg": 171.0,
+        "elongation_axis_compass": "Ю-С",
+        "frontlike": false,
+        "window_spanning": false,
+        "target_id": 7
+      },
+      {
+        "centroid_dx_km": -77.19,
+        "centroid_dy_km": -267.86,
+        "area_km2": 138.8,
+        "class": "local",
+        "bbox_km": {
+          "dx_min": -99.25,
+          "dx_max": -77.19,
+          "dy_min": -277.6,
+          "dy_max": -267.86
+        },
+        "elongation_aspect_ratio": 2.62,
+        "elongation_axis_deg": 65.0,
+        "elongation_axis_compass": "СВ-ЮЗ",
+        "frontlike": false,
+        "window_spanning": false,
+        "target_id": 8
+      },
+      {
+        "centroid_dx_km": -170.2,
+        "centroid_dy_km": 273.43,
+        "area_km2": 296.2,
+        "class": "local",
+        "bbox_km": {
+          "dx_min": -191.3,
+          "dx_max": -170.2,
+          "dy_min": 259.51,
+          "dy_max": 277.6
+        },
+        "elongation_aspect_ratio": 1.56,
+        "elongation_axis_deg": 47.0,
+        "elongation_axis_compass": "СВ-ЮЗ",
+        "frontlike": false,
+        "window_spanning": false,
+        "target_id": 9
+      }
+    ],
+    "method_note": "Персистентный буфер до 9 кадров Cloud Mask + CTH (шаг 15 мин, до 2 часов истории), хранится между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр вместо всех заново. Скорость усреднена по всем парам кадров буфера с реальным dt (phase correlation всего поля). Край облака/просвета ищется только среди связных областей >= 40px (~53км²) с учётом прозрачных no-data пикселей. Тренды плотности/высоты/формы — сравнение первого и последнего кадра БУФЕРА в радиусе 50км (окно растёт по мере наполнения буфера, см. buffer_status). Высота — ординальный индекс по цвету (не метры, официальной таблицы нет). Вероятность (только когда сейчас ясно/переменная облачность и есть значимое приближающееся поле) — эвристическая оценка по близости/размеру/уверенности в скорости, не физическая модель осадков. Линейная экстраполяция, годится на ~1 час."
+  }
 }
