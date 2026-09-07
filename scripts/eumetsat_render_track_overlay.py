@@ -83,36 +83,64 @@ def _draw_score_checkpoints(base_img, tracks_for_tile, score_data):
     return Image.alpha_composite(base_img.convert("RGBA"), overlay).convert("RGB")
 
 
-def _draw_frontal_confirm_status(base_img, tracks_for_tile, confirm_data):
-    """Визуализация open_meteo_frontal_confirm.py: кольцо вокруг кандидата
-    в центре трека — зелёное, если подтверждён (>=3 из 5 моделей), серое,
-    если нет, подпись "голосов/моделей" рядом. Только near-tile (та же
-    логика, что _draw_score_checkpoints — координаты без origin-сдвига,
-    для west-tile не подходят, см. main())."""
+def _dilate(mask):
+    """4-связная дилатация булевой маски без scipy (numpy-сдвиги массива —
+    достаточно для 1-2px кольца, отдельная зависимость не нужна)."""
+    d = mask.copy()
+    d[1:, :] |= mask[:-1, :]
+    d[:-1, :] |= mask[1:, :]
+    d[:, 1:] |= mask[:, :-1]
+    d[:, :-1] |= mask[:, 1:]
+    return d
+
+
+def _draw_frontal_confirm_outline(base_img, tracks_for_tile, mask_by_track_id, confirm_data):
+    """Обводит РЕАЛЬНЫЙ контур блоба (не абстрактный круг) цветом
+    подтверждения open_meteo_frontal_confirm.py — по запросу пользователя
+    2026-09-07 ("фронт это дуга/линия по форме облачности, а не круг").
+    Раньше здесь рисовался фиксированный ellipse в центре трека
+    (_draw_frontal_confirm_status, удалена) — не отражала ни форму, ни
+    размер реального блоба. Кольцо строится дилатацией (_dilate) маски
+    блоба на 2px наружу — контур виден поверх любого фона, не сливается
+    с уже закрашенным телом блоба (см. _render_tile). Подпись у центроида —
+    голоса/модели + тип фронта (х=холодный/т=тёплый), приоритет —
+    станционный front_type трека (eumetsat_frontal_track.py), фолбэк —
+    модельный front_type_model (open_meteo_frontal_confirm.py, нужен над
+    морем, где станций нет). Только near-tile (та же причина, что была у
+    предыдущей версии — координаты без origin-сдвига, для west не подходят,
+    см. main())."""
     if not confirm_data:
         return base_img
     candidates = confirm_data.get("candidates", {})
     if not candidates:
         return base_img
-    overlay = Image.new("RGBA", base_img.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(overlay)
+    h, w = base_img.height, base_img.width
+    overlay_arr = np.zeros((h, w, 4), dtype=np.uint8)
+    labels = []
     try:
         font = ImageFont.load_default()
     except Exception:
         font = None
     for t in tracks_for_tile:
-        verdict = candidates.get(str(t["track_id"]))
-        if not verdict:
+        tid = t["track_id"]
+        verdict = candidates.get(str(tid))
+        mask = mask_by_track_id.get(tid)
+        if not verdict or mask is None or not mask.any():
             continue
-        dx, dy = t.get("dx_km", 0.0), t.get("dy_km", 0.0)
-        cx = (base_img.width - 1) / 2.0 - dx / fc.KM_PER_PX_X
-        cy = (base_img.height - 1) / 2.0 + dy / fc.KM_PER_PX_Y
+        ring = _dilate(_dilate(mask)) & ~mask
         color = (60, 220, 60, 255) if verdict.get("confirmed") else (160, 160, 160, 255)
-        r = 18
-        draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline=color, width=4)
-        label = f"{verdict.get('votes', 0)}/{verdict.get('n_models', 5)}"
-        draw.text((cx + r + 3, cy - 8), label, fill=color, font=font)
-    return Image.alpha_composite(base_img.convert("RGBA"), overlay).convert("RGB")
+        overlay_arr[ring] = color
+        ys, xs = np.nonzero(mask)
+        cy, cx = float(ys.mean()), float(xs.mean())
+        front_type = t.get("front_type") or verdict.get("front_type_model")
+        type_tag = " х" if front_type == "cold" else (" т" if front_type == "warm" else "")
+        labels.append((cx, cy, f"{verdict.get('votes', 0)}/{verdict.get('n_models', 5)}{type_tag}", color))
+    overlay = Image.fromarray(overlay_arr, mode="RGBA")
+    out = Image.alpha_composite(base_img.convert("RGBA"), overlay)
+    draw = ImageDraw.Draw(out)
+    for cx, cy, label, color in labels:
+        draw.text((cx + 6, cy - 8), label, fill=color, font=font)
+    return out.convert("RGB")
 
 
 def _render_tile(scratch_base_path, scratch_pixelmap_path, out_path,
@@ -128,6 +156,7 @@ def _render_tile(scratch_base_path, scratch_pixelmap_path, out_path,
         pixel_map = np.load(scratch_pixelmap_path)
         arr = np.array(base_img)
         painted = 0
+        mask_by_track_id = {}
         for t in tracks_for_tile:
             tid = t.get("current_target_id")
             if tid is None:
@@ -137,11 +166,12 @@ def _render_tile(scratch_base_path, scratch_pixelmap_path, out_path,
                 continue
             color = fc.FRONTAL_TRACK_COLORS[t["track_id"] % len(fc.FRONTAL_TRACK_COLORS)]
             arr[mask] = color
+            mask_by_track_id[t["track_id"]] = mask  # для _draw_frontal_confirm_outline ниже
             painted += 1
         out_img = Image.fromarray(arr, mode="RGB")
         out_img = fc.draw_odessa_marker(out_img, origin_dx_km=origin_dx_km, origin_dy_km=origin_dy_km)
         out_img = _draw_score_checkpoints(out_img, tracks_for_tile, score_data)
-        out_img = _draw_frontal_confirm_status(out_img, tracks_for_tile, confirm_data)
+        out_img = _draw_frontal_confirm_outline(out_img, tracks_for_tile, mask_by_track_id, confirm_data)
         out_img.save(out_path)
         return f"ok_{painted}_tracks"
     except Exception as e:
@@ -191,3 +221,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
