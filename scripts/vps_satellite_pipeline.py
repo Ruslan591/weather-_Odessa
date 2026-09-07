@@ -998,7 +998,6 @@ def _main_body():
     _timed(check_eumetsat_cloud_forecast)
     _timed(check_eumetsat_west_watch)
     _timed(check_eumetsat_frontal_track)
-    _timed(check_open_meteo_frontal_confirm)
     _timed(check_eumetsat_render_track_overlay)
     _timed(check_eumetsat_ground_station_verify)
     _timed(check_ground_station_field_fetch)
@@ -1021,6 +1020,18 @@ def _main_body():
     # check_eumetsat_anim_render() не вызывается — см. докстринг файла, п.5.
     _timed(check_eumetsat_far_watch)
     _timed(check_eumetsat_very_far_watch)
+    # check_open_meteo_frontal_confirm() — ПОСЛЕ very_far_watch: рисует
+    # кольцо поверх very_far_geocolour.png (см. _draw_confirm_on_very_far
+    # в open_meteo_frontal_confirm.py), а very_far_watch каждый цикл
+    # ПЕРЕГЕНЕРИРУЕТ этот файл с нуля — если confirm рисует РАНЬШЕ,
+    # рисунок стирается на той же итерации (найдено 2026-09-06 при
+    # первой попытке разместить confirm до render_track_overlay). Цена
+    # компромисса: near-tier-кольцо на eumetsat_clm_snapshot.png (в
+    # render_track_overlay, который теперь выполняется РАНЬШЕ confirm)
+    # отстаёт на 1 цикл — тот же уже принятый нюанс, что у
+    # frontal_line_score/_draw_score_checkpoints, см. docs/topics/
+    # frontal_line_stations.md.
+    _timed(check_open_meteo_frontal_confirm)
     # [ОТКЛЮЧЕНО 2026-09-05, ЭКСТРЕННО] check_open_meteo_very_far_line() —
     # см. причину у check_open_meteo_field_fetch() выше, тот же общий
     # рейт-лимит на IP VPS.
