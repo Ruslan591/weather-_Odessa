@@ -79,6 +79,7 @@ STALE_TRACK_MINUTES = 90      # трек без новых точек дольш
 JITTER_FLOOR_KM = 40          # допуск на шум centroid даже при dt->0
 SPEED_CAP_KMH = 100           # потолок правдоподобной скорости движения фронта
 MIN_POINTS_FOR_VELOCITY = 3   # меньше — публикуем трек, но без velocity (шумно)
+FRONT_TYPE_MIN_TEMP_DIFF = 0.5  # °C — ниже порога classификация не публикуется (шум станции)
 
 COMPASS = ["С", "СВ", "В", "ЮВ", "Ю", "ЮЗ", "З", "СЗ"]
 
@@ -484,6 +485,27 @@ def main():
         entry["ahead_obs"] = gv.get("ahead_obs") if gv else None
         entry["behind_obs"] = gv.get("behind_obs") if gv else None
 
+        # Классификация тёплый/холодный — по знаку разницы temp между
+        # ahead_obs (куда движется фронт) и behind_obs (откуда пришёл),
+        # согласовано с пользователем 2026-09-07. behind холоднее ahead =>
+        # холодный воздух наступает => холодный фронт; behind теплее =>
+        # тёплый. Порог FRONT_TYPE_MIN_TEMP_DIFF — ниже разница слишком
+        # мала для уверенного вывода (может быть просто погрешностью
+        # станции/микроклиматом), тогда front_type остаётся None.
+        # confidence="station" — реальные данные, НЕ предположение модели.
+        # Фолбэк, когда станций нет (например, фронт над морем) —
+        # front_type_model в open_meteo_frontal_confirm.py, читается
+        # фронтендом отдельно, ТОЛЬКО если здесь front_type is None.
+        entry["front_type"] = None
+        entry["front_type_confidence"] = None
+        ao_temp = entry["ahead_obs"].get("temp") if entry["ahead_obs"] else None
+        bo_temp = entry["behind_obs"].get("temp") if entry["behind_obs"] else None
+        if ao_temp is not None and bo_temp is not None:
+            dt = bo_temp - ao_temp
+            if abs(dt) >= FRONT_TYPE_MIN_TEMP_DIFF:
+                entry["front_type"] = "cold" if dt < 0 else "warm"
+                entry["front_type_confidence"] = "station"
+
         if len(pts) >= MIN_POINTS_FOR_VELOCITY:
             first = pts[0]
             dt_hours = (cf_ts - _parse_ts(first["ts"])).total_seconds() / 3600.0
@@ -530,4 +552,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
