@@ -62,6 +62,8 @@ let _eumetsatFarWatchData      = null;
 let _eumetsatFarWatchFetchedAt = 0;
 let _eumetsatVeryFarWatchData      = null;
 let _eumetsatVeryFarWatchFetchedAt = 0;
+let _openMeteoFrontalConfirmData      = null;
+let _openMeteoFrontalConfirmFetchedAt = 0;
 let _eumetsatTargetSummaryData      = null;
 let _eumetsatTargetSummaryFetchedAt = 0;
 let _eumetsatWestWatchData      = null;
@@ -281,8 +283,12 @@ async function loadEumetsatFarWatch(){
 }
 
 async function loadEumetsatVeryFarWatch(){
-    // Сервер обновляет раз в 3ч — 60 мин клиентского опроса достаточно.
-    if(Date.now() - _eumetsatVeryFarWatchFetchedAt < 60 * 60000) return;
+    // [ИЗМЕНЕНО 2026-09-06] Было "раз в 3ч" (60 мин опроса) — 3ч-гейт на
+    // сервере убран 2026-09-04, теперь снимок обновляется каждый цикл
+    // VPS (~5мин). Опрос сокращён до 5 мин, чтобы кольцо/таблица
+    // подтверждения фронтов (open_meteo_frontal_confirm.py) не казались
+    // "зависшими" на час.
+    if(Date.now() - _eumetsatVeryFarWatchFetchedAt < 5 * 60000) return;
     _eumetsatVeryFarWatchFetchedAt = Date.now();
     try {
         const r = await fetch(
@@ -295,6 +301,28 @@ async function loadEumetsatVeryFarWatch(){
         renderNearbyPrecipCard();
     } catch(e){
         _eumetsatVeryFarWatchFetchedAt = 0;
+    }
+}
+
+async function loadOpenMeteoFrontalConfirm(){
+    // Согласовано с пользователем 2026-09-06 — подтверждение фронтов по
+    // Open-Meteo (open_meteo_frontal_confirm.py), событийный источник на
+    // бэкенде, но здесь просто опрашиваем как обычно (короткого TTL
+    // достаточно, лишней сети это не создаёт — файл читается с GitHub,
+    // не дёргает Open-Meteo напрямую).
+    if(Date.now() - _openMeteoFrontalConfirmFetchedAt < 5 * 60000) return;
+    _openMeteoFrontalConfirmFetchedAt = Date.now();
+    try {
+        const r = await fetch(
+            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/open_meteo_frontal_confirm.json",
+            { cache: "no-store" }
+        );
+        if(!r.ok) return;
+        const j = await r.json();
+        if(j && j.generated_at) _openMeteoFrontalConfirmData = j;
+        renderNearbyPrecipCard();
+    } catch(e){
+        _openMeteoFrontalConfirmFetchedAt = 0;
     }
 }
 
@@ -1298,12 +1326,44 @@ function _renderNearSnapshotsAccordion(geocolourData, irData, forecastData, trac
     </details>`;
 }
 
-function _renderFarWatchLines(farData, veryFarData){
+// Таблица подтверждения фронтов по Open-Meteo (open_meteo_frontal_
+// confirm.py) — согласовано с пользователем 2026-09-06. Кольцо+голоса на
+// самих снимках (near-tier CLM и very_far GeoColour) рисует бэкенд, тут —
+// детальная разбивка по каждой из 5 моделей (перепад temp/pressure,
+// сдвиг ветра, голос за/против), чтобы видеть не только вердикт, но и
+// на чём он основан.
+function _renderFrontalConfirmTable(data){
+    if(!data || !data.candidates || !Object.keys(data.candidates).length) return "";
+    const cards = Object.entries(data.candidates).map(([tid, c]) => {
+        const icon = c.confirmed ? "✅" : "⬜";
+        const modelLines = Object.entries(c.per_model || {}).map(([mid, m]) => {
+            if(m.reason === "incomplete_data"){
+                return `<div style="color:#777;">· ${mid}: нет данных</div>`;
+            }
+            const mark = m.vote ? "✓" : "·";
+            const color = m.vote ? "#6adc6a" : "#888";
+            return `<div style="color:${color};">${mark} ${mid}: Δt=${m.temp_grad ?? "?"}°C, Δp=${m.pressure_grad ?? "?"}гПа, ветер=${m.wind_shift_deg ?? "?"}°</div>`;
+        }).join("");
+        return `<div style="margin:8px 0; padding:8px; border:1px solid #333; border-radius:8px;">
+            <div style="font-weight:600;">${icon} Кандидат ${tid} — ${c.votes}/${c.n_models} моделей</div>
+            <div style="font-size:12px; margin-top:4px; line-height:1.5;">${modelLines}</div>
+        </div>`;
+    }).join("");
+    const ts = _obsTimeTag(data.generated_at, 60);
+    return `<div style="margin-top:10px;">
+        <div style="color:#72c8ff; font-size:13px; font-weight:600; margin-bottom:4px;">🗳️ Подтверждение фронтов по Open-Meteo ${ts}</div>
+        ${cards}
+        <div style="color:#777; font-size:11px; margin-top:3px;">Пороги подтверждения — первая прикидка, не откалибрована на реальных случаях, см. docs/topics/frontal_line_stations.md.</div>
+    </div>`;
+}
+
+function _renderFarWatchLines(farData, veryFarData, confirmData){
     if(!farData && !veryFarData) return "";
     return _hr()
         + _subhead("Наблюдения по Европе")
         + _renderOneFarTier(farData, "Дальний контроль (~1000км)")
-        + _renderOneFarTier(veryFarData, "Очень дальний контроль (~2500км)");
+        + _renderOneFarTier(veryFarData, "Очень дальний контроль (~2500км)")
+        + _renderFrontalConfirmTable(confirmData);
 }
 
 // Таблица "хронология" — последние N записей из .jsonl-лога, свежие сверху.
@@ -1369,7 +1429,7 @@ function renderNearbyPrecipCard(){
         ${_renderPrecipForecastLines(_eumetsatPrecipForecastData)}
         ${_renderPrecipMotionLines(_eumetsatPrecipMotionData)}
         ${_renderLightningForecastLines(_eumetsatLightningForecastData)}
-        ${_renderFarWatchLines(_eumetsatFarWatchData, _eumetsatVeryFarWatchData)}
+        ${_renderFarWatchLines(_eumetsatFarWatchData, _eumetsatVeryFarWatchData, _openMeteoFrontalConfirmData)}
     `;
 
     card.innerHTML = `
