@@ -1008,9 +1008,26 @@ def _main_body():
     save_next_expected(next_expected_state)
     print(f"{'─'*52}\n")
 
+    # [ДОБАВЛЕНО 2026-09-08] run_pipeline() (шаг "update_local.py --no-model")
+    # УЖЕ дёргает update.py::main(), который безусловно вызывает
+    # fetch_ensemble_ready_time() (6 запросов к Open-Meteo без пауз между
+    # ними) — независимо от --no-model/--no-fill, эти флаги только
+    # подменяют шаги 0/2 внутри update_local.py, а update.py::main()
+    # вызывается ВСЕГДА (см. update_local.py::main()). Раньше это не
+    # учитывалось: если новый прогон модели совпадал с SYNOP-окном (как
+    # 2026-09-07 18:15 местного = 15:15 UTC, GRAPES + synop-час 15
+    # одновременно), update_local.py запускался ДВАЖДЫ подряд в одном
+    # цикле — 12+ запросов почти без пауз слепленные в минуту. Через 3
+    # минуты после этого open_meteo_frontal_confirm.py поймал 429 на ВСЕХ
+    # 5 моделях — см. разбор в чате 2026-09-08 (расследование по логам
+    # vps-pipeline.log/vps-satellite-pipeline.log). Флаг ниже гарантирует,
+    # что update_local.py вызывается максимум ОДИН раз за цикл.
+    ran_update_local_this_cycle = False
+
     if new_models:
         save_history(history)
         ok = run_pipeline(new_models)
+        ran_update_local_this_cycle = True
         if ok:
             queue_ai_models(new_models)
         git_push_history()
@@ -1023,7 +1040,7 @@ def _main_body():
     # (см. is_synop_window). Заодно снижает частоту коммитов тяжёлых
     # ensemble_snapshots_*.json (см. docs/topics/hosting_migration.md про
     # раздутие репозитория историей).
-    if is_synop_window(now_dt):
+    if is_synop_window(now_dt) and not ran_update_local_this_cycle:
         print("  [SYNOP-окно] обновляю SYNOP + снимок ансамбля")
         try:
             subprocess.run(
@@ -1033,6 +1050,8 @@ def _main_body():
         except subprocess.TimeoutExpired:
             print("  ✗ update_local.py завис дольше 300с — прерван по таймауту")
         git_push_history()
+    elif is_synop_window(now_dt):
+        print("  [SYNOP-окно] пропущено — update_local.py уже вызывался в этом цикле (см. докстринг выше)")
 
     # [ПЕРЕСМОТРЕНО 29.08.2026] check_pws_sync()/check_pws_calibration()
     # раньше вызывались каждый цикл вхолостую — теперь только в PWS-окне
