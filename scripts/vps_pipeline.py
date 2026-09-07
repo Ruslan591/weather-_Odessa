@@ -275,6 +275,20 @@ NEXT_EXPECTED_FILE = os.path.join(BASE_DIR, "data", "model_next_expected.json")
 # (безопасный дефолт, см. `due = True` при отсутствии записи), схема
 # самовосстанавливается за один цикл.
 DEFAULT_INTERVAL_SEC = 6 * 3600      # если meta.json не отдал update_interval_seconds
+
+# [ДОБАВЛЕНО 2026-09-08] Паспортный update_interval_seconds — это НОМИНАЛ,
+# реальная задержка публикации плавает и бывает заметно короче. Проверено
+# по полному дню истории (06.09.2026, все 6 моделей): минимальный реальный
+# интервал у ICON EU — 127 мин против паспортных 180 (т.е. -29%), у
+# остальных 5 моделей отклонение 0-17%. Без запаса next_expected = last+
+# interval рискует "проспать" ранний прогон, если СЛЕДУЮЩИЙ (тоже ранний)
+# выйдет раньше запланированной проверки — тогда он молча теряется из
+# model_runs_history.json (не ошибка, а тихий пропуск). 30% запаса
+# перекрывает худший наблюдённый случай (ICON EU) с небольшим допуском,
+# для остальных моделей — щедро. Стоимость — несколько лишних лёгких
+# meta.json-проверок на прогон, это копейки на фоне бюджета (см. разбор
+# запросов/сутки в чате 2026-09-08).
+SCHEDULE_MARGIN_FRACTION = 0.30
 RETRY_ON_FETCH_FAIL_SEC = 5 * 60     # сеть недоступна прямо на "due"-тике — не ждать полный интервал
 
 
@@ -977,7 +991,9 @@ def _main_body():
 
         try:
             base_dt = datetime.strptime(base_time, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
-            next_expected_dt = base_dt.timestamp() + interval_sec
+            # Запас SCHEDULE_MARGIN_FRACTION — см. докстринг константы выше.
+            effective_interval_sec = interval_sec * (1.0 - SCHEDULE_MARGIN_FRACTION)
+            next_expected_dt = base_dt.timestamp() + effective_interval_sec
             next_expected_iso2 = datetime.fromtimestamp(
                 next_expected_dt, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         except Exception:
