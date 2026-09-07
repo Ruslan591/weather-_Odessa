@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-07T02:34:04Z",
+  "timestamp": "2026-09-07T02:59:03Z",
   "mode": "day",
   "unclassified_fraction_now": 0.0,
   "phase_ordinal_now": 0.0,
@@ -10,8 +10,8 @@
   "type_verdict": "без существенных изменений",
   "target_confirmation": {
     "confirmed": false,
-    "target_id": 6,
-    "target_area_km2": 161.4,
+    "target_id": 9,
+    "target_area_km2": 202.8,
     "roi_cloud_fraction": 0.0,
     "roi_dominant_phase_ordinal": 0.0,
     "roi_dominant_phase_label": "безоблачно",
@@ -255,12 +255,12 @@
     }
   ],
   "buffer_status": {
-    "frames_in_memory": 2,
+    "frames_in_memory": 5,
     "frames_target": 13,
-    "span_minutes_now": 10,
+    "span_minutes_now": 40,
     "span_minutes_target": 120,
-    "eta_full_window_min": 110,
-    "note": "в памяти 2/13 снимков (~10 мин истории), полное 120-минутное окно накопится через ~110 мин"
+    "eta_full_window_min": 80,
+    "note": "в памяти 5/13 снимков (~40 мин истории), полное 120-минутное окно накопится через ~80 мин"
   },
   "method_note": "[День] Персистентный буфер до 13 кадров Cloud Phase RGB + Cloud Type RGB (шаг 10 мин, до 2 часов). Анкеры цвета — HSV-диапазоны, ПЕРВАЯ, не откалиброванная по реальным сценам версия (у обоих слоёв нет официальной легенды — это настоящие RGB-композиты, GetLegendGraphic возвращает не легенду). phase_ordinal (0..8) — безоблачно -> вода (низкая/средняя/плотная) -> лёд (тонкий/плотный) -> смешанная фаза -> холодные верхушки Cb -> гроза. type_group (0..2) — безоблачно/низкая-средняя/плотная-высокая. Тренд — сравнение первого и последнего кадра буфера в радиусе 50км. unclassified_fraction_now — доля пикселей, не попавших уверенно ни в одно цветовое правило: при большом значении анкеры нужно пересматривать."
 }
