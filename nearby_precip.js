@@ -1258,10 +1258,12 @@ function _renderWestSnapshot(westData, tracks){
     // 2026-08-17) — раньше "Треки фронтов" была одной общей таблицей (near+
     // west вперемешку, различить можно было только по чтению координат).
     const tracksHtml = _renderFrontalTracksTable(tracks, {tileFilter: "west", title: "Треки фронтов (западный тайл)"});
+    const confirmHtml = _renderFrontalConfirmTable(_openMeteoFrontalConfirmData, tracks, {tileFilter: "west"});
     return `<details style="margin-top:10px;">
         <summary style="cursor:pointer; color:#72c8ff; font-size:13px; font-weight:600;">🧩 Западный тайл — снимки ${ts} (кандидатов: ${n})</summary>
         <div style="margin-top:6px;">
             ${tracksHtml}
+            ${confirmHtml}
             <div style="color:#777; font-size:11px; margin-bottom:3px;">GeoColour</div>
             <img src="${gcSrc}" alt="Западный тайл — GeoColour"
                  style="width:100%; border-radius:8px; display:block;"
@@ -1314,7 +1316,9 @@ function _renderNearSnapshotsAccordion(geocolourData, irData, forecastData, trac
     // Отдельная таблица ТОЛЬКО фронтов центрального (near) тайла — пара к
     // west-таблице в _renderWestSnapshot(), тот же запрос 2026-08-17.
     const tracksHtml = _renderFrontalTracksTable(tracks, {tileFilter: "near", title: "Треки фронтов (центральный тайл)"});
+    const confirmHtml = _renderFrontalConfirmTable(_openMeteoFrontalConfirmData, tracks, {tileFilter: "near"});
     const inner = tracksHtml
+        + confirmHtml
         + _renderGeocolourSnapshot(geocolourData)
         + _renderIrSnapshot(irData)
         + _renderClmSnapshot(forecastData);
@@ -1332,20 +1336,56 @@ function _renderNearSnapshotsAccordion(geocolourData, irData, forecastData, trac
 // детальная разбивка по каждой из 5 моделей (перепад temp/pressure,
 // сдвиг ветра, голос за/против), чтобы видеть не только вердикт, но и
 // на чём он основан.
-function _renderFrontalConfirmTable(data){
+// [ИЗМЕНЕНО 2026-09-07] Раньше это была ОДНА общая таблица под
+// "Наблюдения по Европе", хотя её кандидаты на самом деле — near/west-
+// треки (open_meteo_frontal_confirm.py читает ВСЕ tracks из eumetsat_
+// frontal_track.json; far/very_far system-кандидаты сюда вообще не
+// попадают, см. build_pooled_points() в скрипте) — вводило в заблуждение
+// (запрос пользователя: "Таблицу для центрального тайла тоже надо" —
+// она уже была, просто не там, где ожидалась). Теперь фильтруется по
+// tileFilter через tracks (тот же список, что у _renderFrontalTracksTable)
+// и рендерится ВНУТРИ своего аккордеона (near/west), не одним блоком под
+// Европой — там ей взяться неоткуда, за пределами near+west (~360км)
+// объектная линия фронта не считается (см. docs/topics/
+// frontal_line_stations.md, "Смена архитектуры").
+// Тип фронта (х=холодный/т=тёплый) — приоритет station (track.front_type,
+// реальные наблюдения ahead_obs/behind_obs), фолбэк — front_type_model
+// (сигнатура по Open-Meteo, нужна когда станций нет, например над морем) —
+// с явной пометкой источника в подписи, чтобы не путать надёжность.
+function _renderFrontalConfirmTable(data, tracks, opts){
     if(!data || !data.candidates || !Object.keys(data.candidates).length) return "";
-    const cards = Object.entries(data.candidates).map(([tid, c]) => {
+    opts = opts || {};
+    const tileFilter = opts.tileFilter;
+    const trackById = {};
+    (tracks || []).forEach(t => { trackById[String(t.track_id)] = t; });
+    const entries = Object.entries(data.candidates).filter(([tid]) => {
+        if(!tileFilter) return true;
+        const t = trackById[tid];
+        return t && (t.tile || "near") === tileFilter;
+    });
+    if(!entries.length) return "";
+    const cards = entries.map(([tid, c]) => {
         const icon = c.confirmed ? "✅" : "⬜";
+        const track = trackById[tid];
+        let frontTypeHtml = "";
+        if(track && track.front_type){
+            const label = track.front_type === "cold" ? "холодный" : "тёплый";
+            frontTypeHtml = `<span style="color:#9fd6ff; font-weight:400;"> · ${label} (станция)</span>`;
+        } else if(c.front_type_model){
+            const label = c.front_type_model === "cold" ? "холодный" : "тёплый";
+            frontTypeHtml = `<span style="color:#8899aa; font-weight:400;" title="Станций нет в этой точке (например, над морем) — вывод по знаку градиента температуры Open-Meteo, менее надёжно, чем прямое наблюдение"> · ${label} (модель)</span>`;
+        }
         const modelLines = Object.entries(c.per_model || {}).map(([mid, m]) => {
             if(m.reason === "incomplete_data"){
                 return `<div style="color:#777;">· ${mid}: нет данных</div>`;
             }
             const mark = m.vote ? "✓" : "·";
             const color = m.vote ? "#6adc6a" : "#888";
-            return `<div style="color:${color};">${mark} ${mid}: Δt=${m.temp_grad ?? "?"}°C, Δp=${m.pressure_grad ?? "?"}гПа, ветер=${m.wind_shift_deg ?? "?"}°</div>`;
+            const windSpeed = m.wind_speed_grad_ms != null ? `, ΔV=${m.wind_speed_grad_ms}м/с` : "";
+            return `<div style="color:${color};">${mark} ${mid}: Δt=${m.temp_grad ?? "?"}°C, Δp=${m.pressure_grad ?? "?"}гПа, ветер=${m.wind_shift_deg ?? "?"}°${windSpeed}</div>`;
         }).join("");
         return `<div style="margin:8px 0; padding:8px; border:1px solid #333; border-radius:8px;">
-            <div style="font-weight:600;">${icon} Кандидат ${tid} — ${c.votes}/${c.n_models} моделей</div>
+            <div style="font-weight:600;">${icon} Кандидат ${tid} — ${c.votes}/${c.n_models} моделей${frontTypeHtml}</div>
             <div style="font-size:12px; margin-top:4px; line-height:1.5;">${modelLines}</div>
         </div>`;
     }).join("");
@@ -1357,13 +1397,12 @@ function _renderFrontalConfirmTable(data){
     </div>`;
 }
 
-function _renderFarWatchLines(farData, veryFarData, confirmData){
+function _renderFarWatchLines(farData, veryFarData){
     if(!farData && !veryFarData) return "";
     return _hr()
         + _subhead("Наблюдения по Европе")
         + _renderOneFarTier(farData, "Дальний контроль (~1000км)")
-        + _renderOneFarTier(veryFarData, "Очень дальний контроль (~2500км)")
-        + _renderFrontalConfirmTable(confirmData);
+        + _renderOneFarTier(veryFarData, "Очень дальний контроль (~2500км)");
 }
 
 // Таблица "хронология" — последние N записей из .jsonl-лога, свежие сверху.
@@ -1429,7 +1468,7 @@ function renderNearbyPrecipCard(){
         ${_renderPrecipForecastLines(_eumetsatPrecipForecastData)}
         ${_renderPrecipMotionLines(_eumetsatPrecipMotionData)}
         ${_renderLightningForecastLines(_eumetsatLightningForecastData)}
-        ${_renderFarWatchLines(_eumetsatFarWatchData, _eumetsatVeryFarWatchData, _openMeteoFrontalConfirmData)}
+        ${_renderFarWatchLines(_eumetsatFarWatchData, _eumetsatVeryFarWatchData)}
     `;
 
     card.innerHTML = `
