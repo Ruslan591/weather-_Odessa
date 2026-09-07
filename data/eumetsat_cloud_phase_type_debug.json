@@ -1,12 +1,11 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-09-07T06:30:00.000Z",
+  "server_latest_time": "2026-09-07T06:40:00.000Z",
   "mode": "day",
   "bootstrap": true,
   "buffer_before": 13,
   "buffer_size": 13,
   "buffer_times": [
-    "2026-09-07T04:30:00.000Z",
     "2026-09-07T04:40:00.000Z",
     "2026-09-07T04:50:00.000Z",
     "2026-09-07T05:00:00.000Z",
@@ -18,28 +17,33 @@
     "2026-09-07T06:00:00.000Z",
     "2026-09-07T06:10:00.000Z",
     "2026-09-07T06:20:00.000Z",
-    "2026-09-07T06:30:00.000Z"
+    "2026-09-07T06:30:00.000Z",
+    "2026-09-07T06:40:00.000Z"
   ],
   "result": {
-    "timestamp": "2026-09-07T06:57:09Z",
+    "timestamp": "2026-09-07T07:07:16Z",
     "mode": "day",
-    "unclassified_fraction_now": 0.438,
-    "phase_ordinal_now": 0.01,
+    "unclassified_fraction_now": 0.437,
+    "phase_ordinal_now": 0.0,
     "phase_ordinal_delta": -0.01,
     "phase_verdict": "без существенных изменений",
     "type_group_now": 0.0,
-    "type_group_delta": -0.42,
-    "type_verdict": "становится реже/ниже",
+    "type_group_delta": -0.17,
+    "type_verdict": "без существенных изменений",
     "target_confirmation": {
-      "confirmed": null,
-      "reason": "мало классифицированных пикселей в ROI цели CLM (облачно, но цвет неуверенный, либо вне окна)",
-      "target_id": 2
+      "confirmed": false,
+      "target_id": 1,
+      "target_area_km2": 77.4,
+      "roi_cloud_fraction": 0.0,
+      "roi_dominant_phase_ordinal": 0.0,
+      "roi_dominant_phase_label": "безоблачно",
+      "verdict": "Phase/Type НЕ подтверждает: в ROI CLM-цели облачность не преобладает — возможно расхождение слоёв"
     },
     "system_analysis": {
       "available": true,
       "target_id": 0,
-      "area_km2": 35281.5,
-      "roi_cloud_fraction": 0.009,
+      "area_km2": 29963.0,
+      "roi_cloud_fraction": 0.007,
       "roi_dominant_phase_ordinal": 6.0,
       "roi_dominant_phase_label": "смешанная фаза",
       "roi_dominant_type_label": "низкая/средняя"
@@ -48,19 +52,26 @@
       {
         "target_id": 0,
         "available": true,
-        "roi_cloud_fraction": 0.009,
+        "roi_cloud_fraction": 0.007,
         "roi_dominant_phase_label": "смешанная фаза",
         "roi_dominant_type_label": "низкая/средняя"
       },
       {
-        "target_id": 1,
+        "target_id": 2,
         "available": true,
-        "roi_cloud_fraction": 0.077,
+        "roi_cloud_fraction": 0.075,
         "roi_dominant_phase_label": "безоблачно",
         "roi_dominant_type_label": "плотная/высокая"
       },
       {
-        "target_id": 5,
+        "target_id": 8,
+        "available": true,
+        "roi_cloud_fraction": 0.0,
+        "roi_dominant_phase_label": "безоблачно",
+        "roi_dominant_type_label": "безоблачно"
+      },
+      {
+        "target_id": 10,
         "available": true,
         "roi_cloud_fraction": 0.0,
         "roi_dominant_phase_label": "безоблачно",
@@ -69,9 +80,12 @@
     ],
     "local_analysis_all": [
       {
-        "target_id": 2,
-        "available": false,
-        "reason": "мало классифицированных пикселей в ROI (облачно, но цвет неуверенный, либо вне окна)"
+        "target_id": 1,
+        "available": true,
+        "roi_cloud_fraction": 0.0,
+        "confirmed": false,
+        "roi_dominant_phase_label": "безоблачно",
+        "roi_dominant_type_label": "безоблачно"
       },
       {
         "target_id": 3,
@@ -83,6 +97,35 @@
       },
       {
         "target_id": 4,
+        "available": true,
+        "roi_cloud_fraction": 0.0,
+        "confirmed": false,
+        "roi_dominant_phase_label": "безоблачно",
+        "roi_dominant_type_label": "безоблачно"
+      },
+      {
+        "target_id": 5,
+        "available": false,
+        "reason": "мало классифицированных пикселей в ROI (облачно, но цвет неуверенный, либо вне окна)"
+      },
+      {
+        "target_id": 6,
+        "available": true,
+        "roi_cloud_fraction": 0.0,
+        "confirmed": false,
+        "roi_dominant_phase_label": "безоблачно",
+        "roi_dominant_type_label": "безоблачно"
+      },
+      {
+        "target_id": 7,
+        "available": true,
+        "roi_cloud_fraction": 0.0,
+        "confirmed": false,
+        "roi_dominant_phase_label": "безоблачно",
+        "roi_dominant_type_label": "безоблачно"
+      },
+      {
+        "target_id": 9,
         "available": true,
         "roi_cloud_fraction": 0.0,
         "confirmed": false,
