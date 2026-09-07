@@ -49,6 +49,7 @@ import urllib.request
 from datetime import datetime, timezone
 
 import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
@@ -57,6 +58,7 @@ GEO_CONFIG_FILE = os.path.join(DATA_DIR, "geo_config.json")
 MODEL_RUNS_HISTORY_FILE = os.path.join(DATA_DIR, "model_runs_history.json")
 STATE_FILE = os.path.join(DATA_DIR, "_state_open_meteo_frontal_confirm.json")
 OUT_FILE = os.path.join(DATA_DIR, "open_meteo_frontal_confirm.json")
+VERY_FAR_IMG_FILE = os.path.join(DATA_DIR, "anim", "very_far_geocolour.png")
 
 # id для &models= -> label в model_runs_history.json (для событийного гейта)
 MODELS = [
@@ -270,6 +272,66 @@ def confirm_candidate(meta, model_results_by_id):
     return {"confirmed": votes >= MIN_MODEL_VOTES, "votes": votes, "n_models": len(model_results_by_id), "per_model": per_model}
 
 
+def _draw_confirm_on_very_far(candidates, tracks_by_id, geo):
+    """Рисует кольцо+голоса поверх very_far GeoColour снимка — то же, что
+    eumetsat_render_track_overlay.py делает для near-tier CLM, но БЕЗ
+    единого дополнительного запроса к Open-Meteo: используются уже
+    посчитанные dx_km/dy_km трека и вердикт candidates ИЗ ЭТОГО ЖЕ
+    прогона. По запросу пользователя 2026-09-06 — исходная цель была
+    именно very_far, near-tier CLM тоже оставлен (бесплатно, не почему
+    бы не показать в обоих местах).
+
+    Тихо ничего не делает, если снимка нет (тайл не обновился в этом
+    цикле, обычный холостой случай) или bbox не сконфигурирован."""
+    if not os.path.exists(VERY_FAR_IMG_FILE):
+        return
+    very_far_cfg = geo.get("very_far_window") or {}
+    bbox = very_far_cfg.get("bbox")
+    center_lat, center_lon = geo.get("center_lat"), geo.get("center_lon")
+    if not bbox or center_lat is None or center_lon is None:
+        return
+    min_lon, min_lat, max_lon, max_lat = bbox
+    km_per_deg_lat = 111.32
+    km_per_deg_lon = 111.32 * math.cos(math.radians(center_lat))
+
+    try:
+        img = Image.open(VERY_FAR_IMG_FILE).convert("RGB")
+    except Exception as e:
+        print(f"  [WARN] open_meteo_frontal_confirm: не удалось открыть {VERY_FAR_IMG_FILE}: {e}")
+        return
+    w, h = img.size
+    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    try:
+        font = ImageFont.load_default()
+    except Exception:
+        font = None
+
+    drawn = 0
+    for tid, verdict in candidates.items():
+        t = tracks_by_id.get(tid)
+        if not t:
+            continue
+        dx, dy = t.get("dx_km", 0.0), t.get("dy_km", 0.0)
+        lon = center_lon + dx / km_per_deg_lon
+        lat = center_lat + dy / km_per_deg_lat
+        col = (lon - min_lon) / (max_lon - min_lon) * w - 0.5
+        row = (max_lat - lat) / (max_lat - min_lat) * h - 0.5
+        if not (0 <= row < h and 0 <= col < w):
+            continue  # кандидат вне окна very_far — не должно случаться (near << very_far радиус), но безопасно пропустить
+        color = (60, 220, 60, 255) if verdict.get("confirmed") else (200, 200, 200, 255)
+        r = 14
+        draw.ellipse([col - r, row - r, col + r, row + r], outline=color, width=3)
+        label = f"{verdict.get('votes', 0)}/{verdict.get('n_models', 5)}"
+        draw.text((col + r + 3, row - 8), label, fill=color, font=font)
+        drawn += 1
+
+    if drawn:
+        out = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
+        out.save(VERY_FAR_IMG_FILE)
+    print(f"  open_meteo_frontal_confirm: {drawn} кандидат(ов) отрисовано на very_far_geocolour.png")
+
+
 def main():
     ft = _load_json(FRONTAL_TRACK_FILE, None)
     tracks = (ft or {}).get("tracks") or []
@@ -320,6 +382,9 @@ def main():
 
     n_confirmed = sum(1 for c in out_candidates.values() if c["confirmed"])
     print(f"  [OK] open_meteo_frontal_confirm: {n_confirmed}/{len(out_candidates)} подтверждено")
+
+    tracks_by_id = {str(t["track_id"]): t for t in tracks}
+    _draw_confirm_on_very_far(out_candidates, tracks_by_id, geo)
 
 
 if __name__ == "__main__":
