@@ -174,6 +174,12 @@ def build_pooled_points(tracks, center_lat, center_lon, km_per_deg_lat, km_per_d
             "start_idx": start_idx,
             "n_points": side * side,
             "axis_deg": axis_deg,
+            # Нужен для fallback-классификации тёплый/холодный, когда
+            # станций нет (например, фронт над морем) — см.
+            # confirm_candidate()::front_type. pp_x/pp_y (перпендикуляр
+            # к оси, направление столбцов j сетки) сверяется по знаку
+            # скалярного произведения с вектором этого bearing.
+            "movement_bearing_deg": t.get("movement_bearing_deg"),
         }
     return flat_points, candidate_meta
 
@@ -235,41 +241,108 @@ def _wind_dir_shift(dir_grid):
     return abs(diff)
 
 
+FRONT_TYPE_MIN_TEMP_DIFF_MODEL = 1.0  # °C — выше, чем у станций (FRONT_TYPE_MIN_TEMP_DIFF в
+                                       # eumetsat_frontal_track.py), т.к. модельная сетка
+                                       # грубее и шумнее прямого наблюдения
+
+
+def _classify_front_type(temp_grid, axis_deg, movement_bearing_deg):
+    """Fallback-классификация тёплый/холодный по знаку разницы temp между
+    краем сетки "по курсу" (ahead) и "с тыла" (behind) движения трека —
+    используется ТОЛЬКО когда станционных ahead_obs/behind_obs нет (см.
+    eumetsat_frontal_track.py::front_type, confidence="station" там —
+    приоритетный источник, этот — запасной для случаев над морем, где
+    станций физически нет). Столбцы сетки (j) — перпендикуляр к axis_deg
+    (pp_x/pp_y в build_pooled_points), тот же перпендикуляр сверяется по
+    знаку скалярного произведения с вектором movement_bearing_deg, чтобы
+    понять, какой край (j=0 или j=-1) "ahead", а какой "behind"."""
+    if movement_bearing_deg is None or axis_deg is None:
+        return None
+    axis_rad = math.radians(axis_deg)
+    pp_x, pp_y = math.cos(axis_rad), -math.sin(axis_rad)
+    mv_rad = math.radians(movement_bearing_deg)
+    mv_x, mv_y = math.sin(mv_rad), math.cos(mv_rad)
+    dot = pp_x * mv_x + pp_y * mv_y
+    left_mean = float(np.nanmean(temp_grid[:, 0]))
+    right_mean = float(np.nanmean(temp_grid[:, -1]))
+    # dot>0 => правый край (j=-1) в направлении движения (ahead)
+    ahead_mean, behind_mean = (right_mean, left_mean) if dot >= 0 else (left_mean, right_mean)
+    dt = behind_mean - ahead_mean
+    if abs(dt) < FRONT_TYPE_MIN_TEMP_DIFF_MODEL:
+        return None
+    return "cold" if dt < 0 else "warm"
+
+
 def confirm_candidate(meta, model_results_by_id):
     """model_results_by_id: {model_id: [essentials_dict,...]} — ТОЛЬКО
     точки этого кандидата (уже вырезанные вызывающим кодом по start_idx/
     n_points). Возвращает {"confirmed":, "votes":, "per_model": {...}}."""
     side = meta["side"]
+    axis_deg = meta.get("axis_deg")
+    movement_bearing_deg = meta.get("movement_bearing_deg")
     per_model = {}
     votes = 0
+    front_type_votes = {"cold": 0, "warm": 0}
     for model_id, results in model_results_by_id.items():
         temp_vals = [r.get("temperature_2m") for r in results]
         pres_vals = [r.get("pressure_msl") for r in results]
         wind_vals = [r.get("wind_direction_10m") for r in results]
+        # wind_speed_10m — уже запрашивался у Open-Meteo, но раньше нигде не
+        # использовался (замечено пользователем 2026-09-07: "вижу смену
+        # направления ветра, но не вижу скорость"). Градиент по той же
+        # схеме, что temp/pressure — макс. модуль по сетке.
+        wind_speed_vals = [r.get("wind_speed_10m") for r in results]
 
-        if any(v is None for v in temp_vals + pres_vals + wind_vals):
+        if any(v is None for v in temp_vals + pres_vals + wind_vals + wind_speed_vals):
             per_model[model_id] = {"vote": False, "reason": "incomplete_data"}
             continue
 
-        temp_grad = _max_abs_gradient(_grid_of(temp_vals, side))
+        temp_grid = _grid_of(temp_vals, side)
+        temp_grad = _max_abs_gradient(temp_grid)
         pres_grad = _max_abs_gradient(_grid_of(pres_vals, side))
         wind_shift = _wind_dir_shift(_grid_of(wind_vals, side))
+        wind_speed_grad = _max_abs_gradient(_grid_of(wind_speed_vals, side))
 
         vote = (
             (temp_grad is not None and temp_grad >= TEMP_GRAD_THRESHOLD) or
             (pres_grad is not None and pres_grad >= PRESSURE_GRAD_THRESHOLD) or
             (wind_shift is not None and wind_shift >= WIND_SHIFT_THRESHOLD_DEG)
         )
+        # Fallback тёплый/холодный по модели — см. _classify_front_type().
+        # Используется фронтендом ТОЛЬКО когда станционного front_type нет
+        # (eumetsat_frontal_track.py::front_type is None, обычно над морем).
+        front_type = None
+        if not np.isnan(temp_grid).any():
+            front_type = _classify_front_type(temp_grid, axis_deg, movement_bearing_deg)
+            if front_type is not None:
+                front_type_votes[front_type] += 1
         per_model[model_id] = {
             "vote": vote,
             "temp_grad": round(temp_grad, 2) if temp_grad is not None else None,
             "pressure_grad": round(pres_grad, 2) if pres_grad is not None else None,
             "wind_shift_deg": round(wind_shift, 1) if wind_shift is not None else None,
+            "wind_speed_grad_ms": round(wind_speed_grad, 1) if wind_speed_grad is not None else None,
+            "front_type": front_type,
         }
         if vote:
             votes += 1
 
-    return {"confirmed": votes >= MIN_MODEL_VOTES, "votes": votes, "n_models": len(model_results_by_id), "per_model": per_model}
+    # Консенсус по модельному fallback-типу фронта — нужно явное
+    # большинство (не просто "больше нулей"), иначе 1-против-0 при
+    # остальных None выглядело бы как уверенный вывод.
+    front_type_model = None
+    total_type_votes = front_type_votes["cold"] + front_type_votes["warm"]
+    if total_type_votes >= MIN_MODEL_VOTES and front_type_votes["cold"] != front_type_votes["warm"]:
+        front_type_model = "cold" if front_type_votes["cold"] > front_type_votes["warm"] else "warm"
+
+    return {
+        "confirmed": votes >= MIN_MODEL_VOTES,
+        "votes": votes,
+        "n_models": len(model_results_by_id),
+        "per_model": per_model,
+        "front_type_model": front_type_model,
+        "front_type_model_votes": front_type_votes,
+    }
 
 
 def _draw_confirm_on_very_far(candidates, tracks_by_id, geo):
@@ -389,3 +462,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
