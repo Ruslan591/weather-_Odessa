@@ -1,27 +1,27 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-09-08T12:30:00.000Z",
+  "server_latest_time": "2026-09-08T12:40:00.000Z",
   "bootstrap": true,
   "buffer_before": 6,
   "buffer_size": 6,
   "buffer_times": [
-    "2026-09-08T11:40:00.000Z",
     "2026-09-08T11:50:00.000Z",
     "2026-09-08T12:00:00.000Z",
     "2026-09-08T12:10:00.000Z",
     "2026-09-08T12:20:00.000Z",
-    "2026-09-08T12:30:00.000Z"
+    "2026-09-08T12:30:00.000Z",
+    "2026-09-08T12:40:00.000Z"
   ],
   "frame_std": [
-    35.8,
     35.6,
     35.4,
     35.1,
     34.7,
-    34.2
+    34.2,
+    33.7
   ],
   "result": {
-    "timestamp": "2026-09-08T12:30:00.000Z",
+    "timestamp": "2026-09-08T12:40:00.000Z",
     "buffer_size": 6,
     "buffer_span_minutes": 50,
     "observed_area": {
@@ -37,21 +37,21 @@
     "valid": false,
     "verdict": "нет значимой облачности для оценки движения",
     "area_fraction_over_time": [
-      0.112,
       0.084,
       0.065,
       0.048,
       0.041,
+      0.024,
       0.024
     ],
-    "area_trend_delta": -0.088,
+    "area_trend_delta": -0.06,
     "area_trend_verdict": "без существенных изменений",
     "station_state": "clear",
     "station_area_fraction": 0.0,
-    "cloud_mass_distance_km": 24.0,
+    "cloud_mass_distance_km": 25.7,
     "cloud_mass_bearing_deg": 327.0,
     "cloud_mass_compass": "СЗ",
-    "cloud_mass_area_km2": 149,
+    "cloud_mass_area_km2": 161,
     "target_confirmation": {
       "confirmed": false,
       "target_id": 0,
@@ -63,13 +63,13 @@
       {
         "target_id": 9,
         "available": true,
-        "roi_cloud_fraction": 0.429,
+        "roi_cloud_fraction": 0.462,
         "confirmed": false
       },
       {
         "target_id": 10,
         "available": true,
-        "roi_cloud_fraction": 0.085,
+        "roi_cloud_fraction": 0.079,
         "confirmed": false
       },
       {
@@ -81,19 +81,19 @@
       {
         "target_id": 14,
         "available": true,
-        "roi_cloud_fraction": 0.105,
+        "roi_cloud_fraction": 0.125,
         "confirmed": false
       },
       {
         "target_id": 26,
         "available": true,
-        "roi_cloud_fraction": 0.129,
+        "roi_cloud_fraction": 0.335,
         "confirmed": false
       },
       {
         "target_id": 27,
         "available": true,
-        "roi_cloud_fraction": 0.014,
+        "roi_cloud_fraction": 0.003,
         "confirmed": false
       }
     ],
@@ -107,7 +107,7 @@
       {
         "target_id": 1,
         "available": true,
-        "roi_cloud_fraction": 0.341,
+        "roi_cloud_fraction": 0.413,
         "confirmed": false
       },
       {
@@ -131,7 +131,7 @@
       {
         "target_id": 5,
         "available": true,
-        "roi_cloud_fraction": 0.017,
+        "roi_cloud_fraction": 0.002,
         "confirmed": false
       },
       {
@@ -143,7 +143,7 @@
       {
         "target_id": 7,
         "available": true,
-        "roi_cloud_fraction": 0.007,
+        "roi_cloud_fraction": 0.014,
         "confirmed": false
       },
       {
@@ -155,25 +155,25 @@
       {
         "target_id": 11,
         "available": true,
-        "roi_cloud_fraction": 0.43,
+        "roi_cloud_fraction": 0.408,
         "confirmed": false
       },
       {
         "target_id": 12,
         "available": true,
-        "roi_cloud_fraction": 0.076,
+        "roi_cloud_fraction": 0.13,
         "confirmed": false
       },
       {
         "target_id": 15,
         "available": true,
-        "roi_cloud_fraction": 0.0,
+        "roi_cloud_fraction": 0.008,
         "confirmed": false
       },
       {
         "target_id": 16,
         "available": true,
-        "roi_cloud_fraction": 0.0,
+        "roi_cloud_fraction": 0.022,
         "confirmed": false
       },
       {
@@ -191,7 +191,7 @@
       {
         "target_id": 19,
         "available": true,
-        "roi_cloud_fraction": 0.068,
+        "roi_cloud_fraction": 0.013,
         "confirmed": false
       },
       {
@@ -209,7 +209,7 @@
       {
         "target_id": 22,
         "available": true,
-        "roi_cloud_fraction": 0.006,
+        "roi_cloud_fraction": 0.0,
         "confirmed": false
       },
       {
@@ -221,7 +221,7 @@
       {
         "target_id": 24,
         "available": true,
-        "roi_cloud_fraction": 0.0,
+        "roi_cloud_fraction": 0.038,
         "confirmed": false
       },
       {
@@ -233,8 +233,8 @@
       {
         "target_id": 28,
         "available": true,
-        "roi_cloud_fraction": 0.528,
-        "confirmed": true
+        "roi_cloud_fraction": 0.333,
+        "confirmed": false
       }
     ],
     "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
