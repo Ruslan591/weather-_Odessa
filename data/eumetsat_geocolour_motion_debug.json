@@ -1,28 +1,32 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-09-08T10:40:00.000Z",
+  "server_latest_time": "2026-09-08T10:50:00.000Z",
   "bootstrap": true,
   "buffer_before": 6,
-  "buffer_size": 6,
+  "bootstrap_failed_frames": [
+    {
+      "time": "2026-09-08T10:40:00.000Z",
+      "error": "попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)"
+    }
+  ],
+  "buffer_size": 5,
   "buffer_times": [
-    "2026-09-08T09:50:00.000Z",
     "2026-09-08T10:00:00.000Z",
     "2026-09-08T10:10:00.000Z",
     "2026-09-08T10:20:00.000Z",
     "2026-09-08T10:30:00.000Z",
-    "2026-09-08T10:40:00.000Z"
+    "2026-09-08T10:50:00.000Z"
   ],
   "frame_std": [
-    38.8,
     38.7,
     38.1,
     37.6,
     37.1,
-    36.7
+    36.5
   ],
   "result": {
-    "timestamp": "2026-09-08T10:40:00.000Z",
-    "buffer_size": 6,
+    "timestamp": "2026-09-08T10:50:00.000Z",
+    "buffer_size": 5,
     "buffer_span_minutes": 50,
     "observed_area": {
       "center_lat": 46.4406,
@@ -35,95 +39,94 @@
       "state_radius_km": 12
     },
     "valid": true,
-    "speed_kmh": 0.2,
-    "direction_compass": "В",
-    "bearing_deg": 87.9,
-    "frame_pairs_used": 5,
-    "acceleration_kmh": 0.0,
-    "turning_deg": -134.1,
+    "speed_kmh": 0.3,
+    "direction_compass": "ЮВ",
+    "bearing_deg": 124.4,
+    "frame_pairs_used": 4,
+    "acceleration_kmh": -0.5,
+    "turning_deg": -157.8,
     "acceleration_verdict": "скорость стабильна",
     "turning_verdict": "меняет направление (против часовой)",
     "forecast_displacement": {
       "30min": {
         "distance_km": 0.5,
-        "bearing_deg": 346.0,
-        "compass": "С"
+        "bearing_deg": 329.0,
+        "compass": "СЗ"
       },
       "60min": {
-        "distance_km": 1.4,
-        "bearing_deg": 342.0,
-        "compass": "С"
+        "distance_km": 1.8,
+        "bearing_deg": 327.0,
+        "compass": "СЗ"
       },
       "120min": {
-        "distance_km": 4.9,
-        "bearing_deg": 339.0,
-        "compass": "С"
+        "distance_km": 6.7,
+        "bearing_deg": 326.0,
+        "compass": "СЗ"
       }
     },
     "area_fraction_over_time": [
-      0.077,
       0.093,
       0.101,
       0.109,
       0.097,
-      0.091
+      0.087
     ],
-    "area_trend_delta": 0.014,
+    "area_trend_delta": -0.006,
     "area_trend_verdict": "без существенных изменений",
     "station_state": "clear",
-    "station_area_fraction": 0.068,
-    "cloud_mass_distance_km": 7.1,
-    "cloud_mass_bearing_deg": 332.0,
+    "station_area_fraction": 0.089,
+    "cloud_mass_distance_km": 7.6,
+    "cloud_mass_bearing_deg": 325.0,
     "cloud_mass_compass": "СЗ",
-    "cloud_mass_area_km2": 415,
+    "cloud_mass_area_km2": 402,
     "target_confirmation": {
       "confirmed": true,
       "target_id": 0,
       "target_area_km2": 266.9,
-      "roi_cloud_fraction": 0.523,
+      "roi_cloud_fraction": 0.502,
       "verdict": "GeoColour подтверждает: в ROI CLM-цели преобладает облачность"
     },
     "system_analysis_all": [
       {
         "target_id": 6,
         "available": true,
-        "roi_cloud_fraction": 0.398,
+        "roi_cloud_fraction": 0.385,
         "confirmed": false
       },
       {
         "target_id": 8,
         "available": true,
-        "roi_cloud_fraction": 0.145,
+        "roi_cloud_fraction": 0.13,
         "confirmed": false
       },
       {
         "target_id": 9,
         "available": true,
-        "roi_cloud_fraction": 0.361,
+        "roi_cloud_fraction": 0.326,
         "confirmed": false
       },
       {
         "target_id": 13,
         "available": true,
-        "roi_cloud_fraction": 0.093,
+        "roi_cloud_fraction": 0.092,
         "confirmed": false
       },
       {
         "target_id": 15,
         "available": true,
-        "roi_cloud_fraction": 0.503,
+        "roi_cloud_fraction": 0.517,
         "confirmed": true
       },
       {
         "target_id": 21,
         "available": true,
-        "roi_cloud_fraction": 0.448,
+        "roi_cloud_fraction": 0.488,
         "confirmed": false
       },
       {
         "target_id": 24,
         "available": true,
-        "roi_cloud_fraction": 0.36,
+        "roi_cloud_fraction": 0.47,
         "confirmed": false
       }
     ],
@@ -131,13 +134,13 @@
       {
         "target_id": 0,
         "available": true,
-        "roi_cloud_fraction": 0.523,
+        "roi_cloud_fraction": 0.502,
         "confirmed": true
       },
       {
         "target_id": 1,
         "available": true,
-        "roi_cloud_fraction": 0.494,
+        "roi_cloud_fraction": 0.473,
         "confirmed": false
       },
       {
@@ -155,43 +158,43 @@
       {
         "target_id": 4,
         "available": true,
-        "roi_cloud_fraction": 0.0,
+        "roi_cloud_fraction": 0.036,
         "confirmed": false
       },
       {
         "target_id": 5,
         "available": true,
-        "roi_cloud_fraction": 0.011,
+        "roi_cloud_fraction": 0.017,
         "confirmed": false
       },
       {
         "target_id": 7,
         "available": true,
-        "roi_cloud_fraction": 0.075,
+        "roi_cloud_fraction": 0.103,
         "confirmed": false
       },
       {
         "target_id": 10,
         "available": true,
-        "roi_cloud_fraction": 0.019,
+        "roi_cloud_fraction": 0.017,
         "confirmed": false
       },
       {
         "target_id": 11,
         "available": true,
-        "roi_cloud_fraction": 0.0,
+        "roi_cloud_fraction": 0.03,
         "confirmed": false
       },
       {
         "target_id": 12,
         "available": true,
-        "roi_cloud_fraction": 0.445,
+        "roi_cloud_fraction": 0.396,
         "confirmed": false
       },
       {
         "target_id": 14,
         "available": true,
-        "roi_cloud_fraction": 0.373,
+        "roi_cloud_fraction": 0.451,
         "confirmed": false
       },
       {
@@ -203,7 +206,7 @@
       {
         "target_id": 17,
         "available": true,
-        "roi_cloud_fraction": 0.346,
+        "roi_cloud_fraction": 0.458,
         "confirmed": false
       },
       {
@@ -215,7 +218,7 @@
       {
         "target_id": 19,
         "available": true,
-        "roi_cloud_fraction": 0.318,
+        "roi_cloud_fraction": 0.364,
         "confirmed": false
       },
       {
@@ -227,28 +230,28 @@
       {
         "target_id": 22,
         "available": true,
-        "roi_cloud_fraction": 0.111,
+        "roi_cloud_fraction": 0.167,
         "confirmed": false
       },
       {
         "target_id": 23,
         "available": true,
-        "roi_cloud_fraction": 0.426,
+        "roi_cloud_fraction": 0.386,
         "confirmed": false
       },
       {
         "target_id": 25,
         "available": true,
-        "roi_cloud_fraction": 0.626,
-        "confirmed": true
+        "roi_cloud_fraction": 0.468,
+        "confirmed": false
       },
       {
         "target_id": 26,
         "available": true,
-        "roi_cloud_fraction": 0.469,
-        "confirmed": false
+        "roi_cloud_fraction": 0.605,
+        "confirmed": true
       }
     ],
-    "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
+    "method_note": "Буфер 5/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
   }
 }
