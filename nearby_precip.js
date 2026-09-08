@@ -64,6 +64,9 @@ let _eumetsatVeryFarWatchData      = null;
 let _eumetsatVeryFarWatchFetchedAt = 0;
 let _openMeteoFrontalConfirmData      = null;
 let _openMeteoFrontalConfirmFetchedAt = 0;
+let _confirmOverlayData = null;
+let _confirmOverlayFetchedAt = 0;
+let _confirmOverlayVisible = true;  // по умолчанию показываем — тумблер только на случай, если мешает (запрос пользователя 2026-09-08)
 let _eumetsatTargetSummaryData      = null;
 let _eumetsatTargetSummaryFetchedAt = 0;
 let _eumetsatWestWatchData      = null;
@@ -323,6 +326,27 @@ async function loadOpenMeteoFrontalConfirm(){
         renderNearbyPrecipCard();
     } catch(e){
         _openMeteoFrontalConfirmFetchedAt = 0;
+    }
+}
+
+// Векторные данные подтверждения (кольцо + стрелка направления) для
+// SVG-слоя ПОВЕРХ Cloud Mask — заменяет запечённую в PNG отрисовку
+// (см. eumetsat_render_track_overlay.py, правка 2026-09-08). Отдельный
+// файл, отдельный лёгкий loader — та же логика TTL, что у остальных.
+async function loadConfirmOverlay(){
+    if(Date.now() - _confirmOverlayFetchedAt < 5 * 60000) return;
+    _confirmOverlayFetchedAt = Date.now();
+    try {
+        const r = await fetch(
+            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_confirm_overlay.json",
+            { cache: "no-store" }
+        );
+        if(!r.ok) return;
+        const j = await r.json();
+        if(j && j.generated_at) _confirmOverlayData = j;
+        renderNearbyPrecipCard();
+    } catch(e){
+        _confirmOverlayFetchedAt = 0;
     }
 }
 
@@ -1281,6 +1305,38 @@ function _renderWestSnapshot(westData, tracks){
     </details>`;
 }
 
+// Строит SVG-разметку (кольцо каждого кандидата одним <path> из
+// единичных квадратов на пиксель + стрелка направления движения +
+// подпись) — координаты уже в системе tile_size×tile_size (см.
+// eumetsat_confirm_overlay.json), тот же viewBox у <svg> ниже, поэтому
+// пересчёт под реальный размер img на странице делает браузер сам.
+function _buildConfirmOverlaySvgInner(overlayData){
+    if(!overlayData || !overlayData.tracks || !overlayData.tracks.length) return "";
+    return overlayData.tracks.map(t => {
+        const color = t.confirmed ? "#3cdc3c" : "#a0a0a0";
+        const ringPath = (t.ring_pixels || []).map(([r,c]) => `M${c} ${r}h1v1h-1z`).join("");
+        let arrowSvg = "";
+        if(t.arrow_start && t.arrow_end){
+            const [sx, sy] = t.arrow_start, [ex, ey] = t.arrow_end;
+            const ang = Math.atan2(ey - sy, ex - sx);
+            const ah = 6; // длина "усов" наконечника, в единицах viewBox (пикселях снимка)
+            const a1x = ex - ah * Math.cos(ang - 0.4), a1y = ey - ah * Math.sin(ang - 0.4);
+            const a2x = ex - ah * Math.cos(ang + 0.4), a2y = ey - ah * Math.sin(ang + 0.4);
+            arrowSvg = `<line x1="${sx}" y1="${sy}" x2="${ex}" y2="${ey}" stroke="${color}" stroke-width="1.5"/>
+                <polygon points="${ex},${ey} ${a1x},${a1y} ${a2x},${a2y}" fill="${color}"/>`;
+        }
+        const [lx, ly] = t.label_pos || [0, 0];
+        return `<path d="${ringPath}" fill="${color}"/>
+            ${arrowSvg}
+            <text x="${lx + 4}" y="${ly - 4}" fill="${color}" font-size="10" font-family="sans-serif">${t.label}</text>`;
+    }).join("");
+}
+
+function _toggleConfirmOverlay(){
+    _confirmOverlayVisible = !_confirmOverlayVisible;
+    renderNearbyPrecipCard();
+}
+
 // Последний снимок Cloud Mask (CLM) — бинарная маска облако/ясно, ТО, ЧТО
 // РЕАЛЬНО является входом детектора кандидатов/frontlike (см.
 // eumetsat_cloud_forecast.py::_classify_cloud_mask/_significant_blobs) —
@@ -1292,15 +1348,41 @@ function _renderWestSnapshot(westData, tracks){
 // каналам. Timestamp берём из _eumetsatForecastData (тот же кадр, на
 // котором считался is_cloud_now в питоне) — у CLM своего отдельного JSON
 // с timestamp нет, снимок пишется сбоку в eumetsat_cloud_forecast.py.
+//
+// [ИЗМЕНЕНО 2026-09-08] Контур подтверждения раньше был запечён прямо в
+// PNG — по запросу пользователя ("если сделаем несъёмный контур, перекроет
+// снимок") теперь это отдельный SVG-слой поверх <img> с кнопкой вкл/выкл
+// (_confirmOverlayVisible), данные — eumetsat_confirm_overlay.json (см.
+// loadConfirmOverlay()). tile_size в viewBox берём из самого файла —
+// если бэкенд когда-нибудь сменит размер тайла, фронтенду ничего
+// подстраивать не нужно.
 function _renderClmSnapshot(forecastData){
     if(!forecastData || !forecastData.timestamp) return "";
     const ts = _obsTimeTag(forecastData.timestamp, 20);
     const src = `https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_clm_snapshot.png?v=${encodeURIComponent(forecastData.timestamp)}`;
+    const ov = _confirmOverlayData;
+    const hasOverlay = ov && ov.tracks && ov.tracks.length;
+    const tileSize = (ov && ov.tile_size) || 400;
+    const toggleBtn = hasOverlay ? `
+        <button onclick="_toggleConfirmOverlay()"
+                style="margin-bottom:6px; padding:5px 10px; border-radius:6px; border:1px solid #444;
+                       background:${_confirmOverlayVisible ? '#1c3d1c' : '#222'};
+                       color:${_confirmOverlayVisible ? '#6adc6a' : '#999'}; font-size:12px;">
+            ${_confirmOverlayVisible ? '✓ Подтверждение показано' : '☐ Подтверждение скрыто'} — нажми, чтобы ${_confirmOverlayVisible ? 'скрыть' : 'показать'}
+        </button>` : "";
+    const svgLayer = (hasOverlay && _confirmOverlayVisible) ? `
+        <svg viewBox="0 0 ${tileSize} ${tileSize}" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;">
+            ${_buildConfirmOverlaySvgInner(ov)}
+        </svg>` : "";
     return `<div style="margin-top:10px;">
         <div style="color:#72c8ff; font-size:13px; font-weight:600; margin-bottom:4px;">🗺️ Cloud Mask (вход детектора) ${ts}</div>
-        <img src="${src}" alt="Cloud Mask"
-             style="width:100%; border-radius:8px; display:block;"
-             onerror="this.parentElement.style.display='none';">
+        ${toggleBtn}
+        <div style="position:relative;">
+            <img src="${src}" alt="Cloud Mask"
+                 style="width:100%; border-radius:8px; display:block;"
+                 onerror="this.parentElement.style.display='none';">
+            ${svgLayer}
+        </div>
         <div style="color:#777; font-size:11px; margin-top:3px;">Белое — облако, тёмно-синее — ясно, серое — нет данных. Это ТО, ЧТО реально видит детектор кандидатов/фронтов — не GC/ИК (те лишь подтверждают)</div>
     </div>`;
 }
@@ -1384,9 +1466,21 @@ function _renderFrontalConfirmTable(data, tracks, opts){
             const windSpeed = m.wind_speed_grad_ms != null ? `, ΔV=${m.wind_speed_grad_ms}м/с` : "";
             return `<div style="color:${color};">${mark} ${mid}: Δt=${m.temp_grad ?? "?"}°C, Δp=${m.pressure_grad ?? "?"}гПа, ветер=${m.wind_shift_deg ?? "?"}°${windSpeed}</div>`;
         }).join("");
+        // [ДОБАВЛЕНО 2026-09-08] Разбор кандидата 1160 (Δt=6-8°C у всех
+        // моделей, Δp мизерная, wind_shift 15°→145°) навёл на вывод: у
+        // настоящего синоптического фронта модели обычно согласны по
+        // НАПРАВЛЕНИЮ разворота ветра (даже расходясь в силе), а большой
+        // разброс типичен для процессов мельче разрешения модели
+        // (параметризованная конвекция, бриз) — см. docs/topics/
+        // frontal_line_stations.md. Порог 60° — грубая прикидка, не
+        // калибровано на реальных случаях.
+        const spreadWarning = (c.wind_shift_spread_deg != null && c.wind_shift_spread_deg > 60)
+            ? `<div style="color:#e0a030; font-size:11px; margin-top:4px;">⚠️ Большой разброс моделей по направлению ветра (${c.wind_shift_spread_deg}°) — возможно, локальный процесс (бриз/конвекция), а не синоптический фронт</div>`
+            : "";
         return `<div style="margin:8px 0; padding:8px; border:1px solid #333; border-radius:8px;">
             <div style="font-weight:600;">${icon} Кандидат ${tid} — ${c.votes}/${c.n_models} моделей${frontTypeHtml}</div>
             <div style="font-size:12px; margin-top:4px; line-height:1.5;">${modelLines}</div>
+            ${spreadWarning}
         </div>`;
     }).join("");
     const ts = _obsTimeTag(data.generated_at, 60);
