@@ -67,6 +67,9 @@ let _openMeteoFrontalConfirmFetchedAt = 0;
 let _confirmOverlayData = null;
 let _confirmOverlayFetchedAt = 0;
 let _confirmOverlayVisible = true;  // по умолчанию показываем — тумблер только на случай, если мешает (запрос пользователя 2026-09-08)
+let _europeOverlayData = null;
+let _europeOverlayFetchedAt = 0;
+let _europeOverlayVisible = true;  // та же схема, что near-tile — по умолчанию показан, один тумблер сразу на far+very_far
 let _eumetsatTargetSummaryData      = null;
 let _eumetsatTargetSummaryFetchedAt = 0;
 let _eumetsatWestWatchData      = null;
@@ -347,6 +350,29 @@ async function loadConfirmOverlay(){
         renderNearbyPrecipCard();
     } catch(e){
         _confirmOverlayFetchedAt = 0;
+    }
+}
+
+// Векторные данные консенсус-детекции по Европе/Атлантике (регулярная
+// сетка 220км, см. open_meteo_frontal_confirm.py::run_europe_detection,
+// согласовано с пользователем 2026-09-08) — та же схема SVG-слоя+тумблера,
+// что у near-tile, применена сразу к far и very_far снимкам (см.
+// _renderOneFarTier). Каждая точка несёт px_far/px_very_far — которое из
+// двух использовать, решает сам рендер по своему tierKey.
+async function loadEuropeOverlay(){
+    if(Date.now() - _europeOverlayFetchedAt < 5 * 60000) return;
+    _europeOverlayFetchedAt = Date.now();
+    try {
+        const r = await fetch(
+            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/europe_frontal_overlay.json",
+            { cache: "no-store" }
+        );
+        if(!r.ok) return;
+        const j = await r.json();
+        if(j && j.generated_at) _europeOverlayData = j;
+        renderNearbyPrecipCard();
+    } catch(e){
+        _europeOverlayFetchedAt = 0;
     }
 }
 
@@ -759,14 +785,60 @@ function _renderAreaSummary(g, farData, veryFarData){
 // (scripts/field_motion_common.py), порядок важен для читаемого текста.
 const _COMPASS_RU = ["С", "СВ", "В", "ЮВ", "Ю", "ЮЗ", "З", "СЗ"];
 
-function _renderOneFarTier(data, label){
+function _toggleEuropeOverlay(){
+    _europeOverlayVisible = !_europeOverlayVisible;
+    renderNearbyPrecipCard();
+}
+
+// Строит содержимое SVG для одного тира (far/very_far) — точки консенсус-
+// детекции как маленькие кружки (не кольцо вокруг блоба, как у near-tile:
+// здесь нет спутникового блоба вообще, только точки регулярной сетки,
+// см. run_europe_detection в open_meteo_frontal_confirm.py). pxField —
+// "px_far" или "px_very_far", у каждой точки своя пара координат под
+// свой снимок (bbox разные), см. _build_europe_overlay в питоне.
+function _buildEuropeOverlaySvgInner(overlayData, pxField){
+    if(!overlayData || !overlayData.points || !overlayData.points.length) return "";
+    return overlayData.points
+        .filter(p => p[pxField])
+        .map(p => {
+            const [x, y] = p[pxField];
+            const color = p.confirmed ? "#3cdc3c" : "#666";
+            const r = p.confirmed ? 4 : 2;
+            return `<circle cx="${x}" cy="${y}" r="${r}" fill="${color}" ${p.confirmed ? '' : 'fill-opacity="0.6"'}/>`;
+        }).join("");
+}
+
+// tierKey: "far" или "very_far" — выбирает px_far/px_very_far из
+// _europeOverlayData (объединённый bbox шире каждого снимка по
+// отдельности, у точки может не быть координат для этого конкретного
+// снимка — тогда она просто не рисуется здесь).
+function _renderOneFarTier(data, label, tierKey){
     if(!data) return "";
     const ts = data.timestamp ? _obsTimeTag(data.timestamp, 240) : ""; // окно "устарело" пошире — тир редкий (30мин/3ч), не 10-15мин как ближние
     const img = data.observed_area && data.observed_area.geocolour_image;
+    const ov = _europeOverlayData;
+    const pxField = tierKey === "far" ? "px_far" : "px_very_far";
+    const whField = tierKey === "far" ? "far_wh" : "very_far_wh";
+    const wh = ov && ov[whField];  // реальные px-размеры снимка на момент расчёта (см. python-докстринг far_wh/very_far_wh) — БЕЗ них координаты точек не совпадут с картинкой, поэтому без wh оверлей не показываем вовсе
+    const hasOverlay = wh && ov.points && ov.points.some(p => p[pxField]);
+    const toggleBtn = hasOverlay ? `
+        <button onclick="_toggleEuropeOverlay()"
+                style="margin:6px 0; padding:5px 10px; border-radius:6px; border:1px solid #444;
+                       background:${_europeOverlayVisible ? '#1c3d1c' : '#222'};
+                       color:${_europeOverlayVisible ? '#6adc6a' : '#999'}; font-size:12px;">
+            ${_europeOverlayVisible ? '✓ Линия фронта (Европа) показана' : '☐ Линия фронта (Европа) скрыта'} — нажми, чтобы ${_europeOverlayVisible ? 'скрыть' : 'показать'}
+        </button>` : "";
+    const svgLayer = (hasOverlay && _europeOverlayVisible) ? `
+        <svg viewBox="0 0 ${wh[0]} ${wh[1]}" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;">
+            ${_buildEuropeOverlaySvgInner(ov, pxField)}
+        </svg>` : "";
     const imgHtml = img
-        ? `<img src="https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/${img}?v=${encodeURIComponent(data.timestamp || "")}"
-                alt="${label}" style="width:100%; border-radius:8px; margin:6px 0; display:block;"
-                onerror="this.style.display='none';">`
+        ? `<div style="position:relative; margin:6px 0;">
+                <img src="https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/${img}?v=${encodeURIComponent(data.timestamp || "")}"
+                     alt="${label}" style="width:100%; border-radius:8px; display:block;"
+                     onerror="this.parentElement.style.display='none';">
+                ${svgLayer}
+           </div>${toggleBtn}`
         : "";
 
     const sectorBullets = _COMPASS_RU
@@ -1495,8 +1567,8 @@ function _renderFarWatchLines(farData, veryFarData){
     if(!farData && !veryFarData) return "";
     return _hr()
         + _subhead("Наблюдения по Европе")
-        + _renderOneFarTier(farData, "Дальний контроль (~1000км)")
-        + _renderOneFarTier(veryFarData, "Очень дальний контроль (~2500км)");
+        + _renderOneFarTier(farData, "Дальний контроль (~1000км)", "far")
+        + _renderOneFarTier(veryFarData, "Очень дальний контроль (~2500км)", "very_far");
 }
 
 // Таблица "хронология" — последние N записей из .jsonl-лога, свежие сверху.
