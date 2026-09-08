@@ -335,6 +335,21 @@ def confirm_candidate(meta, model_results_by_id):
     if total_type_votes >= MIN_MODEL_VOTES and front_type_votes["cold"] != front_type_votes["warm"]:
         front_type_model = "cold" if front_type_votes["cold"] > front_type_votes["warm"] else "warm"
 
+    # [ДОБАВЛЕНО 2026-09-08] Метрика согласия моделей по направлению
+    # ветра — запрос пользователя после разбора кандидата 1160 (Δt=6-8°C
+    # у всех 5 моделей, но wind_shift_deg разбросан 15°→145°, при этом
+    # Δp мизерная 0.25-0.56гПа). Вывод из того разбора: у настоящего
+    # синоптического фронта/циклона Δt обычно тянет за собой заметный Δp
+    # (геострофика), а МОДЕЛИ должны быть согласны по направлению разворота
+    # ветра на синоптическом масштабе, даже расходясь в силе — раздрай в
+    # направлении характерен для процессов МЕНЬШЕ разрешения модели
+    # (параметризованная конвекция, бриз), где каждая модель "додумывает"
+    # своё. wind_shift_deg у нас уже в диапазоне 0-180 (это МОДУЛЬ сдвига
+    # направления по _wind_dir_shift, не сырой bearing) — обычная
+    # арифметика (max-min) корректна, круговая обёртка не нужна.
+    shift_vals = [m["wind_shift_deg"] for m in per_model.values() if m.get("wind_shift_deg") is not None]
+    wind_shift_spread_deg = round(max(shift_vals) - min(shift_vals), 1) if len(shift_vals) >= 2 else None
+
     return {
         "confirmed": votes >= MIN_MODEL_VOTES,
         "votes": votes,
@@ -342,6 +357,7 @@ def confirm_candidate(meta, model_results_by_id):
         "per_model": per_model,
         "front_type_model": front_type_model,
         "front_type_model_votes": front_type_votes,
+        "wind_shift_spread_deg": wind_shift_spread_deg,
     }
 
 
