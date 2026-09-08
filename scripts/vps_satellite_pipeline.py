@@ -823,6 +823,7 @@ def git_push_satellite():
             "data/eumetsat_frontal_track.json",
             "data/open_meteo_frontal_confirm.json",
             "data/eumetsat_confirm_overlay.json",
+            "data/europe_frontal_overlay.json",
             "data/eumetsat_frontal_track_state.json",
             "data/eumetsat_ground_station_verify.json",
             "data/ground_station_field.json",
