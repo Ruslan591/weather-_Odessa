@@ -573,7 +573,7 @@ def _build_europe_overlay(points_meta, votes_grid, n_valid_grid, confirmed, geo)
                 "confirmed": bool(confirmed[i, j]),
                 "px_far": px_far, "px_very_far": px_very_far,
             })
-    return out_points
+    return out_points, far_wh, very_far_wh
 
 
 def run_europe_detection(geo):
@@ -600,11 +600,18 @@ def run_europe_detection(geo):
             time.sleep(REQUEST_INTERVAL)
 
     votes_grid, n_valid_grid, confirmed = detect_europe_fronts(model_results_by_id, rows, cols)
-    overlay_points = _build_europe_overlay(points, votes_grid, n_valid_grid, confirmed, geo)
+    overlay_points, far_wh, very_far_wh = _build_europe_overlay(points, votes_grid, n_valid_grid, confirmed, geo)
     _save_json(EUROPE_OVERLAY_FILE, {
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "bbox": list(bbox),
         "step_km": EUROPE_GRID_STEP_KM,
+        # Реальные пиксельные размеры снимков far/very_far (Image.open(...).size,
+        # НЕ вычислены заново из bbox/target_km_per_px) — px_far/px_very_far у
+        # каждой точки посчитаны именно под эти размеры, фронтенду нужны точно
+        # такие же для viewBox SVG-слоя, иначе координаты точек не совпадут с
+        # картинкой. None, если снимок не был найден в момент расчёта.
+        "far_wh": list(far_wh) if far_wh else None,
+        "very_far_wh": list(very_far_wh) if very_far_wh else None,
         "points": overlay_points,
     })
     n_confirmed = sum(1 for p in overlay_points if p["confirmed"])
