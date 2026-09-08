@@ -28,7 +28,7 @@ import math
 import os
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 import field_motion_common as fc
 
@@ -47,6 +47,9 @@ WEST_OUT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_west_snapshot_clm.png")
 
 FRONTAL_LINE_SCORE_FILE = os.path.join(BASE_DIR, "data", "frontal_line_score.json")
 FRONTAL_CONFIRM_FILE = os.path.join(BASE_DIR, "data", "open_meteo_frontal_confirm.json")
+CONFIRM_OVERLAY_FILE = os.path.join(BASE_DIR, "data", "eumetsat_confirm_overlay.json")
+
+ARROW_LEN_KM = 25.0  # длина стрелки направления движения — см. _movement_arrow_endpoint
 
 
 def _draw_score_checkpoints(base_img, tracks_for_tile, score_data):
@@ -94,33 +97,45 @@ def _dilate(mask):
     return d
 
 
-def _draw_frontal_confirm_outline(base_img, tracks_for_tile, mask_by_track_id, confirm_data):
-    """Обводит РЕАЛЬНЫЙ контур блоба (не абстрактный круг) цветом
-    подтверждения open_meteo_frontal_confirm.py — по запросу пользователя
-    2026-09-07 ("фронт это дуга/линия по форме облачности, а не круг").
-    Раньше здесь рисовался фиксированный ellipse в центре трека
-    (_draw_frontal_confirm_status, удалена) — не отражала ни форму, ни
-    размер реального блоба. Кольцо строится дилатацией (_dilate) маски
-    блоба на 2px наружу — контур виден поверх любого фона, не сливается
-    с уже закрашенным телом блоба (см. _render_tile). Подпись у центроида —
-    голоса/модели + тип фронта (х=холодный/т=тёплый), приоритет —
-    станционный front_type трека (eumetsat_frontal_track.py), фолбэк —
-    модельный front_type_model (open_meteo_frontal_confirm.py, нужен над
-    морем, где станций нет). Только near-tile (та же причина, что была у
-    предыдущей версии — координаты без origin-сдвига, для west не подходят,
-    см. main())."""
+def _movement_arrow_endpoint(cx, cy, movement_bearing_deg):
+    """Конечная точка стрелки направления движения трека — запрос
+    пользователя 2026-09-08 ("стандартное обозначение в виде дуги
+    холодного фронта дало бы больше информации... куда движется").
+    movement_bearing_deg уже считается в eumetsat_frontal_track.py
+    (_bearing_compass: 0=север, по часовой) — тут только переводим в
+    пиксели ТЕМ ЖЕ способом, что и остальные маркеры на этом снимке
+    (_draw_score_checkpoints выше, старый _draw_frontal_confirm_status) —
+    dx/dy в км от bearing, затем в пиксели через ту же зеркальную
+    формулу (cx MINUS dx/KM_PER_PX_X, cy PLUS dy/KM_PER_PX_Y). Не пытаюсь
+    переосмыслить, почему знак у X именно такой — так исторически рисуются
+    все прочие маркеры на этом кадре, и стрелка обязана быть в той же
+    системе координат, что кольцо/подпись рядом с ней."""
+    if movement_bearing_deg is None:
+        return None
+    rad = math.radians(movement_bearing_deg)
+    dx_km, dy_km = ARROW_LEN_KM * math.sin(rad), ARROW_LEN_KM * math.cos(rad)
+    ex = cx - dx_km / fc.KM_PER_PX_X
+    ey = cy + dy_km / fc.KM_PER_PX_Y
+    return [round(ex, 1), round(ey, 1)]
+
+
+def _build_confirm_overlay_data(tracks_for_tile, mask_by_track_id, confirm_data):
+    """[ЗАМЕНИЛО 2026-09-08 запечённую _draw_frontal_confirm_outline]
+    Раньше контур+подпись рисовались ПРЯМО в PNG — по запросу пользователя
+    ("если сделаем несъёмный контур, перекроет снимок") теперь это
+    отдельные ВЕКТОРНЫЕ данные (координаты кольца + стрелки), которые
+    фронтенд накладывает SVG-слоем поверх снимка с возможностью
+    включить/выключить (см. nearby_precip.js) — сам PNG больше не
+    содержит подтверждения, только реальную покраску блоба (см.
+    _render_tile). Кольцо — та же дилатация на 2px, что была раньше.
+    Только near-tile (координаты без origin-сдвига, для west не
+    подходят — та же причина, что была у предшественницы)."""
     if not confirm_data:
-        return base_img
+        return []
     candidates = confirm_data.get("candidates", {})
     if not candidates:
-        return base_img
-    h, w = base_img.height, base_img.width
-    overlay_arr = np.zeros((h, w, 4), dtype=np.uint8)
-    labels = []
-    try:
-        font = ImageFont.load_default()
-    except Exception:
-        font = None
+        return []
+    out = []
     for t in tracks_for_tile:
         tid = t["track_id"]
         verdict = candidates.get(str(tid))
@@ -128,19 +143,26 @@ def _draw_frontal_confirm_outline(base_img, tracks_for_tile, mask_by_track_id, c
         if not verdict or mask is None or not mask.any():
             continue
         ring = _dilate(_dilate(mask)) & ~mask
-        color = (60, 220, 60, 255) if verdict.get("confirmed") else (160, 160, 160, 255)
-        overlay_arr[ring] = color
-        ys, xs = np.nonzero(mask)
-        cy, cx = float(ys.mean()), float(xs.mean())
+        ys, xs = np.nonzero(ring)
+        if len(ys) == 0:
+            continue
+        confirmed = bool(verdict.get("confirmed"))
+        ys_m, xs_m = np.nonzero(mask)
+        cy, cx = float(ys_m.mean()), float(xs_m.mean())
         front_type = t.get("front_type") or verdict.get("front_type_model")
         type_tag = " х" if front_type == "cold" else (" т" if front_type == "warm" else "")
-        labels.append((cx, cy, f"{verdict.get('votes', 0)}/{verdict.get('n_models', 5)}{type_tag}", color))
-    overlay = Image.fromarray(overlay_arr, mode="RGBA")
-    out = Image.alpha_composite(base_img.convert("RGBA"), overlay)
-    draw = ImageDraw.Draw(out)
-    for cx, cy, label, color in labels:
-        draw.text((cx + 6, cy - 8), label, fill=color, font=font)
-    return out.convert("RGB")
+        arrow_end = _movement_arrow_endpoint(cx, cy, t.get("movement_bearing_deg"))
+        out.append({
+            "track_id": tid,
+            "confirmed": confirmed,
+            "ring_pixels": [[int(r), int(c)] for r, c in zip(ys.tolist(), xs.tolist())],
+            "label": f"{verdict.get('votes', 0)}/{verdict.get('n_models', 5)}{type_tag}",
+            "label_pos": [round(cx, 1), round(cy, 1)],
+            "arrow_start": [round(cx, 1), round(cy, 1)] if arrow_end else None,
+            "arrow_end": arrow_end,
+            "wind_shift_spread_deg": verdict.get("wind_shift_spread_deg"),
+        })
+    return out
 
 
 def _render_tile(scratch_base_path, scratch_pixelmap_path, out_path,
@@ -148,9 +170,11 @@ def _render_tile(scratch_base_path, scratch_pixelmap_path, out_path,
     """Красит реальные пиксели блоба (по pixel_map == current_target_id+1)
     в цвет трека, поверх сохранённой базы (уже с контуром берега/кругом
     обзора, без треков/маркера — см. cloud_forecast.py/west_watch.py),
-    дорисовывает маркер Одессы поверх покраски, сохраняет финальный PNG."""
+    дорисовывает маркер Одессы поверх покраски, сохраняет финальный PNG.
+    Возвращает (status_str, overlay_data) — overlay_data не None только
+    когда передан confirm_data (near-tile), см. _build_confirm_overlay_data."""
     if not (os.path.exists(scratch_base_path) and os.path.exists(scratch_pixelmap_path)):
-        return "skipped_no_scratch"
+        return "skipped_no_scratch", None
     try:
         base_img = Image.open(scratch_base_path).convert("RGB")
         pixel_map = np.load(scratch_pixelmap_path)
@@ -166,17 +190,18 @@ def _render_tile(scratch_base_path, scratch_pixelmap_path, out_path,
                 continue
             color = fc.FRONTAL_TRACK_COLORS[t["track_id"] % len(fc.FRONTAL_TRACK_COLORS)]
             arr[mask] = color
-            mask_by_track_id[t["track_id"]] = mask  # для _draw_frontal_confirm_outline ниже
+            mask_by_track_id[t["track_id"]] = mask  # для _build_confirm_overlay_data ниже
             painted += 1
         out_img = Image.fromarray(arr, mode="RGB")
         out_img = fc.draw_odessa_marker(out_img, origin_dx_km=origin_dx_km, origin_dy_km=origin_dy_km)
         out_img = _draw_score_checkpoints(out_img, tracks_for_tile, score_data)
-        out_img = _draw_frontal_confirm_outline(out_img, tracks_for_tile, mask_by_track_id, confirm_data)
         out_img.save(out_path)
-        return f"ok_{painted}_tracks"
+        overlay_data = _build_confirm_overlay_data(tracks_for_tile, mask_by_track_id, confirm_data) \
+            if confirm_data is not None else None
+        return f"ok_{painted}_tracks", overlay_data
     except Exception as e:
         print(f"  [WARN] eumetsat_render_track_overlay: {out_path} — {e}")
-        return f"error: {e}"
+        return f"error: {e}", None
 
 
 def main():
@@ -208,14 +233,24 @@ def main():
         except Exception:
             pass
 
-    near_status = _render_tile(
+    near_status, near_overlay = _render_tile(
         NEAR_SCRATCH_BASE, NEAR_SCRATCH_PIXELMAP, NEAR_OUT_FILE,
         near_tracks, origin_dx_km=0.0, origin_dy_km=0.0, score_data=score_data, confirm_data=confirm_data,
     )
-    west_status = _render_tile(
+    west_status, _ = _render_tile(
         WEST_SCRATCH_BASE, WEST_SCRATCH_PIXELMAP, WEST_OUT_FILE,
         west_tracks, origin_dx_km=fc.WEST_TILE_OFFSET_DX_KM, origin_dy_km=fc.WEST_TILE_OFFSET_DY_KM,
     )
+
+    if near_overlay is not None:
+        import datetime
+        with open(CONFIRM_OVERLAY_FILE, "w", encoding="utf-8") as f:
+            json.dump({
+                "generated_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "tile_size": fc.TILE_SIZE,
+                "tracks": near_overlay,
+            }, f, ensure_ascii=False)
+
     print(f"  [OK] eumetsat_render_track_overlay: near={near_status}, west={west_status}")
 
 
