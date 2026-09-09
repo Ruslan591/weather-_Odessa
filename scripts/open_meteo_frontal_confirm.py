@@ -62,11 +62,21 @@ THRESHOLD) — первая прикидка, НЕ откалиброваны п
 
 Пишет:
   data/europe_frontal_overlay.json — точки консенсус-детекции с
-    пиксельными координатами под снимки far/very_far.
+    пиксельными координатами под снимки far/very_far ("points", как и
+    раньше) ПЛЮС [ДОБАВЛЕНО 2026-09-09, TASK EUROPE_FRONT_LINE_001]
+    "segments" — связные линии фронта, извлечённые через diameter-path
+    (double Dijkstra) из connected components confirmed-ячеек, с
+    рекурсивным junction-разбиением на боковые ветви. "points" не
+    убраны — обратная совместимость / fallback фронтенда, если
+    segments пуст. См. docs/ai/AI_DISCUSSION.md (Proposal v2/v3,
+    APPROVED) — там же обоснование, почему NOT NMS+PCA, а diameter-path.
   data/eumetsat_near_tile_projection.json — интерполированное поле,
-    спроецированное на near-tile (для SVG-слоя на Cloud Mask).
+    спроецированное на near-tile (для SVG-слоя на Cloud Mask), НЕ
+    затронуто изменениями EUROPE_FRONT_LINE_001 (использует сырой
+    votes_grid/n_valid_grid до сегментации).
 Запуск: python3 scripts/open_meteo_frontal_confirm.py
 """
+import heapq
 import json
 import math
 import os
@@ -109,6 +119,13 @@ CURRENT_VARIABLES = [
 
 REQUEST_INTERVAL = 30  # секунд между запросами моделей — проверено вживую 2026-09-06
 MIN_MODEL_VOTES = 3    # из 5 — подтверждено
+
+# [ДОБАВЛЕНО 2026-09-09, TASK EUROPE_FRONT_LINE_001] Минимальный размер
+# connected component (8-связность по confirmed-ячейкам), чтобы из него
+# извлекать diameter-path сегмент. Меньшие компоненты остаются видны
+# только через "points" (старый point-by-point рендер) — согласовано с
+# GPT (docs/ai/AI_DISCUSSION.md, REVIEW: APPROVED).
+MIN_COMPONENT_CELLS = 3
 
 # Порог consensus_score (votes/n_models) для near-tile проекции —
 # соответствует MIN_MODEL_VOTES/5 у "сырых" точек европейской сетки, тот
@@ -248,9 +265,21 @@ def detect_europe_fronts(model_results_by_id, rows, cols):
     """Консенсус-детекция по регулярной сетке — кандидатов заранее нет
     вообще, ищем сами по полю градиента. Сознательно упрощённо: только
     temp+pressure, БЕЗ классификации тёплый/холодный (см. докстринг
-    файла)."""
+    файла).
+
+    [ПЕРЕРАБОТАНО 2026-09-09, TASK EUROPE_FRONT_LINE_001] Раньше был
+    только votes_grid (bool front_like на модель, OR по порогам). Теперь
+    дополнительно считается consensus_score_grid — непрерывное поле,
+    median() нормированного score ПО ВСЕМ ВАЛИДНЫМ МОДЕЛЯМ в ячейке (не
+    только по тем, что проголосовали "front_like") — так решил GPT
+    review (docs/ai/AI_DISCUSSION.md, Proposal v3 п.1, APPROVED): не
+    терять информацию, ограничиваясь только моделями, прошедшими порог.
+    votes_grid/confirmed — гейт подтверждения, семантика НЕ изменилась
+    (score > 1.0 эквивалентно старому grad_t > T OR grad_p > P, т.к.
+    score = max(grad_t/T, grad_p/P))."""
     votes_grid = np.zeros((rows, cols), dtype=int)
     n_valid_grid = np.zeros((rows, cols), dtype=int)
+    score_stack = []  # список (rows,cols) массивов, по одному на модель, NaN где невалидно
     for model_id, results in model_results_by_id.items():
         if len(results) != rows * cols:
             continue
@@ -264,10 +293,223 @@ def detect_europe_fronts(model_results_by_id, rows, cols):
         grad_t = np.sqrt(gx_t ** 2 + gy_t ** 2)
         gy_p, gx_p = np.gradient(pres_arr)
         grad_p = np.sqrt(gx_p ** 2 + gy_p ** 2)
-        front_like = ((grad_t > EUROPE_TEMP_GRAD_THRESHOLD) | (grad_p > EUROPE_PRESSURE_GRAD_THRESHOLD)) & valid
+        score = np.maximum(grad_t / EUROPE_TEMP_GRAD_THRESHOLD, grad_p / EUROPE_PRESSURE_GRAD_THRESHOLD)
+        score = np.where(valid, score, np.nan)
+        front_like = (score > 1.0) & valid  # эквивалент старого OR-условия по порогам
         votes_grid += front_like.astype(int)
+        score_stack.append(score)
     confirmed = (votes_grid >= MIN_MODEL_VOTES) & (n_valid_grid >= MIN_MODEL_VOTES)
-    return votes_grid, n_valid_grid, confirmed
+    if score_stack:
+        stacked = np.stack(score_stack, axis=0)
+        with np.errstate(invalid="ignore"):
+            import warnings
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=RuntimeWarning)  # nanmedian на all-NaN срезе — ожидаемо в ячейках без валидных моделей
+                consensus_score_grid = np.nanmedian(stacked, axis=0)
+    else:
+        consensus_score_grid = np.full((rows, cols), np.nan)
+    return votes_grid, n_valid_grid, confirmed, consensus_score_grid
+
+
+_NEIGHBOR_OFFSETS = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
+
+
+def _component_cells(confirmed):
+    """[TASK EUROPE_FRONT_LINE_001] BFS 8-связность по confirmed grid
+    (bool rows x cols). Возвращает список компонент, каждая — set из
+    (row, col). Чистый Python/numpy, без scipy (см. AI_DISCUSSION,
+    Proposal v2 п. "не требует scipy")."""
+    rows, cols = confirmed.shape
+    visited = np.zeros_like(confirmed, dtype=bool)
+    components = []
+    for r in range(rows):
+        for c in range(cols):
+            if confirmed[r, c] and not visited[r, c]:
+                stack = [(r, c)]
+                visited[r, c] = True
+                comp = set()
+                while stack:
+                    cr, cc = stack.pop()
+                    comp.add((cr, cc))
+                    for dr, dc in _NEIGHBOR_OFFSETS:
+                        nr, nc = cr + dr, cc + dc
+                        if 0 <= nr < rows and 0 <= nc < cols and confirmed[nr, nc] and not visited[nr, nc]:
+                            visited[nr, nc] = True
+                            stack.append((nr, nc))
+                components.append(comp)
+    return components
+
+
+def _subgraph_dijkstra(start, cells_set):
+    """Dijkstra по подграфу cells_set (8-связность, вес ребра = евклидово
+    расстояние в шагах сетки: 1.0 орто-сосед, sqrt(2) диагональный) —
+    heapq из стандартной библиотеки, без scipy. cells_set предполагается
+    связным (иначе dist просто не покроет недостижимые узлы — вызывающий
+    код гарантирует связность, передавая сюда только компоненты/под-
+    компоненты одного BFS-обхода)."""
+    dist = {start: 0.0}
+    parent = {start: None}
+    pq = [(0.0, start)]
+    while pq:
+        d, node = heapq.heappop(pq)
+        if d > dist.get(node, float("inf")):
+            continue
+        r, c = node
+        for dr, dc in _NEIGHBOR_OFFSETS:
+            nb = (r + dr, c + dc)
+            if nb in cells_set:
+                w = math.sqrt(2) if (dr != 0 and dc != 0) else 1.0
+                nd = d + w
+                if nd < dist.get(nb, float("inf")):
+                    dist[nb] = nd
+                    parent[nb] = node
+                    heapq.heappush(pq, (nd, nb))
+    return dist, parent
+
+
+def _diameter_path(cells_set):
+    """[TASK EUROPE_FRONT_LINE_001, AI_DISCUSSION Proposal v2/v3,
+    APPROVED] Centerline компонента через "диаметр графа" (double
+    Dijkstra) вместо NMS+PCA:
+      1) из произвольной ячейки cells_set ищем самую удалённую P1;
+      2) из P1 ищем самую удалённую P2, восстанавливаем путь P1->P2 по
+         parent-указателям.
+    Путь P1->P2 — диаметр графа: не рвёт прямую цепочку соседних ячеек
+    (диаметр пути-графа = весь путь) и корректно идёт вдоль изгибов
+    (следует реальным рёбрам графа, а не проекции на одну ось, как
+    делала бы PCA-сортировка). cells_set непустой и связный (проверяется
+    вызывающим кодом через MIN_COMPONENT_CELLS и BFS-происхождение)."""
+    start = next(iter(cells_set))
+    dist1, _ = _subgraph_dijkstra(start, cells_set)
+    p1 = max(dist1, key=dist1.get)
+    dist2, parent2 = _subgraph_dijkstra(p1, cells_set)
+    p2 = max(dist2, key=dist2.get)
+    path = []
+    node = p2
+    while node is not None:
+        path.append(node)
+        node = parent2[node]
+    path.reverse()
+    return path
+
+
+def _connected_subcomponents(cells):
+    """BFS 8-связность внутри произвольного множества ячеек `cells`
+    (не обязательно всей сетки) — используется для разбиения "остатка"
+    после извлечения diameter-path на отдельные под-компоненты."""
+    visited = set()
+    out = []
+    for cell in cells:
+        if cell in visited:
+            continue
+        stack = [cell]
+        visited.add(cell)
+        sub = set()
+        while stack:
+            cr, cc = stack.pop()
+            sub.add((cr, cc))
+            for dr, dc in _NEIGHBOR_OFFSETS:
+                nb = (cr + dr, cc + dc)
+                if nb in cells and nb not in visited:
+                    visited.add(nb)
+                    stack.append(nb)
+        out.append(sub)
+    return out
+
+
+def _extract_segments_recursive(cells_set, min_cells=MIN_COMPONENT_CELLS):
+    """[TASK EUROPE_FRONT_LINE_001, AI_DISCUSSION Proposal v3 п.3,
+    APPROVED "с условием защиты от дублирования ячеек между сегментами
+    и бесконечной рекурсии"] Извлекает из компонента ГЛАВНЫЙ diameter-
+    path, а остаток (ячейки компонента, не попавшие на путь) —
+    рекурсивно раскладывает на under-компоненты и обрабатывает каждую
+    той же процедурой. Так T-образный/ветвящийся фронт даёт несколько
+    сегментов (основная линия + боковые ветви) вместо потери веток.
+
+    Гарантии (проверено юнит-тестом на синтетических сетках, см. commit
+    message / AI_DISCUSSION):
+      - НЕТ дублирования ячеек между сегментами: remaining = cells_set -
+        set(path) — строгая разность множеств, path и remaining
+        непересекающиеся по построению; под-компоненты remaining также
+        взаимно непересекающиеся (это результат одного BFS-разбиения
+        одного множества).
+      - НЕТ бесконечной рекурсии: каждый рекурсивный вызов получает
+        cells_set строго меньшего размера, чем родительский (т.к.
+        len(path) >= 1 всегда вычитается), а базовый случай
+        len(cells_set) < min_cells останавливает рекурсию — общее число
+        уровней рекурсии ограничено размером исходного компонента."""
+    if len(cells_set) < min_cells:
+        return []
+    path = _diameter_path(cells_set)
+    segments = [{"cells": path, "n_cells": len(cells_set)}]
+    remaining = cells_set - set(path)
+    for sub in _connected_subcomponents(remaining):
+        segments.extend(_extract_segments_recursive(sub, min_cells))
+    return segments
+
+
+def extract_europe_segments(confirmed, consensus_score_grid, lats, lons, min_cells=MIN_COMPONENT_CELLS):
+    """Точка входа: confirmed grid -> список сегментов с lat/lon (без
+    px — пиксели добавляются отдельно в _attach_pixel_coords_to_segments,
+    т.к. используют ту же _lonlat_to_px, что и обычные points, и не
+    должны дублировать эту логику проекции)."""
+    components = _component_cells(confirmed)
+    all_segments = []
+    for comp in components:
+        all_segments.extend(_extract_segments_recursive(comp, min_cells))
+    out = []
+    for seg in all_segments:
+        cells = seg["cells"]
+        scores = [consensus_score_grid[r, c] for (r, c) in cells if not math.isnan(consensus_score_grid[r, c])]
+        avg_score = round(float(np.mean(scores)), 2) if scores else None
+        path = [{"lat": round(float(lats[r]), 3), "lon": round(float(lons[c]), 3)} for (r, c) in cells]
+        out.append({
+            "n_cells": seg["n_cells"],
+            "path_length": len(cells),
+            "avg_score": avg_score,
+            "path": path,
+        })
+    return out, len(components)
+
+
+def _far_bboxes(geo):
+    """Общий helper для far/very_far bbox+wh — используется и
+    _build_europe_overlay (points), и _attach_pixel_coords_to_segments
+    (segments), чтобы не дублировать/не рассинхронизировать логику
+    проекции lon/lat -> px между ними (см. AI_DISCUSSION Proposal v3 п.4,
+    APPROVED)."""
+    far_bbox = far_wh = very_far_bbox = very_far_wh = None
+    try:
+        far_half = geo["far_window"]["half_window_deg"]
+        far_bbox = (geo["center_lon"] - far_half, geo["center_lat"] - far_half,
+                    geo["center_lon"] + far_half, geo["center_lat"] + far_half)
+        if os.path.exists(FAR_IMG_FILE):
+            far_wh = Image.open(FAR_IMG_FILE).size
+    except Exception:
+        pass
+    try:
+        very_far_bbox = tuple(geo["very_far_window"]["bbox"])
+        if os.path.exists(VERY_FAR_IMG_FILE):
+            very_far_wh = Image.open(VERY_FAR_IMG_FILE).size
+    except Exception:
+        pass
+    return far_bbox, far_wh, very_far_bbox, very_far_wh
+
+
+def _attach_pixel_coords_to_segments(segments, geo):
+    """Добавляет px_far/px_very_far к каждой точке path сегмента — той
+    же _lonlat_to_px, что и у points (см. _far_bboxes)."""
+    far_bbox, far_wh, very_far_bbox, very_far_wh = _far_bboxes(geo)
+    out = []
+    for seg in segments:
+        new_path = []
+        for pt in seg["path"]:
+            lat, lon = pt["lat"], pt["lon"]
+            px_far = _lonlat_to_px(lon, lat, far_bbox, far_wh)
+            px_very_far = _lonlat_to_px(lon, lat, very_far_bbox, very_far_wh)
+            new_path.append({"lat": lat, "lon": lon, "px_far": px_far, "px_very_far": px_very_far})
+        out.append({k: v for k, v in seg.items() if k != "path"} | {"path": new_path})
+    return out, far_wh, very_far_wh
 
 
 def _lonlat_to_px(lon, lat, bbox, wh):
@@ -288,21 +530,7 @@ def _build_europe_overlay(points_meta, votes_grid, n_valid_grid, confirmed, geo)
     Каждая точка — с пиксельными координатами СРАЗУ на ОБОИХ снимках, т.к.
     объединённый bbox шире каждого из них по отдельности — точка может
     попасть в один, другой, оба или ни один (за кадром)."""
-    far_bbox = far_wh = very_far_bbox = very_far_wh = None
-    try:
-        far_half = geo["far_window"]["half_window_deg"]
-        far_bbox = (geo["center_lon"] - far_half, geo["center_lat"] - far_half,
-                    geo["center_lon"] + far_half, geo["center_lat"] + far_half)
-        if os.path.exists(FAR_IMG_FILE):
-            far_wh = Image.open(FAR_IMG_FILE).size
-    except Exception:
-        pass
-    try:
-        very_far_bbox = tuple(geo["very_far_window"]["bbox"])
-        if os.path.exists(VERY_FAR_IMG_FILE):
-            very_far_wh = Image.open(VERY_FAR_IMG_FILE).size
-    except Exception:
-        pass
+    far_bbox, far_wh, very_far_bbox, very_far_wh = _far_bboxes(geo)
 
     rows, cols = votes_grid.shape
     out_points = []
@@ -420,8 +648,15 @@ def run_europe_detection(geo):
         if i < len(MODELS) - 1:
             time.sleep(REQUEST_INTERVAL)
 
-    votes_grid, n_valid_grid, confirmed = detect_europe_fronts(model_results_by_id, rows, cols)
+    votes_grid, n_valid_grid, confirmed, consensus_score_grid = detect_europe_fronts(model_results_by_id, rows, cols)
     overlay_points, far_wh, very_far_wh = _build_europe_overlay(points, votes_grid, n_valid_grid, confirmed, geo)
+
+    # [TASK EUROPE_FRONT_LINE_001] segments — связная линия фронта вместо
+    # облака точек (см. docs/ai/AI_DISCUSSION.md, Proposal v3, APPROVED).
+    # "points" НЕ убирается (обратная совместимость / fallback фронтенда).
+    raw_segments, n_components = extract_europe_segments(confirmed, consensus_score_grid, lats, lons)
+    segments, _far_wh2, _very_far_wh2 = _attach_pixel_coords_to_segments(raw_segments, geo)
+
     _save_json(EUROPE_OVERLAY_FILE, {
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "bbox": list(bbox),
@@ -429,9 +664,15 @@ def run_europe_detection(geo):
         "far_wh": list(far_wh) if far_wh else None,
         "very_far_wh": list(very_far_wh) if very_far_wh else None,
         "points": overlay_points,
+        "segments": segments,
     })
     n_confirmed = sum(1 for p in overlay_points if p["confirmed"])
     print(f"  [OK] open_meteo_frontal_confirm: {n_confirmed}/{len(overlay_points)} точек подтверждено консенсусом")
+    # Диагностика по запросу GPT review (docs/ai/AI_DISCUSSION.md, Proposal v3/APPROVED):
+    # confirmed cells / connected components / итоговые segments / длина каждого.
+    seg_lengths = [s["path_length"] for s in segments]
+    print(f"  [OK] open_meteo_frontal_confirm: confirmed_cells={n_confirmed} components={n_components} "
+          f"segments={len(segments)} lengths={seg_lengths}")
 
     projection = project_to_near_tile(lats, lons, votes_grid, n_valid_grid, geo)
     if projection is not None:
