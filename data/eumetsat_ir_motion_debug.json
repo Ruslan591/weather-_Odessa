@@ -1,73 +1,7 @@
 {
-  "status": "ok",
+  "status": "skipped",
   "server_latest_time": "2026-09-09T16:00:00.000Z",
-  "bootstrap": true,
+  "bootstrap": false,
   "buffer_before": 6,
-  "buffer_size": 6,
-  "buffer_times": [
-    "2026-09-09T15:10:00.000Z",
-    "2026-09-09T15:20:00.000Z",
-    "2026-09-09T15:30:00.000Z",
-    "2026-09-09T15:40:00.000Z",
-    "2026-09-09T15:50:00.000Z",
-    "2026-09-09T16:00:00.000Z"
-  ],
-  "frame_std": [
-    2.6,
-    2.3,
-    2.1,
-    2.1,
-    2.3,
-    2.5
-  ],
-  "result": {
-    "timestamp": "2026-09-09T16:00:00.000Z",
-    "buffer_size": 6,
-    "buffer_span_minutes": 50,
-    "observed_area": {
-      "center_lat": 46.4406,
-      "center_lon": 30.7703,
-      "motion_window_km": {
-        "width": 384,
-        "height": 557
-      },
-      "local_trend_radius_km": 50
-    },
-    "valid": false,
-    "verdict": "недостаточно контраста для оценки (вероятно, однородная сцена)",
-    "area_fraction_over_time": [
-      0.035,
-      0.032,
-      0.05,
-      0.135,
-      0.301,
-      0.483
-    ],
-    "area_trend_delta": 0.449,
-    "area_trend_verdict": "растёт",
-    "mean_brightness_over_time": [
-      31.6,
-      32.2,
-      32.7,
-      33.2,
-      33.6,
-      34.1
-    ],
-    "brightness_trend_delta": 2.5,
-    "station_state": "variable",
-    "station_area_fraction": 0.33,
-    "cloud_mass_distance_km": 98.9,
-    "cloud_mass_bearing_deg": 100.0,
-    "cloud_mass_compass": "В",
-    "cloud_mass_area_km2": 133,
-    "cloud_mass_contrast_sigma": 1.59,
-    "temperature_trend_verdict": "похолодание верхней границы (возможно усиление конвекции)",
-    "target_confirmation": {
-      "confirmed": null,
-      "reason": "candidates пуст или отсутствует (снапшот от старой версии cloud_forecast.py?)"
-    },
-    "system_analysis_all": [],
-    "local_analysis_all": [],
-    "method_note": "Буфер 6/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин, crs=EPSG:4326, всегда явный TIME — не 'latest'), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. cloud_mass_* — положение (не движение) ближайшей значимой облачной массы относительно станции. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
-  }
+  "note": "сервер ещё не объявил кадр новее 2026-09-09T16:00:00.000Z (default=2026-09-09T16:00:00.000Z)"
 }
