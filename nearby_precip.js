@@ -62,14 +62,17 @@ let _eumetsatFarWatchData      = null;
 let _eumetsatFarWatchFetchedAt = 0;
 let _eumetsatVeryFarWatchData      = null;
 let _eumetsatVeryFarWatchFetchedAt = 0;
-let _openMeteoFrontalConfirmData      = null;
-let _openMeteoFrontalConfirmFetchedAt = 0;
-let _confirmOverlayData = null;
-let _confirmOverlayFetchedAt = 0;
-let _confirmOverlayVisible = true;  // по умолчанию показываем — тумблер только на случай, если мешает (запрос пользователя 2026-09-08)
+// [УБРАНО 2026-09-09] _openMeteoFrontalConfirmData/_confirmOverlayData —
+// near/west-детектор убран полностью, единственный детектор теперь
+// европейский (см. ниже), near-tile получает от него ПРОЕКЦИЮ (см.
+// _nearProjectionData) вместо отдельного подтверждения по спутниковому
+// кандидату.
+let _nearProjectionData = null;
+let _nearProjectionFetchedAt = 0;
+let _nearProjectionVisible = true;
 let _europeOverlayData = null;
 let _europeOverlayFetchedAt = 0;
-let _europeOverlayVisible = true;  // та же схема, что near-tile — по умолчанию показан, один тумблер сразу на far+very_far
+let _europeOverlayVisible = true;  // один тумблер сразу на far+very_far
 let _eumetsatTargetSummaryData      = null;
 let _eumetsatTargetSummaryFetchedAt = 0;
 let _eumetsatWestWatchData      = null;
@@ -310,46 +313,25 @@ async function loadEumetsatVeryFarWatch(){
     }
 }
 
-async function loadOpenMeteoFrontalConfirm(){
-    // Согласовано с пользователем 2026-09-06 — подтверждение фронтов по
-    // Open-Meteo (open_meteo_frontal_confirm.py), событийный источник на
-    // бэкенде, но здесь просто опрашиваем как обычно (короткого TTL
-    // достаточно, лишней сети это не создаёт — файл читается с GitHub,
-    // не дёргает Open-Meteo напрямую).
-    if(Date.now() - _openMeteoFrontalConfirmFetchedAt < 5 * 60000) return;
-    _openMeteoFrontalConfirmFetchedAt = Date.now();
+// [ЗАМЕНИЛО 2026-09-09 loadOpenMeteoFrontalConfirm+loadConfirmOverlay]
+// near/west-детектор убран полностью — единственный детектор европейский
+// (см. loadEuropeOverlay ниже), эта функция читает его ПРОЕКЦИЮ на
+// near-tile (билинейная интерполяция, без сети к Open-Meteo напрямую —
+// см. project_to_near_tile() в open_meteo_frontal_confirm.py).
+async function loadNearTileProjection(){
+    if(Date.now() - _nearProjectionFetchedAt < 5 * 60000) return;
+    _nearProjectionFetchedAt = Date.now();
     try {
         const r = await fetch(
-            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/open_meteo_frontal_confirm.json",
+            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_near_tile_projection.json",
             { cache: "no-store" }
         );
         if(!r.ok) return;
         const j = await r.json();
-        if(j && j.generated_at) _openMeteoFrontalConfirmData = j;
+        if(j && j.generated_at) _nearProjectionData = j;
         renderNearbyPrecipCard();
     } catch(e){
-        _openMeteoFrontalConfirmFetchedAt = 0;
-    }
-}
-
-// Векторные данные подтверждения (кольцо + стрелка направления) для
-// SVG-слоя ПОВЕРХ Cloud Mask — заменяет запечённую в PNG отрисовку
-// (см. eumetsat_render_track_overlay.py, правка 2026-09-08). Отдельный
-// файл, отдельный лёгкий loader — та же логика TTL, что у остальных.
-async function loadConfirmOverlay(){
-    if(Date.now() - _confirmOverlayFetchedAt < 5 * 60000) return;
-    _confirmOverlayFetchedAt = Date.now();
-    try {
-        const r = await fetch(
-            "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_confirm_overlay.json",
-            { cache: "no-store" }
-        );
-        if(!r.ok) return;
-        const j = await r.json();
-        if(j && j.generated_at) _confirmOverlayData = j;
-        renderNearbyPrecipCard();
-    } catch(e){
-        _confirmOverlayFetchedAt = 0;
+        _nearProjectionFetchedAt = 0;
     }
 }
 
@@ -785,26 +767,48 @@ function _renderAreaSummary(g, farData, veryFarData){
 // (scripts/field_motion_common.py), порядок важен для читаемого текста.
 const _COMPASS_RU = ["С", "СВ", "В", "ЮВ", "Ю", "ЮЗ", "З", "СЗ"];
 
+// [ИСПРАВЛЕНО 2026-09-09] Раньше toggle вызывал renderNearbyPrecipCard()
+// — полную перестройку HTML всей карточки. Побочный эффект: ЛЮБОЙ
+// <details>-аккордеон на странице без явного атрибута open по умолчанию
+// схлопывается при пересоздании DOM — пользователь жал кнопку и видел,
+// что "аккордеон сворачивается", хотя это не аккордеон реагировал на
+// клик, а вся карточка (включая открытый аккордеон) стиралась и
+// пересоздавалась с нуля. Теперь — точечная правка конкретных элементов
+// по классу, без перестройки остального DOM: другие открытые аккордеоны
+// не трогаются.
 function _toggleEuropeOverlay(){
     _europeOverlayVisible = !_europeOverlayVisible;
-    renderNearbyPrecipCard();
+    document.querySelectorAll('.europe-overlay-svg').forEach(svg => {
+        svg.style.display = _europeOverlayVisible ? '' : 'none';
+    });
+    document.querySelectorAll('.europe-overlay-btn').forEach(btn => {
+        btn.style.background = _europeOverlayVisible ? '#1c3d1c' : '#222';
+        btn.style.color = _europeOverlayVisible ? '#6adc6a' : '#999';
+        btn.textContent = (_europeOverlayVisible ? '✓ Линия фронта (Европа) показана' : '☐ Линия фронта (Европа) скрыта')
+            + ' — нажми, чтобы ' + (_europeOverlayVisible ? 'скрыть' : 'показать');
+    });
 }
 
 // Строит содержимое SVG для одного тира (far/very_far) — точки консенсус-
-// детекции как маленькие кружки (не кольцо вокруг блоба, как у near-tile:
-// здесь нет спутникового блоба вообще, только точки регулярной сетки,
-// см. run_europe_detection в open_meteo_frontal_confirm.py). pxField —
-// "px_far" или "px_very_far", у каждой точки своя пара координат под
-// свой снимок (bbox разные), см. _build_europe_overlay в питоне.
+// детекции как маленькие кружки (не кольцо вокруг блоба, как раньше у
+// near-tile: здесь нет спутникового блоба вообще, только точки регулярной
+// сетки, см. run_europe_detection в open_meteo_frontal_confirm.py).
+// pxField — "px_far" или "px_very_far", у каждой точки своя пара
+// координат под свой снимок (bbox разные), см. _build_europe_overlay в
+// питоне.
+// [ИСПРАВЛЕНО 2026-09-09] Цвет неподтверждённых точек был #666 (тёмно-
+// серый) — почти невидим на тёмном/пасмурном фоне снимка (пользователь:
+// "ничего не показано"). Заменён на янтарный + чёрная обводка у ВСЕХ
+// точек для контраста на любом фоне (облака светлые, море/ясно тёмные).
 function _buildEuropeOverlaySvgInner(overlayData, pxField){
     if(!overlayData || !overlayData.points || !overlayData.points.length) return "";
     return overlayData.points
         .filter(p => p[pxField])
         .map(p => {
             const [x, y] = p[pxField];
-            const color = p.confirmed ? "#3cdc3c" : "#666";
-            const r = p.confirmed ? 4 : 2;
-            return `<circle cx="${x}" cy="${y}" r="${r}" fill="${color}" ${p.confirmed ? '' : 'fill-opacity="0.6"'}/>`;
+            const color = p.confirmed ? "#3cdc3c" : "#ffaa33";
+            const r = p.confirmed ? 4.5 : 2.5;
+            return `<circle cx="${x}" cy="${y}" r="${r}" fill="${color}" stroke="#000" stroke-width="0.6" stroke-opacity="0.7"/>`;
         }).join("");
 }
 
@@ -822,14 +826,15 @@ function _renderOneFarTier(data, label, tierKey){
     const wh = ov && ov[whField];  // реальные px-размеры снимка на момент расчёта (см. python-докстринг far_wh/very_far_wh) — БЕЗ них координаты точек не совпадут с картинкой, поэтому без wh оверлей не показываем вовсе
     const hasOverlay = wh && ov.points && ov.points.some(p => p[pxField]);
     const toggleBtn = hasOverlay ? `
-        <button onclick="_toggleEuropeOverlay()"
+        <button onclick="_toggleEuropeOverlay()" class="europe-overlay-btn"
                 style="margin:6px 0; padding:5px 10px; border-radius:6px; border:1px solid #444;
                        background:${_europeOverlayVisible ? '#1c3d1c' : '#222'};
                        color:${_europeOverlayVisible ? '#6adc6a' : '#999'}; font-size:12px;">
             ${_europeOverlayVisible ? '✓ Линия фронта (Европа) показана' : '☐ Линия фронта (Европа) скрыта'} — нажми, чтобы ${_europeOverlayVisible ? 'скрыть' : 'показать'}
         </button>` : "";
-    const svgLayer = (hasOverlay && _europeOverlayVisible) ? `
-        <svg viewBox="0 0 ${wh[0]} ${wh[1]}" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;">
+    const svgLayer = hasOverlay ? `
+        <svg class="europe-overlay-svg" viewBox="0 0 ${wh[0]} ${wh[1]}"
+             style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; display:${_europeOverlayVisible ? '' : 'none'};">
             ${_buildEuropeOverlaySvgInner(ov, pxField)}
         </svg>` : "";
     const imgHtml = img
@@ -1354,12 +1359,12 @@ function _renderWestSnapshot(westData, tracks){
     // 2026-08-17) — раньше "Треки фронтов" была одной общей таблицей (near+
     // west вперемешку, различить можно было только по чтению координат).
     const tracksHtml = _renderFrontalTracksTable(tracks, {tileFilter: "west", title: "Треки фронтов (западный тайл)"});
-    const confirmHtml = _renderFrontalConfirmTable(_openMeteoFrontalConfirmData, tracks, {tileFilter: "west"});
+    // [УБРАНО 2026-09-09] confirmHtml — таблица была для near/west-
+    // детектора (open_meteo_frontal_confirm.py), полностью убранного.
     return `<details style="margin-top:10px;">
         <summary style="cursor:pointer; color:#72c8ff; font-size:13px; font-weight:600;">🧩 Западный тайл — снимки ${ts} (кандидатов: ${n})</summary>
         <div style="margin-top:6px;">
             ${tracksHtml}
-            ${confirmHtml}
             <div style="color:#777; font-size:11px; margin-bottom:3px;">GeoColour</div>
             <img src="${gcSrc}" alt="Западный тайл — GeoColour"
                  style="width:100%; border-radius:8px; display:block;"
@@ -1382,31 +1387,42 @@ function _renderWestSnapshot(westData, tracks){
 // подпись) — координаты уже в системе tile_size×tile_size (см.
 // eumetsat_confirm_overlay.json), тот же viewBox у <svg> ниже, поэтому
 // пересчёт под реальный размер img на странице делает браузер сам.
-function _buildConfirmOverlaySvgInner(overlayData){
-    if(!overlayData || !overlayData.tracks || !overlayData.tracks.length) return "";
-    return overlayData.tracks.map(t => {
-        const color = t.confirmed ? "#3cdc3c" : "#a0a0a0";
-        const ringPath = (t.ring_pixels || []).map(([r,c]) => `M${c} ${r}h1v1h-1z`).join("");
-        let arrowSvg = "";
-        if(t.arrow_start && t.arrow_end){
-            const [sx, sy] = t.arrow_start, [ex, ey] = t.arrow_end;
-            const ang = Math.atan2(ey - sy, ex - sx);
-            const ah = 6; // длина "усов" наконечника, в единицах viewBox (пикселях снимка)
-            const a1x = ex - ah * Math.cos(ang - 0.4), a1y = ey - ah * Math.sin(ang - 0.4);
-            const a2x = ex - ah * Math.cos(ang + 0.4), a2y = ey - ah * Math.sin(ang + 0.4);
-            arrowSvg = `<line x1="${sx}" y1="${sy}" x2="${ex}" y2="${ey}" stroke="${color}" stroke-width="1.5"/>
-                <polygon points="${ex},${ey} ${a1x},${a1y} ${a2x},${a2y}" fill="${color}"/>`;
-        }
-        const [lx, ly] = t.label_pos || [0, 0];
-        return `<path d="${ringPath}" fill="${color}"/>
-            ${arrowSvg}
-            <text x="${lx + 4}" y="${ly - 4}" fill="${color}" font-size="10" font-family="sans-serif">${t.label}</text>`;
-    }).join("");
+// [ЗАМЕНИЛО 2026-09-09 _buildConfirmOverlaySvgInner] near/west-детектор
+// убран, near-tile больше не показывает контур конкретного спутникового
+// блоба (того больше нет) — вместо этого heatmap-проекция консенсус-поля
+// с европейской сетки (см. project_to_near_tile() в python). Каждая
+// ячейка — небольшой квадрат, заливка полупрозрачная (амбер = сигнал
+// есть, но не подтверждён; зелёная обводка = подтверждено, порог тот же
+// MIN_MODEL_VOTES/5). Ячейки с score<=0.15 не рисуются вовсе — иначе
+// пришлось бы закрашивать полупрозрачным почти всю площадь снимка (шум).
+function _buildNearProjectionSvgInner(data){
+    if(!data || !data.cells || !data.cells.length) return "";
+    return data.cells
+        .filter(c => c.score > 0.15)
+        .map(c => {
+            const [x, y] = c.px;
+            const half = c.size / 2;
+            const alpha = Math.min(0.75, c.score).toFixed(2);
+            const fill = c.confirmed ? `rgba(60,220,60,${Math.max(0.35, alpha)})` : `rgba(255,170,40,${alpha})`;
+            const strokeAttr = c.confirmed ? 'stroke="#3cdc3c" stroke-width="1"' : "";
+            return `<rect x="${(x - half).toFixed(1)}" y="${(y - half).toFixed(1)}" width="${c.size}" height="${c.size}" fill="${fill}" ${strokeAttr}/>`;
+        }).join("");
 }
 
-function _toggleConfirmOverlay(){
-    _confirmOverlayVisible = !_confirmOverlayVisible;
-    renderNearbyPrecipCard();
+// [ИСПРАВЛЕНО 2026-09-09] Та же правка, что у _toggleEuropeOverlay —
+// точечная DOM-правка вместо renderNearbyPrecipCard(), чтобы клик по
+// кнопке не сворачивал окружающий <details>-аккордеон.
+function _toggleNearProjection(){
+    _nearProjectionVisible = !_nearProjectionVisible;
+    const svg = document.getElementById("near-projection-svg");
+    const btn = document.getElementById("near-projection-btn");
+    if(svg) svg.style.display = _nearProjectionVisible ? "" : "none";
+    if(btn){
+        btn.style.background = _nearProjectionVisible ? "#1c3d1c" : "#222";
+        btn.style.color = _nearProjectionVisible ? "#6adc6a" : "#999";
+        btn.textContent = (_nearProjectionVisible ? "✓ Проекция фронта показана" : "☐ Проекция фронта скрыта")
+            + " — нажми, чтобы " + (_nearProjectionVisible ? "скрыть" : "показать");
+    }
 }
 
 // Последний снимок Cloud Mask (CLM) — бинарная маска облако/ясно, ТО, ЧТО
@@ -1421,30 +1437,31 @@ function _toggleConfirmOverlay(){
 // котором считался is_cloud_now в питоне) — у CLM своего отдельного JSON
 // с timestamp нет, снимок пишется сбоку в eumetsat_cloud_forecast.py.
 //
-// [ИЗМЕНЕНО 2026-09-08] Контур подтверждения раньше был запечён прямо в
-// PNG — по запросу пользователя ("если сделаем несъёмный контур, перекроет
-// снимок") теперь это отдельный SVG-слой поверх <img> с кнопкой вкл/выкл
-// (_confirmOverlayVisible), данные — eumetsat_confirm_overlay.json (см.
-// loadConfirmOverlay()). tile_size в viewBox берём из самого файла —
-// если бэкенд когда-нибудь сменит размер тайла, фронтенду ничего
-// подстраивать не нужно.
+// [ПЕРЕРАБОТАНО 2026-09-09] near/west-детектор (open_meteo_frontal_
+// confirm.py, подтверждение конкретного спутникового блоба) убран
+// полностью по запросу пользователя — единственный детектор теперь
+// европейский, near-tile получает от него ПРОЕКЦИЮ (билинейная
+// интерполяция, см. eumetsat_near_tile_projection.json) вместо точного
+// контура. Это ЧЕСТНО грубее прежнего (near-tile ~192км мельче шага
+// европейской сетки 220км) — heatmap, не трассировка формы облака.
 function _renderClmSnapshot(forecastData){
     if(!forecastData || !forecastData.timestamp) return "";
     const ts = _obsTimeTag(forecastData.timestamp, 20);
     const src = `https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/eumetsat_clm_snapshot.png?v=${encodeURIComponent(forecastData.timestamp)}`;
-    const ov = _confirmOverlayData;
-    const hasOverlay = ov && ov.tracks && ov.tracks.length;
-    const tileSize = (ov && ov.tile_size) || 400;
-    const toggleBtn = hasOverlay ? `
-        <button onclick="_toggleConfirmOverlay()"
+    const proj = _nearProjectionData;
+    const hasProjection = proj && proj.cells && proj.cells.some(c => c.score > 0.15);
+    const tileSize = (proj && proj.tile_size) || 400;
+    const toggleBtn = hasProjection ? `
+        <button id="near-projection-btn" onclick="_toggleNearProjection()"
                 style="margin-bottom:6px; padding:5px 10px; border-radius:6px; border:1px solid #444;
-                       background:${_confirmOverlayVisible ? '#1c3d1c' : '#222'};
-                       color:${_confirmOverlayVisible ? '#6adc6a' : '#999'}; font-size:12px;">
-            ${_confirmOverlayVisible ? '✓ Подтверждение показано' : '☐ Подтверждение скрыто'} — нажми, чтобы ${_confirmOverlayVisible ? 'скрыть' : 'показать'}
+                       background:${_nearProjectionVisible ? '#1c3d1c' : '#222'};
+                       color:${_nearProjectionVisible ? '#6adc6a' : '#999'}; font-size:12px;">
+            ${_nearProjectionVisible ? '✓ Проекция фронта показана' : '☐ Проекция фронта скрыта'} — нажми, чтобы ${_nearProjectionVisible ? 'скрыть' : 'показать'}
         </button>` : "";
-    const svgLayer = (hasOverlay && _confirmOverlayVisible) ? `
-        <svg viewBox="0 0 ${tileSize} ${tileSize}" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;">
-            ${_buildConfirmOverlaySvgInner(ov)}
+    const svgLayer = hasProjection ? `
+        <svg id="near-projection-svg" viewBox="0 0 ${tileSize} ${tileSize}"
+             style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; display:${_nearProjectionVisible ? '' : 'none'};">
+            ${_buildNearProjectionSvgInner(proj)}
         </svg>` : "";
     return `<div style="margin-top:10px;">
         <div style="color:#72c8ff; font-size:13px; font-weight:600; margin-bottom:4px;">🗺️ Cloud Mask (вход детектора) ${ts}</div>
@@ -1455,7 +1472,7 @@ function _renderClmSnapshot(forecastData){
                  onerror="this.parentElement.style.display='none';">
             ${svgLayer}
         </div>
-        <div style="color:#777; font-size:11px; margin-top:3px;">Белое — облако, тёмно-синее — ясно, серое — нет данных. Это ТО, ЧТО реально видит детектор кандидатов/фронтов — не GC/ИК (те лишь подтверждают)</div>
+        <div style="color:#777; font-size:11px; margin-top:3px;">Белое — облако, тёмно-синее — ясно, серое — нет данных. Оранжевая заливка — проекция общеевропейской консенсус-детекции (грубо, интерполяция), зелёная обводка — подтверждено моделями</div>
     </div>`;
 }
 
@@ -1467,12 +1484,11 @@ function _renderClmSnapshot(forecastData){
 // менялись — просто их объединённый вывод завёрнут в <details> снаружи,
 // вместо трёх отдельных всегда-развёрнутых <div> прямо в карточке.
 function _renderNearSnapshotsAccordion(geocolourData, irData, forecastData, tracks){
-    // Отдельная таблица ТОЛЬКО фронтов центрального (near) тайла — пара к
-    // west-таблице в _renderWestSnapshot(), тот же запрос 2026-08-17.
+    // [УБРАНО 2026-09-09] confirmHtml (_renderFrontalConfirmTable) — таблица
+    // была специфична для убранного near/west-детектора. Треки сами по
+    // себе (спутниковые кандидаты, независимо от Open-Meteo) остаются.
     const tracksHtml = _renderFrontalTracksTable(tracks, {tileFilter: "near", title: "Треки фронтов (центральный тайл)"});
-    const confirmHtml = _renderFrontalConfirmTable(_openMeteoFrontalConfirmData, tracks, {tileFilter: "near"});
     const inner = tracksHtml
-        + confirmHtml
         + _renderGeocolourSnapshot(geocolourData)
         + _renderIrSnapshot(irData)
         + _renderClmSnapshot(forecastData);
@@ -1484,82 +1500,20 @@ function _renderNearSnapshotsAccordion(geocolourData, irData, forecastData, trac
     </details>`;
 }
 
-// Таблица подтверждения фронтов по Open-Meteo (open_meteo_frontal_
-// confirm.py) — согласовано с пользователем 2026-09-06. Кольцо+голоса на
-// самих снимках (near-tier CLM и very_far GeoColour) рисует бэкенд, тут —
-// детальная разбивка по каждой из 5 моделей (перепад temp/pressure,
-// сдвиг ветра, голос за/против), чтобы видеть не только вердикт, но и
-// на чём он основан.
-// [ИЗМЕНЕНО 2026-09-07] Раньше это была ОДНА общая таблица под
-// "Наблюдения по Европе", хотя её кандидаты на самом деле — near/west-
-// треки (open_meteo_frontal_confirm.py читает ВСЕ tracks из eumetsat_
-// frontal_track.json; far/very_far system-кандидаты сюда вообще не
-// попадают, см. build_pooled_points() в скрипте) — вводило в заблуждение
-// (запрос пользователя: "Таблицу для центрального тайла тоже надо" —
-// она уже была, просто не там, где ожидалась). Теперь фильтруется по
-// tileFilter через tracks (тот же список, что у _renderFrontalTracksTable)
-// и рендерится ВНУТРИ своего аккордеона (near/west), не одним блоком под
-// Европой — там ей взяться неоткуда, за пределами near+west (~360км)
-// объектная линия фронта не считается (см. docs/topics/
-// frontal_line_stations.md, "Смена архитектуры").
-// Тип фронта (х=холодный/т=тёплый) — приоритет station (track.front_type,
-// реальные наблюдения ahead_obs/behind_obs), фолбэк — front_type_model
-// (сигнатура по Open-Meteo, нужна когда станций нет, например над морем) —
-// с явной пометкой источника в подписи, чтобы не путать надёжность.
-function _renderFrontalConfirmTable(data, tracks, opts){
-    if(!data || !data.candidates || !Object.keys(data.candidates).length) return "";
-    opts = opts || {};
-    const tileFilter = opts.tileFilter;
-    const trackById = {};
-    (tracks || []).forEach(t => { trackById[String(t.track_id)] = t; });
-    const entries = Object.entries(data.candidates).filter(([tid]) => {
-        if(!tileFilter) return true;
-        const t = trackById[tid];
-        return t && (t.tile || "near") === tileFilter;
-    });
-    if(!entries.length) return "";
-    const cards = entries.map(([tid, c]) => {
-        const icon = c.confirmed ? "✅" : "⬜";
-        const track = trackById[tid];
-        let frontTypeHtml = "";
-        if(track && track.front_type){
-            const label = track.front_type === "cold" ? "холодный" : "тёплый";
-            frontTypeHtml = `<span style="color:#9fd6ff; font-weight:400;"> · ${label} (станция)</span>`;
-        } else if(c.front_type_model){
-            const label = c.front_type_model === "cold" ? "холодный" : "тёплый";
-            frontTypeHtml = `<span style="color:#8899aa; font-weight:400;" title="Станций нет в этой точке (например, над морем) — вывод по знаку градиента температуры Open-Meteo, менее надёжно, чем прямое наблюдение"> · ${label} (модель)</span>`;
-        }
-        const modelLines = Object.entries(c.per_model || {}).map(([mid, m]) => {
-            if(m.reason === "incomplete_data"){
-                return `<div style="color:#777;">· ${mid}: нет данных</div>`;
-            }
-            const mark = m.vote ? "✓" : "·";
-            const color = m.vote ? "#6adc6a" : "#888";
-            const windSpeed = m.wind_speed_grad_ms != null ? `, ΔV=${m.wind_speed_grad_ms}м/с` : "";
-            return `<div style="color:${color};">${mark} ${mid}: Δt=${m.temp_grad ?? "?"}°C, Δp=${m.pressure_grad ?? "?"}гПа, ветер=${m.wind_shift_deg ?? "?"}°${windSpeed}</div>`;
-        }).join("");
-        // [ДОБАВЛЕНО 2026-09-08] Разбор кандидата 1160 (Δt=6-8°C у всех
-        // моделей, Δp мизерная, wind_shift 15°→145°) навёл на вывод: у
-        // настоящего синоптического фронта модели обычно согласны по
-        // НАПРАВЛЕНИЮ разворота ветра (даже расходясь в силе), а большой
-        // разброс типичен для процессов мельче разрешения модели
-        // (параметризованная конвекция, бриз) — см. docs/topics/
-        // frontal_line_stations.md. Порог 60° — грубая прикидка, не
-        // калибровано на реальных случаях.
-        const spreadWarning = (c.wind_shift_spread_deg != null && c.wind_shift_spread_deg > 60)
-            ? `<div style="color:#e0a030; font-size:11px; margin-top:4px;">⚠️ Большой разброс моделей по направлению ветра (${c.wind_shift_spread_deg}°) — возможно, локальный процесс (бриз/конвекция), а не синоптический фронт</div>`
-            : "";
-        return `<div style="margin:8px 0; padding:8px; border:1px solid #333; border-radius:8px;">
-            <div style="font-weight:600;">${icon} Кандидат ${tid} — ${c.votes}/${c.n_models} моделей${frontTypeHtml}</div>
-            <div style="font-size:12px; margin-top:4px; line-height:1.5;">${modelLines}</div>
-            ${spreadWarning}
-        </div>`;
-    }).join("");
-    const ts = _obsTimeTag(data.generated_at, 60);
-    return `<div style="margin-top:10px;">
-        <div style="color:#72c8ff; font-size:13px; font-weight:600; margin-bottom:4px;">🗳️ Подтверждение фронтов по Open-Meteo ${ts}</div>
-        ${cards}
-        <div style="color:#777; font-size:11px; margin-top:3px;">Пороги подтверждения — первая прикидка, не откалибрована на реальных случаях, см. docs/topics/frontal_line_stations.md.</div>
+// [ДОБАВЛЕНО 2026-09-09] Краткая сводка единственного (общеевропейского)
+// детектора — раньше здесь была детальная таблица по каждому кандидату
+// (_renderFrontalConfirmTable, убрана вместе с near/west-детектором).
+// Точек в сетке (266 при шаге 220км) слишком много для карточек по
+// каждой — просто счётчик + время расчёта; сами точки видны на
+// снимках far/very_far (SVG-слой, см. _renderOneFarTier).
+function _renderEuropeDetectorSummary(){
+    const ov = _europeOverlayData;
+    if(!ov || !ov.points) return "";
+    const n = ov.points.length;
+    const nConfirmed = ov.points.filter(p => p.confirmed).length;
+    const ts = _obsTimeTag(ov.generated_at, 60);
+    return `<div style="color:#777; font-size:12px; margin:4px 0 8px;">
+        🗳️ Общеевропейский детектор ${ts}: подтверждено консенсусом ${nConfirmed} из ${n} точек сетки (шаг ${ov.step_km}км) — пороги первая прикидка, не откалиброваны, см. docs/topics/frontal_line_stations.md
     </div>`;
 }
 
@@ -1567,6 +1521,7 @@ function _renderFarWatchLines(farData, veryFarData){
     if(!farData && !veryFarData) return "";
     return _hr()
         + _subhead("Наблюдения по Европе")
+        + _renderEuropeDetectorSummary()
         + _renderOneFarTier(farData, "Дальний контроль (~1000км)", "far")
         + _renderOneFarTier(veryFarData, "Очень дальний контроль (~2500км)", "very_far");
 }
