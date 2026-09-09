@@ -230,7 +230,17 @@ def build_europe_grid(bbox, step_km=EUROPE_GRID_STEP_KM):
     rows = max(int(height_km / step_km) + 1, 2)
     lons = [min_lon + i * (max_lon - min_lon) / (cols - 1) for i in range(cols)]
     lats = [max_lat - i * (max_lat - min_lat) / (rows - 1) for i in range(rows)]
-    points = [{"lat": lat, "lon": lon} for lat in lats for lon in lons]
+    # [ИСПРАВЛЕНО 2026-09-09] Реальная причина сбоя 08.09 (изначально
+    # принятого за 429) — БЕЗ round() каждое значение lat/lon отдаёт
+    # полную точность float (до 17 значащих цифр, напр. "46.44060000000001"),
+    # а fetch_model_batch склеивает ВСЕ 266 точек в одну строку через
+    # запятую для &latitude=/&longitude= — без округления это ~8900
+    # символов только на координаты, сервер Open-Meteo отвечает HTTP 414
+    # "Request-URI Too Large" (см. живой лог: 4 из 5 моделей упали именно
+    # с 414, не 429 — это НЕ связано с частотой запросов, чистая длина URL).
+    # round(...,3) — точность ~111м, с огромным запасом для сетки с шагом
+    # 220км — даёт ~3600 символов, далеко от типичных лимитов на длину URL.
+    points = [{"lat": round(lat, 3), "lon": round(lon, 3)} for lat in lats for lon in lons]
     return points, rows, cols, lats, lons
 
 
