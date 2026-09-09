@@ -12,6 +12,17 @@ frontal_track.py — треки были минимум на 1 цикл уста
 (пользователь: "может проще просто подкрашивать пиксели с фронтами разными
 цветами?").
 
+[УБРАНО 2026-09-09] Раньше здесь ЖЕ считался и отдавался векторный
+confirm-оверлей (кольцо+стрелка) для near-tile — по прямому запросу
+пользователя near/west-детектор (open_meteo_frontal_confirm.py) убран
+полностью, вместо него единственный общеевропейский детектор проецирует
+своё поле на near-tile САМ (project_to_near_tile() в
+open_meteo_frontal_confirm.py, пишет data/eumetsat_near_tile_projection.json
+напрямую) — этому файлу больше не нужно ни читать open_meteo_frontal_
+confirm.json, ни писать eumetsat_confirm_overlay.json. Функция снова
+делает только то, что описано в докстринге выше: красит форму блоба +
+чекпоинты ahead/behind (см. docs/topics/frontal_line_stations.md).
+
 Не делает НИКАКИХ сетевых запросов — только читает scratch-файлы,
 записанные cloud_forecast.py/eumetsat_west_watch.py в ЭТОМ ЖЕ прогоне job'а
 (они не коммитятся в git, живут только в рамках одного запуска пайплайна —
@@ -46,10 +57,6 @@ WEST_OUT_FILE = os.path.join(BASE_DIR, "data", "eumetsat_west_snapshot_clm.png")
 
 
 FRONTAL_LINE_SCORE_FILE = os.path.join(BASE_DIR, "data", "frontal_line_score.json")
-FRONTAL_CONFIRM_FILE = os.path.join(BASE_DIR, "data", "open_meteo_frontal_confirm.json")
-CONFIRM_OVERLAY_FILE = os.path.join(BASE_DIR, "data", "eumetsat_confirm_overlay.json")
-
-ARROW_LEN_KM = 25.0  # длина стрелки направления движения — см. _movement_arrow_endpoint
 
 
 def _draw_score_checkpoints(base_img, tracks_for_tile, score_data):
@@ -86,101 +93,19 @@ def _draw_score_checkpoints(base_img, tracks_for_tile, score_data):
     return Image.alpha_composite(base_img.convert("RGBA"), overlay).convert("RGB")
 
 
-def _dilate(mask):
-    """4-связная дилатация булевой маски без scipy (numpy-сдвиги массива —
-    достаточно для 1-2px кольца, отдельная зависимость не нужна)."""
-    d = mask.copy()
-    d[1:, :] |= mask[:-1, :]
-    d[:-1, :] |= mask[1:, :]
-    d[:, 1:] |= mask[:, :-1]
-    d[:, :-1] |= mask[:, 1:]
-    return d
-
-
-def _movement_arrow_endpoint(cx, cy, movement_bearing_deg):
-    """Конечная точка стрелки направления движения трека — запрос
-    пользователя 2026-09-08 ("стандартное обозначение в виде дуги
-    холодного фронта дало бы больше информации... куда движется").
-    movement_bearing_deg уже считается в eumetsat_frontal_track.py
-    (_bearing_compass: 0=север, по часовой) — тут только переводим в
-    пиксели ТЕМ ЖЕ способом, что и остальные маркеры на этом снимке
-    (_draw_score_checkpoints выше, старый _draw_frontal_confirm_status) —
-    dx/dy в км от bearing, затем в пиксели через ту же зеркальную
-    формулу (cx MINUS dx/KM_PER_PX_X, cy PLUS dy/KM_PER_PX_Y). Не пытаюсь
-    переосмыслить, почему знак у X именно такой — так исторически рисуются
-    все прочие маркеры на этом кадре, и стрелка обязана быть в той же
-    системе координат, что кольцо/подпись рядом с ней."""
-    if movement_bearing_deg is None:
-        return None
-    rad = math.radians(movement_bearing_deg)
-    dx_km, dy_km = ARROW_LEN_KM * math.sin(rad), ARROW_LEN_KM * math.cos(rad)
-    ex = cx - dx_km / fc.KM_PER_PX_X
-    ey = cy + dy_km / fc.KM_PER_PX_Y
-    return [round(ex, 1), round(ey, 1)]
-
-
-def _build_confirm_overlay_data(tracks_for_tile, mask_by_track_id, confirm_data):
-    """[ЗАМЕНИЛО 2026-09-08 запечённую _draw_frontal_confirm_outline]
-    Раньше контур+подпись рисовались ПРЯМО в PNG — по запросу пользователя
-    ("если сделаем несъёмный контур, перекроет снимок") теперь это
-    отдельные ВЕКТОРНЫЕ данные (координаты кольца + стрелки), которые
-    фронтенд накладывает SVG-слоем поверх снимка с возможностью
-    включить/выключить (см. nearby_precip.js) — сам PNG больше не
-    содержит подтверждения, только реальную покраску блоба (см.
-    _render_tile). Кольцо — та же дилатация на 2px, что была раньше.
-    Только near-tile (координаты без origin-сдвига, для west не
-    подходят — та же причина, что была у предшественницы)."""
-    if not confirm_data:
-        return []
-    candidates = confirm_data.get("candidates", {})
-    if not candidates:
-        return []
-    out = []
-    for t in tracks_for_tile:
-        tid = t["track_id"]
-        verdict = candidates.get(str(tid))
-        mask = mask_by_track_id.get(tid)
-        if not verdict or mask is None or not mask.any():
-            continue
-        ring = _dilate(_dilate(mask)) & ~mask
-        ys, xs = np.nonzero(ring)
-        if len(ys) == 0:
-            continue
-        confirmed = bool(verdict.get("confirmed"))
-        ys_m, xs_m = np.nonzero(mask)
-        cy, cx = float(ys_m.mean()), float(xs_m.mean())
-        front_type = t.get("front_type") or verdict.get("front_type_model")
-        type_tag = " х" if front_type == "cold" else (" т" if front_type == "warm" else "")
-        arrow_end = _movement_arrow_endpoint(cx, cy, t.get("movement_bearing_deg"))
-        out.append({
-            "track_id": tid,
-            "confirmed": confirmed,
-            "ring_pixels": [[int(r), int(c)] for r, c in zip(ys.tolist(), xs.tolist())],
-            "label": f"{verdict.get('votes', 0)}/{verdict.get('n_models', 5)}{type_tag}",
-            "label_pos": [round(cx, 1), round(cy, 1)],
-            "arrow_start": [round(cx, 1), round(cy, 1)] if arrow_end else None,
-            "arrow_end": arrow_end,
-            "wind_shift_spread_deg": verdict.get("wind_shift_spread_deg"),
-        })
-    return out
-
-
 def _render_tile(scratch_base_path, scratch_pixelmap_path, out_path,
-                  tracks_for_tile, origin_dx_km, origin_dy_km, score_data=None, confirm_data=None):
+                  tracks_for_tile, origin_dx_km, origin_dy_km, score_data=None):
     """Красит реальные пиксели блоба (по pixel_map == current_target_id+1)
     в цвет трека, поверх сохранённой базы (уже с контуром берега/кругом
     обзора, без треков/маркера — см. cloud_forecast.py/west_watch.py),
-    дорисовывает маркер Одессы поверх покраски, сохраняет финальный PNG.
-    Возвращает (status_str, overlay_data) — overlay_data не None только
-    когда передан confirm_data (near-tile), см. _build_confirm_overlay_data."""
+    дорисовывает маркер Одессы поверх покраски, сохраняет финальный PNG."""
     if not (os.path.exists(scratch_base_path) and os.path.exists(scratch_pixelmap_path)):
-        return "skipped_no_scratch", None
+        return "skipped_no_scratch"
     try:
         base_img = Image.open(scratch_base_path).convert("RGB")
         pixel_map = np.load(scratch_pixelmap_path)
         arr = np.array(base_img)
         painted = 0
-        mask_by_track_id = {}
         for t in tracks_for_tile:
             tid = t.get("current_target_id")
             if tid is None:
@@ -190,18 +115,15 @@ def _render_tile(scratch_base_path, scratch_pixelmap_path, out_path,
                 continue
             color = fc.FRONTAL_TRACK_COLORS[t["track_id"] % len(fc.FRONTAL_TRACK_COLORS)]
             arr[mask] = color
-            mask_by_track_id[t["track_id"]] = mask  # для _build_confirm_overlay_data ниже
             painted += 1
         out_img = Image.fromarray(arr, mode="RGB")
         out_img = fc.draw_odessa_marker(out_img, origin_dx_km=origin_dx_km, origin_dy_km=origin_dy_km)
         out_img = _draw_score_checkpoints(out_img, tracks_for_tile, score_data)
         out_img.save(out_path)
-        overlay_data = _build_confirm_overlay_data(tracks_for_tile, mask_by_track_id, confirm_data) \
-            if confirm_data is not None else None
-        return f"ok_{painted}_tracks", overlay_data
+        return f"ok_{painted}_tracks"
     except Exception as e:
         print(f"  [WARN] eumetsat_render_track_overlay: {out_path} — {e}")
-        return f"error: {e}", None
+        return f"error: {e}"
 
 
 def main():
@@ -225,35 +147,16 @@ def main():
         except Exception:
             pass
 
-    confirm_data = None
-    if os.path.exists(FRONTAL_CONFIRM_FILE):
-        try:
-            with open(FRONTAL_CONFIRM_FILE, "r", encoding="utf-8") as f:
-                confirm_data = json.load(f)
-        except Exception:
-            pass
-
-    near_status, near_overlay = _render_tile(
+    near_status = _render_tile(
         NEAR_SCRATCH_BASE, NEAR_SCRATCH_PIXELMAP, NEAR_OUT_FILE,
-        near_tracks, origin_dx_km=0.0, origin_dy_km=0.0, score_data=score_data, confirm_data=confirm_data,
+        near_tracks, origin_dx_km=0.0, origin_dy_km=0.0, score_data=score_data,
     )
-    west_status, _ = _render_tile(
+    west_status = _render_tile(
         WEST_SCRATCH_BASE, WEST_SCRATCH_PIXELMAP, WEST_OUT_FILE,
         west_tracks, origin_dx_km=fc.WEST_TILE_OFFSET_DX_KM, origin_dy_km=fc.WEST_TILE_OFFSET_DY_KM,
     )
-
-    if near_overlay is not None:
-        import datetime
-        with open(CONFIRM_OVERLAY_FILE, "w", encoding="utf-8") as f:
-            json.dump({
-                "generated_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "tile_size": fc.TILE_SIZE,
-                "tracks": near_overlay,
-            }, f, ensure_ascii=False)
-
     print(f"  [OK] eumetsat_render_track_overlay: near={near_status}, west={west_status}")
 
 
 if __name__ == "__main__":
     main()
-
