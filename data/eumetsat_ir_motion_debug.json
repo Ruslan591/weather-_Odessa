@@ -1,28 +1,32 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-09-09T16:10:00.000Z",
+  "server_latest_time": "2026-09-09T16:40:00.000Z",
   "bootstrap": true,
   "buffer_before": 6,
-  "buffer_size": 6,
+  "bootstrap_failed_frames": [
+    {
+      "time": "2026-09-09T16:30:00.000Z",
+      "error": "попытка 1: HTTP 200, content-type='text/xml;charset=UTF-8', len=469: <?xml version=\"1.0\" encoding=\"UTF-8\"?><ServiceExceptionReport version=\"1.3.0\" xmlns=\"http://www.opengis.net/ogc\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.opengis.net/ogc https://view.eumetsat.int/geoserver/schemas/wms/1.3.0/exceptions_1_3_0.xsd\">   <Servic"
+    }
+  ],
+  "buffer_size": 5,
   "buffer_times": [
-    "2026-09-09T15:20:00.000Z",
-    "2026-09-09T15:30:00.000Z",
-    "2026-09-09T15:40:00.000Z",
     "2026-09-09T15:50:00.000Z",
     "2026-09-09T16:00:00.000Z",
-    "2026-09-09T16:10:00.000Z"
+    "2026-09-09T16:10:00.000Z",
+    "2026-09-09T16:20:00.000Z",
+    "2026-09-09T16:40:00.000Z"
   ],
   "frame_std": [
     2.3,
-    2.1,
-    2.1,
-    2.3,
     2.5,
-    2.8
+    2.8,
+    2.8,
+    3.6
   ],
   "result": {
-    "timestamp": "2026-09-09T16:10:00.000Z",
-    "buffer_size": 6,
+    "timestamp": "2026-09-09T16:40:00.000Z",
+    "buffer_size": 5,
     "buffer_span_minutes": 50,
     "observed_area": {
       "center_lat": 46.4406,
@@ -36,44 +40,42 @@
     "valid": false,
     "verdict": "недостаточно контраста для оценки (вероятно, однородная сцена)",
     "area_fraction_over_time": [
-      0.032,
-      0.05,
-      0.135,
       0.301,
       0.483,
-      0.568
+      0.568,
+      0.568,
+      0.585
     ],
-    "area_trend_delta": 0.536,
+    "area_trend_delta": 0.284,
     "area_trend_verdict": "растёт",
     "mean_brightness_over_time": [
-      32.2,
-      32.7,
-      33.2,
       33.6,
       34.1,
-      34.5
+      34.5,
+      34.5,
+      35.4
     ],
-    "brightness_trend_delta": 2.3,
+    "brightness_trend_delta": 1.8,
     "station_state": "variable",
-    "station_area_fraction": 0.506,
-    "cloud_mass_distance_km": 97.5,
-    "cloud_mass_bearing_deg": 99.0,
-    "cloud_mass_compass": "В",
-    "cloud_mass_area_km2": 829,
-    "cloud_mass_contrast_sigma": 1.43,
+    "station_area_fraction": 0.524,
+    "cloud_mass_distance_km": 33.5,
+    "cloud_mass_bearing_deg": 21.0,
+    "cloud_mass_compass": "С",
+    "cloud_mass_area_km2": 123,
+    "cloud_mass_contrast_sigma": 1.12,
     "temperature_trend_verdict": "похолодание верхней границы (возможно усиление конвекции)",
     "target_confirmation": {
       "confirmed": true,
       "target_id": 1,
       "target_area_km2": 177.5,
-      "roi_contrast_sigma": 1.67,
+      "roi_contrast_sigma": 1.25,
       "verdict": "ИК подтверждает: в ROI CLM-цели повышенная яркость (облако)"
     },
     "system_analysis_all": [
       {
         "target_id": 0,
         "available": true,
-        "roi_contrast_sigma": 1.12,
+        "roi_contrast_sigma": 0.96,
         "confirmed": true
       }
     ],
@@ -81,22 +83,22 @@
       {
         "target_id": 1,
         "available": true,
-        "roi_contrast_sigma": 1.67,
+        "roi_contrast_sigma": 1.25,
         "confirmed": true
       },
       {
         "target_id": 2,
         "available": true,
-        "roi_contrast_sigma": 1.83,
+        "roi_contrast_sigma": 1.69,
         "confirmed": true
       },
       {
         "target_id": 3,
         "available": true,
-        "roi_contrast_sigma": 1.51,
+        "roi_contrast_sigma": 1.43,
         "confirmed": true
       }
     ],
-    "method_note": "Буфер 6/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин, crs=EPSG:4326, всегда явный TIME — не 'latest'), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. cloud_mass_* — положение (не движение) ближайшей значимой облачной массы относительно станции. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
+    "method_note": "Буфер 5/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин, crs=EPSG:4326, всегда явный TIME — не 'latest'), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. cloud_mass_* — положение (не движение) ближайшей значимой облачной массы относительно станции. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
   }
 }
