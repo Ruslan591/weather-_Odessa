@@ -1,43 +1,70 @@
 """
-open_meteo_frontal_confirm.py — подтверждение спутниковых кандидатов на
-атмосферный фронт (eumetsat_frontal_track.json) через Open-Meteo.
-Согласовано с пользователем 2026-09-06 (docs/topics/frontal_line_stations.md).
+open_meteo_frontal_confirm.py — консенсус-детекция атмосферных фронтов по
+полю (температура/давление) Open-Meteo, регулярная сетка по Европе/
+Атлантике.
+
+[ПЕРЕРАБОТАНО 2026-09-09] Раньше было ДВА детектора: near/west
+(подтверждение уже найденных спутником кандидатов на локальной сетке
+35км вокруг блоба) и europe (независимая консенсус-детекция по
+регулярной сетке 220км). По прямому запросу пользователя near/west-
+детектор УБРАН ПОЛНОСТЬЮ — остаётся ОДИН детектор (европейская сетка), а
+на near-tile (центральный тайл, ~192км) результат ПРОЕЦИРУЕТСЯ
+(билинейная интерполяция уже посчитанного поля голосов) — БЕЗ единого
+дополнительного запроса к Open-Meteo. Причины: (1) один детектор проще
+поддерживать, не дублирует логику голосования; (2) near/west-сетка
+(вокруг конкретного спутникового блоба) физически не то же самое явление,
+что синоптический фронт/фронтогенез — если европейская сетка видит
+реальный крупномасштабный фронт, его "эхо" будет заметно и на
+интерполяции до near-tile, просто грубее (это ЧЕСТНЫЙ побочный эффект
+отказа от отдельного запроса под near-tile, не баг — near-tile ~192км
+МЕЛЬЧЕ шага европейской сетки 220км, поэтому проекция всегда будет
+сглаженной, не точным контуром конкретного облака).
+
+Классификация тёплый/холодный в этой версии ОТСУТСТВУЕТ — для регулярной
+статичной сетки без данных о движении системы это отдельная, более
+сложная синоптическая задача, отложено.
 
 Логика:
-  1. Спутник уже нашёл 1+ кандидата (персистентные треки с axis_deg/
-     movement_bearing_deg/area_km2/aspect_ratio — geometry для сетки).
-  2. Единый пул координат на ВСЕ кандидаты СРАЗУ, максимум MAX_POINTS
-     суммарно (не на каждого) — бюджет делится между кандидатами поровну.
-  3. Один batch-запрos на модель (5 моделей), только current= (без
-     hourly/daily/forecast_days).
-  4. 5 последовательных запросов с паузой REQUEST_INTERVAL между ними.
-  5. Голосование: модель "подтверждает" кандидата, если хотя бы один из
-     трёх сигналов (перепад temp/pressure/сдвиг ветра по сетке кандидата)
-     превышает порог. Кандидат "подтверждён", если ЗА проголосовало
-     большинство моделей (>=3 из 5).
-  6. Запуск СОБЫТИЙНЫЙ: только если (а) есть хотя бы 1 кандидат И (б) с
-     последнего прогона появился новый прогон хотя бы одной из 5
-     отслеживаемых моделей — сверяется с data/model_runs_history.json
-     (пишется на телефоне через check_model_runs.py, коммитится в git,
-     VPS видит его через обычный git pull — НЕ отдельный источник данных).
+  1. Регулярная (НЕ повёрнутая) lat/lon сетка по объединённому bbox
+     far ∪ very_far (см. _europe_grid_bbox) с шагом EUROPE_GRID_STEP_KM.
+     266 точек при 220км — с запасом ниже безопасных вживую 300 (см.
+     докстринг REQUEST_INTERVAL ниже и docs/topics/open_meteo_rate_limits.md).
+  2. Один batch-запрос на модель (5 моделей), только current=.
+  3. 5 последовательных запросов с паузой REQUEST_INTERVAL между ними —
+     ОДИН процесс, БЕЗ отдельного скрипта/гейта (см. разбор реального 429
+     07.09.2026 в docs/topics/open_meteo_rate_limits.md — причина была не
+     в объёме запросов, а в двух независимых скриптах/ветках, сработавших
+     на одно и то же событие одновременно; коллизия структурно невозможна,
+     если это один процесс).
+  4. Консенсус: точка сетки "фронт-подобна" для модели, если модуль
+     градиента temp ИЛИ pressure (между соседними ИНДЕКСАМИ сетки, шаг
+     220км, np.gradient) превышает порог. Точка "подтверждена", если ЗА
+     проголосовало большинство моделей (>=MIN_MODEL_VOTES из 5).
+  5. Проекция на near-tile: билинейная интерполяция consensus_score
+     (votes/n_models, непрерывная величина 0..1) с точек европейской
+     сетки на NEAR_PROJECTION_GRID_SIDE x NEAR_PROJECTION_GRID_SIDE
+     сэмплов внутри near-tile bbox — чистая математика, без сети.
+  6. Запуск СОБЫТИЙНЫЙ: только если появился новый прогон хотя бы одной
+     из 5 отслеживаемых моделей — сверяется с data/model_runs_history.json.
 
-ВАЖНО про модели: пользователь указал "arpege_europe" — это НЕ валидный
-&models= идентификатор Open-Meteo. Правильный (подтверждён по реальному
-рабочему вызову в update.py и check_model_runs.py) — "meteofrance_
-arpege_europe". Использован он.
+ВАЖНО про модели: "arpege_europe" — НЕ валидный &models= идентификатор
+Open-Meteo. Правильный (подтверждён по реальному рабочему вызову в
+update.py и check_model_runs.py) — "meteofrance_arpege_europe".
 
-Пороги подтверждения (TEMP_GRAD_THRESHOLD/PRESSURE_GRAD_THRESHOLD/
-WIND_SHIFT_THRESHOLD_DEG) — первая прикидка, НЕ откалиброваны по реальным
-случаям прохождения фронта. Требуют проверки на практике, см. docs/topics/
-frontal_line_stations.md.
+Пороги подтверждения (EUROPE_TEMP_GRAD_THRESHOLD/EUROPE_PRESSURE_GRAD_
+THRESHOLD) — первая прикидка, НЕ откалиброваны по реальным случаям
+прохождения фронта. См. docs/topics/frontal_line_stations.md.
 
 Нагрузка на Open-Meteo проверена вживую пользователем через Termux
 2026-09-06: 300 точек x 7 параметров x 5 моделей с паузой 30с — все 5
 запросов 200 OK. Отдельно подтверждён burst-порог (500-600 точек в одном
-запросе без пауз уже ловит 429, разряжается за ~5 минут) — 300 точек
-одним запросом далеко от этого порога.
+запросе без пауз уже ловит 429) — 266 точек далеко от этого порога.
 
-Пишет data/open_meteo_frontal_confirm.json.
+Пишет:
+  data/europe_frontal_overlay.json — точки консенсус-детекции с
+    пиксельными координатами под снимки far/very_far.
+  data/eumetsat_near_tile_projection.json — интерполированное поле,
+    спроецированное на near-tile (для SVG-слоя на Cloud Mask).
 Запуск: python3 scripts/open_meteo_frontal_confirm.py
 """
 import json
@@ -49,41 +76,21 @@ import urllib.request
 from datetime import datetime, timezone
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
-FRONTAL_TRACK_FILE = os.path.join(DATA_DIR, "eumetsat_frontal_track.json")
 GEO_CONFIG_FILE = os.path.join(DATA_DIR, "geo_config.json")
 MODEL_RUNS_HISTORY_FILE = os.path.join(DATA_DIR, "model_runs_history.json")
 STATE_FILE = os.path.join(DATA_DIR, "_state_open_meteo_frontal_confirm.json")
-OUT_FILE = os.path.join(DATA_DIR, "open_meteo_frontal_confirm.json")
 VERY_FAR_IMG_FILE = os.path.join(DATA_DIR, "anim", "very_far_geocolour.png")
 FAR_IMG_FILE = os.path.join(DATA_DIR, "anim", "far_geocolour.png")
 EUROPE_OVERLAY_FILE = os.path.join(DATA_DIR, "europe_frontal_overlay.json")
+NEAR_TILE_PROJECTION_FILE = os.path.join(DATA_DIR, "eumetsat_near_tile_projection.json")
 
-# [ДОБАВЛЕНО 2026-09-08] Расширение на Европу/Атлантику — согласовано с
-# пользователем (docs/topics/frontal_line_stations.md, "расширять
-# однозначно"). ВАЖНО: работает в ТОМ ЖЕ процессе/событии, что near/west
-# ниже — НЕ отдельный скрипт со своим гейтом. Разбор реального 429
-# 07.09.2026 (docs/topics/open_meteo_rate_limits.md) показал: причина
-# была не в объёме запросов, а в ДВУХ независимых скриптах/веток,
-# сработавших на одно и то же событие одновременно — коллизия
-# структурно невозможна, если это один процесс, одна последовательность
-# запросов. Шаг сетки 220км выбран пользователем ПОСЛЕ явного расчёта
-# количества точек (266, с запасом ниже проверенных вживую 300 — см.
-# докстринг MAX_POINTS выше; 200км дал бы 315, уже за пределами
-# проверенного).
 EUROPE_GRID_STEP_KM = 220.0
 EUROPE_TEMP_GRAD_THRESHOLD = 3.0      # °C НА ШАГ СЕТКИ (220км) — первая
-                                       # прикидка, НЕ калибровано. NB: это
-                                       # НЕ то же самое число, что
-                                       # TEMP_GRAD_THRESHOLD ниже — там шаг
-                                       # сетки 35км, здесь 220км, np.gradient
-                                       # считает разницу НА ШАГ ИНДЕКСА
-                                       # массива, не на км, так что пороги
-                                       # для разных шагов сетки МЕНЯЮТ смысл
-                                       # и не переиспользуются напрямую.
+                                       # прикидка, НЕ калибровано.
 EUROPE_PRESSURE_GRAD_THRESHOLD = 1.5  # гПа на шаг сетки — тоже не калибровано
 
 # id для &models= -> label в model_runs_history.json (для событийного гейта)
@@ -100,15 +107,17 @@ CURRENT_VARIABLES = [
     "wind_speed_10m", "wind_direction_10m", "wind_gusts_10m", "precipitation",
 ]
 
-MAX_POINTS = 300       # суммарно на ВСЕ кандидаты, не на каждого
 REQUEST_INTERVAL = 30  # секунд между запросами моделей — проверено вживую 2026-09-06
-GRID_STEP_KM = 35.0
-MIN_GRID_SIDE = 3      # 3x3=9 точек — минимум для содержательного градиента
+MIN_MODEL_VOTES = 3    # из 5 — подтверждено
 
-TEMP_GRAD_THRESHOLD = 2.0        # °C между соседними точками сетки
-PRESSURE_GRAD_THRESHOLD = 1.0    # hPa между соседними точками сетки
-WIND_SHIFT_THRESHOLD_DEG = 45.0  # градусов между "левым" и "правым" краем сетки
-MIN_MODEL_VOTES = 3              # из 5 — подтверждено
+# Порог consensus_score (votes/n_models) для near-tile проекции —
+# соответствует MIN_MODEL_VOTES/5 у "сырых" точек европейской сетки, тот
+# же порог применяем к ИНТЕРПОЛИРОВАННОМУ значению.
+NEAR_PROJECTION_THRESHOLD = MIN_MODEL_VOTES / 5.0
+NEAR_PROJECTION_GRID_SIDE = 20  # 20x20 сэмплов по near-tile (400x400px) —
+                                 # сглаженная проекция, НЕ точный контур
+                                 # конкретного облака (того больше нет,
+                                 # см. докстринг файла).
 
 
 def _load_json(path, default):
@@ -122,7 +131,7 @@ def _load_json(path, default):
 def _save_json(path, data):
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+        json.dump(data, f, ensure_ascii=False)
     os.replace(tmp, path)
 
 
@@ -148,66 +157,6 @@ def _has_new_model_run(state):
         if run_time and run_time != prev.get(label):
             return True, latest
     return False, latest
-
-
-def _grid_side_for_budget(budget):
-    """Ближайшая НЕЧЁТНАЯ сторона квадратной сетки side x side <= budget,
-    минимум MIN_GRID_SIDE (даже если бюджет на кандидата после деления
-    поровну меньше — жертвуем общим бюджетом ради содержательного
-    градиента, см. докстринг main())."""
-    side = int(math.isqrt(max(budget, MIN_GRID_SIDE * MIN_GRID_SIDE)))
-    if side % 2 == 0:
-        side -= 1
-    return max(side, MIN_GRID_SIDE)
-
-
-def build_pooled_points(tracks, center_lat, center_lon, km_per_deg_lat, km_per_deg_lon):
-    """Единый пул точек на ВСЕ треки сразу, суммарно <= MAX_POINTS (с
-    небольшим превышением возможным только если бюджета не хватает даже
-    на MIN_GRID_SIDE x MIN_GRID_SIDE на кандидата — тогда бюджет по факту
-    превышается, а не кандидаты обрезаются, т.к. потеря целого кандидата
-    хуже небольшого перерасхода; при реалистичном числе кандидатов (1-3)
-    это не должно происходить).
-
-    Возвращает (flat_points, candidate_meta) где candidate_meta[track_id]
-    = {"side": N, "point_indices": [...индексы в flat_points, по строкам
-    сетки...], "axis_deg":, "dx_km":, "dy_km":}."""
-    n = len(tracks)
-    budget_each = MAX_POINTS // max(n, 1)
-    side = _grid_side_for_budget(budget_each)
-    half = side // 2
-
-    flat_points = []
-    candidate_meta = {}
-    for t in tracks:
-        axis_deg = t.get("axis_deg")
-        rad = math.radians(axis_deg if axis_deg is not None else 90.0)
-        ax_x, ax_y = math.sin(rad), math.cos(rad)
-        pp_x, pp_y = math.cos(rad), -math.sin(rad)
-
-        start_idx = len(flat_points)
-        for i in range(-half, half + 1):
-            for j in range(-half, half + 1):
-                along_km, perp_km = i * GRID_STEP_KM, j * GRID_STEP_KM
-                dx = t.get("dx_km", 0.0) + along_km * ax_x + perp_km * pp_x
-                dy = t.get("dy_km", 0.0) + along_km * ax_y + perp_km * pp_y
-                lon = center_lon + dx / km_per_deg_lon
-                lat = center_lat + dy / km_per_deg_lat
-                flat_points.append({"lat": round(lat, 4), "lon": round(lon, 4)})
-
-        candidate_meta[str(t["track_id"])] = {
-            "side": side,
-            "start_idx": start_idx,
-            "n_points": side * side,
-            "axis_deg": axis_deg,
-            # Нужен для fallback-классификации тёплый/холодный, когда
-            # станций нет (например, фронт над морем) — см.
-            # confirm_candidate()::front_type. pp_x/pp_y (перпендикуляр
-            # к оси, направление столбцов j сетки) сверяется по знаку
-            # скалярного произведения с вектором этого bearing.
-            "movement_bearing_deg": t.get("movement_bearing_deg"),
-        }
-    return flat_points, candidate_meta
 
 
 def fetch_model_batch(model_id, flat_points, timeout=30, _retry=True):
@@ -244,209 +193,6 @@ def fetch_model_batch(model_id, flat_points, timeout=30, _retry=True):
     return out
 
 
-def _grid_of(values, side):
-    return np.array(values, dtype=float).reshape(side, side)
-
-
-def _max_abs_gradient(grid):
-    if np.isnan(grid).any():
-        return None
-    gy, gx = np.gradient(grid)
-    return float(np.sqrt(gx ** 2 + gy ** 2).max())
-
-
-def _wind_dir_shift(dir_grid):
-    """Циркулярная разница между средним направлением ветра на левом и
-    правом краю сетки (столбцы 0 и -1) — грубый признак сдвига ветра
-    поперёк оси кандидата."""
-    if np.isnan(dir_grid).any():
-        return None
-    left = math.radians(float(np.nanmean(dir_grid[:, 0])))
-    right = math.radians(float(np.nanmean(dir_grid[:, -1])))
-    diff = math.degrees(math.atan2(math.sin(right - left), math.cos(right - left)))
-    return abs(diff)
-
-
-FRONT_TYPE_MIN_TEMP_DIFF_MODEL = 1.0  # °C — выше, чем у станций (FRONT_TYPE_MIN_TEMP_DIFF в
-                                       # eumetsat_frontal_track.py), т.к. модельная сетка
-                                       # грубее и шумнее прямого наблюдения
-
-
-def _classify_front_type(temp_grid, axis_deg, movement_bearing_deg):
-    """Fallback-классификация тёплый/холодный по знаку разницы temp между
-    краем сетки "по курсу" (ahead) и "с тыла" (behind) движения трека —
-    используется ТОЛЬКО когда станционных ahead_obs/behind_obs нет (см.
-    eumetsat_frontal_track.py::front_type, confidence="station" там —
-    приоритетный источник, этот — запасной для случаев над морем, где
-    станций физически нет). Столбцы сетки (j) — перпендикуляр к axis_deg
-    (pp_x/pp_y в build_pooled_points), тот же перпендикуляр сверяется по
-    знаку скалярного произведения с вектором movement_bearing_deg, чтобы
-    понять, какой край (j=0 или j=-1) "ahead", а какой "behind"."""
-    if movement_bearing_deg is None or axis_deg is None:
-        return None
-    axis_rad = math.radians(axis_deg)
-    pp_x, pp_y = math.cos(axis_rad), -math.sin(axis_rad)
-    mv_rad = math.radians(movement_bearing_deg)
-    mv_x, mv_y = math.sin(mv_rad), math.cos(mv_rad)
-    dot = pp_x * mv_x + pp_y * mv_y
-    left_mean = float(np.nanmean(temp_grid[:, 0]))
-    right_mean = float(np.nanmean(temp_grid[:, -1]))
-    # dot>0 => правый край (j=-1) в направлении движения (ahead)
-    ahead_mean, behind_mean = (right_mean, left_mean) if dot >= 0 else (left_mean, right_mean)
-    dt = behind_mean - ahead_mean
-    if abs(dt) < FRONT_TYPE_MIN_TEMP_DIFF_MODEL:
-        return None
-    return "cold" if dt < 0 else "warm"
-
-
-def confirm_candidate(meta, model_results_by_id):
-    """model_results_by_id: {model_id: [essentials_dict,...]} — ТОЛЬКО
-    точки этого кандидата (уже вырезанные вызывающим кодом по start_idx/
-    n_points). Возвращает {"confirmed":, "votes":, "per_model": {...}}."""
-    side = meta["side"]
-    axis_deg = meta.get("axis_deg")
-    movement_bearing_deg = meta.get("movement_bearing_deg")
-    per_model = {}
-    votes = 0
-    front_type_votes = {"cold": 0, "warm": 0}
-    for model_id, results in model_results_by_id.items():
-        temp_vals = [r.get("temperature_2m") for r in results]
-        pres_vals = [r.get("pressure_msl") for r in results]
-        wind_vals = [r.get("wind_direction_10m") for r in results]
-        # wind_speed_10m — уже запрашивался у Open-Meteo, но раньше нигде не
-        # использовался (замечено пользователем 2026-09-07: "вижу смену
-        # направления ветра, но не вижу скорость"). Градиент по той же
-        # схеме, что temp/pressure — макс. модуль по сетке.
-        wind_speed_vals = [r.get("wind_speed_10m") for r in results]
-
-        if any(v is None for v in temp_vals + pres_vals + wind_vals + wind_speed_vals):
-            per_model[model_id] = {"vote": False, "reason": "incomplete_data"}
-            continue
-
-        temp_grid = _grid_of(temp_vals, side)
-        temp_grad = _max_abs_gradient(temp_grid)
-        pres_grad = _max_abs_gradient(_grid_of(pres_vals, side))
-        wind_shift = _wind_dir_shift(_grid_of(wind_vals, side))
-        wind_speed_grad = _max_abs_gradient(_grid_of(wind_speed_vals, side))
-
-        vote = (
-            (temp_grad is not None and temp_grad >= TEMP_GRAD_THRESHOLD) or
-            (pres_grad is not None and pres_grad >= PRESSURE_GRAD_THRESHOLD) or
-            (wind_shift is not None and wind_shift >= WIND_SHIFT_THRESHOLD_DEG)
-        )
-        # Fallback тёплый/холодный по модели — см. _classify_front_type().
-        # Используется фронтендом ТОЛЬКО когда станционного front_type нет
-        # (eumetsat_frontal_track.py::front_type is None, обычно над морем).
-        front_type = None
-        if not np.isnan(temp_grid).any():
-            front_type = _classify_front_type(temp_grid, axis_deg, movement_bearing_deg)
-            if front_type is not None:
-                front_type_votes[front_type] += 1
-        per_model[model_id] = {
-            "vote": vote,
-            "temp_grad": round(temp_grad, 2) if temp_grad is not None else None,
-            "pressure_grad": round(pres_grad, 2) if pres_grad is not None else None,
-            "wind_shift_deg": round(wind_shift, 1) if wind_shift is not None else None,
-            "wind_speed_grad_ms": round(wind_speed_grad, 1) if wind_speed_grad is not None else None,
-            "front_type": front_type,
-        }
-        if vote:
-            votes += 1
-
-    # Консенсус по модельному fallback-типу фронта — нужно явное
-    # большинство (не просто "больше нулей"), иначе 1-против-0 при
-    # остальных None выглядело бы как уверенный вывод.
-    front_type_model = None
-    total_type_votes = front_type_votes["cold"] + front_type_votes["warm"]
-    if total_type_votes >= MIN_MODEL_VOTES and front_type_votes["cold"] != front_type_votes["warm"]:
-        front_type_model = "cold" if front_type_votes["cold"] > front_type_votes["warm"] else "warm"
-
-    # [ДОБАВЛЕНО 2026-09-08] Метрика согласия моделей по направлению
-    # ветра — запрос пользователя после разбора кандидата 1160 (Δt=6-8°C
-    # у всех 5 моделей, но wind_shift_deg разбросан 15°→145°, при этом
-    # Δp мизерная 0.25-0.56гПа). Вывод из того разбора: у настоящего
-    # синоптического фронта/циклона Δt обычно тянет за собой заметный Δp
-    # (геострофика), а МОДЕЛИ должны быть согласны по направлению разворота
-    # ветра на синоптическом масштабе, даже расходясь в силе — раздрай в
-    # направлении характерен для процессов МЕНЬШЕ разрешения модели
-    # (параметризованная конвекция, бриз), где каждая модель "додумывает"
-    # своё. wind_shift_deg у нас уже в диапазоне 0-180 (это МОДУЛЬ сдвига
-    # направления по _wind_dir_shift, не сырой bearing) — обычная
-    # арифметика (max-min) корректна, круговая обёртка не нужна.
-    shift_vals = [m["wind_shift_deg"] for m in per_model.values() if m.get("wind_shift_deg") is not None]
-    wind_shift_spread_deg = round(max(shift_vals) - min(shift_vals), 1) if len(shift_vals) >= 2 else None
-
-    return {
-        "confirmed": votes >= MIN_MODEL_VOTES,
-        "votes": votes,
-        "n_models": len(model_results_by_id),
-        "per_model": per_model,
-        "front_type_model": front_type_model,
-        "front_type_model_votes": front_type_votes,
-        "wind_shift_spread_deg": wind_shift_spread_deg,
-    }
-
-
-def _draw_confirm_on_very_far(candidates, tracks_by_id, geo):
-    """Рисует кольцо+голоса поверх very_far GeoColour снимка — то же, что
-    eumetsat_render_track_overlay.py делает для near-tier CLM, но БЕЗ
-    единого дополнительного запроса к Open-Meteo: используются уже
-    посчитанные dx_km/dy_km трека и вердикт candidates ИЗ ЭТОГО ЖЕ
-    прогона. По запросу пользователя 2026-09-06 — исходная цель была
-    именно very_far, near-tier CLM тоже оставлен (бесплатно, не почему
-    бы не показать в обоих местах).
-
-    Тихо ничего не делает, если снимка нет (тайл не обновился в этом
-    цикле, обычный холостой случай) или bbox не сконфигурирован."""
-    if not os.path.exists(VERY_FAR_IMG_FILE):
-        return
-    very_far_cfg = geo.get("very_far_window") or {}
-    bbox = very_far_cfg.get("bbox")
-    center_lat, center_lon = geo.get("center_lat"), geo.get("center_lon")
-    if not bbox or center_lat is None or center_lon is None:
-        return
-    min_lon, min_lat, max_lon, max_lat = bbox
-    km_per_deg_lat = 111.32
-    km_per_deg_lon = 111.32 * math.cos(math.radians(center_lat))
-
-    try:
-        img = Image.open(VERY_FAR_IMG_FILE).convert("RGB")
-    except Exception as e:
-        print(f"  [WARN] open_meteo_frontal_confirm: не удалось открыть {VERY_FAR_IMG_FILE}: {e}")
-        return
-    w, h = img.size
-    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(overlay)
-    try:
-        font = ImageFont.load_default()
-    except Exception:
-        font = None
-
-    drawn = 0
-    for tid, verdict in candidates.items():
-        t = tracks_by_id.get(tid)
-        if not t:
-            continue
-        dx, dy = t.get("dx_km", 0.0), t.get("dy_km", 0.0)
-        lon = center_lon + dx / km_per_deg_lon
-        lat = center_lat + dy / km_per_deg_lat
-        col = (lon - min_lon) / (max_lon - min_lon) * w - 0.5
-        row = (max_lat - lat) / (max_lat - min_lat) * h - 0.5
-        if not (0 <= row < h and 0 <= col < w):
-            continue  # кандидат вне окна very_far — не должно случаться (near << very_far радиус), но безопасно пропустить
-        color = (60, 220, 60, 255) if verdict.get("confirmed") else (200, 200, 200, 255)
-        r = 14
-        draw.ellipse([col - r, row - r, col + r, row + r], outline=color, width=3)
-        label = f"{verdict.get('votes', 0)}/{verdict.get('n_models', 5)}"
-        draw.text((col + r + 3, row - 8), label, fill=color, font=font)
-        drawn += 1
-
-    if drawn:
-        out = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
-        out.save(VERY_FAR_IMG_FILE)
-    print(f"  open_meteo_frontal_confirm: {drawn} кандидат(ов) отрисовано на very_far_geocolour.png")
-
-
 def _europe_grid_bbox(geo):
     """Объединённый bbox far ∪ very_far (Атлантика-Кавказ, см. разбор в
     чате 2026-09-08: -10..44°E, 33..60°N). far_window задан через
@@ -468,10 +214,12 @@ def _europe_grid_bbox(geo):
 
 
 def build_europe_grid(bbox, step_km=EUROPE_GRID_STEP_KM):
-    """Регулярная (НЕ повёрнутая, в отличие от near/west candidate-сеток)
-    lat/lon сетка по bbox с шагом step_km. Строки — с севера на юг (как у
-    растровых снимков), чтобы reshape(rows,cols) сразу давал массив в
-    привычной для np.gradient/картинок ориентации."""
+    """Регулярная (НЕ повёрнутая, в отличие от убранной near/west
+    candidate-сетки) lat/lon сетка по bbox с шагом step_km. Строки — с
+    севера на юг (как у растровых снимков), чтобы reshape(rows,cols)
+    сразу давал массив в привычной для np.gradient/картинок ориентации.
+    Возвращает lats/lons ОТДЕЛЬНО (не только внутри points) — нужны
+    project_to_near_tile() для билинейной интерполяции."""
     min_lon, min_lat, max_lon, max_lat = bbox
     center_lat = (min_lat + max_lat) / 2.0
     km_per_deg_lon = 111.32 * math.cos(math.radians(center_lat))
@@ -483,18 +231,14 @@ def build_europe_grid(bbox, step_km=EUROPE_GRID_STEP_KM):
     lons = [min_lon + i * (max_lon - min_lon) / (cols - 1) for i in range(cols)]
     lats = [max_lat - i * (max_lat - min_lat) / (rows - 1) for i in range(rows)]
     points = [{"lat": lat, "lon": lon} for lat in lats for lon in lons]
-    return points, rows, cols
+    return points, rows, cols, lats, lons
 
 
 def detect_europe_fronts(model_results_by_id, rows, cols):
-    """Консенсус-детекция по РЕГУЛЯРНОЙ сетке — НЕ то же самое, что
-    confirm_candidate() выше: там подтверждается уже известный спутниковый
-    кандидат, здесь кандидатов вообще нет, ищем сами по полю градиента.
-    v1, сознательно упрощённо: только temp+pressure, БЕЗ классификации
-    тёплый/холодный — для статичного снимка поля без данных о движении
-    это отдельная, более сложная синоптическая задача (нужно направление
-    движения системы, а не только градиент в моменте), отложено, см.
-    docs/topics/frontal_line_stations.md."""
+    """Консенсус-детекция по регулярной сетке — кандидатов заранее нет
+    вообще, ищем сами по полю градиента. Сознательно упрощённо: только
+    temp+pressure, БЕЗ классификации тёплый/холодный (см. докстринг
+    файла)."""
     votes_grid = np.zeros((rows, cols), dtype=int)
     n_valid_grid = np.zeros((rows, cols), dtype=int)
     for model_id, results in model_results_by_id.items():
@@ -517,8 +261,7 @@ def detect_europe_fronts(model_results_by_id, rows, cols):
 
 
 def _lonlat_to_px(lon, lat, bbox, wh):
-    """Та же формула, что уже проверена в _draw_confirm_on_very_far —
-    переиспользуем 1-в-1, не изобретаем новую проекцию."""
+    """Проекция lon/lat в пиксели снимка по его собственному bbox+размеру."""
     if not bbox or not wh:
         return None
     min_lon, min_lat, max_lon, max_lat = bbox
@@ -531,14 +274,10 @@ def _lonlat_to_px(lon, lat, bbox, wh):
 
 
 def _build_europe_overlay(points_meta, votes_grid, n_valid_grid, confirmed, geo):
-    """Векторные данные для SVG-слоя с тумблером — ТА ЖЕ схема, что
-    near-tile (см. eumetsat_render_track_overlay.py::
-    _build_confirm_overlay_data, правка 2026-09-08), применена и здесь по
-    прямому запросу пользователя ("схема такая же, как для Центрального
-    тайла, с кнопкой"). Каждая точка — с пиксельными координатами СРАЗУ на
-    ОБОИХ снимках (far и very_far), т.к. объединённый bbox шире каждого из
-    них по отдельности — точка может попасть в один, другой, оба или ни
-    один (за кадром)."""
+    """Векторные данные для SVG-слоя с тумблером на снимках far/very_far.
+    Каждая точка — с пиксельными координатами СРАЗУ на ОБОИХ снимках, т.к.
+    объединённый bbox шире каждого из них по отдельности — точка может
+    попасть в один, другой, оба или ни один (за кадром)."""
     far_bbox = far_wh = very_far_bbox = very_far_wh = None
     try:
         far_half = geo["far_window"]["half_window_deg"]
@@ -576,26 +315,98 @@ def _build_europe_overlay(points_meta, votes_grid, n_valid_grid, confirmed, geo)
     return out_points, far_wh, very_far_wh
 
 
+def _bilinear_interp(lats, lons, field, lat, lon):
+    """Билинейная интерполяция непрерывного поля field[row][col] (та же
+    ориентация, что у lats — убывает, север->юг — и lons — возрастает) в
+    произвольной точке (lat,lon). None, если точка вне покрытия сетки ИЛИ
+    среди 4 соседей есть NaN (недостаточно моделей ответило в этой ячейке
+    европейской сетки)."""
+    if lat > lats[0] or lat < lats[-1] or lon < lons[0] or lon > lons[-1]:
+        return None
+    i = 0
+    while i < len(lats) - 2 and lats[i + 1] > lat:
+        i += 1
+    j = 0
+    while j < len(lons) - 2 and lons[j + 1] < lon:
+        j += 1
+    lat0, lat1 = lats[i], lats[i + 1]
+    lon0, lon1 = lons[j], lons[j + 1]
+    tx = (lon - lon0) / (lon1 - lon0) if lon1 != lon0 else 0.0
+    ty = (lat0 - lat) / (lat0 - lat1) if lat0 != lat1 else 0.0
+    v00, v01, v10, v11 = field[i][j], field[i][j + 1], field[i + 1][j], field[i + 1][j + 1]
+    if any(v is None or math.isnan(v) for v in (v00, v01, v10, v11)):
+        return None
+    top = v00 + tx * (v01 - v00)
+    bot = v10 + tx * (v11 - v10)
+    return top + ty * (bot - top)
+
+
+def project_to_near_tile(lats, lons, votes_grid, n_valid_grid, geo):
+    """[ДОБАВЛЕНО 2026-09-09] Проекция европейской сетки на near-tile —
+    ЗАМЕНА убранного near/west-детектора (см. докстринг файла целиком).
+    НИКАКИХ новых запросов к Open-Meteo — чистая интерполяция уже
+    посчитанного consensus_score = votes/n_models с точек европейской
+    сетки на NEAR_PROJECTION_GRID_SIDE x NEAR_PROJECTION_GRID_SIDE
+    сэмплов внутри near-tile bbox."""
+    mw = geo.get("motion_window") or {}
+    half = mw.get("half_window_deg")
+    center_lat, center_lon = geo.get("center_lat"), geo.get("center_lon")
+    if half is None or center_lat is None or center_lon is None:
+        return None
+    near_bbox = (center_lon - half, center_lat - half, center_lon + half, center_lat + half)
+    tile_size = mw.get("tile_size", 400)
+
+    score_field = []
+    for i in range(len(lats)):
+        row = []
+        for j in range(len(lons)):
+            n = n_valid_grid[i, j]
+            row.append((votes_grid[i, j] / n) if n >= MIN_MODEL_VOTES else float("nan"))
+        score_field.append(row)
+
+    side = NEAR_PROJECTION_GRID_SIDE
+    min_lon, min_lat, max_lon, max_lat = near_bbox
+    cells = []
+    for gi in range(side):
+        for gj in range(side):
+            lat = max_lat - (gi + 0.5) * (max_lat - min_lat) / side
+            lon = min_lon + (gj + 0.5) * (max_lon - min_lon) / side
+            score = _bilinear_interp(lats, lons, score_field, lat, lon)
+            if score is None:
+                continue
+            px_x = (gj + 0.5) * tile_size / side
+            px_y = (gi + 0.5) * tile_size / side
+            cell_size = tile_size / side
+            cells.append({
+                "px": [round(px_x, 1), round(px_y, 1)],
+                "size": round(cell_size, 1),
+                "score": round(float(score), 2),
+                "confirmed": bool(score >= NEAR_PROJECTION_THRESHOLD),
+            })
+    return {
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "tile_size": tile_size,
+        "grid_side": side,
+        "cells": cells,
+    }
+
+
 def run_europe_detection(geo):
-    """Отдельная последовательность из 5 запросов (та же пауза 30с) — в
-    ТОМ ЖЕ вызове main(), сразу после near/west, НЕ отдельным скриптом/
-    гейтом (см. докстринг EUROPE_GRID_STEP_KM выше про причину). Работает
-    НЕЗАВИСИМО от наличия спутниковых кандидатов — в отличие от near/west,
-    которым нужен хотя бы 1 трек, тут кандидатов нет вообще, ищем сами по
-    полю."""
+    """Единственный детектор (см. докстринг файла) — 5 запросов, пауза
+    30с, событийный гейт проверяется в main()."""
     bbox = _europe_grid_bbox(geo)
     if not bbox:
-        print("  [WARN] open_meteo_frontal_confirm: europe — bbox не построен (far_window/very_far_window)")
+        print("  [WARN] open_meteo_frontal_confirm: bbox не построен (far_window/very_far_window)")
         return
-    points, rows, cols = build_europe_grid(bbox)
-    print(f"  open_meteo_frontal_confirm: europe — сетка {rows}x{cols}={rows*cols} точек, шаг {EUROPE_GRID_STEP_KM}км")
+    points, rows, cols, lats, lons = build_europe_grid(bbox)
+    print(f"  open_meteo_frontal_confirm: сетка {rows}x{cols}={rows*cols} точек, шаг {EUROPE_GRID_STEP_KM}км")
 
     model_results_by_id = {}
     for i, (model_id, _label) in enumerate(MODELS):
         try:
             model_results_by_id[model_id] = fetch_model_batch(model_id, points)
         except Exception as e:
-            print(f"  [WARN] open_meteo_frontal_confirm: europe, модель {model_id}: {e}")
+            print(f"  [WARN] open_meteo_frontal_confirm: модель {model_id}: {e}")
         if i < len(MODELS) - 1:
             time.sleep(REQUEST_INTERVAL)
 
@@ -605,27 +416,21 @@ def run_europe_detection(geo):
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "bbox": list(bbox),
         "step_km": EUROPE_GRID_STEP_KM,
-        # Реальные пиксельные размеры снимков far/very_far (Image.open(...).size,
-        # НЕ вычислены заново из bbox/target_km_per_px) — px_far/px_very_far у
-        # каждой точки посчитаны именно под эти размеры, фронтенду нужны точно
-        # такие же для viewBox SVG-слоя, иначе координаты точек не совпадут с
-        # картинкой. None, если снимок не был найден в момент расчёта.
         "far_wh": list(far_wh) if far_wh else None,
         "very_far_wh": list(very_far_wh) if very_far_wh else None,
         "points": overlay_points,
     })
     n_confirmed = sum(1 for p in overlay_points if p["confirmed"])
-    print(f"  [OK] open_meteo_frontal_confirm: europe — {n_confirmed}/{len(overlay_points)} точек подтверждено консенсусом")
+    print(f"  [OK] open_meteo_frontal_confirm: {n_confirmed}/{len(overlay_points)} точек подтверждено консенсусом")
+
+    projection = project_to_near_tile(lats, lons, votes_grid, n_valid_grid, geo)
+    if projection is not None:
+        _save_json(NEAR_TILE_PROJECTION_FILE, projection)
+        n_proj_confirmed = sum(1 for c in projection["cells"] if c["confirmed"])
+        print(f"  [OK] open_meteo_frontal_confirm: near-tile проекция — {n_proj_confirmed}/{len(projection['cells'])} ячеек подтверждено")
 
 
 def main():
-    # [ИЗМЕНЕНО 2026-09-08] Раньше `if not tracks: return` стоял ПЕРВЫМ —
-    # если спутниковых кандидатов нет вообще (как сейчас, см. чат), вся
-    # функция выходила и Европа НИКОГДА не запускалась бы вместе с ней.
-    # Событийный гейт (has_new_run) теперь проверяется один раз для ОБЕИХ
-    # веток, а отсутствие near/west-кандидатов больше не блокирует europe —
-    # они независимы (Европа не нуждается в спутниковом кандидате, ищет
-    # сама по полю).
     state = _load_json(STATE_FILE, {})
     has_new_run, latest_run_times = _has_new_model_run(state)
     if not has_new_run:
@@ -633,53 +438,10 @@ def main():
         return
 
     geo = _load_json(GEO_CONFIG_FILE, {})
-    center_lat, center_lon = geo.get("center_lat"), geo.get("center_lon")
-    if center_lat is None or center_lon is None:
+    if geo.get("center_lat") is None or geo.get("center_lon") is None:
         print("  [WARN] open_meteo_frontal_confirm: geo_config.json без center_lat/center_lon")
         return
-    km_per_deg_lat = 111.32
-    km_per_deg_lon = 111.32 * math.cos(math.radians(center_lat))
 
-    ft = _load_json(FRONTAL_TRACK_FILE, None)
-    tracks = (ft or {}).get("tracks") or []
-    if not tracks:
-        print("  [SKIP] open_meteo_frontal_confirm: нет спутниковых кандидатов near/west — europe всё равно продолжится")
-    else:
-        flat_points, candidate_meta = build_pooled_points(tracks, center_lat, center_lon, km_per_deg_lat, km_per_deg_lon)
-        print(f"  open_meteo_frontal_confirm: {len(tracks)} кандидат(ов), пул {len(flat_points)} точек")
-
-        per_model_all = {}
-        for i, (model_id, _label) in enumerate(MODELS):
-            try:
-                per_model_all[model_id] = fetch_model_batch(model_id, flat_points)
-            except Exception as e:
-                print(f"  [WARN] open_meteo_frontal_confirm: модель {model_id}: {e}")
-            if i < len(MODELS) - 1:
-                time.sleep(REQUEST_INTERVAL)
-
-        out_candidates = {}
-        for tid, meta in candidate_meta.items():
-            s, e = meta["start_idx"], meta["start_idx"] + meta["n_points"]
-            model_results_by_id = {mid: res[s:e] for mid, res in per_model_all.items() if len(res) >= e}
-            out_candidates[tid] = {**confirm_candidate(meta, model_results_by_id), "axis_deg": meta["axis_deg"]}
-
-        out = {
-            "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "model_run_times": latest_run_times,
-            "candidates": out_candidates,
-        }
-        _save_json(OUT_FILE, out)
-
-        n_confirmed = sum(1 for c in out_candidates.values() if c["confirmed"])
-        print(f"  [OK] open_meteo_frontal_confirm: {n_confirmed}/{len(out_candidates)} подтверждено")
-
-        tracks_by_id = {str(t["track_id"]): t for t in tracks}
-        _draw_confirm_on_very_far(out_candidates, tracks_by_id, geo)
-
-    # [ДОБАВЛЕНО 2026-09-08] Europe — В ТОМ ЖЕ вызове, сразу после near/west
-    # (или вместо них, если near/west-кандидатов не было, см. else выше) —
-    # см. докстринг run_europe_detection() про то, почему это НЕ отдельный
-    # скрипт/гейт.
     run_europe_detection(geo)
 
     state["last_run_times"] = latest_run_times
@@ -688,4 +450,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
