@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-09T21:12:13Z",
+  "timestamp": "2026-09-09T21:17:13Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-09-09T20:45:00.000Z",
   "target_id": 3,
@@ -25,23 +25,6 @@
   },
   "local_candidates": [
     {
-      "target_id": 3,
-      "area_km2": 89.4,
-      "distance_km": 190.6,
-      "bearing_deg": 212.0,
-      "compass": "ЮЗ",
-      "elongation_aspect_ratio": 1.55,
-      "elongation_axis_deg": 121.0,
-      "elongation_axis_compass": "ЮВ-СЗ",
-      "frontlike": false,
-      "phase_label": "безоблачно",
-      "type_label": "безоблачно",
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": true,
-      "geocolour_confirmed": false
-    },
-    {
       "target_id": 5,
       "area_km2": 60.0,
       "distance_km": 203.1,
@@ -59,7 +42,7 @@
       "geocolour_confirmed": false
     }
   ],
-  "local_suppressed_count": 1,
+  "local_suppressed_count": 2,
   "system_candidates": [
     {
       "target_id": 0,
@@ -253,21 +236,21 @@
   "existence": {
     "modules": {
       "ir_motion": {
-        "confirmed": true,
-        "timestamp": "2026-09-09T20:50:00.000Z"
+        "confirmed": false,
+        "timestamp": "2026-09-09T21:00:00.000Z"
       },
       "geocolour_motion": {
         "confirmed": false,
-        "timestamp": "2026-09-09T20:40:00.000Z"
+        "timestamp": "2026-09-09T20:50:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": false,
         "timestamp": "2026-09-09T16:57:32Z"
       }
     },
-    "votes_confirmed": 1,
-    "votes_not_confirmed": 2,
-    "consensus": "disputed"
+    "votes_confirmed": 0,
+    "votes_not_confirmed": 3,
+    "consensus": "not_confirmed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -276,8 +259,8 @@
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-09-09T21:07:10Z"
+      "timestamp": "2026-09-09T21:17:05Z"
     }
   },
-  "verdict": "Цель в 191км ЮЗ, безоблачно — каналы расходятся: ir_motion подтверждают, geocolour_motion/cloud_phase_type нет. Отдельно: система синоптического масштаба (1152км²) в 125км В (вытянута В-З (78°), похоже на фронт)."
+  "verdict": "CLM отметил цель в 191км ЮЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (1152км²) в 125км В (вытянута В-З (78°), похоже на фронт)."
 }
