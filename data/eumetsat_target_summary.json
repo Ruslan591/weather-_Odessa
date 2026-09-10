@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-10T04:47:49Z",
+  "timestamp": "2026-09-10T04:53:53Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-09-10T04:30:00.000Z",
   "target_id": 2,
@@ -18,6 +18,8 @@
     "elongation_axis_compass": "С-Ю",
     "frontlike": true,
     "window_spanning": false,
+    "phase_label": "безоблачно",
+    "cloud_fraction": 0.304,
     "has_precip": false,
     "has_lightning": false
   },
@@ -177,10 +179,6 @@
     "signature": "-30_-20",
     "area_km2": 56.0
   },
-  "target_phase": {
-    "label": "безоблачно",
-    "cloud_fraction": 0.341
-  },
   "existence": {
     "modules": {
       "ir_motion": {
@@ -188,17 +186,17 @@
         "timestamp": "2026-09-10T04:30:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-09-10T04:20:00.000Z"
+        "confirmed": true,
+        "timestamp": "2026-09-10T04:30:00.000Z"
       },
       "cloud_phase_type": {
-        "confirmed": false,
-        "timestamp": "2026-09-10T04:37:34Z"
+        "confirmed": null,
+        "timestamp": "2026-09-10T04:52:09Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 1,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -207,8 +205,8 @@
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-09-10T04:47:22Z"
+      "timestamp": "2026-09-10T04:53:02Z"
     }
   },
-  "verdict": "CLM отметил цель в 126км З, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (2318км²) в 79км ЮЗ (вытянута С-Ю (13°), похоже на фронт)."
+  "verdict": "Цель в 126км З — каналы расходятся: geocolour_motion подтверждают, ir_motion нет. Отдельно: система синоптического масштаба (2318км²) в 79км ЮЗ (вытянута С-Ю (13°), похоже на фронт)."
 }
