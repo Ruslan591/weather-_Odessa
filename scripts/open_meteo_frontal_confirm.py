@@ -63,20 +63,23 @@ THRESHOLD) — первая прикидка, НЕ откалиброваны п
 Пишет:
   data/europe_frontal_overlay.json — точки консенсус-детекции с
     пиксельными координатами под снимки far/very_far ("points", как и
-    раньше) ПЛЮС [ДОБАВЛЕНО 2026-09-09, TASK EUROPE_FRONT_LINE_001]
-    "segments" — связные линии фронта, извлечённые через diameter-path
-    (double Dijkstra) из connected components confirmed-ячеек, с
-    рекурсивным junction-разбиением на боковые ветви. "points" не
-    убраны — обратная совместимость / fallback фронтенда, если
-    segments пуст. См. docs/ai/AI_DISCUSSION.md (Proposal v2/v3,
-    APPROVED) — там же обоснование, почему NOT NMS+PCA, а diameter-path.
+    раньше) ПЛЮС [TASK EUROPE_FRONT_LINE_001] "segments" — связные линии
+    фронта. [ПЕРЕРАБОТАНО 2026-09-10] Алгоритм извлечения линии — Hessian-
+    based ridge extraction (directional NMS вдоль eigenvector(lambda_min)
+    Гессиана consensus_score_grid, НЕ вдоль градиента и НЕ через
+    diameter-path/recursive remainder — предыдущая версия на diameter-path
+    была отклонена GPT review по живым данным, давала "сетку ломаных"
+    вместо линий). "points" не убраны — обратная совместимость / fallback
+    фронтенда, если segments пуст. См. docs/ai/AI_DISCUSSION.md
+    (Proposal v6-v10, APPROVED) — там же полное обоснование математики
+    (curvature+anisotropy тест, corner-cut-free связность, junction-
+    разбиение без Dijkstra).
   data/eumetsat_near_tile_projection.json — интерполированное поле,
     спроецированное на near-tile (для SVG-слоя на Cloud Mask), НЕ
     затронуто изменениями EUROPE_FRONT_LINE_001 (использует сырой
     votes_grid/n_valid_grid до сегментации).
 Запуск: python3 scripts/open_meteo_frontal_confirm.py
 """
-import heapq
 import json
 import math
 import os
@@ -120,12 +123,9 @@ CURRENT_VARIABLES = [
 REQUEST_INTERVAL = 30  # секунд между запросами моделей — проверено вживую 2026-09-06
 MIN_MODEL_VOTES = 3    # из 5 — подтверждено
 
-# [ДОБАВЛЕНО 2026-09-09, TASK EUROPE_FRONT_LINE_001] Минимальный размер
-# connected component (8-связность по confirmed-ячейкам), чтобы из него
-# извлекать diameter-path сегмент. Меньшие компоненты остаются видны
-# только через "points" (старый point-by-point рендер) — согласовано с
-# GPT (docs/ai/AI_DISCUSSION.md, REVIEW: APPROVED).
-MIN_COMPONENT_CELLS = 3
+# MIN_SEGMENT_CELLS, RIDGE_ANISOTROPY_RATIO, CURVATURE_EPSILON,
+# VECTOR_EPSILON, MIN_ELONGATION_RATIO — см. блок Hessian-based
+# ridge extraction ниже (TASK EUROPE_FRONT_LINE_001, Proposal v6-v10).
 
 # Порог consensus_score (votes/n_models) для near-tile проекции —
 # соответствует MIN_MODEL_VOTES/5 у "сырых" точек европейской сетки, тот
@@ -313,163 +313,340 @@ def detect_europe_fronts(model_results_by_id, rows, cols):
 
 _NEIGHBOR_OFFSETS = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
 
+# [TASK EUROPE_FRONT_LINE_001, ПЕРЕРАБОТАНО 2026-09-10] Полная замена
+# сегментации: recursive diameter-path decomposition (Proposal v2/v3)
+# была ОТКЛОНЕНА GPT по итогам живого прогона (docs/ai/AI_DISCUSSION.md,
+# implementation review REQUEST CHANGES) — на реальных данных давала
+# "сетку ломаных" вместо осмысленных линий, т.к. диаметр графа честно
+# находится, но на СЫРОМ широком confirmed-blob'е, а рекурсивная обработка
+# остатка снова и снова резала широкую область на диаметры.
+#
+# Новый pipeline (Proposal v6-v10, APPROVED):
+#   consensus_score_grid
+#       -> Фаза 1: Hessian-based ridge extraction (директ. NMS вдоль
+#          eigenvector(lambda_min), НЕ вдоль градиента — см. п.1)
+#       -> Фаза 2: связность по ridge-маске через ЕДИНЫЙ
+#          corner-cut-free neighbor helper (_valid_ridge_neighbors)
+#       -> Фаза 3: классификация компонента (простая линия / цикл /
+#          junction-разбиение на макс. простые пути) — БЕЗ recursive
+#          remainder decomposition
+#       -> Фаза 4: прямой детерминированный обход (endpoint->endpoint
+#          или вокруг цикла) — БЕЗ Dijkstra/diameter, т.к. граф после
+#          Фазы 1 уже тонкий по построению
+#
+# Все константы ниже — эмпирические, калибруются под ЭТУ сетку
+# (~220 км, bbox ~30-60°N), не выводятся из физических единиц (см.
+# Proposal v10 п.1 — index-space Hessian это осознанная grid-space
+# эвристика, а не физически метрический Гессиан).
+CURVATURE_EPSILON = 1e-3        # порог "есть ли вообще кривизна" (ridge/peak vs flat plateau)
+RIDGE_ANISOTROPY_RATIO = 0.5    # |lambda_max|/|lambda_min| <= это -> "вытянуто" (ridge), не "круг" (peak)
+VECTOR_EPSILON = 1e-9           # numerical guard нормировки eigenvector (Proposal v7/v9)
+MIN_SEGMENT_CELLS = 3           # финальный сегмент короче — не публикуется, остаётся в points
+MIN_ELONGATION_RATIO = 1.5      # [Proposal v9 п.4] пост-хок geometry guard ПОСЛЕ topology,
+                                 # эмпирическая страховка, а не мат. доказательство отсутствия
+                                 # ложно прошедшего изотропного пика
 
-def _component_cells(confirmed):
-    """[TASK EUROPE_FRONT_LINE_001] BFS 8-связность по confirmed grid
-    (bool rows x cols). Возвращает список компонент, каждая — set из
-    (row, col). Чистый Python/numpy, без scipy (см. AI_DISCUSSION,
-    Proposal v2 п. "не требует scipy")."""
-    rows, cols = confirmed.shape
-    visited = np.zeros_like(confirmed, dtype=bool)
+
+def _bilinear_sample(grid, row, col, rows, cols):
+    """Билинейная интерполяция значения grid в дробной позиции (row, col).
+    None, если позиция вне сетки ИЛИ хотя бы один из 4 опорных углов NaN
+    — тогда directional NMS в этом направлении корректно не вычислим
+    (граница данных), см. Proposal v9 п.3 (явный NaN-гард)."""
+    if row < 0 or row > rows - 1 or col < 0 or col > cols - 1:
+        return None
+    r0 = int(math.floor(row))
+    c0 = int(math.floor(col))
+    r1 = min(r0 + 1, rows - 1)
+    c1 = min(c0 + 1, cols - 1)
+    fr = row - r0
+    fc = col - c0
+    corners = (grid[r0, c0], grid[r0, c1], grid[r1, c0], grid[r1, c1])
+    if any(math.isnan(v) for v in corners):
+        return None
+    top = grid[r0, c0] * (1 - fc) + grid[r0, c1] * fc
+    bot = grid[r1, c0] * (1 - fc) + grid[r1, c1] * fc
+    return top * (1 - fr) + bot * fr
+
+
+def _ridge_mask(score, confirmed, rows, cols):
+    """[Фаза 1, Proposal v6-v10, APPROVED] Hessian-based ridge detection.
+
+    Направление NMS берётся из eigenvector(lambda_min) Гессиана поля
+    score, а НЕ из градиента — градиент вырождается ровно на вершине
+    ridge (пример из review: "1 2 3 4 5 4 3 2 1", в точке 5 первая
+    производная = 0, но вторая производная сильно отрицательна), поэтому
+    градиент-based направление ошибочно отправляло настоящие вершины
+    ridge в plateau-fallback.
+
+    Ridge-условие СТРОГО ПОСЛЕДОВАТЕЛЬНОЕ (Proposal v10 п.2 — знак
+    lambda_min принципиален, проверяется первым):
+      1) lambda_min < -CURVATURE_EPSILON  (есть выраженная вогнутость;
+         lambda_min > 0 дисквалифицирует НЕМЕДЛЕННО, ratio не считается)
+      2) |lambda_max| / |lambda_min| <= RIDGE_ANISOTROPY_RATIO
+         (вытянутость, а не изотропный peak/blob — Proposal v7,
+         разрешает review-пример "1 2 1 / 2 5 2 / 1 2 1" отклонить, т.к.
+         там lambda_min≈lambda_max, ratio≈1)
+      3) score — локальный максимум вдоль eigenvector(lambda_min)
+         (билинейная интерполяция на +-1 шаг, асимметричный tie-break
+         `>` назад / `>=` вперёд — детерминированное утончение даже при
+         точных совпадениях на плато вдоль самой линии)
+
+    Гессиан считается в INDEX SPACE — детерминированная grid-space
+    эвристика для этой конкретной сетки, СОЗНАТЕЛЬНОЕ ограничение v1
+    (Proposal v10 п.1), не физически метрический Гессиан; все три
+    константы выше калибруются эмпирически под эту сетку.
+
+    NaN в любом из H_rr/H_cc/H_rc (край сетки, невалидные соседи из-за
+    отсутствия моделей) -> явный isnan-гард -> ячейка NOT ridge
+    (Proposal v9 п.3), не полагаемся на случайное поведение сравнений
+    с NaN."""
+    d_row, d_col = np.gradient(score)
+    H_rr, H_rc_a = np.gradient(d_row)
+    H_cr_b, H_cc = np.gradient(d_col)
+    H_rc = (H_rc_a + H_cr_b) / 2.0
+
+    ridge = np.zeros((rows, cols), dtype=bool)
+    for r in range(rows):
+        for c in range(cols):
+            if not confirmed[r, c]:
+                continue
+            hrr, hrc, hcc = float(H_rr[r, c]), float(H_rc[r, c]), float(H_cc[r, c])
+            if math.isnan(hrr) or math.isnan(hrc) or math.isnan(hcc):
+                continue
+            trace = hrr + hcc
+            disc = math.sqrt(max(0.0, ((hrr - hcc) / 2.0) ** 2 + hrc ** 2))
+            lambda_min = trace / 2.0 - disc
+            lambda_max = trace / 2.0 + disc
+            # условие 1 — знак и порог lambda_min ОБЯЗАТЕЛЬНЫ первыми
+            if not (lambda_min < -CURVATURE_EPSILON):
+                continue
+            # условие 2 — anisotropy ratio, ТОЛЬКО после условия 1
+            if abs(lambda_max) > RIDGE_ANISOTROPY_RATIO * abs(lambda_min):
+                continue
+            # eigenvector(lambda_min) = (v_row, v_col), с fallback по норме
+            v_row, v_col = hrc, lambda_min - hrr
+            norm = math.sqrt(v_row * v_row + v_col * v_col)
+            if norm < VECTOR_EPSILON:
+                if hrr <= hcc:
+                    v_row, v_col = 1.0, 0.0
+                else:
+                    v_row, v_col = 0.0, 1.0
+            else:
+                v_row, v_col = v_row / norm, v_col / norm
+            # условие 3 — directional NMS вдоль (v_row, v_col)
+            s_here = float(score[r, c])
+            s_back = _bilinear_sample(score, r - v_row, c - v_col, rows, cols)
+            s_fwd = _bilinear_sample(score, r + v_row, c + v_col, rows, cols)
+            if s_back is None or s_fwd is None:
+                continue
+            if not (s_here > s_back and s_here >= s_fwd):
+                continue
+            ridge[r, c] = True
+    return ridge
+
+
+def _valid_ridge_neighbors(cell, ridge_mask, confirmed):
+    """[Фаза 2, Proposal v5/v7 п.6, APPROVED — уточнено при реализации,
+    см. IMPLEMENTED-отчёт] ЕДИНЫЙ источник топологии для ВСЕХ
+    последующих шагов (components, degree, traversal, junction split).
+
+    Corner-cut-free: диагональный сосед допустим, только если хотя бы
+    одна из двух ортогональных "опорных" ячеек ПОДТВЕРЖДЕНА консенсусом
+    (`confirmed`), а не обязательно сама является ridge-точкой.
+
+    [НАЙДЕНО ПРИ ТЕСТИРОВАНИИ, отклонение от буквальной формулировки
+    Proposal v5] Изначально опора проверялась по `ridge_mask` (как было
+    сформулировано в Proposal). Юнит-тест на чистой диагональной линии
+    (`i,i` для всех i) показал: после Фазы 1 ridge-маска УЖЕ тонкая по
+    построению — у настоящей однопиксельной диагональной линии по
+    определению НЕТ соседей-опор, которые сами были бы ridge-точками
+    (иначе линия не была бы тонкой). Проверка опоры по `ridge_mask`
+    ошибочно рвала любую диагональную линию на N изолированных
+    компонент по 1 ячейке. Проверка по `confirmed` (широкий гейт ДО
+    утончения) сохраняет исходный смысл правила — не позволять двум
+    объектам, действительно не связанным физически (например, через
+    вогнутый угол L-образной области, где опорные ячейки лежат вне
+    confirmed-области вообще), соединяться по диагонали — но больше не
+    мешает честной тонкой диагональной линии, у которой опорные ячейки
+    физически рядом confirmed, просто сами не стали ridge-максимumом
+    после утончения."""
+    r, c = cell
+    rows, cols = ridge_mask.shape
+    neighbors = []
+    for dr, dc in _NEIGHBOR_OFFSETS:
+        nr, nc = r + dr, c + dc
+        if not (0 <= nr < rows and 0 <= nc < cols):
+            continue
+        if not ridge_mask[nr, nc]:
+            continue
+        if dr != 0 and dc != 0 and not (confirmed[r, nc] or confirmed[nr, c]):
+            continue  # diagonal corner-cut без confirmed-опоры — запрещено
+        neighbors.append((nr, nc))
+    return neighbors
+
+
+def _ridge_components(ridge_mask, confirmed):
+    """[Фаза 2] BFS по ridge-маске через _valid_ridge_neighbors."""
+    rows, cols = ridge_mask.shape
+    visited = np.zeros_like(ridge_mask, dtype=bool)
     components = []
     for r in range(rows):
         for c in range(cols):
-            if confirmed[r, c] and not visited[r, c]:
+            if ridge_mask[r, c] and not visited[r, c]:
                 stack = [(r, c)]
                 visited[r, c] = True
                 comp = set()
                 while stack:
-                    cr, cc = stack.pop()
-                    comp.add((cr, cc))
-                    for dr, dc in _NEIGHBOR_OFFSETS:
-                        nr, nc = cr + dr, cc + dc
-                        if 0 <= nr < rows and 0 <= nc < cols and confirmed[nr, nc] and not visited[nr, nc]:
-                            visited[nr, nc] = True
-                            stack.append((nr, nc))
+                    cell = stack.pop()
+                    comp.add(cell)
+                    for nb in _valid_ridge_neighbors(cell, ridge_mask, confirmed):
+                        if not visited[nb]:
+                            visited[nb] = True
+                            stack.append(nb)
                 components.append(comp)
     return components
 
 
-def _subgraph_dijkstra(start, cells_set):
-    """Dijkstra по подграфу cells_set (8-связность, вес ребра = евклидово
-    расстояние в шагах сетки: 1.0 орто-сосед, sqrt(2) диагональный) —
-    heapq из стандартной библиотеки, без scipy. cells_set предполагается
-    связным (иначе dist просто не покроет недостижимые узлы — вызывающий
-    код гарантирует связность, передавая сюда только компоненты/под-
-    компоненты одного BFS-обхода)."""
-    dist = {start: 0.0}
-    parent = {start: None}
-    pq = [(0.0, start)]
-    while pq:
-        d, node = heapq.heappop(pq)
-        if d > dist.get(node, float("inf")):
-            continue
-        r, c = node
-        for dr, dc in _NEIGHBOR_OFFSETS:
-            nb = (r + dr, c + dc)
-            if nb in cells_set:
-                w = math.sqrt(2) if (dr != 0 and dc != 0) else 1.0
-                nd = d + w
-                if nd < dist.get(nb, float("inf")):
-                    dist[nb] = nd
-                    parent[nb] = node
-                    heapq.heappush(pq, (nd, nb))
-    return dist, parent
+def _classify_and_order_component(comp, ridge_mask, confirmed):
+    """[Фаза 3+4, Proposal v5/v10, APPROVED] БЕЗ Dijkstra/diameter —
+    прямой детерминированный обход, т.к. после Фазы 1 граф уже тонкий
+    по построению (degree<=2 везде, кроме настоящих junction).
+
+    - Простая линия (ровно endpoints, degree==2 в остальном): обход
+      endpoint -> endpoint напрямую.
+    - Цикл (degree==2 везде, endpoint нет): обход по кольцу от
+      детерминированного старта, останов перед повторным заходом в start.
+    - Junction (есть degree>=3): раскладывается на максимальные простые
+      пути между вершинами degree!=2. Junction-ячейка МОЖЕТ и будет
+      повторяться как общий endpoint нескольких путей — это корректное
+      топологическое представление ветвления, НЕ ошибочное дублирование
+      (Proposal v5 п.5, APPROVED дословно)."""
+    degree = {cell: len(_valid_ridge_neighbors(cell, ridge_mask, confirmed)) for cell in comp}
+    junctions = {cell for cell, d in degree.items() if d >= 3}
+    endpoints = {cell for cell, d in degree.items() if d <= 1}
+
+    if junctions:
+        special = junctions | endpoints
+        visited_edges = set()
+        paths = []
+        for s in sorted(special):
+            for nb in sorted(_valid_ridge_neighbors(s, ridge_mask, confirmed)):
+                edge = frozenset((s, nb))
+                if edge in visited_edges:
+                    continue
+                visited_edges.add(edge)
+                path = [s, nb]
+                prev, cur = s, nb
+                while cur not in special:
+                    nbs = [n for n in _valid_ridge_neighbors(cur, ridge_mask, confirmed) if n != prev]
+                    if not nbs:
+                        break
+                    prev, cur = cur, nbs[0]
+                    path.append(cur)
+                    visited_edges.add(frozenset((path[-2], path[-1])))
+                paths.append(path)
+        return paths
+
+    if not endpoints:
+        # чистый цикл: degree==2 у всех вершин
+        start = min(comp)
+        nbs_start = sorted(_valid_ridge_neighbors(start, ridge_mask, confirmed))
+        if not nbs_start:
+            return [[start]]  # вырожденный случай (не должен происходить у настоящего цикла)
+        path = [start]
+        prev, cur = start, nbs_start[0]
+        while cur != start:
+            path.append(cur)
+            nbs = [n for n in _valid_ridge_neighbors(cur, ridge_mask, confirmed) if n != prev]
+            if not nbs:
+                break  # защита от неожиданной разомкнутости
+            prev, cur = cur, nbs[0]
+        return [path]
+
+    # простая линия: endpoints (degree<=1), остальные degree==2
+    start = min(endpoints)
+    path = [start]
+    prev, cur = None, start
+    while True:
+        nbs = [n for n in _valid_ridge_neighbors(cur, ridge_mask, confirmed) if n != prev]
+        if not nbs:
+            break
+        prev, cur = cur, nbs[0]
+        path.append(cur)
+    return [path]
 
 
-def _diameter_path(cells_set):
-    """[TASK EUROPE_FRONT_LINE_001, AI_DISCUSSION Proposal v2/v3,
-    APPROVED] Centerline компонента через "диаметр графа" (double
-    Dijkstra) вместо NMS+PCA:
-      1) из произвольной ячейки cells_set ищем самую удалённую P1;
-      2) из P1 ищем самую удалённую P2, восстанавливаем путь P1->P2 по
-         parent-указателям.
-    Путь P1->P2 — диаметр графа: не рвёт прямую цепочку соседних ячеек
-    (диаметр пути-графа = весь путь) и корректно идёт вдоль изгибов
-    (следует реальным рёбрам графа, а не проекции на одну ось, как
-    делала бы PCA-сортировка). cells_set непустой и связный (проверяется
-    вызывающим кодом через MIN_COMPONENT_CELLS и BFS-происхождение)."""
-    start = next(iter(cells_set))
-    dist1, _ = _subgraph_dijkstra(start, cells_set)
-    p1 = max(dist1, key=dist1.get)
-    dist2, parent2 = _subgraph_dijkstra(p1, cells_set)
-    p2 = max(dist2, key=dist2.get)
-    path = []
-    node = p2
-    while node is not None:
-        path.append(node)
-        node = parent2[node]
-    path.reverse()
-    return path
+SPREAD_EPSILON = 1e-9  # guard деления на ~0 в _elongation_ratio (идеально прямая линия)
 
 
-def _connected_subcomponents(cells):
-    """BFS 8-связность внутри произвольного множества ячеек `cells`
-    (не обязательно всей сетки) — используется для разбиения "остатка"
-    после извлечения diameter-path на отдельные под-компоненты."""
-    visited = set()
-    out = []
-    for cell in cells:
-        if cell in visited:
-            continue
-        stack = [cell]
-        visited.add(cell)
-        sub = set()
-        while stack:
-            cr, cc = stack.pop()
-            sub.add((cr, cc))
-            for dr, dc in _NEIGHBOR_OFFSETS:
-                nb = (cr + dr, cc + dc)
-                if nb in cells and nb not in visited:
-                    visited.add(nb)
-                    stack.append(nb)
-        out.append(sub)
-    return out
+def _elongation_ratio(path):
+    """[Proposal v9 п.4, УТОЧНЕНО ПРИ РЕАЛИЗАЦИИ — см. IMPLEMENTED-отчёт]
+    Изначально guard был сформулирован как `bbox_h/bbox_w`. Юнит-тест на
+    чистой 45°-диагональной линии показал: у диагонали `bbox_h == bbox_w`
+    (квадратный bbox) НЕЗАВИСИМО от длины линии — naive bbox-ratio
+    ошибочно отклонял любую диагональную/повёрнутую линию как "неvytянутую".
+
+    Заменено на ориентационно-независимую меру: собственные значения
+    ковариационной матрицы координат точек пути (тот же приём 2×2
+    eigen-decomposition, что и в Фазе 1, применённый здесь не к Гессиану
+    поля, а к разбросу самих точек). `spread_max`/`spread_min` — дисперсия
+    вдоль главной оси облака точек и поперёк неё, не зависят от того, как
+    именно линия расположена относительно сетки (диагональ, горизонталь,
+    любой другой угол — считается корректно одинаково).
+
+    Возвращает "линейное" отношение `sqrt(spread_max/spread_min)`
+    (приведено к линейному масштабу, а не к масштабу дисперсии, чтобы
+    порог `MIN_ELONGATION_RATIO=1.5` сохранял тот же смысл, что и в
+    исходной bbox-формулировке — "во сколько раз линия длиннее, чем
+    широкая"). `inf`, если `spread_min ~ 0` (идеально прямая линия без
+    поперечного разброса вообще — максимально вытянуто по определению)."""
+    if len(path) < 2:
+        return 0.0
+    rs = [p[0] for p in path]
+    cs = [p[1] for p in path]
+    mean_r = sum(rs) / len(rs)
+    mean_c = sum(cs) / len(cs)
+    s_rr = sum((r - mean_r) ** 2 for r in rs) / len(rs)
+    s_cc = sum((c - mean_c) ** 2 for c in cs) / len(cs)
+    s_rc = sum((r - mean_r) * (c - mean_c) for r, c in zip(rs, cs)) / len(rs)
+    trace = s_rr + s_cc
+    disc = math.sqrt(max(0.0, ((s_rr - s_cc) / 2.0) ** 2 + s_rc ** 2))
+    spread_max = trace / 2.0 + disc
+    spread_min = trace / 2.0 - disc
+    if spread_min < SPREAD_EPSILON:
+        return float("inf")
+    return math.sqrt(spread_max / spread_min)
 
 
-def _extract_segments_recursive(cells_set, min_cells=MIN_COMPONENT_CELLS):
-    """[TASK EUROPE_FRONT_LINE_001, AI_DISCUSSION Proposal v3 п.3,
-    APPROVED "с условием защиты от дублирования ячеек между сегментами
-    и бесконечной рекурсии"] Извлекает из компонента ГЛАВНЫЙ diameter-
-    path, а остаток (ячейки компонента, не попавшие на путь) —
-    рекурсивно раскладывает на under-компоненты и обрабатывает каждую
-    той же процедурой. Так T-образный/ветвящийся фронт даёт несколько
-    сегментов (основная линия + боковые ветви) вместо потери веток.
+def extract_europe_segments(consensus_score_grid, confirmed, lats, lons,
+                             min_cells=MIN_SEGMENT_CELLS, min_elongation=MIN_ELONGATION_RATIO):
+    """Точка входа Фаз 1-4. Возвращает (segments, n_components, n_ridge_cells)
+    — последние два для диагностики (запрошено GPT review)."""
+    rows, cols = confirmed.shape
+    ridge_mask = _ridge_mask(consensus_score_grid, confirmed, rows, cols)
+    n_ridge_cells = int(ridge_mask.sum())
+    components = _ridge_components(ridge_mask, confirmed)
 
-    Гарантии (проверено юнит-тестом на синтетических сетках, см. commit
-    message / AI_DISCUSSION):
-      - НЕТ дублирования ячеек между сегментами: remaining = cells_set -
-        set(path) — строгая разность множеств, path и remaining
-        непересекающиеся по построению; под-компоненты remaining также
-        взаимно непересекающиеся (это результат одного BFS-разбиения
-        одного множества).
-      - НЕТ бесконечной рекурсии: каждый рекурсивный вызов получает
-        cells_set строго меньшего размера, чем родительский (т.к.
-        len(path) >= 1 всегда вычитается), а базовый случай
-        len(cells_set) < min_cells останавливает рекурсию — общее число
-        уровней рекурсии ограничено размером исходного компонента."""
-    if len(cells_set) < min_cells:
-        return []
-    path = _diameter_path(cells_set)
-    segments = [{"cells": path, "n_cells": len(cells_set)}]
-    remaining = cells_set - set(path)
-    for sub in _connected_subcomponents(remaining):
-        segments.extend(_extract_segments_recursive(sub, min_cells))
-    return segments
-
-
-def extract_europe_segments(confirmed, consensus_score_grid, lats, lons, min_cells=MIN_COMPONENT_CELLS):
-    """Точка входа: confirmed grid -> список сегментов с lat/lon (без
-    px — пиксели добавляются отдельно в _attach_pixel_coords_to_segments,
-    т.к. используют ту же _lonlat_to_px, что и обычные points, и не
-    должны дублировать эту логику проекции)."""
-    components = _component_cells(confirmed)
-    all_segments = []
+    raw_paths = []
     for comp in components:
-        all_segments.extend(_extract_segments_recursive(comp, min_cells))
-    out = []
-    for seg in all_segments:
-        cells = seg["cells"]
-        scores = [consensus_score_grid[r, c] for (r, c) in cells if not math.isnan(consensus_score_grid[r, c])]
+        raw_paths.extend(_classify_and_order_component(comp, ridge_mask, confirmed))
+
+    segments = []
+    for path in raw_paths:
+        if len(path) < min_cells:
+            continue
+        if _elongation_ratio(path) < min_elongation:
+            continue  # [Proposal v9 п.4] эмпирический guard, не мат. доказательство
+        scores = [consensus_score_grid[r, c] for (r, c) in path if not math.isnan(consensus_score_grid[r, c])]
         avg_score = round(float(np.mean(scores)), 2) if scores else None
-        path = [{"lat": round(float(lats[r]), 3), "lon": round(float(lons[c]), 3)} for (r, c) in cells]
-        out.append({
-            "n_cells": seg["n_cells"],
-            "path_length": len(cells),
+        seg_path = [{"lat": round(float(lats[r]), 3), "lon": round(float(lons[c]), 3)} for (r, c) in path]
+        segments.append({
+            "n_cells": len(path),
+            "path_length": len(path),
             "avg_score": avg_score,
-            "path": path,
+            "path": seg_path,
         })
-    return out, len(components)
+    return segments, len(components), n_ridge_cells
 
 
 def _far_bboxes(geo):
@@ -651,10 +828,12 @@ def run_europe_detection(geo):
     votes_grid, n_valid_grid, confirmed, consensus_score_grid = detect_europe_fronts(model_results_by_id, rows, cols)
     overlay_points, far_wh, very_far_wh = _build_europe_overlay(points, votes_grid, n_valid_grid, confirmed, geo)
 
-    # [TASK EUROPE_FRONT_LINE_001] segments — связная линия фронта вместо
-    # облака точек (см. docs/ai/AI_DISCUSSION.md, Proposal v3, APPROVED).
+    # [TASK EUROPE_FRONT_LINE_001, ПЕРЕРАБОТАНО 2026-09-10] Hessian-based
+    # ridge extraction (см. docs/ai/AI_DISCUSSION.md, Proposal v6-v10,
+    # APPROVED) — заменяет отклонённый на живых данных recursive
+    # diameter-path (Proposal v2/v3, дал "сетку ломаных" вместо линий).
     # "points" НЕ убирается (обратная совместимость / fallback фронтенда).
-    raw_segments, n_components = extract_europe_segments(confirmed, consensus_score_grid, lats, lons)
+    raw_segments, n_components, n_ridge_cells = extract_europe_segments(consensus_score_grid, confirmed, lats, lons)
     segments, _far_wh2, _very_far_wh2 = _attach_pixel_coords_to_segments(raw_segments, geo)
 
     _save_json(EUROPE_OVERLAY_FILE, {
@@ -668,11 +847,13 @@ def run_europe_detection(geo):
     })
     n_confirmed = sum(1 for p in overlay_points if p["confirmed"])
     print(f"  [OK] open_meteo_frontal_confirm: {n_confirmed}/{len(overlay_points)} точек подтверждено консенсусом")
-    # Диагностика по запросу GPT review (docs/ai/AI_DISCUSSION.md, Proposal v3/APPROVED):
-    # confirmed cells / connected components / итоговые segments / длина каждого.
+    # Диагностика по запросу GPT review (docs/ai/AI_DISCUSSION.md,
+    # Proposal v10/APPROVED + implementation review requirement):
+    # confirmed cells / ridge cells / connected components / итоговые
+    # segments / длина каждого.
     seg_lengths = [s["path_length"] for s in segments]
-    print(f"  [OK] open_meteo_frontal_confirm: confirmed_cells={n_confirmed} components={n_components} "
-          f"segments={len(segments)} lengths={seg_lengths}")
+    print(f"  [OK] open_meteo_frontal_confirm: confirmed_cells={n_confirmed} ridge_cells={n_ridge_cells} "
+          f"components={n_components} segments={len(segments)} lengths={seg_lengths}")
 
     projection = project_to_near_tile(lats, lons, votes_grid, n_valid_grid, geo)
     if projection is not None:
