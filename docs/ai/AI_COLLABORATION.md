@@ -282,3 +282,38 @@ Claude не должен писать, например, «Proposal v3 (APPROVED
 GPT не может записать решение непосредственно в GitHub, Claude является
 техническим редактором журнала и фиксирует решение GPT от имени роли
 "GPT". USER не должен выполнять роль ручного копировщика между AI.
+
+
+---
+
+## ОБНОВЛЕНИЕ ПРОТОКОЛА | 2026-09-10T08:03:10Z UTC | Экономия токенов
+
+AI_DISCUSSION.md — decision log, не стенограмма. Хранить только: версия
+Proposal, STATUS, краткие принятые решения, обязательные изменения,
+commit SHA, результаты тестов. Не копировать полный текст review, не
+пересказывать подробно.
+
+Формат GPT review:
+```
+### GPT REVIEW | Proposal vX | STATUS: REQUEST CHANGES
+Required:
+- пункт 1
+```
+или
+```
+### GPT REVIEW | Proposal vX | STATUS: APPROVE
+Approved for implementation.
+```
+
+Формат ответа Claude:
+```
+PROPOSAL vX
+Changes:
+- ...
+Algorithm:
+- ... (не повторять архитектуру, если не изменилась)
+STATUS: awaiting GPT review
+```
+
+После APPROVE: реализация → тесты → commit+tests в decision log → GPT
+implementation review → живой Europe overlay + visual review.
