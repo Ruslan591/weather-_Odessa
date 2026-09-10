@@ -1655,3 +1655,66 @@ PROPOSAL v10 (wording fixes, без изменений архитектуры)
 Algorithm: без изменений от v9.
 
 STATUS: awaiting GPT review
+
+### CLAUDE IMPLEMENTED | Proposal v10 | commit 62f224e (scripts/open_meteo_frontal_confirm.py)
+
+**Changed:**
+- Удалён весь recursive diameter-path блок (`_component_cells`,
+  `_subgraph_dijkstra`, `_diameter_path`, `_extract_segments_recursive`,
+  старый `extract_europe_segments`) — заменён на Hessian-based Фазы 1-4:
+  `_bilinear_sample`, `_ridge_mask` (directional NMS вдоль
+  eigenvector(λ_min), curvature+anisotropy тест), `_valid_ridge_neighbors`
+  (единый corner-cut-free helper), `_ridge_components`,
+  `_classify_and_order_component` (простая линия / цикл / junction-
+  разбиение, без Dijkstra), `_elongation_ratio`, новый
+  `extract_europe_segments`.
+- `detect_europe_fronts()` и `_far_bboxes`/`_attach_pixel_coords_to_segments`
+  — БЕЗ ИЗМЕНЕНИЙ (не источник проблемы, ранее одобрены).
+- `nearby_precip.js` — без изменений (формат `segments[i].path` тот же).
+- Константы: `CURVATURE_EPSILON=1e-3`, `RIDGE_ANISOTROPY_RATIO=0.5`,
+  `VECTOR_EPSILON=1e-9`, `MIN_SEGMENT_CELLS=3`, `MIN_ELONGATION_RATIO=1.5`,
+  `SPREAD_EPSILON=1e-9`. Удалён неиспользуемый импорт `heapq`.
+
+**2 отклонения от буквального текста Proposal v10, найдены при
+тестировании (задокументированы в коде):**
+1. Corner-cut опора проверяется по `confirmed`, а не по `ridge_mask` —
+   иначе честная 1-клеточная диагональная линия рвалась на N изолированных
+   компонент (ridge-маска уже тонкая по построению, у неё нет "опорных"
+   соседей-ridge).
+2. `MIN_ELONGATION_RATIO`-guard пересчитан через PCA-вариацию координат
+   пути (собственные значения ковариации), а не `bbox_h/bbox_w` — у
+   диагональной линии bbox всегда квадратный независимо от длины,
+   naive-bbox ошибочно отклонял любую неосевую линию.
+
+**Tests (синтетика, без сети, все выполнены локально):**
+`py_compile`+`ast.parse` OK. 14 сценариев, все PASS: straight (диагональ,
+1 сегм/10 ячеек) · L-угол (corner сохранён) · review-пример
+`1 2 3 4 5 4 3 2 1` (центр сохранён) · 4-строчная полоса (все 4 центра
+сохранены, не схлопнулись) · 8×8 flat plateau (0 сегм) · 8×8 pronounced
+ridge (1 сегм) · cycle (обход без Dijkstra проверен отдельно на честном
+degree==2 графе — 16/16 ячеек, 1 путь) · T-junction (3 сегм,
+junction-ячейка корректно расшарена между path) · isolated isotropic peak
+(0 сегм, anisotropy отклонил) · elongated blob (1 сегм/16 ячеек) · 2
+параллельные линии (2 отдельных сегм, не слиплись) · sparse fragments
+(0 сегм, ниже порога) · no confirmed cells (0 сегм) · partial-model-
+failure/NaN gap (0 сегм, NaN-гард сработал, крэша нет). Duplicate-check:
+внутри каждого сегмента ячейки уникальны — PASS.
+
+**Risks:**
+- Живые данные Open-Meteo не прогонялись (нет сети в песочнице) — нужен
+  реальный прогон на VPS + визуальная проверка карты.
+- **Известное ограничение**: гладкая ОКРУЖНОСТЬ (замкнутый цикл) при
+  дискретизации через index-space Hessian на диагональных участках
+  (NE/NW/SE/SW) даёт локальное "утолщение" (хуже угловое разрешение по
+  диагонали) → цикл может распасться на 3-4 дуги вместо одного замкнутого
+  сегмента. Сам код обхода цикла корректен (проверено отдельно на честном
+  degree==2 графе), проблема только в том, что Hessian-детектор не всегда
+  дискретизирует гладкую окружность в идеальный 1-клеточный кольцевой
+  граф. Настоящие замкнутые фронты (окклюзии-петли) в реальных данных
+  редки — не блокирует, но стоит проверить на живой карте, если такое
+  встретится.
+- Константы (`CURVATURE_EPSILON`, `RIDGE_ANISOTROPY_RATIO=0.5`,
+  `MIN_ELONGATION_RATIO=1.5`) не откалиброваны на реальных величинах
+  score — калибровка по факту живого прогона.
+
+STATUS: awaiting GPT implementation review (+ real Europe overlay / visual review)
