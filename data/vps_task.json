@@ -1,5 +1,5 @@
 {
-  "task_id": "diag-outage-1",
-  "cmd": "\necho ===DATE===; date -u\necho ===PS===; ps aux | grep -E \"python3|vps_.*pipeline\" | grep -v grep\necho ===CRON===; crontab -l 2>/dev/null | grep -v \"^#\"\necho ===SYSTEMD-AGENT===; systemctl is-active vps-agent 2>/dev/null\necho ===SYSTEMD-CADDY===; systemctl is-active caddy 2>/dev/null\necho ===TAIL-MAIN===; tail -40 /var/log/vps-pipeline.log\necho ===TAIL-AI===; tail -25 /var/log/vps-ai-pipeline.log 2>/dev/null\necho ===TAIL-SAT===; tail -15 /var/log/vps-satellite-pipeline.log\necho ===ERR-GREP-MAIN===; grep -iE \"429|error|traceback|exception\" /var/log/vps-pipeline.log | tail -20\n",
+  "task_id": "diag-outage-2",
+  "cmd": "\necho ===LOGSIZE===; wc -l /var/log/vps-pipeline.log\necho ===FIRST429TODAY===; grep -n \"429\" /var/log/vps-pipeline.log | grep \"^\" | awk -F: '{print $1}' | head -1\necho ===GREP-10-09===; grep -B2 \"429\" /var/log/vps-pipeline.log | grep -E \"^[0-9]{2}:[0-9]{2}:[0-9]{2}\" | head -5\necho ===ALL-429-COUNT===; grep -c \"429\" /var/log/vps-pipeline.log\necho ===SUCCESS-AFTER-1300===; grep -E \"\\\\[OK\\\\]|success|\\u2713 icon_eu|\\u2713 ecmwf\" /var/log/vps-pipeline.log | tail -5\necho ===LAST-SUCCESSFUL-MODEL-FETCH===; grep -E \"HTTP Error 429|\\u2717 |INFO.*ecmwf_ifs|INFO.*icon_eu\" /var/log/vps-pipeline.log | grep -v WARNING | tail -40\necho ===DISK===; df -h / | tail -1\necho ===UPTIME===; uptime\n",
   "timeout": 45
 }
