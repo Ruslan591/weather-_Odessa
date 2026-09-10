@@ -1,29 +1,35 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-09-10T08:50:00.000Z",
+  "server_latest_time": "2026-09-10T09:30:00.000Z",
   "bootstrap": true,
   "buffer_before": 6,
-  "buffer_size": 6,
+  "bootstrap_failed_frames": [
+    {
+      "time": "2026-09-10T09:20:00.000Z",
+      "error": "попытка 1: HTTP 200, content-type='text/xml;charset=UTF-8', len=472: <?xml version=\"1.0\" encoding=\"UTF-8\"?><ServiceExceptionReport version=\"1.3.0\" xmlns=\"http://www.opengis.net/ogc\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.opengis.net/ogc https://view.eumetsat.int/geoserver/schemas/wms/1.3.0/exceptions_1_3_0.xsd\">   <Servic"
+    },
+    {
+      "time": "2026-09-10T09:30:00.000Z",
+      "error": "попытка 1: HTTP 200, content-type='text/xml;charset=UTF-8', len=472: <?xml version=\"1.0\" encoding=\"UTF-8\"?><ServiceExceptionReport version=\"1.3.0\" xmlns=\"http://www.opengis.net/ogc\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.opengis.net/ogc https://view.eumetsat.int/geoserver/schemas/wms/1.3.0/exceptions_1_3_0.xsd\">   <Servic"
+    }
+  ],
+  "buffer_size": 4,
   "buffer_times": [
-    "2026-09-10T08:00:00.000Z",
-    "2026-09-10T08:10:00.000Z",
-    "2026-09-10T08:20:00.000Z",
-    "2026-09-10T08:30:00.000Z",
     "2026-09-10T08:40:00.000Z",
-    "2026-09-10T08:50:00.000Z"
+    "2026-09-10T08:50:00.000Z",
+    "2026-09-10T09:00:00.000Z",
+    "2026-09-10T09:10:00.000Z"
   ],
   "frame_std": [
-    29.4,
-    29.0,
-    28.9,
-    28.8,
     28.6,
+    28.7,
+    28.7,
     28.7
   ],
   "result": {
-    "timestamp": "2026-09-10T08:50:00.000Z",
-    "buffer_size": 6,
-    "buffer_span_minutes": 50,
+    "timestamp": "2026-09-10T09:10:00.000Z",
+    "buffer_size": 4,
+    "buffer_span_minutes": 30,
     "observed_area": {
       "center_lat": 46.4406,
       "center_lon": 30.7703,
@@ -36,46 +42,23 @@
     },
     "valid": true,
     "speed_kmh": 0.1,
-    "direction_compass": "З",
-    "bearing_deg": 289.0,
-    "frame_pairs_used": 5,
-    "acceleration_kmh": -0.1,
-    "turning_deg": 101.9,
-    "acceleration_verdict": "скорость стабильна",
-    "turning_verdict": "меняет направление (по часовой)",
-    "forecast_displacement": {
-      "30min": {
-        "distance_km": 0.1,
-        "bearing_deg": 71.0,
-        "compass": "В"
-      },
-      "60min": {
-        "distance_km": 0.2,
-        "bearing_deg": 78.0,
-        "compass": "В"
-      },
-      "120min": {
-        "distance_km": 0.9,
-        "bearing_deg": 82.0,
-        "compass": "В"
-      }
-    },
+    "direction_compass": "СВ",
+    "bearing_deg": 29.5,
+    "frame_pairs_used": 2,
     "area_fraction_over_time": [
-      0.03,
-      0.021,
-      0.019,
-      0.027,
       0.028,
-      0.032
+      0.032,
+      0.035,
+      0.035
     ],
-    "area_trend_delta": 0.003,
+    "area_trend_delta": 0.007,
     "area_trend_verdict": "без существенных изменений",
     "station_state": "clear",
-    "station_area_fraction": 0.012,
-    "cloud_mass_distance_km": 11.1,
-    "cloud_mass_bearing_deg": 305.0,
-    "cloud_mass_compass": "СЗ",
-    "cloud_mass_area_km2": 72,
+    "station_area_fraction": 0.03,
+    "cloud_mass_distance_km": 9.8,
+    "cloud_mass_bearing_deg": 291.0,
+    "cloud_mass_compass": "З",
+    "cloud_mass_area_km2": 115,
     "target_confirmation": {
       "confirmed": false,
       "target_id": 0,
@@ -111,7 +94,7 @@
       {
         "target_id": 9,
         "available": true,
-        "roi_cloud_fraction": 0.164,
+        "roi_cloud_fraction": 0.158,
         "confirmed": false
       },
       {
@@ -161,7 +144,7 @@
       {
         "target_id": 7,
         "available": true,
-        "roi_cloud_fraction": 0.647,
+        "roi_cloud_fraction": 0.613,
         "confirmed": true
       },
       {
@@ -219,6 +202,6 @@
         "confirmed": false
       }
     ],
-    "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
+    "method_note": "Буфер 4/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
   }
 }
