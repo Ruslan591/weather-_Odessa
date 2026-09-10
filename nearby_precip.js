@@ -800,8 +800,28 @@ function _toggleEuropeOverlay(){
 // серый) — почти невидим на тёмном/пасмурном фоне снимка (пользователь:
 // "ничего не показано"). Заменён на янтарный + чёрная обводка у ВСЕХ
 // точек для контраста на любом фоне (облака светлые, море/ясно тёмные).
+// [ПЕРЕРАБОТАНО 2026-09-09, TASK EUROPE_FRONT_LINE_001] Раньше рисовались
+// только независимые circle по каждой точке — "линия фронта" физически
+// нигде не строилась, даже подтверждённые точки выглядели облаком
+// кружков. Теперь: если backend прислал overlayData.segments (связные
+// линии, diameter-path + junction-разбиение, см.
+// open_meteo_frontal_confirm.py::extract_europe_segments и
+// docs/ai/AI_DISCUSSION.md Proposal v2/v3, APPROVED) — рисуем polyline
+// по каждому сегменту. Explicit `.length > 0` (не просто наличие ключа)
+// — пустой segments не должен скрывать диагностические точки (см.
+// AI_DISCUSSION Proposal v2/v3 п.5, APPROVED). Если segments нет или
+// пуст — старый point-by-point рендер как fallback, БЕЗ ИЗМЕНЕНИЙ.
 function _buildEuropeOverlaySvgInner(overlayData, pxField){
-    if(!overlayData || !overlayData.points || !overlayData.points.length) return "";
+    if(!overlayData) return "";
+    if(overlayData.segments && overlayData.segments.length > 0){
+        return overlayData.segments.map(seg => {
+            const pts = (seg.path || []).map(p => p[pxField]).filter(Boolean);
+            if(pts.length < 2) return "";  // одна точка/меньше — polyline не имеет смысла, эта точка всё равно видна через points
+            const pointsAttr = pts.map(([x, y]) => `${x},${y}`).join(" ");
+            return `<polyline points="${pointsAttr}" fill="none" stroke="#3cdc3c" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.9"/>`;
+        }).join("");
+    }
+    if(!overlayData.points || !overlayData.points.length) return "";
     return overlayData.points
         .filter(p => p[pxField])
         .map(p => {
