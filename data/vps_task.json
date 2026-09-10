@@ -1,5 +1,5 @@
 {
-  "task_id": "diag-outage-3",
-  "cmd": "\necho ===LINENUM-10-09-MARKER===; grep -n \"10.09\" /var/log/vps-pipeline.log | head -3\necho ===FIRST-429-AFTER-MARKER===; awk '/10\\.09/{found=1} found && /429/{print NR\": \"$0; c++; if(c>=3) exit}' /var/log/vps-pipeline.log\necho ===LOGROTATE===; ls -la /etc/logrotate.d/ 2>/dev/null | grep -i vps\necho ===FILE-CTIME===; stat /var/log/vps-pipeline.log | grep -E 'Birth|Modify'\necho ===EVERY-429-BLOCK-TODAY===; grep -n \"429\" /var/log/vps-pipeline.log | awk -F: '{print $1}' | tail -100 | head -1\necho ===TIMESTAMPS-AROUND-FIRST-CONSISTENT-429===; sed -n '250000,250030p' /var/log/vps-pipeline.log\necho ===COUNT-SUCCESSFUL-FETCH-LAST-2H===; grep -E \"HTTP Error 429|^[0-9]{2}:[0-9]{2}:[0-9]{2}  INFO      (ecmwf_ifs|icon_eu|gfs_global) \" /var/log/vps-pipeline.log | tail -60\n",
-  "timeout": 45
+  "task_id": "diag-outage-4",
+  "cmd": "\necho ===LAST-OK-FETCH-PER-MODEL===\ngrep -nP '\\x{2713}\\s+(ecmwf_ifs|icon_eu|icon_global|ukmo_global_deterministic_10km|meteofrance_arpege_europe|gfs_global|gem_global|cma_grapes_global):' /var/log/vps-pipeline.log | tail -20\necho ===FIRST-OF-CURRENT-UNBROKEN-429-STREAK===\ntail -3000 /var/log/vps-pipeline.log | grep -nP '\\x{2713}\\s+\\w+_\\w*:' | tail -3\necho ===ALL-XMARK-LAST-30===\ntail -3000 /var/log/vps-pipeline.log | grep -P '\\x{2717}\\s|\\x{2713}\\s' | grep -E 'ecmwf_ifs|icon_eu|gfs_global|icon_global|ukmo|arpege|gem_global|grapes' | tail -40\n",
+  "timeout": 40
 }
