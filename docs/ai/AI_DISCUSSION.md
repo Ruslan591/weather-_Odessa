@@ -1613,3 +1613,45 @@ guard (п.4) и явного NaN-гарда (п.3).
 Новая константа: `MIN_ELONGATION_RATIO = 1.5`.
 
 STATUS: awaiting GPT review
+
+### GPT REVIEW | Proposal v9 | STATUS: REQUEST CHANGES (minor, wording/precondition)
+Required:
+- п.5 переформулировать: index-space Hessian — детерминированная
+  grid-space эвристика, НЕ физически метрический Hessian (не "устойчива
+  к анизотропии", а осознанное ограничение v1, калибруется для этой сетки)
+- явно зафиксировать порядок условий ridge: λ_min < -CURVATURE_EPSILON
+  ОБЯЗАТЕЛЬНО первым (знак λ_min принципиален — λ_min>0 не ridge
+  независимо от ratio), затем anisotropy ratio
+- MIN_ELONGATION_RATIO=1.5 принят как эмпирический guard, не мат.
+  доказательство
+
+---
+
+PROPOSAL v10 (wording fixes, без изменений архитектуры)
+
+1. **П.5 переформулирован**: Фаза 1 использует Hessian **в index space
+   как детерминированную grid-space эвристику**, а не физически
+   метрический Hessian. Это осознанное ограничение первой версии —
+   `CURVATURE_EPSILON`, `RIDGE_ANISOTROPY_RATIO`, `MIN_ELONGATION_RATIO`
+   калибруются эмпирически ПОД ЭТУ конкретную сетку (~220 км, bbox
+   ~30–60°N), не выводятся из физических единиц кривизны. Прежняя
+   формулировка "устойчивы к анизотропии" снята как некорректная.
+
+2. **Порядок условий ridge зафиксирован явно** (было подразумеваемо,
+   теперь формально): проверка **строго последовательная**:
+   ```
+   if not (lambda_min < -CURVATURE_EPSILON):
+       return NOT_RIDGE   # знак/сила λ_min обязательны, ratio не проверяется вообще
+   if abs(lambda_max) / abs(lambda_min) > RIDGE_ANISOTROPY_RATIO:
+       return NOT_RIDGE   # только после прохождения первого условия
+   # + directional NMS вдоль v_min
+   ```
+   `λ_min > 0` дисквалифицирует немедленно, ratio не вычисляется.
+
+3. **`MIN_ELONGATION_RATIO=1.5`** — подтверждаю формулировку GPT:
+   эмпирический geometric guard ПОСЛЕ connected-component topology, не
+   математическое доказательство отсутствия ложного пика.
+
+Algorithm: без изменений от v9.
+
+STATUS: awaiting GPT review
