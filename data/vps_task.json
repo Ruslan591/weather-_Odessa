@@ -1,5 +1,5 @@
 {
-  "task_id": "verify-natural-cycle-1788425700",
-  "cmd": "\necho ===DATE===; date -u\necho ===TAIL-MAIN===; tail -25 /var/log/vps-pipeline.log\necho ===TAIL-SAT===; tail -25 /var/log/vps-satellite-pipeline.log\necho ===GIT-LOG===; cd /opt/weather-pipeline/repo && git log -5 --oneline\n",
-  "timeout": 20
+  "task_id": "diag-outage-1",
+  "cmd": "\necho ===DATE===; date -u\necho ===PS===; ps aux | grep -E \"python3|vps_.*pipeline\" | grep -v grep\necho ===CRON===; crontab -l 2>/dev/null | grep -v \"^#\"\necho ===SYSTEMD-AGENT===; systemctl is-active vps-agent 2>/dev/null\necho ===SYSTEMD-CADDY===; systemctl is-active caddy 2>/dev/null\necho ===TAIL-MAIN===; tail -40 /var/log/vps-pipeline.log\necho ===TAIL-AI===; tail -25 /var/log/vps-ai-pipeline.log 2>/dev/null\necho ===TAIL-SAT===; tail -15 /var/log/vps-satellite-pipeline.log\necho ===ERR-GREP-MAIN===; grep -iE \"429|error|traceback|exception\" /var/log/vps-pipeline.log | tail -20\n",
+  "timeout": 45
 }
