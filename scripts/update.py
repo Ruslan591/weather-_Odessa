@@ -18,6 +18,8 @@ from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
 from urllib.parse import urlencode, quote
 
+import open_meteo_guard as _om_guard
+
 # ── Логирование ─────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
@@ -414,7 +416,16 @@ def build_model_record(synop_rec, hourly_by_model):
 # ════════════════════════════════════════════════════════════════════════════
 
 def fetch_ensemble_ready_time():
-    """Возвращает datetime готовности последнего прогона или None."""
+    """Возвращает datetime готовности последнего прогона или None.
+
+    Общий Open-Meteo circuit breaker (docs/ai/MODEL_UPDATE_OUTAGE.md):
+    эта точка входа никогда не является probe-owner'ом (им является
+    только ecmwf_ifs-проверка в vps_pipeline.py). Если ворота закрыты —
+    пропускаем весь шаг (0 запросов). При первом 429 — останавливаем
+    перебор моделей в ЭТОМ вызове (не долбим остальные)."""
+    if _om_guard.gate(probe_owner=False) == "skip":
+        log.info("  Open-Meteo cooldown активен — fetch_ensemble_ready_time пропущен")
+        return None
     times = []
     for m in ENSEMBLE_MODELS:
         if not m["metaId"]:
@@ -425,6 +436,11 @@ def fetch_ensemble_ready_time():
             ts   = data.get("last_run_availability_time")
             if ts:
                 times.append(int(ts))
+        except HTTPError as e:
+            if e.code == 429:
+                _om_guard.record_429()
+                log.warning("  HTTP 429 на %s — cooldown зафиксирован, останавливаю перебор моделей", m["id"])
+                break
         except Exception:
             pass
     if not times:
@@ -1361,14 +1377,25 @@ def main():
             for date_str, date_recs in by_date.items():
                 gist_log(f"  Модели за {date_str} ...")
                 hourly_by_model = {}
-                for mid in [m["id"] for m in ENSEMBLE_MODELS]:
-                    try:
-                        h = fetch_historical_model(mid, date_str)
-                        hourly_by_model[mid] = h
-                        time.sleep(0.5)
-                    except Exception as e:
-                        log.warning("    ✗ %s: %s", mid, e)
-                        hourly_by_model[mid] = None
+                if _om_guard.gate(probe_owner=False) == "skip":
+                    gist_log("    Open-Meteo cooldown активен — бэкфилл за эту дату пропущен")
+                else:
+                    for mid in [m["id"] for m in ENSEMBLE_MODELS]:
+                        try:
+                            h = fetch_historical_model(mid, date_str)
+                            hourly_by_model[mid] = h
+                            time.sleep(0.5)
+                        except HTTPError as e:
+                            if e.code == 429:
+                                _om_guard.record_429()
+                                log.warning("    ✗ %s: HTTP 429 — cooldown зафиксирован, останавливаю перебор моделей", mid)
+                                hourly_by_model[mid] = None
+                                break
+                            log.warning("    ✗ %s: %s", mid, e)
+                            hourly_by_model[mid] = None
+                        except Exception as e:
+                            log.warning("    ✗ %s: %s", mid, e)
+                            hourly_by_model[mid] = None
                 for rec in date_recs:
                     md_rec = build_model_record(rec, hourly_by_model)
                     if md_rec:
@@ -1413,10 +1440,12 @@ def main():
     need_synop = ensemble_ready_time is not None and (not last_synop_run or last_synop_run < ensemble_ready_time)
     need_pws   = ensemble_ready_time is not None and (not last_pws_run   or last_pws_run   < ensemble_ready_time)
 
-    if need_synop or need_pws:
+    all_model_hours = {}
+    succeeded = []
+    if (need_synop or need_pws) and _om_guard.gate(probe_owner=False) == "skip":
+        gist_log("  Open-Meteo cooldown активен — свежий ансамблевый прогноз пропущен")
+    elif need_synop or need_pws:
         log.info("  Загружаем прогнозы моделей...")
-        all_model_hours = {}
-        succeeded = []
         for m in ENSEMBLE_MODELS:
             try:
                 h = fetch_forecast_model(m["id"], days=16)
@@ -1424,6 +1453,12 @@ def main():
                     all_model_hours[m["id"]] = parse_hourly(h)
                     succeeded.append(m["id"])
                     gist_log(f"    ✓ {m['id']}")
+            except HTTPError as e:
+                if e.code == 429:
+                    _om_guard.record_429()
+                    gist_log(f"    ✗ {m['id']}: HTTP 429 — cooldown зафиксирован, останавливаю перебор моделей")
+                    break
+                gist_log(f"    ✗ {m['id']}: {e}")
             except Exception as e:
                 gist_log(f"    ✗ {m['id']}: {e}")
             time.sleep(0.5)
