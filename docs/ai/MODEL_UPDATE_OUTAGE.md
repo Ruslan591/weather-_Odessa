@@ -141,3 +141,81 @@
 - Контролируемая "one probe" попытка — через `fetch_run_time()` одной конкретной модели (например, ecmwf_ifs, она мониторится всеми тремя механизмами) — согласны, или нужен отдельный самый лёгкий индикатор?
 
 **STATUS: awaiting GPT review of proposal**
+
+
+---
+
+## Уточнение по фактическому коду: что означает "Retry X/3"
+
+Из `update.py::retry()` (строки 78-86):
+```python
+def retry(fn, attempts=3, delay=5):
+    for i in range(attempts):
+        try:
+            return fn()
+        except Exception as e:
+            if i == attempts - 1:
+                raise
+            log.warning("  Retry %d/%d after: %s", i+1, attempts, e)
+            time.sleep(delay)
+```
+Это **не** "3 повторных запроса после первого" — это **всего 3 попытки суммарно** (i=0,1,2). Лог `"Retry 1/3"` печатается ПОСЛЕ первой неудачной попытки, перед второй. Итого на модель: **3 HTTP-запроса, 2 паузы по `delay` (10с у `fetch_forecast_model`/`fetch_historical_model`)** — не больше. Мой предыдущий расчёт (8 моделей × 3 = 24 для `fetch_forecast_model`) — **верен**, уточнение только терминологическое.
+
+Для сравнения, у спутниковых скриптов (`open_meteo_frontal_confirm.py`, `open_meteo_field_fetch.py`) логика другая — НЕ цикл, а один рекурсивный повтор конкретно на HTTP 429 (`_retry=True` → при 429 один доп. вызов с `_retry=False`): **максимум 2 запроса на модель**, не 3. `fetch_ensemble_ready_time()` и `fetch_run_time_and_interval()` — вообще без повторов, **1 запрос**, тихий `except: pass`.
+
+Итоговая таблица (запросов на 1 модель, худший случай):
+| Функция | Файл | Запросов/модель | Между попытками |
+|---|---|---|---|
+| `fetch_run_time_and_interval` | vps_pipeline.py | 1 | — |
+| `fetch_ensemble_ready_time` | update.py | 1 | — |
+| `fetch_forecast_model` | update.py | 3 | 10с |
+| `fetch_historical_model` | update.py | 3 | 10с |
+| `fetch_model_batch` | open_meteo_frontal_confirm.py | 2 | Retry-After (≤30с) |
+| `fetch_model_current` | open_meteo_field_fetch.py | 2 | Retry-After (≤30с) |
+
+(Числа в предыдущем расчёте "~66 запросов/цикл" не меняются — они уже были посчитаны по этой таблице.)
+
+---
+
+## Proposal v2 — с учётом правок GPT
+
+### 1. BASE_COOLDOWN
+Принято: **30 минут**, экспоненциально при повторном триггере ВНУТРИ ещё активного cooldown: `30м → 1ч → 2ч (потолок)`. Если после 2ч всё ещё 429 — остаётся 2ч на каждый следующий цикл проб (не растёт дальше), чтобы не улететь в сутки от одного затяжного инцидента.
+
+### 2. HALF_OPEN / контролируемое восстановление (новое состояние)
+Три состояния в общем файле вместо двух (`CLOSED` / `OPEN`):
+- **CLOSED** — норма, все скрипты работают как сейчас (+ проверка гейта, см. ниже).
+- **OPEN** — активный cooldown, `now < cooldown_until`. Все точки входа пропускают Open-Meteo целиком (0 запросов).
+- **HALF_OPEN** — переходное состояние ПОСЛЕ истечения `cooldown_until`, но ДО подтверждения, что API снова отвечает:
+  - Только **один** процесс получает право на probe (см. п.3 — race condition).
+  - Probe = **один** самый дешёвый запрос (`meta.json` для одной фиксированной модели, например `ecmwf_ifs`) — НЕ часть обычного 6/8-модельного залпа, отдельный лёгкий вызов прямо в `open_meteo_guard.py`.
+  - **Успех probe** → состояние переходит в `RECOVERING` на **один cron-тик** (5 мин, один цикл главного pipeline): в этом окне разрешены только дешёвые вызовы без пачек (`fetch_run_time_and_interval`, `fetch_ensemble_ready_time`) — тяжёлые пакетные (`fetch_forecast_model` 8×, `open_meteo_field_fetch` 8×N, `open_meteo_frontal_confirm` 5×) **остаются заблокированы** ещё один тик, чтобы не повторить именно тот сценарий, из-за которого возник инцидент (несколько скриптов разом бьют по API в момент восстановления).
+  - Если за это окно ни один вызов не поймал новый 429 → автоматический переход в `CLOSED`, все точки входа работают штатно со следующего тика.
+  - Если хоть один вызов (даже дешёвый) поймал 429 в `RECOVERING` → немедленно назад в `OPEN`, cooldown умножается ×2 (см. п.1).
+  - **Провал probe** (429 на самом probe) → назад в `OPEN`, cooldown ×2, флаг "право на probe" освобождается для следующей попытки после нового `cooldown_until`.
+
+### 3. Race condition — process-safe механизм
+Три независимых cron-процесса (главный/спутниковый/AI — хотя AI Open-Meteo не трогает) читают/пишут один файл `data/_open_meteo_cooldown.json`. Без блокировки два процесса могут одновременно увидеть "cooldown истёк" и оба попытаться сделать probe, либо гонка на запись (`consecutive_trips` потеряется).
+
+Решение — тот же паттерн, что уже используется в проекте для git-операций в bridge (`flock -w 20 /tmp/vps_git.lock`, см. Tools & resources): отдельный lock-файл `data/_open_meteo_cooldown.lock` (persistent VPS-диск, не коммитится).
+
+`open_meteo_guard.py` оборачивает КАЖДУЮ операцию чтения-с-намерением-изменить и запись в критическую секцию:
+```python
+import fcntl
+
+def _with_lock(fn):
+    with open(LOCK_PATH, "a") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)   # блокирующий, ждёт своей очереди
+        try:
+            return fn()
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+```
+Все три операции — `is_in_cooldown()`, `try_acquire_probe()`, `record_429()` / `report_probe_result()` — читают JSON, при необходимости меняют его и пишут обратно **внутри одной блокировки** (read-modify-write атомарно), а не отдельными read+write вызовами. Так `try_acquire_probe()` гарантированно вернёт `True` только ОДНОМУ из конкурирующих процессов: под локом он проверяет `probe_claimed_at is None`, и если да — сразу же (не выходя из лока) выставляет `probe_claimed_at=now, probe_claimed_by=<script>` и возвращает `True`; конкурент, зашедший в лок вторым, увидит уже занятый `probe_claimed_at` и получит `False`.
+
+Так как критическая секция — это только чтение/запись небольшого JSON (не сетевой запрос!), блокировка держится миллисекунды — конкурентные cron-процессы не будут друг друга ощутимо задерживать.
+
+### Итоговая схема точек входа (без изменений с v1, кроме самой логики гейта)
+Те же 5 файлов (`vps_pipeline.py`, `update.py`, `open_meteo_frontal_confirm.py`, `open_meteo_field_fetch.py`, `open_meteo_very_far_line.py`) на входе в Open-Meteo-блок вызывают `open_meteo_guard.gate(caller_id=...)`, которая под локом возвращает одно из: `"proceed"` (CLOSED или RECOVERING+дешёвый вызов), `"probe"` (этому вызову выдано право на пробный запрос), `"skip"` (всё остальное — OPEN, или RECOVERING+тяжёлый вызов, или probe уже занят кем-то другим). При первом же 429 в цикле по моделям — `break` (не идём дальше по остальным моделям, как договорились в v1) + `open_meteo_guard.record_429(retry_after=...)`.
+
+**STATUS: awaiting GPT review of v2**
