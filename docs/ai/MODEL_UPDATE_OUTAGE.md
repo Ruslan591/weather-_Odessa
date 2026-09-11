@@ -265,3 +265,47 @@ if guard.is_in_cooldown():
 Изменения в существующих файлах — как в v1/v2 (2-3 строки на файл), без HALF_OPEN-специфики. Код по-прежнему не менял.
 
 **STATUS: awaiting GPT review of v3**
+
+
+---
+
+## РЕАЛИЗАЦИЯ (11.09.2026) — Proposal v3 внедрён
+
+### Коммиты (main)
+| Файл | Commit SHA |
+|---|---|
+| `scripts/open_meteo_guard.py` (новый) | `87f082e1dbd01284ed7f29dd0cc69ab07bc07833` |
+| `scripts/vps_pipeline.py` | `14f5392b02da8b9e0ef36436b423d15205de998f` |
+| `scripts/update.py` | `f01d7222d0ed73f8339be21549b2d798849ecdf5` |
+| `scripts/open_meteo_frontal_confirm.py` | `96411ed939a6107f755bde4b1934bebdcb059d2c` |
+| `scripts/open_meteo_field_fetch.py` | `dbd4a78e4995db3c7ac1fd03dfc9ec05dc3b81b8` |
+| `scripts/open_meteo_very_far_line.py` | `e2e1d4de18e0d99da79dffc18299cf4df182c06d` |
+
+Все правки — целевые `str_replace` (не heredoc), после каждой — `py_compile` + `ast`-сверка списка функций до/после (0 потерянных, 0 случайно добавленных функций во всех 5 изменённых файлах). Содержимое на GitHub после пуша сверено байт-в-байт с локальной версией — совпадает во всех 6 файлах.
+
+### Что именно внедрено (соответствует Proposal v3)
+- `open_meteo_guard.py`: 2 состояния (`CLOSED`/`OPEN`), файл состояния `data/_open_meteo_cooldown.json` + lock `data/_open_meteo_cooldown.lock` (не коммитятся — не входят в whitelist `git add` ни одного из трёх pipeline, как и существующие `_throttle_*.json`). `gate(probe_owner)` — единая атомарная точка (под `fcntl.flock`), возвращает `proceed`/`probe`/`skip`. `record_429()` — no-op, если уже `OPEN` (защита от "хвостовых" параллельных 429). `report_probe_result()` — только `CLOSED` (успех) или backoff 30м→1ч→2ч (провал).
+- Probe-owner — **только** проверка `ecmwf_ifs` в `vps_pipeline.py` (уже существующий самый дешёвый вызов `fetch_run_time_and_interval`, без изменений в самой сети/логике детекта прогонов).
+- Во всех 5 точках входа: gate-проверка перед сетевым блоком + `break`/`continue` на первом 429 в переборе моделей (не долбим оставшиеся модели в этом цикле).
+
+### Тесты (без сети, только логика state machine)
+Прогнаны локально в песочнице (не на VPS):
+1. **CLOSED → первый 429 (non-probe) → OPEN, trips=1, cooldown=30м** — OK.
+2. **Второй 429 (non-probe) во время уже открытого OPEN → no-op** (state не меняется побитово) — OK, подтверждён явным сравнением словаря состояния до/после.
+3. **gate() для не-probe-владельца — `skip` и до, и после истечения cooldown** (пока пробу не подтвердили) — OK.
+4. **gate() для probe-владельца до истечения cooldown → `skip`**; **после истечения → `probe`** (claim выставлен) — OK.
+5. **Провал probe → `report_probe_result(False)` → `OPEN`, trips=2, cooldown=1ч** — OK.
+6. **Повторная проба после истечения нового cooldown → успех → `report_probe_result(True)` → `CLOSED`, trips=0** — OK.
+7. **Race condition**: 20 параллельных процессов (`fork` через отдельные `python3`-процессы, не threads — реалистичнее для независимых cron-джобов) одновременно вызывают `gate(probe_owner=True)` при истёкшем cooldown → **ровно один** получил `"probe"`, остальные 19 — `"skip"`. Файл состояния не повреждён.
+8. **10 параллельных non-probe вызовов** `gate(probe_owner=False)` во время активного `OPEN` → все 10 корректно получили `"skip"`, состояние (`trips`, `cooldown_until`) не изменилось ни на йоту.
+
+Скрипты тестов не коммитились в репозиторий (временные, в песочнице) — при необходимости могу оформить как `tests/test_open_meteo_guard.py` отдельным коммитом, если нужно для CI/регрессии.
+
+### Как это доедет до VPS
+`vps_pipeline.py` в начале **каждого** 5-минутного цикла делает `git fetch origin main --depth 1 && git reset --hard origin/main` (см. докстринг файла) — значит все 6 файлов подтянутся на VPS автоматически на первом же cron-тике после этого коммита, без ручного вмешательства. `git reset --hard` не трогает untracked-файлы (`_throttle_*.json`, теперь и `_open_meteo_cooldown.*`) — персистентность между циклами сохраняется.
+
+### Что осталось проверить УЖЕ на живом VPS (не проверено в этой сессии — сети к Open-Meteo из песочницы нет, состояние на VPS сейчас `CLOSED`, инцидент не воспроизвести искусственно без реального 429)
+- Что `import open_meteo_guard` резолвится корректно при запуске `python3 /opt/weather-pipeline/repo/scripts/vps_pipeline.py` из cron (ожидается — Python добавляет директорию скрипта в `sys.path[0]`, как уже используется для `from open_meteo_field_fetch import ...` в `open_meteo_very_far_line.py`).
+- Что при следующем реальном 429 (если он случится) в логе появится `"cooldown зафиксирован"` / `"⛔ Open-Meteo cooldown активен"` — визуальное подтверждение, что breaker сработал.
+
+**STATUS: implemented, awaiting first live 429 (or manual VPS smoke-test) for on-server confirmation**
