@@ -1,5 +1,5 @@
 {
-  "task_id": "diag-outage-4",
-  "cmd": "\necho ===LAST-OK-FETCH-PER-MODEL===\ngrep -nP '\\x{2713}\\s+(ecmwf_ifs|icon_eu|icon_global|ukmo_global_deterministic_10km|meteofrance_arpege_europe|gfs_global|gem_global|cma_grapes_global):' /var/log/vps-pipeline.log | tail -20\necho ===FIRST-OF-CURRENT-UNBROKEN-429-STREAK===\ntail -3000 /var/log/vps-pipeline.log | grep -nP '\\x{2713}\\s+\\w+_\\w*:' | tail -3\necho ===ALL-XMARK-LAST-30===\ntail -3000 /var/log/vps-pipeline.log | grep -P '\\x{2717}\\s|\\x{2713}\\s' | grep -E 'ecmwf_ifs|icon_eu|gfs_global|icon_global|ukmo|arpege|gem_global|grapes' | tail -40\n",
+  "task_id": "verify-guard-1",
+  "cmd": "\ncd /opt/weather-pipeline/repo\ngit log --oneline -1\necho ===IMPORT-CHECK===\npython3 -c \"import sys; sys.path.insert(0,'scripts'); import open_meteo_guard as g; print('gate:', g.gate(probe_owner=False)); print('status:', g.status())\"\necho ===AST-CHECK===\nfor f in scripts/vps_pipeline.py scripts/update.py scripts/open_meteo_frontal_confirm.py scripts/open_meteo_field_fetch.py scripts/open_meteo_very_far_line.py scripts/open_meteo_guard.py; do\n  python3 -c \"import ast; ast.parse(open('$f').read()); print('$f OK')\" || echo \"$f FAIL\"\ndone\necho ===LS-DATA===\nls -la data/_open_meteo_cooldown* 2>/dev/null || echo \"no cooldown files yet (expected before first trip)\"\n",
   "timeout": 40
 }
