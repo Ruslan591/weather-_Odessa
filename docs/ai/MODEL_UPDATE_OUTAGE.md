@@ -219,3 +219,49 @@ def _with_lock(fn):
 Те же 5 файлов (`vps_pipeline.py`, `update.py`, `open_meteo_frontal_confirm.py`, `open_meteo_field_fetch.py`, `open_meteo_very_far_line.py`) на входе в Open-Meteo-блок вызывают `open_meteo_guard.gate(caller_id=...)`, которая под локом возвращает одно из: `"proceed"` (CLOSED или RECOVERING+дешёвый вызов), `"probe"` (этому вызову выдано право на пробный запрос), `"skip"` (всё остальное — OPEN, или RECOVERING+тяжёлый вызов, или probe уже занят кем-то другим). При первом же 429 в цикле по моделям — `break` (не идём дальше по остальным моделям, как договорились в v1) + `open_meteo_guard.record_429(retry_after=...)`.
 
 **STATUS: awaiting GPT review of v2**
+
+
+---
+
+## Proposal v3 — упрощённая state machine (по замечаниям GPT)
+
+### Убрано
+- Отдельное состояние `RECOVERING` и деление вызовов на cheap/heavy — убрано целиком.
+- Guard больше НЕ делает HTTP-запросов сам — только состояние + lock.
+
+### Состояния — всего два
+`CLOSED` (норма) / `OPEN` (cooldown). Файл `data/_open_meteo_cooldown.json`:
+```json
+{"state": "OPEN", "cooldown_until": "2026-09-10T14:00:00Z", "trips": 1, "probe_claimed_at": null}
+```
+
+### Кто выполняет probe
+Guard НЕ ходит в сеть. Probe — это **существующий** вызов `fetch_run_time_and_interval("ecmwf_ifs025")` в `vps_pipeline.py` (главный pipeline, проверка прогонов моделей). Он и так самый дешёвый (1 запрос, meta.json, без ретраев) и и так выполняется на каждом цикле как часть штатной проверки прогонов. Фиксированный, единственный probe-owner — **этот конкретный вызов для этой конкретной модели**, никакой отдельной синтетической функции в guard не создаётся.
+
+### Логика для 5 точек входа
+Все точки входа (включая саму проверку `ecmwf_ifs` в `vps_pipeline.py`) на входе делают:
+```python
+if guard.is_in_cooldown():
+    # но если это ИМЕННО probe-owner (ecmwf_ifs check) — сначала пробуем застолбить probe
+    if caller_is_probe_owner and guard.try_acquire_probe():
+        pass  # разрешено выполнить СВОЙ обычный запрос как probe
+    else:
+        skip()  # 0 запросов
+```
+Остальные 4 точки входа (`update.py`×3 функции, `open_meteo_frontal_confirm.py`, `open_meteo_field_fetch.py`, `open_meteo_very_far_line.py`) видят `is_in_cooldown() == True` и просто пропускают весь блок, пока `state != CLOSED` — без какого-либо разделения "лёгкий/тяжёлый" вызов.
+
+### Переходы состояний
+1. **CLOSED → OPEN** (первый трип): любая из 5 точек входа поймала первый 429 в своём цикле → `guard.record_429()` → если `state == CLOSED`: `state = OPEN`, `cooldown_until = now + 30м`, `trips = 1`.
+2. **429 во время уже открытого OPEN, НЕ от probe-owner'а**: это "хвостовой" запрос, начатый ДО того, как ворота закрылись (гонка с моментом трипа) — `record_429()` при `state == OPEN` и вызов НЕ помечен как probe → **no-op**, ничего не меняем (по просьбе GPT: backoff не растёт от параллельных 429, начавшихся до трипа).
+3. **OPEN, `now >= cooldown_until`**: только probe-owner (`ecmwf_ifs` check в `vps_pipeline.py`) вызывает `try_acquire_probe()` — под flock атомарно проверяет `probe_claimed_at is None`, если да — ставит `probe_claimed_at = now` и возвращает `True` (право получено), иначе `False`. Только обладатель `True` реально делает HTTP-запрos.
+4. **Probe успешен**: `guard.report_probe_result(success=True)` → `state = CLOSED`, `trips = 0`, `probe_claimed_at = None`. Все точки входа с этого момента (следующая их проверка `is_in_cooldown()`) работают штатно.
+5. **Probe провалился (429 на самом probe)**: `guard.report_probe_result(success=False)` → `state` остаётся `OPEN`, `trips += 1`, `cooldown_until = now + backoff(trips)`, `probe_claimed_at = None` (разблокировано для следующей попытки после нового `cooldown_until`). `backoff`: `{1: 30м, 2: 1ч, 3+: 2ч}` (потолок 2ч).
+
+### Итог: 3 функции в `open_meteo_guard.py`, ноль сетевых вызовов внутри него
+- `is_in_cooldown() -> bool` (под flock, простое чтение `state`)
+- `try_acquire_probe() -> bool` (под flock, атомарный claim, только для вызова из `vps_pipeline.py`/`ecmwf_ifs`-проверки)
+- `record_429(is_probe: bool)` / `report_probe_result(success: bool)` — по сути один и тот же путь записи, разница только в источнике вызова (обычная точка входа vs probe-owner)
+
+Изменения в существующих файлах — как в v1/v2 (2-3 строки на файл), без HALF_OPEN-специфики. Код по-прежнему не менял.
+
+**STATUS: awaiting GPT review of v3**
