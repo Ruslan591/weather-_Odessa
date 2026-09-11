@@ -33,6 +33,8 @@ from datetime import datetime, timezone
 
 import numpy as np
 
+import open_meteo_guard as _om_guard
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 FRONTAL_TRACK_FILE = os.path.join(DATA_DIR, "eumetsat_frontal_track.json")
@@ -195,7 +197,12 @@ def main():
     now = datetime.now(timezone.utc)
     out_tracks = {}
 
-    for t in ft["tracks"]:
+    tracks = ft["tracks"]
+    if _om_guard.gate(probe_owner=False) == "skip":
+        print("  [INFO] open_meteo_field_fetch: Open-Meteo cooldown активен — пропуск")
+        tracks = []
+
+    for t in tracks:
         try:
             grid = build_grid(t.get("dx_km", 0.0), t.get("dy_km", 0.0), t.get("axis_deg"),
                                t.get("area_km2"), t.get("aspect_ratio"),
@@ -211,6 +218,13 @@ def main():
         for model_id in MODEL_IDS:
             try:
                 vals = fetch_model_current(model_id, flat)
+            except urllib.error.HTTPError as e:
+                if e.code == 429:
+                    _om_guard.record_429()
+                    print(f"  [WARN] open_meteo_field_fetch: {model_id}: HTTP 429 — cooldown зафиксирован, останавливаю перебор моделей")
+                    break
+                print(f"  [WARN] open_meteo_field_fetch: модель {model_id} трек {t.get('track_id')}: {e}")
+                continue
             except Exception as e:
                 print(f"  [WARN] open_meteo_field_fetch: модель {model_id} трек {t.get('track_id')}: {e}")
                 continue
