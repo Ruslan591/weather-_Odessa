@@ -1,5 +1,5 @@
 {
-  "task_id": "verify-guard-3",
-  "cmd": "\ncd /opt/weather-pipeline/repo\ngit fetch origin main --depth 1 2>&1 | tail -3\ngit reset --hard origin/main 2>&1 | tail -3\ngit log --oneline -1\necho ===IMPORT-CHECK===\npython3 -c \"import sys; sys.path.insert(0,'scripts'); import open_meteo_guard as g; print('gate:', g.gate(probe_owner=False)); print('status:', g.status())\"\necho ===LS-DATA===\nls -la data/_open_meteo_cooldown* 2>/dev/null || echo \"no cooldown files yet (expected before first trip)\"\n",
+  "task_id": "verify-guard-4",
+  "cmd": "\ncd /opt/weather-pipeline/repo\necho ===GIT-STATUS-COOLDOWN===\ngit status --porcelain data/_open_meteo_cooldown.json data/_open_meteo_cooldown.lock 2>&1\necho ===COOLDOWN-CONTENT===\ncat data/_open_meteo_cooldown.json\necho\necho ===LOG-COOLDOWN-MENTIONS===\ntail -300 /var/log/vps-pipeline.log | grep -i \"cooldown\" | tail -20\necho ===LOG-SAT-COOLDOWN===\ntail -300 /var/log/vps-satellite-pipeline.log | grep -i \"cooldown\" | tail -20\necho ===UPTIME===\ndate -u\n",
   "timeout": 40
 }
