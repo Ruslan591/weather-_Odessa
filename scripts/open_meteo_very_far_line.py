@@ -15,11 +15,13 @@ data/anim/very_far_geocolour.png.
 import json
 import os
 import traceback
+import urllib.error
 
 import numpy as np
 from PIL import Image, ImageDraw
 
 from open_meteo_field_fetch import fetch_model_current, _gradient_ridge
+import open_meteo_guard as _om_guard
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GEO_CONFIG_FILE = os.path.join(BASE_DIR, "data", "geo_config.json")
@@ -55,11 +57,24 @@ def main():
             geo = json.load(f)
         min_lon, min_lat, max_lon, max_lat = geo["very_far_window"]["bbox"]
 
+        if _om_guard.gate(probe_owner=False) == "skip":
+            _write_debug("cooldown_skip")
+            print("  [INFO] open_meteo_very_far_line: Open-Meteo cooldown активен — пропуск")
+            return
+
         lats = np.linspace(max_lat, min_lat, GRID_N)
         lons = np.linspace(min_lon, max_lon, GRID_N)
         flat = [{"lat": round(float(la), 3), "lon": round(float(lo), 3)} for la in lats for lo in lons]
 
-        vals = fetch_model_current(MODEL_ID, flat)
+        try:
+            vals = fetch_model_current(MODEL_ID, flat)
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                _om_guard.record_429()
+                _write_debug("http_429")
+                print("  [WARN] open_meteo_very_far_line: HTTP 429 — cooldown зафиксирован")
+                return
+            raise
         if not vals or len(vals) != len(flat):
             _write_debug("bad_response_len", n_expected=len(flat), n_got=len(vals) if vals else 0)
             print(f"  [WARN] open_meteo_very_far_line: неожиданный размер ответа ({len(vals) if vals else 0} из {len(flat)})")
