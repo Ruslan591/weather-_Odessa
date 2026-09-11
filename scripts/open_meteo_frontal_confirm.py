@@ -91,6 +91,8 @@ from datetime import datetime, timezone
 import numpy as np
 from PIL import Image
 
+import open_meteo_guard as _om_guard
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 GEO_CONFIG_FILE = os.path.join(DATA_DIR, "geo_config.json")
@@ -817,13 +819,22 @@ def run_europe_detection(geo):
     print(f"  open_meteo_frontal_confirm: сетка {rows}x{cols}={rows*cols} точек, шаг {EUROPE_GRID_STEP_KM}км")
 
     model_results_by_id = {}
-    for i, (model_id, _label) in enumerate(MODELS):
-        try:
-            model_results_by_id[model_id] = fetch_model_batch(model_id, points)
-        except Exception as e:
-            print(f"  [WARN] open_meteo_frontal_confirm: модель {model_id}: {e}")
-        if i < len(MODELS) - 1:
-            time.sleep(REQUEST_INTERVAL)
+    if _om_guard.gate(probe_owner=False) == "skip":
+        print("  [INFO] open_meteo_frontal_confirm: Open-Meteo cooldown активен — пропуск")
+    else:
+        for i, (model_id, _label) in enumerate(MODELS):
+            try:
+                model_results_by_id[model_id] = fetch_model_batch(model_id, points)
+            except urllib.error.HTTPError as e:
+                if e.code == 429:
+                    _om_guard.record_429()
+                    print(f"  [WARN] open_meteo_frontal_confirm: {model_id}: HTTP 429 — cooldown зафиксирован, останавливаю перебор моделей")
+                    break
+                print(f"  [WARN] open_meteo_frontal_confirm: модель {model_id}: {e}")
+            except Exception as e:
+                print(f"  [WARN] open_meteo_frontal_confirm: модель {model_id}: {e}")
+            if i < len(MODELS) - 1:
+                time.sleep(REQUEST_INTERVAL)
 
     votes_grid, n_valid_grid, confirmed, consensus_score_grid = detect_europe_fronts(model_results_by_id, rows, cols)
     overlay_points, far_wh, very_far_wh = _build_europe_overlay(points, votes_grid, n_valid_grid, confirmed, geo)
