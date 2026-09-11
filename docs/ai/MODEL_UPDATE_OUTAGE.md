@@ -309,3 +309,21 @@ if guard.is_in_cooldown():
 - Что при следующем реальном 429 (если он случится) в логе появится `"cooldown зафиксирован"` / `"⛔ Open-Meteo cooldown активен"` — визуальное подтверждение, что breaker сработал.
 
 **STATUS: implemented, awaiting first live 429 (or manual VPS smoke-test) for on-server confirmation**
+
+---
+
+## IMPLEMENTATION — 11.09.2026
+
+- Incident diagnosis: Open-Meteo HTTP 429 confirmed; pipeline/VPS themselves continued working normally.
+- Recovery: new model data resumed at `2026-09-11T00:16:25Z`, shortly after UTC midnight; daily quota hypothesis strongly supported, exact Open-Meteo limit mechanism not independently confirmed.
+- Root architectural issue: independent pipelines continued making Open-Meteo requests after the first 429, with no shared cross-process cooldown.
+- Fix implemented: global persistent Open-Meteo circuit breaker in `scripts/open_meteo_guard.py`.
+- State machine: `CLOSED → OPEN`; first 429 stops further model requests; cooldown `30m → 1h → 2h`; one atomic probe after cooldown; probe success returns to `CLOSED`.
+- Process safety: shared state protected with `fcntl.flock`; concurrent probe claim tested with 20 processes, exactly one probe winner.
+- Guard does not perform HTTP itself; probe uses existing `ecmwf_ifs` run-time check.
+- All 5 Open-Meteo entry points integrated.
+- Implementation commits: `87f082e`, `14f5392`, `f01d722`, `96411ed`, `dbd4a78`, `e2e1d4d`.
+- Local state-machine tests: PASS.
+- VPS smoke-test / first live 429 confirmation: pending.
+
+STATUS: implemented; awaiting VPS smoke-test and first live 429 confirmation.
