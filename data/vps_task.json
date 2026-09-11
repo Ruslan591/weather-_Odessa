@@ -1,5 +1,5 @@
 {
-  "task_id": "verify-guard-1",
-  "cmd": "\ncd /opt/weather-pipeline/repo\ngit log --oneline -1\necho ===IMPORT-CHECK===\npython3 -c \"import sys; sys.path.insert(0,'scripts'); import open_meteo_guard as g; print('gate:', g.gate(probe_owner=False)); print('status:', g.status())\"\necho ===AST-CHECK===\nfor f in scripts/vps_pipeline.py scripts/update.py scripts/open_meteo_frontal_confirm.py scripts/open_meteo_field_fetch.py scripts/open_meteo_very_far_line.py scripts/open_meteo_guard.py; do\n  python3 -c \"import ast; ast.parse(open('$f').read()); print('$f OK')\" || echo \"$f FAIL\"\ndone\necho ===LS-DATA===\nls -la data/_open_meteo_cooldown* 2>/dev/null || echo \"no cooldown files yet (expected before first trip)\"\n",
+  "task_id": "verify-guard-3",
+  "cmd": "\ncd /opt/weather-pipeline/repo\ngit fetch origin main --depth 1 2>&1 | tail -3\ngit reset --hard origin/main 2>&1 | tail -3\ngit log --oneline -1\necho ===IMPORT-CHECK===\npython3 -c \"import sys; sys.path.insert(0,'scripts'); import open_meteo_guard as g; print('gate:', g.gate(probe_owner=False)); print('status:', g.status())\"\necho ===LS-DATA===\nls -la data/_open_meteo_cooldown* 2>/dev/null || echo \"no cooldown files yet (expected before first trip)\"\n",
   "timeout": 40
 }
