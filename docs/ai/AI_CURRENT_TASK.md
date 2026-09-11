@@ -1,44 +1,50 @@
 # AI CURRENT TASK
 
 ## ID
-EUROPE_FRONT_LINE_001
+FRONT_DETECTION_ARCHITECTURE_001
 
 ## Status
-OPEN
+OPEN — Proposal готов, ожидает GPT review
 
 ## Goal
-Исправить алгоритм европейского фронтального анализа: сейчас на карте отображается широкая сетка зелёных точек, а не связная фронтальная линия.
+Архитектура детекции реальных атмосферных фронтов (cold/warm/occlusion/
+stationary) на базе Satellite → BUFR → Open-Meteo, с покраской поверх
+спутникового снимка и confidence-уровнями. Полный текст — см.
+`docs/ai/FRONT_DETECTION_ARCHITECTURE.md`.
 
-## Observed result
-- Europe grid: примерно 220 км.
-- Используется консенсус нескольких моделей.
-- На карте много подтверждённых точек, образующих широкие области.
-- UI сообщает «Линия фронта (Европа) показана», хотя фактически отображаются точки.
+## Context (кратко)
+- Пользователь: 1-2 недели назад была попытка Europe-wide детектора
+  фронтов на Cloud Mask (CLM) — захватывал весь/очень большой массив
+  облачности вместо фронта. Код не найден в git-истории/docs (архив
+  `eumetsat_archive.md` не содержит Europe+CLM, commit-search пуст) —
+  анализ сделан по симптому, не по коду.
+- Существующий near/west satellite-детектор (`eumetsat_cloud_forecast.py`
+  / `eumetsat_west_watch.py` / `eumetsat_frontal_track.py`) НЕ имеет этой
+  проблемы — локальный охват (Одесса ±2.5° / west bbox), явный
+  area+aspect_ratio фильтр frontlike. Активно развивается, последний
+  коммит 2026-09-07 (классификация тёплый/холодный по станциям).
+- `EUROPE_FRONT_LINE_001` НЕ трогается этой задачей — отдельный трек,
+  статус: Proposal v10 implemented (commit `62f224e`), ожидает GPT
+  implementation review + живая проверка на VPS.
 
-## Suspected cause
-Текущий критерий фронтоподобности использует слишком широкое условие:
-- gradient temperature OR gradient pressure
+## Proposal (Layer 1, Satellite Front Detector) — см. полный текст в
+docs/ai/FRONT_DETECTION_ARCHITECTURE.md
 
-Это может отмечать обычные синоптические градиенты на больших площадях.
-
-## Required outcome
-1. Не просто повысить пороги.
-2. Выделить узкую фронтальную зону / гребень максимального фронтального сигнала.
-3. Объединить подходящие точки в связные сегменты.
-4. Передавать сегменты во frontend как линии.
-5. Сохранить консенсус между моделями.
-6. Не ломать near / west / far / very_far и существующий satellite pipeline.
+Ключевая идея: для Europe-wide спутникового поиска не использовать
+бинарную CLM-маску напрямую (гипотеза — именно так провалилась
+предыдущая попытка), а строить непрерывное поле CTH внутри облачной
+области и применять к нему уже реализованный и протестированный
+Hessian-based ridge extraction из `open_meteo_frontal_confirm.py`
+(переиспользование, не копирование кода).
 
 ## Constraints
-- Сначала анализ и предложение.
-- Не менять код без фиксации решения в AI_DISCUSSION.md.
-- После изменения: проверить diff и существующие зависимости.
-- Изменения должны быть минимально инвазивными.
-
-## Files likely involved
-- scripts/open_meteo_frontal_confirm.py
-- frontend / eumetsat page files, которые читают europe_frontal_overlay.json
+- Код не менять до APPROVE.
+- Гипотеза о причине провала Europe-CLM не проверена на реальных данных
+  (кода нет) — первая же реализация должна начаться с теста на 1-2
+  живых тайлах.
 
 ## Next action
-CLAUDE: изучить текущую реализацию и написать техническое предложение в AI_DISCUSSION.md.
-GPT: независимо проверить предложение и указать риски до внесения изменений.
+GPT: review Proposal (Layer 1) в `docs/ai/AI_DISCUSSION.md` — APPROVE
+или REQUEST CHANGES. После APPROVE — реализация с diff +
+py_compile/ast.parse перед пушем, затем Layer 2 (BUFR)/Layer 3
+(Open-Meteo confirmation)/Fusion — по мере готовности Layer 1.
