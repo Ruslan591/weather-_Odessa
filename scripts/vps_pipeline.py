@@ -32,8 +32,11 @@ import re
 import subprocess
 import sys
 import time as _time
+import urllib.error
 import urllib.request
 from datetime import datetime, timezone
+
+import open_meteo_guard as _om_guard
 
 # ── конфиг ────────────────────────────────────────────────────────────────────
 BASE_DIR     = "/opt/weather-pipeline/repo"
@@ -356,6 +359,13 @@ def fetch_run_time_and_interval(meta_id):
         run_time = ts_to_iso(ts) if ts else None
         interval = data.get("update_interval_seconds")
         return run_time, interval
+    except urllib.error.HTTPError as e:
+        # 429 пробрасываем отдельно — см. open_meteo_guard.py и
+        # docs/ai/MODEL_UPDATE_OUTAGE.md (общий circuit breaker).
+        # Вызывающий цикл решает, был ли это probe или обычный вызов.
+        if e.code == 429:
+            raise
+        return None, None
     except Exception:
         return None, None
 
@@ -938,7 +948,31 @@ def _main_body():
             print(f"  {label:<14}  {status}")
             continue
 
-        run_time, interval_sec = fetch_run_time_and_interval(meta_id)
+        # Общий Open-Meteo circuit breaker (docs/ai/MODEL_UPDATE_OUTAGE.md).
+        # ecmwf_ifs — единственный фиксированный "probe owner": именно этот
+        # (самый дешёвый) вызов пробует восстановление после cooldown.
+        # Остальные модели при OPEN просто пропускаются (0 запросов), пока
+        # probe не вернёт CLOSED.
+        _is_probe = (m["id"] == "ecmwf_ifs")
+        _gate = _om_guard.gate(probe_owner=_is_probe)
+        if _gate == "skip":
+            print(f"  {label:<14}  ⛔ Open-Meteo cooldown активен — пропуск")
+            continue
+
+        try:
+            run_time, interval_sec = fetch_run_time_and_interval(meta_id)
+            if _gate == "probe":
+                _om_guard.report_probe_result(success=True)
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                if _gate == "probe":
+                    _om_guard.report_probe_result(success=False)
+                else:
+                    _om_guard.record_429()
+                print(f"  {label:<14}  ✗ HTTP 429 — cooldown зафиксирован")
+                continue
+            raise
+
         if interval_sec is None:
             interval_sec = st.get("update_interval_seconds") or DEFAULT_INTERVAL_SEC
 
