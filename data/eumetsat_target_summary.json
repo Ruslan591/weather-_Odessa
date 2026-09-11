@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-11T13:57:23Z",
+  "timestamp": "2026-09-11T14:02:29Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-09-11T13:30:00.000Z",
   "target_id": 1,
@@ -18,9 +18,29 @@
     "elongation_axis_compass": "СВ-ЮЗ",
     "frontlike": false,
     "window_spanning": true,
+    "phase_label": "безоблачно",
+    "cloud_fraction": 0.14,
+    "has_precip": false,
     "has_lightning": false
   },
   "local_candidates": [
+    {
+      "target_id": 2,
+      "area_km2": 133.4,
+      "distance_km": 82.7,
+      "bearing_deg": 62.0,
+      "compass": "СВ",
+      "elongation_aspect_ratio": 1.63,
+      "elongation_axis_deg": 4.0,
+      "elongation_axis_compass": "С-Ю",
+      "frontlike": false,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
+      "has_precip": false,
+      "has_lightning": false,
+      "ir_confirmed": true,
+      "geocolour_confirmed": false
+    },
     {
       "target_id": 4,
       "area_km2": 56.0,
@@ -65,8 +85,8 @@
       "elongation_axis_deg": 78.0,
       "elongation_axis_compass": "В-З",
       "frontlike": false,
-      "phase_label": "безоблачно",
-      "type_label": "безоблачно",
+      "phase_label": null,
+      "type_label": null,
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
@@ -84,7 +104,7 @@
       "frontlike": false,
       "phase_label": null,
       "type_label": null,
-      "has_precip": null,
+      "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": true,
       "geocolour_confirmed": false
@@ -99,17 +119,36 @@
       "elongation_axis_deg": 90.0,
       "elongation_axis_compass": "В-З",
       "frontlike": false,
-      "phase_label": "безоблачно",
-      "type_label": "безоблачно",
+      "phase_label": null,
+      "type_label": null,
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
       "geocolour_confirmed": true
     }
   ],
-  "local_suppressed_count": 7,
-  "system_candidates": [],
-  "system_suppressed_count": 4,
+  "local_suppressed_count": 6,
+  "system_candidates": [
+    {
+      "target_id": 9,
+      "area_km2": 5524.0,
+      "distance_km": 199.5,
+      "bearing_deg": 43.0,
+      "compass": "СВ",
+      "elongation_aspect_ratio": 1.87,
+      "elongation_axis_deg": 153.0,
+      "elongation_axis_compass": "ЮВ-СЗ",
+      "frontlike": false,
+      "window_spanning": false,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
+      "has_precip": false,
+      "has_lightning": false,
+      "ir_confirmed": true,
+      "geocolour_confirmed": false
+    }
+  ],
+  "system_suppressed_count": 3,
   "frontal_tracks": [
     {
       "track_id": 1282,
@@ -226,7 +265,7 @@
   ],
   "target_phase": {
     "label": "безоблачно",
-    "cloud_fraction": 0.0
+    "cloud_fraction": 0.923
   },
   "existence": {
     "modules": {
@@ -239,23 +278,23 @@
         "timestamp": "2026-09-11T13:30:00.000Z"
       },
       "cloud_phase_type": {
-        "confirmed": false,
-        "timestamp": "2026-09-11T13:47:05Z"
+        "confirmed": true,
+        "timestamp": "2026-09-11T14:02:04Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
       "confirmed": false,
-      "timestamp": "2026-09-11T13:47:17Z"
+      "timestamp": "2026-09-11T14:02:17Z"
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-09-11T13:52:35Z"
+      "timestamp": "2026-09-11T14:02:19Z"
     }
   },
-  "verdict": "CLM отметил цель в 52км З, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (107268км²) в 14км З (площадь/форма ненадёжны — объект упирается в границы окна обзора)."
+  "verdict": "Цель в 52км З, безоблачно — каналы расходятся: cloud_phase_type подтверждают, ir_motion/geocolour_motion нет. Отдельно: система синоптического масштаба (107268км²) в 14км З (площадь/форма ненадёжны — объект упирается в границы окна обзора)."
 }
