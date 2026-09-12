@@ -44,13 +44,61 @@ SYNOP_HOURS = {0, 3, 6, 9, 12, 15, 18, 21}
 ENSEMBLE_MODELS = [
     {"id": "ecmwf_ifs",                     "metaId": "ecmwf_ifs025"},
     {"id": "icon_eu",                        "metaId": "dwd_icon_eu"},
-    {"id": "icon_global",                    "metaId": None},
+    {"id": "icon_global",                    "metaId": "dwd_icon"},
     {"id": "ukmo_global_deterministic_10km", "metaId": "ukmo_global_deterministic_10km"},
     {"id": "meteofrance_arpege_europe",      "metaId": "meteofrance_arpege_europe"},
     {"id": "gfs_global",                     "metaId": "ncep_gfs013"},
-    {"id": "gem_global",                     "metaId": None},
+    {"id": "gem_global",                     "metaId": "cmc_gem_gdps"},
     {"id": "cma_grapes_global",              "metaId": "cma_grapes_global"},
 ]
+
+# [ДОБАВЛЕНО 2026-09-12, OPEN_METEO_PER_MODEL_UPDATE_ARCHITECTURE_001, GPT APPROVED]
+MODEL_FORECAST_CACHE_PATH = "data/model_forecast_cache.json"
+
+
+def load_forecast_cache():
+    """Загружает data/model_forecast_cache.json. Формат:
+    {"version": 1, "models": {model_id: {"source_run_time","fetched_at","hours"}}}."""
+    cache, sha = gh_load_json(MODEL_FORECAST_CACHE_PATH, default={"version": 1, "models": {}})
+    if not isinstance(cache, dict) or "models" not in cache:
+        cache = {"version": 1, "models": {}}
+    return cache, sha
+
+
+def get_changed_models(history, cache):
+    """Возвращает (changed_ids, run_time_by_id) — список model_id, чей
+    run_time (из model_runs_history.json) ещё не совпадает с
+    cache["models"][id]["source_run_time"], плюс карта id->run_time_iso
+    (для тех моделей, где run_time вообще известен из history).
+
+    Модель без записи в кэше — тоже "changed" (первый запуск / новая модель).
+    Модель без label в _ID_TO_HISTORY_LABEL или без записей в history —
+    в changed НЕ попадает автоматически: без сравнения не с чем; такие
+    модели просто продолжают жить со старым кэшем, пока их run_time не
+    появится в history (это не должно происходить для всех 8 моделей после
+    расширения _ID_TO_HISTORY_LABEL — оставлено на случай будущей модели
+    без due-tracking)."""
+    cache_models = cache.get("models", {})
+    changed = []
+    run_time_by_id = {}
+    for m in ENSEMBLE_MODELS:
+        mid = m["id"]
+        label = _ID_TO_HISTORY_LABEL.get(mid)
+        run_time_iso = None
+        if label:
+            entries = (history or {}).get(label)
+            if entries:
+                run_time_iso = entries[-1].get("run_time")
+        if run_time_iso:
+            run_time_by_id[mid] = run_time_iso
+        cached_entry = cache_models.get(mid)
+        if cached_entry is None:
+            changed.append(mid)  # нет в кэше вообще — нужен фетч (первый запуск)
+        elif run_time_iso and run_time_iso != cached_entry.get("source_run_time"):
+            changed.append(mid)
+        # если run_time_iso неизвестен (нет label/history), но кэш уже есть —
+        # не считаем changed: нечего сравнивать, используем то, что в кэше.
+    return changed, run_time_by_id
 
 OGIMET_PROXIES = [
     "https://api.allorigins.win/raw?url=",
@@ -452,12 +500,35 @@ def build_model_record(synop_rec, hourly_by_model):
 
 # id -> label в model_runs_history.json (та же карта, что vps_pipeline.py::MODELS —
 # поддерживать синхронно при добавлении/переименовании моделей в обоих файлах).
+#
+# [РАСШИРЕНО 2026-09-12, OPEN_METEO_PER_MODEL_UPDATE_ARCHITECTURE_001, GPT APPROVED]
+# icon_global/gem_global добавлены после подтверждения живыми запросами (VPS):
+#   dwd_icon        → icon_global : HTTP 200, данные свежие (last_run 2026-09-12,
+#                      update_interval_seconds=21600) — полноценно event-driven.
+#   cmc_gem_gdps    → gem_global  : HTTP 200, НО данные STALE (last_run 2026-05-26,
+#                      last_run_availability_time 2026-07-01 — на момент проверки
+#                      отстают на ~3.5 месяца от текущей даты). Других рабочих
+#                      кандидатов domain-id для GEM Global не найдено (проверены
+#                      cmc_gem_global/cmc_gem/cmc_gem_gdps_global/gem_global — все
+#                      HTTP 500). Включено в tracked по прямому указанию GPT
+#                      (APPROVED, п.8: "не оставлять gem_global безусловным
+#                      fetch"), но практический эффект: пока Open-Meteo не
+#                      обновит этот bucket, run_time для GEM Global не изменится
+#                      → changed_models никогда не включит gem_global → её кэш
+#                      останется с данными первого fill навсегда. Риск: due-gate
+#                      в vps_pipeline.py будет опрашивать meta.json для этой
+#                      модели КАЖДЫЙ цикл (раз в 5 мин, а не по interval), т.к.
+#                      next_expected так и останется в прошлом — это не меняли
+#                      (п.10 задачи: due-gate не трогать без необходимости).
+#                      Наблюдать; если станет проблемой — отдельная задача.
 _ID_TO_HISTORY_LABEL = {
     "ecmwf_ifs":                     "ECMWF IFS",
     "icon_eu":                       "ICON EU",
+    "icon_global":                   "ICON Global",
     "ukmo_global_deterministic_10km": "UKMO",
     "meteofrance_arpege_europe":     "Arpège",
     "gfs_global":                    "GFS",
+    "gem_global":                    "GEM Global",
     "cma_grapes_global":             "GRAPES",
 }
 
@@ -587,11 +658,51 @@ def debias_model_hours(model_id, hours, model_bias_models):
         result.append(hc)
     return result
 
-def merge_ensemble(all_model_hours, succeeded):
-    """Смешивает прогнозы моделей в ансамбль (равные веса)."""
+def merge_ensemble(all_model_hours, succeeded, min_time=None):
+    """Смешивает прогнозы моделей в ансамбль (равные веса).
+
+    min_time (опционально) — строка "YYYY-MM-DDTHH:MM", нижняя граница
+    времени для итогового ряда. [ДОБАВЛЕНО 2026-09-12, найдено при
+    тестировании per-model кэша] Без этой границы протухший кэш (пример —
+    GEM Global, meta.json не обновлялся с мая 2026) мог бы протащить в
+    ensemble_hours "осиротевшие" записи с календарными датами из далёкого
+    прошлого (те часы, что есть ТОЛЬКО в устаревшем кэше и ни у одной другой
+    модели) — technically корректные по значению, но не имеющие отношения к
+    текущему прогнозному окну, и способные сломать ожидания потребителей
+    снимка (forecast.html и т.п. ожидают непрерывный ряд от "сегодня"
+    вперёд). Вызывающий код передаёт min_time = (now − несколько часов).
+
+    [ИСПРАВЛЕНО 2026-09-12, OPEN_METEO_PER_MODEL_UPDATE_ARCHITECTURE_001,
+    GPT APPROVED, найдено при реализации п.6] Раньше объединение шло по
+    ПОЗИЦИИ индекса i в массиве первой succeeded-модели — это было безопасно,
+    только пока ВСЕ модели фетчились синхронно "сейчас" (единый time-axis:
+    hours[0] у всех = полночь сегодняшнего UTC-дня). После введения
+    per-model кэша (data/model_forecast_cache.json) часть массивов hours
+    может быть получена несколько часов/дней назад — их time-axis СМЕЩЁН
+    относительно свежих моделей на N часов. Слияние по индексу в этом
+    случае молча усредняло бы данные РАЗНЫХ календарных часов между собой
+    (например, сегодняшние 12:00 свежей модели с позавчерашними 12:00
+    кэшированной) — тихая порча ensemble/PWS/SYNOP без единой ошибки в логе.
+
+    Теперь выравнивание — по фактической метке времени h["time"] (точное
+    совпадение строки), а не по позиции. Модель, чьи закэшированные часы не
+    пересекаются по времени с текущим окном (как в пределе — GEM Global с
+    протухшим meta.json), просто не участвует в среднем для соответствующих
+    часов — вместо порчи данных получаем корректное исключение по каждому
+    часу отдельно. Поведение для случая "все модели свежие" (совпадающий
+    time-axis) не изменилось."""
     if not succeeded:
         return []
-    base = all_model_hours[succeeded[0]]
+
+    by_time = {}
+    for m in succeeded:
+        mh = all_model_hours.get(m) or []
+        by_time[m] = {h["time"]: h for h in mh}
+
+    all_times = sorted({t for d in by_time.values() for t in d.keys()})
+    if min_time:
+        all_times = [t for t in all_times if t >= min_time]
+
     numeric = [
         "temperature_2m","apparent_temperature","pressure_msl","relative_humidity_2m",
         "wind_speed_10m","wind_gusts_10m","rain","showers","precip_prob","snowfall",
@@ -599,31 +710,30 @@ def merge_ensemble(all_model_hours, succeeded):
         "shortwave_radiation","dew_point_2m","visibility",
     ]
     result = []
-    w = 1 / len(succeeded)
-    for i, bh in enumerate(base):
-        merged = {"time": bh["time"]}
+    for t in all_times:
+        present = [m for m in succeeded if t in by_time[m]]
+        if not present:
+            continue
+        merged = {"time": t}
         for f in numeric:
-            vals = [all_model_hours[m][i][f] for m in succeeded
-                    if all_model_hours[m] and i < len(all_model_hours[m])
-                    and all_model_hours[m][i][f] is not None]
+            vals = [by_time[m][t][f] for m in present if by_time[m][t].get(f) is not None]
             # Фильтр выбросов для давления
             if f == "pressure_msl" and vals:
                 vals = [v for v in vals if 930 < v < 1060]
             merged[f] = sum(vals) / len(vals) if vals else None
         # Направление ветра — векторное среднее
         sx = sy = 0
-        for m in succeeded:
-            mh = all_model_hours[m]
-            if mh and i < len(mh) and mh[i]["wind_direction_10m"] is not None:
-                rad = mh[i]["wind_direction_10m"] * math.pi / 180
+        for m in present:
+            v = by_time[m][t].get("wind_direction_10m")
+            if v is not None:
+                rad = v * math.pi / 180
                 sx += math.sin(rad)
                 sy += math.cos(rad)
         merged["wind_direction_10m"] = (math.degrees(math.atan2(sx, sy)) + 360) % 360 if (sx or sy) else None
         # weather_code — мажоритарный
         codes = {}
-        for m in succeeded:
-            mh = all_model_hours[m]
-            c = mh[i]["weather_code"] if mh and i < len(mh) else None
+        for m in present:
+            c = by_time[m][t].get("weather_code")
             if c is not None:
                 codes[c] = codes.get(c, 0) + 1
         merged["weather_code"] = max(codes, key=codes.get) if codes else 0
@@ -653,8 +763,16 @@ def apply_bias(value, key, bias_overall, bias_by_horizon=None, horizon_h=None):
     return result
 
 
-def build_snapshot(ensemble_hours, saved_at, run_time, mode="synop", bias=None, bias_by_horizon=None, all_model_hours=None, succeeded=None):
-    """Формирует снимок в формате совместимом с forecast.html."""
+def build_snapshot(ensemble_hours, saved_at, run_time, mode="synop", bias=None, bias_by_horizon=None, all_model_hours=None, succeeded=None, model_run_times=None):
+    """Формирует снимок в формате совместимом с forecast.html.
+
+    [ДОБАВЛЕНО 2026-09-12, OPEN_METEO_PER_MODEL_UPDATE_ARCHITECTURE_001,
+    GPT APPROVED, п.7] model_run_times — {model_id: run_time_iso}, per-model
+    времена прогонов, вошедших в этот снимок (часть — из свежего фетча, часть
+    — из model_forecast_cache.json). Пишется в новое поле "modelRunTimes"
+    ДОПОЛНИТЕЛЬНО к существующему "runTime" (агрегированный max(), сохранён
+    для обратной совместимости — старые потребители снимка не меняются).
+    Старые снимки не мигрируются, у них просто не будет этого поля."""
     hours_out = []
     saved_dt = parse_iso(saved_at)
     snap_dt  = saved_dt.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -753,11 +871,14 @@ def build_snapshot(ensemble_hours, saved_at, run_time, mode="synop", bias=None, 
                 entry_pws["models"] = models_out_pws
             hours_out.append(entry_pws)
 
-    return {
+    snapshot_out = {
         "savedAt": saved_at,
         "runTime": run_time,
         "hours":   hours_out,
     }
+    if model_run_times:
+        snapshot_out["modelRunTimes"] = model_run_times
+    return snapshot_out
 
 # ════════════════════════════════════════════════════════════════════════════
 # 4. Выжимка снимков → ensemble_accuracy.json
@@ -1494,28 +1615,82 @@ def main():
 
     all_model_hours = {}
     succeeded = []
+    model_run_times = {}   # для build_snapshot()::modelRunTimes — заполняется и из кэша, и из свежих фетчей
     if (need_synop or need_pws) and _om_guard.gate(probe_owner=False) == "skip":
         gist_log("  Open-Meteo cooldown активен — свежий ансамблевый прогноз пропущен")
         _om_log.log("update.py", "fetch_forecast_model", endpoint="forecast",
                     status="skip_gate", gate="skip")
     elif need_synop or need_pws:
-        log.info("  Загружаем прогнозы моделей...")
+        # [ПЕРЕПИСАНО 2026-09-12, OPEN_METEO_PER_MODEL_UPDATE_ARCHITECTURE_001,
+        # GPT APPROVED] Раньше здесь был безусловный цикл по ВСЕМ 8 моделям —
+        # 1 новый run любой модели вызывал 8 Forecast API запросов. Теперь:
+        # Forecast API вызывается ТОЛЬКО для моделей, чей run_time в
+        # model_runs_history.json разошёлся с cache.source_run_time
+        # (data/model_forecast_cache.json). Для остальных моделей ансамбль
+        # переиспользует их последние успешно сохранённые hours из кэша —
+        # HTTP-запрос не делается вообще. need_synop/need_pws (агрегированный
+        # max() по history) остаётся ВНЕШНИМ триггером "стоит ли вообще
+        # пересматривать снимок" — не тронут (п.10: due-gate/discovery не
+        # менять без необходимости), но КОЛИЧЕСТВО запросов внутри теперь
+        # определяется per-model diff, а не фактом срабатывания триггера.
+        cache, cache_sha = load_forecast_cache()
+        cache_models = cache.setdefault("models", {})
+        model_runs_history_data, _ = gh_load_json("data/model_runs_history.json", default={})
+        changed_models, run_time_by_id = get_changed_models(model_runs_history_data, cache)
+        cache_dirty = False
+
+        gist_log(f"  Изменившиеся модели: {changed_models or '(нет)'}")
+
         for m in ENSEMBLE_MODELS:
-            try:
-                h = fetch_forecast_model(m["id"], days=16)
-                if h:
-                    all_model_hours[m["id"]] = parse_hourly(h)
-                    succeeded.append(m["id"])
-                    gist_log(f"    ✓ {m['id']}")
-            except HTTPError as e:
-                if e.code == 429:
-                    _om_guard.record_429()
-                    gist_log(f"    ✗ {m['id']}: HTTP 429 — cooldown зафиксирован, останавливаю перебор моделей")
-                    break
-                gist_log(f"    ✗ {m['id']}: {e}")
-            except Exception as e:
-                gist_log(f"    ✗ {m['id']}: {e}")
-            time.sleep(0.5)
+            mid = m["id"]
+            if mid in changed_models:
+                log.info(f"  Загружаем прогноз {mid} (новый run)...")
+                try:
+                    h = fetch_forecast_model(mid, days=16)
+                    if h:
+                        parsed = parse_hourly(h)
+                        all_model_hours[mid] = parsed
+                        succeeded.append(mid)
+                        run_time_iso = run_time_by_id.get(mid)
+                        model_run_times[mid] = run_time_iso
+                        # Кэш обновляем ТОЛЬКО при успехе (п.4 partial failure:
+                        # при ошибке source_run_time/hours старые НЕ трогать).
+                        cache_models[mid] = {
+                            "source_run_time": run_time_iso,
+                            "fetched_at": now.isoformat(),
+                            "hours": parsed,
+                        }
+                        cache_dirty = True
+                        gist_log(f"    ✓ {mid} (новый run, HTTP-запрос выполнен)")
+                except HTTPError as e:
+                    if e.code == 429:
+                        _om_guard.record_429()
+                        gist_log(f"    ✗ {mid}: HTTP 429 — cooldown зафиксирован, останавливаю перебор моделей")
+                        break
+                    gist_log(f"    ✗ {mid}: {e} (кэш не тронут, повтор в следующем цикле)")
+                except Exception as e:
+                    gist_log(f"    ✗ {mid}: {e} (кэш не тронут, повтор в следующем цикле)")
+                time.sleep(0.5)
+            else:
+                # Модель не менялась — берём hours из кэша, БЕЗ HTTP-запроса.
+                cached_entry = cache_models.get(mid)
+                if cached_entry and cached_entry.get("hours"):
+                    all_model_hours[mid] = cached_entry["hours"]
+                    succeeded.append(mid)
+                    model_run_times[mid] = cached_entry.get("source_run_time")
+                    gist_log(f"    · {mid} (без изменений, из кэша, 0 запросов)")
+                else:
+                    gist_log(f"    · {mid} (без изменений, но кэш пуст — пропущена)")
+
+        if cache_dirty:
+            _cache = cache
+            _cache_sha = cache_sha
+            cache_sha = gist_log_save(
+                f"model_forecast_cache.json обновлён ({len(changed_models)} моделей)",
+                lambda: gh_save_json(MODEL_FORECAST_CACHE_PATH, _cache, _cache_sha,
+                                     f"forecast cache: +{len(changed_models)} changed models",
+                                     compact=True),
+                gh_path=MODEL_FORECAST_CACHE_PATH)
 
         if succeeded:
             # Сохраняем сырые данные моделей ДО дебайасинга (для верификации)
@@ -1527,7 +1702,8 @@ def main():
                     all_model_hours[mid] = debias_model_hours(
                         mid, all_model_hours[mid], model_bias_models)
                 gist_log(f"  Per-model bias применён для {len(succeeded)} моделей (месяц {cur_month})")
-            ensemble_hours = merge_ensemble(all_model_hours, succeeded)
+            _min_time = (now - timedelta(hours=6)).strftime("%Y-%m-%dT%H:%M")
+            ensemble_hours = merge_ensemble(all_model_hours, succeeded, min_time=_min_time)
             saved_at  = now.isoformat()
             run_time  = ensemble_ready_time.isoformat() if ensemble_ready_time else None
 
@@ -1537,7 +1713,8 @@ def main():
             same_run = last_run and run_time and parse_iso(last_run) == parse_iso(run_time)
             if need_synop and (now.hour - synop_hour) <= 2 and not same_run:
                 snap = build_snapshot(ensemble_hours, saved_at, run_time, mode="synop",
-                                     all_model_hours=raw_model_hours, succeeded=succeeded)
+                                     all_model_hours=raw_model_hours, succeeded=succeeded,
+                                     model_run_times=model_run_times)
                 snaps_synop.append(snap)
                 _snaps_synop = snaps_synop
                 _snaps_synop_sha = snaps_synop_sha
@@ -1553,7 +1730,8 @@ def main():
             same_run_pws = last_run_pws and run_time and parse_iso(last_run_pws) == parse_iso(run_time)
             if need_pws and not same_run_pws:
                 snap = build_snapshot(ensemble_hours, saved_at, run_time, mode="pws",
-                                     all_model_hours=raw_model_hours, succeeded=succeeded)
+                                     all_model_hours=raw_model_hours, succeeded=succeeded,
+                                     model_run_times=model_run_times)
                 snaps_pws.append(snap)
                 _snaps_pws = snaps_pws
                 _snaps_pws_sha = snaps_pws_sha
