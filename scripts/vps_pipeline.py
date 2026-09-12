@@ -50,12 +50,21 @@ AI_QUEUE_FILE = os.path.join(BASE_DIR, "data", "_ai_pending_models.json")
 PYTHON       = sys.executable
 SCRIPTS_DIR  = os.path.join(BASE_DIR, "scripts")
 
+# [РАСШИРЕНО 2026-09-12, OPEN_METEO_PER_MODEL_UPDATE_ARCHITECTURE_001, GPT
+# APPROVED] icon_global/gem_global добавлены как due-gated tracked модели —
+# см. подробный комментарий у _ID_TO_HISTORY_LABEL в update.py про
+# подтверждённые живыми запросами metaId и известную проблему со staleness
+# cmc_gem_gdps (для gem_global HTTP 200, но данные не обновляются с мая
+# 2026 — due-check по ней будет "due" каждый цикл, это ожидаемо и не
+# исправлялось намеренно, п.10 задачи "due-gate не менять без необходимости").
 MODELS = [
     {"id": "ecmwf_ifs",                     "metaId": "ecmwf_ifs025",                   "label": "ECMWF IFS"},
     {"id": "icon_eu",                        "metaId": "dwd_icon_eu",                    "label": "ICON EU"},
+    {"id": "icon_global",                    "metaId": "dwd_icon",                       "label": "ICON Global"},
     {"id": "ukmo_global_deterministic_10km", "metaId": "ukmo_global_deterministic_10km", "label": "UKMO"},
     {"id": "meteofrance_arpege_europe",      "metaId": "meteofrance_arpege_europe",      "label": "Arpège"},
     {"id": "gfs_global",                     "metaId": "ncep_gfs013",                    "label": "GFS"},
+    {"id": "gem_global",                     "metaId": "cmc_gem_gdps",                   "label": "GEM Global"},
     {"id": "cma_grapes_global",              "metaId": "cma_grapes_global",              "label": "GRAPES"},
 ]
 
