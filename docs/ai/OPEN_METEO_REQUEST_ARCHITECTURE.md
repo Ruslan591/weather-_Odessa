@@ -121,3 +121,47 @@ Discovery-логика (`vps_pipeline.py`, `model_runs_history.json`, `new_model
 3. (Proposal B, опционально) — `open_meteo_guard.py` расширить не нужно, throttle для forecast-блока — отдельный лёгкий файл с той же `fcntl`-схемой.
 
 **Код не пишется до APPROVE от GPT.**
+
+---
+
+## 9. GPT review (2026-09-12) — вердикт и реализация
+
+**Verdict: A1+A2 APPROVED** (после проверки семантики). **B — HOLD** (не внедрять до измерения реального трафика).
+
+### Проверка семантики (обязательное условие A1)
+
+Проверено на факте (`data/model_runs_history.json`, живые данные 2026-09-12):
+поле `run_time` в history = `ts_to_iso(last_run_availability_time)`, детект-время
+хранится отдельно в поле `detected_at`. Семантика совпадает 1:1 с тем, что
+раньше возвращал HTTP-запрос к meta.json → **условие A1 выполнено, миграция безопасна**.
+
+### Реализовано (STATUS: DONE, задеплоено в main)
+
+- **A1** — `update.py::fetch_ensemble_ready_time()` (scripts/update.py) больше не делает HTTP;
+  читает `data/model_runs_history.json` через `gh_load_json()` (работает и в GH Actions,
+  и на VPS через monkey-patch в `update_local.py`, как и остальной I/O). Сетевое discovery
+  meta.json остаётся ТОЛЬКО в `vps_pipeline.py`.
+- **A2** — `update.py::retry()` больше не ретраит HTTP 429: пробрасывает немедленно на
+  первой попытке, `guard.record_429()` теперь срабатывает после первого, а не третьего запроса.
+  Retry остаётся для сетевых сбоев и прочих HTTP-ошибок.
+- **Единый лог запросов** (`scripts/open_meteo_request_log.py`, требование GPT review) —
+  JSONL, append-only под flock, поля: `ts, script, function, endpoint, model, status, gate, attempt`.
+  Не коммитится в git (аналог `_open_meteo_cooldown.json`). Подключён во всех активных
+  точках входа: `vps_pipeline.py` (meta.json), `update.py::retry()` (forecast/historical,
+  через `log_ctx`, логирует КАЖДУЮ попытку внутри retry — видно реальное усиление),
+  `open_meteo_frontal_confirm.py` (forecast, 5 моделей).
+
+### НЕ сделано / открыто
+
+- **Proposal B — HOLD**, не реализовывать, пока нет измеренного трафика.
+- Причина 429 10-11.09 **не считается доказанной** (штатный объём запросов, по расчёту
+  §6, недостаточен для суточной квоты — вероятно minute/hour burst, но это ГИПОТЕЗА, не
+  факт). Следующий шаг — дождаться следующего инцидента (или заданного окна наблюдения)
+  и разобрать `data/_open_meteo_requests.jsonl` количественно: реальный overlap/burst
+  между `vps_pipeline.py` / `update.py` / `open_meteo_frontal_confirm.py`.
+- `open_meteo_frontal_confirm.py::fetch_model_batch()` и `open_meteo_field_fetch.py`
+  (отключён) имеют СВОЙ внутренний одиночный retry на 429 (не через `update.py::retry()`,
+  не затронут A2-фиксом) — тот же класс риска (лишний запрос на 429 до проброса), но
+  вне текущего approve-scope. Кандидат на отдельную задачу, если лог покажет значимый вклад.
+
+STATUS: A1+A2 задеплоены. Единый лог включён. Ожидаем накопления данных для количественного разбора burst (п. "Отдельно проверить" из review) перед решением по Proposal B.
