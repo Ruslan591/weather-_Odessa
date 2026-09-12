@@ -1,5 +1,5 @@
 {
-  "task_id": "openmeteo-meta-check-icon-gem-001",
-  "cmd": "echo \"=== ICON ===\" && curl -s -o /tmp/icon_meta.json -w \"ICON HTTP=%{http_code}\\n\" \"https://api.open-meteo.com/data/dwd_icon/static/meta.json\" && cat /tmp/icon_meta.json && echo && echo \"=== GEM ===\" && curl -s -o /tmp/gem_meta.json -w \"GEM HTTP=%{http_code}\\n\" \"https://api.open-meteo.com/data/cmc_gem_gdps/static/meta.json\" && cat /tmp/gem_meta.json && echo",
-  "timeout": 30
+  "task_id": "openmeteo-meta-check-gem-candidates-002",
+  "cmd": "echo \"=== cmc_gem_global ===\" && curl -s -o /tmp/g_cmc_gem_global.json -w \"cmc_gem_global HTTP=%{http_code}\\n\" \"https://api.open-meteo.com/data/cmc_gem_global/static/meta.json\" && cat /tmp/g_cmc_gem_global.json && echo && echo \"=== cmc_gem ===\" && curl -s -o /tmp/g_cmc_gem.json -w \"cmc_gem HTTP=%{http_code}\\n\" \"https://api.open-meteo.com/data/cmc_gem/static/meta.json\" && cat /tmp/g_cmc_gem.json && echo && echo \"=== cmc_gem_gdps_global ===\" && curl -s -o /tmp/g_cmc_gem_gdps_global.json -w \"cmc_gem_gdps_global HTTP=%{http_code}\\n\" \"https://api.open-meteo.com/data/cmc_gem_gdps_global/static/meta.json\" && cat /tmp/g_cmc_gem_gdps_global.json && echo && echo \"=== gem_global ===\" && curl -s -o /tmp/g_gem_global.json -w \"gem_global HTTP=%{http_code}\\n\" \"https://api.open-meteo.com/data/gem_global/static/meta.json\" && cat /tmp/g_gem_global.json && echo",
+  "timeout": 40
 }
