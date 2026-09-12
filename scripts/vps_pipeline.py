@@ -37,6 +37,7 @@ import urllib.request
 from datetime import datetime, timezone
 
 import open_meteo_guard as _om_guard
+import open_meteo_request_log as _om_log
 
 # ── конфиг ────────────────────────────────────────────────────────────────────
 BASE_DIR     = "/opt/weather-pipeline/repo"
@@ -957,20 +958,28 @@ def _main_body():
         _gate = _om_guard.gate(probe_owner=_is_probe)
         if _gate == "skip":
             print(f"  {label:<14}  ⛔ Open-Meteo cooldown активен — пропуск")
+            _om_log.log("vps_pipeline.py", "fetch_run_time_and_interval",
+                        endpoint="meta", model=meta_id, status="skip_gate", gate="skip")
             continue
 
         try:
             run_time, interval_sec = fetch_run_time_and_interval(meta_id)
+            _om_log.log("vps_pipeline.py", "fetch_run_time_and_interval",
+                        endpoint="meta", model=meta_id, status="ok", gate=_gate)
             if _gate == "probe":
                 _om_guard.report_probe_result(success=True)
         except urllib.error.HTTPError as e:
             if e.code == 429:
+                _om_log.log("vps_pipeline.py", "fetch_run_time_and_interval",
+                            endpoint="meta", model=meta_id, status="429", gate=_gate)
                 if _gate == "probe":
                     _om_guard.report_probe_result(success=False)
                 else:
                     _om_guard.record_429()
                 print(f"  {label:<14}  ✗ HTTP 429 — cooldown зафиксирован")
                 continue
+            _om_log.log("vps_pipeline.py", "fetch_run_time_and_interval",
+                        endpoint="meta", model=meta_id, status=f"error:{e}", gate=_gate)
             raise
 
         if interval_sec is None:
