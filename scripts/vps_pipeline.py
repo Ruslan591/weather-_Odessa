@@ -304,6 +304,24 @@ DEFAULT_INTERVAL_SEC = 6 * 3600      # если meta.json не отдал update
 SCHEDULE_MARGIN_FRACTION = 0.30
 RETRY_ON_FETCH_FAIL_SEC = 5 * 60     # сеть недоступна прямо на "due"-тике — не ждать полный интервал
 
+# [ДОБАВЛЕНО 2026-09-12, GPT review OPEN_METEO_PER_MODEL_UPDATE_ARCHITECTURE_001,
+# REQUEST CHANGES] Общий backoff для permanently/долго stale meta.json. Раньше
+# при is_same_run next_expected пересчитывался ОТ last_run (см. докстринг ниже
+# у блока "без дедлайна") — для здоровой модели это правильно: активный
+# 5-минутный опрос вблизи ожидаемого времени публикации, пока не появится
+# новый прогон. Но если модель не публикует новых прогонов ВООБЩЕ (найдено на
+# GEM Global/cmc_gem_gdps — HTTP 200, но run_time не менялся с мая 2026),
+# next_expected навсегда остаётся в прошлом → due=True КАЖДЫЙ цикл бессрочно.
+# Правило общее для любой модели: если модель просрочена больше чем в
+# STALE_BACKOFF_MULTIPLIER раз от своего собственного интервала — считаем её
+# "надолго зависшей" и переходим на редкие перепроверки STALE_RECHECK_SEC
+# вместо каждых 5 минут. Для нормальной модели, отставшей на часы (типичная
+# задержка публикации), порог (обычно десятки часов) не срабатывает — активный
+# 5-минутный опрос вблизи due остаётся как есть, обнаружение нового run не
+# задерживается.
+STALE_BACKOFF_MULTIPLIER = 3
+STALE_RECHECK_SEC = 6 * 3600
+
 
 def load_next_expected():
     if os.path.exists(NEXT_EXPECTED_FILE):
@@ -1029,8 +1047,9 @@ def _main_body():
         if is_same_run:
             # Реального нового прогона ещё нет — пересчитываем next_expected
             # от ФАКТИЧЕСКОГО last_run (не от старого next_expected!), чтобы
-            # дрейф не накапливался. Ретрай на каждом такте cron, пока не
-            # найдём — без дедлайна (см. докстринг блока выше).
+            # дрейф не накапливался. Ретрай на каждом такте cron, ПОКА модель
+            # не просрочена больше чем в STALE_BACKOFF_MULTIPLIER раз от
+            # своего интервала — см. блок backoff ниже.
             base_time = last_run
             status = f"  {iso_to_local(run_time)}  ({age_str(run_time)}) — без изменений"
         else:
@@ -1045,9 +1064,25 @@ def _main_body():
             base_dt = datetime.strptime(base_time, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
             # Запас SCHEDULE_MARGIN_FRACTION — см. докстринг константы выше.
             effective_interval_sec = interval_sec * (1.0 - SCHEDULE_MARGIN_FRACTION)
-            next_expected_dt = base_dt.timestamp() + effective_interval_sec
+            naive_next_expected_ts = base_dt.timestamp() + effective_interval_sec
+
+            # [ДОБАВЛЕНО 2026-09-12] Общий backoff — см. докстринг
+            # STALE_BACKOFF_MULTIPLIER/STALE_RECHECK_SEC выше. Срабатывает
+            # ТОЛЬКО когда run не изменился (is_same_run) И "наивный" next_expected
+            # уже просрочен больше чем в STALE_BACKOFF_MULTIPLIER раз от
+            # интервала модели — то есть модель не публикует новых прогонов
+            # заметно дольше своего обычного цикла.
+            overdue_sec = now_dt.timestamp() - naive_next_expected_ts
+            if is_same_run and overdue_sec > interval_sec * STALE_BACKOFF_MULTIPLIER:
+                next_expected_ts = now_dt.timestamp() + STALE_RECHECK_SEC
+                status += (f"  ⏸ stale >{STALE_BACKOFF_MULTIPLIER}× интервала "
+                           f"({overdue_sec/3600:.0f}ч просрочки) — backoff на "
+                           f"{STALE_RECHECK_SEC/3600:.0f}ч")
+            else:
+                next_expected_ts = naive_next_expected_ts
+
             next_expected_iso2 = datetime.fromtimestamp(
-                next_expected_dt, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                next_expected_ts, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         except Exception:
             next_expected_iso2 = now
         next_expected_state[label] = {
