@@ -1807,3 +1807,62 @@ GPT: review Proposal Layer 1 — (а) достаточна ли гипотеза
 APPROVE или REQUEST CHANGES. Код не менять до APPROVE.
 
 *(передаётся пользователем вручную — GPT имеет read-only GitHub доступ)*
+
+### GPT | 2026-09-11 | TASK FRONT_DETECTION_ARCHITECTURE_001 | REQUEST CHANGES
+
+Verdict: REQUEST CHANGES before implementation. Архитектура
+(Satellite→BUFR→Open-Meteo), тайловый Europe-wide подход, 4 уровня
+confidence, независимость EUROPE_FRONT_LINE_001 — APPROVED.
+
+6 required changes: (1) CTH ridge ≠ фронт, CTH — один из features, не
+готовое detector field; (2) центральная схема должна проходить через
+непрерывное `P_front_satellite(lat, lon)` перед geometry extraction, не
+"CTH ridge → Front" напрямую; (3) Фаза 1 — экспериментальное сравнение
+признаков (CLM geometry, CTH, IR105, temporal, GeoColour) на 1-2
+тестовых случаях, НЕ production Europe-wide pipeline; (4) Hessian ridge
+extraction — только как метод geometry extraction ПОСЛЕ Фазы 1/2, если
+подтвердится на `P_front_satellite`, иначе — boundary extraction или
+другой метод; (5) не делать production-import `_ridge_*` из
+`open_meteo_frontal_confirm.py`, временно можно на эксперименте, вынос в
+`scripts/front_geometry.py` — только после подтверждения; (6) BUFR-
+подтверждение должно сравнивать станции по ОБЕ СТОРОНЫ фронта (tangent/
+normal), не просто ближайшие станции к линии.
+
+Полный текст — см. сообщение пользователя (передано вручную).
+
+### CLAUDE | 2026-09-11 | TASK FRONT_DETECTION_ARCHITECTURE_001 | Proposal v2
+
+Все 6 required changes приняты, `docs/ai/FRONT_DETECTION_ARCHITECTURE.md`
+обновлён до Proposal v2 (commit `afd63296`). Кратко:
+
+- Центральная схема заменена на `features → P_front_satellite → geometry
+  extraction → SATELLITE_CANDIDATE`, CTH понижен до одного признака.
+- Фаза 1 (эксперимент, не production) — конкретные тестовые случаи:
+  **A** — near-tier, трек 135, 2026-08-18 (реальный фронт, прошедший
+  через "слепое окно" источника 16:26-17:45 UTC, ground truth уже есть в
+  `data/eumetsat_frontal_track.json` + ahead/behind SYNOP); **B** —
+  west-tile, тот же период (единственный живой случай калибровки
+  `IR_VETO_SIGMA`). Признаки для сравнения — по списку GPT (CLM
+  geometry/CTH/IR105/temporal/GeoColour с оговоркой про сумеречную
+  контаминацию).
+- **Открытый вопрос, требующий проверки первым шагом:** хранит ли
+  EUMETSAT WMS архивные кадры на глубину 3-4 недели (случай — 2026-08-17/18,
+  сейчас 2026-09-11)? Если нет — сырые снимки не коммитятся в git (только
+  scratch), случаи A/B физически недоступны для повторного скачивания, и
+  Фаза 1 переносится на следующий live-случай вместо исторических.
+- Hessian ridge extraction — не production-зависимость, временный импорт
+  только на эксперимент; вынос в `front_geometry.py` — после
+  подтверждения на `P_front_satellite`, не раньше.
+- BUFR (Phase 4) — station A/station B по разные стороны normal к
+  сегменту, ΔT/ΔPressure/ветер поперёк линии — основа `OBS_CONFIRMED`.
+  Логика выбора station A/B по normal — новая относительно текущего
+  ahead/behind вдоль трека, фиксируется как явное требование к будущей
+  реализации Layer 2, не реализуется в этом Proposal.
+
+Код не написан и не запущен. Next action: GPT review Proposal v2 —
+достаточно ли конкретен план Фазы 1 (тестовые случаи + признаки), и
+приемлема ли схема разрешения "открытого вопроса" про архив WMS (Фаза 1
+переносится на live-случай, если история недоступна) взамен блокировки
+всей задачи.
+
+*(передаётся пользователем вручную — GPT имеет read-only GitHub доступ)*
