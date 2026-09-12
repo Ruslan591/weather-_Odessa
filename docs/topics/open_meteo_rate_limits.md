@@ -207,3 +207,20 @@ interval_sec * 0.70`. Перекрывает худший наблюдённый
 - **Идемпотентность:** `changed_models = [m for m in models if history[m].run_time != cache[m].source_run_time]`. После успешного фетча — `cache[m].source_run_time = history[m].run_time`. Повторный вызов с тем же run_time — 0 запросов для этой модели.
 
 Открыто: проверка кандидатов meta.json для icon_global/gem_global через VPS (1 живой запрос на каждый, безопасно) — следующий шаг перед итоговым APPROVE.
+
+## GPT REQUEST CHANGES — исправлен discovery-scheduling для stale meta.json (2026-09-12)
+
+**Причина 5-минутного polling stale-модели:** `next_expected` в `vps_pipeline.py` при `is_same_run=True` всегда пересчитывался как `last_run + effective_interval` — то есть от неизменного `run_time`. Для GEM Global (`run_time` не менялся с мая) это значение навсегда осталось в прошлом → `due=True` каждый 5-минутный цикл бессрочно ("без дедлайна" — было явно заложено в докстринге как намеренное поведение для здоровых моделей, ожидающих скорой публикации).
+
+**Что изменено:** добавлен общий backoff (не GEM-specific) — если модель просрочена больше чем в `STALE_BACKOFF_MULTIPLIER=3` раза от собственного `update_interval_seconds`, следующая проверка планируется через `STALE_RECHECK_SEC=6ч` от текущего момента вместо пересчёта от `run_time`. Применяется только при `is_same_run=True`.
+
+**Почему не задерживает нормальное обнаружение:** порог (3× интервала — для GEM это 36ч, для 6-часовых моделей 18ч) заметно больше типичной задержки публикации; активный 5-минутный опрос вблизи ожидаемого времени сохраняется без изменений, пока модель не просрочена настолько сильно, что это уже явно "застряла", а не "чуть задержалась".
+
+**Тест (синтетика, без сети):**
+- GEM Global, run_time 2026-07-01, interval 12ч, now=2026-09-12 → просрочка ~1751ч (≫36ч) → BACKOFF, next_expected = now+6ч, due-через-5мин=False.
+- ECMWF с типичной задержкой публикации 8ч на 6-часовом интервале (≪18ч) → normal active-poll, due-через-5мин=True — как и раньше.
+- Только что обнаруженный новый run (is_same_run=False) → backoff не применяется, next_expected обычный.
+
+**Дополнительно (найдено при реализации, вне первоначального ТЗ):** `merge_ensemble()` был переписан с index-based на time-based выравнивание — при позиционном слиянии кэш с чужим (сдвинутым) time-axis тихо смешивал бы данные разных календарных дней. Добавлена также `min_time`-отсечка (now−6ч) в `merge_ensemble()`, чтобы протухший кэш (GEM) не протаскивал в снимок осиротевшие записи с датами из прошлого. Оба фикса покрыты synthetic-тестами (без реальных HTTP-вызовов, т.к. `api.open-meteo.com` недоступен из песочницы).
+
+**Файлы:** `scripts/vps_pipeline.py` (STALE_BACKOFF_MULTIPLIER/STALE_RECHECK_SEC + правка блока next_expected), `scripts/update.py` (per-model cache, get_changed_models, merge_ensemble time-alignment + min_time, modelRunTimes в build_snapshot) — все запушены в main, ждём финального APPROVE от GPT.
