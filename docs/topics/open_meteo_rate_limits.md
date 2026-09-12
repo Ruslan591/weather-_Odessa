@@ -160,3 +160,50 @@ interval_sec * 0.70`. Перекрывает худший наблюдённый
 Риск: смешение данных разного "возраста" моделей в одном merged-снимке (кэш может быть на несколько часов старее свежедобавленной модели) — семантика ensemble и сейчас не строго синхронна, но разброс увеличится; нужно явно принять допущение перед реализацией.
 
 Открыт вопрос к GPT: точный формат кэша и стоит ли исключить icon_global/gem_global из безусловного фетча вовсе.
+
+## GPT review OPEN_METEO_PER_MODEL_UPDATE_ARCHITECTURE_001 (2026-09-12) — доп. анализ
+
+**Verdict GPT: концепция APPROVED, 2 открытых вопроса перед implementation. Код не писан.**
+
+### Вопрос 1 — event-driven detection для icon_global / gem_global
+
+Найдена сильная зацепка (официальный источник — sync-утилита самого Open-Meteo, `openmeteo-api`/Vapor Swift CLI, help-текст команды `sync`):
+
+> `models` Weather model domains separated by comma. E.g. **`cmc_gem_gdps,dwd_icon_d2,dwd_icon`**
+
+Т.е. в собственной номенклатуре Open-Meteo domain-директорий (`data/<model>/static/meta.json`) отдельно существуют `dwd_icon_d2`, `dwd_icon_eu` (уже подтверждён рабочим кодом) и **голый `dwd_icon`** — по всей видимости это и есть ICON Global. Для GEM Global домен, вероятно, **`cmc_gem_gdps`** (GDPS = Global Deterministic Prediction System, канадская модель).
+
+Кандидаты для проверки:
+- `https://api.open-meteo.com/data/dwd_icon/static/meta.json` → icon_global
+- `https://api.open-meteo.com/data/cmc_gem_gdps/static/meta.json` → gem_global
+
+**Не подтверждено живым запросом** — у меня нет сетевого доступа к `api.open-meteo.com` из песочницы (домен не в allowlist). Нужна проверка через VPS-бридж (обычный `curl -sI`, 1 GET на кандидата, безопасно). Если оба ответят 200 — задача решена без каких-либо дополнительных запросов: `vps_pipeline.py::MODELS` расширяется с 6 до 8 записей, все 8 моделей становятся due-gated tracked, целевая таблица (0/1/2, без "+2 безусловных") выполняется буквально.
+
+Если кандидаты не подтвердятся — запасной вариант: раз в сутки (не каждый цикл) делать 1 пробный `fetch_forecast_model()` для этих двух моделей и детектировать смену run по изменению первого часа прогноза (эвристика, не идеальна, но на 2 порядка дешевле текущих "8 при каждом обновлении любой модели"). Предпочтительно сначала проверить прямые meta.json-кандидаты.
+
+### Вопрос 2 — формат кэша (принят с уточнением)
+
+```json
+{
+  "version": 1,
+  "models": {
+    "ecmwf_ifs":   {"source_run_time": "2026-09-12T13:10:07Z", "fetched_at": "2026-09-12T13:45:02Z", "hours": []},
+    "icon_global": {"source_run_time": null, "fetched_at": "2026-09-12T13:45:02Z", "hours": []}
+  }
+}
+```
+`source_run_time: null` — для моделей без подтверждённого meta.json-детектора (пока вопрос 1 не закрыт живой проверкой).
+
+### Вопрос 3 — per-model metadata в снимке
+
+`build_snapshot()` уже возвращает плоский dict `{savedAt, runTime, hours}`. Новый ключ `modelRunTimes: {model_id: run_time}` — чисто аддитивное поле. Проверено: `squeeze_snapshots()` и остальные потребители снимка (`ensemble_pws.html`, `ensemble_score.html`) читают только `savedAt`/`hours`/`runTime` по имени ключа — неизвестные ключи не ломают их. Безопасно добавлять без миграции существующих снимков (старые просто не будут иметь этого поля).
+
+### Финальный Proposal реализации (ждёт APPROVE, код всё ещё не писан)
+
+- **Новый файл:** `data/model_forecast_cache.json` (формат выше).
+- **Изменяемые файлы:** `update.py` (новая функция `get_changed_models(history, cache)`; правка блока `update.py:1501-1518` — вместо безусловного цикла по `ENSEMBLE_MODELS`, fetch только для changed, остальные — из кэша); `vps_pipeline.py::MODELS` — расширить до 8 записей ПОСЛЕ подтверждения кандидатов из вопроса 1.
+- **Первый запуск (пустой кэш):** cache отсутствует/пуст → все модели считаются "changed" → однократный полный fetch всех 8 (как сейчас) → кэш заполняется. Деградация к текущему поведению только один раз, не на каждый цикл.
+- **Partial failure одной модели:** как и сейчас в `merge_ensemble()` — модель просто не попадает в `succeeded`, используется предыдущее значение из кэша (`hours` не перезаписываются, `source_run_time`/`fetched_at` тоже не обновляются) → следующий цикл попробует снова, т.к. history всё ещё покажет новый run как "не подтверждённый в кэше".
+- **Идемпотентность:** `changed_models = [m for m in models if history[m].run_time != cache[m].source_run_time]`. После успешного фетча — `cache[m].source_run_time = history[m].run_time`. Повторный вызов с тем же run_time — 0 запросов для этой модели.
+
+Открыто: проверка кандидатов meta.json для icon_global/gem_global через VPS (1 живой запрос на каждый, безопасно) — следующий шаг перед итоговым APPROVE.
