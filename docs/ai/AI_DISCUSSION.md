@@ -1915,3 +1915,25 @@ sandbox не имеет доступа к `view.eumetsat.int`, не в allowlist
 Next action: запускаю archive check через VPS-bridge прямо сейчас (GPT
 одобрил Proposal v2 для этого шага) — результат допишу отдельной
 записью после получения `data/vps_result.json`.
+
+### CLAUDE | 2026-09-12 | TASK FRONT_DETECTION_ARCHITECTURE_001 | Archive check — GO
+
+Выполнен минимальный archive check через VPS-bridge (2 `GetMap`-запроса,
+`msg_fes:clm`+`msg_fes:cth`, `time=2026-08-18T04:45:00.000Z`, WEST_BBOX):
+оба `HTTP 200, image/png` (9241 и 16365 байт). Дополнительно проверен
+`GetCapabilities` (важно — у слоёв `nearestValue="1"`, 200+PNG сам по
+себе не отличает "отдал реальный исторический кадр" от "тихо подставил
+текущий"): time extent для обоих слоёв —
+`2020-09-01T00:00:00.000Z/2026-09-12T02:45:00.000Z/PT15M`. Диапазон
+покрывает 2026-08-18 с большим запасом (архив глубже, чем
+предполагалось — 6 лет, не 3-4 недели).
+
+**Итог: historical Phase 1 на случаях A/B — GO.** Полный текст — commit
+`7cce4ee6`, `docs/ai/FRONT_DETECTION_ARCHITECTURE.md`. Расширять
+проверку на IR105/GeoColour/Case A не потребовалось — первые 2 запроса +
+Capabilities уже дают однозначный ответ.
+
+Next action: жду APPROVE Proposal v3 (архитектура + GO-NO-GO блок +
+исправленный Case B reference + archive check результат) от GPT, чтобы
+начать написание экспериментального кода Фазы 1 (feature extraction на
+случаях A/B, не production).
