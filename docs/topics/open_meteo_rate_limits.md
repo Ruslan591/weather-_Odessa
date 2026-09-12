@@ -125,3 +125,38 @@ interval_sec * 0.70`. Перекрывает худший наблюдённый
 реальный код ответа в логе, а не сразу применять диагноз от прошлого
 похожего на вид инцидента — разные HTTP-коды означают разные причины,
 даже если внешне ("все 5 запросов отвалились") выглядит одинаково.
+
+## Задача OPEN_METEO_PER_MODEL_UPDATE_ARCHITECTURE_001 (анализ 2026-09-12, до этого выдавалась как _002, переиздана как _001)
+
+**Статус: ANALYSIS ONLY, код не писан, GPT APPROVE не запрошен.**
+
+### A1/A2 — уже реализовано (GPT review OPEN_METEO_REQUEST_ARCHITECTURE_001, коммиты 2026-09-12)
+- `fetch_ensemble_ready_time()` больше не делает 6 HTTP meta.json — читает `run_time` из `data/model_runs_history.json` (per-model, уже пригодно для detection).
+- `retry()`: 429 больше не ретраится 3 раза — пробрасывается немедленно после 1-й попытки, `guard.record_429()` вызывается сразу.
+
+### Найденный fan-out (нерешённая часть)
+Место: `update.py:1501-1518`. Триггер — `need_synop`/`need_pws` (булево, единое на весь ансамбль, по `max(run_time)` всех 6 моделей из history). При True — цикл `for m in ENSEMBLE_MODELS: fetch_forecast_model(m)` по ВСЕМ 8 моделям, а не по изменившейся.
+
+Причина: `all_model_hours` не персистентен между вызовами (собирается с нуля), поэтому для `merge_ensemble()` берутся все модели заново, независимо от того, что реально обновилась одна.
+
+### modelData vs ensemble-снимки — два независимых потока в update.py
+- Секция 2 (`update.py`, `fetch_historical_model()` + `build_model_record()`) → `data/modeldata/modelData_YYYY_MM.json`, ключ — `synopTime`, `run_time` там НЕ хранится. Потребители: `modelCheck.js`, `modelHistory.js` (история/MAE моделей).
+- Секция 3 (`fetch_forecast_model()` + `merge_ensemble()`) → `data/ensemble_snapshots_{synop,pws}.json`, единый `runTime` = `max()`. Потребители: `ensemble_pws.html`, `ensemble_score.html`.
+- Эти потоки НЕ пересекаются — `fetch_forecast_model()` никогда не пишет в modelData. Значит modelData нельзя использовать как источник идемпотентности per-model+run_time для ensemble-фан-аута; `model_runs_history.json` уже пригоден для detection, но нет кэша самих hourly-данных.
+
+### 8 forecast-моделей vs 6 meta-моделей
+`icon_global`, `gem_global` — без `metaId`, не отслеживаются в `model_runs_history.json`, но участвуют в `fetch_forecast_model()`-цикле. Для них нет способа узнать "обновились ли" — предложено оставить безусловный фетч этих двух (2 запроса вместо 8 — всё равно основная экономия).
+
+### Целевая архитектура (НЕ реализовано, ждёт APPROVE)
+Новый персистентный кэш `data/model_forecast_cache.json` {model_id: {run_time, hours}}. Per-model diff (history vs cache) → `changed_models[]` → Forecast API только для них → merge_ensemble берёт по каждой модели либо свежие, либо кэшированные hours.
+
+Таблица запросов (сейчас / целевое):
+| Событие | Сейчас | После |
+|---|---|---|
+| Нет нового прогона | 0 | 0 |
+| 1 новая модель | 8 | 1 (+ 2 безусловных icon_global/gem_global, если решим их не трогать = 3) |
+| 2 новые модели | 8 | 2 (+2) |
+
+Риск: смешение данных разного "возраста" моделей в одном merged-снимке (кэш может быть на несколько часов старее свежедобавленной модели) — семантика ensemble и сейчас не строго синхронна, но разброс увеличится; нужно явно принять допущение перед реализацией.
+
+Открыт вопрос к GPT: точный формат кэша и стоит ли исключить icon_global/gem_global из безусловного фетча вовсе.
