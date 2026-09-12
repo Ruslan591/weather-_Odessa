@@ -92,6 +92,7 @@ import numpy as np
 from PIL import Image
 
 import open_meteo_guard as _om_guard
+import open_meteo_request_log as _om_log
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
@@ -821,17 +822,27 @@ def run_europe_detection(geo):
     model_results_by_id = {}
     if _om_guard.gate(probe_owner=False) == "skip":
         print("  [INFO] open_meteo_frontal_confirm: Open-Meteo cooldown активен — пропуск")
+        _om_log.log("open_meteo_frontal_confirm.py", "fetch_model_batch", endpoint="forecast",
+                    status="skip_gate", gate="skip")
     else:
         for i, (model_id, _label) in enumerate(MODELS):
             try:
                 model_results_by_id[model_id] = fetch_model_batch(model_id, points)
+                _om_log.log("open_meteo_frontal_confirm.py", "fetch_model_batch",
+                            endpoint="forecast", model=model_id, status="ok", gate="proceed")
             except urllib.error.HTTPError as e:
                 if e.code == 429:
+                    _om_log.log("open_meteo_frontal_confirm.py", "fetch_model_batch",
+                                endpoint="forecast", model=model_id, status="429", gate="proceed")
                     _om_guard.record_429()
                     print(f"  [WARN] open_meteo_frontal_confirm: {model_id}: HTTP 429 — cooldown зафиксирован, останавливаю перебор моделей")
                     break
+                _om_log.log("open_meteo_frontal_confirm.py", "fetch_model_batch",
+                            endpoint="forecast", model=model_id, status=f"error:{e}", gate="proceed")
                 print(f"  [WARN] open_meteo_frontal_confirm: модель {model_id}: {e}")
             except Exception as e:
+                _om_log.log("open_meteo_frontal_confirm.py", "fetch_model_batch",
+                            endpoint="forecast", model=model_id, status=f"error:{e}", gate="proceed")
                 print(f"  [WARN] open_meteo_frontal_confirm: модель {model_id}: {e}")
             if i < len(MODELS) - 1:
                 time.sleep(REQUEST_INTERVAL)
