@@ -4,47 +4,38 @@
 FRONT_DETECTION_ARCHITECTURE_001
 
 ## Status
-OPEN — Proposal готов, ожидает GPT review
+OPEN — Proposal v2 готов, ожидает GPT review (после REQUEST CHANGES на v1)
 
 ## Goal
 Архитектура детекции реальных атмосферных фронтов (cold/warm/occlusion/
-stationary) на базе Satellite → BUFR → Open-Meteo, с покраской поверх
-спутникового снимка и confidence-уровнями. Полный текст — см.
-`docs/ai/FRONT_DETECTION_ARCHITECTURE.md`.
+stationary) на базе Satellite → BUFR → Open-Meteo. Полный текст — см.
+`docs/ai/FRONT_DETECTION_ARCHITECTURE.md` (Proposal v2).
 
-## Context (кратко)
-- Пользователь: 1-2 недели назад была попытка Europe-wide детектора
-  фронтов на Cloud Mask (CLM) — захватывал весь/очень большой массив
-  облачности вместо фронта. Код не найден в git-истории/docs (архив
-  `eumetsat_archive.md` не содержит Europe+CLM, commit-search пуст) —
-  анализ сделан по симптому, не по коду.
-- Существующий near/west satellite-детектор (`eumetsat_cloud_forecast.py`
-  / `eumetsat_west_watch.py` / `eumetsat_frontal_track.py`) НЕ имеет этой
-  проблемы — локальный охват (Одесса ±2.5° / west bbox), явный
-  area+aspect_ratio фильтр frontlike. Активно развивается, последний
-  коммит 2026-09-07 (классификация тёплый/холодный по станциям).
-- `EUROPE_FRONT_LINE_001` НЕ трогается этой задачей — отдельный трек,
-  статус: Proposal v10 implemented (commit `62f224e`), ожидает GPT
-  implementation review + живая проверка на VPS.
-
-## Proposal (Layer 1, Satellite Front Detector) — см. полный текст в
-docs/ai/FRONT_DETECTION_ARCHITECTURE.md
-
-Ключевая идея: для Europe-wide спутникового поиска не использовать
-бинарную CLM-маску напрямую (гипотеза — именно так провалилась
-предыдущая попытка), а строить непрерывное поле CTH внутри облачной
-области и применять к нему уже реализованный и протестированный
-Hessian-based ridge extraction из `open_meteo_frontal_confirm.py`
-(переиспользование, не копирование кода).
+## История ревью
+- v1: Proposal "CTH ridge = фронт" через Hessian extraction (переиспользование
+  кода EUROPE_FRONT_LINE_001) — GPT REQUEST CHANGES (6 пунктов, см.
+  AI_DISCUSSION.md).
+- v2: центральная схема заменена на `features → P_front_satellite →
+  geometry extraction`, CTH понижен до одного признака, добавлена
+  Фаза 1 (эксперимент на 2 реальных случаях: near-tier трек 135
+  2026-08-18, west-tile тот же период), BUFR — station A/B по обе
+  стороны normal к сегменту вместо простой близости.
 
 ## Constraints
-- Код не менять до APPROVE.
-- Гипотеза о причине провала Europe-CLM не проверена на реальных данных
-  (кода нет) — первая же реализация должна начаться с теста на 1-2
-  живых тайлах.
+- Код не менять/не запускать до APPROVE.
+- Europe-wide production pipeline не запускать — сначала Фаза 1
+  (эксперимент на 1-2 случаях).
+- Hessian ridge extraction — не production-import, только временно на
+  эксперименте; вынос в `scripts/front_geometry.py` — только после
+  подтверждения на satellite-поле.
+
+## Открытый вопрос (проверить первым шагом Фазы 1, до всего остального)
+Хранит ли EUMETSAT WMS архивные кадры (`msg_fes:clm`/`cth`/`ir105_hrfi`/
+`rgb_geocolour`) на глубину 3-4 недели? Тестовые случаи — 2026-08-17/18,
+сейчас 2026-09-11. Если архив недоступен — Фаза 1 переносится на
+следующий live-случай вместо исторических A/B.
 
 ## Next action
-GPT: review Proposal (Layer 1) в `docs/ai/AI_DISCUSSION.md` — APPROVE
-или REQUEST CHANGES. После APPROVE — реализация с diff +
-py_compile/ast.parse перед пушем, затем Layer 2 (BUFR)/Layer 3
-(Open-Meteo confirmation)/Fusion — по мере готовности Layer 1.
+GPT: review Proposal v2 — достаточно ли конкретен план Фазы 1 (случаи +
+признаки), приемлема ли схема "перенос на live-случай, если история
+недоступна". APPROVE или REQUEST CHANGES.
