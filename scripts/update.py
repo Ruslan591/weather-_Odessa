@@ -19,6 +19,7 @@ from urllib.error import URLError, HTTPError
 from urllib.parse import urlencode, quote
 
 import open_meteo_guard as _om_guard
+import open_meteo_request_log as _om_log
 
 # ── Логирование ─────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -77,11 +78,43 @@ def http_get(url, headers=None, timeout=40):
 def http_get_json(url, headers=None, timeout=40):
     return json.loads(http_get(url, headers, timeout))
 
-def retry(fn, attempts=3, delay=5):
+def retry(fn, attempts=3, delay=5, log_ctx=None):
+    """[ИСПРАВЛЕНО 2026-09-12, GPT review OPEN_METEO_REQUEST_ARCHITECTURE_001,
+    п. A2] HTTP 429 — НЕ временная ошибка, а сигнал общего circuit breaker
+    (open_meteo_guard.py). Раньше retry() ловил 429 наравне с сетевыми
+    сбоями и тратил все `attempts` попыток (с паузой `delay` между ними)
+    ПРЕЖДЕ чем исключение доходило до вызывающего кода и guard.record_429()
+    успевал сработать — то есть каждая модель, поймавшая 429, реально
+    делала 3 запроса вместо 1, усиливая burst в 3 раза. Теперь 429
+    пробрасывается немедленно, без ретрая; retry остаётся только для
+    сетевых сбоев и остальных HTTP-ошибок.
+
+    log_ctx (опционально) — dict(script=, function=, endpoint=, model=) для
+    единого лога запросов (open_meteo_request_log.py, GPT review: "нужен
+    единый счётчик/лог реальных HTTP-вызовов"). Логируется КАЖДАЯ попытка
+    с её номером — это даёт видимость реального retry-усиления в логе."""
     for i in range(attempts):
         try:
-            return fn()
+            result = fn()
+            if log_ctx:
+                _om_log.log(log_ctx["script"], log_ctx["function"], log_ctx["endpoint"],
+                            model=log_ctx.get("model"), status="ok", attempt=i + 1)
+            return result
+        except HTTPError as e:
+            if log_ctx:
+                _om_log.log(log_ctx["script"], log_ctx["function"], log_ctx["endpoint"],
+                            model=log_ctx.get("model"),
+                            status="429" if e.code == 429 else str(e.code), attempt=i + 1)
+            if e.code == 429:
+                raise
+            if i == attempts - 1:
+                raise
+            log.warning("  Retry %d/%d after: %s", i+1, attempts, e)
+            time.sleep(delay)
         except Exception as e:
+            if log_ctx:
+                _om_log.log(log_ctx["script"], log_ctx["function"], log_ctx.get("endpoint"),
+                            model=log_ctx.get("model"), status=f"error:{e}", attempt=i + 1)
             if i == attempts - 1:
                 raise
             log.warning("  Retry %d/%d after: %s", i+1, attempts, e)
@@ -360,7 +393,9 @@ def fetch_historical_model(model_id, date_str):
         f"&start_date={date_str}&end_date={date_str}"
         "&timezone=UTC&wind_speed_unit=ms"
     )
-    data = retry(lambda: http_get_json(url, timeout=25), attempts=3, delay=10)
+    data = retry(lambda: http_get_json(url, timeout=25), attempts=3, delay=10,
+                 log_ctx={"script": "update.py", "function": "fetch_historical_model",
+                          "endpoint": "historical", "model": model_id})
     return data.get("hourly")
 
 
@@ -415,34 +450,47 @@ def build_model_record(synop_rec, hourly_by_model):
 # 3. Open-Meteo: свежий ансамблевый прогноз (для снимков)
 # ════════════════════════════════════════════════════════════════════════════
 
+# id -> label в model_runs_history.json (та же карта, что vps_pipeline.py::MODELS —
+# поддерживать синхронно при добавлении/переименовании моделей в обоих файлах).
+_ID_TO_HISTORY_LABEL = {
+    "ecmwf_ifs":                     "ECMWF IFS",
+    "icon_eu":                       "ICON EU",
+    "ukmo_global_deterministic_10km": "UKMO",
+    "meteofrance_arpege_europe":     "Arpège",
+    "gfs_global":                    "GFS",
+    "cma_grapes_global":             "GRAPES",
+}
+
+
 def fetch_ensemble_ready_time():
     """Возвращает datetime готовности последнего прогона или None.
 
-    Общий Open-Meteo circuit breaker (docs/ai/MODEL_UPDATE_OUTAGE.md):
-    эта точка входа никогда не является probe-owner'ом (им является
-    только ecmwf_ifs-проверка в vps_pipeline.py). Если ворота закрыты —
-    пропускаем весь шаг (0 запросов). При первом 429 — останавливаем
-    перебор моделей в ЭТОМ вызове (не долбим остальные)."""
-    if _om_guard.gate(probe_owner=False) == "skip":
-        log.info("  Open-Meteo cooldown активен — fetch_ensemble_ready_time пропущен")
-        return None
+    [ИСПРАВЛЕНО 2026-09-12, GPT review OPEN_METEO_REQUEST_ARCHITECTURE_001,
+    п. A1, APPROVED после проверки семантики] Раньше эта функция сама делала
+    6 HTTP-запросов к /data/{metaId}/static/meta.json — ТЕ ЖЕ САМЫЕ 6
+    проверок, которые vps_pipeline.py уже сделал (due-гейтированно) в
+    начале этого же цикла и сохранил в data/model_runs_history.json. Теперь
+    вместо повторного сетевого запроса читаем уже известные значения
+    оттуда: поле "run_time" в history — это ts_to_iso(last_run_availability_time)
+    (проверено на факте 2026-09-12: НЕ detected_at, семантика совпадает 1:1
+    с тем, что раньше отдавал HTTP-запрос). Сетевое discovery остаётся
+    ТОЛЬКО в vps_pipeline.py — экономия ~6 запросов на каждый вызов
+    update.py::main() (и по run_pipeline(), и по SYNOP-окну)."""
+    history, _ = gh_load_json("data/model_runs_history.json", default={})
     times = []
     for m in ENSEMBLE_MODELS:
-        if not m["metaId"]:
-            continue
-        try:
-            url  = f"https://api.open-meteo.com/data/{m['metaId']}/static/meta.json"
-            data = http_get_json(url, timeout=10)
-            ts   = data.get("last_run_availability_time")
-            if ts:
-                times.append(int(ts))
-        except HTTPError as e:
-            if e.code == 429:
-                _om_guard.record_429()
-                log.warning("  HTTP 429 на %s — cooldown зафиксирован, останавливаю перебор моделей", m["id"])
-                break
-        except Exception:
-            pass
+        label = _ID_TO_HISTORY_LABEL.get(m["id"])
+        if not label:
+            continue  # icon_global/gem_global — без metaId, не отслеживаются в history
+        entries = (history or {}).get(label)
+        if entries:
+            run_time_iso = entries[-1].get("run_time")
+            if run_time_iso:
+                try:
+                    dt = datetime.strptime(run_time_iso, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                    times.append(dt.timestamp())
+                except Exception:
+                    pass
     if not times:
         return None
     ready_ts = max(times)
@@ -458,7 +506,9 @@ def fetch_forecast_model(model_id, days=16):
         f"&models={model_id}"
         f"&timezone=UTC&forecast_days={days}&wind_speed_unit=ms"
     )
-    data = retry(lambda: http_get_json(url, timeout=25), attempts=3, delay=10)
+    data = retry(lambda: http_get_json(url, timeout=25), attempts=3, delay=10,
+                 log_ctx={"script": "update.py", "function": "fetch_forecast_model",
+                          "endpoint": "forecast", "model": model_id})
     return data.get("hourly")
 
 
@@ -1379,6 +1429,8 @@ def main():
                 hourly_by_model = {}
                 if _om_guard.gate(probe_owner=False) == "skip":
                     gist_log("    Open-Meteo cooldown активен — бэкфилл за эту дату пропущен")
+                    _om_log.log("update.py", "fetch_historical_model", endpoint="historical",
+                                status="skip_gate", gate="skip")
                 else:
                     for mid in [m["id"] for m in ENSEMBLE_MODELS]:
                         try:
@@ -1444,6 +1496,8 @@ def main():
     succeeded = []
     if (need_synop or need_pws) and _om_guard.gate(probe_owner=False) == "skip":
         gist_log("  Open-Meteo cooldown активен — свежий ансамблевый прогноз пропущен")
+        _om_log.log("update.py", "fetch_forecast_model", endpoint="forecast",
+                    status="skip_gate", gate="skip")
     elif need_synop or need_pws:
         log.info("  Загружаем прогнозы моделей...")
         for m in ENSEMBLE_MODELS:
