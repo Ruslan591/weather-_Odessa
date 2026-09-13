@@ -322,6 +322,20 @@ RETRY_ON_FETCH_FAIL_SEC = 5 * 60     # сеть недоступна прямо 
 STALE_BACKOFF_MULTIPLIER = 3
 STALE_RECHECK_SEC = 6 * 3600
 
+# [ДОБАВЛЕНО 2026-09-13, TASK OPEN_METEO_DISCOVERY_BACKOFF_001, GPT APPROVE]
+# Промежуточный уровень backoff между "активный 5-минутный опрос" (выше) и
+# "признали stale" (STALE_BACKOFF_MULTIPLIER/STALE_RECHECK_SEC выше). Раньше
+# ЗДОРОВАЯ, но ещё не stale модель опрашивалась КАЖДЫЙ cron-тик (5 мин) всё
+# время между "уже пора" и порогом stale (до 3×interval — часы). Инцидент
+# 13.09.2026 (docs/ai/OPEN_METEO_DISCOVERY_BACKOFF_001.md): этот фоновый
+# discovery-трафик (оценка ~700-800 запросов/сутки) — часть причины серии
+# HTTP 429. Прогрессия: 5 → 10 → 20 → 40 → 60 мин (счётчик подряд
+# "due, но run не изменился" на каждую модель), сброс к началу шкалы при
+# обнаружении нового run (is_same_run=False) или при входе в stale-режим.
+# Потолок 60 мин держится до срабатывания STALE_BACKOFF_MULTIPLIER — сама
+# stale-логика не меняется.
+DISCOVERY_BACKOFF_SCHEDULE_MIN = [5, 10, 20, 40, 60]
+
 
 def load_next_expected():
     if os.path.exists(NEXT_EXPECTED_FILE):
@@ -981,8 +995,13 @@ def _main_body():
         # (самый дешёвый) вызов пробует восстановление после cooldown.
         # Остальные модели при OPEN просто пропускаются (0 запросов), пока
         # probe не вернёт CLOSED.
+        # [ИЗМЕНЕНО 2026-09-13, OPEN_METEO_DISCOVERY_BACKOFF_001, Proposal v4]
+        # Единый reserve_request()/report_request_result() вместо
+        # gate()/report_probe_result()/record_429() — endpoint_class="meta"
+        # (не расходует forecast/archive rate-limiter, не гейтится
+        # RECOVERING). Семантика (probe/proceed/skip) не изменилась.
         _is_probe = (m["id"] == "ecmwf_ifs")
-        _gate = _om_guard.gate(probe_owner=_is_probe)
+        _gate = _om_guard.reserve_request("meta", probe_owner=_is_probe)
         if _gate == "skip":
             print(f"  {label:<14}  ⛔ Open-Meteo cooldown активен — пропуск")
             _om_log.log("vps_pipeline.py", "fetch_run_time_and_interval",
@@ -993,20 +1012,17 @@ def _main_body():
             run_time, interval_sec = fetch_run_time_and_interval(meta_id)
             _om_log.log("vps_pipeline.py", "fetch_run_time_and_interval",
                         endpoint="meta", model=meta_id, status="ok", gate=_gate)
-            if _gate == "probe":
-                _om_guard.report_probe_result(success=True)
+            _om_guard.report_request_result("meta", "success")
         except urllib.error.HTTPError as e:
             if e.code == 429:
                 _om_log.log("vps_pipeline.py", "fetch_run_time_and_interval",
                             endpoint="meta", model=meta_id, status="429", gate=_gate)
-                if _gate == "probe":
-                    _om_guard.report_probe_result(success=False)
-                else:
-                    _om_guard.record_429()
+                _om_guard.report_request_result("meta", "429")
                 print(f"  {label:<14}  ✗ HTTP 429 — cooldown зафиксирован")
                 continue
             _om_log.log("vps_pipeline.py", "fetch_run_time_and_interval",
                         endpoint="meta", model=meta_id, status=f"error:{e}", gate=_gate)
+            _om_guard.report_request_result("meta", "error")
             raise
 
         if interval_sec is None:
@@ -1047,11 +1063,13 @@ def _main_body():
         if is_same_run:
             # Реального нового прогона ещё нет — пересчитываем next_expected
             # от ФАКТИЧЕСКОГО last_run (не от старого next_expected!), чтобы
-            # дрейф не накапливался. Ретрай на каждом такте cron, ПОКА модель
-            # не просрочена больше чем в STALE_BACKOFF_MULTIPLIER раз от
-            # своего интервала — см. блок backoff ниже.
+            # дрейф не накапливался. Частота повторных проверок — по
+            # прогрессивной шкале DISCOVERY_BACKOFF_SCHEDULE_MIN (см. ниже),
+            # ПОКА модель не просрочена больше чем в STALE_BACKOFF_MULTIPLIER
+            # раз от своего интервала — см. блок backoff ниже.
             base_time = last_run
             status = f"  {iso_to_local(run_time)}  ({age_str(run_time)}) — без изменений"
+            miss_streak = st.get("miss_streak", 0) + 1
         else:
             entries.append({"run_time": run_time, "detected_at": now})
             if len(entries) > MAX_ENTRIES:
@@ -1059,6 +1077,9 @@ def _main_body():
             new_models.append(label)
             base_time = run_time
             status = f"🆕 {iso_to_local(run_time)}  ({age_str(run_time)}) ← новый прогон"
+            # [ДОБАВЛЕНО 2026-09-13, OPEN_METEO_DISCOVERY_BACKOFF_001] Новый
+            # прогон обнаружен — сброс прогрессии backoff'а к началу шкалы.
+            miss_streak = 0
 
         try:
             base_dt = datetime.strptime(base_time, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
@@ -1078,6 +1099,22 @@ def _main_body():
                 status += (f"  ⏸ stale >{STALE_BACKOFF_MULTIPLIER}× интервала "
                            f"({overdue_sec/3600:.0f}ч просрочки) — backoff на "
                            f"{STALE_RECHECK_SEC/3600:.0f}ч")
+                # [ДОБАВЛЕНО 2026-09-13, OPEN_METEO_DISCOVERY_BACKOFF_001]
+                # Вход в stale-backoff — сброс прогрессии; если модель потом
+                # "отойдёт" от stale, опрос начнётся заново с 5 мин, а не с
+                # накопленного потолка 60 мин.
+                miss_streak = 0
+            elif is_same_run:
+                # [ДОБАВЛЕНО 2026-09-13, OPEN_METEO_DISCOVERY_BACKOFF_001]
+                # Промежуточный уровень: run не изменился, но модель ещё не
+                # stale. Раньше здесь стояло next_expected_ts = naive_next_
+                # expected_ts — тот же (уже прошедший) момент, что даёт
+                # due=True на КАЖДОМ cron-тике. Теперь — прогрессия по
+                # DISCOVERY_BACKOFF_SCHEDULE_MIN от текущего момента.
+                step_idx = min(miss_streak - 1, len(DISCOVERY_BACKOFF_SCHEDULE_MIN) - 1)
+                backoff_min = DISCOVERY_BACKOFF_SCHEDULE_MIN[step_idx]
+                next_expected_ts = now_dt.timestamp() + backoff_min * 60
+                status += f"  ⏱ backoff {backoff_min}м (miss #{miss_streak})"
             else:
                 next_expected_ts = naive_next_expected_ts
 
@@ -1088,6 +1125,8 @@ def _main_body():
         next_expected_state[label] = {
             "next_expected": next_expected_iso2,
             "update_interval_seconds": interval_sec,
+            # [ДОБАВЛЕНО 2026-09-13, OPEN_METEO_DISCOVERY_BACKOFF_001]
+            "miss_streak": miss_streak,
         }
 
         print(f"  {label:<14}  {status}")
