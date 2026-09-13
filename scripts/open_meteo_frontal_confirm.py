@@ -104,6 +104,15 @@ FAR_IMG_FILE = os.path.join(DATA_DIR, "anim", "far_geocolour.png")
 EUROPE_OVERLAY_FILE = os.path.join(DATA_DIR, "europe_frontal_overlay.json")
 NEAR_TILE_PROJECTION_FILE = os.path.join(DATA_DIR, "eumetsat_near_tile_projection.json")
 
+# [TEMP_DISABLE_OPEN_METEO_FRONTAL_CONFIRM_001, 2026-09-14] Временный
+# диагностический флаг для изоляции возможного источника HTTP 429 —
+# полностью отключает HTTP-запросы к Open-Meteo ИЗ ЭТОГО МОДУЛЯ (см.
+# проверку в начале main()). Локален для frontal_confirm: НЕ влияет на
+# основной forecast pipeline, общий rate-limit/cooldown (open_meteo_guard),
+# EUMETSAT satellite pipeline, far/very_far. Включить обратно — вернуть
+# True.
+FRONTAL_CONFIRM_ENABLED = False
+
 EUROPE_GRID_STEP_KM = 220.0
 EUROPE_TEMP_GRAD_THRESHOLD = 3.0      # °C НА ШАГ СЕТКИ (220км) — первая
                                        # прикидка, НЕ калибровано.
@@ -912,6 +921,10 @@ def run_europe_detection(geo):
 
 
 def main():
+    if not FRONTAL_CONFIRM_ENABLED:
+        print("[SKIP] open_meteo_frontal_confirm: временно отключён")
+        return
+
     state = _load_json(STATE_FILE, {})
     has_new_run, latest_run_times = _has_new_model_run(state)
     if not has_new_run:
