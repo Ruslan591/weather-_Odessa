@@ -1,50 +1,107 @@
 {
-  "timestamp": "2026-09-13T11:32:12Z",
+  "timestamp": "2026-09-13T11:37:46Z",
   "status": "ok",
-  "cloud_forecast_timestamp": "2026-09-13T11:00:00.000Z",
-  "target_id": 3,
-  "target_area_km2": 64.0,
-  "target_distance_km": 196.4,
-  "target_bearing_deg": 133.0,
-  "target_compass": "ЮВ",
+  "cloud_forecast_timestamp": "2026-09-13T11:15:00.000Z",
+  "target_id": 2,
+  "target_area_km2": 120.1,
+  "target_distance_km": 284.3,
+  "target_bearing_deg": 160.0,
+  "target_compass": "Ю",
   "system": {
     "target_id": 0,
-    "area_km2": 552.4,
-    "distance_km": 113.3,
-    "bearing_deg": 112.0,
+    "area_km2": 12356.9,
+    "distance_km": 112.6,
+    "bearing_deg": 100.0,
     "compass": "В",
-    "elongation_aspect_ratio": 2.05,
-    "elongation_axis_deg": 64.0,
-    "elongation_axis_compass": "СВ-ЮЗ",
-    "frontlike": false,
+    "elongation_aspect_ratio": 2.58,
+    "elongation_axis_deg": 177.0,
+    "elongation_axis_compass": "Ю-С",
+    "frontlike": true,
     "window_spanning": false,
     "phase_label": "безоблачно",
-    "cloud_fraction": 0.397,
+    "cloud_fraction": 0.126,
     "has_precip": false,
     "has_lightning": false
   },
   "local_candidates": [],
-  "local_suppressed_count": 3,
+  "local_suppressed_count": 1,
   "system_candidates": [],
-  "system_suppressed_count": 4,
-  "frontal_tracks": [],
+  "system_suppressed_count": 2,
+  "frontal_tracks": [
+    {
+      "track_id": 1356,
+      "first_seen": "2026-09-13T04:45:00.000Z",
+      "last_seen": "2026-09-13T11:15:00.000Z",
+      "points_count": 12,
+      "age_minutes": 390.0,
+      "distance_from_odessa_km": 112.6,
+      "dx_km": 110.75,
+      "dy_km": -20.18,
+      "area_km2": 12356.9,
+      "axis_deg": 177.0,
+      "aspect_ratio": 2.58,
+      "velocity_kmh": 28.1,
+      "movement_bearing_deg": 115.1,
+      "movement_bearing_compass": "ЮВ",
+      "axis_rotation_deg": 4.0,
+      "tile": "near",
+      "ahead_station": {
+        "name": "KHERSON",
+        "ctry": "UP",
+        "lat": 46.633,
+        "lon": 32.567,
+        "elev_m": "+0054.0",
+        "dist_km_from_odessa": 139.1,
+        "wmo_synop_id": "33902",
+        "icao": null,
+        "usaf_raw": "339020",
+        "source": "synop",
+        "along_km": 6.9,
+        "perp_km": 49.2,
+        "dist_km": 49.6
+      },
+      "behind_station": {
+        "name": "ODESA INTL",
+        "ctry": "UP",
+        "lat": 46.427,
+        "lon": 30.676,
+        "elev_m": "+0052.4",
+        "dist_km_from_odessa": 7.4,
+        "wmo_synop_id": "33837",
+        "icao": "UKOO",
+        "usaf_raw": "338370",
+        "source": "synop+metar",
+        "along_km": -114.8,
+        "perp_km": -33.1,
+        "dist_km": 119.5
+      },
+      "direction_compass": "В",
+      "current_target_id": 0,
+      "has_precip": false,
+      "has_lightning": false,
+      "ahead_obs": null,
+      "behind_obs": null,
+      "front_type": null,
+      "front_type_confidence": null
+    }
+  ],
   "target_phase": {
     "label": "безоблачно",
-    "cloud_fraction": 0.0
+    "cloud_fraction": 0.037
   },
   "existence": {
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-09-13T11:10:00.000Z"
+        "timestamp": "2026-09-13T11:20:00.000Z"
       },
       "geocolour_motion": {
         "confirmed": false,
-        "timestamp": "2026-09-13T11:00:00.000Z"
+        "timestamp": "2026-09-13T11:10:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": false,
-        "timestamp": "2026-09-13T11:27:05Z"
+        "timestamp": "2026-09-13T11:37:18Z"
       }
     },
     "votes_confirmed": 0,
@@ -58,8 +115,8 @@
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-09-13T11:27:15Z"
+      "timestamp": "2026-09-13T11:37:35Z"
     }
   },
-  "verdict": "CLM отметил цель в 196км ЮВ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (552км²) в 113км В."
+  "verdict": "CLM отметил цель в 284км Ю, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (12357км²) в 113км В (вытянута Ю-С (177°), похоже на фронт)."
 }
