@@ -113,7 +113,20 @@ EUROPE_PRESSURE_GRAD_THRESHOLD = 1.5  # гПа на шаг сетки — тож
 MODELS = [
     ("ecmwf_ifs", "ECMWF IFS"),
     ("icon_eu", "ICON EU"),
-    ("meteofrance_arpege_europe", "Arpège"),  # НЕ "arpege_europe" — см. докстринг
+    # [ARPEGE_MODEL_SWITCH_001, 2026-09-13, GPT APPROVED] Заменено с
+    # "meteofrance_arpege_europe" на "meteofrance_arpege_world".
+    # Наиболее вероятная причина — проблема ответа ARPEGE Europe на части
+    # точек регионального домена (batch-запрос ~266 точек ловил
+    # json.JSONDecodeError "Expecting value" на стабильной позиции
+    # ~11000 символов); ПОДТВЕРЖДЕНИЯ raw response НЕТ, живое
+    # воспроизведение не проводилось — только анализ архитектуры запроса.
+    # ARPEGE World — глобальная модель (0.25°, ~27км, часовые данные
+    # после апгрейда Open-Meteo, см. блог openmeteo.substack.com), не
+    # региональная — исключает сам класс ошибки "точка вне домена".
+    # Разница разрешения 11км->27км несущественна при шаге сетки 220км.
+    # Другие потребители "meteofrance_arpege_europe" (update.py,
+    # check_model_runs.py) НЕ затронуты — там одиночные запросы, не batch.
+    ("meteofrance_arpege_world", "Arpège"),
     ("ukmo_global_deterministic_10km", "UKMO"),
     ("gfs_global", "GFS"),
 ]
