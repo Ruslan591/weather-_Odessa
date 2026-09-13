@@ -2023,3 +2023,40 @@ GPT review Proposal v1 (передано Русланом вручную) — RE
 Next action: жду подтверждения от Руслана на старт кодирования
 (реализация в `open_meteo_frontal_confirm.py` + новый файл
 `data/front_spatial_cache.json`).
+
+
+---
+
+## TASK: OPEN_METEO_DISCOVERY_BACKOFF_001
+
+### CLAUDE | 2026-09-13T00:00:00Z UTC | TASK OPEN_METEO_DISCOVERY_BACKOFF_001 | PROPOSAL
+
+Инцидент 13.09.2026 (два 429: 07:43:47 `open_meteo_frontal_confirm.py`/UKMO,
+08:15:09 `update.py`/ECMWF forecast). Полный анализ причины + Proposal —
+см. `docs/ai/OPEN_METEO_DISCOVERY_BACKOFF_001.md`.
+
+Кратко: due-gate в `vps_pipeline.py` не имеет прогрессивного backoff между
+"уже пора проверять" (5 мин) и "признали stale" (`STALE_BACKOFF_MULTIPLIER=3×`,
+6ч) — здоровая, но запаздывающая модель опрашивается каждые 5 минут часами.
+Отдельно: probe-owner circuit breaker'а (`open_meteo_guard.py`) — дешёвый
+`meta.json` (ecmwf_ifs), а не тяжёлый `/v1/forecast`; успешный probe разом
+открывает шлюз для всех накопившихся due-моделей и скриптов (thundering
+herd) — это вероятная причина повторного 429 в 08:15:09 сразу после
+истечения cooldown. Frontal burst (`open_meteo_frontal_confirm.py`) сам по
+себе в пределах ранее проверенной нормы (30с между моделями) — похоже,
+просто последний запрос в очереди на фоне совокупного трафика от
+независимых 5-минутных cron-процессов (`vps_pipeline.py` +
+`vps_satellite_pipeline.py`), а не первопричина.
+
+Proposal (4 пункта, без кода): общий rate-limiter между всеми точками
+входа; плавное открытие guard после cooldown вместо разового шлюза;
+прогрессивный backoff 5→10→20→40 мин для due-check; раздельный probe для
+meta- и forecast-класса запросов. Оценка эффекта: п.3 — сокращение
+discovery-трафика на ~60-75%; п.1-2 — устраняет класс "429 от наложения
+независимых cron-процессов".
+
+Код не менялся, ничего не коммичено кроме этого анализа.
+
+### GPT | PENDING REVIEW
+
+Ожидается APPROVE / REQUEST CHANGES по `docs/ai/OPEN_METEO_DISCOVERY_BACKOFF_001.md`.
