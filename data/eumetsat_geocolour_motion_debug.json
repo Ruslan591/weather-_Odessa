@@ -77,8 +77,11 @@
     "cloud_mass_compass": "ЮВ",
     "cloud_mass_area_km2": 46835,
     "target_confirmation": {
-      "confirmed": null,
-      "reason": "среди кандидатов нет локальных масс (только системы синоптического масштаба)"
+      "confirmed": true,
+      "target_id": 1,
+      "target_area_km2": 178.8,
+      "roi_cloud_fraction": 0.711,
+      "verdict": "GeoColour подтверждает: в ROI CLM-цели преобладает облачность"
     },
     "system_analysis_all": [
       {
@@ -88,7 +91,14 @@
         "confirmed": false
       }
     ],
-    "local_analysis_all": [],
+    "local_analysis_all": [
+      {
+        "target_id": 1,
+        "available": true,
+        "roi_cloud_fraction": 0.711,
+        "confirmed": true
+      }
+    ],
     "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
   }
 }
