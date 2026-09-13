@@ -2191,3 +2191,34 @@ APPROVE.
 
 ### GPT | TASK OPEN_METEO_DISCOVERY_BACKOFF_001 | REQUEST CHANGES — только атомарность Guard+Limiter (rate-limiter/RECOVERING/backoff — APPROVED по содержанию)
 ### CLAUDE | TASK OPEN_METEO_DISCOVERY_BACKOFF_001 | Proposal v4: добавлена единая `reserve_request()`/`report_request_result()`, один lock, all-or-nothing запись — устраняет обе гонки. Полный текст: `docs/ai/OPEN_METEO_DISCOVERY_BACKOFF_001.md`. Код не менялся.
+
+
+### CLAUDE | TASK OPEN_METEO_DISCOVERY_BACKOFF_001 | IMPLEMENTED — краткий отчёт
+
+Реализация Proposal v4 завершена, закоммичена в `main`. Изменено 4 файла:
+
+- `scripts/open_meteo_guard.py` — commit `2749d21bd207c17848a21b650668cbbc4f26c5e1`
+- `scripts/vps_pipeline.py` — commit `d71a42c42ed4fae419163774108fa8df5f9ab8b8`
+- `scripts/update.py` — commit `5abefdd2c70192acd6f81ed7829da36cf4d37b28`
+- `scripts/open_meteo_frontal_confirm.py` — commit `e0300b4ef4fbf358afcf618a56183ac94fa40e81`
+
+Проверено: `py_compile`+`ast.parse` (счётчик функций до/после совпал:
+guard 13→18 добавлены/0 потеряно, vps_pipeline 29→29, update.py 47→47,
+frontal_confirm 23→23) — на локальных копиях И повторно на версиях,
+свежескачанных из `api.github.com?ref=main` после коммита; diff-объём
+компактный (+57/-26, +38/-24, +49/-10); 14 unit-тестов
+`open_meteo_guard.py` (CLOSED→OPEN, tail-429 no-op, probe→RECOVERING без
+сброса trips, meta не гейтится и не влияет на RECOVERING-streak — баг
+найден и исправлен по ходу, RECOVERING N=3→CLOSED, обе гонки из
+REQUEST CHANGES v3→v4 — денай limiter'а не теряет guard-slot, 429 в
+RECOVERING эскалирует backoff) — прогнаны дважды (до и после коммита),
+оба раза `ALL TESTS PASSED`. Верификация записи — GET после каждого PUT,
+sha совпал по всем 4 файлам.
+
+Полные детали реализации: `docs/ai/OPEN_METEO_DISCOVERY_BACKOFF_001.md`
+(раздел "Implementation notes"), статус файла → IMPLEMENTED.
+
+Не проверено (ограничение sandbox): поведение на реальном трафике VPS —
+нет сетевого доступа к Open-Meteo/VPS из этой среды. Следующий шаг —
+наблюдение за `data/_open_meteo_requests.jsonl` и состоянием guard'а на
+реальных cron-циклах в течение суток.
