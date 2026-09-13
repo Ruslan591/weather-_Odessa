@@ -1,5 +1,5 @@
 {
-  "task_id": "disk-audit-2026-09-14-001",
-  "cmd": "echo '=== opt/weather-pipeline depth1 ===' && du -xh --max-depth=1 /opt/weather-pipeline 2>&1 | sort -h && echo '=== repo depth1 ===' && du -xh --max-depth=1 /opt/weather-pipeline/repo 2>&1 | sort -h && echo '=== repo/data depth1 ===' && du -xh --max-depth=1 /opt/weather-pipeline/repo/data 2>&1 | sort -h && echo '=== repo/.git depth1 ===' && du -xh --max-depth=1 /opt/weather-pipeline/repo/.git 2>&1 | sort -h && echo '=== var/log depth1 ===' && du -xh --max-depth=1 /var/log 2>&1 | sort -h && echo '=== big files >50M ===' && find /opt/weather-pipeline -type f -size +50M -printf '%s %p\\n' 2>&1 | sort -n | tail -50 && echo '=== git count-objects ===' && cd /opt/weather-pipeline/repo && git count-objects -v -H && echo '=== df -h ===' && df -h",
-  "timeout": 60
+  "task_id": "disk-audit-git-history-002",
+  "cmd": "cd /opt/weather-pipeline/repo && git rev-list --objects --all > /tmp/allfileshas.txt && git cat-file --batch-check='%(objecttype) %(objectname) %(objectsize) %(rest)' < /tmp/allfileshas.txt | awk '/^blob/ {print substr($0,6)}' | sort -k2 -n -r | head -40 | numfmt --field=2 --to=iec-i --suffix=B --padding=10",
+  "timeout": 90
 }
