@@ -16,7 +16,7 @@
     24.3,
     25.3,
     25.9,
-    25.9,
+    25.5,
     25.9,
     26.8
   ],
@@ -37,34 +37,34 @@
     "valid": true,
     "speed_kmh": 0.0,
     "direction_compass": "Ю",
-    "bearing_deg": 200.8,
-    "frame_pairs_used": 4,
-    "acceleration_kmh": -0.1,
-    "turning_deg": 104.9,
+    "bearing_deg": 170.4,
+    "frame_pairs_used": 5,
+    "acceleration_kmh": 0.0,
+    "turning_deg": 114.1,
     "acceleration_verdict": "скорость стабильна",
     "turning_verdict": "меняет направление (по часовой)",
     "forecast_displacement": {
       "30min": {
         "distance_km": 0.0,
-        "bearing_deg": 321.0,
-        "compass": "СЗ"
+        "bearing_deg": 236.0,
+        "compass": "ЮЗ"
       },
       "60min": {
-        "distance_km": 0.2,
-        "bearing_deg": 329.0,
-        "compass": "СЗ"
+        "distance_km": 0.1,
+        "bearing_deg": 240.0,
+        "compass": "ЮЗ"
       },
       "120min": {
-        "distance_km": 0.6,
-        "bearing_deg": 334.0,
-        "compass": "СЗ"
+        "distance_km": 0.3,
+        "bearing_deg": 243.0,
+        "compass": "ЮЗ"
       }
     },
     "area_fraction_over_time": [
       0.538,
       0.521,
       0.521,
-      0.521,
+      0.54,
       0.569,
       0.604
     ],
@@ -77,11 +77,21 @@
     "cloud_mass_compass": "СЗ",
     "cloud_mass_area_km2": 82831,
     "target_confirmation": {
-      "confirmed": null,
-      "reason": "candidates пуст или отсутствует (снапшот от старой версии cloud_forecast.py?)"
+      "confirmed": false,
+      "target_id": 0,
+      "target_area_km2": 234.8,
+      "roi_cloud_fraction": 0.0,
+      "verdict": "GeoColour НЕ подтверждает: в ROI CLM-цели облачность не преобладает — возможно расхождение слоёв"
     },
     "system_analysis_all": [],
-    "local_analysis_all": [],
+    "local_analysis_all": [
+      {
+        "target_id": 0,
+        "available": true,
+        "roi_cloud_fraction": 0.0,
+        "confirmed": false
+      }
+    ],
     "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
   }
 }
