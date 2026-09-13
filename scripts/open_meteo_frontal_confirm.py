@@ -833,32 +833,46 @@ def run_europe_detection(geo):
     print(f"  open_meteo_frontal_confirm: сетка {rows}x{cols}={rows*cols} точек, шаг {EUROPE_GRID_STEP_KM}км")
 
     model_results_by_id = {}
-    if _om_guard.gate(probe_owner=False) == "skip":
-        print("  [INFO] open_meteo_frontal_confirm: Open-Meteo cooldown активен — пропуск")
-        _om_log.log("open_meteo_frontal_confirm.py", "fetch_model_batch", endpoint="forecast",
-                    status="skip_gate", gate="skip")
-    else:
-        for i, (model_id, _label) in enumerate(MODELS):
-            try:
-                model_results_by_id[model_id] = fetch_model_batch(model_id, points)
-                _om_log.log("open_meteo_frontal_confirm.py", "fetch_model_batch",
-                            endpoint="forecast", model=model_id, status="ok", gate="proceed")
-            except urllib.error.HTTPError as e:
-                if e.code == 429:
-                    _om_log.log("open_meteo_frontal_confirm.py", "fetch_model_batch",
-                                endpoint="forecast", model=model_id, status="429", gate="proceed")
-                    _om_guard.record_429()
-                    print(f"  [WARN] open_meteo_frontal_confirm: {model_id}: HTTP 429 — cooldown зафиксирован, останавливаю перебор моделей")
-                    break
-                _om_log.log("open_meteo_frontal_confirm.py", "fetch_model_batch",
-                            endpoint="forecast", model=model_id, status=f"error:{e}", gate="proceed")
-                print(f"  [WARN] open_meteo_frontal_confirm: модель {model_id}: {e}")
-            except Exception as e:
-                _om_log.log("open_meteo_frontal_confirm.py", "fetch_model_batch",
-                            endpoint="forecast", model=model_id, status=f"error:{e}", gate="proceed")
-                print(f"  [WARN] open_meteo_frontal_confirm: модель {model_id}: {e}")
+    # [ИЗМЕНЕНО 2026-09-13, OPEN_METEO_DISCOVERY_BACKOFF_001, Proposal v4
+    # п.4/6] Раньше guard.gate() проверялся ОДИН раз на весь батч из 5
+    # моделей. Теперь reserve_request() вызывается атомарно перед КАЖДЫМ
+    # отдельным fetch_model_batch() — и заодно каждый такой forecast-запрос
+    # теперь проходит через общий межпроцессный token-bucket rate-limiter
+    # (REQUEST_INTERVAL=30с между моделями сохраняется как есть — это
+    # штатный темп самого скрипта, лимитер — дополнительная, независимая
+    # проверка).
+    for i, (model_id, _label) in enumerate(MODELS):
+        _decision = _om_guard.reserve_request("forecast_or_archive")
+        if _decision == "skip":
+            print(f"  [INFO] open_meteo_frontal_confirm: {model_id}: Open-Meteo лимит/cooldown — пропуск")
+            _om_log.log("open_meteo_frontal_confirm.py", "fetch_model_batch", endpoint="forecast",
+                        model=model_id, status="skip_gate", gate="skip")
             if i < len(MODELS) - 1:
                 time.sleep(REQUEST_INTERVAL)
+            continue
+        try:
+            model_results_by_id[model_id] = fetch_model_batch(model_id, points)
+            _om_guard.report_request_result("forecast_or_archive", "success")
+            _om_log.log("open_meteo_frontal_confirm.py", "fetch_model_batch",
+                        endpoint="forecast", model=model_id, status="ok", gate="proceed")
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                _om_guard.report_request_result("forecast_or_archive", "429")
+                _om_log.log("open_meteo_frontal_confirm.py", "fetch_model_batch",
+                            endpoint="forecast", model=model_id, status="429", gate="proceed")
+                print(f"  [WARN] open_meteo_frontal_confirm: {model_id}: HTTP 429 — cooldown зафиксирован, останавливаю перебор моделей")
+                break
+            _om_guard.report_request_result("forecast_or_archive", "error")
+            _om_log.log("open_meteo_frontal_confirm.py", "fetch_model_batch",
+                        endpoint="forecast", model=model_id, status=f"error:{e}", gate="proceed")
+            print(f"  [WARN] open_meteo_frontal_confirm: модель {model_id}: {e}")
+        except Exception as e:
+            _om_guard.report_request_result("forecast_or_archive", "error")
+            _om_log.log("open_meteo_frontal_confirm.py", "fetch_model_batch",
+                        endpoint="forecast", model=model_id, status=f"error:{e}", gate="proceed")
+            print(f"  [WARN] open_meteo_frontal_confirm: модель {model_id}: {e}")
+        if i < len(MODELS) - 1:
+            time.sleep(REQUEST_INTERVAL)
 
     votes_grid, n_valid_grid, confirmed, consensus_score_grid = detect_europe_fronts(model_results_by_id, rows, cols)
     overlay_points, far_wh, very_far_wh = _build_europe_overlay(points, votes_grid, n_valid_grid, confirmed, geo)
