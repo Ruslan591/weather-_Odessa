@@ -1,8 +1,23 @@
 # TASK: FRONT_SPATIAL_CACHE_001
 
 ## Status
-OPEN — Proposal v1 (проектирование, код не менялся, коммит не делался).
-Ждём APPROVE/REQUEST CHANGES от GPT перед реализацией.
+APPROVED (Proposal v2) — GPT APPROVE на реализацию получен, при
+условии 3 правок из REQUEST CHANGES по v1 (внесены ниже). Код пока НЕ
+менялся, коммита в `open_meteo_frontal_confirm.py` не было — это всё
+ещё только проектный документ.
+
+## История ревью
+- v1: GPT REQUEST CHANGES, 3 пункта:
+  1. `new_run_time is None` не должно триггерить fetch само по себе
+     (защита от лишних запросов/429, если `model_runs_history.json`
+     временно не содержит модель).
+  2. Partial cache после смены grid не должен автоматически считаться
+     valid для consensus — нужна отдельная freshness/grid-валидация
+     на входе в голосование, `MIN_MODEL_VOTES` остаётся единственным
+     vote gate.
+  3. `grid_id` не должен содержать зашитое `eu220` — сетка может
+     измениться в будущем, префикс должен быть общим (`grid_<hash>`).
+- v2 (этот документ): все 3 правки внесены — см. п.2, п.5, п.3 ниже.
 
 ## Цель
 Убрать повторный полный fan-out (5 моделей × ~266 точек) из
@@ -34,7 +49,7 @@ OPEN — Proposal v1 (проектирование, код не менялся, 
 ```json
 {
   "version": 1,
-  "grid_id": "eu220_a3f9c2e1d0",
+  "grid_id": "grid_a3f9c2e1d0",
   "grid_meta": {
     "schema_version": 1,
     "step_km": 220.0,
@@ -91,10 +106,26 @@ else:
     models_to_fetch = []
     for model_id, label in MODELS:
         cached_entry = cache_for_models.get(model_id)
-        new_run_time = latest_run_times.get(label)
-        if (cached_entry is None
-                or cached_entry["source_run_time"] != new_run_time
-                or _is_stale(cached_entry["fetched_at"], model_id)):  # см. п.4
+        new_run_time = latest_run_times.get(label)  # может быть None —
+                                                      # модель временно
+                                                      # отсутствует в
+                                                      # model_runs_history.json
+
+        if cached_entry is None:
+            needs_fetch = True
+        elif _is_stale(cached_entry["fetched_at"], model_id):  # см. п.4
+            needs_fetch = True
+        elif new_run_time is not None and new_run_time != cached_entry["source_run_time"]:
+            needs_fetch = True
+        else:
+            # new_run_time is None (неизвестен) ИЛИ равен source_run_time —
+            # НЕ считаем changed. [FIX GPT REQUEST CHANGES v1, п.1]
+            # Раньше здесь стояло cached_entry["source_run_time"] != new_run_time,
+            # что триггерило fetch каждый раз, когда new_run_time временно
+            # None — лишние запросы/риск 429 без реальной причины.
+            needs_fetch = False
+
+        if needs_fetch:
             models_to_fetch.append(model_id)
 ```
 
@@ -120,7 +151,11 @@ def compute_grid_id(bbox, step_km, points, schema_version):
         # порядок points ВАЖЕН — не сортировать, брать as-is из build_europe_grid()
     }, ensure_ascii=False, sort_keys=False)
     h = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:10]
-    return f"eu220_{h}"
+    return f"grid_{h}"  # [FIX GPT REQUEST CHANGES v1, п.3] было "eu220_{h}" —
+                         # зашитое имя региона/шага некорректно, если сетка
+                         # в будущем изменится (другой регион/шаг/схема).
+                         # Сам hash уже полностью зависит от step_km/bbox/
+                         # points/schema_version — префикс чисто декоративный.
 ```
 
 Округление до 4 знаков (~11м) — чтобы плавающая арифметика при
@@ -176,6 +211,34 @@ run_time) — иначе кэш обслуживает данные бескон
 - `os.replace()` на новый `grid_id` и есть "замена" старого кэша —
   отдельного шага удаления не нужно.
 
+**[FIX GPT REQUEST CHANGES v1, п.2]** Факт присутствия модели в
+partial cache (файл на диске) и факт её допуска к consensus этого
+run — ДВЕ РАЗНЫЕ вещи, их нельзя смешивать:
+
+```
+model_results_by_id = {}
+for model_id, label in MODELS:
+    entry = cache_after_this_run["models"].get(model_id)
+    if entry is None:
+        continue  # модели нет в кэше вообще — не участвует, как и сегодня
+    if _is_stale(entry["fetched_at"], model_id):
+        continue  # есть в файле, но просрочена/не прошла freshness —
+                   # НЕ участвует в consensus, даже если физически
+                   # лежит в front_spatial_cache.json
+    model_results_by_id[model_id] = entry["fields"]
+
+# дальше — БЕЗ ИЗМЕНЕНИЙ:
+votes_grid, n_valid_grid, confirmed, consensus_score_grid = \
+    detect_europe_fronts(model_results_by_id, rows, cols)
+```
+
+То есть на вход в `detect_europe_fronts()` (и, соответственно, в
+`MIN_MODEL_VOTES`/`n_valid_grid`) попадают только модели, прошедшие ту
+же freshness-проверку, что определяет `models_to_fetch` в п.2 —
+раздельно от того, есть ли у них физическая запись в partial cache
+после неполного fan-out. `MIN_MODEL_VOTES` остаётся единственным vote
+gate, сама логика `detect_europe_fronts()` не меняется.
+
 ## 6. Оценка максимального размера
 
 CURRENT_VARIABLES = 7 переменных, n_points = 266 (сейчас), 5 моделей.
@@ -201,19 +264,14 @@ CURRENT_VARIABLES = 7 переменных, n_points = 266 (сейчас), 5 м�
 
 ---
 
-## Вопросы к ревью
-1. Согласны ли со схемой changed-model detection через переиспользование
-   `model_runs_history.json`/`_latest_run_times()`, без отдельного
-   meta-пробника?
-2. Согласны ли с freshness-таблицей (п.4) и форс-рефетчем по возрасту
-   независимо от `source_run_time`?
-3. Согласны ли с поведением при частичном fan-out на смене grid (п.5) —
-   писать частичный новый `grid_id`, докачивать недостающее в
-   последующих runs, а не блокировать запись до полного успеха?
-4. Устраивает ли оценка размера (п.6) и выбор columnar-формата?
-5. Нужен ли отдельный TASK на аудит файлов из п.7, или отложить до
-   отдельного запроса?
+## Итог ревью
+GPT APPROVE на Proposal v2 (все 3 правки внесены). Аудит файлов из
+п.7 — вынесен в отдельную задачу, не блокирует эту реализацию.
 
 ## Next action
-GPT: review Proposal v1 — APPROVE / REQUEST CHANGES. До APPROVE код
-не менять, `open_meteo_frontal_confirm.py` не трогать.
+Ждём подтверждения от Руслана на старт кодирования. После
+подтверждения: реализация в `open_meteo_frontal_confirm.py`
+(`FRONT_SPATIAL_CACHE_001`) + `data/front_spatial_cache.json` как
+новый файл, с `py_compile`/`ast.parse`/enumeration FunctionDef перед
+пушем (проектный стандарт) и верификацией через повторный GET после
+коммита.
