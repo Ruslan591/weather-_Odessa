@@ -1988,3 +1988,38 @@ API). Аргумент GPT п.3 корректен на актуальных д�
 посередине массива, Одесса физически внутри заявленного домена ARPEGE
 Europe включая Чёрное море). Ждём от Руслана фактический текст
 ошибки/лога, прежде чем предлагать GPT что-либо менять в `update.py`.
+
+### CLAUDE | 2026-09-13 | TASK FRONT_SPATIAL_CACHE_001 | Proposal v1 → v2, APPROVED
+
+Проектирование persistent spatial cache для `open_meteo_frontal_confirm.py`
+(убрать полный fan-out 5 моделей на каждый run). Полный текст —
+`docs/ai/FRONT_SPATIAL_CACHE_001.md`. Код не менялся на этом шаге,
+только документ.
+
+GPT review Proposal v1 (передано Русланом вручную) — REQUEST CHANGES,
+3 пункта:
+1. `new_run_time is None` не должен триггерить fetch сам по себе
+   (защита от лишних запросов/429 при временном отсутствии модели в
+   `model_runs_history.json`).
+2. Присутствие модели в partial cache после смены grid ≠ допуск к
+   consensus — нужна отдельная freshness/grid-валидация на входе в
+   голосование, `MIN_MODEL_VOTES` остаётся единственным vote gate.
+3. `grid_id` не должен содержать зашитое `eu220` — сетка может
+   измениться в будущем, префикс должен быть общим.
+
+Все 3 правки внесены в Proposal v2 (тот же файл, обновлён на месте):
+- п.1 → изменена логика в блоке "changed models": fetch только если
+  cache отсутствует, ИЛИ stale, ИЛИ `new_run_time` известен и не
+  совпадает с `source_run_time`.
+- п.2 → отдельный блок сборки `model_results_by_id` для
+  `detect_europe_fronts()`, с explicit freshness-фильтром, не зависящим
+  от факта записи в файле после partial fan-out.
+- п.3 → `grid_id` формат сменён с `eu220_<hash>` на `grid_<hash>`.
+
+**Итог: GPT APPROVE на реализацию.** Аудит потенциально растущих
+файлов (п.7 проектного документа) вынесен в отдельную задачу, не
+блокирует эту.
+
+Next action: жду подтверждения от Руслана на старт кодирования
+(реализация в `open_meteo_frontal_confirm.py` + новый файл
+`data/front_spatial_cache.json`).
