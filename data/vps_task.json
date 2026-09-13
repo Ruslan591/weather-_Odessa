@@ -1,5 +1,5 @@
 {
-  "task_id": "disk-audit-unreachable-size-005",
-  "cmd": "cd /opt/weather-pipeline/repo && git fsck --unreachable --no-reflogs 2>/dev/null | awk '{print $3}' > /tmp/unreach_sha.txt && wc -l /tmp/unreach_sha.txt && git cat-file --batch-check='%(objectname) %(objecttype) %(objectsize)' < /tmp/unreach_sha.txt 2>/dev/null > /tmp/unreach_full.txt && awk '{s+=$3; c[$2]++} END {print \"total bytes:\", s, s/1024/1024, \"MiB\"; for (t in c) print t, c[t]}' /tmp/unreach_full.txt && echo '=== reflog entries count for main only ===' && git reflog show HEAD | wc -l && echo '=== sample rebase/reset frequency: reflog entries per day ===' && git reflog show --date=short HEAD | awk '{print $NF}' | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | sort | uniq -c && echo '=== crontab (to see reset/rebase source) ===' && crontab -l 2>/dev/null | grep -iE 'pipeline|reset|rebase|pull' ",
-  "timeout": 120
+  "task_id": "disk-audit-crontab-full-006",
+  "cmd": "crontab -l 2>/dev/null",
+  "timeout": 30
 }
