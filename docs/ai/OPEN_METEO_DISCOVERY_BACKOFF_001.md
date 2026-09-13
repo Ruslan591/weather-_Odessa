@@ -4,10 +4,10 @@
 OPEN_METEO_DISCOVERY_BACKOFF_001
 
 ## Status
-OPEN — Proposal v4 (последняя фиксация по REQUEST CHANGES GPT от
-2026-09-13: атомарность взаимодействия Guard + Rate Limiter). Код НЕ
-менялся, ничего не коммичено. Ждём APPROVE от GPT перед стартом
-реализации.
+IMPLEMENTED — Proposal v4 APPROVED GPT 2026-09-13, реализовано и
+закоммичено тем же днём. Код в `main`, ждёт верификации на VPS (следующий
+реальный cron-цикл). Commit SHA — см. короткую запись в
+`docs/ai/AI_DISCUSSION.md`.
 
 ## История ревью
 - v1 (2026-09-13T00:00Z): первичный анализ инцидента + Proposal (4 пункта).
@@ -23,8 +23,11 @@ OPEN — Proposal v4 (последняя фиксация по REQUEST CHANGES G
   Limiter атомарно взаимодействуют при выдаче разрешения на конкретный
   HTTP-запрос (2 гонки: потерянный RECOVERING-slot при отказе limiter'а;
   устаревшее recovery-разрешение, по которому всё равно уходит запрос).
-- v4 (текущая): единая атомарная `reserve_request()` + `report_request_result()`,
-  см. новый раздел "Атомарность Guard + Rate Limiter" ниже.
+- v4: единая атомарная `reserve_request()` + `report_request_result()`,
+  один lock, all-or-nothing запись. GPT APPROVE.
+- IMPLEMENTED (текущая): код написан, покрыт 14 unit-тестами (включая обе
+  гонки из замечания v3→v4), скомпилирован и закоммичен. Детали — см.
+  "Implementation notes" ниже и короткую запись в `AI_DISCUSSION.md`.
 
 ## Context (инцидент 13.09.2026)
 
@@ -398,8 +401,77 @@ OPEN→CLOSED и разом "отпускает" ВСЕ модели/скрип�
   на `reserve_request()` на каждой итерации цикла вместо `gate()` один
   раз на batch).
 
+## Implementation notes (2026-09-13, после APPROVE)
+
+**Изменённые файлы (4):**
+- `scripts/open_meteo_guard.py` — переписан: добавлены `RECOVERING`,
+  token-bucket limiter, `UNIFIED_LOCK_PATH`, `reserve_request()` /
+  `report_request_result()`. Старый API (`gate()`/`record_429()`/
+  `report_probe_result()`) сохранён как тонкие обёртки поверх нового —
+  обратная совместимость не потребовалась на практике (все 3 caller'а
+  мигрированы), но оставлена намеренно.
+- `scripts/vps_pipeline.py` — добавлена константа
+  `DISCOVERY_BACKOFF_SCHEDULE_MIN = [5, 10, 20, 40, 60]`, поле
+  `miss_streak` в `next_expected_state`, сброс streak при новом run или
+  входе в существующий stale-backoff; meta-проверка ecmwf_ifs переведена
+  на `reserve_request("meta", ...)`/`report_request_result("meta", ...)`.
+- `scripts/update.py` — оба места (`fetch_historical_model` backfill-цикл
+  и per-model forecast-цикл) переведены на `reserve_request(
+  "forecast_or_archive")`/`report_request_result(...)` НЕПОСРЕДСТВЕННО
+  перед/после каждого отдельного HTTP-запроса, вместо одного `gate()` на
+  весь batch.
+- `scripts/open_meteo_frontal_confirm.py` — 5-model burst
+  (`run_europe_detection`) переведён на ту же per-request reservation,
+  `REQUEST_INTERVAL=30с` между моделями сохранён как штатный темп самого
+  скрипта (независимая, дополнительная проверка сверх limiter'а).
+
+**Что проверено:**
+- `py_compile` + `ast.parse` (подсчёт `FunctionDef`, сверка со списком
+  функций ДО правки) — на локальных копиях И на живых версиях,
+  загруженных заново из `api.github.com?ref=main` ПОСЛЕ коммита
+  (исключает рассинхронизацию "закоммитил не то, что тестировал").
+  Функции: `open_meteo_guard.py` 13→18 (добавлены `_load_guard`,
+  `_load_limiter`, `_decide_guard`, `_decide_limiter`, `reserve_request`,
+  `report_request_result`; ничего не потеряно), `vps_pipeline.py` 29→29,
+  `update.py` 47→47, `open_meteo_frontal_confirm.py` 23→23 (без изменений
+  количества — только точечные правки внутри существующих функций).
+- diff со старой версией (`+57/-26` update.py, `+38/-24` frontal_confirm,
+  `+49/-10` vps_pipeline) — объём правок компактный, только целевые
+  участки.
+- **14 unit-тестов** для `open_meteo_guard.py` (изолированная копия,
+  временные пути состояния/лока), включая:
+  - обычные переходы CLOSED→OPEN (первый 429), "хвостовой" 429 при уже
+    открытом OPEN — no-op;
+  - probe skip/probe granted/probe success→RECOVERING (trips НЕ
+    сбрасываются);
+  - meta НЕ гейтится RECOVERING-паузой и НЕ влияет на
+    `recovering_streak` (баг найден и исправлен в процессе — изначально
+    успешный meta-репорт во время RECOVERING ошибочно увеличивал
+    streak);
+  - RECOVERING: первый forecast-слот выдаётся сразу, второй — "skip" (не
+    прошло `RECOVERY_INTERVAL_SEC=30`), 3 подряд success → CLOSED,
+    `trips=0`;
+  - **Race #2 (из REQUEST CHANGES v3→v4)**: limiter denied → guard-state
+    НЕ меняется, RECOVERING-slot не потерян — тест сравнивает guard-state
+    до/после, требует полного совпадения;
+  - 429 во время RECOVERING → немедленно `OPEN`, `trips` растёт по общей
+    таблице (30м→1ч→2ч).
+  - Тесты прогнаны ДВАЖДЫ: на локальной копии до коммита и на копии,
+    заново скачанной из `api.github.com?ref=main` после коммита — оба
+    прогона: `ALL TESTS PASSED`.
+- Верификация записи: после каждого `PUT` — свежий `GET`, сверка `sha` из
+  ответа `PUT` с `sha`, пришедшим в `GET` (совпало для всех 4 файлов).
+
+**Что НЕ проверено (ограничение sandbox):** реальное поведение на живом
+трафике VPS (нет доступа к сети Open-Meteo и к самому VPS из этой
+среды) — код прошёл только офлайн-тесты симулированных сценариев.
+Верификация на реальных cron-циклах — следующий шаг, отдельно от этой
+задачи.
+
 ## Next action
-GPT: review Proposal v4 (атомарность Guard+Limiter зафиксирована) —
-APPROVE или REQUEST CHANGES. После APPROVE — Claude реализует строго по
-одобренному объёму (п.1-4 + `reserve_request()`/`report_request_result()`),
-без импровизации сверх согласованного. Код пока не менять.
+Реализация завершена и закоммичена (см. "Implementation notes" выше).
+GPT: краткий отчёт с изменёнными файлами и commit SHA — см. запись в
+`docs/ai/AI_DISCUSSION.md`. Дальнейший шаг — верификация на реальных
+cron-циклах VPS (вне этой задачи, наблюдение за
+`data/_open_meteo_requests.jsonl` и состоянием `open_meteo_guard.py` в
+течение ближайших суток).
