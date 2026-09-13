@@ -12,28 +12,28 @@
     "local_trend_radius_km": 50
   },
   "valid": true,
-  "speed_kmh": 69.7,
+  "speed_kmh": 69.5,
   "direction_compass": "С",
-  "bearing_deg": 15.3,
+  "bearing_deg": 14.4,
   "frame_pairs_used": 5,
-  "acceleration_kmh": -0.5,
-  "turning_deg": -1.6,
+  "acceleration_kmh": -0.2,
+  "turning_deg": -0.0,
   "acceleration_verdict": "скорость стабильна",
   "turning_verdict": "направление стабильно",
   "forecast_displacement": {
     "30min": {
       "distance_km": 34.6,
-      "bearing_deg": 13.0,
+      "bearing_deg": 14.0,
       "compass": "С"
     },
     "60min": {
-      "distance_km": 68.9,
-      "bearing_deg": 12.0,
+      "distance_km": 69.1,
+      "bearing_deg": 14.0,
       "compass": "С"
     },
     "120min": {
-      "distance_km": 137.0,
-      "bearing_deg": 11.0,
+      "distance_km": 137.6,
+      "bearing_deg": 14.0,
       "compass": "С"
     }
   },
@@ -66,16 +66,16 @@
   "temperature_trend_verdict": "без существенных изменений",
   "target_confirmation": {
     "confirmed": null,
-    "reason": "известный шумовой объект в этой точке подавлен (сигнатура 185_-210), других локальных целей нет"
+    "reason": "среди кандидатов нет локальных масс (только системы синоптического масштаба)"
   },
-  "system_analysis_all": [],
-  "local_analysis_all": [
+  "system_analysis_all": [
     {
       "target_id": 0,
       "available": true,
-      "roi_contrast_sigma": -4.0,
+      "roi_contrast_sigma": 0.0,
       "confirmed": false
     }
   ],
+  "local_analysis_all": [],
   "method_note": "Буфер 6/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин, crs=EPSG:4326, всегда явный TIME — не 'latest'), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. cloud_mass_* — положение (не движение) ближайшей значимой облачной массы относительно станции. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
 }
