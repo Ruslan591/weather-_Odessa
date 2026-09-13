@@ -1548,27 +1548,39 @@ def main():
             for date_str, date_recs in by_date.items():
                 gist_log(f"  Модели за {date_str} ...")
                 hourly_by_model = {}
-                if _om_guard.gate(probe_owner=False) == "skip":
-                    gist_log("    Open-Meteo cooldown активен — бэкфилл за эту дату пропущен")
-                    _om_log.log("update.py", "fetch_historical_model", endpoint="historical",
-                                status="skip_gate", gate="skip")
-                else:
-                    for mid in [m["id"] for m in ENSEMBLE_MODELS]:
-                        try:
-                            h = fetch_historical_model(mid, date_str)
-                            hourly_by_model[mid] = h
-                            time.sleep(0.5)
-                        except HTTPError as e:
-                            if e.code == 429:
-                                _om_guard.record_429()
-                                log.warning("    ✗ %s: HTTP 429 — cooldown зафиксирован, останавливаю перебор моделей", mid)
-                                hourly_by_model[mid] = None
-                                break
-                            log.warning("    ✗ %s: %s", mid, e)
+                # [ИЗМЕНЕНО 2026-09-13, OPEN_METEO_DISCOVERY_BACKOFF_001,
+                # Proposal v4 п.4/6] Раньше guard.gate() проверялся ОДИН
+                # раз на всю дату (batch), а не перед каждым отдельным
+                # запросом к модели. Теперь reserve_request() вызывается
+                # атомарно перед КАЖДЫМ fetch_historical_model() —
+                # архивные/forecast-запросы теперь ещё и проходят через
+                # общий межпроцессный token-bucket rate-limiter.
+                for mid in [m["id"] for m in ENSEMBLE_MODELS]:
+                    _decision = _om_guard.reserve_request("forecast_or_archive")
+                    if _decision == "skip":
+                        gist_log(f"    {mid}: Open-Meteo лимит/cooldown — пропуск")
+                        _om_log.log("update.py", "fetch_historical_model", endpoint="historical",
+                                    model=mid, status="skip_gate", gate="skip")
+                        hourly_by_model[mid] = None
+                        continue
+                    try:
+                        h = fetch_historical_model(mid, date_str)
+                        hourly_by_model[mid] = h
+                        _om_guard.report_request_result("forecast_or_archive", "success")
+                        time.sleep(0.5)
+                    except HTTPError as e:
+                        if e.code == 429:
+                            _om_guard.report_request_result("forecast_or_archive", "429")
+                            log.warning("    ✗ %s: HTTP 429 — cooldown зафиксирован, останавливаю перебор моделей", mid)
                             hourly_by_model[mid] = None
-                        except Exception as e:
-                            log.warning("    ✗ %s: %s", mid, e)
-                            hourly_by_model[mid] = None
+                            break
+                        _om_guard.report_request_result("forecast_or_archive", "error")
+                        log.warning("    ✗ %s: %s", mid, e)
+                        hourly_by_model[mid] = None
+                    except Exception as e:
+                        _om_guard.report_request_result("forecast_or_archive", "error")
+                        log.warning("    ✗ %s: %s", mid, e)
+                        hourly_by_model[mid] = None
                 for rec in date_recs:
                     md_rec = build_model_record(rec, hourly_by_model)
                     if md_rec:
@@ -1616,11 +1628,16 @@ def main():
     all_model_hours = {}
     succeeded = []
     model_run_times = {}   # для build_snapshot()::modelRunTimes — заполняется и из кэша, и из свежих фетчей
-    if (need_synop or need_pws) and _om_guard.gate(probe_owner=False) == "skip":
-        gist_log("  Open-Meteo cooldown активен — свежий ансамблевый прогноз пропущен")
-        _om_log.log("update.py", "fetch_forecast_model", endpoint="forecast",
-                    status="skip_gate", gate="skip")
-    elif need_synop or need_pws:
+    # [ИЗМЕНЕНО 2026-09-13, OPEN_METEO_DISCOVERY_BACKOFF_001, Proposal v4
+    # п.4/6] Раньше здесь был единый gate()-чек ОДИН раз на весь батч
+    # (need_synop or need_pws), до захода в per-model цикл. Теперь решение
+    # принимается атомарно перед КАЖДЫМ отдельным fetch_forecast_model() —
+    # см. reserve_request() внутри цикла ниже. Внешний need_synop/need_pws
+    # остаётся триггером "стоит ли вообще пересматривать снимок" (не
+    # тронут), но сам факт cooldown/лимита больше не блокирует загрузку
+    # cache/history заранее — только реальный HTTP-запрос к конкретной
+    # модели.
+    if need_synop or need_pws:
         # [ПЕРЕПИСАНО 2026-09-12, OPEN_METEO_PER_MODEL_UPDATE_ARCHITECTURE_001,
         # GPT APPROVED] Раньше здесь был безусловный цикл по ВСЕМ 8 моделям —
         # 1 новый run любой модели вызывал 8 Forecast API запросов. Теперь:
@@ -1644,10 +1661,18 @@ def main():
         for m in ENSEMBLE_MODELS:
             mid = m["id"]
             if mid in changed_models:
+                _decision = _om_guard.reserve_request("forecast_or_archive")
+                if _decision == "skip":
+                    gist_log(f"    {mid}: Open-Meteo лимит/cooldown — пропуск "
+                             f"(новый run, повтор в следующем цикле)")
+                    _om_log.log("update.py", "fetch_forecast_model", endpoint="forecast",
+                                model=mid, status="skip_gate", gate="skip")
+                    continue
                 log.info(f"  Загружаем прогноз {mid} (новый run)...")
                 try:
                     h = fetch_forecast_model(mid, days=16)
                     if h:
+                        _om_guard.report_request_result("forecast_or_archive", "success")
                         parsed = parse_hourly(h)
                         all_model_hours[mid] = parsed
                         succeeded.append(mid)
@@ -1662,13 +1687,19 @@ def main():
                         }
                         cache_dirty = True
                         gist_log(f"    ✓ {mid} (новый run, HTTP-запрос выполнен)")
+                    else:
+                        # 2xx, но пустой/неожиданный ответ — не success и не
+                        # 429 (см. классификация outcome в open_meteo_guard.py).
+                        _om_guard.report_request_result("forecast_or_archive", "error")
                 except HTTPError as e:
                     if e.code == 429:
-                        _om_guard.record_429()
+                        _om_guard.report_request_result("forecast_or_archive", "429")
                         gist_log(f"    ✗ {mid}: HTTP 429 — cooldown зафиксирован, останавливаю перебор моделей")
                         break
+                    _om_guard.report_request_result("forecast_or_archive", "error")
                     gist_log(f"    ✗ {mid}: {e} (кэш не тронут, повтор в следующем цикле)")
                 except Exception as e:
+                    _om_guard.report_request_result("forecast_or_archive", "error")
                     gist_log(f"    ✗ {mid}: {e} (кэш не тронут, повтор в следующем цикле)")
                 time.sleep(0.5)
             else:
