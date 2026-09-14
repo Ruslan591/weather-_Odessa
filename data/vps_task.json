@@ -1,5 +1,5 @@
 {
-  "task_id": "ping-016",
-  "cmd": "echo PONG_$(date -u +%s)",
-  "timeout": 10
+  "task_id": "bridge-selfdiag-018",
+  "cmd": "echo '=== ps aux | grep bridge ===' && ps aux | grep -i '[v]ps_github_bridge' && echo '(none running = OK, no zombie)' && echo '=== crontab entry ===' && crontab -l 2>/dev/null | grep -i bridge && echo '=== last_task_id.txt ===' && cat /opt/vps-github-bridge/last_task_id.txt 2>&1 && echo && echo '=== tail -300 vps-github-bridge.log ===' && tail -300 /var/log/vps-github-bridge.log 2>&1",
+  "timeout": 20
 }
