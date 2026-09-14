@@ -1,5 +1,5 @@
 {
-  "task_id": "ping-016",
-  "cmd": "echo PONG_$(date -u +%s)",
-  "timeout": 10
+  "task_id": "post-fix-baseline-020",
+  "cmd": "date -u +'%Y-%m-%dT%H:%M:%SZ' && echo '=== .git size ===' && du -sh /opt/weather-pipeline/repo/.git && echo '=== count-objects ===' && git -C /opt/weather-pipeline/repo count-objects -v -H && echo '=== fsck unreachable --no-reflogs (breakdown) ===' && git -C /opt/weather-pipeline/repo fsck --unreachable --no-reflogs 2>/dev/null | awk '{c[$1\" \"$2]++; t++} END {for (k in c) print k, c[k]; print \"TOTAL\", t}'",
+  "timeout": 200
 }
