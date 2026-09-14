@@ -1,5 +1,5 @@
 {
-  "task_id": "monitor-recheck-021",
-  "cmd": "date -u +'%Y-%m-%dT%H:%M:%SZ' && echo '=== .git size ===' && du -sh /opt/weather-pipeline/repo/.git && echo '=== count-objects ===' && git -C /opt/weather-pipeline/repo count-objects -v -H && echo '=== fsck unreachable --no-reflogs (breakdown) ===' && git -C /opt/weather-pipeline/repo fsck --unreachable --no-reflogs 2>/dev/null | awk '{c[$1\" \"$2]++; t++} END {for (k in c) print k, c[k]; print \"TOTAL\", t}' && echo '=== marker counts since deploy ===' && for m in UNPUSHED_COMMITS_DETECTED UNPUSHED_COMMITS_PRESERVED UNPUSHED_COMMIT_RETAINED SYNC_ABORTED_SHALLOW_ERROR GIT_LOCK_TIMEOUT; do echo -n \"$m: \"; grep -c \"$m\" /var/log/vps-pipeline.log /var/log/vps-satellite-pipeline.log /var/log/vps-ai-pipeline.log 2>&1 | paste -sd' '; done && echo -n 'push failed after 3 attempts: '; grep -c 'push failed after 3 attempts' /var/log/vps-pipeline.log /var/log/vps-satellite-pipeline.log /var/log/vps-ai-pipeline.log 2>&1 | paste -sd' '",
-  "timeout": 200
+  "task_id": "ping-016",
+  "cmd": "echo PONG_$(date -u +%s)",
+  "timeout": 10
 }
