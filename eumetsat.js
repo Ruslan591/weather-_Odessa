@@ -1,0 +1,225 @@
+/* =========================================================
+   EUMETSAT.JS — карта спутника EUMETSAT для eumetsat.html.
+
+   АРХИТЕКТУРА (после переделки): раньше каждый слой анимировался ЖИВЫМИ
+   WMS-тайлами прямо в Leaflet — на каждый кадр уходило НЕСКОЛЬКО отдельных
+   GetMap-запросов (по тайлу стандартной XYZ-сетки), и если хоть один тайл
+   не успевал/не мог загрузиться — в этом месте кадра было видно НАСКВОЗЬ
+   базовую карту (см. обсуждение в чате). Патчи (двойной буфер с
+   кроссфейдом, порог ошибок тайлов) снижали частоту, но не убирали
+   проблему в принципе — слишком много точек отказа на клиенте.
+
+   Теперь сервер (scripts/eumetsat_anim_render.py, GitHub Actions) сам
+   собирает готовую MP4-петлю (последние ~2ч) ОДНИМ GetMap-запросом на
+   кадр (не тайлами — цельным широким обзорным изображением), кодирует и
+   кладёт ОДИН файл на слой в data/anim/<key>.mp4 (перезаписывается,
+   история не копится). Здесь — просто L.videoOverlay поверх карты,
+   привязанный к тем же географическим границам (ANIM_BOUNDS), что и
+   рендерился на сервере. Ни одного сетевого запроса к EUMETSAT на клиенте
+   — мерцать нечему, а base-карта (OSM) как отображалась статично, так и
+   отображается (она и не была источником мерцания).
+
+   Прозрачность: у видео (H.264) нет альфа-канала, поэтому сервер кладёт
+   "нет данных" на сплошную тёмную подложку, а не на прозрачность — здесь
+   компенсируется общей opacity слоя (видно карту сквозь видео равномерно,
+   не только в no-data пятнах, это компромисс ради простоты и надёжности).
+========================================================= */
+
+const ANIM_BASE = "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/anim";
+const MANIFEST_URL = ANIM_BASE + "/manifest.json";
+const CENTER_LAT = 46.4406;
+const CENTER_LON = 30.7703;
+
+// ANIM_BOUNDS больше НЕ хардкод — читается из manifest.json (ключ "_bounds",
+// публикуется scripts/eumetsat_anim_render.py). До первой загрузки манифеста
+// используется этот дефолт (тот же охват, что и раньше), просто чтобы карте
+// было с чем стартовать на requestAnimationFrame ниже — реальные границы
+// подставляются сразу после loadManifest() и карта перецентровывается.
+// Раньше здесь было "ВАЖНО: должен совпадать 1:1 с BBOX в
+// eumetsat_anim_render.py, иначе видео уедет от карты" — теперь менять
+// охват нужно только в ОДНОМ месте (BBOX там), это ключ синхронизации.
+let ANIM_BOUNDS = [[40.0, 22.0], [52.0, 40.0]]; // [[lat_min,lon_min],[lat_max,lon_max]] — дефолт до загрузки манифеста
+
+const LEGEND_HTML = {
+    clm: `
+        <div class="swatchRow"><span class="swatch" style="background:rgb(0,0,255);"></span>ясно (над водой)</div>
+        <div class="swatchRow"><span class="swatch" style="background:rgb(0,170,0);"></span>ясно (над сушей)</div>
+        <div class="swatchRow"><span class="swatch" style="background:rgb(255,255,255);"></span>облачно</div>`,
+    cth: `
+        <div class="gradBar" style="background:linear-gradient(90deg,#3355ff,#33cc66,#eeee33,#ff6633,#cc2222);"></div>
+        <div>цвет ≈ позиция на шкале высоты верхней границы облака (точной шкалы в метрах нет)</div>`,
+    h60b: `
+        <div>тёмный фон = осадков нет</div>
+        <div>цвет = осадки есть, оттенок ≈ интенсивность (калиброванной шкалы мм/ч нет)</div>`,
+    h40b: `
+        <div>тёмный фон = осадков нет</div>
+        <div>цвет = осадки есть, оттенок ≈ интенсивность (калиброванной шкалы мм/ч нет); MTG FCI — точнее и чаще (10 мин против 15 мин у msg_fes:h60b)</div>`,
+    gii_kindex: `
+        <div class="gradBar" style="background:linear-gradient(90deg,#3355ff,#eeee33,#ff3322);"></div>
+        <div>цвет ≈ индекс грозовой неустойчивости воздушной массы (K-Index), только над безоблачными участками</div>`,
+    li_afa: `
+        <div>тёмный фон = молний за 5 мин нет</div>
+        <div>цвет = накопленная площадь вспышек, оттенок ≈ плотность (без калиброванного числа вспышек)</div>`,
+    geocolour: `<div>натуральный цвет со спутника (как на официальном EUMETView), не тематическая карта</div>`,
+    ir108: `
+        <div class="gradBar" style="background:linear-gradient(90deg,#111111,#666666,#cccccc,#ffffff);"></div>
+        <div>яркостная температура верхней границы облака (10.5мкм, MTG FCI, 1км) — холоднее (выше облако) обычно светлее на этой шкале; точной шкалы в °C нет. Работает одинаково днём и ночью.</div>`,
+    cloudtype: `
+        <div>RGB-композит: различает типы облаков по текстуре/фазе (лёд/вода, тонкие/плотные). Официальной калиброванной шкалы нет.</div>
+        <div style="margin-top:4px;"><b>Работает только днём</b> — ночью изображение недостоверно/чёрное.</div>`,
+    cloudphase: `
+        <div>RGB-композит: фаза облаков — зелёный/жёлтый/белый ≈ водяные (низкие→плотные), голубой/синий ≈ ледяные (перистые/плотные), розовый ≈ смешанная фаза, красный/фиолетовый ≈ самые холодные ледяные верхушки (мощная конвекция/гроза). Официальной калиброванной шкалы нет.</div>
+        <div style="margin-top:4px;"><b>Работает только днём</b> — ночью изображение недостоверно/чёрное.</div>`,
+    fog: `
+        <div>R = ИК12.3−ИК10.5 (толщина облака), G = ИК10.5−ИК3.8 (подсвечивает именно низкие облака/туман — они слабее излучают на 3.8мкм), B = ИК10.5 (температура).</div>
+        <div style="margin-top:4px;"><b>Настроен на ночь</b> — днём отражённый солнечный свет в канале 3.8мкм ломает интерпретацию, применимость очень ограничена.</div>`,
+};
+
+const LAYERS = {
+    clm:        { opacity: 0.85 },
+    cth:        { opacity: 0.85 },
+    h60b:       { opacity: 0.85 },
+    h40b:       { opacity: 0.85 },
+    gii_kindex: { opacity: 0.85 },
+    li_afa:     { opacity: 0.85 },
+    geocolour:  { opacity: 1.0 },
+    ir108:      { opacity: 1.0 },
+    vis06:      { opacity: 1.0 },
+    cloudtype:  { opacity: 1.0 },
+    cloudphase: { opacity: 1.0 },
+    fog:        { opacity: 1.0 },
+};
+
+let currentKey = "clm";
+let currentVideoOverlay = null;
+let manifestData = {};
+
+const map = L.map("mapid", { attributionControl: true });
+
+// ПОЧЕМУ invalidateSize() ПЕРЕД fitBounds: #mapid — position:fixed с
+// размерами через top/left/right/bottom. Если fitBounds вызвать сразу же
+// при создании карты, Leaflet иногда успевает закэшировать размер
+// контейнера ДО того, как браузер завершил layout (особенно на мобильном
+// при первой отрисовке страницы) — тогда fitBounds считает зум по
+// неправильному (нулевому/старому) размеру, и видео с "правильными"
+// геокоординатами занимает только часть экрана, а не весь mapid (см.
+// баг-скриншот в чате). requestAnimationFrame даёт браузеру дорисовать
+// layout перед тем, как Leaflet пересчитает размер и зум.
+function fitToAnimBounds(){
+    map.invalidateSize();
+    map.fitBounds(ANIM_BOUNDS);
+}
+requestAnimationFrame(fitToAnimBounds);
+window.addEventListener("resize", fitToAnimBounds); // поворот экрана и т.п.
+
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '&copy; <a href="https://openstreetmap.org">OpenStreetMap</a> contributors',
+    subdomains: "abc",
+}).addTo(map);
+
+L.marker([CENTER_LAT, CENTER_LON]).addTo(map).bindPopup("Одесса (СИНОП 33837)");
+
+function updateTimestampLabel(key){
+    const iso = manifestData[key];
+    const el = document.getElementById("eumTimestamp");
+    if(!iso){ el.textContent = "нет данных"; return; }
+    const d = new Date(iso);
+    const label = d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+    const ageMin = Math.round((Date.now() - d.getTime()) / 60000);
+    el.textContent = ageMin < 1 ? `обновлено только что` : `обновлено ${label} (${ageMin} мин назад)`;
+}
+
+function setLayer(key){
+    currentKey = key;
+    document.querySelectorAll("#eumLayerTabs button").forEach(b => {
+        b.classList.toggle("active", b.dataset.layer === key);
+    });
+    document.getElementById("eumLegendContent").innerHTML = LEGEND_HTML[key] || "";
+    updateTimestampLabel(key);
+
+    if(currentVideoOverlay){
+        map.removeLayer(currentVideoOverlay);
+        currentVideoOverlay = null;
+    }
+
+    // "_type" публикует eumetsat_anim_render.py (2026-08-03) — 5 слоёв
+    // (clm/h40b/li_afa/geocolour/ir108) реально анимированы (движение
+    // несёт информацию), остальные 7 — только последний кадр, статичный
+    // PNG (программный анализ не нуждается в ролике, а рендерить 13-кадровую
+    // петлю для них — лишняя нагрузка на пайплайн без пользы для обзора).
+    const layerType = (manifestData._type && manifestData._type[key]) || "video";
+    const ext = layerType === "image" ? "png" : "mp4";
+    const url = `${ANIM_BASE}/${key}.${ext}?v=${Date.now()}`; // cache-bust: файл перезаписывается на месте
+
+    if(layerType === "image"){
+        const overlay = L.imageOverlay(url, ANIM_BOUNDS, {
+            opacity: LAYERS[key].opacity ?? 0.85,
+            interactive: false,
+        });
+        overlay.addTo(map);
+        currentVideoOverlay = overlay; // общая переменная под removeLayer(), имя не переименовывал — не только видео теперь
+        overlay.on("error", () => {
+            document.getElementById("eumTimestamp").textContent = "снимок недоступен (ещё не сгенерирован?)";
+        });
+        return;
+    }
+
+    const overlay = L.videoOverlay(url, ANIM_BOUNDS, {
+        opacity: LAYERS[key].opacity ?? 0.85,
+        // interactive:true — ИНАЧЕ Leaflet ставит pointer-events:none на
+        // видео (чтобы оно не мешало панорамировать карту), и тогда тапы
+        // по play/scrubber/fullscreen самого <video> просто не долетают
+        // до элемента: браузер сам прячет controls через пару секунд
+        // бездействия, а вернуть их уже нельзя (см. видео-баг в чате).
+        interactive: true,
+    });
+    overlay.addTo(map);
+    currentVideoOverlay = overlay;
+
+    const videoEl = overlay.getElement();
+    if(videoEl){
+        videoEl.muted = true;
+        videoEl.loop = true;
+        videoEl.playsInline = true;
+        videoEl.controls = true; // нативный плеер — play/pause/перемотка
+        videoEl.autoplay = true;
+        videoEl.play().catch(() => {}); // автоплей может требовать жеста на некоторых браузерах — не критично, controls всё равно есть
+        videoEl.onerror = () => {
+            document.getElementById("eumTimestamp").textContent = "видео недоступно (ещё не сгенерировано?)";
+        };
+    }
+}
+
+async function loadManifest(){
+    try {
+        const r = await fetch(MANIFEST_URL, { cache: "no-store" });
+        if(r.ok) manifestData = await r.json();
+    } catch(e){
+        manifestData = {};
+    }
+    // "_bounds" публикует eumetsat_anim_render.py из своего BBOX — единственная
+    // точка правды на весь охват. Если границы реально поменялись (кто-то
+    // расширил/сузил BBOX на сервере) — перецентровываем карту и текущий
+    // video overlay заново, не только при первой загрузке страницы.
+    if(Array.isArray(manifestData._bounds)){
+        const newBounds = manifestData._bounds;
+        const changed = JSON.stringify(newBounds) !== JSON.stringify(ANIM_BOUNDS);
+        ANIM_BOUNDS = newBounds;
+        if(changed){
+            fitToAnimBounds();
+            if(currentVideoOverlay) currentVideoOverlay.setBounds(ANIM_BOUNDS);
+        }
+    }
+    updateTimestampLabel(currentKey);
+}
+
+document.querySelectorAll("#eumLayerTabs button").forEach(btn => {
+    btn.addEventListener("click", () => setLayer(btn.dataset.layer));
+});
+
+loadManifest().then(() => setLayer("clm"));
+setInterval(async () => {
+    await loadManifest();
+    setLayer(currentKey); // подхватить свежую петлю, если manifest обновился
+}, 5 * 60000);
+

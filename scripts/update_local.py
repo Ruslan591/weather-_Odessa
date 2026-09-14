@@ -1,0 +1,195 @@
+#!/usr/bin/env python3
+"""
+update_local.py — локальная версия update.py для запуска в Termux.
+
+Читает/пишет файлы напрямую с диска вместо GitHub API.
+После обновления делает git commit + git push.
+
+Запуск:
+    cd /storage/emulated/0/Documents/weather
+    python3 scripts/update_local.py
+
+Аргументы:
+    --no-push     обновить локальные файлы без git push
+    --no-synop    пропустить шаг 1 (SYNOP с ogimet)
+    --no-model    пропустить шаг 2 (исторические данные моделей)
+    --snap-only   только шаг 3: снять снимок ансамбля (быстро, ~1 мин)
+"""
+
+import os, sys, subprocess, argparse, logging
+
+# ── Путь к проекту (скрипт лежит рядом с update.py в scripts/) ───────────────
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# ── Заглушка токена (GitHub API не используется для чтения/записи) ────────────
+os.environ.setdefault("GITHUB_TOKEN", "_local_")
+
+# ── Импортируем оригинальный update.py ────────────────────────────────────────
+sys.path.insert(0, os.path.join(BASE_DIR, "scripts"))
+import update as _upd
+
+# ── Локальный I/O: замена GitHub API на файловую систему ─────────────────────
+
+_GIT_CHANGED = []   # файлы, которые нужно закоммитить
+
+def _local_gh_get(path):
+    """Читает файл из BASE_DIR/path. Возвращает (text, 'local') или (None, None)."""
+    full = os.path.join(BASE_DIR, path)
+    if not os.path.exists(full):
+        return None, None
+    with open(full, "r", encoding="utf-8") as f:
+        return f.read(), "local"
+
+def _local_gh_put(path, content, sha, message):
+    """Пишет файл в BASE_DIR/path, запоминает для git."""
+    full = os.path.join(BASE_DIR, path)
+    os.makedirs(os.path.dirname(full), exist_ok=True)
+    with open(full, "w", encoding="utf-8") as f:
+        f.write(content)
+    if path not in _GIT_CHANGED:
+        if not path.startswith(".github/"):
+            _GIT_CHANGED.append(path)
+    _upd.log.info("  💾 %s", path)
+    return "local"
+
+# Monkey-patch — gh_load_json/gh_save_json автоматически используют патч
+_upd.gh_get = _local_gh_get
+_upd.gh_put = _local_gh_put
+
+# ── Git-операции ──────────────────────────────────────────────────────────────
+
+def git_commit_push(no_push=False):
+    try:
+        subprocess.run(
+            ["git", "-C", BASE_DIR, "fetch", "origin", "main"],
+            capture_output=True, text=True
+        )
+        if _GIT_CHANGED:
+            files_str = ", ".join(os.path.basename(p) for p in _GIT_CHANGED)
+            subprocess.run(
+                ["git", "-C", BASE_DIR, "add"] + _GIT_CHANGED,
+                check=True, capture_output=True
+            )
+            result = subprocess.run(
+                ["git", "-C", BASE_DIR, "commit", "-m", f"update_local: {files_str}"],
+                capture_output=True, text=True
+            )
+            if result.returncode != 0:
+                print(f"\n  git commit: {result.stdout.strip() or result.stderr.strip()}")
+            else:
+                print(f"\n  git commit ✓  ({files_str})")
+        else:
+            print("\n  git: новых данных нет")
+
+        if no_push:
+            print("  git push пропущен (--no-push)")
+            return
+
+        if not _GIT_CHANGED:
+            return  # нечего пушить
+
+        # Прячем возможные unstaged-изменения (напр. data/forecast_days.json
+        # от generate_ai_analysis.py), чтобы pull --rebase не падал на "unstaged changes"
+        stash = subprocess.run(
+            ["git", "-C", BASE_DIR, "stash", "--include-untracked"],
+            capture_output=True, text=True
+        )
+        stashed = "No local changes to save" not in (stash.stdout + stash.stderr)
+
+        pull = subprocess.run(
+            ["git", "-C", BASE_DIR, "pull", "--rebase", "origin", "main"],
+            capture_output=True, text=True
+        )
+        if pull.returncode != 0:
+            print(f"  git pull --rebase ✗: {pull.stderr.strip()}")
+            subprocess.run(
+                ["git", "-C", BASE_DIR, "rebase", "--abort"],
+                capture_output=True, text=True
+            )
+            pull = subprocess.run(
+                ["git", "-C", BASE_DIR, "pull", "--rebase", "origin", "main"],
+                capture_output=True, text=True
+            )
+            if pull.returncode != 0:
+                print(f"  git pull --rebase (retry) ✗: {pull.stderr.strip()}")
+                if stashed:
+                    subprocess.run(["git", "-C", BASE_DIR, "stash", "pop"], capture_output=True, text=True)
+                return
+
+        if stashed:
+            pop = subprocess.run(["git", "-C", BASE_DIR, "stash", "pop"], capture_output=True, text=True)
+            if pop.returncode != 0:
+                print(f"  git stash pop ✗: {pop.stderr.strip()}")
+
+        push = subprocess.run(
+            ["bash", os.path.join(BASE_DIR, "scripts", "git_push_locked.sh"), BASE_DIR],
+            capture_output=True, text=True
+        )
+        if push.returncode == 0:
+            print("  git push ✓")
+        else:
+            print(f"  git push ✗: {push.stderr.strip()}")
+
+    except subprocess.CalledProcessError as e:
+        print(f"\n  git: ошибка — {e}")
+
+# ── Точка входа ───────────────────────────────────────────────────────────────
+
+def main():
+    parser = argparse.ArgumentParser(description="update_local.py — локальный апдейтер")
+    parser.add_argument("--no-push",   action="store_true", help="Не делать git push")
+    parser.add_argument("--no-synop",  action="store_true", help="Пропустить шаг 1 (SYNOP)")
+    parser.add_argument("--no-model",  action="store_true", help="Пропустить шаг 2 (modelData)")
+    parser.add_argument("--snap-only", action="store_true", help="Только снять снимок (шаг 3+4)")
+    parser.add_argument("--no-fill",   action="store_true", help="Не заполнять modeldata")
+    args = parser.parse_args()
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+        datefmt="%H:%M:%S"
+    )
+
+    # ── Шаг 0: заполнение modeldata ───────────────────────────────────────────
+    if not args.snap_only and not args.no_fill:
+        from fill_modeldata_local import fill_missing_months, update_current_month
+        fill_missing_months(_GIT_CHANGED)
+        update_current_month(_GIT_CHANGED)
+    else:
+        _upd.log.info("  [local] Шаг 0 (fill modeldata) пропущен")
+
+    # ── Шаг 1: SYNOP ──────────────────────────────────────────────────────────
+    if args.snap_only or args.no_synop:
+        _upd.fetch_synop_ogimet = lambda d: None
+        _upd.time.sleep = lambda s: None
+        _upd.log.info("  [local] Шаг 1 (SYNOP) пропущен")
+
+    # ── Шаг 1б: BUFR с Meteomanz (выполняется всегда, включая --snap-only) ────
+    try:
+        from fetch_bufr_obs import fetch_and_append
+        import datetime
+        now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+        synop_hours = [3, 9, 15, 21]
+        candidates = []
+        for d in range(2):
+            day = now - datetime.timedelta(days=d)
+            for h in synop_hours:
+                candidates.append(day.replace(hour=h, minute=0, second=0, microsecond=0))
+        targets = sorted([c for c in candidates if c <= now], reverse=True)[:2]
+        for dt in reversed(targets):
+            added = fetch_and_append(dt)
+            if added and f'data/bufr_{dt.year}.json' not in _GIT_CHANGED:
+                _GIT_CHANGED.append(f'data/bufr_{dt.year}.json')
+    except Exception as e:
+        _upd.log.warning("  [BUFR] ошибка: %s", e)
+
+    # ── Шаг 2: modelData (через update.py) ────────────────────────────────────
+    if args.snap_only or args.no_model:
+        _upd.fetch_historical_model = lambda m, d: None
+        _upd.log.info("  [local] Шаг 2 (modelData) пропущен")
+
+    _upd.main()
+    git_commit_push(no_push=args.no_push)
+
+if __name__ == "__main__":
+    main()

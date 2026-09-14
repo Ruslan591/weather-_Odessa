@@ -1,0 +1,62 @@
+name: Sweep v_min/s_max для ночной ветки GeoColour
+
+# Ручной запуск. Ночная ветка _classify_cloud() (mtg_fd:rgb_geocolour)
+# никогда не калибровалась по SYNOP (в отличие от дневной, закрытой
+# 2026-08-11). Анализ уже собранного data/calibration_geocolour_synop.jsonl
+# (73 ночные строки) показал: текущий порог (v>0.10) даёт ~40% ложных
+# срабатываний на ясном ночном небе (N=0), а средний V в ROI монотонно
+# растёт с N (0.25 -> 0.48) — надёжный сигнал, который сейчас не
+# используется. Этот прогон измеряет ПОЛНУЮ (не record-proxy) площадную
+# cloud_fraction на 73 ночных сроках для сетки (v_min, s_max). См.
+# docs/topics/eumetsat.md.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Установка Python-зависимостей
+        run: pip install numpy scipy Pillow requests
+
+      - name: Настройка git для коммитов
+        run: |
+          git config user.name "gh-calibration-bot"
+          git config user.email "actions@users.noreply.github.com"
+
+      - name: Sweep v_min/s_max для ночного GeoColour
+        working-directory: scripts
+        run: python calibration_geocolour_night_sweep.py
+
+      - name: Коммит и пуш результата
+        run: |
+          set -e
+          if [ -z "$(git status --porcelain data/calibration_geocolour_night_sweep.jsonl 2>/dev/null)" ]; then
+            echo "Нет изменений — нечего коммитить"
+            exit 0
+          fi
+          git add data/calibration_geocolour_night_sweep.jsonl
+          git commit -m "data: sweep v_min/s_max для ночного GeoColour classifier"
+          for i in 1 2 3; do
+            if git push; then
+              echo "push успешен (попытка $i)"
+              break
+            fi
+            echo "push не удался (попытка $i), git pull --rebase и повтор..."
+            git pull --rebase origin main
+            if [ "$i" = "3" ]; then
+              echo "::error::push не удался после 3 попыток"
+              exit 1
+            fi
+          done

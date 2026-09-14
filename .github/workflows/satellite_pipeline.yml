@@ -1,0 +1,259 @@
+name: Спутниковый пайплайн (EUMETSAT)
+
+# [ИЗМЕНЕНО 2026-08-20] С этой даты — триггерится телефоном напрямую
+# (termux-job-scheduler, job 1001, каждые 15 мин, через
+# scripts/trigger_gh_pipeline.sh). Раньше телефон триггерил
+# full_pipeline.yml, а этот workflow запускался ВТОРЫМ, явным диспетчем из
+# его последнего шага.
+#
+# [ИЗМЕНЕНО 2026-08-28] Этот модуль — теперь ЕДИНСТВЕННОЕ звено, которое
+# телефон/GH Actions вообще выполняет из старой цепочки "спутник →
+# full_pipeline → ai_pipeline". full_pipeline.yml отключён (см. пометку у
+# бывшего последнего шага ниже) — основной писатель верификационных данных
+# теперь VPS, независимо от этого workflow. Прямой зависимости по данным
+# между спутниковым модулем и верификацией моделей как не было, так и нет —
+# отключение цепочки от этого workflow ничего здесь не меняет.
+#
+# workflow_run-триггер по завершении full_pipeline.yml УБРАН 2026-08-20: при
+# новом порядке он указывал бы "назад" (full_pipeline теперь запускается
+# ПОСЛЕ этого workflow, а не до) — риск цикла, если бы workflow_run
+# когда-нибудь заработал. Он и так документированно ненадёжен и ни разу не
+# сработал на практике за всё время, что стоял здесь (с 2026-07-26).
+#
+# [ВРЕМЕННЫЙ cron-мост 2026-08-21 03:20–10:38 UTC, УБРАН] Обнаружено при
+# возврате к сессии после разрыва: с 2026-08-20 18:25 (мой ручной тест) до
+# 2026-08-21 03:17 спутниковый модуль НЕ получал триггер вообще ни откуда
+# 8.5 часов — телефон ещё не сделал `git pull`, а собственный workflow_run
+# убран этим же рефакторингом. На это время был добавлен `schedule: cron:
+# "*/15 * * * *"` как мост. Убран 2026-08-21 10:38 UTC после подтверждения:
+# с 07:56 UTC телефон сам стабильно диспетчит этот workflow напрямую
+# (`event=workflow_dispatch`, `actor=Ruslan591`, интервалы ~15 мин) —
+# `git pull`/обновление скрипта на телефоне подтверждено рабочим, мост
+# больше не нужен.
+on:
+  workflow_dispatch:
+    inputs:
+      chain_depth:
+        description: "Глубина цепочки самоповторов в режиме тревоги (см. eumetsat_alert_redispatch.yml)"
+        default: "0"
+
+concurrency:
+  group: satellite-pipeline
+  cancel-in-progress: false
+
+jobs:
+  run-satellite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Установка Python-зависимостей
+        run: pip install numpy scipy Pillow requests
+
+      - name: Установка ffmpeg (для eumetsat_anim_render.py)
+        # DEBIAN_FRONTEND=noninteractive + NEEDRESTART_MODE=a — без этого
+        # apt-get зависает на needrestart на ubuntu-latest (24.04), см.
+        # известную проблему в video-пайплайне этого же проекта.
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          NEEDRESTART_MODE: a
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+
+      - name: Настройка git для коммитов
+        run: |
+          git config user.name "gh-satellite-bot"
+          git config user.email "actions@users.noreply.github.com"
+
+      - name: Запуск спутникового пайплайна
+        id: run_pipeline
+        run: python scripts/gh_satellite_pipeline.py
+
+      - name: Push-уведомление (ntfy) — осадки, новая тревога
+        # Шлёт push ТОЛЬКО на переход false→true (just_triggered), не на
+        # каждый цикл — иначе спам все 5 минут, пока тревога активна.
+        # Topic — случайная нечитаемая строка вместо auth (см.
+        # docs/topics/eumetsat.md, обсуждение 2026-08-09): приемлемо для
+        # личных алертов, не для критичных данных.
+        #
+        # [ИСПРАВЛЕНО 2026-08-19] Раньше было if: always() — при каскаде
+        # отменённых прогонов (см. инцидент 2026-08-18, docs/topics/eumetsat.md)
+        # шаг "Запуск спутникового пайплайна" пропускался (skipped), но этот
+        # шаг с always() всё равно выполнялся и перечитывал СТАРЫЙ
+        # alert_state.json с прошлого успешного коммита — 5 одинаковых
+        # push подряд с одними и теми же цифрами. Теперь шлём только если
+        # пайплайн в ЭТОМ прогоне реально пересчитал состояние.
+        if: steps.run_pipeline.outcome == 'success'
+        continue-on-error: true
+        run: |
+          if [ ! -f data/eumetsat_alert_state.json ]; then
+            echo "нет alert_state.json — пропуск"
+            exit 0
+          fi
+          just_triggered=$(jq -r '.just_triggered' data/eumetsat_alert_state.json)
+          if [ "$just_triggered" = "true" ]; then
+            eta=$(jq -r '.eta_min // "?"' data/eumetsat_alert_state.json)
+            dist=$(jq -r '.distance_km_now // "?"' data/eumetsat_alert_state.json)
+            verdict=$(jq -r '.verdict // "?"' data/eumetsat_alert_state.json)
+            prob=$(jq -r '.probability_percent // "?"' data/eumetsat_alert_state.json)
+            curl -sS --retry 3 --retry-delay 2 --retry-all-errors --max-time 15 -X POST "https://ntfy.sh/odessa-storm-x7k2m9qp4h" \
+              -H "Title: 🌧️ Осадки приближаются" \
+              -H "Priority: high" \
+              -H "Tags: cloud_with_rain" \
+              -H "Click: https://ruslan591.github.io/weather-_Odessa/nearby.html" \
+              -d "${verdict} / ETA ~${eta} мин / ${dist} км / вероятность ${prob}%"
+            echo "push (осадки) отправлен"
+          else
+            echo "тревоги по осадкам нет либо уже уведомляли — пропуск"
+          fi
+
+      - name: Push-уведомление (ntfy) — гроза, новая тревога
+        # Отдельная тревога от осадков (li_afa вместо h60b) — своё
+        # сообщение, чтобы не путать "просто дождь" с грозовой активностью.
+        # [ИСПРАВЛЕНО 2026-08-19] см. коммент к шагу про осадки выше — та же
+        # причина дублей.
+        if: steps.run_pipeline.outcome == 'success'
+        continue-on-error: true
+        run: |
+          if [ ! -f data/eumetsat_lightning_alert_state.json ]; then
+            echo "нет lightning_alert_state.json — пропуск"
+            exit 0
+          fi
+          just_triggered=$(jq -r '.just_triggered' data/eumetsat_lightning_alert_state.json)
+          if [ "$just_triggered" = "true" ]; then
+            eta=$(jq -r '.eta_min // "?"' data/eumetsat_lightning_alert_state.json)
+            dist=$(jq -r '.distance_km_now // "?"' data/eumetsat_lightning_alert_state.json)
+            verdict=$(jq -r '.verdict // "?"' data/eumetsat_lightning_alert_state.json)
+            prob=$(jq -r '.probability_percent // "?"' data/eumetsat_lightning_alert_state.json)
+            curl -sS --retry 3 --retry-delay 2 --retry-all-errors --max-time 15 -X POST "https://ntfy.sh/odessa-storm-x7k2m9qp4h" \
+              -H "Title: ⛈️ Гроза приближается" \
+              -H "Priority: urgent" \
+              -H "Tags: zap" \
+              -H "Click: https://ruslan591.github.io/weather-_Odessa/nearby.html" \
+              -d "${verdict} / ETA ~${eta} мин / ${dist} км / вероятность ${prob}%"
+            echo "push (гроза) отправлен"
+          else
+            echo "тревоги по грозе нет либо уже уведомляли — пропуск"
+          fi
+
+      - name: Push-уведомление (ntfy) — пайплайн застрял / отпустило
+        # Отдельная тема от погодных алертов (odessa-storm-x7k2m9qp4h) —
+        # это сигнал про здоровье пайплайна, не про погоду, смешивать нельзя.
+        # Реакция на инцидент 2026-08-18 (см. docs/topics/eumetsat.md):
+        # EUMETSAT ~75 мин не публиковал новые кадры, и это прошло незамеченным
+        # до разбора постфактум. Порог — 3 подряд "источник не дал данных"
+        # (см. gh_satellite_pipeline.py: check_pipeline_health_alert). Топик —
+        # тот же принцип, что и odessa-storm-x7k2m9qp4h: случайная нечитаемая
+        # строка вместо auth, приемлемо для личных алертов.
+        # [ИСПРАВЛЕНО 2026-08-19] см. коммент к шагу про осадки выше — та же
+        # причина дублей (этот файл тоже пишется внутри "Запуск спутникового
+        # пайплайна", stale-чтение при отменённом прогоне дало бы те же дубли).
+        if: steps.run_pipeline.outcome == 'success'
+        continue-on-error: true
+        run: |
+          if [ ! -f data/eumetsat_pipeline_alert_state.json ]; then
+            echo "нет pipeline_alert_state.json — пропуск"
+            exit 0
+          fi
+          just_triggered=$(jq -r '.just_triggered' data/eumetsat_pipeline_alert_state.json)
+          just_recovered=$(jq -r '.just_recovered' data/eumetsat_pipeline_alert_state.json)
+          if [ "$just_triggered" = "true" ]; then
+            scripts=$(jq -r '[.stuck_scripts[].script] | join(", ")' data/eumetsat_pipeline_alert_state.json)
+            since=$(jq -r '.stuck_scripts[0].stuck_since // "?"' data/eumetsat_pipeline_alert_state.json)
+            curl -sS --retry 3 --retry-delay 2 --retry-all-errors --max-time 15 -X POST "https://ntfy.sh/odessa-pipeline-health-k7m2q9wx4h" \
+              -H "Title: ⚠️ Спутниковый пайплайн застрял" \
+              -H "Priority: default" \
+              -H "Tags: warning" \
+              -d "Источник не даёт новых кадров (3+ прогона подряд): ${scripts}. Застряло с ${since} UTC."
+            echo "push (пайплайн застрял) отправлен"
+          elif [ "$just_recovered" = "true" ]; then
+            curl -sS --retry 3 --retry-delay 2 --retry-all-errors --max-time 15 -X POST "https://ntfy.sh/odessa-pipeline-health-k7m2q9wx4h" \
+              -H "Title: ✅ Спутниковый пайплайн отпустило" \
+              -H "Priority: low" \
+              -H "Tags: white_check_mark" \
+              -d "Источник снова даёт новые кадры, данные обновляются."
+            echo "push (пайплайн отпустило) отправлен"
+          else
+            echo "состояние пайплайна не изменилось — пропуск"
+          fi
+
+      - name: Проверка тревоги — досрочный повтор через 5 минут
+        # Android job scheduler (job 1001) не позволяет учащать триггер
+        # чаще 15 мин, поэтому во время тревоги каденс ускоряет сам GitHub:
+        # если ЛЮБОЙ из alert_state (осадки ИЛИ гроза) показывает alert=true,
+        # дёргаем eumetsat_alert_redispatch.yml (спит 5 мин, затем снова этот
+        # воркфлоу) вместо ожидания следующего цикла с телефона.
+        # chain_depth ограничивает цепочку 8 повторами (~40 мин ускоренного
+        # каденса), после чего откатываемся на обычный 15-минутный ритм.
+        #
+        # [ИСПРАВЛЕНО 2026-08-19, ГЛАВНАЯ ПРИЧИНА КАСКАДА 2026-08-18] Раньше
+        # было if: always(). Этот шаг сам решает, диспетчить ли следующее
+        # звено цепочки — при always() отменённый прогон (пайплайн skipped,
+        # файл alert_state.json СТАРЫЙ) всё равно читал в нём alert=true и
+        # САМ ПОДДЕРЖИВАЛ цепочку редиспетчей дальше, даже когда реальных
+        # новых данных не было. Именно это раскручивало шторм диспетчей
+        # (8 отменённых прогонов подряд, 16:26-17:33 UTC), который в свою
+        # очередь давал ещё больше кандидатов на "always()"-дубли пуша выше.
+        # Теперь решение о повторе принимается только по СВЕЖЕМУ состоянию.
+        if: steps.run_pipeline.outcome == 'success'
+        continue-on-error: true
+        env:
+          CHAIN_DEPTH: ${{ inputs.chain_depth }}
+        run: |
+          MAX_CHAIN=8
+          alert_precip="False"
+          alert_lightning="False"
+          if [ -f data/eumetsat_alert_state.json ]; then
+            alert_precip=$(python3 -c "import json; print(json.load(open('data/eumetsat_alert_state.json')).get('alert'))")
+          fi
+          if [ -f data/eumetsat_lightning_alert_state.json ]; then
+            alert_lightning=$(python3 -c "import json; print(json.load(open('data/eumetsat_lightning_alert_state.json')).get('alert'))")
+          fi
+          depth="${CHAIN_DEPTH:-0}"
+          echo "alert_precip=$alert_precip alert_lightning=$alert_lightning chain_depth=$depth"
+          if { [ "$alert_precip" = "True" ] || [ "$alert_lightning" = "True" ]; } && [ "$depth" -lt "$MAX_CHAIN" ]; then
+            next_depth=$((depth + 1))
+            code=$(curl -sS --retry 3 --retry-delay 2 --retry-all-errors --max-time 15 -o /tmp/redispatch_resp.json -w "%{http_code}" -X POST \
+              -H "Authorization: token ${{ secrets.GH_PAT }}" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${{ github.repository }}/actions/workflows/eumetsat_alert_redispatch.yml/dispatches" \
+              -d "{\"ref\":\"main\",\"inputs\":{\"delay_seconds\":\"300\",\"chain_depth\":\"$next_depth\"}}")
+            echo "HTTP: $code"
+            cat /tmp/redispatch_resp.json || true
+            if [ "$code" != "204" ]; then
+              echo "::warning::Диспетч eumetsat_alert_redispatch.yml вернул HTTP $code"
+            fi
+          else
+            echo "тревоги нет или цепочка исчерпана — обычный каденс"
+          fi
+
+# [УБРАНО 2026-08-28] Шаг "Явный запуск полного пайплайна" (диспетч
+# full_pipeline.yml) удалён. Основной писатель верификационных данных
+# (bias/weights/history) — VPS (scripts/vps_pipeline.py, cron каждые 15
+# мин, см. docs/topics/hosting_migration.md), full_pipeline.yml отключён
+# 2026-08-28 (state: disabled_manually) после ~29 часов параллельной
+# работы и 11 патчей на устойчивость VPS-версии. Диспетч ai_pipeline.yml
+# (AI-анализ Claude+Gemini) тоже перенесён на VPS
+# (dispatch_ai_pipeline() внутри vps_pipeline.py) — без этого переноса
+# отключение full_pipeline.yml тихо убило бы AI-анализ насовсем, т.к.
+# раньше именно его последний шаг диспетчил ai_pipeline.yml.
+#
+# Причина отключения, не только "экономия минут": у full_pipeline.yml
+# (через scripts/gh_pipeline.py) обнаружен баг ложного детектирования
+# "нового прогона модели" почти на КАЖДОМ 15-минутном цикле — open-meteo
+# отдаёт last_run_availability_time с разных backend-серверов за
+# балансировщиком нагрузки, значения колеблются на секунды-минуты для
+# одного и того же реального прогона, а точное сравнение run_time ==
+# last_run ложно считало это новым прогоном. Это не просто шум: каждое
+# такое ложное срабатывание диспетчило ПЛАТНЫЙ AI-анализ (Claude+Gemini)
+# без надобности. В vps_pipeline.py пофикшено (допуск 30 минут вместо
+# точного равенства), в оригинальном gh_pipeline.py — не фикшено (файл
+# больше не используется, поэтому фикс сюда не переносился).
+

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Осадки и гроза поблизости — Одесса</title>
+<link rel="stylesheet" href="current_weather.css">
+</head>
+<body>
+
+<div class="header">
+    <div class="nav">
+        <a href="index.html">ГМЦ ЧАМ</a>
+    </div>
+    <div class="headerTitle">Осадки поблизости</div>
+    <div class="nav"></div>
+</div>
+
+<div class="container">
+
+    <!-- Анализ спутниковых снимков (EUMETSAT) -->
+    <div class="card" id="nearbyPrecipCard" style="margin-top:14px;"></div>
+
+    <a href="https://github.com/ruslan591/weather-_Odessa/actions/workflows/test_eumetsat_cloud_forecast.yml"
+       target="_blank" rel="noopener"
+       style="display:block; text-align:center; margin-top:10px; padding:10px; border-radius:8px;
+              border:1px solid #333; color:#72c8ff; font-size:13px; text-decoration:none;">
+        🔄 Тест: запустить анализ облачности вручную (без ожидания пайплайна)
+    </a>
+
+    <a href="https://github.com/ruslan591/weather-_Odessa/actions/workflows/test_eumetsat_ir_motion.yml"
+       target="_blank" rel="noopener"
+       style="display:block; text-align:center; margin-top:8px; padding:10px; border-radius:8px;
+              border:1px solid #333; color:#72c8ff; font-size:13px; text-decoration:none;">
+        🔄 Тест: запустить ИК-анализ движения вручную (без ожидания пайплайна)
+    </a>
+
+</div>
+
+<script src="nearby_precip.js"></script>
+<script>
+    function refreshNearbyPage(){
+        loadEumetsatCloudForecast();
+        loadEumetsatCloudPhaseType();
+        loadEumetsatPrecipForecast();
+        loadEumetsatLightningForecast();
+        loadEumetsatIrMotion();
+        loadEumetsatGeocolourMotion();
+        loadEumetsatPrecipMotion();
+        loadEumetsatFarWatch();
+        loadEumetsatVeryFarWatch();
+        loadNearTileProjection();
+        loadEuropeOverlay();
+        loadEumetsatTargetSummary();
+        loadEumetsatWestWatch();
+        loadEumetsatPrecipHistory();
+        loadEumetsatLightningHistory();
+    }
+    refreshNearbyPage();
+    setInterval(refreshNearbyPage, 60000);
+</script>
+<script src="nav.js"></script>
+</body>
+</html>

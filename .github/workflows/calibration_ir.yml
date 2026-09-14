@@ -1,0 +1,60 @@
+name: Калибровка ИК (историческая, по SYNOP)
+
+# Ручной запуск — НЕ часть обычного пайплайна. Второй канал в очереди
+# калибровки (после GeoColour день, закрыт 2026-08-11). См.
+# docs/topics/eumetsat.md для полного плана.
+#
+# ИК не различает день/ночь — используются все 200 сроков из
+# data/calibration_geocolour_sample.json (та же выборка, что и для
+# GeoColour). Радиус и порог sigma сэмплируются вместе в одном проходе.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Установка Python-зависимостей
+        run: pip install numpy scipy Pillow requests
+
+      - name: Настройка git для коммитов
+        run: |
+          git config user.name "gh-calibration-bot"
+          git config user.email "actions@users.noreply.github.com"
+
+      - name: Сбор калибровочного датасета ИК
+        working-directory: scripts
+        run: python calibration_ir_collect.py
+
+      - name: Коммит и пуш результата
+        run: |
+          set -e
+          if [ -z "$(git status --porcelain data/calibration_ir_synop.jsonl 2>/dev/null)" ]; then
+            echo "Нет изменений — нечего коммитить"
+            exit 0
+          fi
+          git add data/calibration_ir_synop.jsonl
+          git commit -m "data: калибровочный датасет ИК (SYNOP-сверка, радиус+sigma)"
+          for i in 1 2 3; do
+            if git push; then
+              echo "push успешен (попытка $i)"
+              break
+            fi
+            echo "push не удался (попытка $i), git pull --rebase и повтор..."
+            git pull --rebase origin main
+            if [ "$i" = "3" ]; then
+              echo "::error::push не удался после 3 попыток"
+              exit 1
+            fi
+          done

@@ -1,0 +1,60 @@
+name: Проверка якорей Phase RGB (визуально + HSV-кластеры)
+
+# Ручной запуск. Первый прогон Phase RGB дал почти нулевую точность для
+# всех категорий кроме "безоблачно", даже после фикса карты CL/CM/CH и
+# исключения сумерек. Подозрение — сами HSV-якоря каскада _classify_phase()
+# (первая, не откалиброванная версия) не соответствуют реальному
+# рендерингу mtg_fd:rgb_cloudphase. Эта проверка тянет 8 "чистых" сроков
+# (по одному на категорию) и сохраняет PNG + топ HSV-кластеров для
+# визуальной и числовой проверки. См. docs/topics/eumetsat.md.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Установка Python-зависимостей
+        run: pip install numpy scipy Pillow requests
+
+      - name: Настройка git для коммитов
+        run: |
+          git config user.name "gh-calibration-bot"
+          git config user.email "actions@users.noreply.github.com"
+
+      - name: Проверка якорей Phase RGB
+        working-directory: scripts
+        run: python calibration_phase_anchor_check.py
+
+      - name: Коммит и пуш результата
+        run: |
+          set -e
+          git add data/calibration_phase_anchor_check/ data/calibration_phase_anchor_check_stats.json
+          if git diff --cached --quiet; then
+            echo "Нет изменений — нечего коммитить"
+            exit 0
+          fi
+          git commit -m "data: проверка якорей Phase RGB (PNG + HSV-кластеры)"
+          for i in 1 2 3; do
+            if git push; then
+              echo "push успешен (попытка $i)"
+              break
+            fi
+            echo "push не удался (попытка $i), git pull --rebase и повтор..."
+            git pull --rebase origin main
+            if [ "$i" = "3" ]; then
+              echo "::error::push не удался после 3 попыток"
+              exit 1
+            fi
+          done

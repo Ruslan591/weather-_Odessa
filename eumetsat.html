@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Спутник EUMETSAT — Одесса</title>
+<link rel="stylesheet" href="current_weather.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+    body{ margin:0; padding-bottom:0 !important; background:#0d0d0d; }
+    #eumControls{
+        position:fixed; top:0; left:0; right:0; z-index:900;
+        background:#161616; border-bottom:1px solid #262626;
+        box-sizing:border-box; padding:6px 10px;
+    }
+    #eumControls .titleRow{
+        display:flex; align-items:center; justify-content:space-between; height:32px;
+    }
+    #eumControls .title{ font-size:14px; font-weight:700; color:#eee; }
+    #eumTimestamp{ font-size:11px; color:#72c8ff; font-weight:600; text-align:right; }
+    #eumLayerTabs{
+        display:flex; flex-wrap:nowrap; gap:6px; margin-top:4px;
+        overflow-x:auto; -webkit-overflow-scrolling:touch;
+        scrollbar-width:none; padding-bottom:2px;
+    }
+    #eumLayerTabs::-webkit-scrollbar{ display:none; }
+    #eumLayerTabs button{
+        flex:0 0 auto; padding:7px 14px; border-radius:8px; border:1px solid #333;
+        background:#1d1d1d; color:#bbb; font-size:12px; cursor:pointer; white-space:nowrap;
+    }
+    #eumLayerTabs button.active{ background:#2a4d63; color:#fff; border-color:#3d7ca6; }
+    #mapid{ position:fixed; top:84px; left:0; right:0; bottom:56px; z-index:1; }
+    #eumLegendWrap{
+        position:fixed; top:88px; left:8px; z-index:800;
+        background:rgba(22,22,22,0.92); border:1px solid #262626; border-radius:8px;
+        padding:6px 8px; max-width:62vw; max-height:36vh; overflow-y:auto;
+        font-size:10px; color:#ccc; line-height:1.4;
+    }
+    #eumLegendWrap .swatchRow{ display:flex; align-items:center; gap:5px; margin:2px 0; }
+    #eumLegendWrap .swatch{ width:12px; height:12px; border-radius:3px; flex:0 0 auto; border:1px solid #444; }
+    #eumLegendWrap .gradBar{ width:100%; height:10px; border-radius:3px; margin:2px 0; }
+    #eumAttribution{
+        position:fixed; bottom:64px; right:8px; z-index:800;
+        font-size:10px; color:#888; background:rgba(22,22,22,0.85);
+        padding:3px 6px; border-radius:6px;
+    }
+    #eumAttribution a{ color:#72c8ff; }
+    .leaflet-control-attribution{ font-size:9px !important; }
+</style>
+</head>
+<body>
+
+<div id="eumControls">
+    <div class="titleRow">
+        <span class="title">Спутник EUMETSAT</span>
+        <span id="eumTimestamp">Загрузка…</span>
+    </div>
+    <div id="eumLayerTabs">
+        <button data-layer="clm" class="active">Облачность</button>
+        <button data-layer="cth">Высота облаков</button>
+        <button data-layer="h60b">Осадки</button>
+        <button data-layer="h40b">Осадки (MTG)</button>
+        <button data-layer="gii_kindex">Грозоопасность</button>
+        <button data-layer="li_afa">Молнии</button>
+        <button data-layer="geocolour">Естественный цвет</button>
+        <button data-layer="ir108">ИК (10.5мкм)</button>
+        <button data-layer="vis06">VIS 0.6 HD</button>
+        <button data-layer="cloudtype">Тип облаков (день)</button>
+        <button data-layer="cloudphase">Фаза облаков (день)</button>
+        <button data-layer="fog">Туман/низкая облачность (ночь)</button>
+    </div>
+</div>
+
+<div id="mapid"></div>
+
+<div id="eumLegendWrap"><div id="eumLegendContent"></div></div>
+
+<div id="eumAttribution">Data: <a href="https://www.eumetsat.int/" target="_blank" rel="noopener">EUMETSAT</a></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="eumetsat.js?v=20260803a"></script>
+<script src="nav.js"></script>
+</body>
+</html>

@@ -1,0 +1,61 @@
+name: Диагностика правил Type RGB (какое правило ловит ясное небо)
+
+# Ручной запуск — НЕ часть обычного пайплайна. По итогам первого прогона
+# calibration_type.yml (139/200, слабая корреляция rho~0.21-0.26, ложные
+# срабатывания group>=1 на N=0 в среднем 27-40%) — нужна атрибуция по
+# правилам каскада _classify_type() перед тем, как делать threshold sweep
+# (см. docs/topics/eumetsat.md, запись "калибровка Type RGB").
+#
+# Переиспользует N=0 сроки, УЖЕ собранные в data/calibration_type_synop.jsonl
+# (41 штука) — отдельной выборки не требуется.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Установка Python-зависимостей
+        run: pip install numpy scipy Pillow requests
+
+      - name: Настройка git для коммитов
+        run: |
+          git config user.name "gh-calibration-bot"
+          git config user.email "actions@users.noreply.github.com"
+
+      - name: Диагностика правил на N=0 срока
+        working-directory: scripts
+        run: python calibration_type_rule_diagnostic.py
+
+      - name: Коммит и пуш результата
+        run: |
+          set -e
+          if [ -z "$(git status --porcelain data/calibration_type_rule_diagnostic.jsonl 2>/dev/null)" ]; then
+            echo "Нет изменений — нечего коммитить"
+            exit 0
+          fi
+          git add data/calibration_type_rule_diagnostic.jsonl
+          git commit -m "data: диагностика правил Type RGB на ясном небе (N=0)"
+          for i in 1 2 3; do
+            if git push; then
+              echo "push успешен (попытка $i)"
+              break
+            fi
+            echo "push не удался (попытка $i), git pull --rebase и повтор..."
+            git pull --rebase origin main
+            if [ "$i" = "3" ]; then
+              echo "::error::push не удался после 3 попыток"
+              exit 1
+            fi
+          done

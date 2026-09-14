@@ -1,0 +1,46 @@
+name: Generate Video
+
+on:
+  push:
+    paths:
+      - 'data/blocks/blocks_meta.json'
+      - 'data/blocks/*.mp3'
+  workflow_dispatch:
+
+concurrency:
+  group: video-generation
+  cancel-in-progress: false
+
+jobs:
+  make-video:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --fix-missing ffmpeg fonts-crosextra-carlito
+          pip install Pillow numpy
+
+      - name: Generate video
+        run: python3 scripts/make_video.py
+
+      - name: Commit video
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/forecast_video.mp4
+          git diff --cached --quiet && echo "No changes" && exit 0
+          git commit -m "auto: generate forecast video"
+          for i in 1 2 3; do
+            git stash || true
+            git pull --rebase origin main
+            git stash pop || true
+            git push && break
+            echo "Retry $i..."
+            sleep 5
+          done

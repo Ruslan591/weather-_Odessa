@@ -1,0 +1,60 @@
+name: Профиль blue_ice на облачных сроках Type RGB (сравнение с ясным небом)
+
+# Ручной запуск. Продолжение диагностики calibration_type_rule_diagnostic —
+# там нашли, что правило blue_ice (Hue 215-245, S>0.25, без порога V) —
+# главный источник ложных срабатываний на ЯСНОМ небе (V~0.24-0.54).
+# Этот workflow берёт срока с РЕАЛЬНОЙ высокой/ледяной облачностью
+# (expected_group=2) и считает HSV-профиль пикселей в том же Hue/S
+# диапазоне — чтобы понять, отличается ли V у настоящих облаков от
+# ложных "облаков"-моря. См. docs/topics/eumetsat.md.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Установка Python-зависимостей
+        run: pip install numpy scipy Pillow requests
+
+      - name: Настройка git для коммитов
+        run: |
+          git config user.name "gh-calibration-bot"
+          git config user.email "actions@users.noreply.github.com"
+
+      - name: Профиль blue_ice на облачных сроках
+        working-directory: scripts
+        run: python calibration_type_blueice_cloudy_profile.py
+
+      - name: Коммит и пуш результата
+        run: |
+          set -e
+          if [ -z "$(git status --porcelain data/calibration_type_blueice_cloudy_profile.jsonl 2>/dev/null)" ]; then
+            echo "Нет изменений — нечего коммитить"
+            exit 0
+          fi
+          git add data/calibration_type_blueice_cloudy_profile.jsonl
+          git commit -m "data: профиль blue_ice на облачных сроках Type RGB"
+          for i in 1 2 3; do
+            if git push; then
+              echo "push успешен (попытка $i)"
+              break
+            fi
+            echo "push не удался (попытка $i), git pull --rebase и повтор..."
+            git pull --rebase origin main
+            if [ "$i" = "3" ]; then
+              echo "::error::push не удался после 3 попыток"
+              exit 1
+            fi
+          done

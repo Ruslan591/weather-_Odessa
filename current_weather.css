@@ -1,0 +1,987 @@
+/* =========================
+   БАЗА
+========================= */
+*{
+    box-sizing:border-box;
+}
+
+html{
+    scroll-behavior:smooth;
+}
+
+body{
+    margin:0;
+    background:#121212;
+    color:#eee;
+    font-family:sans-serif;
+}
+
+a{
+    color:inherit;
+    text-decoration:none;
+}
+
+/* =========================
+   ВЕРХНЯЯ ПАНЕЛЬ
+========================= */
+.header{
+    width: 100%;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: rgba(30,30,30,0.96);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid #2b2b2b;
+    box-sizing: border-box;
+}
+
+.headerTitle{
+    font-size: 18px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.nav{
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+}
+
+.nav a{
+    color: #aaa;
+    padding: 6px 10px;
+    border-radius: 8px;
+    transition: 0.2s;
+    white-space: nowrap;
+}
+
+.nav a:hover{
+    color: #fff;
+    background: #2a2a2a;
+}
+
+/* =========================
+   КОНТЕЙНЕР
+========================= */
+.container{
+    max-width:1000px;
+    margin:0 auto;
+    padding:16px;
+}
+
+/* =========================
+   КАРТОЧКИ
+========================= */
+.card{
+    background:#1e1e1e;
+    border:1px solid #2e2e2e;
+    border-radius:14px;
+    padding:14px;
+    margin-bottom:14px;
+    transition:
+        opacity 0.6s ease,
+        max-height 0.8s ease,
+        margin 0.8s ease,
+        padding 0.8s ease,
+        transform 0.8s ease;
+}
+
+.cardTitle{
+    font-size:16px;
+    font-weight:700;
+    margin-bottom:12px;
+}
+
+.subTitle{
+    font-size:13px;
+    color:#aaa;
+    margin-bottom:10px;
+}
+
+.row{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:10px;
+    padding:8px 0;
+    border-bottom:1px solid #333;
+}
+
+.row:last-child{
+    border-bottom:none;
+}
+
+.label{
+    color:#bbb;
+}
+
+.value{
+    font-weight:700;
+    text-align:right;
+}
+
+.small{
+    font-size:12px;
+    color:#aaa;
+}
+
+.muted{
+    color:#888;
+}
+
+.center{
+    text-align:center;
+}
+
+.cardSubOrg {
+    display: block;
+    font-size: 0.6em;       /* ~60% от размера ОДЕССА */
+    font-weight: 400;
+    color: var(--muted, #888); /* приглушённый цвет */
+    letter-spacing: 0.01em;
+    margin-top: 2px;
+}
+
+/* =========================
+   HERO SYNOP
+========================= */
+.synopHero{
+    display:grid;
+    grid-template-columns:1.25fr 1fr;
+    gap:12px;
+}
+
+.heroMain{
+    background:linear-gradient(180deg,#232323,#1c1c1c);
+    border-radius:14px;
+    padding:14px;
+    border:1px solid #323232;
+}
+
+.heroTemp{
+    font-size:38px;
+    font-weight:800;
+    line-height:1;
+    margin:6px 0 10px;
+}
+
+.heroFeels{
+    font-size:15px;
+    color:#cfcfcf;
+}
+
+.heroWeather{
+    font-size:15px;
+    color:#ddd;
+    margin-top:10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center; /* выравнивание по вертикали */
+    gap: 0.5em; /* немного пространства между текстом и иконкой */
+}
+
+/* Контейнер строки температуры */
+.heroTempRow {
+    display: flex;
+    justify-content: space-between; /* левый и правый блоки по краям */
+    align-items: center;             /* выравнивание по вертикали */
+    margin-bottom: 0.5em;
+}
+
+/* Левая колонка: текстовая информация */
+.heroTempLeft {
+    display: flex;
+    flex-direction: column; /* вертикально: заголовок, температура, ощущается как */
+    gap: 0.2em;             /* расстояние между строками */
+}
+
+/* Правая колонка: иконка и описание */
+.heroWeather {
+    display: flex;
+    align-items: center;     /* иконка по центру вертикально */
+    gap: 0.3em;              /* немного пространства между иконкой и текстом */
+    font-size: 1.1em;        /* можно чуть увеличить шрифт */
+}
+
+.heroMeta{
+    display:flex;
+    flex-wrap:nowrap;
+    gap:0;
+    align-items:stretch;
+    overflow-x:auto;
+    padding:8px 0 12px;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:thin;
+    scrollbar-color:rgba(255,255,255,0.15) transparent;
+}
+
+/* Каждый индикатор — отдельная позиция на ширину экрана */
+.ind-card{
+    flex:0 0 100%;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    padding:8px 0 4px;
+    border-right:1px solid #2e2e2e;
+    scroll-snap-align:start;
+}
+.ind-card:last-child{
+    border-right:none;
+}
+.ind-title{
+    margin-bottom:2px;
+    text-align:center;
+    font-size:12px;
+    color:#aaa;
+    letter-spacing:0.03em;
+}
+.ind-sub{
+    margin-top:2px;
+    text-align:center;
+    font-size:12px;
+    color:#888;
+}
+.ind-trend{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-top:4px;
+}
+
+/* Прокрутка с прилипанием */
+.heroMeta{
+    scroll-snap-type:x mandatory;
+}
+
+.miniCard{
+    flex: 0 0 50%;           /* каждая плитка 50% ширины родителя */
+    min-width: 0;            /* важно для flex */
+    box-sizing: border-box;
+}
+
+.miniValue{
+    font-size:19px;
+    font-weight:800;
+    margin-top:4px;
+}
+
+.value svg{
+    display:block;
+}
+
+@media (max-width:520px){
+    .value{
+        max-width:70%;
+    }
+}
+
+@media (max-width:520px){
+    .heroMeta{
+        overflow-x: auto;
+    }
+}
+
+.tempCold{ color:#7ec8ff; }
+.tempCool{ color:#9dd6ff; }
+.tempMild{ color:#8ad68a; }
+.tempWarm{ color:#ffbf66; }
+.tempHot{ color:#ff6b6b; }
+
+/* =========================
+   СЕТКИ
+========================= */
+.grid2{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:14px;
+}
+
+.grid3{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:10px;
+}
+
+/* =========================
+   РАЙОНЫ
+========================= */
+.districtGrid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+}
+
+.districtCard{
+    background:#232323;
+    border:1px solid #323232;
+    border-radius:12px;
+    padding:12px;
+}
+
+.districtTop{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:8px;
+    margin-bottom:8px;
+}
+
+.districtName{
+    font-weight:700;
+    font-size:15px;
+}
+
+.districtTemp{
+    font-weight:800;
+    font-size:22px;
+    line-height:1;
+}
+
+.districtLine{
+    display:flex;
+    justify-content:space-between;
+    gap:10px;
+    padding:4px 0;
+    font-size:13px;
+}
+
+.districtLine span:first-child{
+    color:#aaa;
+}
+
+/* =========================
+   КНОПКИ
+========================= */
+.btnRow{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+}
+
+button{
+    width:100%;
+    padding:11px 14px;
+    background:#333;
+    color:#fff;
+    border:none;
+    border-radius:10px;
+    cursor:pointer;
+    font-size:14px;
+    transition:0.2s;
+}
+
+button:hover{
+    background:#444;
+}
+
+button:disabled{
+    opacity:0.65;
+    cursor:default;
+}
+
+/* =========================
+   LOG / STATUS
+========================= */
+.logBox{
+    overflow:hidden;
+    opacity:1;
+    max-height:500px;
+    transform:translateY(0);
+    transition:
+        opacity 1.8s ease,
+        max-height 1.8s ease,
+        margin 1.8s ease,
+        padding 1.8s ease,
+        transform 1.8s ease;
+}
+
+.logBox.hidden{
+    opacity:0;
+    max-height:0;
+    margin-top:0 !important;
+    margin-bottom:0 !important;
+    padding-top:0 !important;
+    padding-bottom:0 !important;
+    transform:translateY(-6px);
+}
+
+.logLine{
+    font-size:12px;
+    color:#bdbdbd;
+    padding:2px 0;
+    line-height:1.45;
+}
+
+/* =========================
+   DETAILS
+========================= */
+details{
+    background:#232323;
+    border:1px solid #323232;
+    border-radius:12px;
+    padding:10px 12px;
+    margin-top:10px;
+}
+
+summary{
+    cursor:pointer;
+    font-weight:700;
+    color:#eee;
+    list-style:none;
+}
+
+summary::-webkit-details-marker{
+    display:none;
+}
+
+summary::before{
+    content:"▸";
+    display:inline-block;
+    margin-right:8px;
+    transition:transform 0.6s ease; /* ← скорость поворота стрелки */
+}
+
+details[open] summary::before{
+    transform:rotate(90deg);
+}
+
+.codeBlock{
+    margin-top:10px;
+    background:#171717;
+    border:1px solid #303030;
+    border-radius:10px;
+    padding:10px;
+    font-size:12px;
+    white-space:pre-wrap;
+    word-break:break-word;
+    color:#cfcfcf;
+}
+
+/* =========================
+   ИКОНКИ / БЕЙДЖИ
+========================= */
+.badge{
+    display:inline-block;
+    padding:4px 8px;
+    border-radius:999px;
+    background:#2e2e2e;
+    color:#ddd;
+    font-size:12px;
+    margin:2px 4px 2px 0;
+}
+
+.wxIcon{
+    font-size:24px;
+    margin-right:6px;
+    vertical-align:-1px;
+    order: 2; /* ставим иконку после текста, можно убрать если не нужно */
+}
+
+/* =========================
+   АДАПТИВ
+========================= */
+@media (max-width:800px){
+    .synopHero,
+    .grid2,
+    .districtGrid,
+    .btnRow{
+        grid-template-columns:1fr;
+    }
+
+    
+}
+
+@media (max-width:520px){
+    .header{
+        align-items:flex-start;
+        flex-direction:column;
+    }
+
+    .heroTemp{
+        font-size:34px;
+    }
+
+    .grid3{
+        grid-template-columns:1fr;
+    }
+
+    .heroMeta{
+        grid-template-columns:1fr;
+    }
+}
+
+@media (max-width:520px){
+    .header{
+        flex-direction: row !important; /* вместо column */
+        align-items: center !important; /* горизонтально по центру */
+        flex-wrap: nowrap !important;   /* запрещаем перенос */
+        overflow-x: auto !important;    /* добавляем скролл, если не помещается */
+    }
+}
+
+/*≠==============
+    РОЗА ВЕТРОВ
+================*/
+.windMiniCard{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+}
+
+.windMini{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    width:100%;
+    margin:4px 0 2px;
+}
+
+.windMini svg{
+    display:block;
+    width:100px;
+    height:100px;
+}
+
+/* ======================
+    Индикатор давления
+=========================*/
+.pressureMiniCard{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+}
+
+.pressureMini{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    width:100%;
+    margin:4px 0 2px;
+}
+
+.pressureMini svg{
+    display:block;
+    width:160px;
+    height:100px;
+}
+
+.pressureTrendRow{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+    margin-top:2px;
+    min-height:20px;
+}
+
+.pressureTrendValue{
+    font-size:11px;
+    color:#d8d8d8;
+    min-width:24px;
+    text-align:left;
+}
+
+
+.heroMetaIndicators {
+    display: flex;
+    flex-direction: column;  /* вертикально */
+    align-items: center;     /* центрирование по горизонтали */
+    gap: 30px;               /* расстояние между индикаторами */
+}
+
+/* Увеличиваем SVG */
+.miniCard svg {
+    width: 200px;   /* или 200px для больших индикаторов */
+    height: 200px;  /* для кругов, дуг, стрелок */
+}
+
+/* Текст внутри SVG масштабируется автоматически, но если нужно, можно отдельно */
+.miniCard text {
+    font-size: 0.5em;  /* пропорционально */
+}
+
+.pressureMini{
+    margin-bottom: 2px;
+}
+
+.pressureTrendRow{
+    margin-top: 0;
+}
+/* =========================
+   ПАНЕЛЬ ИНДИКАТОРОВ
+========================= */
+/* Внутри heroMeta miniCard не должен растягиваться на 50% */
+.heroMeta .miniCard,
+.heroMeta .windMiniCard,
+.heroMeta .pressureMiniCard {
+    flex: 0 0 auto;
+    min-width: 0;
+}
+
+.windMiniCard {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.pressureMiniCard {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+
+
+
+
+/* =========================
+   ИНДИКАТОРЫ
+========================= */
+.ind-grid-2x2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 12px 0;
+}
+
+/* Карточки в ряду растягиваются под самую высокую (например, у "Давления"
+   есть доп. блок тренда .ind-trend, у соседей его может не быть).
+   Без этого правила более короткие карточки центрируются по вертикали
+   в выросшей ячейке, и их дуга/значение визуально "съезжает" вниз —
+   выравниваем всё содержимое по верхнему краю. */
+.ind-grid-2x2 .ind-card {
+    justify-content: flex-start;
+}
+
+.ind-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px 4px 4px;
+    background: #191919;
+    border-radius: 12px;
+    cursor: pointer;
+    overflow: hidden;
+    transition: opacity 0.15s;
+    -webkit-tap-highlight-color: transparent;
+}
+.ind-card:active { opacity: 0.7; }
+
+/* SVG масштабируется до ширины ячейки */
+.ind-card svg {
+    width: 100% !important;
+    height: auto !important;
+}
+
+.ind-title {
+    font-size: 11px;
+    color: #777;
+    margin-bottom: 2px;
+    letter-spacing: 0.03em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 4px;
+}
+
+.ind-sub {
+    font-size: 11px;
+    color: #777;
+    text-align: center;
+    margin-top: 2px;
+}
+
+.ind-trend {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+/* Оверлей fullscreen */
+#indOverlay {
+    cursor: pointer;
+}
+#indOverlay svg {
+    filter: drop-shadow(0 0 20px rgba(0,0,0,0.8));
+}
+
+/* =========================
+   PWS СТРАНИЦА
+========================= */
+.pws-station-card {
+    background: #1e1e1e;
+    border: 1px solid #2e2e2e;
+    border-radius: 14px;
+    padding: 14px;
+    margin-bottom: 14px;
+}
+.pws-station-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 6px;
+}
+.pws-fields { margin: 6px 0 4px; }
+
+.seaFactRow{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    flex-wrap:wrap;
+    gap:4px 12px;
+    padding:8px 0;
+    border-bottom:1px solid #1c1c1c;
+    font-size:15px;
+}
+.seaFactRow:last-child{ border-bottom:none; }
+.seaFactRow .sfLabel{
+    color:#999;
+    flex:1 1 140px;
+}
+.seaFactRow .sfValue{
+    text-align:right;
+    font-weight:700;
+    color:#eee;
+    flex:1 1 140px;
+}
+.seaVerifyList{
+    max-height:260px;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+}
+.pws-calib {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #252525;
+    flex-wrap: wrap;
+}
+
+/* =========================
+   SELECT СТАНЦИИ
+========================= */
+.station-select-wrap {
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: 0;
+    margin-bottom: 0;
+}
+/* Sticky панель выбора станции */
+#stationSelectWrap {
+    position: sticky;
+    top: 0;
+    z-index: 90;
+    margin: -16px -16px 0;
+    padding: 10px 16px;
+    background: rgba(18, 18, 18, 0.97);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid #2b2b2b;
+}
+
+#stationSelectWrap + * {
+    margin-top: 14px;
+}
+.station-select-wrap select {
+    width: 100%;
+    background: #2a2a2a;
+    color: #eee;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-size: 14px;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 32px;
+}
+
+/* tempClass */
+.tempCold { fill: #7ec8ff; color: #7ec8ff; }
+.tempCool { fill: #9dd6ff; color: #9dd6ff; }
+.tempMild { fill: #8ad68a; color: #8ad68a; }
+.tempWarm { fill: #ffbf66; color: #ffbf66; }
+.tempHot  { fill: #ff6b6b; color: #ff6b6b; }
+
+/* =========================
+   АНИМАЦИЯ ШТОРКИ DETAILS
+========================= */
+details .details-body {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.8s ease; /* ← скорость разворачивания блока */
+}
+
+details[open] .details-body {
+    grid-template-rows: 1fr;
+}
+
+details .details-body > div {
+    overflow: hidden;
+}
+
+/* =========================
+   ИСТОРИЯ / ГРАФИК
+========================= */
+
+/* uPlot переопределения */
+.hist-uplot {
+    background: transparent !important;
+}
+.hist-uplot .u-cursor-x {
+    border-left: 1px solid rgba(255,255,255,0.18) !important;
+}
+.hist-uplot .u-cursor-pt {
+    border-radius: 50% !important;
+}
+
+/* Кнопки параметра */
+.hist-param-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.hist-param-btn {
+    width: auto !important;
+    padding: 5px 11px !important;
+    font-size: 12px !important;
+    border-radius: 20px !important;
+    background: #232323 !important;
+    color: #888 !important;
+    border: 1px solid #2e2e2e !important;
+    transition: 0.15s !important;
+    white-space: nowrap;
+}
+
+.hist-param-btn:hover {
+    color: #ccc !important;
+    background: #2a2a2a !important;
+}
+
+.hist-param-btn.active {
+    background: #1a1a1a !important;
+    color: var(--c, #fff) !important;
+    border-color: var(--c, #555) !important;
+    box-shadow: 0 0 0 1px var(--c, #555) inset;
+}
+
+/* Кнопки периода */
+.hist-period-row {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 10px;
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 10px;
+    padding: 3px;
+}
+
+.hist-period-btn {
+    width: auto !important;
+    flex: 1;
+    padding: 6px 8px !important;
+    font-size: 12px !important;
+    border-radius: 8px !important;
+    background: transparent !important;
+    color: #666 !important;
+    border: none !important;
+    transition: 0.15s !important;
+    white-space: nowrap;
+}
+
+.hist-period-btn:hover {
+    color: #aaa !important;
+    background: #252525 !important;
+}
+
+.hist-period-btn.active {
+    background: #2e2e2e !important;
+    color: #eee !important;
+}
+
+/* Статистика */
+.hist-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+}
+
+@media (max-width: 520px) {
+    .hist-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.hist-stat-card {
+    background: #191919;
+    border: 1px solid #272727;
+    border-radius: 10px;
+    padding: 10px;
+    text-align: center;
+}
+
+.hist-stat-label {
+    font-size: 11px;
+    color: #666;
+    margin-bottom: 4px;
+}
+
+.hist-stat-value {
+    font-size: 17px;
+    font-weight: 800;
+    line-height: 1.1;
+    margin-bottom: 3px;
+}
+
+.hist-stat-time {
+    font-size: 10px;
+    color: #555;
+}
+
+.hist-stats-grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+/* =========================
+   СТРОКА СТАТУСА
+========================= */
+#lastUpdate {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    position: relative;
+}
+#lastUpdate.running span {
+    display: inline-block;
+    animation: marquee 12s linear infinite;
+}
+@keyframes marquee {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+}
+
+.spin {
+    display: inline-block;
+    animation: spin-flip 1s steps(1) infinite;
+}
+@keyframes spin-flip {
+    0%  { content: "⏳"; }
+    50% { content: "⌛"; }
+}

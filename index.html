@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>Погода сейчас — SYNOP</title>
+<link rel="stylesheet" href="current_weather.css">
+</head>
+<body>
+
+<div class="header">
+    <div class="headerTitle">ГМЦ ЧАМ</div>
+    <div class="nav">
+        <a href="bufr.html">BUFR</a>
+        <a href="pws.html">PWS</a>
+        <a href="forecast.html">Прогноз</a>
+        <a href="verify.html">Рейтинг</a>
+    </div>
+</div>
+
+<div class="container">
+    <div class="card">
+        <div id="lastUpdate" style="color:#aaa;font-size:0.9em;margin-bottom:10px;">—</div>
+        <div class="btnRow">
+            <button id="btnSynop" onclick="loadSynopUI()">Обновить</button>
+        </div>
+    </div>
+    <div id="main" class="card">Загрузка...</div>
+</div>
+
+<script src="utils.js?v=3"></script>
+<script src="indicators.js"></script>
+<script src="synop.js?v=3"></script>
+<script src="main.js"></script>
+
+
+
+<script src="nav.js"></script>
+</body>
+</html>
