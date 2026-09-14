@@ -1,5 +1,5 @@
 {
-  "task_id": "ping-016",
-  "cmd": "echo PONG_$(date -u +%s)",
-  "timeout": 10
+  "task_id": "evidence-unpushed-retained-023",
+  "cmd": "echo '=== main pipeline: context around UNPUSHED_COMMIT_RETAINED ===' && grep -n -B15 -A3 'UNPUSHED_COMMIT_RETAINED' /var/log/vps-pipeline.log | tail -60 && echo && echo '=== satellite: context around UNPUSHED_COMMIT_RETAINED ===' && grep -n -B15 -A3 'UNPUSHED_COMMIT_RETAINED' /var/log/vps-satellite-pipeline.log | tail -60 && echo && echo '=== gc.auto settings (read-only check, per new hypothesis) ===' && git -C /opt/weather-pipeline/repo config --get gc.auto && git -C /opt/weather-pipeline/repo config --get gc.autopacklimit && git -C /opt/weather-pipeline/repo config --get gc.autoDetach && echo '(empty above = using git defaults: gc.auto=6700, autoDetach=true)'",
+  "timeout": 30
 }
