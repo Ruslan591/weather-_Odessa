@@ -46,6 +46,17 @@ AI_QUEUE_FILE = os.path.join(BASE_DIR, "data", "_ai_pending_models.json")
 # чтобы каждый VPS-скрипт оставался независимым и самодостаточным.
 
 def sync_repo():
+    """[ДОБАВЛЕНО 2026-09-14, ROOT CAUSE ORPHANED OBJECTS] Вся секция теперь
+    выполняется ПОД GIT_LOCK_FILE — раньше checkout -B здесь двигал ref
+    main без лока и мог оторвать ещё-не-запушенный коммит vps_pipeline.py/
+    vps_satellite_pipeline.py (см. docs/ai/AI_DISCUSSION.md, GPT REQUEST
+    CHANGES 2026-09-14). Fail-closed: лок не получен — НЕ выполняем ни
+    одной git-команды, пропускаем цикл."""
+    lock_fd = acquire_git_lock()
+    if lock_fd is None:
+        print("  [GIT_LOCK_TIMEOUT] sync_repo: лок не получен — "
+              "git-секция пропущена, цикл повторится в следующий раз")
+        return False
     try:
         subprocess.run(["git", "-C", BASE_DIR, "rebase", "--abort"],
                         capture_output=True, text=True, timeout=15)
@@ -121,17 +132,25 @@ def sync_repo():
     except Exception as e:
         print(f"  [WARN] sync_repo error: {e}")
         return False
+    finally:
+        release_git_lock(lock_fd)
 
 
 # ── общий git-lock с vps_pipeline.py/vps_satellite_pipeline.py ─────────────
-# Три независимых cron-процесса пишут в один .git — лок оборачивает ТОЛЬКО
-# секцию add/commit/push (секунды), не весь цикл.
+# [ИЗМЕНЕНО 2026-09-14] Раньше лок оборачивал ТОЛЬКО секцию add/commit/push.
+# Теперь также оборачивает sync_repo() (fetch+cleanup+reset/checkout) — см.
+# докстринг sync_repo() выше и docs/ai/AI_DISCUSSION.md (GPT REQUEST
+# CHANGES 2026-09-14, root cause orphaned objects).
 
 GIT_LOCK_FILE = "/tmp/vps_git.lock"
 GIT_LOCK_TIMEOUT_SEC = 60
 
 
 def acquire_git_lock():
+    """[ИЗМЕНЕНО 2026-09-14] Раньше при таймауте был fallback "продолжаю
+    без лока" — именно он открывал гонку за ref main. Теперь caller
+    обязан проверить lock_fd is None и НЕ выполнять git-команды
+    (fail-closed)."""
     import fcntl
     lock_fd = open(GIT_LOCK_FILE, "w")
     waited = 0
@@ -142,8 +161,7 @@ def acquire_git_lock():
         except OSError:
             _time.sleep(1)
             waited += 1
-    print(f"  [WARN] git-lock не получен за {GIT_LOCK_TIMEOUT_SEC}с — "
-          f"продолжаю без него (второй писатель, возможна гонка)")
+    print(f"  [GIT_LOCK_TIMEOUT] git-lock не получен за {GIT_LOCK_TIMEOUT_SEC}с")
     lock_fd.close()
     return None
 
@@ -371,6 +389,10 @@ BLOCKS_GEMINI_PATHS = ["data/blocks_gemini"]
 
 def git_push_ai(paths=None):
     lock_fd = acquire_git_lock()
+    if lock_fd is None:
+        print("  [GIT_LOCK_TIMEOUT] git_push_ai: лок не получен — "
+              "add/commit/push пропущены в этом цикле")
+        return
     try:
         _candidates = paths if paths is not None else (ANALYSIS_PATHS + MEDIA_PATHS)
         _to_add = [p for p in _candidates if os.path.exists(os.path.join(BASE_DIR, p))]
