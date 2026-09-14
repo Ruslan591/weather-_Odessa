@@ -1,5 +1,5 @@
 {
-  "task_id": "evidence-unpushed-retained-023",
-  "cmd": "echo '=== main pipeline: context around UNPUSHED_COMMIT_RETAINED ===' && grep -n -B15 -A3 'UNPUSHED_COMMIT_RETAINED' /var/log/vps-pipeline.log | tail -60 && echo && echo '=== satellite: context around UNPUSHED_COMMIT_RETAINED ===' && grep -n -B15 -A3 'UNPUSHED_COMMIT_RETAINED' /var/log/vps-satellite-pipeline.log | tail -60 && echo && echo '=== gc.auto settings (read-only check, per new hypothesis) ===' && git -C /opt/weather-pipeline/repo config --get gc.auto && git -C /opt/weather-pipeline/repo config --get gc.autopacklimit && git -C /opt/weather-pipeline/repo config --get gc.autoDetach && echo '(empty above = using git defaults: gc.auto=6700, autoDetach=true)'",
-  "timeout": 30
+  "task_id": "dirty-tree-readonly-024",
+  "cmd": "flock -w 60 /tmp/vps_git.lock -c 'echo === git status --short ===; git -C /opt/weather-pipeline/repo status --short; echo === git diff --name-status (unstaged) ===; git -C /opt/weather-pipeline/repo diff --name-status; echo === git diff --stat (unstaged) ===; git -C /opt/weather-pipeline/repo diff --stat; echo === git diff --cached --name-status (staged, if any) ===; git -C /opt/weather-pipeline/repo diff --cached --name-status; echo === rev-list --count origin/main..HEAD (still ahead?) ===; git -C /opt/weather-pipeline/repo rev-list --count origin/main..HEAD; echo === mtimes of changed tracked files ===; git -C /opt/weather-pipeline/repo status --short | awk \"{print \\$2}\" | while read f; do stat -c \"%Y  %y  %n\" \"/opt/weather-pipeline/repo/$f\" 2>/dev/null; done; echo === current time for reference ===; date -u +%s; date -u\n'",
+  "timeout": 90
 }
