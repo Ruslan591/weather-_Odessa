@@ -130,7 +130,25 @@ def sync_repo():
 
     Поэтому самолечение (abort rebase/merge + сброс индекса) теперь стоит
     ЗДЕСЬ, до checkout -B — а не только в git_push_history().
+
+    [ДОБАВЛЕНО 2026-09-14, ROOT CAUSE ORPHANED OBJECTS] Вся секция ниже
+    теперь выполняется ПОД GIT_LOCK_FILE (тем же, что раньше защищал
+    только add/commit/push). Раньше checkout -B здесь двигал ref main БЕЗ
+    лока — если в этот момент ДРУГОЙ VPS-процесс (satellite/ai) уже сделал
+    свой git commit (под локом), но ещё не успел git push, этот
+    checkout -B молча переставлял main на origin/main, и локальный коммит
+    другого процесса терял единственную ссылку на себя — это и было
+    основным источником orphaned commits/trees/blobs (см. GPT REQUEST
+    CHANGES 2026-09-14, docs/ai/AI_DISCUSSION.md). Fail-closed: если лок
+    не получен за GIT_LOCK_TIMEOUT_SEC — НЕ выполняем НИ ОДНОЙ git-команды
+    и пропускаем цикл; прежний fallback "продолжаю без лока" убран
+    намеренно, именно он и обеспечивал гонку.
     """
+    lock_fd = acquire_git_lock()
+    if lock_fd is None:
+        print("  [GIT_LOCK_TIMEOUT] sync_repo: лок не получен — "
+              "git-секция пропущена, цикл повторится в следующий раз")
+        return False
     try:
         # Самолечение ДО checkout -B: чистим любой мусор, оставленный
         # предыдущим циклом, иначе checkout -B откажется работать.
@@ -244,6 +262,8 @@ def sync_repo():
     except Exception as e:
         print(f"  [WARN] sync_repo error: {e}")
         return False
+    finally:
+        release_git_lock(lock_fd)
 
 # ── загрузка/сохранение истории ───────────────────────────────────────────────
 
@@ -486,8 +506,11 @@ def acquire_git_lock():
             import time as _t
             _t.sleep(1)
             waited += 1
-    print(f"  [WARN] git-lock не получен за {GIT_LOCK_TIMEOUT_SEC}с — "
-          f"продолжаю без него (второй писатель, возможна гонка)")
+    # [ИЗМЕНЕНО 2026-09-14] Раньше здесь был fallback "продолжаю без лока" —
+    # именно он открывал гонку за ref main (см. sync_repo()). Теперь
+    # caller обязан проверить lock_fd is None и НЕ выполнять git-команды
+    # (fail-closed / SKIP), а не идти вперёд без защиты.
+    print(f"  [GIT_LOCK_TIMEOUT] git-lock не получен за {GIT_LOCK_TIMEOUT_SEC}с")
     lock_fd.close()
     return None
 
@@ -505,6 +528,10 @@ def release_git_lock(lock_fd):
 def git_push_history():
     import time as _time
     lock_fd = acquire_git_lock()
+    if lock_fd is None:
+        print("  [GIT_LOCK_TIMEOUT] git_push_history: лок не получен — "
+              "add/commit/push пропущены в этом цикле")
+        return
     try:
         ensure_repo_healthy()
         year = datetime.now(timezone.utc).year
