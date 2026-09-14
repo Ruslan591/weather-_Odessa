@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-14T05:10:00.000Z",
+  "timestamp": "2026-09-14T05:50:00.000Z",
   "buffer_size": 6,
   "buffer_span_minutes": 50,
   "observed_area": {
@@ -13,29 +13,29 @@
     "state_radius_km": 12
   },
   "valid": true,
-  "speed_kmh": 1.5,
-  "direction_compass": "Ю",
-  "bearing_deg": 196.7,
-  "frame_pairs_used": 5,
-  "acceleration_kmh": 2.0,
-  "turning_deg": 80.1,
-  "acceleration_verdict": "скорость стабильна",
-  "turning_verdict": "меняет направление (по часовой)",
+  "speed_kmh": 9.0,
+  "direction_compass": "СЗ",
+  "bearing_deg": 305.1,
+  "frame_pairs_used": 4,
+  "acceleration_kmh": -15.5,
+  "turning_deg": 17.5,
+  "acceleration_verdict": "замедляется",
+  "turning_verdict": "направление стабильно",
   "forecast_displacement": {
     "30min": {
-      "distance_km": 2.4,
-      "bearing_deg": 229.0,
-      "compass": "ЮЗ"
+      "distance_km": 4.1,
+      "bearing_deg": 120.0,
+      "compass": "ЮВ"
     },
     "60min": {
-      "distance_km": 6.7,
-      "bearing_deg": 232.0,
-      "compass": "ЮЗ"
+      "distance_km": 17.5,
+      "bearing_deg": 121.0,
+      "compass": "ЮВ"
     },
     "120min": {
-      "distance_km": 20.8,
-      "bearing_deg": 235.0,
-      "compass": "ЮЗ"
+      "distance_km": 72.6,
+      "bearing_deg": 122.0,
+      "compass": "ЮВ"
     }
   },
   "area_fraction_over_time": [
@@ -53,52 +53,70 @@
   "cloud_mass_distance_km": 0.8,
   "cloud_mass_bearing_deg": 325.0,
   "cloud_mass_compass": "СЗ",
-  "cloud_mass_area_km2": 206982,
+  "cloud_mass_area_km2": 206085,
   "target_confirmation": {
     "confirmed": true,
-    "target_id": 2,
-    "target_area_km2": 108.1,
-    "roi_cloud_fraction": 0.931,
+    "target_id": 1,
+    "target_area_km2": 260.2,
+    "roi_cloud_fraction": 0.978,
     "verdict": "GeoColour подтверждает: в ROI CLM-цели преобладает облачность"
   },
   "system_analysis_all": [
     {
       "target_id": 0,
       "available": true,
-      "roi_cloud_fraction": 0.963,
+      "roi_cloud_fraction": 0.972,
       "confirmed": true
     },
-    {
-      "target_id": 1,
-      "available": true,
-      "roi_cloud_fraction": 0.842,
-      "confirmed": true
-    },
-    {
-      "target_id": 4,
-      "available": true,
-      "roi_cloud_fraction": 0.637,
-      "confirmed": true
-    }
-  ],
-  "local_analysis_all": [
     {
       "target_id": 2,
       "available": true,
-      "roi_cloud_fraction": 0.931,
+      "roi_cloud_fraction": 0.787,
       "confirmed": true
     },
     {
       "target_id": 3,
       "available": true,
-      "roi_cloud_fraction": 0.799,
-      "confirmed": true
+      "roi_cloud_fraction": 0.479,
+      "confirmed": false
     },
     {
       "target_id": 5,
       "available": true,
-      "roi_cloud_fraction": 0.876,
+      "roi_cloud_fraction": 0.38,
+      "confirmed": false
+    },
+    {
+      "target_id": 6,
+      "available": true,
+      "roi_cloud_fraction": 0.373,
+      "confirmed": false
+    }
+  ],
+  "local_analysis_all": [
+    {
+      "target_id": 1,
+      "available": true,
+      "roi_cloud_fraction": 0.978,
       "confirmed": true
+    },
+    {
+      "target_id": 4,
+      "available": true,
+      "roi_cloud_fraction": 0.831,
+      "confirmed": true
+    },
+    {
+      "target_id": 7,
+      "available": true,
+      "roi_cloud_fraction": 0.111,
+      "confirmed": false
+    },
+    {
+      "target_id": 8,
+      "available": true,
+      "roi_cloud_fraction": 0.345,
+      "confirmed": false
     }
   ],
   "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
