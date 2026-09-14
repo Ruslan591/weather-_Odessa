@@ -2,54 +2,45 @@
   "status": "ok",
   "frames_fetched": 4,
   "times_requested": [
-    "2026-09-14T02:45:00.000Z",
     "2026-09-14T03:00:00.000Z",
     "2026-09-14T03:15:00.000Z",
+    "2026-09-14T03:30:00.000Z",
     null
   ],
   "result": {
-    "timestamp": "2026-09-14T03:32:07Z",
+    "timestamp": "2026-09-14T03:59:23Z",
     "current_state": "no_precip",
     "target_type": "precip_mass",
-    "distance_km_now": 12.1,
-    "bearing_deg": 191.0,
-    "compass": "Ю",
-    "speed_kmh": 13.5,
-    "direction_compass": "С",
-    "cpa_km": 5.7,
-    "eta_min": 47.0,
-    "blob_area_km2": 21749.0,
-    "verdict": "приближается",
+    "distance_km_now": 9.9,
+    "bearing_deg": 219.0,
+    "compass": "ЮЗ",
+    "speed_kmh": 0.0,
+    "direction_compass": "Ю",
+    "cpa_km": 9.9,
+    "eta_min": null,
+    "blob_area_km2": 22203.0,
+    "verdict": "почти стоит на месте",
     "frame_pairs_used": 3,
-    "probability_percent": 91,
+    "probability_percent": 88,
     "probability_note": "эвристика (близость точки сближения + размер поля + уверенность в скорости), не физическая модель осадков",
     "method_note": "Скорость усреднена по 4 кадрам msg_fes:h60b (шаг 15 мин, phase correlation). Presence = непрозрачный пиксель. Край ищется только среди связных областей >= 40px (~53км²). Линейная экстраполяция, годится на ~1 час.",
     "target_confirmation": {
-      "confirmed": false,
-      "target_id": 1,
-      "target_area_km2": 61.4,
-      "roi_precip_fraction": 0.0,
-      "verdict": "Осадков из этой конкретной массы не наблюдается (сухое облако либо осадки не достигают земли)"
+      "confirmed": null,
+      "reason": "известный шумовой объект в этой точке подавлен (сигнатура -180_-255), других локальных целей нет"
     },
     "system_analysis": {
       "available": true,
       "target_id": 0,
-      "area_km2": 207574.0,
-      "roi_precip_fraction": 0.32,
+      "area_km2": 207100.3,
+      "roi_precip_fraction": 0.324,
       "has_precip": true
     },
     "system_analysis_all": [
       {
         "target_id": 0,
         "available": true,
-        "roi_precip_fraction": 0.32,
+        "roi_precip_fraction": 0.324,
         "has_precip": true
-      },
-      {
-        "target_id": 2,
-        "available": true,
-        "roi_precip_fraction": 0.0,
-        "has_precip": false
       }
     ],
     "local_analysis_all": [
