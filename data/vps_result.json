@@ -1,7 +1,7 @@
 {
-  "task_id": "ping-016",
+  "task_id": "bridge-recheck-019",
   "returncode": 0,
-  "stdout": "PONG_1789378201\n",
+  "stdout": "    task, _task_sha = get_file(TASK_PATH, token)\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/vps-github-bridge/vps_github_bridge.py\", line 96, in get_file\n    raise RuntimeError(f\"GET {path} failed: {status} {resp}\")\nRuntimeError: GET data/vps_task.json failed: 500 {'message': 'Internal Server Error', 'documentation_url': 'https://docs.github.com/rest', 'status': '500'}\nTraceback (most recent call last):\n  File \"/opt/vps-github-bridge/vps_github_bridge.py\", line 181, in <module>\n    sys.exit(main())\n             ^^^^^^\n  File \"/opt/vps-github-bridge/vps_github_bridge.py\", line 129, in main\n    task, _task_sha = get_file(TASK_PATH, token)\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/vps-github-bridge/vps_github_bridge.py\", line 96, in get_file\n    raise RuntimeError(f\"GET {path} failed: {status} {resp}\")\nRuntimeError: GET data/vps_task.json failed: 500 {'message': 'Internal Server Error', 'documentation_url': 'https://docs.github.com/rest', 'status': '500'}\n---\nping-016",
   "stderr": "",
-  "completed_at_utc": "2026-09-14T09:30:01Z"
+  "completed_at_utc": "2026-09-14T10:06:01Z"
 }
