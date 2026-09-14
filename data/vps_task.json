@@ -1,5 +1,5 @@
 {
-  "task_id": "ping-016",
-  "cmd": "echo PONG_$(date -u +%s)",
-  "timeout": 10
+  "task_id": "baseline-post-v2-cheap-015",
+  "cmd": "date -u +'%Y-%m-%dT%H:%M:%SZ' && echo '=== .git size ===' && du -sh /opt/weather-pipeline/repo/.git && echo '=== count-objects ===' && git -C /opt/weather-pipeline/repo count-objects -v -H && echo '=== marker counts ===' && for m in UNPUSHED_COMMITS_DETECTED UNPUSHED_COMMIT_RETAINED SYNC_ABORTED_SHALLOW_ERROR GIT_LOCK_TIMEOUT; do echo \"--- $m ---\"; grep -c \"$m\" /var/log/vps-pipeline.log /var/log/vps-satellite-pipeline.log /var/log/vps-ai-pipeline.log 2>&1; done && echo '--- push failed after 3 attempts ---' && grep -c 'push failed after 3 attempts' /var/log/vps-pipeline.log /var/log/vps-satellite-pipeline.log /var/log/vps-ai-pipeline.log 2>&1 && echo '=== df -h / ===' && df -h /",
+  "timeout": 60
 }
