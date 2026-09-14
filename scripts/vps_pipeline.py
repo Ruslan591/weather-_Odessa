@@ -98,6 +98,81 @@ def age_str(iso_str):
 
 # ── синхронизация репозитория (НОВОЕ для VPS-версии) ──────────────────────────
 
+def _preserve_unpushed_local_commits():
+    """[ДОБАВЛЕНО 2026-09-14, ROOT CAUSE ORPHANED OBJECTS v2, GPT APPROVED]
+    Вызывается из sync_repo() ПОСЛЕ fetch, ДО checkout -B/reset --hard —
+    если у HEAD есть коммиты, которых нет в origin/main (типичный случай:
+    предыдущий цикл сделал git commit, но push не прошёл 3 раза подряд —
+    см. "push failed after 3 attempts" в логах), пытаемся их сохранить,
+    прежде чем sync_repo() переставит ref main и сделает их недостижимыми.
+
+    GPT REQUEST CHANGES 2026-09-14, пункт 1: после успешного push НЕ
+    считаем автоматически, что origin/main теперь совпадает с локальным
+    состоянием — делаем повторный fetch и заново считаем rev-list, прежде
+    чем сообщить об успехе caller'у.
+
+    Семантика "-X theirs" для git rebase (эмпирически проверено на
+    тестовом репозитории 2026-09-14): при конфликте побеждает
+    РЕПЛЕИРУЕМЫЙ коммит, т.е. НАШ локальный — origin/main используется
+    только как новая база. Тот же принцип, что уже используется в
+    git_push_history() для этих же идемпотентно пересчитываемых файлов.
+
+    Force-push НЕ используется. Backup branch/tag НЕ создаётся.
+    Возвращает True, только если ПОДТВЕРЖДЕНО (повторным rev-list после
+    повторного fetch), что HEAD полностью содержится в origin/main —
+    тогда caller может безопасно делать checkout -B/reset. Возвращает
+    False во всех остальных случаях — caller НЕ ДОЛЖЕН трогать ref.
+    """
+    _delays = [10, 20]
+    for _attempt in range(3):
+        push = subprocess.run(
+            ["git", "-C", BASE_DIR, "push", "origin", "HEAD:main"],
+            capture_output=True, text=True, timeout=60)
+        if push.returncode == 0:
+            refetch = subprocess.run(
+                ["git", "-C", BASE_DIR, "fetch", "origin", "main", "--depth", "1",
+                 "--update-shallow"],
+                capture_output=True, text=True, timeout=60)
+            if refetch.returncode != 0:
+                print(f"  [WARN] preserve: re-fetch после push упал: "
+                      f"{refetch.stderr.strip()}")
+                return False
+            recheck = subprocess.run(
+                ["git", "-C", BASE_DIR, "rev-list", "--count", "origin/main..HEAD"],
+                capture_output=True, text=True, timeout=15)
+            if recheck.returncode != 0:
+                print(f"  [WARN] preserve: повторный rev-list упал после push: "
+                      f"{recheck.stderr.strip()}")
+                return False
+            remaining = int(recheck.stdout.strip() or "0")
+            if remaining > 0:
+                print(f"  [WARN] preserve: после push всё ещё {remaining} "
+                      f"local-only коммит(ов) — не подтверждено, ref не трогаю")
+                return False
+            print(f"  [UNPUSHED_COMMITS_PRESERVED] сохранено и подтверждено "
+                  f"(attempt {_attempt+1})")
+            return True
+
+        err = push.stderr.strip()
+        print(f"  [WARN] preserve: push attempt {_attempt+1} failed: {err}")
+        if _attempt < 2:
+            _time.sleep(_delays[_attempt])
+            subprocess.run(
+                ["git", "-C", BASE_DIR, "fetch", "origin", "main", "--depth", "1",
+                 "--update-shallow"],
+                capture_output=True, timeout=60)
+            rebase = subprocess.run(
+                ["git", "-C", BASE_DIR, "rebase", "-X", "theirs", "origin/main"],
+                capture_output=True, text=True, timeout=60)
+            if rebase.returncode != 0:
+                print(f"  [WARN] preserve: rebase -X theirs не прошёл: "
+                      f"{rebase.stderr.strip()[:200]} — abort, ref не трогаю")
+                subprocess.run(["git", "-C", BASE_DIR, "rebase", "--abort"],
+                               capture_output=True, timeout=15)
+                return False
+    return False
+
+
 def sync_repo():
     """Обязательная ресинхронизация в начале КАЖДОГО цикла — см. docstring.
 
@@ -218,6 +293,28 @@ def sync_repo():
         if fetch.returncode != 0:
             print(f"  [WARN] git fetch failed: {fetch.stderr.strip()}")
             return False
+
+        # [ДОБАВЛЕНО 2026-09-14, ROOT CAUSE ORPHANED OBJECTS v2, GPT APPROVED]
+        # ДО checkout -B — проверяем, нет ли у HEAD коммитов, отсутствующих
+        # в origin/main (типично: прошлый цикл закоммитил, но push не
+        # прошёл 3 раза). Если такие коммиты есть — checkout -B/reset
+        # запрещены, пока они не подтверждённо доставлены в origin.
+        rev = subprocess.run(
+            ["git", "-C", BASE_DIR, "rev-list", "--count", "origin/main..HEAD"],
+            capture_output=True, text=True, timeout=15)
+        if rev.returncode != 0:
+            print(f"  [SYNC_ABORTED_SHALLOW_ERROR] rev-list origin/main..HEAD "
+                  f"упал: {rev.stderr.strip()} — ref не трогаю, цикл пропущен")
+            return False
+        local_only = int(rev.stdout.strip() or "0")
+        if local_only > 0:
+            print(f"  [UNPUSHED_COMMITS_DETECTED] {local_only} локальных "
+                  f"коммит(ов) отсутствуют в origin/main — пробую сохранить "
+                  f"перед checkout -B")
+            if not _preserve_unpushed_local_commits():
+                print("  [UNPUSHED_COMMIT_RETAINED] не удалось подтверждённо "
+                      "запушить — ref НЕ трогаю, цикл пропущен")
+                return False
 
         was_detached = subprocess.run(
             ["git", "-C", BASE_DIR, "symbolic-ref", "-q", "HEAD"],
