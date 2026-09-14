@@ -92,6 +92,17 @@ def _parse_ts_flexible(ts):
 #    sync_repo()/ensure_repo_healthy() за полной историей находок 27-28.08) ──
 
 def sync_repo():
+    """[ДОБАВЛЕНО 2026-09-14, ROOT CAUSE ORPHANED OBJECTS] Вся секция теперь
+    выполняется ПОД GIT_LOCK_FILE — раньше checkout -B здесь двигал ref
+    main без лока и мог оторвать ещё-не-запушенный коммит vps_pipeline.py/
+    vps_ai_pipeline.py (см. docs/ai/AI_DISCUSSION.md, GPT REQUEST CHANGES
+    2026-09-14). Fail-closed: лок не получен — НЕ выполняем ни одной
+    git-команды, пропускаем цикл."""
+    lock_fd = acquire_git_lock()
+    if lock_fd is None:
+        print("  [GIT_LOCK_TIMEOUT] sync_repo: лок не получен — "
+              "git-секция пропущена, цикл повторится в следующий раз")
+        return False
     try:
         subprocess.run(["git", "-C", BASE_DIR, "rebase", "--abort"],
                        capture_output=True, text=True, timeout=15)
@@ -167,6 +178,8 @@ def sync_repo():
     except Exception as e:
         print(f"  [WARN] sync_repo error: {e}")
         return False
+    finally:
+        release_git_lock(lock_fd)
 
 
 def ensure_repo_healthy():
@@ -210,13 +223,15 @@ GIT_LOCK_TIMEOUT_SEC = 60
 
 
 def acquire_git_lock():
-    """Блокирующий (с таймаутом) лок на КОРОТКУЮ секцию git add/commit/push —
-    общий между vps_pipeline.py и vps_satellite_pipeline.py (два независимых
-    процесса, один .git). Не путать с LOCK_FILE ниже (self-collision одного
-    и того же скрипта) — это разные локи с разными именами файлов.
-    Ждём до GIT_LOCK_TIMEOUT_SEC, опрашивая раз в секунду; если так и не
-    получили — не блокируем цикл навсегда, идём на push без лока (в худшем
-    случае сработает retry с rebase -X theirs, как и раньше)."""
+    """Блокирующий (с таймаутом) лок на git-секцию (sync_repo + add/commit/
+    push) — общий между vps_pipeline.py, vps_satellite_pipeline.py и
+    vps_ai_pipeline.py (три независимых процесса, один .git). Не путать с
+    LOCK_FILE ниже (self-collision одного и того же скрипта) — это разные
+    локи с разными именами файлов.
+    Ждём до GIT_LOCK_TIMEOUT_SEC, опрашивая раз в секунду.
+    [ИЗМЕНЕНО 2026-09-14] Раньше при таймауте был fallback "продолжаю без
+    лока" — именно он открывал гонку за ref main. Теперь caller обязан
+    проверить lock_fd is None и НЕ выполнять git-команды (fail-closed)."""
     import fcntl
     lock_fd = open(GIT_LOCK_FILE, "w")
     waited = 0
@@ -227,8 +242,7 @@ def acquire_git_lock():
         except OSError:
             _time.sleep(1)
             waited += 1
-    print(f"  [WARN] git-lock не получен за {GIT_LOCK_TIMEOUT_SEC}с — "
-          f"продолжаю без него (второй писатель, возможна гонка)")
+    print(f"  [GIT_LOCK_TIMEOUT] git-lock не получен за {GIT_LOCK_TIMEOUT_SEC}с")
     lock_fd.close()
     return None
 
@@ -808,6 +822,10 @@ def notify_pipeline_health():
 
 def git_push_satellite():
     lock_fd = acquire_git_lock()
+    if lock_fd is None:
+        print("  [GIT_LOCK_TIMEOUT] git_push_satellite: лок не получен — "
+              "add/commit/push пропущены в этом цикле")
+        return
     try:
         ensure_repo_healthy()
         _candidates = [
