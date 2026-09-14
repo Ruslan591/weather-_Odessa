@@ -1,16 +1,20 @@
 {
-  "timestamp": "2026-09-14T16:33:06Z",
-  "status": "system_only",
-  "reason": "локальных компактных масс нет, есть только система(ы) синоптического масштаба",
-  "cloud_forecast_timestamp": "2026-09-14T16:00:00.000Z",
+  "timestamp": "2026-09-14T16:37:46Z",
+  "status": "ok",
+  "cloud_forecast_timestamp": "2026-09-14T16:15:00.000Z",
+  "target_id": 1,
+  "target_area_km2": 72.1,
+  "target_distance_km": 50.7,
+  "target_bearing_deg": 83.0,
+  "target_compass": "В",
   "system": {
     "target_id": 0,
-    "area_km2": 188115.9,
+    "area_km2": 186957.7,
     "distance_km": 0.8,
     "bearing_deg": 326.0,
     "compass": "СЗ",
-    "elongation_aspect_ratio": 1.44,
-    "elongation_axis_deg": 2.0,
+    "elongation_aspect_ratio": 1.43,
+    "elongation_axis_deg": 3.0,
     "elongation_axis_compass": "С-Ю",
     "frontlike": false,
     "window_spanning": true,
@@ -19,7 +23,39 @@
     "has_precip": true,
     "has_lightning": false
   },
+  "local_candidates": [],
+  "local_suppressed_count": 3,
   "system_candidates": [],
   "system_suppressed_count": 1,
-  "verdict": "Локальных облачных масс нет. Система синоптического масштаба (188116км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора, осадки)."
+  "frontal_tracks": [],
+  "existence": {
+    "modules": {
+      "ir_motion": {
+        "confirmed": false,
+        "timestamp": "2026-09-14T16:20:00.000Z"
+      },
+      "geocolour_motion": {
+        "confirmed": false,
+        "timestamp": "2026-09-14T16:10:00.000Z"
+      },
+      "cloud_phase_type": {
+        "confirmed": null,
+        "timestamp": "2026-09-14T16:32:05Z"
+      }
+    },
+    "votes_confirmed": 0,
+    "votes_not_confirmed": 2,
+    "consensus": "not_confirmed"
+  },
+  "phenomena": {
+    "precip_forecast": {
+      "confirmed": null,
+      "timestamp": "2026-09-14T16:32:37Z"
+    },
+    "lightning_forecast": {
+      "confirmed": null,
+      "timestamp": "2026-09-14T16:32:47Z"
+    }
+  },
+  "verdict": "CLM отметил цель в 51км В, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (186958км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора, осадки)."
 }
