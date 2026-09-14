@@ -1,19 +1,19 @@
 {
   "status": "ok",
-  "server_latest_time": "2026-09-14T00:30:00.000Z",
+  "server_latest_time": "2026-09-14T00:40:00.000Z",
   "bootstrap": true,
   "buffer_before": 6,
   "buffer_after": 6,
   "buffer_times": [
-    "2026-09-13T23:40:00.000Z",
     "2026-09-13T23:50:00.000Z",
     "2026-09-14T00:00:00.000Z",
     "2026-09-14T00:10:00.000Z",
     "2026-09-14T00:20:00.000Z",
-    "2026-09-14T00:30:00.000Z"
+    "2026-09-14T00:30:00.000Z",
+    "2026-09-14T00:40:00.000Z"
   ],
   "result": {
-    "timestamp": "2026-09-14T00:52:43Z",
+    "timestamp": "2026-09-14T01:07:36Z",
     "buffer_size": 6,
     "buffer_span_minutes": 50,
     "observed_area": {
@@ -26,14 +26,14 @@
     },
     "current_state": "precip",
     "target_type": "clearing",
-    "distance_km_now": 17.5,
-    "bearing_deg": 156.0,
+    "distance_km_now": 5.4,
+    "bearing_deg": 154.0,
     "compass": "ЮВ",
-    "blob_area_km2": 120615.0,
-    "speed_kmh": 36.3,
+    "blob_area_km2": 125393.0,
+    "speed_kmh": 24.1,
     "direction_compass": "С",
-    "cpa_km": 5.6,
-    "eta_min": 28.0,
+    "cpa_km": 1.6,
+    "eta_min": 13.0,
     "verdict": "приближается",
     "frame_pairs_used": 5,
     "method_note": "Буфер 6/6 масок mtg_fd:h40b (шаг 10 мин, crs=EPSG:4326, всегда явный TIME из GetCapabilities — не floor(now)), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Presence = непрозрачный пиксель. Край ищется только среди связных областей >= 40px (~53км²). Скорость — из реальных интервалов буфера (не фиксированный шаг). Линейная экстраполяция, годится на ~1 час."
