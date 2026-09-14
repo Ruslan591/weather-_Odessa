@@ -1,5 +1,5 @@
 {
-  "task_id": "deploy-v2-verify-013",
-  "cmd": "echo '=== markers present on disk (v2 deployed?) ===' && grep -c UNPUSHED_COMMITS_DETECTED /opt/weather-pipeline/repo/scripts/vps_pipeline.py /opt/weather-pipeline/repo/scripts/vps_satellite_pipeline.py /opt/weather-pipeline/repo/scripts/vps_ai_pipeline.py && echo '=== last 20 lines each log ===' && echo '--- main ---' && tail -20 /var/log/vps-pipeline.log && echo '--- satellite ---' && tail -20 /var/log/vps-satellite-pipeline.log && echo '--- ai ---' && tail -20 /var/log/vps-ai-pipeline.log && echo '=== any new markers fired yet? ===' && grep -c 'UNPUSHED_COMMITS_DETECTED\\|UNPUSHED_COMMITS_PRESERVED\\|UNPUSHED_COMMIT_RETAINED\\|SYNC_ABORTED_SHALLOW_ERROR\\|GIT_LOCK_TIMEOUT' /var/log/vps-pipeline.log /var/log/vps-satellite-pipeline.log /var/log/vps-ai-pipeline.log",
-  "timeout": 60
+  "task_id": "baseline-post-v2-014",
+  "cmd": "date -u +'%Y-%m-%dT%H:%M:%SZ' && echo '=== .git size ===' && du -sh /opt/weather-pipeline/repo/.git && echo '=== count-objects ===' && git -C /opt/weather-pipeline/repo count-objects -v -H && echo '=== unreachable --no-reflogs count ===' && git -C /opt/weather-pipeline/repo fsck --unreachable --no-reflogs 2>/dev/null | wc -l && echo '=== marker counts (post-v2-deploy baseline, should be 0 or very low) ===' && for m in UNPUSHED_COMMITS_DETECTED UNPUSHED_COMMIT_RETAINED SYNC_ABORTED_SHALLOW_ERROR GIT_LOCK_TIMEOUT 'push failed after 3 attempts'; do echo \"--- $m ---\"; grep -c \"$m\" /var/log/vps-pipeline.log /var/log/vps-satellite-pipeline.log /var/log/vps-ai-pipeline.log 2>&1; done && echo '=== df -h / ===' && df -h /",
+  "timeout": 90
 }
