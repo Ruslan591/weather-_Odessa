@@ -1,5 +1,5 @@
 {
-  "task_id": "disk-audit-fsck-plain-010",
-  "cmd": "cd /opt/weather-pipeline/repo && timeout 250 git fsck --unreachable 2>/dev/null | wc -l && echo DONE_PLAIN_FSCK",
-  "timeout": 270
+  "task_id": "deploy-verify-011",
+  "cmd": "echo '=== grep new markers present on disk ===' && grep -c GIT_LOCK_TIMEOUT /opt/weather-pipeline/repo/scripts/vps_pipeline.py /opt/weather-pipeline/repo/scripts/vps_satellite_pipeline.py /opt/weather-pipeline/repo/scripts/vps_ai_pipeline.py && echo '=== last 12 lines of each log (post-deploy sanity) ===' && echo '--- main ---' && tail -12 /var/log/vps-pipeline.log && echo '--- satellite ---' && tail -12 /var/log/vps-satellite-pipeline.log && echo '--- ai ---' && tail -12 /var/log/vps-ai-pipeline.log && echo '=== GIT_LOCK_TIMEOUT occurrences so far ===' && grep -c GIT_LOCK_TIMEOUT /var/log/vps-pipeline.log /var/log/vps-satellite-pipeline.log /var/log/vps-ai-pipeline.log && echo '=== current .git size (baseline AFTER-fix) ===' && du -sh /opt/weather-pipeline/repo/.git && git -C /opt/weather-pipeline/repo count-objects -v -H",
+  "timeout": 60
 }
