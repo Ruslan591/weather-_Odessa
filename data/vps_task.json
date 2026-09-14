@@ -1,5 +1,5 @@
 {
-  "task_id": "ping-016",
-  "cmd": "echo PONG_$(date -u +%s)",
-  "timeout": 10
+  "task_id": "shallow-missing-check-022",
+  "cmd": "cd /opt/weather-pipeline/repo && echo '=== is-shallow-repository ===' && git rev-parse --is-shallow-repository && echo '=== .git/shallow contents (boundary commit SHAs) ===' && cat .git/shallow 2>/dev/null && echo '(lines):' && wc -l < .git/shallow 2>/dev/null && echo '=== missing objects (SHA + type), plain fsck --no-reflogs ===' && git fsck --unreachable --no-reflogs 2>&1 | grep -i '^missing'",
+  "timeout": 180
 }
