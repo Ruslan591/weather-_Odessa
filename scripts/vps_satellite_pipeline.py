@@ -91,6 +91,62 @@ def _parse_ts_flexible(ts):
 # ── синхронизация репозитория (копия из vps_pipeline.py, см. его докстринг
 #    sync_repo()/ensure_repo_healthy() за полной историей находок 27-28.08) ──
 
+def _preserve_unpushed_local_commits():
+    """[ДОБАВЛЕНО 2026-09-14, ROOT CAUSE ORPHANED OBJECTS v2, GPT APPROVED]
+    См. идентичную функцию и докстринг в vps_pipeline.py — продублировано
+    намеренно (тот же принцип независимости файлов, что и у sync_repo()).
+    Force-push НЕ используется. Backup branch/tag НЕ создаётся. Возвращает
+    True только если ПОДТВЕРЖДЕНО повторным fetch+rev-list."""
+    _delays = [10, 20]
+    for _attempt in range(3):
+        push = subprocess.run(
+            ["git", "-C", BASE_DIR, "push", "origin", "HEAD:main"],
+            capture_output=True, text=True, timeout=60)
+        if push.returncode == 0:
+            refetch = subprocess.run(
+                ["git", "-C", BASE_DIR, "fetch", "origin", "main", "--depth", "1",
+                 "--update-shallow"],
+                capture_output=True, text=True, timeout=60)
+            if refetch.returncode != 0:
+                print(f"  [WARN] preserve: re-fetch после push упал: "
+                      f"{refetch.stderr.strip()}")
+                return False
+            recheck = subprocess.run(
+                ["git", "-C", BASE_DIR, "rev-list", "--count", "origin/main..HEAD"],
+                capture_output=True, text=True, timeout=15)
+            if recheck.returncode != 0:
+                print(f"  [WARN] preserve: повторный rev-list упал после push: "
+                      f"{recheck.stderr.strip()}")
+                return False
+            remaining = int(recheck.stdout.strip() or "0")
+            if remaining > 0:
+                print(f"  [WARN] preserve: после push всё ещё {remaining} "
+                      f"local-only коммит(ов) — не подтверждено, ref не трогаю")
+                return False
+            print(f"  [UNPUSHED_COMMITS_PRESERVED] сохранено и подтверждено "
+                  f"(attempt {_attempt+1})")
+            return True
+
+        err = push.stderr.strip()
+        print(f"  [WARN] preserve: push attempt {_attempt+1} failed: {err}")
+        if _attempt < 2:
+            _time.sleep(_delays[_attempt])
+            subprocess.run(
+                ["git", "-C", BASE_DIR, "fetch", "origin", "main", "--depth", "1",
+                 "--update-shallow"],
+                capture_output=True, timeout=60)
+            rebase = subprocess.run(
+                ["git", "-C", BASE_DIR, "rebase", "-X", "theirs", "origin/main"],
+                capture_output=True, text=True, timeout=60)
+            if rebase.returncode != 0:
+                print(f"  [WARN] preserve: rebase -X theirs не прошёл: "
+                      f"{rebase.stderr.strip()[:200]} — abort, ref не трогаю")
+                subprocess.run(["git", "-C", BASE_DIR, "rebase", "--abort"],
+                               capture_output=True, timeout=15)
+                return False
+    return False
+
+
 def sync_repo():
     """[ДОБАВЛЕНО 2026-09-14, ROOT CAUSE ORPHANED OBJECTS] Вся секция теперь
     выполняется ПОД GIT_LOCK_FILE — раньше checkout -B здесь двигал ref
@@ -135,11 +191,34 @@ def sync_repo():
                        capture_output=True, text=True, timeout=15)
 
         fetch = subprocess.run(
-            ["git", "-C", BASE_DIR, "fetch", "origin", "main", "--depth", "1"],
+            ["git", "-C", BASE_DIR, "fetch", "origin", "main", "--depth", "1",
+             "--update-shallow"],
             capture_output=True, text=True, timeout=60)
         if fetch.returncode != 0:
             print(f"  [WARN] git fetch failed: {fetch.stderr.strip()}")
             return False
+
+        # [ДОБАВЛЕНО 2026-09-14, ROOT CAUSE ORPHANED OBJECTS v2, GPT APPROVED]
+        # ДО checkout -B — проверяем, нет ли у HEAD коммитов, отсутствующих
+        # в origin/main (типично: прошлый цикл закоммитил, но push не
+        # прошёл 3 раза). Если такие коммиты есть — checkout -B/reset
+        # запрещены, пока они не подтверждённо доставлены в origin.
+        rev = subprocess.run(
+            ["git", "-C", BASE_DIR, "rev-list", "--count", "origin/main..HEAD"],
+            capture_output=True, text=True, timeout=15)
+        if rev.returncode != 0:
+            print(f"  [SYNC_ABORTED_SHALLOW_ERROR] rev-list origin/main..HEAD "
+                  f"упал: {rev.stderr.strip()} — ref не трогаю, цикл пропущен")
+            return False
+        local_only = int(rev.stdout.strip() or "0")
+        if local_only > 0:
+            print(f"  [UNPUSHED_COMMITS_DETECTED] {local_only} локальных "
+                  f"коммит(ов) отсутствуют в origin/main — пробую сохранить "
+                  f"перед checkout -B")
+            if not _preserve_unpushed_local_commits():
+                print("  [UNPUSHED_COMMIT_RETAINED] не удалось подтверждённо "
+                      "запушить — ref НЕ трогаю, цикл пропущен")
+                return False
 
         was_detached = subprocess.run(
             ["git", "-C", BASE_DIR, "symbolic-ref", "-q", "HEAD"],
