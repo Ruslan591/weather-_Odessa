@@ -10,6 +10,10 @@ fill_modeldata_local.py — заполняет пропущенные месяц
 
 import os, json, re, time, datetime, calendar, logging
 import urllib.request
+import urllib.error
+
+import open_meteo_guard as _om_guard
+import open_meteo_request_log as _om_log
 
 log = logging.getLogger(__name__)
 
@@ -128,7 +132,35 @@ def _load_synop_for_month(year, month):
 
 # ── Open-meteo ─────────────────────────────────────────────────────────────────
 
+# Статусы результата _fetch_model_month() — используются вызывающим кодом
+# явно (НЕ выводятся из hourly is None), чтобы break по 429/skip не путался
+# с обычной сетевой ошибкой или пустым ответом.
+FETCH_OK    = "ok"      # есть hourly-данные
+FETCH_EMPTY = "empty"   # HTTP 200, но модель не покрывает период (нет "hourly")
+FETCH_429   = "429"     # реальный HTTP 429 от Open-Meteo
+FETCH_SKIP  = "skip"    # open_meteo_guard не дал сделать запрос (cooldown/бюджет)
+FETCH_ERROR = "error"   # сетевая/прочая ошибка после исчерпания retries
+
+
 def _fetch_model_month(model, start_date, end_date, retries=3):
+    """Возвращает (status, hourly_or_None).
+
+    status ∈ {FETCH_OK, FETCH_EMPTY, FETCH_429, FETCH_SKIP, FETCH_ERROR} —
+    явно различает причину отсутствия данных, чтобы вызывающий код мог
+    корректно решить, что ретраить можно/нужно, а что — нет.
+
+    [OPEN_METEO_DISCOVERY_BACKOFF_001] Запрос проходит через общий
+    open_meteo_guard (тот же UNIFIED_LOCK_PATH token-bucket/circuit-breaker,
+    что и update.py::main() Step 2, vps_pipeline.py, open_meteo_frontal_confirm.py).
+    На HTTP 429 — НЕ ретраим локально: это сигнал общего circuit breaker,
+    а не временная ошибка (см. OPEN_METEO_REQUEST_ARCHITECTURE_001 в update.py).
+    """
+    decision = _om_guard.reserve_request("forecast_or_archive")
+    if decision == "skip":
+        _om_log.log("fill_modeldata_local", "_fetch_model_month",
+                     endpoint="historical", model=model, status="skip_gate")
+        return FETCH_SKIP, None
+
     url = (
         "https://historical-forecast-api.open-meteo.com/v1/forecast"
         f"?latitude={LAT}&longitude={LON}"
@@ -137,24 +169,61 @@ def _fetch_model_month(model, start_date, end_date, retries=3):
         f"&start_date={start_date}&end_date={end_date}"
         "&timezone=UTC&wind_speed_unit=ms"
     )
+
     for attempt in range(retries):
         try:
             with urllib.request.urlopen(url, timeout=60) as r:
                 data = json.loads(r.read().decode())
             if "hourly" not in data:
-                raise ValueError(data.get("reason", "no hourly"))
-            return data["hourly"]
-        except Exception as e:
-            err = str(e)
-            if "429" in err and attempt < retries - 1:
-                log.warning("      %s: rate limit, пауза 15с...", model)
-                time.sleep(15)
-            elif attempt < retries - 1:
+                log.warning("      %s: успешный ответ без hourly (%s)",
+                            model, data.get("reason", "?"))
+                _om_guard.report_request_result("forecast_or_archive", "success")
+                _om_log.log("fill_modeldata_local", "_fetch_model_month",
+                             endpoint="historical", model=model, status="empty")
+                return FETCH_EMPTY, None
+            _om_guard.report_request_result("forecast_or_archive", "success")
+            _om_log.log("fill_modeldata_local", "_fetch_model_month",
+                         endpoint="historical", model=model, status="ok")
+            return FETCH_OK, data["hourly"]
+
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                # HTTP 429 — НЕ ретраим локально, отдаём сигнал наверх сразу.
+                _om_guard.report_request_result("forecast_or_archive", "429")
+                _om_log.log("fill_modeldata_local", "_fetch_model_month",
+                             endpoint="historical", model=model, status="429",
+                             attempt=attempt + 1)
+                log.warning("      %s: HTTP 429 — без локального ретрая", model)
+                return FETCH_429, None
+
+            # Прочая HTTP-ошибка (не 429) — обычный сетевой сбой, ретрай в разумных пределах.
+            _om_guard.report_request_result("forecast_or_archive", "error")
+            if attempt < retries - 1:
+                log.warning("      %s: HTTP %s, retry (%d/%d)",
+                            model, e.code, attempt + 1, retries)
                 time.sleep(3)
-            else:
-                log.warning("      ✗ %s: %s", model, e)
-                return None
-    return None
+                continue
+            log.warning("      ✗ %s: HTTP %s", model, e)
+            _om_log.log("fill_modeldata_local", "_fetch_model_month",
+                         endpoint="historical", model=model, status="error",
+                         attempt=attempt + 1)
+            return FETCH_ERROR, None
+
+        except Exception as e:
+            # Сетевая/парсинг-ошибка, не связанная с HTTP-статусом.
+            _om_guard.report_request_result("forecast_or_archive", "error")
+            if attempt < retries - 1:
+                log.warning("      %s: %s, retry (%d/%d)",
+                            model, e, attempt + 1, retries)
+                time.sleep(3)
+                continue
+            log.warning("      ✗ %s: %s", model, e)
+            _om_log.log("fill_modeldata_local", "_fetch_model_month",
+                         endpoint="historical", model=model, status="error",
+                         attempt=attempt + 1)
+            return FETCH_ERROR, None
+
+    return FETCH_ERROR, None
 
 # ── Сборка записи ──────────────────────────────────────────────────────────────
 
@@ -196,6 +265,14 @@ def _build_record(obs, hourly_by_model, target_time):
         "obs":          obs,
         "models":       models_data,
     }
+
+
+def _missing_models(record):
+    """Список ID моделей, отсутствующих в record['models'] (не путать со
+    значением None внутри отдельных полей уже присутствующей модели —
+    здесь проверяется именно отсутствие самого ключа модели)."""
+    models_data = record.get("models") or {}
+    return [m for m in MODELS if m not in models_data]
 
 # ── Главная функция ────────────────────────────────────────────────────────────
 
@@ -255,7 +332,8 @@ def fill_missing_months(changed_files: list, dry_run=False) -> int:
         hourly_by_model = {}
         for model in MODELS:
             log.info("      %s...", model)
-            hourly_by_model[model] = _fetch_model_month(model, start_date, end_date)
+            _status, hourly = _fetch_model_month(model, start_date, end_date)
+            hourly_by_model[model] = hourly
             time.sleep(0.5)
 
         records = []
@@ -288,8 +366,19 @@ def fill_missing_months(changed_files: list, dry_run=False) -> int:
     
 def update_current_month(changed_files: list) -> int:
     """
-    Дополняет modelData_YYYY_MM.json за текущий месяц
-    записями которых нет (сравнивает с synop_YYYY.txt).
+    Дополняет modelData_YYYY_MM.json за текущий месяц.
+
+    Различает два случая:
+      - brand_new  — synopTime, которого в файле ещё нет вообще → запрашиваются
+        все 8 моделей;
+      - incomplete — synopTime уже есть, но record["models"] не содержит всех
+        8 моделей (осталось так после предыдущего 429/skip/error) →
+        запрашиваются ТОЛЬКО отсутствующие модели, уже полученные не трогаются.
+
+    При HTTP 429 или guard-skip перебор моделей на текущей дате
+    останавливается; недополученные модели остаются отсутствующими в
+    record["models"] и будут дозапрошены на следующем запуске —
+    _missing_models() их снова найдёт.
     """
     today = datetime.date.today()
     year, month = today.year, today.month
@@ -303,44 +392,124 @@ def update_current_month(changed_files: list) -> int:
     else:
         existing = []
 
-    existing_keys = {r["synopTime"] for r in existing}
+    existing_by_key = {r["synopTime"]: r for r in existing}
     synops = _load_synop_for_month(year, month)
-    to_add = [s for s in synops if s["synopTime"] not in existing_keys]
 
-    if not to_add:
+    brand_new = [s for s in synops if s["synopTime"] not in existing_by_key]
+    incomplete = [
+        existing_by_key[s["synopTime"]]
+        for s in synops
+        if s["synopTime"] in existing_by_key
+        and _missing_models(existing_by_key[s["synopTime"]])
+    ]
+
+    if not brand_new and not incomplete:
         log.info("  modelData_%d_%02d.json актуален", year, month)
         return 0
 
-    log.info("  modelData_%d_%02d.json: %d новых сводок, загружаем модели...",
-             year, month, len(to_add))
+    log.info("  modelData_%d_%02d.json: %d новых, %d неполных сводок",
+             year, month, len(brand_new), len(incomplete))
 
-    by_date = {}
-    for obs in to_add:
+    changed_count = 0
+
+    # ── Единый проход по датам: brand_new и incomplete объединяются, чтобы
+    # одна и та же модель на одну и ту же дату запрашивалась максимум 1 раз,
+    # а результат использовался сразу для всех записей этой даты. ──────────
+    by_date_new = {}
+    for obs in brand_new:
         tk = obs["synopTime"]
-        by_date.setdefault(f"{tk[:4]}-{tk[4:6]}-{tk[6:8]}", []).append(obs)
+        by_date_new.setdefault(f"{tk[:4]}-{tk[4:6]}-{tk[6:8]}", []).append(obs)
 
-    new_records = []
-    for date_str, date_obs in sorted(by_date.items()):
-        log.info("    %s (%d сводок)...", date_str, len(date_obs))
+    by_date_incomplete = {}
+    for rec in incomplete:
+        tk = rec["synopTime"]
+        by_date_incomplete.setdefault(f"{tk[:4]}-{tk[4:6]}-{tk[6:8]}", []).append(rec)
+
+    all_dates = sorted(set(by_date_new) | set(by_date_incomplete))
+
+    for date_str in all_dates:
+        date_new_obs   = by_date_new.get(date_str, [])
+        date_incomplete = by_date_incomplete.get(date_str, [])
+
+        if date_new_obs:
+            # На дату есть хотя бы одна совсем новая запись — ей нужны все 8
+            # моделей, поэтому запрашиваем полный набор одним проходом; уже
+            # присутствующие в incomplete-записях этой даты модели всё равно
+            # не перезаписываются (см. цикл применения ниже — он идёт только
+            # по _missing_models(rec)).
+            models_needed = list(MODELS)
+        else:
+            # Только неполные записи на эту дату — запрашиваем строго
+            # объединение недостающих моделей, не более.
+            models_needed = sorted(set().union(
+                *(set(_missing_models(r)) for r in date_incomplete)
+            ))
+
+        log.info("    %s: новых %d, неполных %d, запрашиваю %s...",
+                  date_str, len(date_new_obs), len(date_incomplete),
+                  ", ".join(models_needed))
+
         hourly_by_model = {}
-        for model in MODELS:
-            hourly_by_model[model] = _fetch_model_month(model, date_str, date_str)
+        for model in models_needed:
+            status, hourly = _fetch_model_month(model, date_str, date_str)
+            hourly_by_model[model] = hourly
             time.sleep(0.3)
-        for obs in date_obs:
+            if status in (FETCH_429, FETCH_SKIP):
+                log.warning("      %s — останов перебора моделей на %s (%s)",
+                            model, date_str, status)
+                break
+
+        # ── Применяем результат к brand_new записям этой даты ──────────────
+        for obs in date_new_obs:
             tk     = obs["synopTime"]
-            target = f"{tk[:4]}-{tk[4:6]}-{tk[6:8]}T{tk[8:10]}:00"
+            target = f"{date_str}T{tk[8:10]}:00"
             rec    = _build_record(obs, hourly_by_model, target)
             if rec:
-                new_records.append(rec)
+                existing_by_key[tk] = rec
+                changed_count += 1
 
-    if new_records:
-        merged = sorted(existing + new_records, key=lambda r: r["synopTime"])
+        # ── Применяем результат к incomplete записям этой даты ─────────────
+        for rec in date_incomplete:
+            tk     = rec["synopTime"]
+            target = f"{date_str}T{tk[8:10]}:00"
+            for model in _missing_models(rec):
+                h = hourly_by_model.get(model)
+                if not h:
+                    continue  # снова не получилось — останется missing до следующего запуска
+                time_arr = h.get("time")
+                if not time_arr:
+                    continue
+                hi = next((i for i, t in enumerate(time_arr) if t.startswith(target)), -1)
+                if hi == -1:
+                    continue
+                # Та же схема полей, что и в _build_record() — дублируется
+                # намеренно, чтобы не трогать _build_record() в рамках
+                # этого минимального изменения.
+                wd = h.get("wind_direction_10m")
+                rec.setdefault("models", {})[model] = {
+                    "temp":        h["temperature_2m"][hi]   if h.get("temperature_2m")   else None,
+                    "pressure":    h["pressure_msl"][hi]     if h.get("pressure_msl")     else None,
+                    "wind":        h["wind_speed_10m"][hi]   if h.get("wind_speed_10m")   else None,
+                    "windDir":     round(wd[hi]/10)*10       if wd and wd[hi] is not None else None,
+                    "gusts":       h["wind_gusts_10m"][hi]   if h.get("wind_gusts_10m")   else None,
+                    "cloudcover":  h["cloud_cover"][hi]      if h.get("cloud_cover")      else None,
+                    "precip":      h["precipitation"][hi]    if h.get("precipitation")    else None,
+                    "weatherCode": h["weather_code"][hi]     if h.get("weather_code")     else None,
+                    "visibility":  h["visibility"][hi]       if h.get("visibility")       else None,
+                    "dewPoint":    h["dew_point_2m"][hi]     if h.get("dew_point_2m")     else None,
+                    "temp850":     None,
+                }
+                changed_count += 1
+
+    if changed_count:
+        merged = sorted(existing_by_key.values(), key=lambda r: r["synopTime"])
         os.makedirs(modeldata_dir, exist_ok=True)
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(merged, f, ensure_ascii=False, indent=2)
         rel = os.path.relpath(out_path, BASE_DIR)
         if rel not in changed_files:
             changed_files.append(rel)
-        log.info("  ✓ modelData_%d_%02d.json: +%d записей", year, month, len(new_records))
+        log.info("  ✓ modelData_%d_%02d.json: %d изменений (новых+дозаполненных)",
+                 year, month, changed_count)
 
-    return len(new_records)
+    return changed_count
