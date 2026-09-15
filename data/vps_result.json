@@ -1,7 +1,7 @@
 {
-  "task_id": "dirty-tree-readonly-024",
-  "returncode": 2,
-  "stdout": "",
-  "stderr": "/bin/sh: 1: Syntax error: \"(\" unexpected\n",
-  "completed_at_utc": "2026-09-14T10:56:01Z"
+  "task_id": "1789493821",
+  "returncode": 0,
+  "stdout": "--id--\nuid=0(root) gid=0(root) groups=0(root)\n--whoami--\nroot\n--crontab--\n* * * * * /opt/vps-github-bridge/venv/bin/python3 /opt/vps-github-bridge/vps_github_bridge.py >> /var/log/vps-github-bridge.log 2>&1\n*/5 * * * * /opt/weather-pipeline/run_timed.sh main /var/log/vps-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_pipeline.py\n2,7,12,17,22,27,32,37,42,47,52,57 * * * * /opt/weather-pipeline/run_timed.sh satellite /var/log/vps-satellite-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_satellite_pipeline.py\n4,9,14,19,24,29,34,39,44,49,54,59 * * * * /opt/weather-pipeline/run_timed.sh ai /var/log/vps-ai-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_ai_pipeline.py\n--ps--\nroot     1669155 /bin/sh -c /opt/vps-github-bridge/venv/bin/python3 /opt/vps-github-bridge/vps_github_bridge.py >> /var/log/vps-github-bridge.log 2>&1\nroot     1669156 /opt/vps-github-bridge/venv/bin/python3 /opt/vps-github-bridge/vps_github_bridge.py\nroot     1669157 /bin/sh -c echo \"--id--\" ; id ; echo \"--whoami--\" ; whoami ; echo \"--crontab--\" ; crontab -l 2>&1 ; echo \"--ps--\" ; ps -eo user,pid,args | grep '[v]ps_github_bridge.py' ; echo \"--stat_script--\" ; stat -c '%U:%G %a %n' /opt/vps-github-bridge/vps_github_bridge.py 2>&1 ; echo \"--stat_dir--\" ; stat -c '%U:%G %a %n' /etc/vps-github-bridge 2>/dev/null || echo 'no /etc/vps-github-bridge dir yet'\n--stat_script--\nroot:root 644 /opt/vps-github-bridge/vps_github_bridge.py\n--stat_dir--\nroot:root 755 /etc/vps-github-bridge\n",
+  "stderr": "",
+  "completed_at_utc": "2026-09-15T17:38:01Z"
 }
