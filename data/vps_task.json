@@ -1,5 +1,5 @@
 {
-  "task_id": "dirty-tree-readonly-024",
-  "cmd": "flock -w 60 /tmp/vps_git.lock -c 'echo === git status --short ===; git -C /opt/weather-pipeline/repo status --short; echo === git diff --name-status (unstaged) ===; git -C /opt/weather-pipeline/repo diff --name-status; echo === git diff --stat (unstaged) ===; git -C /opt/weather-pipeline/repo diff --stat; echo === git diff --cached --name-status (staged, if any) ===; git -C /opt/weather-pipeline/repo diff --cached --name-status; echo === rev-list --count origin/main..HEAD (still ahead?) ===; git -C /opt/weather-pipeline/repo rev-list --count origin/main..HEAD; echo === mtimes of changed tracked files ===; git -C /opt/weather-pipeline/repo status --short | awk \"{print \\$2}\" | while read f; do stat -c \"%Y  %y  %n\" \"/opt/weather-pipeline/repo/$f\" 2>/dev/null; done; echo === current time for reference ===; date -u +%s; date -u\n'",
-  "timeout": 90
+  "task_id": "1789493821",
+  "cmd": "echo \"--id--\" ; id ; echo \"--whoami--\" ; whoami ; echo \"--crontab--\" ; crontab -l 2>&1 ; echo \"--ps--\" ; ps -eo user,pid,args | grep '[v]ps_github_bridge.py' ; echo \"--stat_script--\" ; stat -c '%U:%G %a %n' /opt/vps-github-bridge/vps_github_bridge.py 2>&1 ; echo \"--stat_dir--\" ; stat -c '%U:%G %a %n' /etc/vps-github-bridge 2>/dev/null || echo 'no /etc/vps-github-bridge dir yet'",
+  "timeout": 30
 }
