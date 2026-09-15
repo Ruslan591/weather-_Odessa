@@ -1277,7 +1277,12 @@ def _main_body():
     if new_models:
         save_history(history)
         ok = run_pipeline(new_models)
-        ran_update_local_this_cycle = True
+        # [FIX] Раньше флаг ставился безусловно, из-за чего SYNOP-окно ниже
+        # могло решить, что update_local.py уже отработал, даже если
+        # run_pipeline() упал на более раннем шаге и до update_local.py не
+        # дошёл. ok=True только если ВСЕ шаги run_pipeline(), включая
+        # update_local.py, завершились успешно.
+        ran_update_local_this_cycle = ok
         if ok:
             queue_ai_models(new_models)
         git_push_history()
