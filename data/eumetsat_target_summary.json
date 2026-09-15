@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-09-15T19:37:11Z",
+  "timestamp": "2026-09-15T19:42:17Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-09-15T19:15:00.000Z",
-  "target_id": 1,
-  "target_area_km2": 53.4,
-  "target_distance_km": 28.4,
-  "target_bearing_deg": 216.0,
-  "target_compass": "ЮЗ",
+  "target_id": 5,
+  "target_area_km2": 238.8,
+  "target_distance_km": 104.5,
+  "target_bearing_deg": 324.0,
+  "target_compass": "СЗ",
   "system": {
     "target_id": 0,
     "area_km2": 118709.8,
@@ -175,6 +175,10 @@
       "front_type_confidence": null
     }
   ],
+  "also_suppressed_nearby": {
+    "signature": "-15_-25",
+    "area_km2": 53.4
+  },
   "target_phase": {
     "label": "безоблачно",
     "cloud_fraction": 0.0
@@ -183,20 +187,20 @@
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-09-15T19:10:00.000Z"
+        "timestamp": "2026-09-15T19:20:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-09-15T19:10:00.000Z"
+        "confirmed": true,
+        "timestamp": "2026-09-15T19:20:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": false,
         "timestamp": "2026-09-15T16:57:37Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -205,8 +209,8 @@
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-09-15T19:32:53Z"
+      "timestamp": "2026-09-15T19:42:04Z"
     }
   },
-  "verdict": "CLM отметил цель в 28км ЮЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (118710км²) в 3км В (площадь/форма ненадёжны — объект упирается в границы окна обзора)."
+  "verdict": "Цель в 104км СЗ, безоблачно — каналы расходятся: geocolour_motion подтверждают, ir_motion/cloud_phase_type нет. Отдельно: система синоптического масштаба (118710км²) в 3км В (площадь/форма ненадёжны — объект упирается в границы окна обзора)."
 }
