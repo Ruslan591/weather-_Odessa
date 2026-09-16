@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-16T08:27:49Z",
+  "timestamp": "2026-09-16T08:38:05Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-09-16T06:30:00.000Z",
   "target_id": 6,
@@ -39,7 +39,7 @@
       "window_spanning": false,
       "phase_label": "безоблачно",
       "type_label": "плотная/высокая",
-      "has_precip": true,
+      "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": true,
       "geocolour_confirmed": false
@@ -256,36 +256,36 @@
   },
   "target_phase": {
     "label": "безоблачно",
-    "cloud_fraction": 0.049
+    "cloud_fraction": 0.262
   },
   "existence": {
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-09-16T08:00:00.000Z"
+        "timestamp": "2026-09-16T08:20:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-09-16T08:00:00.000Z"
+        "confirmed": true,
+        "timestamp": "2026-09-16T08:10:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": false,
-        "timestamp": "2026-09-16T08:17:48Z"
+        "timestamp": "2026-09-16T08:37:45Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
       "confirmed": false,
-      "timestamp": "2026-09-16T08:18:05Z"
+      "timestamp": "2026-09-16T08:37:55Z"
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-09-16T08:27:41Z"
+      "timestamp": "2026-09-16T08:37:56Z"
     }
   },
-  "verdict": "CLM отметил цель в 172км ЮЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (5397км²) в 99км С (вытянута В-З (111°), похоже на фронт)."
+  "verdict": "Цель в 172км ЮЗ, безоблачно — каналы расходятся: geocolour_motion подтверждают, ir_motion/cloud_phase_type нет. Отдельно: система синоптического масштаба (5397км²) в 99км С (вытянута В-З (111°), похоже на фронт)."
 }
