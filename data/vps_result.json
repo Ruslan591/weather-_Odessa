@@ -1,7 +1,7 @@
 {
-  "task_id": "verify-1789596297",
+  "task_id": "filterrepo-prep",
   "returncode": 0,
-  "stdout": "MARKER-1789596297\nWed Sep 16 22:05:02 UTC 2026\nroot\n* * * * * /opt/vps-github-bridge/venv/bin/python3 /opt/vps-github-bridge/vps_github_bridge.py >> /var/log/vps-github-bridge.log 2>&1\n---procs---\n1780805 /bin/sh -c echo MARKER-1789596297; date -u; whoami; sudo crontab -l 2>&1; echo \"---procs---\"; pgrep -fa \"vps_pipeline.py|vps_satellite_pipeline.py|vps_ai_pipeline.py\" || echo NONE_RUNNING\n",
+  "stdout": "FILTER_REPO_MISSING\n=== git version ===\ngit version 2.43.0\n=== repo path/remote ===\norigin\thttps://github.com/Ruslan591/weather-_Odessa.git (fetch)\norigin\thttps://github.com/Ruslan591/weather-_Odessa.git (push)\n15\ndf6d82249 satellite: far_geocolour, very_far_geocolour, eumetsat_clm_snapshot, eumetsat_cloud_buffer, eumetsat_cloud_forecast, eumetsat_cloud_forecast_debug, eumetsat_far_watch, eumetsat_far_watch_debug, eum...\n=== disk before ===\nFilesystem      Size  Used Avail Use% Mounted on\n/dev/sda1        45G   14G   31G  30% /\n7.2G\t/opt/weather-pipeline/repo/.git\n=== backup start ===\n-rw-r--r-- 1 root root 100M Sep 16 22:06 /opt/weather-pipeline/repo-backup-20260916.bundle\n",
   "stderr": "",
-  "completed_at_utc": "2026-09-16T22:05:02Z"
+  "completed_at_utc": "2026-09-16T22:06:04Z"
 }
