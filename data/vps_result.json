@@ -1,7 +1,7 @@
 {
-  "task_id": "disable-cron-0",
+  "task_id": "git-audit-516467bf",
   "returncode": 0,
-  "stdout": "=== backup saved ===\n* * * * * /opt/vps-github-bridge/venv/bin/python3 /opt/vps-github-bridge/vps_github_bridge.py >> /var/log/vps-github-bridge.log 2>&1\n*/5 * * * * /opt/weather-pipeline/run_timed.sh main /var/log/vps-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_pipeline.py\n2,7,12,17,22,27,32,37,42,47,52,57 * * * * /opt/weather-pipeline/run_timed.sh satellite /var/log/vps-satellite-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_satellite_pipeline.py\n4,9,14,19,24,29,34,39,44,49,54,59 * * * * /opt/weather-pipeline/run_timed.sh ai /var/log/vps-ai-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_ai_pipeline.py\n=== crontab after removal ===\nno crontab for root\n=== confirm no python pipelines running ===\n1780378 /bin/sh -c /opt/weather-pipeline/run_timed.sh ai /var/log/vps-ai-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_ai_pipeline.py\n1780381 /bin/bash /opt/weather-pipeline/run_timed.sh ai /var/log/vps-ai-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_ai_pipeline.py\n1780383 /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_ai_pipeline.py\n1780392 /bin/sh -c crontab -l > /opt/weather-pipeline/crontab_backup_before_filterrepo.txt; echo \"=== backup saved ===\"; cat /opt/weather-pipeline/crontab_backup_before_filterrepo.txt; crontab -r; echo \"=== crontab after removal ===\"; crontab -l 2>&1; echo \"=== confirm no python pipelines running ===\"; pgrep -fa \"vps_pipeline.py|vps_satellite_pipeline.py|vps_ai_pipeline.py\" || echo NONE_RUNNING\n",
+  "stdout": "===RECENT_COMMITS===\n4e31fef4f 2026-09-16 16:35:48 +0000 weather-odessa-vps vps ai: _ai_pending_models\n===LAST_SATELLITE===\n===LAST_VPS===\n===LAST_UPDATE_LOCAL===\n",
   "stderr": "",
-  "completed_at_utc": "2026-09-16T21:54:02Z"
+  "completed_at_utc": "2026-09-16T16:40:01Z"
 }
