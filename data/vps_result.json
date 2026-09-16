@@ -1,7 +1,7 @@
 {
-  "task_id": "restore-state",
+  "task_id": "cleanup-and-restore-cron",
   "returncode": 0,
-  "stdout": "=== восстановлено ===\n/opt/weather-pipeline/repo/data/_open_meteo_cooldown.json\n/opt/weather-pipeline/repo/data/model_next_expected.json\n15\n=== общий размер нового репо ===\n275M\t/opt/weather-pipeline/repo\n=== диск целиком ===\nFilesystem      Size  Used Avail Use% Mounted on\n/dev/sda1        45G  6.4G   38G  15% /\n",
+  "stdout": "REMOVED_OLD\n=== crontab восстановлен ===\n* * * * * /opt/vps-github-bridge/venv/bin/python3 /opt/vps-github-bridge/vps_github_bridge.py >> /var/log/vps-github-bridge.log 2>&1\n*/5 * * * * /opt/weather-pipeline/run_timed.sh main /var/log/vps-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_pipeline.py\n2,7,12,17,22,27,32,37,42,47,52,57 * * * * /opt/weather-pipeline/run_timed.sh satellite /var/log/vps-satellite-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_satellite_pipeline.py\n4,9,14,19,24,29,34,39,44,49,54,59 * * * * /opt/weather-pipeline/run_timed.sh ai /var/log/vps-ai-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_ai_pipeline.py\n=== финальный диск ===\nFilesystem      Size  Used Avail Use% Mounted on\n/dev/sda1        45G  6.2G   38G  15% /\n",
   "stderr": "",
-  "completed_at_utc": "2026-09-16T22:21:02Z"
+  "completed_at_utc": "2026-09-16T22:22:01Z"
 }
