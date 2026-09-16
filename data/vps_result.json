@@ -1,7 +1,7 @@
 {
-  "task_id": "git-audit-516467bf",
+  "task_id": "bridge-check-1",
   "returncode": 0,
-  "stdout": "===RECENT_COMMITS===\n4e31fef4f 2026-09-16 16:35:48 +0000 weather-odessa-vps vps ai: _ai_pending_models\n===LAST_SATELLITE===\n===LAST_VPS===\n===LAST_UPDATE_LOCAL===\n",
+  "stdout": "BRIDGE_ALIVE\nWed Sep 16 22:04:02 UTC 2026\n1780759 /bin/sh -c echo BRIDGE_ALIVE; date -u; pgrep -fa \"vps_pipeline.py|vps_satellite_pipeline.py|vps_ai_pipeline.py\" || echo NONE_RUNNING; crontab -l\n* * * * * /opt/vps-github-bridge/venv/bin/python3 /opt/vps-github-bridge/vps_github_bridge.py >> /var/log/vps-github-bridge.log 2>&1\n",
   "stderr": "",
-  "completed_at_utc": "2026-09-16T16:40:01Z"
+  "completed_at_utc": "2026-09-16T22:04:02Z"
 }
