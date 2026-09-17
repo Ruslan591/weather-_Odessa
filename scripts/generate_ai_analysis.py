@@ -1006,8 +1006,11 @@ def generate_gemini_analysis(prompt, now_iso, current_hash, days, run_key, mode=
         if _period_summary:
             _verif_path = os.path.join(BASE_DIR, "data", "verification_snapshots.json")
             verification.save_current_period_summary(_verif_path, _period_summary)
-            import subprocess as _sp3
-            _sp3.run(["git", "-C", BASE_DIR, "add", "data/verification_snapshots.json"], capture_output=True)
+            # [ИЗМЕНЕНО 2026-09-17] Убран незалоченный git add — та же
+            # находка, что и с data/forecast_days.json (см.
+            # vps_ai_pipeline.py::ANALYSIS_PATHS). Файл только пишется на
+            # диск, коммитит его git_push_ai() под общим локом.
+            pass
     except Exception as e:
         print(f"  [AI-Gemini] Ошибка Gemini API: {e} -- сохраняю pending")
         _existing = {}
@@ -1261,8 +1264,11 @@ def main(force=False, new_models=None, force_gemini=False):
             text, _period_summary = verification.extract_period_summary(text)
             if _period_summary:
                 verification.save_current_period_summary(_verif_path, _period_summary)
-                import subprocess as _sp3
-                _sp3.run(["git", "-C", BASE_DIR, "add", "data/verification_snapshots.json"], capture_output=True)
+                # [ИЗМЕНЕНО 2026-09-17] Убран незалоченный git add — та же
+                # находка, что и с data/forecast_days.json и в ветке Gemini
+                # выше. Файл только пишется на диск, коммитит его
+                # git_push_ai() под общим локом.
+                pass
         except Exception as e:
             print(f"  [AI] Ошибка Claude API: {e}")
             return
