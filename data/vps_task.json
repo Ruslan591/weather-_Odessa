@@ -1,1 +1,1 @@
-{"task_id": "diag-bufr-1", "cmd": "cd /opt/weather-pipeline/repo && grep -rln -i bufr scripts/ | head -10 && echo '=== файлы с bufr в data ===' && ls -la data/*bufr* data/*BUFR* 2>&1"}
+{"task_id": "diag-bufr-2", "cmd": "cd /opt/weather-pipeline/repo && grep -n 'fetch_bufr_obs' scripts/vps_pipeline.py scripts/vps_satellite_pipeline.py scripts/vps_ai_pipeline.py 2>&1 && echo '=== manual run ===' && timeout 60 python3 scripts/fetch_bufr_obs.py 2>&1 | tail -40"}
