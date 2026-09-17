@@ -1187,11 +1187,14 @@ def main(force=False, new_models=None, force_gemini=False):
         return
 
     # Сохраняем агрегированные данные по дням
+    # [ИЗМЕНЕНО 2026-09-17] Раньше здесь сразу шёл незалоченный
+    # `git add data/forecast_days.json` — вне GIT_LOCK_FILE, риск гонки с
+    # sync_repo()/ensure_repo_healthy() параллельного VPS-процесса. Теперь
+    # только пишем файл на диск; коммитит его (под локом) git_push_ai() в
+    # vps_ai_pipeline.py — data/forecast_days.json добавлен в ANALYSIS_PATHS.
     _days_file = os.path.join(BASE_DIR, "data", "forecast_days.json")
     with open(_days_file, "w", encoding="utf-8") as _f:
         json.dump(days, _f, ensure_ascii=False, indent=2)
-    import subprocess as _sp
-    _sp.run(["git", "-C", BASE_DIR, "add", "data/forecast_days.json"], capture_output=True)
 
     # Marine данные
     marine_raw = fetch_marine()
