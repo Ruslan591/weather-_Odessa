@@ -158,17 +158,16 @@ def _preserve_unpushed_local_commits():
         if _attempt < 2:
             _time.sleep(_delays[_attempt])
             subprocess.run(
-                ["git", "-C", BASE_DIR, "fetch", "origin", "main", "--depth", "1",
+                # [ИЗМЕНЕНО 2026-09-17] --depth 1 → 30: реально наблюдался
+                # дедлок 17.09.2026, когда rebase двух коммитов с НЕПЕРЕСЕКАЮ-
+                # ЩИМИСЯ файлами (marine_history.json локально vs
+                # ai_schedule.json в origin) репортил "конфликт" — на глубине
+                # 1 git не может вычислить настоящий merge-base. depth=30 даёт
+                # достаточный запас при типичном темпе коммитов (см. также
+                # git_push_history()/git_push_ai()/git_push_satellite()).
+                ["git", "-C", BASE_DIR, "fetch", "origin", "main", "--depth", "30",
                  "--update-shallow"],
                 capture_output=True, timeout=60)
-            # [ИЗМЕНЕНО 2026-09-17] Убран `-X theirs`: на shallow-истории
-            # (--depth 1) git иногда не может вычислить корректный merge-base
-            # и после конфликта откатывает ВЕСЬ working tree к состоянию до
-            # fetch — включая файлы, которых этот коммит вообще не касался
-            # (напр. data/vps_task.json/vps_result.json, используемые
-            # GitHub-мостом vps_github_bridge.py — реально наблюдалось
-            # 17.09.2026). При конфликте просто прерываем rebase без силового
-            # авторезолва.
             rebase = subprocess.run(
                 ["git", "-C", BASE_DIR, "rebase", "origin/main"],
                 capture_output=True, text=True, timeout=60)
@@ -705,8 +704,15 @@ def git_push_history():
             print(f"  history push ✗ attempt {_attempt+1}: {err}")
             if _attempt < 2:
                 _time.sleep(_delays[_attempt])
-                subprocess.run(["git", "-C", BASE_DIR, "fetch", "origin", "main"],
-                               capture_output=True, timeout=60)
+                subprocess.run(
+                    # [ИЗМЕНЕНО 2026-09-17] Без --depth git не углубляет
+                    # shallow-историю сам — оставляли фактическую глубину=1,
+                    # чего недостаточно для корректного merge-base при rebase
+                    # (реально наблюдался дедлок 17.09.2026 на непересекаю-
+                    # щихся файлах). Явно углубляем до 30.
+                    ["git", "-C", BASE_DIR, "fetch", "origin", "main",
+                     "--depth", "30", "--update-shallow"],
+                    capture_output=True, timeout=60)
                 # НАХОДКА (27.08.2026, вечер): обычный `git rebase origin/main`
                 # при КОНФЛИКТЕ содержимого (гонка с параллельным GH Actions
                 # по тем же derived-файлам) сам оставляет HEAD detached до
