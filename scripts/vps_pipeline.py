@@ -659,8 +659,25 @@ def git_push_history():
                         "data/pws_sync_state.json",
                         ]
         _to_add = [p for p in _candidates if os.path.exists(os.path.join(BASE_DIR, p))]
-        subprocess.run(["git", "-C", BASE_DIR, "add"] + _to_add,
-                      check=True, capture_output=True, timeout=30)
+        if _to_add:
+            # [ИЗМЕНЕНО 2026-09-17] См. ту же находку в
+            # vps_satellite_pipeline.py::git_push_satellite() — .gitignore
+            # от 16.09.2026 добавил правило на data/pws_sync_state.json
+            # (среди прочего), которое есть в _candidates выше. `git add`
+            # гитигнорнутого пути без -f падает с exit 1, а check=True на
+            # батче роняет весь коммит целиком. Отфильтровываем гитигнорнутые
+            # пути автоматически, а не полагаемся на ручную синхронизацию
+            # списков (returncode 1 у check-ignore = "ничего не
+            # проигнорено", это нормальный исход, не ошибка).
+            _ignore_check = subprocess.run(
+                ["git", "-C", BASE_DIR, "check-ignore"] + _to_add,
+                capture_output=True, text=True, timeout=15)
+            _ignored = set(_ignore_check.stdout.strip().splitlines())
+            if _ignored:
+                _to_add = [p for p in _to_add if p not in _ignored]
+        if _to_add:
+            subprocess.run(["git", "-C", BASE_DIR, "add"] + _to_add,
+                          check=True, capture_output=True, timeout=30)
         # [ДОБАВЛЕНО 2026-08-29] Раньше коммит всегда шёл под фиксированным
         # текстом "vps: synop + history update" (название историческое, ещё
         # с тех пор, когда это были единственные два файла), хотя реально
