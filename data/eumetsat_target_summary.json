@@ -1,17 +1,12 @@
 {
-  "timestamp": "2026-09-17T04:12:55Z",
-  "status": "suppressed_known_false_positive",
+  "timestamp": "2026-09-17T06:12:50Z",
+  "status": "ok",
   "cloud_forecast_timestamp": "2026-09-16T22:15:00.000Z",
-  "suppressed_target": {
-    "signature": "-75_-100",
-    "area_km2": 65.4,
-    "distance_km": 125.3,
-    "bearing_deg": 216.0,
-    "compass": "ЮЗ",
-    "not_confirmed_streak": 3,
-    "total_not_confirmed": 3,
-    "excluded_since": "2026-09-16T22:58:07Z"
-  },
+  "target_id": 4,
+  "target_area_km2": 56.0,
+  "target_distance_km": 157.9,
+  "target_bearing_deg": 188.0,
+  "target_compass": "Ю",
   "system": {
     "target_id": 0,
     "area_km2": 7868.4,
@@ -23,15 +18,83 @@
     "elongation_axis_compass": "СВ-ЮЗ",
     "frontlike": false,
     "window_spanning": false,
-    "phase_label": "безоблачно",
-    "cloud_fraction": 0.0,
+    "phase_label": "плотная водяная",
+    "cloud_fraction": 0.004,
     "has_precip": false,
     "has_lightning": false
   },
-  "local_candidates": [],
-  "local_suppressed_count": 9,
+  "local_candidates": [
+    {
+      "target_id": 4,
+      "area_km2": 56.0,
+      "distance_km": 157.9,
+      "bearing_deg": 188.0,
+      "compass": "Ю",
+      "elongation_aspect_ratio": 1.7,
+      "elongation_axis_deg": 0.0,
+      "elongation_axis_compass": "С-Ю",
+      "frontlike": false,
+      "phase_label": null,
+      "type_label": null,
+      "has_precip": false,
+      "has_lightning": false,
+      "ir_confirmed": true,
+      "geocolour_confirmed": true
+    },
+    {
+      "target_id": 6,
+      "area_km2": 154.8,
+      "distance_km": 166.3,
+      "bearing_deg": 180.0,
+      "compass": "Ю",
+      "elongation_aspect_ratio": 1.7,
+      "elongation_axis_deg": 26.0,
+      "elongation_axis_compass": "СВ-ЮЗ",
+      "frontlike": false,
+      "phase_label": "тонкий лёд (перистые)",
+      "type_label": "низкая/средняя",
+      "has_precip": false,
+      "has_lightning": false,
+      "ir_confirmed": true,
+      "geocolour_confirmed": true
+    }
+  ],
+  "local_suppressed_count": 7,
   "system_candidates": [],
   "system_suppressed_count": 5,
-  "verdict": "Известный шумовой объект в 125км ЮЗ (~65км²) — подавлено (не подтверждался 3 раз подряд). Отдельно: система синоптического масштаба (7868км²) в 40км ЮВ.",
-  "frontal_tracks": []
+  "frontal_tracks": [],
+  "also_suppressed_nearby": {
+    "signature": "-75_-100",
+    "area_km2": 65.4
+  },
+  "existence": {
+    "modules": {
+      "ir_motion": {
+        "confirmed": true,
+        "timestamp": "2026-09-17T05:50:00.000Z"
+      },
+      "geocolour_motion": {
+        "confirmed": true,
+        "timestamp": "2026-09-17T05:50:00.000Z"
+      },
+      "cloud_phase_type": {
+        "confirmed": null,
+        "timestamp": "2026-09-17T06:12:11Z"
+      }
+    },
+    "votes_confirmed": 2,
+    "votes_not_confirmed": 0,
+    "consensus": "confirmed"
+  },
+  "phenomena": {
+    "precip_forecast": {
+      "confirmed": false,
+      "timestamp": "2026-09-17T06:12:37Z"
+    },
+    "lightning_forecast": {
+      "confirmed": false,
+      "timestamp": "2026-09-17T06:12:39Z"
+    }
+  },
+  "verdict": "Облачная масса (56км²) в 158км Ю подтверждена всеми доступными каналами. Отдельно: система синоптического масштаба (7868км²) в 40км ЮВ (плотная водяная)."
 }
