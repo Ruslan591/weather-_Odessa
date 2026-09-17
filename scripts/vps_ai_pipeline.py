@@ -85,7 +85,11 @@ def _preserve_unpushed_local_commits():
         if _attempt < 2:
             _time.sleep(_delays[_attempt])
             subprocess.run(
-                ["git", "-C", BASE_DIR, "fetch", "origin", "main", "--depth", "1",
+                # [ИЗМЕНЕНО 2026-09-17] --depth 1 → 30: см.
+                # vps_pipeline.py::_preserve_unpushed_local_commits() —
+                # реально наблюдался дедлок на непересекающихся файлах
+                # из-за невозможности вычислить merge-base на глубине 1.
+                ["git", "-C", BASE_DIR, "fetch", "origin", "main", "--depth", "30",
                  "--update-shallow"],
                 capture_output=True, timeout=60)
             # [ИЗМЕНЕНО 2026-09-17] Убран `-X theirs` — см. подробное
@@ -523,8 +527,11 @@ def git_push_ai(paths=None):
             print(f"  ai push ✗ attempt {_attempt+1}: {err}")
             if _attempt < 2:
                 _time.sleep(_delays[_attempt])
-                subprocess.run(["git", "-C", BASE_DIR, "fetch", "origin", "main"],
-                                capture_output=True, timeout=60)
+                subprocess.run(
+                    # [ИЗМЕНЕНО 2026-09-17] см. vps_pipeline.py::git_push_history()
+                    ["git", "-C", BASE_DIR, "fetch", "origin", "main",
+                     "--depth", "30", "--update-shallow"],
+                    capture_output=True, timeout=60)
                 # [ИЗМЕНЕНО 2026-09-17] Убран `-X theirs` — см. подробное
                 # объяснение в vps_pipeline.py::git_push_history() и
                 # docs/topics/ (найдено 17.09.2026: на shallow-истории может
