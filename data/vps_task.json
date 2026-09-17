@@ -1,1 +1,1 @@
-{"task_id": "diag-marine-conflict-1", "cmd": "cd /opt/weather-pipeline/repo && echo '=== git status ===' && git status && echo '=== log local ===' && git log --oneline -5 && echo '=== log origin ===' && git log --oneline -5 origin/main && echo '=== rebase state dirs ===' && ls -la .git/rebase-merge 2>&1; ls -la .git/rebase-apply 2>&1"}
+{"task_id": "unblock-marine-1", "cmd": "flock -w 30 /tmp/vps_git.lock -c \"cd /opt/weather-pipeline/repo && git rebase --abort 2>&1; git checkout -B main origin/main 2>&1 && echo '=== after ===' && git status && git log --oneline -3\""}
