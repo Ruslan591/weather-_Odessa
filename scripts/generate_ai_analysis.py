@@ -1040,6 +1040,10 @@ def generate_gemini_analysis(prompt, now_iso, current_hash, days, run_key, mode=
 
     print(f"  [AI-Gemini] ✅ Анализ сохранён ({len(text)} символов)")
 
+    # [ДОБАВЛЕНО 2026-09-17] См. ту же находку в ветке Claude выше —
+    # generate_tts() определена, но никогда не вызывалась.
+    generate_tts(text, OUTPUT_FILE_GEMINI.replace(".json", ".mp3"))
+
 # ── Расписание (data/ai_schedule.json) ─────────────────────────────────────────
 
 SCHEDULE_FILE = os.path.join(BASE_DIR, "data", "ai_schedule.json")
@@ -1277,6 +1281,14 @@ def main(force=False, new_models=None, force_gemini=False):
             json.dump(result, f, ensure_ascii=False, indent=2)
 
         print(f"  [AI] ✅ Анализ сохранён ({len(text)} символов)")
+
+        # [ДОБАВЛЕНО 2026-09-17] НАХОДКА: generate_tts() была определена, но
+        # нигде не вызывалась (регрессия, дата потери неизвестна — заметно
+        # по тому, что forecast_analysis_claude.mp3 не обновлялся, а
+        # forecast_analysis_gemini.mp3 не существовал в репозитории вообще).
+        # Текст анализа при этом исправно генерировался — TTS-шаг просто
+        # выпал из основного потока.
+        generate_tts(text, OUTPUT_FILE.replace(".json", ".mp3"))
     elif not claude_enabled():
         print("  [AI] Claude отключён (CLAUDE_ANALYSIS_ENABLED=false) -- пропускаю")
 
