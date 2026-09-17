@@ -1,1 +1,1 @@
-{"task_id": "check-recovery-1", "cmd": "cd /opt/weather-pipeline/repo && date -u && echo '=== log ===' && git log --oneline -6 && echo '=== status ===' && git status --short --branch && echo '=== tail main log ===' && tail -n 25 /var/log/vps-pipeline.log"}
+{"task_id": "check-ai-satellite-1", "cmd": "tail -n 20 /var/log/vps-ai-pipeline.log && echo '=== SATELLITE ===' && tail -n 20 /var/log/vps-satellite-pipeline.log"}
