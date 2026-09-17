@@ -104,7 +104,7 @@ def _preserve_unpushed_local_commits():
             capture_output=True, text=True, timeout=60)
         if push.returncode == 0:
             refetch = subprocess.run(
-                ["git", "-C", BASE_DIR, "fetch", "origin", "main", "--depth", "1",
+                ["git", "-C", BASE_DIR, "fetch", "origin", "main", "--depth", "30",
                  "--update-shallow"],
                 capture_output=True, text=True, timeout=60)
             if refetch.returncode != 0:
@@ -198,7 +198,7 @@ def sync_repo():
                        capture_output=True, text=True, timeout=15)
 
         fetch = subprocess.run(
-            ["git", "-C", BASE_DIR, "fetch", "origin", "main", "--depth", "1",
+            ["git", "-C", BASE_DIR, "fetch", "origin", "main", "--depth", "30",
              "--update-shallow"],
             capture_output=True, text=True, timeout=60)
         if fetch.returncode != 0:
@@ -288,7 +288,7 @@ def ensure_repo_healthy():
             print(f"  [WARN] repo нездоров (unmerged={has_unmerged}, "
                   f"detached={is_detached}) — пересобираю на origin/main")
             subprocess.run(
-                ["git", "-C", BASE_DIR, "fetch", "origin", "main", "--depth", "1"],
+                ["git", "-C", BASE_DIR, "fetch", "origin", "main", "--depth", "30"],
                 capture_output=True, text=True, timeout=60)
             subprocess.run(
                 ["git", "-C", BASE_DIR, "checkout", "-B", "main", "origin/main"],
