@@ -492,6 +492,18 @@ def git_push_ai(paths=None):
         if not _to_add:
             print("  Нет файлов для коммита.")
             return
+        # [ИЗМЕНЕНО 2026-09-17] Та же защита, что в vps_pipeline.py и
+        # vps_satellite_pipeline.py — на случай если ANALYSIS_PATHS/
+        # MEDIA_PATHS когда-нибудь пересекутся с новым правилом .gitignore.
+        _ignore_check = subprocess.run(
+            ["git", "-C", BASE_DIR, "check-ignore"] + _to_add,
+            capture_output=True, text=True, timeout=15)
+        _ignored = set(_ignore_check.stdout.strip().splitlines())
+        if _ignored:
+            _to_add = [p for p in _to_add if p not in _ignored]
+        if not _to_add:
+            print("  Нет файлов для коммита (все отфильтрованы .gitignore).")
+            return
         subprocess.run(["git", "-C", BASE_DIR, "add"] + _to_add,
                         check=True, capture_output=True, timeout=30)
 
