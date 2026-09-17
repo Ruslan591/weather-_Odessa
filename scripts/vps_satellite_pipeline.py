@@ -977,6 +977,23 @@ def git_push_satellite():
         ]
         _to_add = [p for p in _candidates if os.path.exists(os.path.join(BASE_DIR, p))]
         if _to_add:
+            # [ИЗМЕНЕНО 2026-09-17] НАХОДКА: .gitignore от 16.09.2026 добавил
+            # правила на часть этих же файлов (внутренняя диагностика,
+            # раздувавшая .git) — но статический список _candidates не
+            # обновили синхронно. `git add` на гитигнорнутый путь без -f
+            # падает с exit 1, а check=True на батч из всех файлов сразу
+            # ронял ВЕСЬ коммит спутникового цикла (реально стояло часами,
+            # 17.09.2026). Вместо ручной синхронизации двух списков —
+            # отфильтровываем гитигнорнутые пути автоматически через
+            # `git check-ignore` (returncode 1 у этой команды означает
+            # "ничего не проигнорено", это НЕ ошибка, а нормальный исход).
+            _ignore_check = subprocess.run(
+                ["git", "-C", BASE_DIR, "check-ignore"] + _to_add,
+                capture_output=True, text=True, timeout=15)
+            _ignored = set(_ignore_check.stdout.strip().splitlines())
+            if _ignored:
+                _to_add = [p for p in _to_add if p not in _ignored]
+        if _to_add:
             subprocess.run(["git", "-C", BASE_DIR, "add"] + _to_add,
                             check=True, capture_output=True, timeout=30)
         # data/anim/* — ОТДЕЛЬНО, директорией целиком (см. докстринг в
