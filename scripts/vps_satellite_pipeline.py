@@ -135,11 +135,16 @@ def _preserve_unpushed_local_commits():
                 ["git", "-C", BASE_DIR, "fetch", "origin", "main", "--depth", "1",
                  "--update-shallow"],
                 capture_output=True, timeout=60)
+            # [ИЗМЕНЕНО 2026-09-17] Убран `-X theirs` — см. подробное
+            # объяснение в vps_pipeline.py::_preserve_unpushed_local_commits()
+            # (найдено 17.09.2026: на shallow-истории может откатить весь
+            # working tree, включая не связанные файлы вроде
+            # data/vps_task.json/vps_result.json — GitHub-мост).
             rebase = subprocess.run(
-                ["git", "-C", BASE_DIR, "rebase", "-X", "theirs", "origin/main"],
+                ["git", "-C", BASE_DIR, "rebase", "origin/main"],
                 capture_output=True, text=True, timeout=60)
             if rebase.returncode != 0:
-                print(f"  [WARN] preserve: rebase -X theirs не прошёл: "
+                print(f"  [WARN] preserve: rebase не прошёл (конфликт): "
                       f"{rebase.stderr.strip()[:200]} — abort, ref не трогаю")
                 subprocess.run(["git", "-C", BASE_DIR, "rebase", "--abort"],
                                capture_output=True, timeout=15)
@@ -1015,17 +1020,24 @@ def git_push_satellite():
                 _time.sleep(_delays[_attempt])
                 subprocess.run(["git", "-C", BASE_DIR, "fetch", "origin", "main"],
                                capture_output=True, timeout=60)
+                # [ИЗМЕНЕНО 2026-09-17] Убран `-X theirs` — см. подробное
+                # объяснение в vps_pipeline.py::git_push_history() (найдено
+                # 17.09.2026: на shallow-истории может откатить весь working
+                # tree, включая не связанные файлы вроде data/vps_task.json/
+                # vps_result.json — GitHub-мост).
                 rebase = subprocess.run(
-                    ["git", "-C", BASE_DIR, "rebase", "-X", "theirs", "origin/main"],
+                    ["git", "-C", BASE_DIR, "rebase", "origin/main"],
                     capture_output=True, text=True, timeout=60)
                 if rebase.returncode != 0:
-                    print(f"  [WARN] rebase -X theirs не прошёл: "
-                          f"{rebase.stderr.strip()[:200]} — abort+reset")
+                    print(f"  [WARN] rebase не прошёл (конфликт): "
+                          f"{rebase.stderr.strip()[:200]} — abort+reset, "
+                          f"коммит этого цикла пропущен")
                     subprocess.run(["git", "-C", BASE_DIR, "rebase", "--abort"],
                                    capture_output=True, timeout=15)
                     subprocess.run(
                         ["git", "-C", BASE_DIR, "checkout", "-B", "main", "origin/main"],
                         capture_output=True, timeout=30)
+                    return
         print("  satellite push failed after 3 attempts")
     except subprocess.TimeoutExpired as e:
         print(f"  satellite git timeout: {e}")
@@ -1145,3 +1157,4 @@ def _main_body():
 
 if __name__ == "__main__":
     main()
+
