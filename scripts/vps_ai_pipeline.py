@@ -465,6 +465,11 @@ ANALYSIS_PATHS = [
     # только пишется на диск в generate_ai_analysis.py, а коммитит его
     # (под локом) этот же git_push_ai(), как и всё остальное.
     "data/forecast_days.json",
+    # [ДОБАВЛЕНО 2026-09-17] Та же находка — незалоченный git add
+    # data/verification_snapshots.json в обеих ветках (claude и gemini)
+    # generate_ai_analysis.py. Теперь только пишется на диск, коммитит
+    # git_push_ai().
+    "data/verification_snapshots.json",
 ]
 MEDIA_PATHS = [
     "data/blocks",
