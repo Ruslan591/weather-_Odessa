@@ -88,11 +88,16 @@ def _preserve_unpushed_local_commits():
                 ["git", "-C", BASE_DIR, "fetch", "origin", "main", "--depth", "1",
                  "--update-shallow"],
                 capture_output=True, timeout=60)
+            # [ИЗМЕНЕНО 2026-09-17] Убран `-X theirs` — см. подробное
+            # объяснение в vps_pipeline.py::_preserve_unpushed_local_commits()
+            # и docs/topics/ (найдено 17.09.2026: на shallow-истории может
+            # откатить весь working tree, включая не связанные файлы вроде
+            # data/vps_task.json/vps_result.json).
             rebase = subprocess.run(
-                ["git", "-C", BASE_DIR, "rebase", "-X", "theirs", "origin/main"],
+                ["git", "-C", BASE_DIR, "rebase", "origin/main"],
                 capture_output=True, text=True, timeout=60)
             if rebase.returncode != 0:
-                print(f"  [WARN] preserve: rebase -X theirs не прошёл: "
+                print(f"  [WARN] preserve: rebase не прошёл (конфликт): "
                       f"{rebase.stderr.strip()[:200]} — abort, ref не трогаю")
                 subprocess.run(["git", "-C", BASE_DIR, "rebase", "--abort"],
                                capture_output=True, timeout=15)
@@ -449,6 +454,13 @@ ANALYSIS_PATHS = [
     "data/forecast_analysis_claude.json", "data/forecast_analysis_claude.mp3",
     "data/forecast_analysis_gemini.json", "data/forecast_analysis_gemini.mp3",
     "data/ai_schedule.json", "data/ai_schedule_gemini.json",
+    # [ДОБАВЛЕНО 2026-09-17] Раньше generate_ai_analysis.py делал свой
+    # собственный незалоченный `git add data/forecast_days.json` прямо в
+    # процессе анализа (вне GIT_LOCK_FILE) — потенциальная гонка с
+    # sync_repo()/ensure_repo_healthy() параллельного процесса. Теперь файл
+    # только пишется на диск в generate_ai_analysis.py, а коммитит его
+    # (под локом) этот же git_push_ai(), как и всё остальное.
+    "data/forecast_days.json",
 ]
 MEDIA_PATHS = [
     "data/blocks",
@@ -513,17 +525,24 @@ def git_push_ai(paths=None):
                 _time.sleep(_delays[_attempt])
                 subprocess.run(["git", "-C", BASE_DIR, "fetch", "origin", "main"],
                                 capture_output=True, timeout=60)
+                # [ИЗМЕНЕНО 2026-09-17] Убран `-X theirs` — см. подробное
+                # объяснение в vps_pipeline.py::git_push_history() и
+                # docs/topics/ (найдено 17.09.2026: на shallow-истории может
+                # откатить весь working tree, включая не связанные файлы
+                # вроде data/vps_task.json/vps_result.json — GitHub-мост).
                 rebase = subprocess.run(
-                    ["git", "-C", BASE_DIR, "rebase", "-X", "theirs", "origin/main"],
+                    ["git", "-C", BASE_DIR, "rebase", "origin/main"],
                     capture_output=True, text=True, timeout=60)
                 if rebase.returncode != 0:
-                    print(f"  [WARN] rebase -X theirs не прошёл: "
-                          f"{rebase.stderr.strip()[:200]} — abort+reset")
+                    print(f"  [WARN] rebase не прошёл (конфликт): "
+                          f"{rebase.stderr.strip()[:200]} — abort+reset, "
+                          f"коммит этого цикла пропущен")
                     subprocess.run(["git", "-C", BASE_DIR, "rebase", "--abort"],
                                     capture_output=True, timeout=15)
                     subprocess.run(
                         ["git", "-C", BASE_DIR, "checkout", "-B", "main", "origin/main"],
                         capture_output=True, timeout=30)
+                    return
         print("  ai push failed after 3 attempts")
     except subprocess.TimeoutExpired as e:
         print(f"  ai git timeout: {e}")
