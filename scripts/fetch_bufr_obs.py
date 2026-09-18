@@ -8,6 +8,7 @@ fetch_bufr_obs.py — парсит BUFR-наблюдения с Meteomanz для
 """
 import re, json, os, time, datetime, logging
 import urllib.request
+from urllib.parse import quote
 
 logging.basicConfig(
     level=logging.INFO,
@@ -24,6 +25,18 @@ HEADERS = {
     "Referer":    "https://www.meteomanz.com/",
 }
 
+# [ДОБАВЛЕНО 2026-09-17] НАХОДКА: meteomanz.com отдаёт 403 Forbidden при
+# прямом запросе с IP VPS (подтверждено прямым curl с самого VPS) — похоже
+# на IP-блокировку диапазона Oracle Cloud, не на баг в коде. Тот же паттерн
+# "прямой запрос + fallback на публичные CORS-прокси", что уже проверен для
+# ogimet в update.py::fetch_synop_ogimet() и
+# ground_station_obs_fetch.py::fetch_synop_ogimet() — публичный прокси имеет
+# свой IP, не связанный с Oracle Cloud, и обходит именно IP-блокировку.
+METEOMANZ_PROXIES = [
+    "https://api.allorigins.win/raw?url=",
+    "https://corsproxy.io/?",
+]
+
 # ── HTML-парсинг ──────────────────────────────────────────────────────────────
 
 def fetch_html(dt: datetime.datetime, station: str = None) -> str:
@@ -34,9 +47,23 @@ def fetch_html(dt: datetime.datetime, station: str = None) -> str:
         f"&d2={dt.day:02d}&m2={dt.month:02d}&y2={dt.year}"
         f"&h1={dt.hour:02d}Z&h2={dt.hour:02d}Z&min=0&rt=0&ext=1"
     )
-    req = urllib.request.Request(url, headers=HEADERS)
-    with urllib.request.urlopen(req, timeout=20) as r:
-        return r.read().decode("utf-8", errors="replace")
+    try:
+        req = urllib.request.Request(url, headers=HEADERS)
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return r.read().decode("utf-8", errors="replace")
+    except Exception as e:
+        log.debug("  прямой запрос meteomanz не сработал: %s", e)
+
+    for proxy in METEOMANZ_PROXIES:
+        try:
+            purl = proxy + quote(url, safe="")
+            req = urllib.request.Request(purl, headers=HEADERS)
+            with urllib.request.urlopen(req, timeout=25) as r:
+                return r.read().decode("utf-8", errors="replace")
+        except Exception as e:
+            log.debug("  прокси %s не сработал: %s", proxy, e)
+
+    raise RuntimeError(f"meteomanz: ни прямой запрос, ни {len(METEOMANZ_PROXIES)} прокси не сработали")
 
 def _val(html: str, label: str):
     """
