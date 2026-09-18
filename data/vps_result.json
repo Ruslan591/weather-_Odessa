@@ -1,7 +1,7 @@
 {
-  "task_id": "test-bufr-proxy-1",
+  "task_id": "test-bufr-verbose-1",
   "returncode": 0,
-  "stdout": "branch 'main' set up to track 'origin/main'.\nYour branch is up to date with 'origin/main'.\n03:26:22  WARNING [BUFR] fetch ошибка 2026-09-18 03:00 UTC: meteomanz: ни прямой запрос, ни 2 прокси не сработали\n",
-  "stderr": "From https://github.com/Ruslan591/weather-_Odessa\n * branch            main       -> FETCH_HEAD\n   49f09d1..1950ec3  main       -> origin/main\nReset branch 'main'\n",
-  "completed_at_utc": "2026-09-18T03:26:24Z"
+  "stdout": "=== DIRECT ===\nFAIL <HTTPError 403: 'Forbidden'>\n=== PROXY https://api.allorigins.win/raw?url= ===\nFAIL <HTTPError 522: '<none>'>\n=== PROXY https://corsproxy.io/? ===\nFAIL <HTTPError 403: 'Forbidden'>\n",
+  "stderr": "",
+  "completed_at_utc": "2026-09-18T03:28:21Z"
 }
