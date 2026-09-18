@@ -8,7 +8,6 @@ fetch_bufr_obs.py — парсит BUFR-наблюдения с Meteomanz для
 """
 import re, json, os, time, datetime, logging
 import urllib.request
-from urllib.parse import quote
 
 logging.basicConfig(
     level=logging.INFO,
@@ -25,17 +24,73 @@ HEADERS = {
     "Referer":    "https://www.meteomanz.com/",
 }
 
-# [ДОБАВЛЕНО 2026-09-17] НАХОДКА: meteomanz.com отдаёт 403 Forbidden при
-# прямом запросе с IP VPS (подтверждено прямым curl с самого VPS) — похоже
-# на IP-блокировку диапазона Oracle Cloud, не на баг в коде. Тот же паттерн
-# "прямой запрос + fallback на публичные CORS-прокси", что уже проверен для
-# ogimet в update.py::fetch_synop_ogimet() и
-# ground_station_obs_fetch.py::fetch_synop_ogimet() — публичный прокси имеет
-# свой IP, не связанный с Oracle Cloud, и обходит именно IP-блокировку.
-METEOMANZ_PROXIES = [
-    "https://api.allorigins.win/raw?url=",
-    "https://corsproxy.io/?",
-]
+# [ИЗМЕНЕНО 2026-09-18] НАХОДКА: 403/страница "Access limitation" от
+# meteomanz.com — это НЕ блокировка по IP (подтверждено: с другой сети тот
+# же URL открывается нормально), а мягкий rate-limit самого сайта на общий
+# объём запросов ("probably due to issues related to massive data
+# downloads", их собственный текст). Прокси-каскад, добавленный раньше как
+# фикс "от IP", на самом деле УТРАИВАЛ трафик на каждую неудачную попытку —
+# убран. Настоящая причина объёма: fetch_latest_meteomanz_essentials() и
+# fetch_latest_bufr_essentials() перебирают 4 часа назад КАЖДЫЙ вызов, и
+# вызываются НЕЗАВИСИМО из vps_pipeline.py и vps_satellite_pipeline.py
+# каждые ~5 минут без общего кэша между ними — сотни запросов в сутки на
+# одну и ту же станцию. Настоящий фикс — общий кулдаун ниже
+# (COOLDOWN_FILE), проверяемый во всех точках вызова перед сетевым
+# запросом.
+COOLDOWN_FILE = os.path.join(BASE_DIR, "data", "bufr_fetch_cooldown.json")
+COOLDOWN_MIN = 20  # минут между повторными попытками одного и того же (station, hour)
+
+
+def _cooldown_key(station, dt):
+    return f"{station}:{dt:%Y-%m-%dT%H}"
+
+
+def _load_cooldown():
+    try:
+        with open(COOLDOWN_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _save_cooldown(data):
+    tmp = COOLDOWN_FILE + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+        os.replace(tmp, COOLDOWN_FILE)
+    except Exception as e:
+        log.debug("  cooldown save error: %s", e)
+
+
+def in_cooldown(station, dt):
+    """True, если (station, час) уже пытались недавно и неудачно —
+    пропускаем сетевой запрос."""
+    data = _load_cooldown()
+    ts = data.get(_cooldown_key(station, dt))
+    if not ts:
+        return False
+    try:
+        last = datetime.datetime.fromisoformat(ts)
+    except Exception:
+        return False
+    return (datetime.datetime.utcnow() - last).total_seconds() < COOLDOWN_MIN * 60
+
+
+def mark_attempt(station, dt):
+    """Отмечает неудачную попытку и заодно подчищает записи старше 3
+    часов, чтобы файл не рос бесконечно."""
+    data = _load_cooldown()
+    data[_cooldown_key(station, dt)] = datetime.datetime.utcnow().isoformat()
+    cutoff = datetime.datetime.utcnow() - datetime.timedelta(hours=3)
+    for k in list(data.keys()):
+        try:
+            if datetime.datetime.fromisoformat(data[k]) < cutoff:
+                del data[k]
+        except Exception:
+            del data[k]
+    _save_cooldown(data)
+
 
 # ── HTML-парсинг ──────────────────────────────────────────────────────────────
 
@@ -47,23 +102,16 @@ def fetch_html(dt: datetime.datetime, station: str = None) -> str:
         f"&d2={dt.day:02d}&m2={dt.month:02d}&y2={dt.year}"
         f"&h1={dt.hour:02d}Z&h2={dt.hour:02d}Z&min=0&rt=0&ext=1"
     )
-    try:
-        req = urllib.request.Request(url, headers=HEADERS)
-        with urllib.request.urlopen(req, timeout=20) as r:
-            return r.read().decode("utf-8", errors="replace")
-    except Exception as e:
-        log.debug("  прямой запрос meteomanz не сработал: %s", e)
-
-    for proxy in METEOMANZ_PROXIES:
-        try:
-            purl = proxy + quote(url, safe="")
-            req = urllib.request.Request(purl, headers=HEADERS)
-            with urllib.request.urlopen(req, timeout=25) as r:
-                return r.read().decode("utf-8", errors="replace")
-        except Exception as e:
-            log.debug("  прокси %s не сработал: %s", proxy, e)
-
-    raise RuntimeError(f"meteomanz: ни прямой запрос, ни {len(METEOMANZ_PROXIES)} прокси не сработали")
+    req = urllib.request.Request(url, headers=HEADERS)
+    with urllib.request.urlopen(req, timeout=20) as r:
+        html = r.read().decode("utf-8", errors="replace")
+    # [ДОБАВЛЕНО 2026-09-18] Rate-limit meteomanz отдаётся как HTTP 200 с
+    # текстом "Access limitation", а не как HTTP-ошибка — без этой проверки
+    # такой ответ считался бы "успешным пустым часом" и не попадал в
+    # кулдаун, что позволяло долбить сайт дальше без пауз.
+    if "Access limitation" in html:
+        raise RuntimeError("meteomanz: rate-limit (Access limitation page)")
+    return html
 
 def _val(html: str, label: str):
     """
@@ -672,10 +720,13 @@ def fetch_latest_meteomanz_essentials(station_id, hours_back=4):
     )
     for h in range(hours_back):
         dt = now - datetime.timedelta(hours=h)
+        if in_cooldown(station_id, dt):
+            continue
         try:
             html = fetch_html(dt, station=station_id)
         except Exception as e:
             log.debug(f"[Meteomanz] {station_id} {dt:%Y-%m-%d %H}:00 UTC fetch ошибка: {e}")
+            mark_attempt(station_id, dt)
             time.sleep(0.3)
             continue
 
@@ -704,10 +755,13 @@ def fetch_latest_bufr_essentials(station_id: str, hours_back: int = 4):
     )
     for h in range(hours_back):
         dt = now - datetime.timedelta(hours=h)
+        if in_cooldown(station_id, dt):
+            continue
         try:
             html = fetch_html(dt, station=station_id)
         except Exception as e:
             log.debug(f"[BUFR fallback] {station_id} {dt:%Y-%m-%d %H}:00 UTC fetch ошибка: {e}")
+            mark_attempt(station_id, dt)
             time.sleep(0.3)
             continue
         obs = parse_obs(html, dt, station=station_id)
@@ -726,10 +780,15 @@ def fetch_and_append(dt: datetime.datetime, dry_run=False, station: str = None) 
         log.info(f"[BUFR] уже есть: {dt:%Y-%m-%d %H}:00 UTC")
         return False
 
+    if in_cooldown(station, dt):
+        log.info(f"[BUFR] кулдаун активен, пропуск: {dt:%Y-%m-%d %H}:00 UTC")
+        return False
+
     try:
         html = fetch_html(dt, station=station)
     except Exception as e:
         log.warning(f"[BUFR] fetch ошибка {dt:%Y-%m-%d %H}:00 UTC: {e}")
+        mark_attempt(station, dt)
         return False
 
     obs = parse_obs(html, dt, station=station)
