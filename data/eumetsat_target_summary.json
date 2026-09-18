@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-09-18T13:37:46Z",
+  "timestamp": "2026-09-18T13:43:03Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-09-18T13:00:00.000Z",
-  "target_id": 0,
-  "target_area_km2": 249.5,
-  "target_distance_km": 41.2,
-  "target_bearing_deg": 299.0,
-  "target_compass": "СЗ",
+  "target_id": 2,
+  "target_area_km2": 77.4,
+  "target_distance_km": 67.4,
+  "target_bearing_deg": 241.0,
+  "target_compass": "ЮЗ",
   "system": {
     "target_id": 3,
     "area_km2": 345.6,
@@ -703,10 +703,14 @@
       "front_type_confidence": null
     }
   ],
+  "also_suppressed_nearby": {
+    "signature": "-35_20",
+    "area_km2": 249.5
+  },
   "target_movement": {
     "speed_kmh": 0.0,
     "direction_compass": "СЗ",
-    "cpa_km": 41.2,
+    "cpa_km": 67.4,
     "eta_min": null,
     "verdict": "почти стоит на месте"
   },
@@ -717,7 +721,7 @@
         "timestamp": "2026-09-18T13:10:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": false,
+        "confirmed": true,
         "timestamp": "2026-09-18T13:00:00.000Z"
       },
       "cloud_phase_type": {
@@ -725,9 +729,9 @@
         "timestamp": "2026-09-18T13:37:12Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 2,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 1,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -739,5 +743,5 @@
       "timestamp": "2026-09-18T13:27:55Z"
     }
   },
-  "verdict": "CLM отметил цель в 41км СЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (346км²) в 70км З."
+  "verdict": "Цель в 67км ЮЗ — каналы расходятся: geocolour_motion подтверждают, ir_motion нет. Почти не движется. Отдельно: система синоптического масштаба (346км²) в 70км З."
 }
