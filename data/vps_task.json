@@ -1,1 +1,1 @@
-{"task_id": "diag-bufr-caller-2", "cmd": "cd /opt/weather-pipeline/repo && grep -rln 'fetch_bufr_obs\\|import fetch_bufr' scripts/*.py"}
+{"task_id": "diag-bufr-caller-3", "cmd": "cd /opt/weather-pipeline/repo && echo '=== ground_station_field_fetch.py ===' && grep -n 'fetch_bufr_obs\\|cooldown\\|COOLDOWN\\|retry\\|last_attempt' scripts/ground_station_field_fetch.py && echo '=== eumetsat_ground_station_verify.py ===' && grep -n 'fetch_bufr_obs\\|cooldown\\|COOLDOWN\\|retry\\|last_attempt' scripts/eumetsat_ground_station_verify.py"}
