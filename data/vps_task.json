@@ -1,1 +1,1 @@
-{"task_id": "diag-bufr-frequency-1", "cmd": "cd /opt/weather-pipeline/repo && grep -n 'fetch_bufr_obs\\|BUFR' scripts/vps_pipeline.py | head -30 && echo '=== сколько раз в логах за сегодня вызывался BUFR fetch ===' && grep -c 'BUFR.*fetch\\|meteomanz' /var/log/vps-pipeline.log && echo '=== временные метки последних 20 попыток ===' && grep -oE '^[0-9]{2}:[0-9]{2}:[0-9]{2}.*BUFR' /var/log/vps-pipeline.log | tail -20"}
+{"task_id": "diag-bufr-caller-1", "cmd": "cd /opt/weather-pipeline/repo && grep -n 'bufr\\|BUFR' scripts/vps_pipeline.py"}
