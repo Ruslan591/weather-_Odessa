@@ -1,1 +1,1 @@
-{"task_id": "diag-proxy-search-1", "cmd": "cd /opt/weather-pipeline/repo && grep -rlin 'proxy\\|ogimet' scripts/ | head -20"}
+{"task_id": "test-bufr-proxy-1", "cmd": "cd /opt/weather-pipeline/repo && flock -w 30 /tmp/vps_git.lock -c 'git fetch origin main --depth 30 --update-shallow && git checkout -B main origin/main' && timeout 60 python3 scripts/fetch_bufr_obs.py 2>&1 | tail -30"}
