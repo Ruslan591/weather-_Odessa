@@ -1,5 +1,5 @@
 {
-  "task_id": "1789791193",
-  "cmd": "python3 --version; which python3; pip3 list 2>/dev/null | grep -iE 'numpy|scipy|pillow|requests'; df -h / | tail -1; nproc",
-  "timeout": 55
+  "task_id": "1789791290",
+  "cmd": "mkdir -p /tmp/eumetsat_probe_run && cd /tmp/eumetsat_probe_run && curl -s -o eumetsat_very_far_signal_probe.py https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/scripts/experiments/eumetsat_very_far_signal_probe.py && nohup python3 eumetsat_very_far_signal_probe.py > /tmp/eumetsat_probe_run/run.log 2>&1 & echo LAUNCHED_PID_$!",
+  "timeout": 30
 }
