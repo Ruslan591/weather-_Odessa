@@ -1,5 +1,5 @@
 {
-  "task_id": "1789791651",
-  "cmd": "curl -s 'https://view.eumetsat.int/geoserver/wms?service=WMS&version=1.3.0&request=GetCapabilities' -o /tmp/caps.xml; wc -c /tmp/caps.xml; head -c 1500 /tmp/caps.xml; echo; echo ---GREP-CLM---; grep -o '.\\{80\\}msg_fes:clm.\\{80\\}' /tmp/caps.xml | head -5",
+  "task_id": "1789791741",
+  "cmd": "grep -c 'msg_fes' /tmp/caps.xml; grep -c '<Name>' /tmp/caps.xml; grep -o '<Name>[a-zA-Z0-9_:.]*</Name>' /tmp/caps.xml | grep -i 'clm\\|cth\\|ir105\\|geocolour' | head -20",
   "timeout": 30
 }
