@@ -1,5 +1,5 @@
 {
-  "task_id": "1789791290",
-  "cmd": "mkdir -p /tmp/eumetsat_probe_run && cd /tmp/eumetsat_probe_run && curl -s -o eumetsat_very_far_signal_probe.py https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/scripts/experiments/eumetsat_very_far_signal_probe.py && nohup python3 eumetsat_very_far_signal_probe.py > /tmp/eumetsat_probe_run/run.log 2>&1 & echo LAUNCHED_PID_$!",
+  "task_id": "1789791470",
+  "cmd": "ps aux | grep eumetsat_very_far_signal_probe | grep -v grep; echo ---LOG---; cat /tmp/eumetsat_probe_run/run.log 2>&1; echo ---LS---; ls -la /tmp/eumetsat_very_far_probe/ 2>&1",
   "timeout": 30
 }
