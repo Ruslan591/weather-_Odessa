@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-19T10:38:53Z",
+  "timestamp": "2026-09-19T10:42:26Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-09-19T10:15:00.000Z",
   "target_id": 2,
@@ -59,23 +59,6 @@
       "geocolour_confirmed": true
     },
     {
-      "target_id": 14,
-      "area_km2": 53.4,
-      "distance_km": 255.1,
-      "bearing_deg": 33.0,
-      "compass": "СВ",
-      "elongation_aspect_ratio": 1.77,
-      "elongation_axis_deg": 90.0,
-      "elongation_axis_compass": "В-З",
-      "frontlike": false,
-      "phase_label": null,
-      "type_label": null,
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": false,
-      "geocolour_confirmed": true
-    },
-    {
       "target_id": 15,
       "area_km2": 68.0,
       "distance_km": 255.6,
@@ -110,7 +93,7 @@
       "geocolour_confirmed": true
     }
   ],
-  "local_suppressed_count": 13,
+  "local_suppressed_count": 14,
   "system_candidates": [
     {
       "target_id": 10,
@@ -459,20 +442,20 @@
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-09-19T10:10:00.000Z"
+        "timestamp": "2026-09-19T10:20:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-09-19T10:10:00.000Z"
+        "confirmed": true,
+        "timestamp": "2026-09-19T10:20:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": null,
         "timestamp": "2026-09-19T10:38:18Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 2,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 1,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -484,5 +467,5 @@
       "timestamp": "2026-09-19T10:38:37Z"
     }
   },
-  "verdict": "CLM отметил цель в 163км З, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (23948км²) в 94км С (вытянута СВ-ЮЗ (51°), похоже на фронт)."
+  "verdict": "Цель в 163км З — каналы расходятся: geocolour_motion подтверждают, ir_motion нет. Отдельно: система синоптического масштаба (23948км²) в 94км С (вытянута СВ-ЮЗ (51°), похоже на фронт)."
 }
