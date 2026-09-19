@@ -1,1 +1,5 @@
-{"task_id": "diag-bufr-caller-3", "cmd": "cd /opt/weather-pipeline/repo && echo '=== ground_station_field_fetch.py ===' && grep -n 'fetch_bufr_obs\\|cooldown\\|COOLDOWN\\|retry\\|last_attempt' scripts/ground_station_field_fetch.py && echo '=== eumetsat_ground_station_verify.py ===' && grep -n 'fetch_bufr_obs\\|cooldown\\|COOLDOWN\\|retry\\|last_attempt' scripts/eumetsat_ground_station_verify.py"}
+{
+  "task_id": "1789791193",
+  "cmd": "python3 --version; which python3; pip3 list 2>/dev/null | grep -iE 'numpy|scipy|pillow|requests'; df -h / | tail -1; nproc",
+  "timeout": 55
+}
