@@ -216,7 +216,14 @@ def check_capabilities(layer_name, timeout=NETWORK_TIMEOUT):
 
         base_dim = {"nearest_value": None, "default_time": None,
                     "time_dimension_raw": None, "dimension_source": "none"}
-        found = walk(root, base_dim, [])
+        # Баг v3, найден 2026-09-19 на живом ответе VPS: <Layer> вложены
+        # внутрь <Capability>, а не напрямую под корнем <WMS_Capabilities>.
+        # Обход от root напрямую никогда не заходил внутрь <Capability> —
+        # находил 0 слоёв даже когда они реально есть в XML. Спускаемся
+        # явно через <Capability> к корневому <Layer> дереву.
+        capability_el = root.find(_WMS_NS + "Capability")
+        root_layer_el = capability_el.find(_WMS_NS + "Layer") if capability_el is not None else None
+        found = walk(root_layer_el, base_dim, []) if root_layer_el is not None else None
         if found is not None:
             out["layer_found"] = True
             out.update(found)
