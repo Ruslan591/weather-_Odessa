@@ -1,11 +1,25 @@
 """
-eumetsat_very_far_signal_probe.py — РАЗОВЫЙ эксперимент, НЕ production. v3
-(правка 2026-09-19: НИКАКОГО git — репозиторий сейчас ~15.5 ГБ / ~38000
-коммитов из-за многолетней истории PNG-коммитов от *_watch.py скриптов;
-git pull/git show на телефоне, где чекаут не обновлялся с лета, means
-качать всю историю разом. Вместо этого — только точечные HTTPS GET к
-raw.githubusercontent.com: конкретные файлы на конкретных SHA/main, без
-единого обращения к git.)
+eumetsat_very_far_signal_probe.py — РАЗОВЫЙ эксперимент, НЕ production. v4
+(episode 2: независимый эпизод 2026-09-09, другая синоптика — сектор "З",
+63→66% и растёт, а не "СЗ" 85-90% стабильно как в эпизоде 1 от 2026-09-18)
+
+Правки к v4 по итогам разбора episode 1:
+- ИСПРАВЛЕН баг в check_grid_alignment: формат времени с миллисекундами
+  (.000Z) теперь распознаётся (было: %H:%M:%SZ без %f, on_grid всегда
+  'unknown'). Проверено на данных episode 1 вручную, здесь работает как
+  автоматическая проверка.
+- front_score БОЛЬШЕ НЕ рассматривается как готовый детектор — добавлена
+  раздельная диагностика по каждому каналу (CLM/CTH/IR105 отдельно:
+  connected components на каждом) и метрика пространственного совпадения
+  (Jaccard overlap top-5% масок между парами каналов) — чтобы отличить
+  "все три канала указывают на одно и то же место" (в пользу B) от
+  "у каждого канала свои несвязанные яркие пятна" (в пользу A: обычный
+  шум/края).
+
+v3 (без изменений от неё): НИКАКОГО git — репозиторий ~15.5 ГБ / ~38000
+коммитов из-за истории PNG-коммитов от *_watch.py скриптов; только
+точечные HTTPS GET к raw.githubusercontent.com, без единого обращения к
+git-истории или локальному чекауту.
 
 Проверяет гипотезу: существует ли внутри крупного облачного массива на
 very_far bbox (~2500км) устойчивая пространственно-временная структура
@@ -45,7 +59,7 @@ import requests
 from PIL import Image
 from scipy import ndimage
 
-TMP_DIR = "/tmp/eumetsat_very_far_probe"
+TMP_DIR = "/tmp/eumetsat_very_far_probe_ep2"  # ОТДЕЛЬНАЯ папка от episode 1 — ничего не перезаписывает
 LIBS_DIR = os.path.join(TMP_DIR, "_repo_snapshot")  # зеркало layout scripts/ + data/, только 3 файла
 RAW_BASE = "https://raw.githubusercontent.com/ruslan591/weather-_Odessa"
 GITHUB_FETCH_TIMEOUT = 15  # не EUMETSAT-политика (NETWORK_TIMEOUT ниже) — обычный GitHub raw CDN
@@ -113,27 +127,26 @@ LAYERS = {
     "ir105": {"name": "mtg_fd:ir105_hrfi", "crs": "EPSG:4326", "style": STYLE_IR105},
 }
 
-# ВАЖНО (правка по ревью, пункт 1): это ВНУТРЕННЕЕ поле "timestamp" из
-# исторических data/eumetsat_very_far_watch.json (время наблюдения EUMETSAT,
-# использованное для параметра time= при GetMap) — НЕ время git-коммита
-# (то на ~15-20 мин позже, это когда пайплайн запушил результат). Оба
-# значения проверены read-only 2026-09-19 (git show эквивалент через raw
-# content на конкретном SHA):
-#   0402e828: timestamp=14:30:00Z, commit pushed=14:49:55Z
-#   ddb1e387: timestamp=14:45:00Z, commit pushed=15:04:40Z
-#   31e04593: timestamp=15:00:00Z, commit pushed=15:17:42Z
-# Используем timestamp (не commit time) — это то, что реально пойдёт в
-# параметр time= GetMap-запроса и должно совпасть с кадром GeoColour.
+# EPISODE 2 — независимый от episode 1 (2026-09-18, сектор СЗ, 85-90%,
+# стабильно). Найден той же read-only проверкой (raw content на SHA, без
+# git): 2026-09-09, сектор "З" (другой!), 63%→66% и РАСТЁТ (не стабильно,
+# в отличие от episode 1) — genuinely другая синоптическая ситуация, не
+# соседний момент той же системы.
+#   6c73cb06: timestamp=10:00:00Z, overall_cloud_fraction=0.487, "З: 64%"
+#   4f476ecb: timestamp=10:15:00Z, overall_cloud_fraction=0.494, "З: 65%"
+#   24992468: timestamp=10:30:00Z, overall_cloud_fraction=0.499, "З: 66%"
+# JSON и PNG коммиты подтверждены синхронными (идентичные SHA в обеих
+# историях коммитов) — как и для episode 1.
 REQUESTED_TIMESTAMPS = [
-    "2026-09-18T14:30:00.000Z",
-    "2026-09-18T14:45:00.000Z",
-    "2026-09-18T15:00:00.000Z",
+    "2026-09-09T10:00:00.000Z",
+    "2026-09-09T10:15:00.000Z",
+    "2026-09-09T10:30:00.000Z",
 ]
 
 GIT_SHA_FOR_TIMESTAMP = {
-    "2026-09-18T14:30:00.000Z": "0402e828",
-    "2026-09-18T14:45:00.000Z": "ddb1e387",
-    "2026-09-18T15:00:00.000Z": "31e04593",
+    "2026-09-09T10:00:00.000Z": "6c73cb06",
+    "2026-09-09T10:15:00.000Z": "4f476ecb",
+    "2026-09-09T10:30:00.000Z": "24992468",
 }
 GEOCOLOUR_PATH_IN_REPO = "data/anim/very_far_geocolour.png"
 
@@ -253,8 +266,20 @@ def check_grid_alignment(time_dimension_raw, requested_iso):
         return result
     start_s, _end_s, period_s = parts
     try:
-        start = datetime.strptime(start_s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
-        req = datetime.strptime(requested_iso, "%Y-%m-%dT%H:%M:00.000Z").replace(tzinfo=timezone.utc)
+        # ИСПРАВЛЕНО (был баг в v1-v3): start_s из GetCapabilities может
+        # быть как без миллисекунд ('...T00:00:00Z'), так и с ними
+        # ('...T00:00:00.000Z') — пробуем оба формата явно, вместо того
+        # чтобы падать в except и возвращать 'unknown' на ровном месте.
+        for fmt in ("%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%dT%H:%M:%SZ"):
+            try:
+                start = datetime.strptime(start_s, fmt).replace(tzinfo=timezone.utc)
+                break
+            except ValueError:
+                continue
+        else:
+            result["note"] = f"start='{start_s}' не распознан ни одним из известных форматов — сверить вручную"
+            return result
+        req = datetime.strptime(requested_iso, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
         m = re.match(r"^PT(\d+)M$", period_s)
         if not m:
             result["note"] = f"период '{period_s}' не в формате 'PTxxM' — сверить вручную (может быть PT1H и т.п.)"
@@ -492,6 +517,56 @@ def connected_component_diagnostics(front_score, coherence, orientation_deg, val
 
 
 # ============================================================
+# 6b. Раздельная диагностика по каналам (правка v4, по запросу: front_score
+#    не готовый детектор) — connected components НА КАЖДОМ канале отдельно
+#    + пространственное совпадение (Jaccard) между парами каналов top-5%.
+# ============================================================
+
+def per_channel_component_diagnostics(channels, valid_mask):
+    out = {}
+    for name in ("clm_signal", "cth_signal", "ir_signal"):
+        field = channels[name]
+        coherence, orientation_deg = _orientation_field(field)
+        out[name] = connected_component_diagnostics(field, coherence, orientation_deg, valid_mask)
+    return out
+
+
+def top_percentile_mask(field, valid_mask, percentile=95):
+    thresh = np.percentile(field[valid_mask], percentile) if np.any(valid_mask) else np.inf
+    return (field >= thresh) & valid_mask
+
+
+def spatial_coincidence(channels, valid_mask, percentile=95):
+    """Jaccard overlap |A∩B|/|A∪B| между top-5% масками пар каналов.
+    Высокое совпадение (близко к 1) между всеми тремя парами — довод в
+    пользу B (независимые физические признаки указывают на одно и то же
+    место). Низкое/случайное совпадение — довод в пользу A (каждый канал
+    подсвечивает свои, несвязанные яркие пятна — обычный шум/края)."""
+    masks = {
+        name: top_percentile_mask(channels[name], valid_mask, percentile)
+        for name in ("clm_signal", "cth_signal", "ir_signal")
+    }
+    pairs = [("clm_signal", "cth_signal"), ("clm_signal", "ir_signal"), ("cth_signal", "ir_signal")]
+    out = {}
+    for a, b in pairs:
+        inter = np.logical_and(masks[a], masks[b]).sum()
+        union = np.logical_or(masks[a], masks[b]).sum()
+        out[f"{a}__vs__{b}"] = {
+            "jaccard": float(inter / union) if union > 0 else None,
+            "intersection_px": int(inter), "union_px": int(union),
+        }
+    # Случайный базовый уровень для сравнения: если бы маски были независимы
+    # и каждая покрывала ~5% площади, ожидаемый Jaccard ≈ 0.05/(2-0.05)≈0.026
+    out["_random_baseline_jaccard_approx"] = round(percentile_to_random_jaccard(percentile), 4)
+    return out
+
+
+def percentile_to_random_jaccard(percentile):
+    p = (100 - percentile) / 100.0
+    return p / (2 - p)
+
+
+# ============================================================
 # 7. Control region candidates — НЕ "negative control" (правка по
 #    ревью, пункт 7): не предполагаем заранее, что какой-то угол однороден
 # ============================================================
@@ -658,13 +733,17 @@ def main():
             fs["front_score"], fs["coherence"], fs["orientation_deg"], channels["valid"]
         )
         controls = control_region_candidates(fs["front_score"], channels["valid"])
+        per_channel_components = per_channel_component_diagnostics(channels, channels["valid"])
+        coincidence = spatial_coincidence(channels, channels["valid"])
 
         per_frame[ts] = {
             "skipped": False,
             "ir105_decode": channels["ir_meta"],
             "front_score_mean": float(np.mean(fs["front_score"][channels["valid"]])),
             "front_score_std": float(np.std(fs["front_score"][channels["valid"]])),
-            "connected_components": components,
+            "connected_components_front_score": components,
+            "connected_components_per_channel": per_channel_components,
+            "spatial_coincidence_between_channels": coincidence,
             "control_region_candidates": controls,
         }
 
