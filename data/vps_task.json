@@ -1,5 +1,5 @@
 {
-  "task_id": "1789837480",
-  "cmd": "rm -rf /tmp/eumetsat_europe_windshift_probe /tmp/windshift_run; mkdir -p /tmp/windshift_run && cd /tmp/windshift_run && curl -s -o europe_windshift_probe.py https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/scripts/experiments/europe_windshift_probe.py && nohup python3 europe_windshift_probe.py > /tmp/windshift_run/run.log 2>&1 & echo RELAUNCHED_PID_$!",
+  "task_id": "1789837751",
+  "cmd": "cat /tmp/windshift_run/run.log 2>&1; echo ---; ls -la /tmp/eumetsat_europe_windshift_probe/ 2>&1",
   "timeout": 30
 }
