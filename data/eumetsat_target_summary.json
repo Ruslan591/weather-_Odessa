@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-19T06:27:19Z",
+  "timestamp": "2026-09-19T06:32:39Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-09-19T06:00:00.000Z",
   "target_id": 0,
@@ -19,7 +19,7 @@
     "frontlike": true,
     "window_spanning": false,
     "phase_label": "средняя водяная",
-    "cloud_fraction": 0.711,
+    "cloud_fraction": 0.678,
     "has_precip": true,
     "has_lightning": false
   },
@@ -34,8 +34,8 @@
       "elongation_axis_deg": 15.0,
       "elongation_axis_compass": "С-Ю",
       "frontlike": false,
-      "phase_label": null,
-      "type_label": null,
+      "phase_label": "безоблачно",
+      "type_label": "безоблачно",
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
@@ -114,24 +114,6 @@
       "geocolour_confirmed": true
     },
     {
-      "target_id": 2,
-      "area_km2": 457.7,
-      "distance_km": 98.1,
-      "bearing_deg": 359.0,
-      "compass": "С",
-      "elongation_aspect_ratio": 1.18,
-      "elongation_axis_deg": 56.0,
-      "elongation_axis_compass": "СВ-ЮЗ",
-      "frontlike": false,
-      "window_spanning": false,
-      "phase_label": "безоблачно",
-      "type_label": "плотная/высокая",
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": true,
-      "geocolour_confirmed": true
-    },
-    {
       "target_id": 5,
       "area_km2": 779.2,
       "distance_km": 138.0,
@@ -186,24 +168,6 @@
       "geocolour_confirmed": true
     },
     {
-      "target_id": 15,
-      "area_km2": 360.3,
-      "distance_km": 284.8,
-      "bearing_deg": 38.0,
-      "compass": "СВ",
-      "elongation_aspect_ratio": 1.79,
-      "elongation_axis_deg": 3.0,
-      "elongation_axis_compass": "С-Ю",
-      "frontlike": false,
-      "window_spanning": false,
-      "phase_label": "безоблачно",
-      "type_label": "плотная/высокая",
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": true,
-      "geocolour_confirmed": true
-    },
-    {
       "target_id": 16,
       "area_km2": 2008.1,
       "distance_km": 286.9,
@@ -222,7 +186,7 @@
       "geocolour_confirmed": true
     }
   ],
-  "system_suppressed_count": 2,
+  "system_suppressed_count": 4,
   "frontal_tracks": [
     {
       "track_id": 316,
@@ -400,23 +364,27 @@
     "eta_min": null,
     "verdict": "пройдёт мимо, город, скорее всего, не заденет"
   },
+  "target_phase": {
+    "label": "безоблачно",
+    "cloud_fraction": 0.0
+  },
   "existence": {
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-09-19T06:00:00.000Z"
+        "timestamp": "2026-09-19T06:10:00.000Z"
       },
       "geocolour_motion": {
         "confirmed": true,
-        "timestamp": "2026-09-19T06:00:00.000Z"
+        "timestamp": "2026-09-19T06:10:00.000Z"
       },
       "cloud_phase_type": {
-        "confirmed": null,
-        "timestamp": "2026-09-19T06:22:04Z"
+        "confirmed": false,
+        "timestamp": "2026-09-19T06:32:09Z"
       }
     },
     "votes_confirmed": 1,
-    "votes_not_confirmed": 1,
+    "votes_not_confirmed": 2,
     "consensus": "disputed"
   },
   "phenomena": {
@@ -426,8 +394,8 @@
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-09-19T06:27:12Z"
+      "timestamp": "2026-09-19T06:32:23Z"
     }
   },
-  "verdict": "Цель в 74км З — каналы расходятся: geocolour_motion подтверждают, ir_motion нет. Идёт на В со скоростью ~6 км/ч, пройдёт мимо на ≈20км, город, скорее всего, не заденет. Отдельно: система синоптического масштаба (43251км²) в 85км С (вытянута СВ-ЮЗ (63°), похоже на фронт, средняя водяная, осадки)."
+  "verdict": "Цель в 74км З, безоблачно — каналы расходятся: geocolour_motion подтверждают, ir_motion/cloud_phase_type нет. Идёт на В со скоростью ~6 км/ч, пройдёт мимо на ≈20км, город, скорее всего, не заденет. Отдельно: система синоптического масштаба (43251км²) в 85км С (вытянута СВ-ЮЗ (63°), похоже на фронт, средняя водяная, осадки)."
 }
