@@ -1,5 +1,5 @@
 {
-  "task_id": "cwgp_progress_1",
-  "cmd": "tail -c 2500 /tmp/central_west_grid_probe_run/run.log; echo ---; pgrep -f central_west_grid_probe.py && echo STILL_RUNNING || echo NOT_RUNNING; echo ---; test -f /tmp/central_west_grid_probe/result.json && echo RESULT_EXISTS || echo NO_RESULT_YET",
+  "task_id": "cwgp_result_summary_1",
+  "cmd": "cat /tmp/central_west_grid_probe_run/run.log | head -c 3000; echo ===LOGEND===; python3 -c \"import json; d=json.load(open('/tmp/central_west_grid_probe/result.json')); a=d.get('analysis',{}); summary={k:({kk:vv for kk,vv in v.items() if kk not in ('segments',)} if isinstance(v,dict) else v) for k,v in a.items()}; print(json.dumps({'policy':d.get('policy'),'grid_geometry':d.get('grid_geometry'),'analysis_summary':summary}, ensure_ascii=False, indent=1)[:6000])\"",
   "timeout": 20
 }
