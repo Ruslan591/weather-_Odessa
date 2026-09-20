@@ -1,1 +1,5 @@
-{"task_id": "cwgp_poll2_20260920", "cmd": "ps aux | grep central_west_grid_probe | grep -v grep; echo ---; wc -l /tmp/central_west_grid_probe.log 2>&1; echo ---; ls -la /tmp/central_west_grid_probe/ 2>&1", "timeout": 30}
+{
+  "task_id": "cwgp_env_check_1",
+  "cmd": "which python3; echo ---; ls /opt/weather-pipeline/repo 2>&1 | head -5; echo ---; test -d /opt/weather-pipeline/repo/venv && echo VENV_EXISTS || echo NO_VENV; echo ---; /opt/weather-pipeline/repo/venv/bin/python3 -c 'import numpy,PIL,requests;print(\"venv deps ok\")' 2>&1; echo ---; python3 -c 'import numpy,PIL,requests;print(\"system deps ok\")' 2>&1",
+  "timeout": 30
+}
