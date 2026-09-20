@@ -1,5 +1,5 @@
 {
-  "task_id": "cwgp_png_fetch_1",
-  "cmd": "echo B64START_VF; base64 -w0 /tmp/central_west_grid_probe/diagnostic_very_far.png; echo B64END_VF; echo B64START_WF; base64 -w0 /tmp/central_west_grid_probe/diagnostic_west_fine.png; echo B64END_WF",
-  "timeout": 20
+  "task_id": "cwgp_status_recheck_1",
+  "cmd": "cd /tmp/central_west_grid_probe 2>/dev/null && echo PROC:; pgrep -af central_west_grid_probe.py; echo LOGTAIL:; tail -c 2000 /tmp/central_west_grid_probe.log 2>/dev/null; echo RESULT_EXISTS:; ls -la result.json 2>/dev/null; echo REQLOG:; python3 -c \"import json; d=json.load(open('result.json')); rl=d.get('request_log',[]); print('n_requests_logged', len(rl)); bad=[e for e in rl if str(e.get('status','')).startswith('error') or e.get('gate_decision')=='skip']; print('problems', bad)\" 2>&1; echo SUMMARY:; python3 -c \"import json; d=json.load(open('result.json')); print(json.dumps(d.get('summary_table'), ensure_ascii=False, indent=2))\" 2>&1",
+  "timeout": 25
 }
