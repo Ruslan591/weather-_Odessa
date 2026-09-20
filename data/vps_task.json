@@ -1,5 +1,5 @@
 {
-  "task_id": "cwgp_status_recheck_1",
-  "cmd": "cd /tmp/central_west_grid_probe 2>/dev/null && echo PROC:; pgrep -af central_west_grid_probe.py; echo LOGTAIL:; tail -c 2000 /tmp/central_west_grid_probe.log 2>/dev/null; echo RESULT_EXISTS:; ls -la result.json 2>/dev/null; echo REQLOG:; python3 -c \"import json; d=json.load(open('result.json')); rl=d.get('request_log',[]); print('n_requests_logged', len(rl)); bad=[e for e in rl if str(e.get('status','')).startswith('error') or e.get('gate_decision')=='skip']; print('problems', bad)\" 2>&1; echo SUMMARY:; python3 -c \"import json; d=json.load(open('result.json')); print(json.dumps(d.get('summary_table'), ensure_ascii=False, indent=2))\" 2>&1",
-  "timeout": 25
+  "task_id": "cwgp_full_result_fetch_1",
+  "cmd": "cat /tmp/central_west_grid_probe/result.json",
+  "timeout": 20
 }
