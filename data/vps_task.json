@@ -1,1 +1,1 @@
-{"task_id": "cwgp_poll1_20260920", "cmd": "tail -n 40 /tmp/central_west_grid_probe.log 2>&1; echo ---; test -f /tmp/central_west_grid_probe/result.json && echo RESULT_EXISTS || echo RESULT_NOT_YET", "timeout": 30}
+{"task_id": "cwgp_poll2_20260920", "cmd": "ps aux | grep central_west_grid_probe | grep -v grep; echo ---; wc -l /tmp/central_west_grid_probe.log 2>&1; echo ---; ls -la /tmp/central_west_grid_probe/ 2>&1", "timeout": 30}
