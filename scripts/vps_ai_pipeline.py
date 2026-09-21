@@ -263,7 +263,29 @@ def release_git_lock(lock_fd):
 
 
 # ── очередь новых моделей (пишет vps_pipeline.py, этот файл читает/опустошает) ──
+def gemini_blocks_need_update():
+    """Проверяет, соответствуют ли Gemini-медиаблоки текущему анализу."""
+    gemini_file = os.path.join(BASE_DIR, "data", "forecast_analysis_gemini.json")
+    meta_file = os.path.join(BASE_DIR, "data", "blocks_gemini", "blocks_meta.json")
 
+    try:
+        with open(gemini_file, encoding="utf-8") as f:
+            src_hash = json.load(f).get("data_hash", "")
+
+        if not src_hash:
+            return False
+
+        if not os.path.exists(meta_file):
+            return True
+
+        with open(meta_file, encoding="utf-8") as f:
+            blocks_hash = json.load(f).get("data_hash", "")
+
+        return blocks_hash != src_hash
+
+    except Exception as e:
+        print(f"  [AI-Gemini] не удалось проверить data_hash блоков: {e}")
+        return False
 def check_ai_new_models(force=False):
     if not os.path.exists(AI_QUEUE_FILE):
         return
@@ -348,11 +370,11 @@ def check_ai_new_models(force=False):
             except subprocess.TimeoutExpired:
                 print("  [WARN] make_video.py завис дольше 700с — прерван")
 
-    if gemini_changed:
+    if gemini_blocks_need_update():
         try:
             blocks_result = subprocess.run(
                 [PYTHON, os.path.join(SCRIPTS_DIR, "make_blocks_gemini_cloud.py")],
-                cwd=BASE_DIR, capture_output=False, timeout=180
+                cwd=BASE_DIR, capture_output=False, timeout=600
             )
         except subprocess.TimeoutExpired:
             print("  [AI-Gemini] make_blocks_gemini_cloud.py завис дольше 180с — прерван")
@@ -414,7 +436,7 @@ def check_ai_gemini_pending():
     try:
         with open(gemini_file, encoding="utf-8") as f:
             gd2 = json.load(f)
-        if gd2.get("changed") and not gd2.get("pending"):
+        if not gd2.get("pending") and gemini_blocks_need_update():
             # 01.09.2026: тот же ранний push текста, что и в check_ai_new_models()
             # — иначе следующий cron-тик (main/satellite) может откатить его
             # sync_repo()'ом раньше, чем дойдёт очередь до git_push_ai() в конце.
@@ -422,7 +444,7 @@ def check_ai_gemini_pending():
             try:
                 blocks_r = subprocess.run(
                     [PYTHON, os.path.join(SCRIPTS_DIR, "make_blocks_gemini_cloud.py")],
-                    cwd=BASE_DIR, capture_output=False, timeout=180
+                    cwd=BASE_DIR, capture_output=False, timeout=600
                 )
             except subprocess.TimeoutExpired:
                 print("  [AI-Gemini] retry: make_blocks_gemini_cloud.py завис дольше 180с — прерван")
