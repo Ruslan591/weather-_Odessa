@@ -1,5 +1,5 @@
 {
-  "task_id": "cwtp_png2_1",
-  "cmd": "base64 -w0 /tmp/central_west_temporal_probe/diagnostic_frame2.png",
+  "task_id": "cwtp_offline_check_1",
+  "cmd": "ls -la /tmp/central_west_temporal_probe/; echo ---; grep -i 'temperature\\|pressure\\|raw' /tmp/central_west_temporal_probe.log | head -20; echo ---SCRIPT_SAVES---; grep -n 'model_results_by_id\\|json.dump\\|open(.*w.*)' /tmp/central_west_temporal_probe.py",
   "timeout": 15
 }
