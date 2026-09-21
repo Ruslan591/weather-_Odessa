@@ -1,5 +1,5 @@
 {
-  "task_id": "cwtd_check_procs_1",
-  "cmd": "ps -eo pid,lstart,cmd | grep -i central_west_temporal || echo NO_PROC; echo ---; date -u; echo ---; cat /tmp/central_west_temporal_diag/manifest.json",
+  "task_id": "cwtd_reqlog_check_1",
+  "cmd": "python3 -c \"import json; d=json.load(open('/tmp/central_west_temporal_diag/manifest.json')); rl=d['request_log']; print('n_requests', len(rl)); print('errors', [e for e in rl if str(e.get(\\\"status\\\",\\\"\\\")).startswith(\\\"error\\\")]); print('stopped_early', d.get('stopped_early'))\"",
   "timeout": 15
 }
