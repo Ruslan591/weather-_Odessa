@@ -1,5 +1,5 @@
 {
-  "task_id": "cwtd_progress_1",
-  "cmd": "pgrep -af central_west_temporal_probe_diag.py; echo ---; tail -c 1500 /tmp/central_west_temporal_diag.log",
+  "task_id": "cwtd_check_procs_1",
+  "cmd": "ps -eo pid,lstart,cmd | grep -i central_west_temporal || echo NO_PROC; echo ---; date -u; echo ---; cat /tmp/central_west_temporal_diag/manifest.json",
   "timeout": 15
 }
