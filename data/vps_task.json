@@ -1,5 +1,5 @@
 {
-  "task_id": "cwtp_check_final_1",
-  "cmd": "pgrep -af central_west_temporal_probe.py; echo ---LOG---; tail -c 2500 /tmp/central_west_temporal_probe.log; echo ---RESULT_STATUS---; python3 -c \"import json; d=json.load(open('/tmp/central_west_temporal_probe/result.json')); print('n_frames', len(d.get('frames',[]))); print('stopped_early', d.get('stopped_early')); print('end', d.get('generated_at_end')); [print(f.get('frame'), f.get('timestamp_utc'), f.get('n_confirmed_cells'), f.get('n_ridge_cells'), f.get('n_ridge_components'), f.get('n_closed_loop_components'), f.get('n_segments_after_filters'), f.get('error')) for f in d.get('frames',[])]\"",
+  "task_id": "cwtp_full_result_1",
+  "cmd": "cat /tmp/central_west_temporal_probe/result.json",
   "timeout": 20
 }
