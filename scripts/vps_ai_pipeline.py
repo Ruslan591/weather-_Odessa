@@ -377,7 +377,7 @@ def check_ai_new_models(force=False):
                 cwd=BASE_DIR, capture_output=False, timeout=600
             )
         except subprocess.TimeoutExpired:
-            print("  [AI-Gemini] make_blocks_gemini_cloud.py завис дольше 180с — прерван")
+            print("  [AI-Gemini] make_blocks_gemini_cloud.py завис дольше 600с — прерван")
             blocks_result = None
         if blocks_result is not None:
             if blocks_result.returncode != 0:
@@ -447,7 +447,7 @@ def check_ai_gemini_pending():
                     cwd=BASE_DIR, capture_output=False, timeout=600
                 )
             except subprocess.TimeoutExpired:
-                print("  [AI-Gemini] retry: make_blocks_gemini_cloud.py завис дольше 180с — прерван")
+                print("  [AI-Gemini] retry: make_blocks_gemini_cloud.py завис дольше 600с — прерван")
                 blocks_r = None
             if blocks_r is not None and blocks_r.returncode == 0:
                 # 02.09.2026: тот же ранний push блоков, что и в check_ai_new_models().
