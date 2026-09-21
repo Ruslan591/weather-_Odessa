@@ -1,32 +1,51 @@
 {
-  "timestamp": "2026-09-21T17:32:07Z",
+  "timestamp": "2026-09-21T17:47:04Z",
   "current_state": "no_storm",
   "target_type": "storm_mass",
-  "distance_km_now": 124.0,
-  "bearing_deg": 125.0,
+  "distance_km_now": 130.9,
+  "bearing_deg": 119.0,
   "compass": "ЮВ",
-  "blob_area_km2": 1053.0,
-  "verdict": "скорость посчитать не удалось (ячейка слишком мала/разрежена для оценки)",
-  "probability_percent": 32,
-  "probability_note": "эвристика (близость + размер очага), скорость не посчиталась",
+  "speed_kmh": 0.0,
+  "direction_compass": "ЮВ",
+  "cpa_km": 130.9,
+  "eta_min": null,
+  "blob_area_km2": 2571.0,
+  "verdict": "почти стоит на месте",
+  "frame_pairs_used": 2,
+  "probability_percent": 44,
+  "probability_note": "эвристика (близость точки сближения + размер очага + уверенность в скорости), не физическая модель грозовой активности",
   "method_note": "Скорость усреднена по 4 кадрам mtg_fd:li_afa (шаг 5 мин). Presence = непрозрачный пиксель (накопленная площадь вспышек за 5 мин). Порог значимости снижен до 8px — грозовые ячейки компактнее осадков/облаков. Скорость часто не считается (поле слишком разреженное) — это ограничение метода, не ошибка.",
   "target_confirmation": {
     "confirmed": false,
-    "target_id": 1,
-    "target_area_km2": 80.1,
+    "target_id": 2,
+    "target_area_km2": 64.0,
     "roi_lightning_fraction": 0.0,
     "verdict": "Грозовой активности в этой конкретной массе не наблюдается"
   },
   "system_analysis": {
     "available": true,
     "target_id": 0,
-    "area_km2": 9364.1,
-    "roi_lightning_fraction": 0.0,
-    "has_lightning": false
+    "area_km2": 175378.7,
+    "roi_lightning_fraction": 0.021,
+    "has_lightning": true
   },
   "system_analysis_all": [
     {
       "target_id": 0,
+      "available": true,
+      "roi_lightning_fraction": 0.021,
+      "has_lightning": true
+    },
+    {
+      "target_id": 5,
+      "available": true,
+      "roi_lightning_fraction": 0.0,
+      "has_lightning": false
+    }
+  ],
+  "local_analysis_all": [
+    {
+      "target_id": 1,
       "available": true,
       "roi_lightning_fraction": 0.0,
       "has_lightning": false
@@ -44,57 +63,13 @@
       "has_lightning": false
     },
     {
-      "target_id": 9,
-      "available": true,
-      "roi_lightning_fraction": 0.028,
-      "has_lightning": true
-    },
-    {
-      "target_id": 10,
-      "available": true,
-      "roi_lightning_fraction": 0.0,
-      "has_lightning": false
-    },
-    {
-      "target_id": 11,
-      "available": true,
-      "roi_lightning_fraction": 0.0,
-      "has_lightning": false
-    }
-  ],
-  "local_analysis_all": [
-    {
-      "target_id": 1,
-      "available": true,
-      "roi_lightning_fraction": 0.0,
-      "has_lightning": false
-    },
-    {
       "target_id": 4,
       "available": true,
       "roi_lightning_fraction": 0.0,
       "has_lightning": false
     },
     {
-      "target_id": 5,
-      "available": true,
-      "roi_lightning_fraction": 0.0,
-      "has_lightning": false
-    },
-    {
       "target_id": 6,
-      "available": true,
-      "roi_lightning_fraction": 0.0,
-      "has_lightning": false
-    },
-    {
-      "target_id": 7,
-      "available": true,
-      "roi_lightning_fraction": 0.0,
-      "has_lightning": false
-    },
-    {
-      "target_id": 8,
       "available": true,
       "roi_lightning_fraction": 0.0,
       "has_lightning": false
