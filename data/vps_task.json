@@ -1,5 +1,5 @@
 {
-  "task_id": "cwtd_bundle_1",
-  "cmd": "cd /tmp/central_west_temporal_diag && tar cf - frame_0/components.json frame_0/segments.json frame_0/confirmed_mask.json frame_0/ridge_mask.json frame_0/score_grid.json frame_0/summary.json frame_1/components.json frame_1/segments.json frame_1/confirmed_mask.json frame_1/ridge_mask.json frame_1/score_grid.json frame_1/summary.json frame_2/components.json frame_2/segments.json frame_2/confirmed_mask.json frame_2/ridge_mask.json frame_2/score_grid.json frame_2/summary.json | base64 -w0",
-  "timeout": 20
+  "task_id": "cwtd_sizes_1",
+  "cmd": "wc -c /tmp/central_west_temporal_diag/frame_*/*.json",
+  "timeout": 15
 }
