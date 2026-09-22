@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-09-22T19:55:36.353778+00:00",
+  "generated_utc": "2026-09-22T19:59:05.247362+00:00",
   "experiment": "ICON-EU MSLP isobars over EUMETSAT (single model, single time, isolated)",
   "target_valid_utc_requested": "2026-09-21T15:00:00+00:00",
   "bbox_lonlat_crs84": [
@@ -11,7 +11,13 @@
   "sat_width": 900,
   "sat_height": 900,
   "production_modified": false,
-  "errors": [],
+  "errors": [
+    {
+      "stage": "icon_eu",
+      "error": "too many values to unpack (expected 3)",
+      "traceback": "Traceback (most recent call last):\n  File \"/home/runner/work/weather-_Odessa/weather-_Odessa/scripts/experiments/icon_eu_isobars_satellite_probe.py\", line 396, in main\n    grid_hpa, lats, lons, grib_meta = parse_grib_mslp(raw)\n                                      ^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/weather-_Odessa/weather-_Odessa/scripts/experiments/icon_eu_isobars_satellite_probe.py\", line 217, in parse_grib_mslp\n    lats, lons, values = eccodes.codes_grib_get_data(gid)\n    ^^^^^^^^^^^^^^^^^^\nValueError: too many values to unpack (expected 3)\n"
+    }
+  ],
   "icon_eu_download_attempts": [
     {
       "run_utc": "2026-09-21T12:00:00+00:00",
@@ -46,7 +52,7 @@
       "bytes": 0
     }
   ],
-  "icon_eu_status": "NOT_FOUND",
+  "icon_eu_status": "ERROR",
   "icon_eu_available_runs_probe": {
     "00": {
       "http_status": 200,
@@ -94,6 +100,16 @@
     }
   },
   "icon_eu_reason": "Ни один run+lead, дающий валидное время ровно 2026-09-21T15:00:00+00:00, не найден на opendata.dwd.de (HTTP 404 на все кандидаты). opendata.dwd.de хранит только недавние прогоны ICON-EU (rolling retention), запрошенный момент (вчерашние сутки относительно запуска эксперимента) мог уже быть вычищен более новыми run'ами.",
+  "icon_eu_fallback_used": true,
+  "icon_eu_fallback_deviation_hours": 3.0,
+  "icon_eu_fallback_note": "ВНИМАНИЕ: это НЕ requested время (2026-09-21 15:00 UTC), а ближайшее РЕАЛЬНО доступное на opendata.dwd.de на момент запуска эксперимента — 2026-09-21T18:00:00+00:00. Используется отдельно, как иллюстративный/резервный результат, requested-результат выше остаётся NOT_FOUND и не подменяется.",
+  "icon_eu_chosen": {
+    "run_utc": "2026-09-21T18:00:00+00:00",
+    "lead_hours": 0,
+    "url": "https://opendata.dwd.de/weather/nwp/icon-eu/grib/18/pmsl/icon-eu_europe_regular-lat-lon_single-level_2026092118_000_PMSL.grib2.bz2",
+    "fname": "icon-eu_europe_regular-lat-lon_single-level_2026092118_000_PMSL.grib2.bz2",
+    "valid_utc": "2026-09-21T18:00:00+00:00"
+  },
   "eumetsat": {
     "geocolour": {
       "status": "OK",
