@@ -1,5 +1,5 @@
 {
-  "task_id": "truncate_bridge_log_1790068643",
-  "cmd": "truncate -s 0 /var/log/vps-github-bridge.log && echo '# лог очищен от протухшего traceback от 19.09, реальная ошибка не повторялась' >> /var/log/vps-github-bridge.log && date -u >> /var/log/vps-github-bridge.log && cat /var/log/vps-github-bridge.log",
-  "timeout": 20
+  "task_id": "free_tier_check_1790069039",
+  "cmd": "echo '--- CPU ---'; nproc; echo '--- MEM ---'; free -h; echo '--- BOOT+BLOCK DF ---'; df -h; echo '--- LSBLK ---'; lsblk; echo '--- DMIDECODE ---'; cat /proc/cpuinfo | grep -c processor; echo '--- OCI META ---'; curl -s -m 5 -H 'Authorization: Bearer Oracle' http://169.254.169.254/opc/v2/instance/shape 2>&1; echo; curl -s -m 5 -H 'Authorization: Bearer Oracle' http://169.254.169.254/opc/v2/instance/shapeConfig 2>&1",
+  "timeout": 30
 }
