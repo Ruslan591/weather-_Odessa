@@ -1,5 +1,5 @@
 {
-  "task_id": "diag2_1790046684",
-  "cmd": "cd /opt/weather-pipeline/repo && echo '--DISK-SHA--' && sha256sum data/blocks_gemini/block_0_today.mp3 && echo '--HEAD-SHA--' && git show HEAD:data/blocks_gemini/block_0_today.mp3 | sha256sum && echo '--DISK-SIZE--' && ls -la data/blocks_gemini/block_0_today.mp3 && echo '--GIT-DIFF--' && git diff --stat HEAD -- data/blocks_gemini/block_0_today.mp3 && echo '--LS-SCRIPTS-LOG--' && ls -la /var/log/*.log /opt/weather-pipeline/*.log /opt/weather-pipeline/repo/*.log 2>/dev/null && echo '--CRONTAB--' && crontab -l 2>/dev/null | grep -v '^#' && echo '--PS--' && ps aux | grep -iE 'python|make_blocks|make_video' | grep -v grep && echo '--LAST-N-COMMITS--' && git log --oneline -8",
+  "task_id": "diag3_1790052981",
+  "cmd": "cd /opt/weather-pipeline/repo && echo '--PENDING-GREP--' && grep -iE 'pending|gemini|rate.?limit|429|quota|RESOURCE_EXHAUSTED|error' /var/log/vps-ai-pipeline.log | tail -60 && echo '--LAST-200-LINES--' && tail -200 /var/log/vps-ai-pipeline.log",
   "timeout": 55
 }
