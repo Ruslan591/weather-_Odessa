@@ -310,6 +310,7 @@ def main():
         "errors": [],
     }
     log = manifest["log"]
+    sub_grid = sub_lats = sub_lons = None
 
     # --- 1. ICON-EU MSLP ---
     try:
