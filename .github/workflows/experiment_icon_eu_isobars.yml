@@ -19,15 +19,25 @@ jobs:
       - name: Install Python deps
         run: pip install numpy Pillow requests scipy matplotlib eccodes
       - name: Run experiment (isolated, no production files touched)
-        run: python scripts/experiments/icon_eu_isobars_satellite_probe.py
-      - name: Commit experiment results only
+        id: run_exp
+        run: |
+          mkdir -p data/experiments/icon_eu_isobars
+          set +e
+          python scripts/experiments/icon_eu_isobars_satellite_probe.py > data/experiments/icon_eu_isobars/run_log.txt 2>&1
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          cat data/experiments/icon_eu_isobars/run_log.txt
+      - name: Commit experiment results and log (always, even on failure)
+        if: always()
         run: |
           git config user.name "icon-eu-isobars-experiment-bot"
           git config user.email "actions@github.com"
           git add data/experiments/icon_eu_isobars
-          git diff --cached --quiet || git commit -m "experiment: ICON-EU MSLP isobars over EUMETSAT (isolated, no production change)"
+          git diff --cached --quiet || git commit -m "experiment: ICON-EU MSLP isobars over EUMETSAT run (exit=${{ steps.run_exp.outputs.exit_code }})"
           for i in 1 2 3; do
             git push && break
             git fetch origin main
             git rebase origin/main
           done
+      - name: Fail job if script failed
+        if: steps.run_exp.outputs.exit_code != '0'
+        run: exit 1
