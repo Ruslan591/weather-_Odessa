@@ -16,7 +16,7 @@ import verification
 BASE_DIR      = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUTPUT_FILE   = os.path.join(BASE_DIR, "data", "forecast_analysis_claude.json")
 OUTPUT_FILE_GEMINI = os.path.join(BASE_DIR, "data", "forecast_analysis_gemini.json")
-GEMINI_MODEL  = "gemini-2.5-flash"
+GEMINI_MODEL  = "gemini-3.5-flash"
 ENV_FILE      = os.path.join(BASE_DIR, ".env")
 TIMEOUT       = 30
 
