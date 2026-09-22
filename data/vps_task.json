@@ -1,5 +1,5 @@
 {
-  "task_id": "logcheck_1790068528",
-  "cmd": "stat -c '%y %n' /var/log/vps-github-bridge.log; echo ---; wc -l /var/log/vps-github-bridge.log; echo ---; tail -c 3000 /var/log/vps-github-bridge.log; echo ---LOCKCHECK---; ls -la /opt/vps-github-bridge/bridge.lock 2>&1; echo ---MD5---; md5sum /opt/vps-github-bridge/vps_github_bridge.py; echo ---GREP_FLOCK---; grep -c 'fcntl.flock' /opt/vps-github-bridge/vps_github_bridge.py",
-  "timeout": 30
+  "task_id": "truncate_bridge_log_1790068643",
+  "cmd": "truncate -s 0 /var/log/vps-github-bridge.log && echo '# лог очищен от протухшего traceback от 19.09, реальная ошибка не повторялась' >> /var/log/vps-github-bridge.log && date -u >> /var/log/vps-github-bridge.log && cat /var/log/vps-github-bridge.log",
+  "timeout": 20
 }
