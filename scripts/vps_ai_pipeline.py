@@ -410,6 +410,33 @@ def check_ai_new_models(force=False):
 
 # ── повтор Gemini при pending (rate-limit) ──────────────────────────────────
 
+# [ДОБАВЛЕНО 2026-09-22] Файл /tmp — сознательно ВНЕ репозитория, чтобы
+# sync_repo() (checkout -B/reset --hard в начале каждого цикла) его не трогал.
+GEMINI_RETRY_STATE_FILE = "/tmp/gemini_pending_retry_state.json"
+GEMINI_RETRY_MIN_INTERVAL_SEC = 30 * 60  # не долбим 429-квоту каждые ~5 минут
+
+
+def _gemini_retry_allowed():
+    try:
+        with open(GEMINI_RETRY_STATE_FILE, encoding="utf-8") as f:
+            st = json.load(f)
+        last = datetime.fromisoformat(st["last_attempt_utc"])
+        elapsed = (datetime.now(timezone.utc) - last).total_seconds()
+        if elapsed < GEMINI_RETRY_MIN_INTERVAL_SEC:
+            return False, elapsed
+    except Exception:
+        pass
+    return True, None
+
+
+def _gemini_retry_mark():
+    try:
+        with open(GEMINI_RETRY_STATE_FILE, "w", encoding="utf-8") as f:
+            json.dump({"last_attempt_utc": datetime.now(timezone.utc).isoformat()}, f)
+    except Exception:
+        pass
+
+
 def check_ai_gemini_pending():
     gemini_file = os.path.join(BASE_DIR, "data", "forecast_analysis_gemini.json")
     if not os.path.exists(gemini_file):
@@ -422,7 +449,17 @@ def check_ai_gemini_pending():
     if not gd.get("pending", False):
         return
 
+    # [ДОБАВЛЕНО 2026-09-22, ПРИЧИНА: HTTP 429 квота Gemini держалась
+    # сутками, а этот retry раньше стучался в API на каждом тике (~раз в
+    # 5 мин) без разбора — 429 по квоте (план/биллинг) не лечится частыми
+    # попытками, только тратит запросы и засоряет лог одинаковой ошибкой.
+    # Теперь ждём минимум GEMINI_RETRY_MIN_INTERVAL_SEC между попытками.
+    allowed, elapsed = _gemini_retry_allowed()
+    if not allowed:
+        return
+
     print("\n  [AI-Gemini] Найден pending — повторная попытка Gemini...")
+    _gemini_retry_mark()
     try:
         gr = subprocess.run(
             [PYTHON, os.path.join(SCRIPTS_DIR, "generate_ai_analysis.py"), "--force-gemini"],
