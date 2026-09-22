@@ -1,5 +1,5 @@
 {
-  "task_id": "diag3_1790052981",
-  "cmd": "cd /opt/weather-pipeline/repo && echo '--PENDING-GREP--' && grep -iE 'pending|gemini|rate.?limit|429|quota|RESOURCE_EXHAUSTED|error' /var/log/vps-ai-pipeline.log | tail -60 && echo '--LAST-200-LINES--' && tail -200 /var/log/vps-ai-pipeline.log",
-  "timeout": 55
+  "task_id": "diag_cron_1790055402",
+  "cmd": "crontab -l 2>/dev/null | grep -v '^#'",
+  "timeout": 30
 }
