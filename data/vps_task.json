@@ -1,5 +1,5 @@
 {
-  "task_id": "deploy_bridge_fix_1790068249",
-  "cmd": "cd /opt/weather-pipeline/repo && git fetch --update-shallow origin main && git checkout main && git reset --hard origin/main && cp scripts/vps_github_bridge.py /opt/vps-github-bridge/vps_github_bridge.py && python3 -m py_compile /opt/vps-github-bridge/vps_github_bridge.py && echo DEPLOYED_OK && md5sum /opt/vps-github-bridge/vps_github_bridge.py",
-  "timeout": 45
+  "task_id": "logcheck_1790068528",
+  "cmd": "stat -c '%y %n' /var/log/vps-github-bridge.log; echo ---; wc -l /var/log/vps-github-bridge.log; echo ---; tail -c 3000 /var/log/vps-github-bridge.log; echo ---LOCKCHECK---; ls -la /opt/vps-github-bridge/bridge.lock 2>&1; echo ---MD5---; md5sum /opt/vps-github-bridge/vps_github_bridge.py; echo ---GREP_FLOCK---; grep -c 'fcntl.flock' /opt/vps-github-bridge/vps_github_bridge.py",
+  "timeout": 30
 }
