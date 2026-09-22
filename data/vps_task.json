@@ -1,5 +1,5 @@
 {
-  "task_id": "diag_cron_1790055402",
-  "cmd": "crontab -l 2>/dev/null | grep -v '^#'",
-  "timeout": 30
+  "task_id": "deploy_bridge_fix_1790068249",
+  "cmd": "cd /opt/weather-pipeline/repo && git fetch --update-shallow origin main && git checkout main && git reset --hard origin/main && cp scripts/vps_github_bridge.py /opt/vps-github-bridge/vps_github_bridge.py && python3 -m py_compile /opt/vps-github-bridge/vps_github_bridge.py && echo DEPLOYED_OK && md5sum /opt/vps-github-bridge/vps_github_bridge.py",
+  "timeout": 45
 }
