@@ -995,6 +995,30 @@ def call_gemini(prompt, api_key, model=GEMINI_MODEL):
         raise Exception(f"HTTP Error {e.code}: {e.reason} | {body[:300]}")
     return resp["candidates"][0]["content"]["parts"][0]["text"]
 
+# [ДОБАВЛЕНО 2026-09-22] Кэш промпта для повторных попыток Gemini при
+# pending (см. GEMINI_RETRY_CACHE_FILE ниже) — файл в /tmp, сознательно
+# вне репозитория, чтобы sync_repo() его не трогал и не засорять git.
+GEMINI_RETRY_CACHE_FILE = "/tmp/gemini_retry_prompt_cache.json"
+
+def _load_gemini_retry_cache(expected_run_key, max_age_hours=3):
+    """Отдаёт закэшированный промпт, если он относится к тому же
+    pending_run_key и не старше max_age_hours, иначе None (тогда
+    вызывающий код просто идёт по обычному пути с полным fetch_ensemble())."""
+    if not expected_run_key:
+        return None
+    try:
+        with open(GEMINI_RETRY_CACHE_FILE, encoding="utf-8") as f:
+            c = json.load(f)
+        if c.get("run_key") != expected_run_key:
+            return None
+        cached_at = datetime.fromisoformat(c["cached_at"].replace("Z", "+00:00"))
+        age_h = (datetime.now(timezone.utc) - cached_at).total_seconds() / 3600
+        if age_h > max_age_hours:
+            return None
+        return c
+    except Exception:
+        return None
+
 def generate_gemini_analysis(prompt, now_iso, current_hash, days, run_key, mode=None):
     api_key = load_gemini_api_key()
     if not api_key:
@@ -1025,6 +1049,25 @@ def generate_gemini_analysis(prompt, now_iso, current_hash, days, run_key, mode=
         _existing["changed"] = False
         with open(OUTPUT_FILE_GEMINI, "w", encoding="utf-8") as _f:
             json.dump(_existing, _f, ensure_ascii=False, indent=2)
+        # [ДОБАВЛЕНО 2026-09-22] Кэшируем промпт для retry — см.
+        # _load_gemini_retry_cache()/GEMINI_RETRY_CACHE_FILE выше. Причина:
+        # без этого каждый retry (даже раз в 30 мин) заново дёргал 8
+        # моделей open-meteo + marine ради того же самого промпта, хотя
+        # модельные данные между retry не менялись (модели публикуются
+        # раз в ~6ч).
+        try:
+            with open(GEMINI_RETRY_CACHE_FILE, "w", encoding="utf-8") as _cf:
+                json.dump({
+                    "run_key": run_key,
+                    "data_hash": current_hash,
+                    "now_iso": now_iso,
+                    "mode": mode,
+                    "days_count": len(days),
+                    "prompt": prompt,
+                    "cached_at": now_iso,
+                }, _cf, ensure_ascii=False)
+        except Exception:
+            pass
         return
 
     result = {
@@ -1161,6 +1204,24 @@ def main(force=False, new_models=None, force_gemini=False):
 
     if not ok_claude and not ok_gemini:
         return
+
+    # [ДОБАВЛЕНО 2026-09-22] Если это чисто gemini-retry (force_gemini) и
+    # Claude в этот заход не нужен -- пробуем переиспользовать промпт,
+    # закэшированный на предыдущей неудачной попытке, вместо повторного
+    # fetch_ensemble()+fetch_marine() (8 моделей open-meteo + marine) ради
+    # того же самого промпта. Данные моделей не меняются между retry
+    # (модели публикуются раз в ~6ч), так что смысла их перезапрашивать
+    # нет -- нужно только заново отправить промпт в Gemini.
+    if force_gemini and ok_gemini and not ok_claude and gemini_enabled():
+        _cached = _load_gemini_retry_cache(existing_gemini.get("pending_run_key"))
+        if _cached:
+            print("  [AI-Gemini] Retry: использую закэшированный промпт, open-meteo не трогаю")
+            generate_gemini_analysis(
+                _cached["prompt"], _cached["now_iso"], _cached["data_hash"],
+                [None] * _cached.get("days_count", 0), run_key_gemini,
+                mode=_cached.get("mode"),
+            )
+            return
 
     # Запрашиваем данные
     try:
