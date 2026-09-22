@@ -1,5 +1,5 @@
 {
-  "task_id": "cwtd_f2_files_1",
-  "cmd": "cd /tmp/central_west_temporal_diag/frame_2 && cat confirmed_mask.json; echo '<<<SPLIT>>>'; cat ridge_mask.json; echo '<<<SPLIT>>>'; cat components.json; echo '<<<SPLIT>>>'; cat segments.json; echo '<<<SPLIT>>>'; cat score_grid.json",
-  "timeout": 15
+  "task_id": "diag_1790046538",
+  "cmd": "cd /opt/weather-pipeline/repo && echo '--MTIME--' && stat -c '%Y %y %n' data/blocks_gemini/block_0_today.mp3 data/blocks_gemini/block_2_next3.mp3 data/blocks_gemini/blocks_meta.json && echo '--DATENOW--' && date -u && date && echo '--GITLOG--' && git log -1 --format='%H %cI %s' -- data/blocks_gemini/block_0_today.mp3 && echo '--GITSTATUS--' && git status --porcelain data/blocks_gemini | head -30 && echo '--TZ--' && timedatectl 2>/dev/null | grep -i zone && echo '--LOGFILES--' && ls -la /opt/weather-pipeline/*.log 2>/dev/null && echo '--RECENTLOG--' && tail -200 /opt/weather-pipeline/vps_ai_pipeline.log 2>/dev/null | grep -iE 'today|block_0|BLOCKS-Gemini|устарел|пропущен' | tail -40",
+  "timeout": 55
 }
