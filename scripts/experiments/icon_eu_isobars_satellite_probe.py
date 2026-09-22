@@ -126,6 +126,37 @@ def try_download_icon_eu_mslp(log):
     return None, None, attempts
 
 
+def find_fallback_run(probe_info, log):
+    """Если requested valid time недоступен (rolling retention DWD вычистила
+    его), НЕ округляем requested время молча — вместо этого явно ищем
+    САМЫЙ РАННИЙ реально доступный run (lead=000, т.е. valid time = сам run)
+    среди директорий 00/06/12/18, и возвращаем его как отдельный,
+    промаркированный 'illustrative/fallback' результат, НЕ подменяющий
+    основной NOT_FOUND для requested time."""
+    import re
+    candidates = []
+    for hh, info in probe_info.items():
+        files = info.get("sample_files", [])
+        m = re.match(r"icon-eu_europe_regular-lat-lon_single-level_(\d{10})_(\d{3})_PMSL\.grib2\.bz2", files[0]) if files else None
+        if m:
+            run_tag, lead = m.group(1), int(m.group(2))
+            run_dt = datetime.strptime(run_tag, "%Y%m%d%H").replace(tzinfo=timezone.utc)
+            valid_dt = run_dt + timedelta(hours=lead)
+            candidates.append({"run_tag": run_tag, "run_hour_dir": hh, "lead": lead, "valid_dt": valid_dt})
+    if not candidates:
+        return None
+    # самый РАННИЙ (минимальный) valid_dt среди всех директорий = самая
+    # старая ещё не вычищенная точка данных = ближайшая к requested (которое
+    # уже в прошлом относительно всех текущих run'ов).
+    best = min(candidates, key=lambda c: c["valid_dt"])
+    fname = f"icon-eu_europe_regular-lat-lon_single-level_{best['run_tag']}_{best['lead']:03d}_PMSL.grib2.bz2"
+    url = f"{DWD_BASE}/{best['run_hour_dir']}/pmsl/{fname}"
+    log.append(f"FALLBACK candidate: {url} (valid={best['valid_dt'].isoformat()})")
+    return {"run_utc": (best['valid_dt'] - timedelta(hours=best['lead'])).isoformat(),
+            "lead_hours": best["lead"], "url": url, "fname": fname,
+            "valid_utc": best["valid_dt"].isoformat()}
+
+
 def probe_available_runs(log):
     """Диагностика: какие run'ы СЕЙЧАС реально выложены на opendata.dwd.de
     для icon-eu/pmsl (директории по часам запуска). Не является заменой
@@ -316,9 +347,11 @@ def main():
     try:
         raw, chosen, attempts = try_download_icon_eu_mslp(log)
         manifest["icon_eu_download_attempts"] = attempts
+        is_fallback = False
         if raw is None:
             manifest["icon_eu_status"] = "NOT_FOUND"
-            manifest["icon_eu_available_runs_probe"] = probe_available_runs(log)
+            probe_info = probe_available_runs(log)
+            manifest["icon_eu_available_runs_probe"] = probe_info
             manifest["icon_eu_reason"] = (
                 "Ни один run+lead, дающий валидное время ровно "
                 f"{TARGET_VALID_UTC.isoformat()}, не найден на opendata.dwd.de "
@@ -327,8 +360,38 @@ def main():
                 "момент (вчерашние сутки относительно запуска эксперимента) "
                 "мог уже быть вычищен более новыми run'ами."
             )
-        else:
-            manifest["icon_eu_status"] = "OK"
+            fb = find_fallback_run(probe_info, log)
+            if fb is not None:
+                try:
+                    r = requests.get(fb["url"], timeout=60)
+                    log.append(f"FALLBACK GET {fb['url']} -> {r.status_code}")
+                    if r.status_code == 200 and len(r.content) > 1000:
+                        raw = bz2.decompress(r.content)
+                        chosen = fb
+                        is_fallback = True
+                        manifest["icon_eu_fallback_used"] = True
+                        manifest["icon_eu_fallback_deviation_hours"] = round(
+                            (datetime.fromisoformat(fb["valid_utc"]) - TARGET_VALID_UTC).total_seconds() / 3600.0, 2
+                        )
+                        manifest["icon_eu_fallback_note"] = (
+                            "ВНИМАНИЕ: это НЕ requested время (2026-09-21 15:00 UTC), а "
+                            "ближайшее РЕАЛЬНО доступное на opendata.dwd.de на момент запуска "
+                            "эксперимента — " + fb["valid_utc"] + ". Используется отдельно, "
+                            "как иллюстративный/резервный результат, requested-результат выше "
+                            "остаётся NOT_FOUND и не подменяется."
+                        )
+                    else:
+                        manifest["icon_eu_fallback_used"] = False
+                        manifest["icon_eu_fallback_error"] = f"HTTP {r.status_code}"
+                except Exception as e:
+                    manifest["icon_eu_fallback_used"] = False
+                    manifest["icon_eu_fallback_error"] = str(e)
+            else:
+                manifest["icon_eu_fallback_used"] = False
+                manifest["icon_eu_fallback_error"] = "no candidate parsed from probe listing"
+
+        if raw is not None:
+            manifest["icon_eu_status"] = "FALLBACK_OK" if is_fallback else "OK"
             manifest["icon_eu_chosen"] = chosen
             grid_hpa, lats, lons, grib_meta = parse_grib_mslp(raw)
             manifest["icon_eu_grib_meta"] = grib_meta
@@ -355,67 +418,127 @@ def main():
                 "argmax_lon": float(sub_lons[np.unravel_index(np.nanargmax(grad_mag), grad_mag.shape)[1]]),
             }
 
-            mslp_png = os.path.join(OUT_DIR, f"icon_eu_mslp_{TARGET_LABEL}.png")
-            render_info = render_mslp_only(sub_grid, sub_lats, sub_lons, mslp_png)
-            manifest["mslp_render"] = render_info
-            manifest["files_written"] = manifest.get("files_written", []) + [
-                f"data/experiments/icon_eu_isobars/icon_eu_mslp_{TARGET_LABEL}.png"
-            ]
-
-            # сохраняем промежуточное поле компактно
+            # промежуточное поле (npz) сохраняем всегда, под TARGET_LABEL
+            # (имя файла про requested-момент эксперимента как таковой, не
+            # про то, что в него попало) — компактно, для последующей
+            # диагностики без повторного скачивания GRIB.
             np.savez_compressed(os.path.join(OUT_DIR, f"icon_eu_mslp_{TARGET_LABEL}.npz"),
                                  grid_hpa=sub_grid, lats=sub_lats, lons=sub_lons)
-            manifest["files_written"].append(
+            manifest["files_written"] = manifest.get("files_written", []) + [
                 f"data/experiments/icon_eu_isobars/icon_eu_mslp_{TARGET_LABEL}.npz"
-            )
+            ]
+
+            if not is_fallback:
+                mslp_png = os.path.join(OUT_DIR, f"icon_eu_mslp_{TARGET_LABEL}.png")
+                render_info = render_mslp_only(sub_grid, sub_lats, sub_lons, mslp_png)
+                manifest["mslp_render"] = render_info
+                manifest["files_written"].append(
+                    f"data/experiments/icon_eu_isobars/icon_eu_mslp_{TARGET_LABEL}.png"
+                )
     except Exception as e:
         manifest["icon_eu_status"] = "ERROR"
         manifest["errors"].append({"stage": "icon_eu", "error": str(e), "traceback": traceback.format_exc()})
         sub_grid = None
 
-    # --- 2. EUMETSAT ---
-    t_iso = TARGET_VALID_UTC.strftime("%Y-%m-%dT%H:%M:00Z")
-    sat = {}
+    # --- 2. EUMETSAT (всегда на REQUESTED время — нужно для честного
+    #     сравнения requested satellite time vs фактически то, что сервер
+    #     отдал, независимо от того, нашёлся ли ICON-EU на 15:00) ---
+    t_iso_requested = TARGET_VALID_UTC.strftime("%Y-%m-%dT%H:%M:00Z")
+    sat_requested = {}
     for key, (layer, style) in {
         "geocolour": (LAYER_GEOCOLOUR, ""),
         "ir105": (LAYER_IR105, STYLE_IR105),
     }.items():
         try:
-            arr = fc.fetch_map_custom(layer, BBOX, SAT_WIDTH, SAT_HEIGHT, time_iso=t_iso,
+            arr = fc.fetch_map_custom(layer, BBOX, SAT_WIDTH, SAT_HEIGHT, time_iso=t_iso_requested,
                                        retries=2, delay=5, style=style, crs="CRS:84")
-            sat[key] = arr
+            sat_requested[key] = arr
             snap_path = os.path.join(OUT_DIR, f"eumetsat_{key}_{TARGET_LABEL}_raw.png")
             Image.fromarray(arr).save(snap_path)
             manifest.setdefault("eumetsat", {})[key] = {
-                "status": "OK", "requested_time_utc": t_iso, "layer": layer,
+                "status": "OK", "requested_time_utc": t_iso_requested, "layer": layer,
                 "raw_file": f"data/experiments/icon_eu_isobars/eumetsat_{key}_{TARGET_LABEL}_raw.png",
                 "note": "WMS GetMap не возвращает фактический timestamp кадра в теле ответа; "
                         "фактическое время не может быть подтверждено помимо requested_time_utc "
                         "без отдельного GetFeatureInfo/GetCapabilities-запроса по историческому времени.",
             }
-            log.append(f"EUMETSAT {key} OK, shape={arr.shape}")
+            log.append(f"EUMETSAT {key} OK (requested time), shape={arr.shape}")
         except Exception as e:
             manifest.setdefault("eumetsat", {})[key] = {"status": "ERROR", "error": str(e)}
             manifest["errors"].append({"stage": f"eumetsat_{key}", "error": str(e)})
-            sat[key] = None
-            log.append(f"EUMETSAT {key} FAILED: {e}")
+            sat_requested[key] = None
+            log.append(f"EUMETSAT {key} FAILED (requested time): {e}")
 
-    # --- 3. Наложение ---
-    if sub_grid is not None:
+    # --- 3. Наложение на REQUESTED satellite time (только если ICON-EU
+    #     реально дал поле НА requested время, т.е. is_fallback=False) ---
+    if sub_grid is not None and not is_fallback:
         levels = np.arange(
             math.floor(manifest["mslp_bbox_stats"]["min_hpa"] / 2.0) * 2.0,
             math.ceil(manifest["mslp_bbox_stats"]["max_hpa"] / 2.0) * 2.0 + 2.0,
             2.0,
         )
         for key in ("geocolour", "ir105"):
-            if sat.get(key) is not None:
+            if sat_requested.get(key) is not None:
                 out_path = os.path.join(OUT_DIR, f"icon_eu_isobars_{key}_{TARGET_LABEL}.png")
                 title = f"ICON-EU MSLP isobars + EUMETSAT {key.upper()}, valid {TARGET_VALID_UTC.isoformat()}"
-                render_overlay(sat[key], sub_grid, sub_lats, sub_lons, title, out_path, levels)
+                render_overlay(sat_requested[key], sub_grid, sub_lats, sub_lons, title, out_path, levels)
                 manifest["files_written"] = manifest.get("files_written", []) + [
                     f"data/experiments/icon_eu_isobars/icon_eu_isobars_{key}_{TARGET_LABEL}.png"
                 ]
-                log.append(f"overlay {key} written")
+                log.append(f"overlay {key} written (requested time)")
+
+    # --- 4. Если ICON-EU получен только через FALLBACK (другое валидное
+    #     время, НЕ requested) — отдельный, ЯВНО помеченный набор: EUMETSAT
+    #     ЗАНОВО запрашивается на fallback valid time (иначе изобары и
+    #     спутник были бы рассинхронизированы по времени), с отдельными
+    #     именами файлов, не пересекающимися с requested-результатом выше. ---
+    if sub_grid is not None and is_fallback:
+        fb_valid_dt = datetime.fromisoformat(manifest["icon_eu_chosen"]["valid_utc"])
+        fb_label = fb_valid_dt.strftime("%Y-%m-%d_%H%M") + "_FALLBACK"
+        t_iso_fb = fb_valid_dt.strftime("%Y-%m-%dT%H:%M:00Z")
+        sat_fb = {}
+        for key, (layer, style) in {
+            "geocolour": (LAYER_GEOCOLOUR, ""),
+            "ir105": (LAYER_IR105, STYLE_IR105),
+        }.items():
+            try:
+                arr = fc.fetch_map_custom(layer, BBOX, SAT_WIDTH, SAT_HEIGHT, time_iso=t_iso_fb,
+                                           retries=2, delay=5, style=style, crs="CRS:84")
+                sat_fb[key] = arr
+                snap_path = os.path.join(OUT_DIR, f"eumetsat_{key}_{fb_label}_raw.png")
+                Image.fromarray(arr).save(snap_path)
+                manifest.setdefault("eumetsat_fallback", {})[key] = {
+                    "status": "OK", "requested_time_utc": t_iso_fb, "layer": layer,
+                    "raw_file": f"data/experiments/icon_eu_isobars/eumetsat_{key}_{fb_label}_raw.png",
+                }
+                log.append(f"EUMETSAT {key} OK (fallback time {t_iso_fb}), shape={arr.shape}")
+            except Exception as e:
+                manifest.setdefault("eumetsat_fallback", {})[key] = {"status": "ERROR", "error": str(e)}
+                manifest["errors"].append({"stage": f"eumetsat_fallback_{key}", "error": str(e)})
+                sat_fb[key] = None
+                log.append(f"EUMETSAT {key} FAILED (fallback time): {e}")
+
+        mslp_png_fb = os.path.join(OUT_DIR, f"icon_eu_mslp_{fb_label}.png")
+        render_info_fb = render_mslp_only(sub_grid, sub_lats, sub_lons, mslp_png_fb)
+        manifest["mslp_render_fallback"] = render_info_fb
+        manifest["files_written"] = manifest.get("files_written", []) + [
+            f"data/experiments/icon_eu_isobars/icon_eu_mslp_{fb_label}.png"
+        ]
+        levels_fb = np.arange(
+            math.floor(manifest["mslp_bbox_stats"]["min_hpa"] / 2.0) * 2.0,
+            math.ceil(manifest["mslp_bbox_stats"]["max_hpa"] / 2.0) * 2.0 + 2.0,
+            2.0,
+        )
+        for key in ("geocolour", "ir105"):
+            if sat_fb.get(key) is not None:
+                out_path = os.path.join(OUT_DIR, f"icon_eu_isobars_{key}_{fb_label}.png")
+                title = (f"[FALLBACK, NOT requested time] ICON-EU MSLP isobars + EUMETSAT "
+                         f"{key.upper()}, valid {fb_valid_dt.isoformat()}")
+                render_overlay(sat_fb[key], sub_grid, sub_lats, sub_lons, title, out_path, levels_fb)
+                manifest["files_written"] = manifest.get("files_written", []) + [
+                    f"data/experiments/icon_eu_isobars/icon_eu_isobars_{key}_{fb_label}.png"
+                ]
+                log.append(f"overlay {key} written (fallback time)")
 
     manifest_path = os.path.join(OUT_DIR, "manifest.json")
     with open(manifest_path, "w", encoding="utf-8") as f:
