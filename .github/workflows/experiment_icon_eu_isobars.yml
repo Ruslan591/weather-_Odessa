@@ -1,0 +1,33 @@
+name: Experiment - ICON-EU MSLP isobars over EUMETSAT (isolated)
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  run-experiment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install eccodes system library
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libeccodes0 libeccodes-tools libeccodes-dev
+      - name: Install Python deps
+        run: pip install numpy Pillow requests scipy matplotlib eccodes
+      - name: Run experiment (isolated, no production files touched)
+        run: python scripts/experiments/icon_eu_isobars_satellite_probe.py
+      - name: Commit experiment results only
+        run: |
+          git config user.name "icon-eu-isobars-experiment-bot"
+          git config user.email "actions@github.com"
+          git add data/experiments/icon_eu_isobars
+          git diff --cached --quiet || git commit -m "experiment: ICON-EU MSLP isobars over EUMETSAT (isolated, no production change)"
+          for i in 1 2 3; do
+            git push && break
+            git fetch origin main
+            git rebase origin/main
+          done
