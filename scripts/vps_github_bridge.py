@@ -39,6 +39,7 @@ HTTPS-агенту (scripts/vps_agent.py) на сервере, даже если
   - cron: * * * * * /opt/vps-github-bridge/venv/bin/python3 /opt/vps-github-bridge/vps_github_bridge.py
 """
 
+import fcntl
 import json
 import os
 import subprocess
@@ -54,6 +55,7 @@ TASK_PATH = "data/vps_task.json"
 RESULT_PATH = "data/vps_result.json"
 STATE_FILE = "/opt/vps-github-bridge/last_task_id.txt"
 TOKEN_FILE = "/etc/vps-github-bridge/token"
+LOCK_FILE = "/opt/vps-github-bridge/bridge.lock"
 
 API_BASE = "https://api.github.com"
 
@@ -124,6 +126,16 @@ def save_last_task_id(task_id: str) -> None:
 
 
 def main() -> int:
+    # Не даём двум экземплярам работать параллельно: если предыдущий запуск
+    # (например, из-за долгой команды) ещё не завершился, новый тик cron
+    # просто выходит, не дублируя выполнение и не создавая гонку за sha
+    # при PUT vps_result.json (см. learnings.md — источник 409-конфликтов).
+    lock_fd = open(LOCK_FILE, "w")
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return 0  # предыдущий запуск ещё выполняется
+
     token = load_token()
 
     task, _task_sha = get_file(TASK_PATH, token)
