@@ -496,6 +496,87 @@ def build_text_segments(section_text, date_prefix, boundaries):
     return segments
 
 
+GIT_LOCK_FILE = "/tmp/vps_git.lock"
+GIT_LOCK_TIMEOUT_SEC = 60
+
+def _acquire_git_lock():
+    """Тот же лок-файл, что и во всех VPS-пайплайнах (vps_pipeline.py,
+    vps_ai_pipeline.py) — берём его тоже здесь, чтобы ранний коммит
+    block_0 не пересекался с их sync_repo()/git_push_ai()."""
+    import fcntl
+    lock_fd = open(GIT_LOCK_FILE, "w")
+    waited = 0
+    while waited < GIT_LOCK_TIMEOUT_SEC:
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return lock_fd
+        except BlockingIOError:
+            import time as _t
+            _t.sleep(1)
+            waited += 1
+    return None
+
+def _release_git_lock(lock_fd):
+    import fcntl
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        lock_fd.close()
+    except Exception:
+        pass
+
+def _git_push_block0_now(filenames):
+    """[ДОБАВЛЕНО 2026-09-22, ROOT CAUSE block_0 STALE SINCE 29.08]
+    Коммитит и пушит файлы block_0 (today/tonight + их страницы) СРАЗУ
+    после генерации, под общим GIT_LOCK_FILE.
+
+    Причина: этот скрипт пишет mp3 на диск БЕЗ лока, а коммитит их
+    (git_push_ai(BLOCKS_GEMINI_PATHS) в vps_ai_pipeline.py) только ПОСЛЕ
+    того как отработает целиком (~2-10 мин на все 6 блоков + страницы).
+    block_0 — первый в BLOCK_DEFS, поэтому лежит на диске незакоммиченным
+    дольше всех. Если в этом окне параллельный пайплайн (satellite/main,
+    свой такт) вызовет sync_repo() — checkout -B/reset --hard там ПОД ТЕМ
+    ЖЕ локом, но на своём такте — он откатывает наши ещё не закоммиченные
+    изменения в data/blocks_gemini обратно к origin/main. Поздние блоки
+    (next3/warnings/marine/trend) страдают реже, т.к. пишутся ближе к
+    финальному пушу. Итог, наблюдавшийся неделями: block_0_today.mp3/
+    block_0_tonight.mp3 навсегда застряли на дате последнего окна без
+    гонки (29.08), пока остальные блоки обновлялись почти каждый цикл
+    (подтверждено диагностикой: sha256 файла на диске == sha256 в HEAD,
+    при этом mtime свежий — файл перезаписывался тем же содержимым, что
+    и было в git, т.е. откатывался, а не просто не трогался).
+    Фикс: коммитим и пушим block_0 под локом сразу, не дожидаясь конца
+    всего скрипта."""
+    lock_fd = _acquire_git_lock()
+    if lock_fd is None:
+        print("  [BLOCKS-Gemini] git-лок не получен — ранний пуш block_0 пропущен")
+        return
+    try:
+        to_add = [f for f in filenames if os.path.exists(os.path.join(BASE_DIR, f))]
+        if not to_add:
+            return
+        subprocess.run(["git", "-C", BASE_DIR, "add"] + to_add,
+                        check=True, capture_output=True, timeout=30)
+        status = subprocess.run(
+            ["git", "-C", BASE_DIR, "diff", "--cached", "--name-only"],
+            capture_output=True, text=True, timeout=15)
+        if not status.stdout.strip():
+            return
+        subprocess.run(["git", "-C", BASE_DIR, "commit", "-m", "vps ai: block_0 early push"],
+                        capture_output=True, text=True, timeout=30)
+        import time as _t
+        for _attempt in range(3):
+            push = subprocess.run(["git", "-C", BASE_DIR, "push"],
+                                   capture_output=True, text=True, timeout=60)
+            if push.returncode == 0:
+                print(f"  [BLOCKS-Gemini] block_0 ранний пуш \u2713{' (retry)' if _attempt else ''}")
+                return
+            if _attempt < 2:
+                _t.sleep([10, 20][_attempt])
+        print("  [BLOCKS-Gemini] block_0 ранний пуш \u2717 (3 попытки)")
+    finally:
+        _release_git_lock(lock_fd)
+
+
 def main(force=False):
     if not os.path.exists(INPUT_FILE):
         print(f"  [BLOCKS-Gemini] Файл не найден: {INPUT_FILE}")
@@ -637,6 +718,11 @@ def main(force=False):
                 "t_min":    _t_min,
                 "t_max":    _t_max,
             })
+            if key in ("today", "tonight"):
+                _git_push_block0_now(
+                    [f"data/blocks_gemini/{filename}"] +
+                    [pf["path"] for pf in page_files]
+                )
 
     meta = {
         "generated_at": data.get('generated_at', ''),
