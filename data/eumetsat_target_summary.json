@@ -1,26 +1,21 @@
 {
-  "timestamp": "2026-09-23T04:17:39Z",
-  "status": "suppressed_known_false_positive",
-  "cloud_forecast_timestamp": "2026-09-23T03:15:00.000Z",
-  "suppressed_target": {
-    "signature": "110_190",
-    "area_km2": 266.9,
-    "distance_km": 219.6,
-    "bearing_deg": 29.0,
-    "compass": "СВ",
-    "not_confirmed_streak": 3,
-    "total_not_confirmed": 3,
-    "excluded_since": "2026-09-23T03:47:24Z"
-  },
+  "timestamp": "2026-09-23T04:23:06Z",
+  "status": "ok",
+  "cloud_forecast_timestamp": "2026-09-23T03:45:00.000Z",
+  "target_id": 1,
+  "target_area_km2": 93.4,
+  "target_distance_km": 198.4,
+  "target_bearing_deg": 328.0,
+  "target_compass": "СЗ",
   "system": {
     "target_id": 0,
-    "area_km2": 26033.5,
-    "distance_km": 177.6,
-    "bearing_deg": 357.0,
+    "area_km2": 781.9,
+    "distance_km": 152.1,
+    "bearing_deg": 350.0,
     "compass": "С",
-    "elongation_aspect_ratio": 2.29,
-    "elongation_axis_deg": 71.0,
-    "elongation_axis_compass": "В-З",
+    "elongation_aspect_ratio": 3.01,
+    "elongation_axis_deg": 20.0,
+    "elongation_axis_compass": "С-Ю",
     "frontlike": true,
     "window_spanning": false,
     "phase_label": "безоблачно",
@@ -28,62 +23,29 @@
     "has_precip": true,
     "has_lightning": false
   },
-  "local_candidates": [
-    {
-      "target_id": 1,
-      "area_km2": 266.9,
-      "distance_km": 219.6,
-      "bearing_deg": 29.0,
-      "compass": "СВ",
-      "elongation_aspect_ratio": 2.9,
-      "elongation_axis_deg": 3.0,
-      "elongation_axis_compass": "С-Ю",
-      "frontlike": false,
-      "phase_label": "безоблачно",
-      "type_label": "безоблачно",
-      "has_precip": true,
-      "has_lightning": false,
-      "ir_confirmed": false,
-      "geocolour_confirmed": true
-    }
-  ],
-  "local_suppressed_count": 0,
+  "local_candidates": [],
+  "local_suppressed_count": 2,
   "system_candidates": [],
-  "system_suppressed_count": 1,
-  "verdict": "Известный шумовой объект в 220км СВ (~267км²) — подавлено (не подтверждался 3 раз подряд). Отдельно: система синоптического масштаба (26034км²) в 178км С (вытянута В-З (71°), похоже на фронт, осадки).",
+  "system_suppressed_count": 3,
   "frontal_tracks": [
     {
       "track_id": 527,
       "first_seen": "2026-09-22T23:45:00.000Z",
-      "last_seen": "2026-09-23T03:15:00.000Z",
-      "points_count": 10,
-      "age_minutes": 210.0,
-      "distance_from_odessa_km": 177.6,
-      "dx_km": -8.15,
-      "dy_km": 177.42,
-      "area_km2": 26033.5,
-      "axis_deg": 71.0,
-      "aspect_ratio": 2.29,
-      "velocity_kmh": 47.6,
-      "movement_bearing_deg": 82.3,
+      "last_seen": "2026-09-23T03:45:00.000Z",
+      "points_count": 11,
+      "age_minutes": 240.0,
+      "distance_from_odessa_km": 152.1,
+      "dx_km": -27.33,
+      "dy_km": 149.59,
+      "area_km2": 781.9,
+      "axis_deg": 20.0,
+      "aspect_ratio": 3.01,
+      "velocity_kmh": 36.5,
+      "movement_bearing_deg": 92.2,
       "movement_bearing_compass": "В",
-      "axis_rotation_deg": 47.0,
+      "axis_rotation_deg": 4.0,
       "tile": "near",
-      "ahead_station": {
-        "name": "KIROVOHRAD",
-        "ctry": "UP",
-        "lat": 48.517,
-        "lon": 32.2,
-        "elev_m": "+0171.0",
-        "dist_km_from_odessa": 254.6,
-        "wmo_synop_id": "33711",
-        "icao": null,
-        "usaf_raw": "337110",
-        "source": "synop",
-        "along_km": 124.0,
-        "perp_km": 37.5,
-        "dist_km": 129.5
-      },
+      "ahead_station": null,
       "behind_station": {
         "name": "RIBNITA",
         "ctry": "MD",
@@ -95,15 +57,32 @@
         "icao": null,
         "usaf_raw": "337540",
         "source": "synop",
-        "along_km": -129.2,
-        "perp_km": -12.6,
-        "dist_km": 129.8
+        "along_km": -107.0,
+        "perp_km": -6.0,
+        "dist_km": 107.2
       },
       "direction_compass": "С",
       "current_target_id": 0,
       "has_precip": true,
       "has_lightning": false,
-      "ahead_obs": null,
+      "ahead_obs": {
+        "obs_time": "2026-09-23T03:00:00Z",
+        "raw": "33711,2026,09,23,03,00,AAXX 23031 33711 41/06 53202 10073 20073 39952 40161 57008 74441 85030==",
+        "temp": 7.3,
+        "station_pressure": 995.2,
+        "sea_pressure": 1016.1,
+        "pressure_tendency_code": "7",
+        "pressure_tendency_value": -0.8,
+        "total_cloud_okta": 5,
+        "wind_dir_deg": 320,
+        "wind_speed_ms": 2,
+        "precip_mm": null,
+        "precip_period_hours": null,
+        "present_weather_code": 44,
+        "present_weather_label": "явление ww=44",
+        "is_extreme_weather": false,
+        "obs_source": "SYNOP"
+      },
       "behind_obs": {
         "obs_time": "2026-09-23T03:00:00Z",
         "raw": "33754,2026,09,23,03,00,AAXX 23031 33754 41996 10000 10042 20035 30029 40177 58003 71000 81030 333 55060 555 20041 7000/=",
@@ -122,8 +101,42 @@
         "is_extreme_weather": false,
         "obs_source": "SYNOP"
       },
-      "front_type": null,
-      "front_type_confidence": null
+      "front_type": "cold",
+      "front_type_confidence": "station"
     }
-  ]
+  ],
+  "target_phase": {
+    "label": "безоблачно",
+    "cloud_fraction": 0.0
+  },
+  "existence": {
+    "modules": {
+      "ir_motion": {
+        "confirmed": false,
+        "timestamp": "2026-09-23T04:00:00.000Z"
+      },
+      "geocolour_motion": {
+        "confirmed": false,
+        "timestamp": "2026-09-23T04:00:00.000Z"
+      },
+      "cloud_phase_type": {
+        "confirmed": false,
+        "timestamp": "2026-09-23T04:22:17Z"
+      }
+    },
+    "votes_confirmed": 0,
+    "votes_not_confirmed": 3,
+    "consensus": "not_confirmed"
+  },
+  "phenomena": {
+    "precip_forecast": {
+      "confirmed": null,
+      "timestamp": "2026-09-23T04:02:10Z"
+    },
+    "lightning_forecast": {
+      "confirmed": null,
+      "timestamp": "2026-09-23T04:12:19Z"
+    }
+  },
+  "verdict": "CLM отметил цель в 198км СЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (782км²) в 152км С (вытянута С-Ю (20°), похоже на фронт, осадки)."
 }
