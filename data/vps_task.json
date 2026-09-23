@@ -1,5 +1,5 @@
 {
-  "task_id": "icon_eu_pip_eccodes_check2_1790152276",
-  "cmd": "tail -c 2000 /tmp/pip_install_eccodes.log; echo ---; python3 -c 'import eccodes; print(\"IMPORT_OK\")' 2>&1",
-  "timeout": 20
+  "task_id": "icon_eu_grib_probe_1790152342",
+  "cmd": "cd /tmp && curl -s -o t.grib2.bz2 https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/pmsl/icon-eu_europe_regular-lat-lon_single-level_2026092306_001_PMSL.grib2.bz2 && ls -la t.grib2.bz2 && bunzip2 -f t.grib2.bz2 && python3 -c \"import eccodes\nf=open('/tmp/t.grib2','rb')\ngid=eccodes.codes_grib_new_from_file(f)\nprint('shortName', eccodes.codes_get(gid,'shortName'))\nprint('units', eccodes.codes_get(gid,'units'))\nprint('Ni', eccodes.codes_get(gid,'Ni'))\nprint('Nj', eccodes.codes_get(gid,'Nj'))\nprint('validityDate', eccodes.codes_get(gid,'validityDate'))\nprint('validityTime', eccodes.codes_get(gid,'validityTime'))\nres = eccodes.codes_grib_get_data(gid)\nprint('codes_grib_get_data returns', len(res), 'items')\nprint(type(res[0]), len(res[0]) if hasattr(res[0],\\\"__len__\\\") else res[0])\n\"",
+  "timeout": 55
 }
