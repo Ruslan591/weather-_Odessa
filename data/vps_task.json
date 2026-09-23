@@ -1,5 +1,5 @@
 {
-  "task_id": "pip_skimage_1790191885",
-  "cmd": "nohup pip3 install --break-system-packages scikit-image > /tmp/pip_skimage.log 2>&1 & echo started_pid=$!",
-  "timeout": 25
+  "task_id": "check_skimage2_1790191997",
+  "cmd": "tail -c 1000 /tmp/pip_skimage.log; echo ---; python3 -c 'import skimage; print(\"OK\", skimage.__version__)' 2>&1",
+  "timeout": 20
 }
