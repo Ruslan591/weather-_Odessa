@@ -1,7 +1,7 @@
 {
-  "timestamp": "2026-09-23T04:20:00.000Z",
-  "buffer_size": 6,
-  "buffer_span_minutes": 50,
+  "timestamp": "2026-09-23T04:40:00.000Z",
+  "buffer_size": 5,
+  "buffer_span_minutes": 40,
   "observed_area": {
     "center_lat": 46.4406,
     "center_lon": 30.7703,
@@ -12,54 +12,52 @@
     "local_trend_radius_km": 50
   },
   "valid": true,
-  "speed_kmh": 137.6,
+  "speed_kmh": 136.8,
   "direction_compass": "С",
-  "bearing_deg": 349.8,
-  "frame_pairs_used": 5,
-  "acceleration_kmh": -2.0,
-  "turning_deg": -0.6,
+  "bearing_deg": 349.0,
+  "frame_pairs_used": 3,
+  "acceleration_kmh": 1.2,
+  "turning_deg": -1.1,
   "acceleration_verdict": "скорость стабильна",
   "turning_verdict": "направление стабильно",
   "forecast_displacement": {
     "30min": {
-      "distance_km": 67.6,
-      "bearing_deg": 349.0,
+      "distance_km": 69.3,
+      "bearing_deg": 347.0,
       "compass": "С"
     },
     "60min": {
-      "distance_km": 134.1,
-      "bearing_deg": 349.0,
+      "distance_km": 139.5,
+      "bearing_deg": 347.0,
       "compass": "С"
     },
     "120min": {
-      "distance_km": 263.5,
-      "bearing_deg": 348.0,
+      "distance_km": 283.1,
+      "bearing_deg": 345.0,
       "compass": "С"
     }
   },
   "area_fraction_over_time": [
-    0.357,
-    0.364,
-    0.391,
-    0.461,
-    0.562,
-    0.559
+    0.385,
+    0.477,
+    0.499,
+    0.5,
+    0.5
   ],
-  "area_trend_delta": 0.202,
+  "area_trend_delta": 0.115,
   "area_trend_verdict": "растёт",
   "mean_brightness_over_time": [
-    155.9,
-    156.0,
-    157.4,
     159.4,
     160.8,
-    160.6
+    160.6,
+    160.4,
+    160.4
   ],
-  "brightness_trend_delta": 4.7,
+  "brightness_trend_delta": 1.0,
   "station_state": "variable",
-  "station_area_fraction": 0.185,
+  "station_area_fraction": 0.372,
   "cloud_mass_distance_km": null,
-  "cloud_mass_contrast_sigma": 0.67,
+  "cloud_mass_contrast_sigma": 0.61,
   "cloud_mass_verdict": "значимой облачной массы в поле зрения нет (кадр однородный)",
   "temperature_trend_verdict": "без существенных изменений",
   "target_confirmation": {
@@ -70,22 +68,10 @@
     {
       "target_id": 0,
       "available": true,
-      "roi_contrast_sigma": -2.39,
-      "confirmed": false
-    },
-    {
-      "target_id": 1,
-      "available": true,
-      "roi_contrast_sigma": -2.23,
-      "confirmed": false
-    },
-    {
-      "target_id": 2,
-      "available": true,
-      "roi_contrast_sigma": -2.36,
+      "roi_contrast_sigma": -2.13,
       "confirmed": false
     }
   ],
   "local_analysis_all": [],
-  "method_note": "Буфер 6/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин, crs=EPSG:4326, всегда явный TIME — не 'latest'), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. cloud_mass_* — положение (не движение) ближайшей значимой облачной массы относительно станции. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
+  "method_note": "Буфер 5/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин, crs=EPSG:4326, всегда явный TIME — не 'latest'), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. cloud_mass_* — положение (не движение) ближайшей значимой облачной массы относительно станции. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
 }
