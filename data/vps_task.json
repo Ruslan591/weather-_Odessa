@@ -1,5 +1,5 @@
 {
-  "task_id": "icon_eu_eccodes_check_1790148942",
-  "cmd": "python3 -c \"import eccodes; print(eccodes.__version__ if hasattr(eccodes,'__version__') else 'no version attr'); help(eccodes.codes_grib_get_data)\" 2>&1 | head -30",
-  "timeout": 20
+  "task_id": "icon_eu_pip_eccodes_1790151699",
+  "cmd": "nohup pip3 install --break-system-packages eccodes > /tmp/pip_install_eccodes.log 2>&1 & echo started_pid=$!",
+  "timeout": 30
 }
