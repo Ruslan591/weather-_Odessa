@@ -1,5 +1,5 @@
 {
-  "task_id": "icon_eu_dwd_probe_1790152407",
-  "cmd": "cat /tmp/t.grib2.bz2 2>/dev/null; echo; echo ---; for run in 06 00; do   echo \"listing $run:\";   curl -s https://opendata.dwd.de/weather/nwp/icon-eu/grib/$run/pmsl/ | grep -o 'icon-eu_europe_regular-lat-lon_single-level_[0-9]*_[0-9]*_PMSL.grib2.bz2' | sort -u | tail -5; done",
-  "timeout": 30
+  "task_id": "icon_eu_grib_probe2_1790152478",
+  "cmd": "cd /tmp && rm -f t2.grib2* && curl -s -o t2.grib2.bz2 'https://opendata.dwd.de/weather/nwp/icon-eu/grib/00/pmsl/icon-eu_europe_regular-lat-lon_single-level_2026092300_007_PMSL.grib2.bz2' && ls -la t2.grib2.bz2 && file t2.grib2.bz2 && bunzip2 -f t2.grib2.bz2 && python3 -c \"import eccodes\nf=open('/tmp/t2.grib2','rb')\ngid=eccodes.codes_grib_new_from_file(f)\nprint('gid', gid)\nprint('shortName', eccodes.codes_get(gid,'shortName'))\nprint('units', eccodes.codes_get(gid,'units'))\nprint('Ni', eccodes.codes_get(gid,'Ni'))\nprint('Nj', eccodes.codes_get(gid,'Nj'))\nprint('validityDate', eccodes.codes_get(gid,'validityDate'))\nprint('validityTime', eccodes.codes_get(gid,'validityTime'))\nprint('iDirectionIncrementInDegrees', eccodes.codes_get(gid,'iDirectionIncrementInDegrees'))\nres = eccodes.codes_grib_get_data(gid)\nprint('codes_grib_get_data returns tuple of len', len(res))\nfor i,item in enumerate(res):\n    try:\n        print(i, type(item), len(item))\n    except Exception as e:\n        print(i, type(item), 'no len', e)\n\"",
+  "timeout": 55
 }
