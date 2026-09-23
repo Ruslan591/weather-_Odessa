@@ -1,5 +1,5 @@
 {
-  "task_id": "icon_eu_mslp_envcheck_1790132902",
-  "cmd": "which python3; crontab -l | grep -i pipeline; find /opt -maxdepth 3 -iname 'venv' -o -iname '*.venv' 2>/dev/null; python3 -c 'import matplotlib' 2>&1; ls /opt/weather-pipeline/",
-  "timeout": 25
+  "task_id": "icon_eu_mslp_pipinstall_1790132966",
+  "cmd": "nohup pip3 install --break-system-packages matplotlib > /tmp/pip_install_matplotlib.log 2>&1 & echo started_pid=$!",
+  "timeout": 30
 }
