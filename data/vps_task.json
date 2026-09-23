@@ -1,5 +1,5 @@
 {
-  "task_id": "icon_eu_synccheck3_1790152825",
-  "cmd": "cd /opt/weather-pipeline/repo && git log --oneline -5 | grep -i 'opendata\\|f52371b' || echo NOTFOUND; git log -1 --oneline",
-  "timeout": 15
+  "task_id": "icon_eu_mslp_run4_1790152884",
+  "cmd": "cd /opt/weather-pipeline/repo && nohup python3 scripts/experiments/icon_eu_mslp_isobars_probe.py > /tmp/icon_eu_mslp_probe.log 2>&1 & echo started_pid=$!",
+  "timeout": 55
 }
