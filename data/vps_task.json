@@ -1,5 +1,5 @@
 {
-  "task_id": "icon_eu_grib_probe2_1790152478",
-  "cmd": "cd /tmp && rm -f t2.grib2* && curl -s -o t2.grib2.bz2 'https://opendata.dwd.de/weather/nwp/icon-eu/grib/00/pmsl/icon-eu_europe_regular-lat-lon_single-level_2026092300_007_PMSL.grib2.bz2' && ls -la t2.grib2.bz2 && file t2.grib2.bz2 && bunzip2 -f t2.grib2.bz2 && python3 -c \"import eccodes\nf=open('/tmp/t2.grib2','rb')\ngid=eccodes.codes_grib_new_from_file(f)\nprint('gid', gid)\nprint('shortName', eccodes.codes_get(gid,'shortName'))\nprint('units', eccodes.codes_get(gid,'units'))\nprint('Ni', eccodes.codes_get(gid,'Ni'))\nprint('Nj', eccodes.codes_get(gid,'Nj'))\nprint('validityDate', eccodes.codes_get(gid,'validityDate'))\nprint('validityTime', eccodes.codes_get(gid,'validityTime'))\nprint('iDirectionIncrementInDegrees', eccodes.codes_get(gid,'iDirectionIncrementInDegrees'))\nres = eccodes.codes_grib_get_data(gid)\nprint('codes_grib_get_data returns tuple of len', len(res))\nfor i,item in enumerate(res):\n    try:\n        print(i, type(item), len(item))\n    except Exception as e:\n        print(i, type(item), 'no len', e)\n\"",
-  "timeout": 55
+  "task_id": "icon_eu_synccheck2_1790152704",
+  "cmd": "cd /opt/weather-pipeline/repo && git log -1 --oneline",
+  "timeout": 15
 }
