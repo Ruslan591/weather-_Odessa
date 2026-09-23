@@ -1,0 +1,123 @@
+{
+  "generated_utc": "2026-09-23T08:42:04.706173+00:00",
+  "experiment": "ICON-EU MSLP (via Open-Meteo) isobars over EUMETSAT (single model, single time, isolated)",
+  "target_valid_utc_requested": "2026-09-23T07:00:00+00:00",
+  "bbox_lonlat_crs84": [
+    28.2703,
+    43.9406,
+    33.2703,
+    48.9406
+  ],
+  "sat_width": 900,
+  "sat_height": 900,
+  "production_modified": false,
+  "log": [
+    "GET https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/pmsl/icon-eu_europe_regular-lat-lon_single-level_2026092306_001_PMSL.grib2.bz2 -> 404 (146 bytes)",
+    "GET https://opendata.dwd.de/weather/nwp/icon-eu/grib/00/pmsl/icon-eu_europe_regular-lat-lon_single-level_2026092300_007_PMSL.grib2.bz2 -> 200 (959673 bytes)",
+    "EUMETSAT geocolour OK (requested time), shape=(900, 900, 4)",
+    "EUMETSAT ir105 OK (requested time), shape=(900, 900, 4)",
+    "overlay geocolour written",
+    "overlay ir105 written",
+    "gradient overlay (geocolour) written"
+  ],
+  "errors": [],
+  "files_written": [
+    "data/experiments/icon_eu_mslp_isobars/icon_eu_mslp_2026-09-23_0700.npz",
+    "data/experiments/icon_eu_mslp_isobars/icon_eu_mslp_2026-09-23_0700.png",
+    "data/experiments/icon_eu_mslp_isobars/icon_eu_mslp_gradient_2026-09-23_0700.png",
+    "data/experiments/icon_eu_mslp_isobars/eumetsat_geocolour_2026-09-23_0700_raw.png",
+    "data/experiments/icon_eu_mslp_isobars/eumetsat_ir105_2026-09-23_0700_raw.png",
+    "data/experiments/icon_eu_mslp_isobars/icon_eu_isobars_geocolour_2026-09-23_0700.png",
+    "data/experiments/icon_eu_mslp_isobars/icon_eu_isobars_ir105_2026-09-23_0700.png",
+    "data/experiments/icon_eu_mslp_isobars/icon_eu_mslp_gradient_geocolour_2026-09-23_0700.png"
+  ],
+  "icon_eu_download_attempts": [
+    {
+      "run_utc": "2026-09-23T06:00:00+00:00",
+      "lead_hours": 1,
+      "url": "https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/pmsl/icon-eu_europe_regular-lat-lon_single-level_2026092306_001_PMSL.grib2.bz2",
+      "fname": "icon-eu_europe_regular-lat-lon_single-level_2026092306_001_PMSL.grib2.bz2",
+      "http_status": 404,
+      "bytes": 0
+    },
+    {
+      "run_utc": "2026-09-23T00:00:00+00:00",
+      "lead_hours": 7,
+      "url": "https://opendata.dwd.de/weather/nwp/icon-eu/grib/00/pmsl/icon-eu_europe_regular-lat-lon_single-level_2026092300_007_PMSL.grib2.bz2",
+      "fname": "icon-eu_europe_regular-lat-lon_single-level_2026092300_007_PMSL.grib2.bz2",
+      "http_status": 200,
+      "bytes": 959673
+    }
+  ],
+  "icon_eu_status": "OK",
+  "icon_eu_chosen": {
+    "run_utc": "2026-09-23T00:00:00+00:00",
+    "lead_hours": 7,
+    "url": "https://opendata.dwd.de/weather/nwp/icon-eu/grib/00/pmsl/icon-eu_europe_regular-lat-lon_single-level_2026092300_007_PMSL.grib2.bz2",
+    "fname": "icon-eu_europe_regular-lat-lon_single-level_2026092300_007_PMSL.grib2.bz2"
+  },
+  "icon_eu_grib_meta": {
+    "shortName": "prmsl",
+    "units": "Pa",
+    "Ni": 1377,
+    "Nj": 657,
+    "gridType": "regular_ll",
+    "iDirectionIncrementInDegrees": 0.0625,
+    "jDirectionIncrementInDegrees": 0.0625,
+    "validityDate": 20260923,
+    "validityTime": 700,
+    "eccodes_get_data_return_type": "tuple of 904689 Bunch objects",
+    "uniq_lat_count": 657,
+    "uniq_lon_count": 1377,
+    "converted_units": "Pa -> hPa (/100)"
+  },
+  "icon_eu_valid_time_actual": "20260923T0700",
+  "mslp_bbox_stats": {
+    "min_hpa": 1006.350234375,
+    "max_hpa": 1018.290859375,
+    "mean_hpa": 1014.7779953125,
+    "n_points_total": 6400,
+    "n_points_valid": 6400,
+    "shape_lat_lon": [
+      80,
+      80
+    ],
+    "grid_spacing_deg": 0.0625
+  },
+  "mslp_gradient_stats": {
+    "max_hpa_per_100km": 11.086308846497058,
+    "mean_hpa_per_100km": 2.0996629952220456,
+    "argmax_lat": 44.0,
+    "argmax_lon": 33.125
+  },
+  "mslp_render": {
+    "vmin": 1006.350234375,
+    "vmax": 1018.290859375,
+    "levels": [
+      1006.0,
+      1008.0,
+      1010.0,
+      1012.0,
+      1014.0,
+      1016.0,
+      1018.0,
+      1020.0
+    ]
+  },
+  "eumetsat": {
+    "geocolour": {
+      "status": "OK",
+      "requested_time_utc": "2026-09-23T07:00:00Z",
+      "layer": "mtg_fd:rgb_geocolour",
+      "raw_file": "data/experiments/icon_eu_mslp_isobars/eumetsat_geocolour_2026-09-23_0700_raw.png",
+      "note": "WMS GetMap не возвращает фактический timestamp кадра в теле ответа; фактическое время не подтверждено сверх requested_time_utc."
+    },
+    "ir105": {
+      "status": "OK",
+      "requested_time_utc": "2026-09-23T07:00:00Z",
+      "layer": "mtg_fd:ir105_hrfi",
+      "raw_file": "data/experiments/icon_eu_mslp_isobars/eumetsat_ir105_2026-09-23_0700_raw.png",
+      "note": "WMS GetMap не возвращает фактический timestamp кадра в теле ответа; фактическое время не подтверждено сверх requested_time_utc."
+    }
+  }
+}
