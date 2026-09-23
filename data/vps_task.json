@@ -1,5 +1,5 @@
 {
-  "task_id": "icon_eu_mslp_log3_1790133710",
-  "cmd": "ps aux | grep icon_eu_mslp_isobars_probe | grep -v grep; echo ---LOG---; tail -c 6000 /tmp/icon_eu_mslp_probe.log",
+  "task_id": "icon_eu_eccodes_check_1790148942",
+  "cmd": "python3 -c \"import eccodes; print(eccodes.__version__ if hasattr(eccodes,'__version__') else 'no version attr'); help(eccodes.codes_grib_get_data)\" 2>&1 | head -30",
   "timeout": 20
 }
