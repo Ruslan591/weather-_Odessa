@@ -1,5 +1,5 @@
 {
-  "task_id": "icon_eu_mslp_commit_1790153156",
-  "cmd": "python3 -c 'import fcntl,subprocess,sys\nlock=open('\"'\"'/tmp/vps_git.lock'\"'\"','\"'\"'w'\"'\"')\nfcntl.flock(lock, fcntl.LOCK_EX)\ntry:\n    subprocess.run(['\"'\"'git'\"'\"','\"'\"'-C'\"'\"','\"'\"'/opt/weather-pipeline/repo'\"'\"','\"'\"'fetch'\"'\"','\"'\"'--depth'\"'\"','\"'\"'20'\"'\"','\"'\"'origin'\"'\"','\"'\"'main'\"'\"','\"'\"'--update-shallow'\"'\"'], check=True)\n    subprocess.run(['\"'\"'git'\"'\"','\"'\"'-C'\"'\"','\"'\"'/opt/weather-pipeline/repo'\"'\"','\"'\"'checkout'\"'\"','\"'\"'-B'\"'\"','\"'\"'main'\"'\"','\"'\"'origin/main'\"'\"'], check=True)\n    subprocess.run(['\"'\"'git'\"'\"','\"'\"'-C'\"'\"','\"'\"'/opt/weather-pipeline/repo'\"'\"','\"'\"'add'\"'\"','\"'\"'data/experiments/icon_eu_mslp_isobars/'\"'\"'], check=True)\n    r=subprocess.run(['\"'\"'git'\"'\"','\"'\"'-C'\"'\"','\"'\"'/opt/weather-pipeline/repo'\"'\"','\"'\"'commit'\"'\"','\"'\"'-m'\"'\"','\"'\"'experiment: icon_eu_mslp_isobars results (2026-09-23 07:00 UTC, opendata.dwd.de native grid)'\"'\"'])\n    if r.returncode==0:\n        subprocess.run(['\"'\"'git'\"'\"','\"'\"'-C'\"'\"','\"'\"'/opt/weather-pipeline/repo'\"'\"','\"'\"'push'\"'\"','\"'\"'origin'\"'\"','\"'\"'main'\"'\"'], check=True)\n        print('\"'\"'PUSHED'\"'\"')\n    else:\n        print('\"'\"'NOTHING_TO_COMMIT'\"'\"')\nfinally:\n    fcntl.flock(lock, fcntl.LOCK_UN)\n'",
-  "timeout": 55
+  "task_id": "icon_eu_size_check_1790154819",
+  "cmd": "ls -la /tmp/t2.grib2* 2>/dev/null; ls -la /opt/weather-pipeline/repo/data/experiments/icon_eu_mslp_isobars/*.npz 2>/dev/null",
+  "timeout": 15
 }
