@@ -1,5 +1,5 @@
 {
-  "task_id": "icon_eu_mslp_run_1790132726",
-  "cmd": "cd /opt/weather-pipeline/repo && nohup python3 scripts/experiments/icon_eu_mslp_isobars_probe.py > /tmp/icon_eu_mslp_probe.log 2>&1 & echo started_pid=$!",
-  "timeout": 55
+  "task_id": "icon_eu_mslp_log_1790132874",
+  "cmd": "ps aux | grep icon_eu_mslp_isobars_probe | grep -v grep; echo ---LOG---; tail -c 3000 /tmp/icon_eu_mslp_probe.log",
+  "timeout": 20
 }
