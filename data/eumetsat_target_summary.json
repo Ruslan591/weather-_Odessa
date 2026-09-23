@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-23T14:54:23Z",
+  "timestamp": "2026-09-23T14:57:47Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-09-23T14:15:00.000Z",
   "target_id": 1,
@@ -19,7 +19,7 @@
     "frontlike": true,
     "window_spanning": false,
     "phase_label": "безоблачно",
-    "cloud_fraction": 0.272,
+    "cloud_fraction": 0.25,
     "has_precip": true,
     "has_lightning": false
   },
@@ -59,6 +59,23 @@
       "geocolour_confirmed": true
     },
     {
+      "target_id": 5,
+      "area_km2": 108.1,
+      "distance_km": 172.5,
+      "bearing_deg": 224.0,
+      "compass": "ЮЗ",
+      "elongation_aspect_ratio": 1.73,
+      "elongation_axis_deg": 129.0,
+      "elongation_axis_compass": "ЮВ-СЗ",
+      "frontlike": false,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
+      "has_precip": false,
+      "has_lightning": false,
+      "ir_confirmed": false,
+      "geocolour_confirmed": true
+    },
+    {
       "target_id": 7,
       "area_km2": 282.9,
       "distance_km": 186.0,
@@ -76,13 +93,87 @@
       "geocolour_confirmed": true
     }
   ],
-  "local_suppressed_count": 3,
+  "local_suppressed_count": 2,
   "system_candidates": [],
   "system_suppressed_count": 5,
-  "frontal_tracks": [],
+  "frontal_tracks": [
+    {
+      "track_id": 544,
+      "first_seen": "2026-09-23T13:15:00.000Z",
+      "last_seen": "2026-09-23T14:15:00.000Z",
+      "points_count": 4,
+      "age_minutes": 60.0,
+      "distance_from_odessa_km": 65.8,
+      "dx_km": -11.99,
+      "dy_km": -64.7,
+      "area_km2": 2803.4,
+      "axis_deg": 108.0,
+      "aspect_ratio": 2.49,
+      "velocity_kmh": 20.5,
+      "movement_bearing_deg": 27.9,
+      "movement_bearing_compass": "СВ",
+      "axis_rotation_deg": 11.0,
+      "tile": "near",
+      "ahead_station": {
+        "name": "ODESA INTL",
+        "ctry": "UP",
+        "lat": 46.427,
+        "lon": 30.676,
+        "elev_m": "+0052.4",
+        "dist_km_from_odessa": 7.4,
+        "wmo_synop_id": "33837",
+        "icao": "UKOO",
+        "usaf_raw": "338370",
+        "source": "synop+metar",
+        "along_km": 58.1,
+        "perp_km": 25.4,
+        "dist_km": 63.4
+      },
+      "behind_station": {
+        "name": "SFANTU GHEORGHE DELTA",
+        "ctry": "RO",
+        "lat": 44.9,
+        "lon": 29.6,
+        "elev_m": "+0002.0",
+        "dist_km_from_odessa": 193.9,
+        "wmo_synop_id": "15387",
+        "icao": null,
+        "usaf_raw": "153870",
+        "source": "synop",
+        "along_km": -130.8,
+        "perp_km": 18.8,
+        "dist_km": 132.1
+      },
+      "direction_compass": "Ю",
+      "current_target_id": 0,
+      "has_precip": true,
+      "has_lightning": false,
+      "ahead_obs": {
+        "obs_time": "2026-09-23T12:00:00Z",
+        "raw": "33837,2026,09,23,12,00,AAXX 23121 33837 32583 83202 10142 20086 30081 40131 56007 8457/ 555 1/014=",
+        "temp": 14.2,
+        "station_pressure": 1008.1,
+        "sea_pressure": 1013.1,
+        "pressure_tendency_code": "6",
+        "pressure_tendency_value": -0.7,
+        "total_cloud_okta": 8,
+        "wind_dir_deg": 320,
+        "wind_speed_ms": 2,
+        "precip_mm": null,
+        "precip_period_hours": null,
+        "present_weather_code": null,
+        "present_weather_label": null,
+        "is_extreme_weather": false,
+        "obs_source": "SYNOP"
+      },
+      "behind_obs": null,
+      "front_type": null,
+      "front_type_confidence": null
+    }
+  ],
   "target_phase": {
     "label": "безоблачно",
-    "cloud_fraction": 0.651
+    "cloud_fraction": 0.377
   },
   "existence": {
     "modules": {
@@ -95,23 +186,23 @@
         "timestamp": "2026-09-23T14:30:00.000Z"
       },
       "cloud_phase_type": {
-        "confirmed": true,
-        "timestamp": "2026-09-23T14:42:09Z"
+        "confirmed": false,
+        "timestamp": "2026-09-23T14:57:06Z"
       }
     },
-    "votes_confirmed": 2,
-    "votes_not_confirmed": 1,
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
     "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
       "confirmed": false,
-      "timestamp": "2026-09-23T14:32:14Z"
+      "timestamp": "2026-09-23T14:57:34Z"
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-09-23T14:42:41Z"
+      "timestamp": "2026-09-23T14:57:36Z"
     }
   },
-  "verdict": "Цель в 79км Ю, безоблачно — каналы расходятся: geocolour_motion/cloud_phase_type подтверждают, ir_motion нет. Отдельно: система синоптического масштаба (2803км²) в 66км Ю (вытянута В-З (108°), похоже на фронт, осадки)."
+  "verdict": "Цель в 79км Ю, безоблачно — каналы расходятся: geocolour_motion подтверждают, ir_motion/cloud_phase_type нет. Отдельно: система синоптического масштаба (2803км²) в 66км Ю (вытянута В-З (108°), похоже на фронт, осадки)."
 }
