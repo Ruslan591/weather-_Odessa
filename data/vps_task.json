@@ -1,5 +1,5 @@
 {
-  "task_id": "icon_eu_params_list_1790170656",
-  "cmd": "echo '--- single-level params (00) ---'; curl -s https://opendata.dwd.de/weather/nwp/icon-eu/grib/00/ | grep -o 'href=\"[a-z0-9_]*/\"' | sort -u; echo '--- pressure-level params ---'; curl -s https://opendata.dwd.de/weather/nwp/icon-eu/grib/00/t/ | grep -o '2026[0-9]*_[0-9]*_[0-9]*_T_[0-9]*.grib2.bz2' | sort -u | tail -5",
+  "task_id": "icon_eu_t_filenames_1790170716",
+  "cmd": "curl -s https://opendata.dwd.de/weather/nwp/icon-eu/grib/00/t/ | grep -o 'icon-eu[^\"]*T[^\"]*grib2.bz2' | sort -u | head -20; echo ---fi---; curl -s https://opendata.dwd.de/weather/nwp/icon-eu/grib/00/fi/ | grep -o 'icon-eu[^\"]*FI[^\"]*grib2.bz2' | sort -u | head -10",
   "timeout": 25
 }
