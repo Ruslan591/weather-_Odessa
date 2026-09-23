@@ -1,5 +1,5 @@
 {
-  "task_id": "free_tier_check_1790069039",
-  "cmd": "echo '--- CPU ---'; nproc; echo '--- MEM ---'; free -h; echo '--- BOOT+BLOCK DF ---'; df -h; echo '--- LSBLK ---'; lsblk; echo '--- DMIDECODE ---'; cat /proc/cpuinfo | grep -c processor; echo '--- OCI META ---'; curl -s -m 5 -H 'Authorization: Bearer Oracle' http://169.254.169.254/opc/v2/instance/shape 2>&1; echo; curl -s -m 5 -H 'Authorization: Bearer Oracle' http://169.254.169.254/opc/v2/instance/shapeConfig 2>&1",
-  "timeout": 30
+  "task_id": "icon_eu_mslp_probe_1790132298",
+  "cmd": "cd /opt/weather-pipeline/repo && git fetch --depth 20 origin main --update-shallow && git checkout -B main origin/main && nohup python3 scripts/experiments/icon_eu_mslp_isobars_probe.py > /tmp/icon_eu_mslp_probe.log 2>&1 & echo started_pid=$!",
+  "timeout": 55
 }
