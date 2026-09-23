@@ -1,5 +1,5 @@
 {
-  "task_id": "icon_eu_t_filenames_1790170716",
-  "cmd": "curl -s https://opendata.dwd.de/weather/nwp/icon-eu/grib/00/t/ | grep -o 'icon-eu[^\"]*T[^\"]*grib2.bz2' | sort -u | head -20; echo ---fi---; curl -s https://opendata.dwd.de/weather/nwp/icon-eu/grib/00/fi/ | grep -o 'icon-eu[^\"]*FI[^\"]*grib2.bz2' | sort -u | head -10",
+  "task_id": "icon_eu_t_pl_check_1790170767",
+  "cmd": "curl -s https://opendata.dwd.de/weather/nwp/icon-eu/grib/00/t/ | grep -o 'icon-eu[^\"]*pressure-level[^\"]*T[^\"]*grib2.bz2' | sort -u | grep -E '_(700|850|925|1000)_T' ; echo ---u---; curl -s https://opendata.dwd.de/weather/nwp/icon-eu/grib/00/u/ | grep -o 'icon-eu[^\"]*pressure-level[^\"]*U[^\"]*grib2.bz2' | sort -u | grep -E '_(700|850|925|1000)_U'; echo ---relhum---; curl -s https://opendata.dwd.de/weather/nwp/icon-eu/grib/00/relhum/ | grep -o 'icon-eu[^\"]*pressure-level[^\"]*RELHUM[^\"]*grib2.bz2' | sort -u | grep -E '_(700|850|925|1000)_RELHUM'",
   "timeout": 25
 }
