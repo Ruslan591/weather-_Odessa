@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-09-23T06:12:26Z",
+  "timestamp": "2026-09-23T06:17:31Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-09-23T05:45:00.000Z",
-  "target_id": 0,
-  "target_area_km2": 201.5,
-  "target_distance_km": 222.2,
-  "target_bearing_deg": 308.0,
-  "target_compass": "СЗ",
+  "target_id": 3,
+  "target_area_km2": 250.8,
+  "target_distance_km": 245.0,
+  "target_bearing_deg": 226.0,
+  "target_compass": "ЮЗ",
   "system": {
     "target_id": 1,
     "area_km2": 380.3,
@@ -19,7 +19,7 @@
     "frontlike": false,
     "window_spanning": false,
     "phase_label": "безоблачно",
-    "cloud_fraction": 0.95,
+    "cloud_fraction": 0.952,
     "has_precip": false,
     "has_lightning": false
   },
@@ -100,16 +100,13 @@
   ],
   "system_suppressed_count": 0,
   "frontal_tracks": [],
-  "target_movement": {
-    "speed_kmh": 38.3,
-    "direction_compass": "З",
-    "cpa_km": 222.2,
-    "eta_min": null,
-    "verdict": "удаляется"
+  "also_suppressed_nearby": {
+    "signature": "-175_135",
+    "area_km2": 201.5
   },
   "target_phase": {
     "label": "безоблачно",
-    "cloud_fraction": 0.063
+    "cloud_fraction": 0.734
   },
   "existence": {
     "modules": {
@@ -122,13 +119,13 @@
         "timestamp": "2026-09-23T05:40:00.000Z"
       },
       "cloud_phase_type": {
-        "confirmed": false,
-        "timestamp": "2026-09-23T06:02:12Z"
+        "confirmed": true,
+        "timestamp": "2026-09-23T06:17:05Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -137,8 +134,8 @@
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-09-23T06:07:29Z"
+      "timestamp": "2026-09-23T06:17:22Z"
     }
   },
-  "verdict": "CLM отметил цель в 222км СЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (380км²) в 240км СЗ."
+  "verdict": "Цель в 245км ЮЗ, безоблачно — каналы расходятся: cloud_phase_type подтверждают, ir_motion/geocolour_motion нет. Отдельно: система синоптического масштаба (380км²) в 240км СЗ."
 }
