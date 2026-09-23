@@ -77,10 +77,12 @@ STYLE_IR105 = "mtg_fd:mtg_fd_ir105_hrfi_grayscale"
 OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 OPEN_METEO_MODEL = "icon_eu"
 
-# Шаг сетки запроса. 0.25 deg ~ 27 x 21 = ~перебор ниже подбирает под лимит
-# точек на один batched-запрос; попытки идут от мелкого шага к крупному.
-GRID_STEP_CANDIDATES_DEG = [0.15, 0.25, 0.5]
-MAX_LOCATIONS_PER_REQUEST = 100  # консервативный потолок free-tier batch
+# Шаг сетки запроса — перебор идёт от мелкого к крупному, реальный предел
+# на число locations в одном batched-запросе Open-Meteo НЕ предполагается
+# заранее: скрипт реально пробует запрос и фиксирует фактический
+# HTTP-ответ (в т.ч. код ошибки, если сервер отклонит из-за размера).
+GRID_STEP_CANDIDATES_DEG = [0.15, 0.25, 0.5, 0.7, 1.0]
+MAX_LOCATIONS_PER_REQUEST = 2000  # только защита от патологически огромного запроса
 
 
 def build_grid_points(step_deg):
