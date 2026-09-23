@@ -1,7 +1,7 @@
 {
-  "task_id": "icon_eu_mslp_log_1790132874",
+  "task_id": "icon_eu_mslp_envcheck_1790132902",
   "returncode": 0,
-  "stdout": "---LOG---\nTraceback (most recent call last):\n  File \"/opt/weather-pipeline/repo/scripts/experiments/icon_eu_mslp_isobars_probe.py\", line 43, in <module>\n    import matplotlib\nModuleNotFoundError: No module named 'matplotlib'\n",
+  "stdout": "/usr/bin/python3\n*/5 * * * * /opt/weather-pipeline/run_timed.sh main /var/log/vps-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_pipeline.py\n2,7,12,17,22,27,32,37,42,47,52,57 * * * * /opt/weather-pipeline/run_timed.sh satellite /var/log/vps-satellite-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_satellite_pipeline.py\n4,9,14,19,24,29,34,39,44,49,54,59 * * * * /opt/weather-pipeline/run_timed.sh ai /var/log/vps-ai-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_ai_pipeline.py\n/opt/vps-github-bridge/venv\n/opt/vps-agent/venv\nTraceback (most recent call last):\n  File \"<string>\", line 1, in <module>\nModuleNotFoundError: No module named 'matplotlib'\ncrontab_backup_before_filterrepo.txt\nfilterrepo.log\nrepo\nrepo-backup-20260916.bundle\nrun_timed.sh\nuntracked_backup\n",
   "stderr": "",
-  "completed_at_utc": "2026-09-23T03:08:02Z"
+  "completed_at_utc": "2026-09-23T03:09:01Z"
 }
