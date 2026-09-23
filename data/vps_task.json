@@ -1,5 +1,5 @@
 {
-  "task_id": "front_v1_latest_run_1790191787",
-  "cmd": "mkdir -p /tmp/icon_front_v1 && echo '--- 12 dir tail ---'; curl -s https://opendata.dwd.de/weather/nwp/icon-eu/grib/12/pmsl/ | grep -o '2026092312_[0-9]*_PMSL' | sort -u | tail -5; echo '--- 18 dir tail ---'; curl -s https://opendata.dwd.de/weather/nwp/icon-eu/grib/18/pmsl/ | grep -o '2026092318_[0-9]*_PMSL' | sort -u | tail -5",
-  "timeout": 25
+  "task_id": "check_skimage_1790191855",
+  "cmd": "python3 -c 'import skimage; print(skimage.__version__)' 2>&1; python3 -c 'import scipy; print(scipy.__version__)' 2>&1",
+  "timeout": 15
 }
