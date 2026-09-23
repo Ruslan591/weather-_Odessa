@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-23T22:24:09Z",
+  "timestamp": "2026-09-23T22:27:47Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-09-23T21:45:00.000Z",
   "target_id": 3,
@@ -30,7 +30,7 @@
       "track_id": 548,
       "first_seen": "2026-09-23T21:15:00.000Z",
       "last_seen": "2026-09-23T21:45:00.000Z",
-      "points_count": 3,
+      "points_count": 5,
       "age_minutes": 30.0,
       "distance_from_odessa_km": 124.6,
       "dx_km": 124.18,
@@ -76,11 +76,45 @@
       "direction_compass": "В",
       "current_target_id": 4,
       "has_precip": null,
-      "has_lightning": null,
-      "ahead_obs": null,
-      "behind_obs": null,
-      "front_type": null,
-      "front_type_confidence": null
+      "has_lightning": false,
+      "ahead_obs": {
+        "obs_time": "2026-09-23T21:00:00Z",
+        "raw": "33902,2026,09,23,21,00,AAXX 23211 33902 41540 82803 10103 20095 30071 40130 52004 70282 883//==",
+        "temp": 10.3,
+        "station_pressure": 1007.1,
+        "sea_pressure": 1013.0,
+        "pressure_tendency_code": "2",
+        "pressure_tendency_value": 0.4,
+        "total_cloud_okta": 8,
+        "wind_dir_deg": 280,
+        "wind_speed_ms": 3,
+        "precip_mm": null,
+        "precip_period_hours": null,
+        "present_weather_code": 2,
+        "present_weather_label": "явление ww=2",
+        "is_extreme_weather": false,
+        "obs_source": "SYNOP"
+      },
+      "behind_obs": {
+        "obs_time": "2026-09-23T21:00:00Z",
+        "raw": "33924,2026,09,23,21,00,AAXX 23211 33924 42570 62002 10126 20094 30130 40142 58001 85901==",
+        "temp": 12.6,
+        "station_pressure": 1013.0,
+        "sea_pressure": 1014.2,
+        "pressure_tendency_code": "8",
+        "pressure_tendency_value": -0.1,
+        "total_cloud_okta": 6,
+        "wind_dir_deg": 200,
+        "wind_speed_ms": 2,
+        "precip_mm": null,
+        "precip_period_hours": null,
+        "present_weather_code": null,
+        "present_weather_label": null,
+        "is_extreme_weather": false,
+        "obs_source": "SYNOP"
+      },
+      "front_type": "warm",
+      "front_type_confidence": "station"
     }
   ],
   "also_suppressed_nearby": {
@@ -95,7 +129,7 @@
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-09-23T22:00:00.000Z"
+        "timestamp": "2026-09-23T22:10:00.000Z"
       },
       "geocolour_motion": {
         "confirmed": false,
@@ -113,11 +147,11 @@
   "phenomena": {
     "precip_forecast": {
       "confirmed": false,
-      "timestamp": "2026-09-23T22:07:15Z"
+      "timestamp": "2026-09-23T22:27:06Z"
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-09-23T22:17:22Z"
+      "timestamp": "2026-09-23T22:27:08Z"
     }
   },
   "verdict": "CLM отметил цель в 101км ЮЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (118835км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора, осадки)."
