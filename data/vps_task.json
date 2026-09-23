@@ -1,5 +1,5 @@
 {
-  "task_id": "icon_eu_mslp_pipcheck_1790133110",
-  "cmd": "tail -c 1500 /tmp/pip_install_matplotlib.log; echo ---; python3 -c 'import matplotlib; print(matplotlib.__version__)'",
-  "timeout": 20
+  "task_id": "icon_eu_mslp_run2_1790133139",
+  "cmd": "cd /opt/weather-pipeline/repo && nohup python3 scripts/experiments/icon_eu_mslp_isobars_probe.py > /tmp/icon_eu_mslp_probe.log 2>&1 & echo started_pid=$!",
+  "timeout": 55
 }
