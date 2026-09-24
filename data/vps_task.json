@@ -1,5 +1,5 @@
 {
-  "task_id": "fetch_imgs_batch1_1790220634",
-  "cmd": "python3 -c '\nimport base64, json\nfiles = [\n    \"/tmp/icon_front_v1/case_01_calm/comparison/pfront_C_coastal.png\",\n    \"/tmp/icon_front_v1/case_01_calm/geometry/mask_thr_0.5.png\",\n    \"/tmp/icon_front_v1/case_01_calm/comparison/overlay_pfront_geocolour.png\",\n]\nout = {}\nfor fpath in files:\n    try:\n        with open(fpath, \"rb\") as f:\n            out[fpath] = base64.b64encode(f.read()).decode()\n    except Exception as e:\n        out[fpath] = f\"ERROR:{e}\"\nprint(json.dumps(out))\n'",
-  "timeout": 30
+  "task_id": "make_thumbs_1790220696",
+  "cmd": "python3 -c '\nfrom PIL import Image\nimport os\n\npairs = [\n    (\"/tmp/icon_front_v1/case_01_calm/comparison/pfront_C_coastal.png\", \"/tmp/icon_front_v1/thumb_calm_pfrontC.png\"),\n    (\"/tmp/icon_front_v1/case_01_calm/geometry/mask_thr_0.5.png\", \"/tmp/icon_front_v1/thumb_calm_mask05.png\"),\n    (\"/tmp/icon_front_v1/case_01_calm/comparison/overlay_pfront_geocolour.png\", \"/tmp/icon_front_v1/thumb_calm_overlay.png\"),\n    (\"/tmp/icon_front_v1/case_02_most_active/comparison/pfront_C_coastal.png\", \"/tmp/icon_front_v1/thumb_active_pfrontC.png\"),\n    (\"/tmp/icon_front_v1/case_02_most_active/geometry/mask_thr_0.5.png\", \"/tmp/icon_front_v1/thumb_active_mask05.png\"),\n    (\"/tmp/icon_front_v1/case_02_most_active/comparison/overlay_pfront_geocolour.png\", \"/tmp/icon_front_v1/thumb_active_overlay.png\"),\n]\nfor src, dst in pairs:\n    im = Image.open(src).convert(\"RGB\")\n    im.thumbnail((380, 380))\n    im.save(dst, \"JPEG\", quality=55)\n    print(dst, os.path.getsize(dst))\n'",
+  "timeout": 20
 }
