@@ -1,5 +1,5 @@
 {
-  "task_id": "case_veryfar_log_1790276187",
-  "cmd": "ps aux | grep run_case | grep -v grep; echo ---; tail -c 3000 /tmp/icon_front_v1/case_03_very_far.log",
+  "task_id": "veryfar_stats_1790276241",
+  "cmd": "python3 -c '\nimport json\nm = json.load(open(\"/tmp/icon_front_v1/case_03_very_far/manifest.json\"))\nprint(\"valid_time:\", m[\"valid_time\"])\nprint(\"p_front_stats:\", json.dumps(m[\"p_front_stats\"]))\nprint(\"coastal_experiment:\", json.dumps(m[\"coastal_experiment\"]))\nfor thr, comps in m[\"geometry_by_threshold\"].items():\n    print(f\"n_components thr={thr}: {len(comps)}\")\n    if comps:\n        areas = sorted([c['\"'\"'area_km2'\"'\"'] for c in comps], reverse=True)[:5]\n        print(\"  top areas km2:\", areas)\nprint(\"pmsl lows:\", len(m[\"pmsl_extrema\"][\"lows\"]), \"highs:\", len(m[\"pmsl_extrema\"][\"highs\"]))\nprint(\"wall_time_s:\", m[\"total_wall_time_s\"])\nprint(\"shape check (from a download meta):\", m[\"download_metas\"][\"pmsl\"][\"shape\"])\n'",
   "timeout": 20
 }
