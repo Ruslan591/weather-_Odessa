@@ -1,5 +1,5 @@
 {
-  "task_id": "run_case_veryfar_1790276059",
-  "cmd": "cd /tmp/icon_front_v1 && nohup python3 run_case.py case_03_very_far 2026-09-24T00:00:00+00:00 8 -10.0 35.0 32.0 60.0 800 700 > /tmp/icon_front_v1/case_03_very_far.log 2>&1 & echo started_pid=$!",
-  "timeout": 30
+  "task_id": "case_veryfar_log_1790276187",
+  "cmd": "ps aux | grep run_case | grep -v grep; echo ---; tail -c 3000 /tmp/icon_front_v1/case_03_very_far.log",
+  "timeout": 20
 }
