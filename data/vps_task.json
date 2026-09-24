@@ -1,5 +1,5 @@
 {
-  "task_id": "run_case_calm2_1790219792",
-  "cmd": "cd /tmp/icon_front_v1 && rm -rf case_01_calm && nohup python3 run_case.py case_01_calm 2026-09-23T12:00:00+00:00 7 > /tmp/icon_front_v1/case_01_calm.log 2>&1 & echo started_pid=$!",
-  "timeout": 30
+  "task_id": "case_calm2_log_1790219882",
+  "cmd": "ps aux | grep run_case | grep -v grep; echo ---; cat /tmp/icon_front_v1/case_01_calm.log | python3 -c \"import sys,json; d=sys.stdin.read(); print(d[:1500]); print('...'); print(d[-1500:])\"",
+  "timeout": 20
 }
