@@ -1,5 +1,5 @@
 {
-  "task_id": "fetch_thumb_8_1790237903",
-  "cmd": "base64 -w0 /tmp/icon_front_v1/thumb_calm_penalty.png",
-  "timeout": 15
+  "task_id": "check_latest_run_1790238819",
+  "cmd": "echo '--- 06 ---'; curl -s https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/pmsl/ | grep -o '2026092406_[0-9]*_PMSL' | sort -u | tail -3; echo '--- 00 ---'; curl -s https://opendata.dwd.de/weather/nwp/icon-eu/grib/00/pmsl/ | grep -o '2026092400_[0-9]*_PMSL' | sort -u | tail -3",
+  "timeout": 25
 }
