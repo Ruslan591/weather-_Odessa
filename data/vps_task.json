@@ -1,5 +1,5 @@
 {
-  "task_id": "summary_stats2_1790220566",
-  "cmd": "python3 -c '\nimport json\nfor case in [\"case_01_calm\", \"case_02_most_active\"]:\n    m = json.load(open(f\"/tmp/icon_front_v1/{case}/manifest.json\"))\n    print(\"=====\", case, \"status:\", m[\"status\"], \"=====\")\n    print(\"valid_time:\", m[\"valid_time\"])\n    print(\"p_front_stats:\", json.dumps(m[\"p_front_stats\"]))\n    print(\"coastal_experiment:\", json.dumps(m[\"coastal_experiment\"]))\n    for thr, comps in m[\"geometry_by_threshold\"].items():\n        print(f\"  n_components thr={thr}: {len(comps)}\")\n    print(\"pmsl lows:\", len(m[\"pmsl_extrema\"][\"lows\"]), \"highs:\", len(m[\"pmsl_extrema\"][\"highs\"]))\n    print(\"wall_time_s:\", m[\"total_wall_time_s\"])\n    print()\n'",
-  "timeout": 20
+  "task_id": "fetch_imgs_batch1_1790220634",
+  "cmd": "python3 -c '\nimport base64, json\nfiles = [\n    \"/tmp/icon_front_v1/case_01_calm/comparison/pfront_C_coastal.png\",\n    \"/tmp/icon_front_v1/case_01_calm/geometry/mask_thr_0.5.png\",\n    \"/tmp/icon_front_v1/case_01_calm/comparison/overlay_pfront_geocolour.png\",\n]\nout = {}\nfor fpath in files:\n    try:\n        with open(fpath, \"rb\") as f:\n            out[fpath] = base64.b64encode(f.read()).decode()\n    except Exception as e:\n        out[fpath] = f\"ERROR:{e}\"\nprint(json.dumps(out))\n'",
+  "timeout": 30
 }
