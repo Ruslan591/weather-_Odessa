@@ -1,5 +1,5 @@
 {
-  "task_id": "fetch_thumb_5_1790237653",
-  "cmd": "base64 -w0 /tmp/icon_front_v1/thumb_active_overlay.png",
-  "timeout": 15
+  "task_id": "make_thumb_extra_1790237748",
+  "cmd": "python3 -c '\nfrom PIL import Image\nimport os\npairs = [\n    (\"/tmp/icon_front_v1/case_01_calm/features/08_thickness_gradient.png\", \"/tmp/icon_front_v1/thumb_calm_thickgrad.png\"),\n    (\"/tmp/icon_front_v1/case_01_calm/features/10_convergence.png\", \"/tmp/icon_front_v1/thumb_calm_conv.png\"),\n    (\"/tmp/icon_front_v1/case_01_calm/comparison/coastal_penalty.png\", \"/tmp/icon_front_v1/thumb_calm_penalty.png\"),\n]\nfor src, dst in pairs:\n    im = Image.open(src).convert(\"RGB\")\n    im.thumbnail((380, 380))\n    im.save(dst, \"JPEG\", quality=55)\n    print(dst, os.path.getsize(dst))\n'",
+  "timeout": 20
 }
