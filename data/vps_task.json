@@ -1,5 +1,5 @@
 {
-  "task_id": "fetch_vf_2_1790276486",
-  "cmd": "base64 -w0 /tmp/icon_front_v1/vf_pfrontC.png",
-  "timeout": 15
+  "task_id": "check_hsurf_1790277214",
+  "cmd": "curl -s https://opendata.dwd.de/weather/nwp/icon-eu/grib/00/hsurf/ | grep -o 'icon-eu[^\"]*grib2.bz2' | head -5",
+  "timeout": 20
 }
