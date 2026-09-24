@@ -1,5 +1,5 @@
 {
-  "task_id": "case_active_log_1790220157",
-  "cmd": "ps aux | grep run_case | grep -v grep; echo ---; tail -c 2000 /tmp/icon_front_v1/case_02_most_active.log",
+  "task_id": "summary_stats_1790220208",
+  "cmd": "python3 -c '\nimport json\nfor case in [\"case_01_calm\", \"case_02_most_active\"]:\n    m = json.load(open(f\"/tmp/icon_front_v1/{case}/manifest.json\"))\n    print(\"=====\", case, \"=====\")\n    print(\"valid_time:\", m[\"valid_time\"])\n    print(\"p_front_stats:\", json.dumps(m[\"p_front_stats\"], indent=None))\n    print(\"coastal_experiment:\", json.dumps(m[\"coastal_experiment\"], indent=None))\n    print(\"normalization_ranges:\", json.dumps(m[\"normalization_ranges_P5_P95\"], indent=None))\n    for thr, comps in m[\"geometry_by_threshold\"].items():\n        print(f\"  n_components thr={thr}: {len(comps)}\")\n    print(\"pmsl_extrema lows:\", len(m[\"pmsl_extrema\"][\"lows\"]), \"highs:\", len(m[\"pmsl_extrema\"][\"highs\"]))\n    print(\"total_wall_time_s:\", m[\"total_wall_time_s\"])\n    print()\n'",
   "timeout": 20
 }
