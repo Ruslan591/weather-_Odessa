@@ -1,5 +1,5 @@
 {
-  "task_id": "rerun_both_cases_1790220395",
-  "cmd": "cd /tmp/icon_front_v1 && rm -rf case_01_calm case_02_most_active && nohup bash -c 'python3 run_case.py case_01_calm 2026-09-23T12:00:00+00:00 7 > case_01_calm.log 2>&1; python3 run_case.py case_02_most_active 2026-09-23T12:00:00+00:00 6 > case_02_most_active.log 2>&1; echo BOTH_DONE > both_done.flag' > /tmp/icon_front_v1/rerun_both.log 2>&1 & echo started_pid=$!",
-  "timeout": 30
+  "task_id": "check_both_done_1790220478",
+  "cmd": "ls -la /tmp/icon_front_v1/*.flag 2>/dev/null; ps aux | grep run_case | grep -v grep",
+  "timeout": 15
 }
