@@ -1,5 +1,5 @@
 {
-  "task_id": "run_snapshot_manual_1790372965",
-  "cmd": "cd /opt/weather-pipeline/repo && nohup python3 scripts/icon_front_very_far_snapshot.py > /tmp/icon_front_snapshot_manual.log 2>&1 & echo started_pid=$!",
-  "timeout": 30
+  "task_id": "check_snapshot_log_1790373062",
+  "cmd": "ps aux | grep icon_front_very_far | grep -v grep; echo ---; tail -c 4000 /tmp/icon_front_snapshot_manual.log",
+  "timeout": 20
 }
