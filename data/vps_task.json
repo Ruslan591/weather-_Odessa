@@ -1,5 +1,5 @@
 {
-  "task_id": "veryfar2_thumbs_1790306076",
-  "cmd": "python3 -c '\nfrom PIL import Image\nimport os\npairs = [\n    (\"/tmp/icon_front_v1/case_03_very_far/comparison/orography_penalty.png\", \"/tmp/icon_front_v1/vf2_oropenalty.png\"),\n    (\"/tmp/icon_front_v1/case_03_very_far/comparison/pfront_C_coastal_oro.png\", \"/tmp/icon_front_v1/vf2_pfrontC.png\"),\n    (\"/tmp/icon_front_v1/case_03_very_far/geometry/mask_thr_0.7.png\", \"/tmp/icon_front_v1/vf2_mask07.png\"),\n    (\"/tmp/icon_front_v1/case_03_very_far/comparison/overlay_pfront_geocolour.png\", \"/tmp/icon_front_v1/vf2_overlay.png\"),\n]\nfor src, dst in pairs:\n    im = Image.open(src).convert(\"RGB\")\n    im.thumbnail((420, 420))\n    im.save(dst, \"JPEG\", quality=55)\n    print(dst, os.path.getsize(dst))\n'",
-  "timeout": 20
+  "task_id": "fetch_vf2_0_1790306121",
+  "cmd": "base64 -w0 /tmp/icon_front_v1/vf2_oropenalty.png",
+  "timeout": 15
 }
