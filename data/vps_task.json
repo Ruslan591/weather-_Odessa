@@ -1,5 +1,5 @@
 {
-  "task_id": "veryfar2_log_1790277509",
-  "cmd": "ps aux | grep run_case | grep -v grep; echo ---; tail -c 2500 /tmp/icon_front_v1/case_03_very_far.log",
+  "task_id": "veryfar2_stats_1790305986",
+  "cmd": "python3 -c '\nimport json\nm = json.load(open(\"/tmp/icon_front_v1/case_03_very_far/manifest.json\"))\nprint(\"coastal_experiment:\", json.dumps(m[\"coastal_experiment\"]))\nprint(\"orography_experiment:\", json.dumps(m[\"orography_experiment\"]))\nfor thr, comps in m[\"geometry_by_threshold\"].items():\n    print(f\"n_components thr={thr}: {len(comps)}\")\n    if comps:\n        areas = sorted([c['\"'\"'area_km2'\"'\"'] for c in comps], reverse=True)[:5]\n        print(\"  top areas km2:\", areas)\n'",
   "timeout": 20
 }
