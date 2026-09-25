@@ -1,5 +1,5 @@
 {
-  "task_id": "veryfar2_stats_1790305986",
-  "cmd": "python3 -c '\nimport json\nm = json.load(open(\"/tmp/icon_front_v1/case_03_very_far/manifest.json\"))\nprint(\"coastal_experiment:\", json.dumps(m[\"coastal_experiment\"]))\nprint(\"orography_experiment:\", json.dumps(m[\"orography_experiment\"]))\nfor thr, comps in m[\"geometry_by_threshold\"].items():\n    print(f\"n_components thr={thr}: {len(comps)}\")\n    if comps:\n        areas = sorted([c['\"'\"'area_km2'\"'\"'] for c in comps], reverse=True)[:5]\n        print(\"  top areas km2:\", areas)\n'",
+  "task_id": "veryfar2_thumbs_1790306076",
+  "cmd": "python3 -c '\nfrom PIL import Image\nimport os\npairs = [\n    (\"/tmp/icon_front_v1/case_03_very_far/comparison/orography_penalty.png\", \"/tmp/icon_front_v1/vf2_oropenalty.png\"),\n    (\"/tmp/icon_front_v1/case_03_very_far/comparison/pfront_C_coastal_oro.png\", \"/tmp/icon_front_v1/vf2_pfrontC.png\"),\n    (\"/tmp/icon_front_v1/case_03_very_far/geometry/mask_thr_0.7.png\", \"/tmp/icon_front_v1/vf2_mask07.png\"),\n    (\"/tmp/icon_front_v1/case_03_very_far/comparison/overlay_pfront_geocolour.png\", \"/tmp/icon_front_v1/vf2_overlay.png\"),\n]\nfor src, dst in pairs:\n    im = Image.open(src).convert(\"RGB\")\n    im.thumbnail((420, 420))\n    im.save(dst, \"JPEG\", quality=55)\n    print(dst, os.path.getsize(dst))\n'",
   "timeout": 20
 }
