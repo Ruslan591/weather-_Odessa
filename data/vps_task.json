@@ -1,5 +1,5 @@
 {
-  "task_id": "fetch_annotated_1790325379",
-  "cmd": "base64 -w0 /tmp/icon_front_v1/thumb_annotated.jpg",
-  "timeout": 15
+  "task_id": "annotate_clean_1790325461",
+  "cmd": "python3 -c '\nimport matplotlib\nmatplotlib.use(\"Agg\")\nimport matplotlib.pyplot as plt\nimport matplotlib.patches as patches\nfrom PIL import Image\nimport numpy as np\n\nWEST, SOUTH, EAST, NORTH = -10.0, 35.0, 32.0, 60.0\nimg = np.array(Image.open(\"/tmp/icon_front_v1/case_03_very_far/comparison/eumetsat_geocolour.png\"))\n\nfig, ax = plt.subplots(figsize=(7,7), dpi=110)\nax.imshow(img, extent=(WEST, EAST, SOUTH, NORTH), origin=\"upper\", aspect=\"auto\")\n\nellipse = patches.Ellipse((11.5, 47.5), width=9, height=7, fill=False, edgecolor=\"lime\", linewidth=3)\nax.add_patch(ellipse)\nax.annotate(\"имел в виду ЭТУ дугу\", (11.5, 47.5), xytext=(11.5, 54),\n            color=\"lime\", fontsize=11, ha=\"center\", weight=\"bold\",\n            arrowprops=dict(arrowstyle=\"->\", color=\"lime\", linewidth=2))\n\nellipse2 = patches.Ellipse((20, 41.5), width=8, height=11, fill=False, edgecolor=\"cyan\", linewidth=3, linestyle=\"--\")\nax.add_patch(ellipse2)\nax.annotate(\"твой круг (горы)\", (20, 36.2), xytext=(20, 36.2),\n            color=\"cyan\", fontsize=11, ha=\"center\", weight=\"bold\")\n\nax.set_xlim(WEST, EAST); ax.set_ylim(SOUTH, NORTH)\nax.set_title(\"Чистый GeoColour — где какая дуга\", fontsize=11)\nax.set_xlabel(\"lon\"); ax.set_ylabel(\"lat\")\nfig.tight_layout()\nfig.savefig(\"/tmp/icon_front_v1/annotated_clean.png\", dpi=110)\nprint(\"saved\")\n'",
+  "timeout": 30
 }
