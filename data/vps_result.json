@@ -1,7 +1,7 @@
 {
-  "task_id": "show_crontab_1790391330",
+  "task_id": "cat_run_timed_1790391379",
   "returncode": 0,
-  "stdout": "* * * * * /opt/vps-github-bridge/venv/bin/python3 /opt/vps-github-bridge/vps_github_bridge.py >> /var/log/vps-github-bridge.log 2>&1\n*/5 * * * * /opt/weather-pipeline/run_timed.sh main /var/log/vps-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_pipeline.py\n2,7,12,17,22,27,32,37,42,47,52,57 * * * * /opt/weather-pipeline/run_timed.sh satellite /var/log/vps-satellite-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_satellite_pipeline.py\n4,9,14,19,24,29,34,39,44,49,54,59 * * * * /opt/weather-pipeline/run_timed.sh ai /var/log/vps-ai-pipeline.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/vps_ai_pipeline.py\n",
+  "stdout": "#!/bin/bash\n# run_timed.sh <label> <logfile> <command...>\nLABEL=\"$1\"; LOGFILE=\"$2\"; shift 2\nS=$(date +%s)\n\"$@\" >> \"$LOGFILE\" 2>&1\nE=$(date +%s)\necho \"[$(date -u +%FT%TZ)] $LABEL duration: $((E-S))s\" >> /var/log/vps-durations.log\n",
   "stderr": "",
-  "completed_at_utc": "2026-09-26T02:56:02Z"
+  "completed_at_utc": "2026-09-26T02:57:01Z"
 }
