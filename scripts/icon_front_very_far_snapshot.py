@@ -39,6 +39,7 @@ from skimage.morphology import skeletonize
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as pe
 
 REPO_DIR = "/opt/weather-pipeline/repo"
 sys.path.insert(0, os.path.join(REPO_DIR, "scripts"))
@@ -249,8 +250,12 @@ def render_transparent_isobars(pmsl, lats, lons, out_path):
     ax.axis("off")
     vmin, vmax = float(np.nanmin(pmsl)), float(np.nanmax(pmsl))
     levels = np.arange(math.floor(vmin / 2) * 2, math.ceil(vmax / 2) * 2 + 2, 2)
-    cs = ax.contour(lons, lats, pmsl, levels=levels, colors="white", linewidths=1.2)
-    ax.clabel(cs, inline=True, fontsize=7, fmt="%d", colors="yellow")
+    cs = ax.contour(lons, lats, pmsl, levels=levels, colors="white", linewidths=1.4)
+    for line in cs.collections:
+        line.set_path_effects([pe.withStroke(linewidth=3.2, foreground="black")])
+    clabels = ax.clabel(cs, inline=True, fontsize=7, fmt="%d", colors="yellow")
+    for txt in clabels:
+        txt.set_path_effects([pe.withStroke(linewidth=2.5, foreground="black")])
     fig.savefig(out_path, dpi=dpi, transparent=True)
     plt.close(fig)
 
