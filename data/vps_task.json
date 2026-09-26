@@ -1,5 +1,5 @@
 {
-  "task_id": "retry_push_cleanup_1790431178",
-  "cmd": "python3 -c '\nimport fcntl, subprocess\nlock = open(\"/tmp/vps_git.lock\", \"w\")\nfcntl.flock(lock, fcntl.LOCK_EX)\ntry:\n    subprocess.run([\"git\", \"-C\", \"/opt/weather-pipeline/repo\", \"fetch\", \"--depth\", \"20\", \"origin\", \"main\", \"--update-shallow\"], check=True)\n    r = subprocess.run([\"git\", \"-C\", \"/opt/weather-pipeline/repo\", \"rebase\", \"origin/main\"])\n    print(\"rebase rc:\", r.returncode)\n    if r.returncode == 0:\n        r2 = subprocess.run([\"git\", \"-C\", \"/opt/weather-pipeline/repo\", \"push\", \"origin\", \"main\"])\n        print(\"push rc:\", r2.returncode)\n    else:\n        subprocess.run([\"git\", \"-C\", \"/opt/weather-pipeline/repo\", \"rebase\", \"--abort\"])\n        print(\"rebase failed, aborted\")\nfinally:\n    fcntl.flock(lock, fcntl.LOCK_UN)\n'",
+  "task_id": "force_rerun_alpha_1790431560",
+  "cmd": "cd /opt/weather-pipeline/repo && rm -f data/icon_front_very_far/manifest.json && nohup python3 scripts/icon_front_very_far_snapshot.py > /tmp/icon_front_snapshot_alpha.log 2>&1 & echo started_pid=$!",
   "timeout": 30
 }
