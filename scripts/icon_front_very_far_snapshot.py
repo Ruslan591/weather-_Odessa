@@ -403,9 +403,22 @@ def main():
         pfront_path = os.path.join(OUT_DIR, f"{ts_label}_pfront.png")
 
         log("Запрашиваю EUMETSAT GeoColour на то же valid_time...")
-        t_iso = valid_dt.strftime("%Y-%m-%dT%H:%M:00Z")
-        arr = fc.fetch_map_custom("mtg_fd:rgb_geocolour", (WEST, SOUTH, EAST, NORTH), SAT_W, SAT_H,
-                                   time_iso=t_iso, retries=2, delay=5, style="", crs="CRS:84")
+        arr = None
+        eumetsat_actual_iso = None
+        for back_min in (0, 5, 10, 15, 20, 25, 30):
+            t_try = valid_dt - timedelta(minutes=back_min)
+            t_iso = t_try.strftime("%Y-%m-%dT%H:%M:00Z")
+            try:
+                arr = fc.fetch_map_custom("mtg_fd:rgb_geocolour", (WEST, SOUTH, EAST, NORTH), SAT_W, SAT_H,
+                                           time_iso=t_iso, retries=1, delay=3, style="", crs="CRS:84")
+                eumetsat_actual_iso = t_iso
+                if back_min > 0:
+                    log(f"  точного кадра на {valid_iso} не было, использован ближайший доступный: {t_iso} (-{back_min} мин)")
+                break
+            except Exception as e:
+                log(f"  {t_iso} недоступен ({e}); пробую раньше")
+        if arr is None:
+            raise RuntimeError("EUMETSAT GeoColour недоступен даже с fallback до -30 мин")
         Image.fromarray(arr).save(geocolour_path)
 
         log("Рендерю изобары (прозрачный слой)...")
@@ -429,6 +442,8 @@ def main():
             "downloaded_mb": round(total_bytes / 1e6, 2),
             "pfront_mean": float(np.nanmean(p_front)),
             "pfront_max": float(np.nanmax(p_front)),
+            "eumetsat_requested_time": valid_iso,
+            "eumetsat_actual_time": eumetsat_actual_iso,
         }
         manifest["snapshots"].append(snapshot)
 
