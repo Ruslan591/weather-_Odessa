@@ -43,12 +43,17 @@ function ifvfRenderSnapshot(idx) {
     document.getElementById("ifvfIsobars").src = IFVF_BASE + snap.files.isobars + bust;
     document.getElementById("ifvfPfront").src = IFVF_BASE + snap.files.pfront + bust;
 
+    let eumetsatNote = "";
+    if (snap.eumetsat_actual_time && snap.eumetsat_actual_time !== snap.valid_time) {
+        eumetsatNote = `<br><span style="color:#f0ad4e;">⚠ EUMETSAT: точного кадра на ${ifvfFormatTime(snap.valid_time)} не было, показан ближайший (${ifvfFormatTime(snap.eumetsat_actual_time)})</span>`;
+    }
     document.getElementById("ifvfMeta").innerHTML =
         `<b>Valid time:</b> ${ifvfFormatTime(snap.valid_time)} &nbsp;` +
         `<b>Сгенерировано:</b> ${ifvfFormatTime(snap.generated_at_utc)} (${ifvfAgoMinutes(snap.generated_at_utc)} мин назад)<br>` +
         `<b>Run:</b> ICON-EU ${snap.run}, lead +${snap.lead_hours}ч &nbsp; ` +
         `<b>Скачано:</b> ${snap.downloaded_mb} МБ &nbsp; ` +
-        `<b>P_front mean/max:</b> ${snap.pfront_mean.toFixed(3)} / ${snap.pfront_max.toFixed(3)}`;
+        `<b>P_front mean/max:</b> ${snap.pfront_mean.toFixed(3)} / ${snap.pfront_max.toFixed(3)}` +
+        eumetsatNote;
 
     // подсветить активную кнопку выбора снимка
     document.querySelectorAll(".ifvfSnapBtn").forEach((btn, i) => {
