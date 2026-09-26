@@ -1,5 +1,5 @@
 {
-  "task_id": "sync_check2_1790392995",
-  "cmd": "cd /opt/weather-pipeline/repo && git log -1 --oneline -- scripts/icon_front_very_far_snapshot.py",
-  "timeout": 15
+  "task_id": "force_rerun_1790393060",
+  "cmd": "cd /opt/weather-pipeline/repo && rm -f data/icon_front_very_far/manifest.json && nohup python3 scripts/icon_front_very_far_snapshot.py > /tmp/icon_front_snapshot_manual2.log 2>&1 & echo started_pid=$!",
+  "timeout": 30
 }
