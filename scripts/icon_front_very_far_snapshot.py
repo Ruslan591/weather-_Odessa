@@ -33,7 +33,7 @@ import numpy as np
 import requests
 from PIL import Image
 from scipy import ndimage
-from scipy.ndimage import maximum_filter, minimum_filter
+from scipy.ndimage import maximum_filter, minimum_filter, gaussian_filter
 from skimage.morphology import skeletonize
 
 import matplotlib
@@ -184,8 +184,19 @@ def normalize_percentile(field, p_lo=5, p_hi=95):
 
 
 def compute_pfront(fields, lats, lons):
-    pmsl, fi500, fi1000 = fields["pmsl"], fields["fi500"], fields["fi1000"]
-    u, v, rh = fields["u850"], fields["v850"], fields["relhum850"]
+    # Лёгкое гауссово сглаживание перед вычислением производных — иначе
+    # convergence/vorticity/wind_dir_shift в основном шум на масштабе сетки
+    # (см. docs/ai/ICON_EU_FRONT_DETECTOR_V1_OFFLINE_EXPERIMENT.md, раздел
+    # "Предложение V2", п.1 — это было известно, но не перенесено в этот
+    # скрипт при первой версии). sigma=2 сетки (~14км на 0.0625°) — гасит
+    # шум масштаба сетки, сохраняя синоптические структуры (100+ км).
+    SIGMA = 2.0
+    pmsl = fields["pmsl"]
+    fi500 = gaussian_filter(fields["fi500"], SIGMA)
+    fi1000 = gaussian_filter(fields["fi1000"], SIGMA)
+    u = gaussian_filter(fields["u850"], SIGMA)
+    v = gaussian_filter(fields["v850"], SIGMA)
+    rh = gaussian_filter(fields["relhum850"], SIGMA)
 
     thickness_m = (fi500 - fi1000) / G
     thick_grad, thick_dx, thick_dy = grad_mag_per_100km(thickness_m, lats, lons)
@@ -250,7 +261,12 @@ def render_transparent_isobars(pmsl, lats, lons, out_path):
     ax.axis("off")
     vmin, vmax = float(np.nanmin(pmsl)), float(np.nanmax(pmsl))
     levels = np.arange(math.floor(vmin / 2) * 2, math.ceil(vmax / 2) * 2 + 2, 2)
-    cs = ax.contour(lons, lats, pmsl, levels=levels, colors="white", linewidths=1.4)
+    # Сглаживаем перед контурами: сырое PMSL даёт мелкий шум там, где
+    # приведение давления к уровню моря физически ненадёжно (высокая и
+    # очень тёплая поверхность — Сахара, Аравия и т.п.) — это не сигнал,
+    # а ошибка экстраполяции через глубокий тёплый столб воздуха.
+    pmsl_smooth = gaussian_filter(pmsl, 2.0)
+    cs = ax.contour(lons, lats, pmsl_smooth, levels=levels, colors="white", linewidths=1.4)
     try:
         cs.set_path_effects([pe.withStroke(linewidth=3.2, foreground="black")])
     except AttributeError:
