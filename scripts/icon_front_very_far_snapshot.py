@@ -251,8 +251,12 @@ def render_transparent_isobars(pmsl, lats, lons, out_path):
     vmin, vmax = float(np.nanmin(pmsl)), float(np.nanmax(pmsl))
     levels = np.arange(math.floor(vmin / 2) * 2, math.ceil(vmax / 2) * 2 + 2, 2)
     cs = ax.contour(lons, lats, pmsl, levels=levels, colors="white", linewidths=1.4)
-    for line in cs.collections:
-        line.set_path_effects([pe.withStroke(linewidth=3.2, foreground="black")])
+    try:
+        cs.set_path_effects([pe.withStroke(linewidth=3.2, foreground="black")])
+    except AttributeError:
+        # старые версии matplotlib (<3.8): ContourSet — набор LineCollection
+        for line in cs.collections:
+            line.set_path_effects([pe.withStroke(linewidth=3.2, foreground="black")])
     clabels = ax.clabel(cs, inline=True, fontsize=7, fmt="%d", colors="yellow")
     for txt in clabels:
         txt.set_path_effects([pe.withStroke(linewidth=2.5, foreground="black")])
