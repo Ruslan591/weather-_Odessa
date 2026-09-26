@@ -272,7 +272,12 @@ def render_transparent_pfront(p_front, lats, lons, out_path):
     ax.axis("off")
     cmap = plt.get_cmap("inferno")
     rgba = cmap(p_front)
-    rgba[..., 3] = np.clip(p_front, 0, 1)  # альфа = сила сигнала: слабый = прозрачный
+    # альфа = "пол" 0.25 + оставшиеся 0.75 пропорционально силе сигнала — иначе
+    # при среднем P_front~0.15-0.2 почти весь слой рисуется почти прозрачным и
+    # выглядит как редкие "языки пламени в темноте", а не читаемая карта, когда
+    # смотрят только на этот слой (GeoColour/изобары выключены на странице).
+    # 0.25 достаточно мало, чтобы не перекрывать GeoColour при наложении.
+    rgba[..., 3] = np.clip(0.25 + 0.75 * p_front, 0, 1)
     ax.imshow(rgba, extent=(lons.min(), lons.max(), lats.min(), lats.max()),
               origin="lower", aspect="auto")
     fig.savefig(out_path, dpi=dpi, transparent=True)
