@@ -1,5 +1,5 @@
 {
-  "task_id": "check_rerun_log_1790393127",
-  "cmd": "tail -c 2500 /tmp/icon_front_snapshot_manual2.log",
-  "timeout": 20
+  "task_id": "force_rerun2_1790409887",
+  "cmd": "cd /opt/weather-pipeline/repo && rm -f data/icon_front_very_far/manifest.json && nohup python3 scripts/icon_front_very_far_snapshot.py > /tmp/icon_front_snapshot_manual3.log 2>&1 & echo started_pid=$!",
+  "timeout": 30
 }
