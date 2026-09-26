@@ -1,5 +1,5 @@
 {
-  "task_id": "check_rerun3_log_1790410306",
-  "cmd": "tail -c 1200 /tmp/icon_front_snapshot_manual4.log",
-  "timeout": 20
+  "task_id": "cleanup_orphans_1790410368",
+  "cmd": "python3 -c '\nimport json, os, fcntl, subprocess\n\nOUT_DIR = \"/opt/weather-pipeline/repo/data/icon_front_very_far\"\nmanifest = json.load(open(os.path.join(OUT_DIR, \"manifest.json\")))\nkeep = set()\nfor s in manifest[\"snapshots\"]:\n    keep.update(s[\"files\"].values())\nkeep.add(\"manifest.json\")\nkeep.add(\"latest_log.txt\")\n\nremoved = []\nfor fn in os.listdir(OUT_DIR):\n    if fn not in keep:\n        os.remove(os.path.join(OUT_DIR, fn))\n        removed.append(fn)\n\nprint(\"removed:\", removed)\n\nlock = open(\"/tmp/vps_git.lock\", \"w\")\nfcntl.flock(lock, fcntl.LOCK_EX)\ntry:\n    subprocess.run([\"git\", \"-C\", \"/opt/weather-pipeline/repo\", \"add\", \"-A\", \"data/icon_front_very_far/\"], check=True)\n    r = subprocess.run([\"git\", \"-C\", \"/opt/weather-pipeline/repo\", \"commit\", \"-m\", \"icon_front_very_far: cleanup orphaned PNGs not referenced by manifest\"])\n    if r.returncode == 0:\n        subprocess.run([\"git\", \"-C\", \"/opt/weather-pipeline/repo\", \"push\", \"origin\", \"main\"], check=True)\n        print(\"pushed cleanup\")\n    else:\n        print(\"nothing to commit\")\nfinally:\n    fcntl.flock(lock, fcntl.LOCK_UN)\n'",
+  "timeout": 30
 }
