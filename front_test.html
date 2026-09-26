@@ -6,14 +6,15 @@
 <title>Тест: изобары + P_front (very_far) — Одесса</title>
 <link rel="stylesheet" href="current_weather.css">
 <style>
-  .ifvfWrap { position: relative; width: 100%; max-width: 800px; margin: 0 auto; }
-  .ifvfWrap img { width: 100%; display: block; }
-  .ifvfLayer { position: absolute; top: 0; left: 0; }
+  .ifvfWrap { position: relative; width: 100%; max-width: 800px; margin: 0 auto;
+              aspect-ratio: 800 / 700; background: #000; }
+  .ifvfWrap img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; }
   .ifvfControls { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0; font-size: 13px; }
   #ifvfSnapButtons { display: flex; flex-wrap: wrap; margin: 8px 0; }
   #ifvfLog { background: #111; color: #9f9; font-size: 11px; padding: 8px; border-radius: 6px;
              max-height: 220px; overflow-y: auto; white-space: pre-wrap; font-family: monospace; }
   #ifvfMeta { font-size: 12px; line-height: 1.6; margin: 8px 0; }
+  .ifvfDesc { font-size: 12px; opacity: 0.8; overflow-wrap: break-word; word-break: break-word; }
 </style>
 </head>
 <body>
@@ -29,19 +30,22 @@
 <div class="container">
 
     <div class="card" style="margin-top:14px;">
-        <p style="font-size:12px; opacity:0.8;">
+        <p class="ifvfDesc">
             Экспериментальная страница. Изобары ICON-EU PMSL и многопризнаковый
             P_front-фильтр (thickness gradient + wind shift + convergence/vorticity +
             RH gradient, с подавлением у берега и в горах) поверх EUMETSAT GeoColour,
             тайл very_far (Испания/Италия/Британия/Балканы). Генерируется отдельным
             cron-процессом на VPS каждые 15 минут (сам решает, вышел ли новый час
             ICON-EU — если нет, ничего не делает). Кнопки запуска на странице нет.
-            Подробности эксперимента: <code>docs/ai/ICON_EU_FRONT_DETECTOR_V1_OFFLINE_EXPERIMENT.md</code>.
+            Подробности эксперимента:<br>
+            <code style="word-break: break-all;">docs/ai/ICON_EU_FRONT_DETECTOR_V1_OFFLINE_EXPERIMENT.md</code>
         </p>
 
         <div id="ifvfMeta">Загрузка...</div>
 
         <div class="ifvfControls">
+            <label><input type="checkbox" id="ifvfChkGeocolour" checked
+                   onchange="ifvfToggleLayer('ifvfGeocolour','ifvfChkGeocolour')"> GeoColour</label>
             <label><input type="checkbox" id="ifvfChkIsobars" checked
                    onchange="ifvfToggleLayer('ifvfIsobars','ifvfChkIsobars')"> Изобары</label>
             <label><input type="checkbox" id="ifvfChkPfront" checked
@@ -50,8 +54,8 @@
 
         <div class="ifvfWrap">
             <img id="ifvfGeocolour" src="" alt="GeoColour">
-            <img id="ifvfIsobars" class="ifvfLayer" src="" alt="Изобары">
-            <img id="ifvfPfront" class="ifvfLayer" src="" alt="P_front">
+            <img id="ifvfIsobars" src="" alt="Изобары">
+            <img id="ifvfPfront" src="" alt="P_front">
         </div>
 
         <div style="font-size:12px; margin:10px 0 4px;">Последние снимки (valid time):</div>
