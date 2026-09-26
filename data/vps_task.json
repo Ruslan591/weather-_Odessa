@@ -1,5 +1,5 @@
 {
-  "task_id": "check_full_log_1790409993",
-  "cmd": "grep -A3 'valid_time\\|Запрашиваю EUMETSAT\\|run=' /tmp/icon_front_snapshot_manual3.log | head -20",
-  "timeout": 15
+  "task_id": "eumetsat_raw_test_1790410045",
+  "cmd": "python3 -c '\nimport requests\nurl = \"https://view.eumetsat.int/geoserver/wms\"\nparams = {\n    \"service\": \"WMS\", \"version\": \"1.3.0\", \"request\": \"GetMap\",\n    \"layers\": \"mtg_fd:rgb_geocolour\", \"crs\": \"CRS:84\",\n    \"bbox\": \"-10.0,35.0,32.0,60.0\", \"width\": \"800\", \"height\": \"700\",\n    \"format\": \"image/png\", \"time\": \"2026-09-26T08:00:00Z\",\n}\nr = requests.get(url, params=params, timeout=30)\nprint(r.status_code, r.headers.get('\"'\"'content-type'\"'\"'))\nprint(r.text[:1000])\n'",
+  "timeout": 30
 }
