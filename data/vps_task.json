@@ -1,5 +1,5 @@
 {
-  "task_id": "cat_run_timed_1790391379",
-  "cmd": "cat /opt/weather-pipeline/run_timed.sh",
-  "timeout": 15
+  "task_id": "add_cron_1790391442",
+  "cmd": "(sudo crontab -l; echo '6,21,36,51 * * * * /opt/weather-pipeline/run_timed.sh front_very_far /var/log/vps-front-very-far.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/icon_front_very_far_snapshot.py') | sudo crontab - && echo ADDED && sudo crontab -l",
+  "timeout": 20
 }
