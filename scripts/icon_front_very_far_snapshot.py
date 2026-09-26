@@ -319,17 +319,27 @@ def git_sync():
 
 
 def git_commit_push(paths, message):
-    """Только add+commit+push — БЕЗ fetch/checkout (тот уже сделан в
-    git_sync() до записи файлов), чтобы не затереть свежезаписанные,
-    ещё не закоммиченные изменения сбросом ветки на origin."""
+    """add+commit+push с retry: если push не прошёл (non-fast-forward —
+    кто-то другой запушил, пока мы качали/считали между git_sync() и этим
+    вызовом), делаем fetch+rebase и пробуем ещё раз, до 3 попыток."""
     lock = open(GIT_LOCK_FILE, "w")
     fcntl.flock(lock, fcntl.LOCK_EX)
     try:
         subprocess.run(["git", "-C", REPO_DIR, "add"] + paths, check=True)
         r = subprocess.run(["git", "-C", REPO_DIR, "commit", "-m", message])
-        if r.returncode == 0:
-            subprocess.run(["git", "-C", REPO_DIR, "push", "origin", "main"], check=True)
-            return True
+        if r.returncode != 0:
+            return False  # нечего коммитить
+        for attempt in range(3):
+            push = subprocess.run(["git", "-C", REPO_DIR, "push", "origin", "main"])
+            if push.returncode == 0:
+                return True
+            log(f"push не прошёл (попытка {attempt+1}/3), делаю fetch+rebase и повторяю...")
+            subprocess.run(["git", "-C", REPO_DIR, "fetch", "--depth", "20", "origin", "main", "--update-shallow"], check=True)
+            rebase = subprocess.run(["git", "-C", REPO_DIR, "rebase", "origin/main"])
+            if rebase.returncode != 0:
+                subprocess.run(["git", "-C", REPO_DIR, "rebase", "--abort"])
+                log("rebase не удался, прерываю попытки push")
+                return False
         return False
     finally:
         fcntl.flock(lock, fcntl.LOCK_UN)
