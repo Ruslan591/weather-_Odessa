@@ -1,5 +1,5 @@
 {
-  "task_id": "check_rerun2_log_1790409954",
-  "cmd": "tail -c 1500 /tmp/icon_front_snapshot_manual3.log",
-  "timeout": 20
+  "task_id": "check_full_log_1790409993",
+  "cmd": "grep -A3 'valid_time\\|Запрашиваю EUMETSAT\\|run=' /tmp/icon_front_snapshot_manual3.log | head -20",
+  "timeout": 15
 }
