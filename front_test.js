@@ -13,6 +13,16 @@ function ifvfFormatTime(iso) {
     }
 }
 
+function ifvfShortLabel(iso) {
+    try {
+        const d = new Date(iso);
+        return d.toLocaleString("ru-RU", { timeZone: "Europe/Kiev", day: "2-digit", month: "2-digit" }) +
+               " " + d.toLocaleString("ru-RU", { timeZone: "Europe/Kiev", hour: "2-digit", minute: "2-digit" });
+    } catch (e) {
+        return iso;
+    }
+}
+
 function ifvfAgoMinutes(iso) {
     const diffMs = Date.now() - new Date(iso).getTime();
     return Math.round(diffMs / 60000);
@@ -52,7 +62,7 @@ function ifvfBuildSnapshotButtons() {
     ifvfManifest.snapshots.forEach((snap, i) => {
         const btn = document.createElement("button");
         btn.className = "ifvfSnapBtn";
-        btn.textContent = ifvfFormatTime(snap.valid_time).split(" ")[0];
+        btn.textContent = ifvfShortLabel(snap.valid_time);
         btn.style.cssText = "margin:2px;padding:6px 10px;border-radius:6px;border:1px solid #444;color:#eee;font-size:12px;";
         btn.onclick = () => ifvfRenderSnapshot(i);
         wrap.appendChild(btn);
