@@ -265,7 +265,12 @@ def render_transparent_isobars(pmsl, lats, lons, out_path):
     # приведение давления к уровню моря физически ненадёжно (высокая и
     # очень тёплая поверхность — Сахара, Аравия и т.п.) — это не сигнал,
     # а ошибка экстраполяции через глубокий тёплый столб воздуха.
-    pmsl_smooth = gaussian_filter(pmsl, 2.0)
+    # sigma=2 (как для P_front) оказалось недостаточно именно для этой
+    # зоны — изобары там всё ещё дробились на мелкие замкнутые петли;
+    # для изобар (в отличие от P_front) более сильное сглаживание не
+    # проблема — синоптическую карту и не нужно показывать с точностью
+    # до сетки, поэтому здесь sigma=4.
+    pmsl_smooth = gaussian_filter(pmsl, 4.0)
     cs = ax.contour(lons, lats, pmsl_smooth, levels=levels, colors="white", linewidths=1.4)
     try:
         cs.set_path_effects([pe.withStroke(linewidth=3.2, foreground="black")])
