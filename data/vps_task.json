@@ -1,5 +1,5 @@
 {
-  "task_id": "fix_cron_1790472628",
-  "cmd": "python3 -c '\nimport subprocess\nlines = subprocess.run([\"sudo\", \"crontab\", \"-l\"], capture_output=True, text=True).stdout.splitlines()\nnew_lines = []\nfor l in lines:\n    if \"icon_front_very_far_snapshot.py\" in l:\n        new_lines.append(\"6 * * * * /opt/weather-pipeline/run_timed.sh front_very_far /var/log/vps-front-very-far.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/icon_front_very_far_snapshot.py\")\n    else:\n        new_lines.append(l)\nnew_crontab = \"\\n\".join(new_lines) + \"\\n\"\np = subprocess.run([\"sudo\", \"crontab\", \"-\"], input=new_crontab, text=True)\nprint(\"rc:\", p.returncode)\nprint(subprocess.run([\"sudo\", \"crontab\", \"-l\"], capture_output=True, text=True).stdout)\n'",
-  "timeout": 20
+  "task_id": "force_rerun_pad_1790494246",
+  "cmd": "cd /opt/weather-pipeline/repo && rm -f data/icon_front_very_far/manifest.json && nohup python3 scripts/icon_front_very_far_snapshot.py > /tmp/icon_front_snapshot_pad.log 2>&1 & echo started_pid=$!",
+  "timeout": 30
 }
