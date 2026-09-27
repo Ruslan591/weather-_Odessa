@@ -55,6 +55,7 @@ KEEP_LAST = 5
 
 WEST, SOUTH, EAST, NORTH = -10.0, 35.0, 32.0, 60.0  # тир very_far, data/geo_config.json
 SAT_W, SAT_H = 800, 700  # ~4 км/px, как у production very_far (target_km_per_px=4.0)
+PAD_DEG = 1.5  # запас за пределами видимого bbox для сглаживания без edge-артефактов
 
 DWD_BASE = "https://opendata.dwd.de/weather/nwp/icon-eu/grib"
 G = 9.80665
@@ -121,13 +122,24 @@ def download_and_parse(url, scratch_name):
     lo = np.array([lon_idx[v] for v in lons])
     grid[li, lo] = values
 
-    lat_mask = (uniq_lats >= SOUTH) & (uniq_lats <= NORTH)
-    lon_mask = (uniq_lons >= WEST) & (uniq_lons <= EAST)
+    lat_mask = (uniq_lats >= SOUTH - PAD_DEG) & (uniq_lats <= NORTH + PAD_DEG)
+    lon_mask = (uniq_lons >= WEST - PAD_DEG) & (uniq_lons <= EAST + PAD_DEG)
     grid = grid[np.ix_(lat_mask, lon_mask)]
     uniq_lats = uniq_lats[lat_mask]
     uniq_lons = uniq_lons[lon_mask]
 
     return (grid, uniq_lats, uniq_lons), {"url": url, "units": units, "bytes": len(r.content)}
+
+
+def crop_to_visible(field, lats, lons):
+    """Обрезает поле (уже сглаженное на padded-сетке) до реального видимого
+    bbox — сглаживание делается ДО этой обрезки, чтобы гауссов фильтр видел
+    настоящих соседей за краем видимой области, а не создавал фиктивный,
+    неподвижный от кадра к кадру контур на границе (reflect-padding
+    scipy.ndimage по умолчанию)."""
+    lat_mask = (lats >= SOUTH) & (lats <= NORTH)
+    lon_mask = (lons >= WEST) & (lons <= EAST)
+    return field[np.ix_(lat_mask, lon_mask)], lats[lat_mask], lons[lon_mask]
 
 
 def find_latest_run_lead():
@@ -246,7 +258,11 @@ def compute_pfront(fields, lats, lons):
         other_weak = 1.0 - np.clip((s_wshift + s_vort) / 2.0, 0, 1)
         p_c = p_c * (1 - 0.7 * align * other_weak * near_mountain.astype(float))
 
-    return p_c
+    # p_c посчитан на padded-сетке (см. PAD_DEG) — обрезаем до видимого bbox
+    # только сейчас, после того как все градиенты уже честно посчитаны с
+    # реальными соседями за краем, а не после сглаживания в самом конце.
+    p_c_cropped, lats_cropped, lons_cropped = crop_to_visible(p_c, lats, lons)
+    return p_c_cropped, lats_cropped, lons_cropped
 
 
 # ---------------------------------------------------------------------------
@@ -254,24 +270,19 @@ def compute_pfront(fields, lats, lons):
 # ---------------------------------------------------------------------------
 
 def render_transparent_isobars(pmsl, lats, lons, out_path):
+    # sigma=4 на padded-сетке (реальные соседи за видимым краем есть, см.
+    # PAD_DEG), обрезаем до видимого bbox уже ПОСЛЕ сглаживания.
+    pmsl_smooth = gaussian_filter(pmsl, 4.0)
+    pmsl_vis, lats_vis, lons_vis = crop_to_visible(pmsl_smooth, lats, lons)
+
     dpi = 100
     fig = plt.figure(figsize=(SAT_W / dpi, SAT_H / dpi), dpi=dpi)
     ax = fig.add_axes([0, 0, 1, 1])
     ax.set_xlim(WEST, EAST); ax.set_ylim(SOUTH, NORTH)
     ax.axis("off")
-    vmin, vmax = float(np.nanmin(pmsl)), float(np.nanmax(pmsl))
+    vmin, vmax = float(np.nanmin(pmsl_vis)), float(np.nanmax(pmsl_vis))
     levels = np.arange(math.floor(vmin / 2) * 2, math.ceil(vmax / 2) * 2 + 2, 2)
-    # Сглаживаем перед контурами: сырое PMSL даёт мелкий шум там, где
-    # приведение давления к уровню моря физически ненадёжно (высокая и
-    # очень тёплая поверхность — Сахара, Аравия и т.п.) — это не сигнал,
-    # а ошибка экстраполяции через глубокий тёплый столб воздуха.
-    # sigma=2 (как для P_front) оказалось недостаточно именно для этой
-    # зоны — изобары там всё ещё дробились на мелкие замкнутые петли;
-    # для изобар (в отличие от P_front) более сильное сглаживание не
-    # проблема — синоптическую карту и не нужно показывать с точностью
-    # до сетки, поэтому здесь sigma=4.
-    pmsl_smooth = gaussian_filter(pmsl, 4.0)
-    cs = ax.contour(lons, lats, pmsl_smooth, levels=levels, colors="white", linewidths=1.4)
+    cs = ax.contour(lons_vis, lats_vis, pmsl_vis, levels=levels, colors="white", linewidths=1.4)
     try:
         cs.set_path_effects([pe.withStroke(linewidth=3.2, foreground="black")])
     except AttributeError:
@@ -431,7 +442,7 @@ def main():
             raise RuntimeError("нет обязательных полей (PMSL/FI500) — прерываю")
 
         log("Считаю P_front (variant C + coastal + orography)...")
-        p_front = compute_pfront(fields, lats, lons)
+        p_front, p_lats, p_lons = compute_pfront(fields, lats, lons)
 
         ts_label = valid_dt.strftime("%Y%m%dT%H%M%SZ")
         geocolour_path = os.path.join(OUT_DIR, f"{ts_label}_geocolour.png")
@@ -461,7 +472,7 @@ def main():
         render_transparent_isobars(fields["pmsl"], lats, lons, isobars_path)
 
         log("Рендерю P_front (прозрачный слой)...")
-        render_transparent_pfront(p_front, lats, lons, pfront_path)
+        render_transparent_pfront(p_front, p_lats, p_lons, pfront_path)
 
         snapshot = {
             "generated_at_utc": datetime.now(timezone.utc).isoformat(),
