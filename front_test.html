@@ -3,13 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Тест: изобары + P_front (very_far) — Одесса</title>
+<title>Тест: изобары + P_front — Одесса</title>
 <link rel="stylesheet" href="current_weather.css">
 <style>
   .ifvfWrap { position: relative; width: 100%; max-width: 800px; margin: 0 auto;
               aspect-ratio: 800 / 700; background: #000; }
   .ifvfWrap img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; }
   .ifvfControls { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0; font-size: 13px; }
+  #ifvfTierTabs { display: flex; flex-wrap: wrap; margin: 8px 0; }
   #ifvfSnapButtons { display: flex; flex-wrap: wrap; margin: 8px 0; }
   #ifvfLog { background: #111; color: #9f9; font-size: 11px; padding: 8px; border-radius: 6px;
              max-height: 220px; overflow-y: auto; white-space: pre-wrap; font-family: monospace; }
@@ -23,7 +24,7 @@
     <div class="nav">
         <a href="index.html">ГМЦ ЧАМ</a>
     </div>
-    <div class="headerTitle">Тест: изобары + P_front (very_far)</div>
+    <div class="headerTitle">Тест: изобары + P_front</div>
     <div class="nav"></div>
 </div>
 
@@ -33,13 +34,16 @@
         <p class="ifvfDesc">
             Экспериментальная страница. Изобары ICON-EU PMSL и многопризнаковый
             P_front-фильтр (thickness gradient + wind shift + convergence/vorticity +
-            RH gradient, с подавлением у берега и в горах) поверх EUMETSAT GeoColour,
-            тайл very_far (Испания/Италия/Британия/Балканы). Генерируется отдельным
-            cron-процессом на VPS каждые 15 минут (сам решает, вышел ли новый час
-            ICON-EU — если нет, ничего не делает). Кнопки запуска на странице нет.
-            Подробности эксперимента:<br>
+            RH gradient, с подавлением у берега и в горах) поверх EUMETSAT GeoColour.
+            Три масштаба: центральный тайл, дальний контроль (~1000км) и very far
+            (Испания/Италия/Британия/Балканы). Генерируется одним cron-процессом на
+            VPS раз в час (в :06), GRIB скачивается один раз на все три тира; тир
+            обновляется, только если для него вышел новый час ICON-EU. Кнопки запуска
+            на странице нет. Подробности эксперимента:<br>
             <code style="word-break: break-all;">docs/ai/ICON_EU_FRONT_DETECTOR_V1_OFFLINE_EXPERIMENT.md</code>
         </p>
+
+        <div id="ifvfTierTabs"></div>
 
         <div id="ifvfMeta">Загрузка...</div>
 
@@ -52,7 +56,7 @@
                    onchange="ifvfToggleLayer('ifvfPfront','ifvfChkPfront')"> P_front</label>
         </div>
 
-        <div class="ifvfWrap">
+        <div class="ifvfWrap" id="ifvfWrap">
             <img id="ifvfGeocolour" src="" alt="GeoColour">
             <img id="ifvfIsobars" src="" alt="Изобары">
             <img id="ifvfPfront" src="" alt="P_front">
@@ -62,7 +66,7 @@
         <div id="ifvfSnapButtons"></div>
 
         <details style="margin-top:12px;">
-            <summary style="font-size:12px; cursor:pointer;">Лог последнего прогона</summary>
+            <summary style="font-size:12px; cursor:pointer;">Лог последнего прогона (для выбранного тира)</summary>
             <pre id="ifvfLog">—</pre>
         </details>
     </div>
@@ -71,6 +75,7 @@
 
 <script src="front_test.js"></script>
 <script>
+    ifvfBuildTierTabs();
     loadIconFrontVeryFar();
     setInterval(loadIconFrontVeryFar, 60000);
 </script>
