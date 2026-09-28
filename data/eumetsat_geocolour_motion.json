@@ -57,29 +57,23 @@
   "target_confirmation": {
     "confirmed": true,
     "target_id": 0,
-    "target_area_km2": 80.1,
-    "roi_cloud_fraction": 0.976,
+    "target_area_km2": 53.4,
+    "roi_cloud_fraction": 0.929,
     "verdict": "GeoColour подтверждает: в ROI CLM-цели преобладает облачность"
   },
   "system_analysis_all": [
     {
-      "target_id": 3,
-      "available": true,
-      "roi_cloud_fraction": 0.996,
-      "confirmed": true
-    },
-    {
       "target_id": 4,
       "available": true,
-      "roi_cloud_fraction": 0.624,
-      "confirmed": true
+      "roi_cloud_fraction": 0.496,
+      "confirmed": false
     }
   ],
   "local_analysis_all": [
     {
       "target_id": 0,
       "available": true,
-      "roi_cloud_fraction": 0.976,
+      "roi_cloud_fraction": 0.929,
       "confirmed": true
     },
     {
@@ -91,20 +85,26 @@
     {
       "target_id": 2,
       "available": true,
-      "roi_cloud_fraction": 1.0,
+      "roi_cloud_fraction": 0.919,
+      "confirmed": true
+    },
+    {
+      "target_id": 3,
+      "available": true,
+      "roi_cloud_fraction": 0.72,
       "confirmed": true
     },
     {
       "target_id": 5,
       "available": true,
-      "roi_cloud_fraction": 0.811,
-      "confirmed": true
+      "roi_cloud_fraction": 0.489,
+      "confirmed": false
     },
     {
       "target_id": 6,
       "available": true,
-      "roi_cloud_fraction": 0.6,
-      "confirmed": true
+      "roi_cloud_fraction": 0.47,
+      "confirmed": false
     }
   ],
   "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
