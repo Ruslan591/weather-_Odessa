@@ -40,7 +40,7 @@ from datetime import datetime, timedelta, timezone
 import numpy as np
 import requests
 from PIL import Image
-from scipy.ndimage import maximum_filter, minimum_filter, gaussian_filter
+from scipy.ndimage import maximum_filter, minimum_filter, gaussian_filter, binary_closing
 
 import matplotlib
 matplotlib.use("Agg")
@@ -454,10 +454,10 @@ def draw_pressure_centers(ax, centers, bbox, px):
 # все градиенты слабые; выраженный циклон — сильные). Берём верхний процентиль распределения
 # градиента в ЭТОМ прогоне (адаптивно), но не ниже абсолютного пола, чтобы в тихую погоду
 # не рисовать фронты из чистого шума полей.
-FRONT_GRAD_PERCENTILE = float(os.environ.get("ICON_FRONT_GRAD_PERCENTILE", "94"))
-FRONT_GRAD_FLOOR = float(os.environ.get("ICON_FRONT_GRAD_FLOOR", "5.0"))   # K/100км, абсолютный пол
-FRONT_MIN_KM = float(os.environ.get("ICON_FRONT_MIN_KM", "400"))
-FRONT_MIN_STRAIGHTNESS = float(os.environ.get("ICON_FRONT_MIN_STRAIGHTNESS", "0.22"))
+FRONT_GRAD_PERCENTILE = float(os.environ.get("ICON_FRONT_GRAD_PERCENTILE", "90"))
+FRONT_GRAD_FLOOR = float(os.environ.get("ICON_FRONT_GRAD_FLOOR", "4.0"))   # K/100км, абсолютный пол
+FRONT_MIN_KM = float(os.environ.get("ICON_FRONT_MIN_KM", "300"))
+FRONT_MIN_STRAIGHTNESS = float(os.environ.get("ICON_FRONT_MIN_STRAIGHTNESS", "0.15"))
 # отношение (расстояние между концами) / (длина линии). Настоящий фронт тянется через
 # карту более-менее в одну сторону; шумовая петля вокруг локального пятна градиента
 # извивается на месте и почти возвращается к себе — у неё это отношение близко к 0.
@@ -497,7 +497,11 @@ def compute_fronts(fields, lats, lons):
     across = tfx * nx + tfy * ny                 # >0 ⇒ вдоль n градиент проходит максимум
     grad100 = gm * 100.0
     grad_thresh = max(FRONT_GRAD_FLOOR, float(np.nanpercentile(grad100, FRONT_GRAD_PERCENTILE)))
-    valid = (grad100 > grad_thresh) & (across > 0) & np.isfinite(tfp)
+    strong = grad100 > grad_thresh
+    # смыкаем разрывы в 1-2 ячейки (~10-15км) вдоль почти непрерывной зоны сильного градиента —
+    # иначе контур рвётся на обрывки там, где градиент на мгновение чуть просел ниже порога
+    strong_bridged = binary_closing(strong, structure=np.ones((5, 5)))
+    valid = strong_bridged & (across > 0) & np.isfinite(tfp)
     hsurf = fields.get("hsurf")
     if hsurf is not None:
         valid &= gaussian_filter(hsurf, 2.0) <= TERRAIN_MASK_M
@@ -631,7 +635,9 @@ def process_tier(tier_key, tier_cfg, fields, lats, lons, run_dt, lead, valid_dt)
     log(f"[{tier_key}] запрашиваю EUMETSAT GeoColour...")
     arr = None
     eumetsat_actual_iso = None
-    for back_min in (0, 5, 10, 15, 20, 25, 30):
+    # по статистике прогонов EUMETSAT ни разу не публикует кадр на :00 и почти никогда на :55 —
+    # кадр на :50 (-10 мин) есть практически всегда, поэтому пробуем его первым и экономим запросы
+    for back_min in (10, 15, 5, 20, 25, 0, 30):
         t_try = valid_dt - timedelta(minutes=back_min)
         t_iso = t_try.strftime("%Y-%m-%dT%H:%M:00Z")
         try:
