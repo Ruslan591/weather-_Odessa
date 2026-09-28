@@ -1,5 +1,5 @@
 {
-  "task_id": "force_terrain2_1790584501",
-  "cmd": "cd /opt/weather-pipeline/repo && ICON_FRONT_FORCE=1 nohup python3 scripts/icon_front_very_far_snapshot.py > /tmp/icon_front_terrain2.log 2>&1 & echo started_pid=$!",
-  "timeout": 30
+  "task_id": "check_terrain2_1790584601",
+  "cmd": "grep -E 'изобары:|Скачано|git push|ОШИБКА' /tmp/icon_front_terrain2.log | tail -10",
+  "timeout": 20
 }
