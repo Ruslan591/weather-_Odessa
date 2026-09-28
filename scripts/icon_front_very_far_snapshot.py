@@ -471,6 +471,11 @@ FRONT_MIN_STRAIGHTNESS = float(os.environ.get("ICON_FRONT_MIN_STRAIGHTNESS", "0.
 # расстоянию, оставляя более длинный из пары.
 FRONT_DEDUP_RADIUS_KM = float(os.environ.get("ICON_FRONT_DEDUP_RADIUS_KM", "35"))
 FRONT_MAX_SEGMENTS = int(os.environ.get("ICON_FRONT_MAX_SEGMENTS", "8"))  # на всю область сразу
+# подавление у берега/гор (как у P_front) — доля выбранного градиента, которая срезается там, где
+# градиент θe идёт вдоль берега/склона, и пороги "мы точно рядом с берегом/горой"
+FRONT_COAST_MOUNTAIN_WEIGHT = float(os.environ.get("ICON_FRONT_COAST_MOUNTAIN_WEIGHT", "0.7"))
+FRONT_COAST_MOUNTAIN_PERCENTILE = float(os.environ.get("ICON_FRONT_COAST_MOUNTAIN_PERCENTILE", "80"))
+FRONT_MOUNTAIN_RELIEF_M = float(os.environ.get("ICON_FRONT_MOUNTAIN_RELIEF_M", "150.0"))
 # отношение (расстояние между концами) / (длина линии). Настоящий фронт тянется через
 # карту более-менее в одну сторону; шумовая петля вокруг локального пятна градиента
 # извивается на месте и почти возвращается к себе — у неё это отношение близко к 0.
@@ -516,18 +521,19 @@ def compute_fronts(fields, lats, lons):
     fr_land = fields.get("fr_land")
     if fr_land is not None:
         coast_grad, coast_dx, coast_dy = grad_mag_per_100km(fr_land, lats, lons)
-        near_coast = coast_grad > np.nanpercentile(coast_grad, 80)
+        near_coast = coast_grad > np.nanpercentile(coast_grad, FRONT_COAST_MOUNTAIN_PERCENTILE)
         denom = (gm * np.hypot(coast_dx, coast_dy)) + eps
         align = np.abs((gx * coast_dx + gy * coast_dy) / denom)
-        grad100 = grad100 * (1 - 0.7 * align * near_coast.astype(float))
+        grad100 = grad100 * (1 - FRONT_COAST_MOUNTAIN_WEIGHT * align * near_coast.astype(float))
     hsurf_raw = fields.get("hsurf")
     if hsurf_raw is not None:
         oro_grad, oro_dx, oro_dy = grad_mag_per_100km(hsurf_raw, lats, lons)
         local_relief = maximum_filter(hsurf_raw, size=5) - minimum_filter(hsurf_raw, size=5)
-        near_mountain = (oro_grad > np.nanpercentile(oro_grad, 80)) & (local_relief > 150.0)
+        near_mountain = (oro_grad > np.nanpercentile(oro_grad, FRONT_COAST_MOUNTAIN_PERCENTILE)) & \
+            (local_relief > FRONT_MOUNTAIN_RELIEF_M)
         denom = (gm * np.hypot(oro_dx, oro_dy)) + eps
         align = np.abs((gx * oro_dx + gy * oro_dy) / denom)
-        grad100 = grad100 * (1 - 0.7 * align * near_mountain.astype(float))
+        grad100 = grad100 * (1 - FRONT_COAST_MOUNTAIN_WEIGHT * align * near_mountain.astype(float))
 
     grad_thresh = max(FRONT_GRAD_FLOOR, float(np.nanpercentile(grad100, FRONT_GRAD_PERCENTILE)))
     strong = grad100 > grad_thresh
