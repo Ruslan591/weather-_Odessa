@@ -270,8 +270,8 @@ def compute_pfront(fields, lats, lons, bbox):
 
 
 TERRAIN_MASK_M = 800.0     # выше этой высоты рельефа изобары не рисуем (PMSL там — артефакт приведения)
-MIN_CLOSED_LOOP_PX = 100   # замкнутые петли короче — выбрасываем (мелкие «пятна» у гор)
-MIN_OPEN_SEG_PX = 40       # открытые обрывки короче (остаются между замаскированными зонами) — тоже
+MIN_CLOSED_LOOP_PX = 120   # замкнутые петли короче — выбрасываем (мелкие «пятна» у гор)
+MIN_OPEN_SEG_PX = 90       # открытые обрывки короче (остаются между замаскированными зонами) — тоже
 
 
 def render_transparent_isobars(pmsl, hsurf, lats, lons, out_path, bbox, px):
