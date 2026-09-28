@@ -274,7 +274,7 @@ MIN_CLOSED_LOOP_PX = 120   # замкнутые петли короче — вы
 MIN_OPEN_SEG_PX = 90       # открытые обрывки короче (остаются между замаскированными зонами) — тоже
 
 
-def render_transparent_isobars(pmsl, hsurf, lats, lons, out_path, bbox, px):
+def render_transparent_isobars(pmsl, hsurf, lats, lons, out_path, bbox, px, centers=None):
     """Изобары без «неподвижного мусора»: приведение давления к уровню моря
     над высоким рельефом (Альпы, Пиренеи, Балканы, Анатолия, Атлас…) даёт
     мелкие замкнутые петли, привязанные к рельефу — а рельеф не меняется,
@@ -344,6 +344,9 @@ def render_transparent_isobars(pmsl, hsurf, lats, lons, out_path, bbox, px):
                             path_effects=halo_text,
                             bbox=dict(boxstyle="round,pad=0.12", fc="black", ec="none", alpha=0.55))
     log(f"изобары: оставлено {kept} линий, отброшено {dropped} мелких/над-горных фрагментов")
+    if centers:
+        n_hl = draw_pressure_centers(ax, centers, bbox, px)
+        log(f"L/H: нарисовано {n_hl} центров")
     fig.savefig(out_path, dpi=dpi, transparent=True)
     plt.close(fig)
 
@@ -397,6 +400,180 @@ def git_commit_push(paths, message):
         return False
     finally:
         fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+
+# ---------- L/H центры давления ----------
+HL_WINDOW_KM = 500.0   # экстремум должен быть лучшим в радиусе этого размера
+HL_PROMINENCE_HPA = 1.5  # и отличаться от среднего по окну не меньше чем на это
+
+
+def find_pressure_centers(pmsl, hsurf, lats, lons):
+    """Список (lat, lon, 'L'|'H', hPa) по всей скачанной области."""
+    from scipy.ndimage import uniform_filter
+    dy_km, dx_km = km_scale(lats, lons)
+    wy = max(3, int(round(HL_WINDOW_KM / abs(dy_km))) | 1)
+    wx = max(3, int(round(HL_WINDOW_KM / abs(dx_km))) | 1)
+    p = gaussian_filter(pmsl, 5.0)
+    mean = uniform_filter(p, size=(wy, wx), mode="nearest")
+    mx = maximum_filter(p, size=(wy, wx), mode="nearest")
+    mn = minimum_filter(p, size=(wy, wx), mode="nearest")
+    hs = gaussian_filter(hsurf, 2.0) if hsurf is not None else np.zeros_like(p)
+    ok = (hs <= TERRAIN_MASK_M)
+    out = []
+    for kind, mask in (("L", (p == mn) & (p < mean - HL_PROMINENCE_HPA)),
+                       ("H", (p == mx) & (p > mean + HL_PROMINENCE_HPA))):
+        for i, j in zip(*np.where(mask & ok)):
+            out.append((float(lats[i]), float(lons[j]), kind, float(p[i, j])))
+    return out
+
+
+def draw_pressure_centers(ax, centers, bbox, px):
+    west, south, east, north = bbox
+    sat_w, sat_h = px
+    halo = [pe.withStroke(linewidth=3.5, foreground="black")]
+    n = 0
+    for lat, lon, kind, val in centers:
+        if not (west < lon < east and south < lat < north):
+            continue
+        fx = (lon - west) / (east - west) * sat_w
+        fy = (north - lat) / (north - south) * sat_h
+        if not (22 < fx < sat_w - 22 and 30 < fy < sat_h - 30):
+            continue
+        col = "#ff5a5a" if kind == "L" else "#5ab0ff"
+        ax.text(lon, lat, kind, color=col, fontsize=22, fontweight="bold",
+                ha="center", va="center", path_effects=halo, zorder=6)
+        ax.text(lon, lat - (north - south) * 0.028, f"{val:.0f}", color=col,
+                fontsize=8, fontweight="bold", ha="center", va="center", path_effects=halo, zorder=6)
+        n += 1
+    return n
+
+
+# ---------- линейные фронты (Renard–Clarke по θe на 850 гПа) ----------
+FRONT_GRAD_MIN = float(os.environ.get("ICON_FRONT_GRAD_MIN", "3.0"))  # K/100км по сглаженному θe850
+FRONT_MIN_KM = float(os.environ.get("ICON_FRONT_MIN_KM", "250"))
+FRONT_SMOOTH_CELLS = 4.0   # ~25 км на сетке ICON-EU 0.0625°
+STATIONARY_MS = 1.5        # |нормальная к фронту скорость ветра 850| меньше — стационарный
+FRONT_COLORS = {"cold": "#3d8bff", "warm": "#ff4545", "stat": "#c07bff"}
+
+
+def theta_e_bolton(t_k, rh_pct, p_hpa):
+    tc = t_k - 273.15
+    es = 6.112 * np.exp(17.67 * tc / (tc + 243.5))
+    e = np.clip(rh_pct, 1.0, 100.0) / 100.0 * es
+    r = 0.622 * e / (p_hpa - e)
+    tl = 2840.0 / (3.5 * np.log(t_k) - np.log(e) - 4.805) + 55.0
+    return t_k * (1000.0 / p_hpa) ** (0.2854 * (1 - 0.28 * r)) * \
+        np.exp((3.376 / tl - 0.00254) * r * 1000.0 * (1 + 0.81 * r))
+
+
+def compute_fronts(fields, lats, lons):
+    """Линии фронтов по всей области: нули TFP = -∇|∇θ|·∇θ/|∇θ| там, где градиент θe
+    значим и достигает максимума поперёк линии. Тип — по знаку нормальной к фронту
+    компоненты ветра 850: в сторону тёплого воздуха → холодный, в сторону холодного →
+    тёплый, мало → стационарный. Возвращает (segments, stats)."""
+    from contourpy import contour_generator, LineType
+    th = theta_e_bolton(fields["t850"], fields["relhum850"], 850.0)
+    th = gaussian_filter(th, FRONT_SMOOTH_CELLS)
+    u = gaussian_filter(fields["u850"], FRONT_SMOOTH_CELLS)
+    v = gaussian_filter(fields["v850"], FRONT_SMOOTH_CELLS)
+    dy_km, dx_km = km_scale(lats, lons)
+    gy, gx = np.gradient(th, dy_km, dx_km)
+    gm = np.hypot(gx, gy)
+    gmy, gmx = np.gradient(gm, dy_km, dx_km)
+    eps = 1e-9
+    nx, ny = gx / (gm + eps), gy / (gm + eps)   # n смотрит в сторону более тёплого воздуха
+    tfp = gaussian_filter(-(gmx * nx + gmy * ny), 2.0)
+    tfy, tfx = np.gradient(tfp, dy_km, dx_km)
+    across = tfx * nx + tfy * ny                 # >0 ⇒ вдоль n градиент проходит максимум
+    grad100 = gm * 100.0
+    valid = (grad100 > FRONT_GRAD_MIN) & (across > 0) & np.isfinite(tfp)
+    hsurf = fields.get("hsurf")
+    if hsurf is not None:
+        valid &= gaussian_filter(hsurf, 2.0) <= TERRAIN_MASK_M
+    stats = {"grad100_p50": float(np.nanpercentile(grad100, 50)),
+             "grad100_p90": float(np.nanpercentile(grad100, 90)),
+             "grad100_max": float(np.nanmax(grad100)),
+             "valid_frac": float(valid.mean())}
+    z = np.ma.masked_where(~valid, tfp)
+    cg = contour_generator(lons, lats, z, name="serial", line_type=LineType.Separate)
+    dlat = float(lats[1] - lats[0]); dlon = float(lons[1] - lons[0])
+    segs = []
+    for seg in cg.lines(0.0):
+        if len(seg) < 6:
+            continue
+        mlat = float(np.mean(seg[:, 1]))
+        kx = 111.32 * math.cos(math.radians(mlat))
+        length_km = float(np.sum(np.hypot(np.diff(seg[:, 0]) * kx, np.diff(seg[:, 1]) * 111.32)))
+        if length_km < FRONT_MIN_KM:
+            continue
+        ii = np.clip(np.round((seg[:, 1] - lats[0]) / dlat).astype(int), 0, len(lats) - 1)
+        jj = np.clip(np.round((seg[:, 0] - lons[0]) / dlon).astype(int), 0, len(lons) - 1)
+        c = u[ii, jj] * nx[ii, jj] + v[ii, jj] * ny[ii, jj]
+        k = min(15, len(c) | 1)
+        c = np.convolve(np.pad(c, k // 2, mode="edge"), np.ones(k) / k, mode="valid")
+        kind = np.where(c > STATIONARY_MS, "cold", np.where(c < -STATIONARY_MS, "warm", "stat"))
+        segs.append({"xy": seg, "kind": kind, "nx": nx[ii, jj], "ny": ny[ii, jj], "km": length_km})
+    stats["n_segments"] = len(segs)
+    stats["km_total"] = float(sum(s["km"] for s in segs))
+    return segs, stats
+
+
+def render_transparent_fronts(segs, hl_centers, out_path, bbox, px):
+    from matplotlib.collections import LineCollection
+    west, south, east, north = bbox
+    sat_w, sat_h = px
+    dpi = 100
+    fig = plt.figure(figsize=(sat_w / dpi, sat_h / dpi), dpi=dpi)
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.set_xlim(west, east); ax.set_ylim(south, north); ax.axis("off")
+    pxl = sat_w / (east - west); pyl = sat_h / (north - south)
+    try:
+        from matplotlib.markers import MarkerStyle
+        from matplotlib.transforms import Affine2D
+        from matplotlib.path import Path as MPath
+        can_sym = True
+    except Exception:
+        can_sym = False
+    drawn = 0
+    for s in segs:
+        xy, kind = s["xy"], s["kind"]
+        if not (xy[:, 0].max() > west and xy[:, 0].min() < east and xy[:, 1].max() > south and xy[:, 1].min() < north):
+            continue
+        drawn += 1
+        pts = xy.reshape(-1, 1, 2)
+        pieces = np.concatenate([pts[:-1], pts[1:]], axis=1)
+        cols = [FRONT_COLORS[k] for k in kind[:-1]]
+        ax.add_collection(LineCollection(pieces, colors="black", linewidths=5.0, alpha=0.65, capstyle="round", zorder=4))
+        ax.add_collection(LineCollection(pieces, colors=cols, linewidths=2.6, capstyle="round", zorder=5))
+        if not can_sym:
+            continue
+        # значки каждые ~55 px: треугольник (холодный) / полукруг (тёплый) в сторону движения
+        dpx = np.hypot(np.diff(xy[:, 0]) * pxl, np.diff(xy[:, 1]) * pyl)
+        cum = np.concatenate([[0], np.cumsum(dpx)])
+        for d in np.arange(30.0, cum[-1], 55.0):
+            i = int(np.searchsorted(cum, d))
+            i = min(i, len(xy) - 1)
+            k = kind[i]
+            if k == "stat":
+                continue
+            sgn = 1.0 if k == "cold" else -1.0
+            mx_, my_ = sgn * s["nx"][i], sgn * s["ny"][i]
+            ang = math.degrees(math.atan2(my_ * pyl, mx_ * pxl))
+            x, y = xy[i]
+            if not (west + 0.05 < x < east - 0.05 and south + 0.05 < y < north - 0.05):
+                continue
+            base = "^" if k == "cold" else MPath.arc(0, 180)
+            try:
+                ms = MarkerStyle(base, transform=Affine2D().rotate_deg(ang - 90))
+            except Exception:
+                continue
+            ax.plot([x + mx_ * 7 / pxl], [y + my_ * 7 / pyl], linestyle="none", marker=ms,
+                    markersize=12, markerfacecolor=FRONT_COLORS[k], markeredgecolor="black",
+                    markeredgewidth=0.6, zorder=6)
+    fig.savefig(out_path, dpi=dpi, transparent=True)
+    plt.close(fig)
+    return drawn
 
 
 def process_tier(tier_key, tier_cfg, fields, lats, lons, run_dt, lead, valid_dt):
@@ -459,8 +636,19 @@ def process_tier(tier_key, tier_cfg, fields, lats, lons, run_dt, lead, valid_dt)
     Image.fromarray(arr).save(geocolour_path)
 
     log(f"[{tier_key}] рендерю изобары и P_front...")
-    render_transparent_isobars(fields["pmsl"], fields.get("hsurf"), lats, lons, isobars_path, bbox, px)
+    render_transparent_isobars(fields["pmsl"], fields.get("hsurf"), lats, lons, isobars_path, bbox, px,
+                               centers=fields.get("_centers"))
     render_transparent_pfront(p_front, p_lats, p_lons, pfront_path, bbox, px)
+    fronts_name = None
+    if fields.get("_fronts") is not None:
+        try:
+            fronts_name = f"{ts_label}_fronts.png"
+            n_fr = render_transparent_fronts(fields["_fronts"], fields.get("_centers"),
+                                             os.path.join(out_dir, fronts_name), bbox, px)
+            log(f"[{tier_key}] фронты: {n_fr} линий в кадре")
+        except Exception as e:
+            log(f"[{tier_key}] фронты не отрисованы: {e}")
+            fronts_name = None
 
     snapshot = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -479,6 +667,8 @@ def process_tier(tier_key, tier_cfg, fields, lats, lons, run_dt, lead, valid_dt)
         "eumetsat_requested_time": valid_iso,
         "eumetsat_actual_time": eumetsat_actual_iso,
     }
+    if fronts_name:
+        snapshot["files"]["fronts"] = fronts_name
     manifest["snapshots"].append(snapshot)
 
     while len(manifest["snapshots"]) > KEEP_LAST:
@@ -545,6 +735,7 @@ def main():
             "u850": ("u", "pressure-level", 850, "U", lead),
             "v850": ("v", "pressure-level", 850, "V", lead),
             "relhum850": ("relhum", "pressure-level", 850, "RELHUM", lead),
+            "t850": ("t", "pressure-level", 850, "T", lead),
             "fr_land": ("fr_land", "time-invariant", None, "FR_LAND", 0),
             "fr_lake": ("fr_lake", "time-invariant", None, "FR_LAKE", 0),
             "hsurf": ("hsurf", "time-invariant", None, "HSURF", 0),
@@ -571,6 +762,23 @@ def main():
 
         if fields["pmsl"] is None or fields["fi500"] is None:
             raise RuntimeError("нет обязательных полей (PMSL/FI500) — прерываю")
+
+        try:
+            fields["_centers"] = find_pressure_centers(fields["pmsl"], fields.get("hsurf"), lats, lons)
+            log(f"L/H: найдено {len(fields['_centers'])} центров в области")
+        except Exception as e:
+            log(f"L/H не посчитаны: {e}"); fields["_centers"] = None
+        fields["_fronts"] = None
+        if all(fields.get(k) is not None for k in ("t850", "relhum850", "u850", "v850")):
+            try:
+                fields["_fronts"], fst = compute_fronts(fields, lats, lons)
+                log(f"фронты: сегментов {fst['n_segments']}, суммарно {fst['km_total']:.0f} км; "
+                    f"|∇θe850| К/100км p50={fst['grad100_p50']:.2f} p90={fst['grad100_p90']:.2f} max={fst['grad100_max']:.2f}; "
+                    f"порог {FRONT_GRAD_MIN}, валидных точек {fst['valid_frac']*100:.1f}%")
+            except Exception as e:
+                log(f"фронты не посчитаны: {e}"); log(traceback.format_exc())
+        else:
+            log("нет T850/RH/U/V — фронты пропущены")
 
         touched_dirs = []
         for tier_key, tier_cfg in TIERS.items():
