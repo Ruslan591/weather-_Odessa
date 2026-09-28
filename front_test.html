@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Тест: изобары + P_front — Одесса</title>
+<title>Тест: изобары, L/H, фронты — Одесса</title>
 <link rel="stylesheet" href="current_weather.css">
 <style>
   .ifvfWrap { position: relative; width: 100%; max-width: 800px; margin: 0 auto;
@@ -24,7 +24,7 @@
     <div class="nav">
         <a href="index.html">ГМЦ ЧАМ</a>
     </div>
-    <div class="headerTitle">Тест: изобары + P_front</div>
+    <div class="headerTitle">Тест: изобары, L/H, фронты</div>
     <div class="nav"></div>
 </div>
 
@@ -32,14 +32,14 @@
 
     <div class="card" style="margin-top:14px;">
         <p class="ifvfDesc">
-            Экспериментальная страница. Изобары ICON-EU PMSL и многопризнаковый
-            P_front-фильтр (thickness gradient + wind shift + convergence/vorticity +
-            RH gradient, с подавлением у берега и в горах) поверх EUMETSAT GeoColour.
-            Три масштаба: центральный тайл, дальний контроль (~1000км) и very far
-            (Испания/Италия/Британия/Балканы). Генерируется одним cron-процессом на
-            VPS раз в час (в :06), GRIB скачивается один раз на все три тира; тир
-            обновляется, только если для него вышел новый час ICON-EU. Кнопки запуска
-            на странице нет. Подробности эксперимента:<br>
+            Экспериментальная страница. Изобары ICON-EU PMSL с центрами L/H и линейные
+            фронты (максимум градиента θe на 850 гПа по Renard–Clarke; цвет по адвекции:
+            <span style="color:#3d8bff">холодный</span>,
+            <span style="color:#ff4545">тёплый</span>,
+            <span style="color:#c07bff">стационарный</span>) поверх EUMETSAT GeoColour.
+            P_front — прежняя карта вероятности, оставлена для сравнения. Три масштаба:
+            центральный тайл, дальний контроль (~1000км) и very far. Генерируется cron-процессом
+            на VPS раз в час (в :06). Подробности:<br>
             <code style="word-break: break-all;">docs/ai/ICON_EU_FRONT_DETECTOR_V1_OFFLINE_EXPERIMENT.md</code>
         </p>
 
@@ -52,14 +52,17 @@
                    onchange="ifvfToggleLayer('ifvfGeocolour','ifvfChkGeocolour')"> GeoColour</label>
             <label><input type="checkbox" id="ifvfChkIsobars" checked
                    onchange="ifvfToggleLayer('ifvfIsobars','ifvfChkIsobars')"> Изобары</label>
-            <label><input type="checkbox" id="ifvfChkPfront" checked
+            <label><input type="checkbox" id="ifvfChkFronts" checked
+                   onchange="ifvfToggleLayer('ifvfFronts','ifvfChkFronts')"> Фронты</label>
+            <label><input type="checkbox" id="ifvfChkPfront"
                    onchange="ifvfToggleLayer('ifvfPfront','ifvfChkPfront')"> P_front</label>
         </div>
 
         <div class="ifvfWrap" id="ifvfWrap">
             <img id="ifvfGeocolour" src="" alt="GeoColour">
             <img id="ifvfIsobars" src="" alt="Изобары">
-            <img id="ifvfPfront" src="" alt="P_front">
+            <img id="ifvfPfront" src="" alt="P_front" style="display:none">
+            <img id="ifvfFronts" src="" alt="Фронты">
         </div>
 
         <div style="font-size:12px; margin:10px 0 4px;">Последние снимки (valid time):</div>
