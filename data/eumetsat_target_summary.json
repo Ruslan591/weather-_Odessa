@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-28T07:43:12Z",
+  "timestamp": "2026-09-28T07:47:15Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-09-28T07:15:00.000Z",
   "target_id": 0,
@@ -20,6 +20,7 @@
     "window_spanning": false,
     "phase_label": "смешанная фаза",
     "cloud_fraction": 0.115,
+    "has_precip": false,
     "has_lightning": false
   },
   "local_candidates": [
@@ -86,15 +87,51 @@
       "frontlike": false,
       "phase_label": "безоблачно",
       "type_label": "плотная/высокая",
-      "has_precip": null,
+      "has_precip": false,
+      "has_lightning": false,
+      "ir_confirmed": false,
+      "geocolour_confirmed": true
+    },
+    {
+      "target_id": 5,
+      "area_km2": 226.8,
+      "distance_km": 245.8,
+      "bearing_deg": 19.0,
+      "compass": "С",
+      "elongation_aspect_ratio": 1.8,
+      "elongation_axis_deg": 62.0,
+      "elongation_axis_compass": "СВ-ЮЗ",
+      "frontlike": false,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
+      "has_precip": true,
       "has_lightning": false,
       "ir_confirmed": false,
       "geocolour_confirmed": true
     }
   ],
-  "local_suppressed_count": 2,
-  "system_candidates": [],
-  "system_suppressed_count": 1,
+  "local_suppressed_count": 1,
+  "system_candidates": [
+    {
+      "target_id": 4,
+      "area_km2": 5937.6,
+      "distance_km": 238.2,
+      "bearing_deg": 327.0,
+      "compass": "СЗ",
+      "elongation_aspect_ratio": 2.52,
+      "elongation_axis_deg": 6.0,
+      "elongation_axis_compass": "С-Ю",
+      "frontlike": true,
+      "window_spanning": false,
+      "phase_label": "смешанная фаза",
+      "type_label": "низкая/средняя",
+      "has_precip": false,
+      "has_lightning": false,
+      "ir_confirmed": false,
+      "geocolour_confirmed": true
+    }
+  ],
+  "system_suppressed_count": 0,
   "frontal_tracks": [
     {
       "track_id": 731,
@@ -349,11 +386,11 @@
   "phenomena": {
     "precip_forecast": {
       "confirmed": false,
-      "timestamp": "2026-09-28T07:28:41Z"
+      "timestamp": "2026-09-28T07:47:04Z"
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-09-28T07:39:34Z"
+      "timestamp": "2026-09-28T07:47:06Z"
     }
   },
   "verdict": "Цель в 95км ЮЗ, безоблачно — каналы расходятся: geocolour_motion подтверждают, ir_motion/cloud_phase_type нет. Идёт на С со скоростью ~36 км/ч, пройдёт мимо на ≈85км, город, скорее всего, не заденет. Отдельно: система синоптического масштаба (5938км²) в 238км СЗ (вытянута С-Ю (6°), похоже на фронт, смешанная фаза)."
