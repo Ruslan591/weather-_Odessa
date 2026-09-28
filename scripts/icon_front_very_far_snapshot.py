@@ -272,6 +272,12 @@ def compute_pfront(fields, lats, lons, bbox):
 TERRAIN_MASK_M = 800.0     # выше этой высоты рельефа изобары не рисуем (PMSL там — артефакт приведения)
 MIN_CLOSED_LOOP_PX = 120   # замкнутые петли короче — выбрасываем (мелкие «пятна» у гор)
 MIN_OPEN_SEG_PX = 90       # открытые обрывки короче (остаются между замаскированными зонами) — тоже
+# контур считаем на поле чуть шире видимого тайла и обрезаем уже готовую картинку осями (ax.set_xlim/
+# ylim ниже) — иначе кольцо изобары вокруг центра у самого края тайла упирается в границу МАССИВА
+# ДАННЫХ и рисуется как разомкнутая дуга, хотя в реальности петля замкнута, просто чуть шире кадра.
+# Ограничено тем, что реально скачано (PAD_DEG за пределами САМОГО ШИРОКОГО тира, см. выше) — для
+# very_far запас меньше, чем для near/far, т.к. для него самого расширять уже особо некуда.
+ISOBAR_CONTOUR_PAD_DEG = float(os.environ.get("ICON_ISOBAR_CONTOUR_PAD_DEG", "3.0"))
 
 
 def render_transparent_isobars(pmsl, hsurf, lats, lons, out_path, bbox, px, centers=None):
@@ -290,7 +296,9 @@ def render_transparent_isobars(pmsl, hsurf, lats, lons, out_path, bbox, px, cent
     if hsurf is not None:
         hs = gaussian_filter(hsurf, 2.0)
         pmsl_smooth = np.where(hs > TERRAIN_MASK_M, np.nan, pmsl_smooth)
-    pmsl_vis, lats_vis, lons_vis = crop_to_bbox(pmsl_smooth, lats, lons, west, south, east, north)
+    pad = ISOBAR_CONTOUR_PAD_DEG
+    pmsl_vis, lats_vis, lons_vis = crop_to_bbox(pmsl_smooth, lats, lons,
+                                                 west - pad, south - pad, east + pad, north + pad)
     z = np.ma.masked_invalid(pmsl_vis)
 
     dpi = 100
