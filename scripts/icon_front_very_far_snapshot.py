@@ -450,9 +450,18 @@ def draw_pressure_centers(ax, centers, bbox, px):
 
 
 # ---------- линейные фронты (Renard–Clarke по θe на 850 гПа) ----------
-FRONT_GRAD_MIN = float(os.environ.get("ICON_FRONT_GRAD_MIN", "3.0"))  # K/100км по сглаженному θe850
-FRONT_MIN_KM = float(os.environ.get("ICON_FRONT_MIN_KM", "250"))
-FRONT_SMOOTH_CELLS = 4.0   # ~25 км на сетке ICON-EU 0.0625°
+# Порог не фиксированный: сила фронтов у нас от прогона к прогону разная (тихая погода —
+# все градиенты слабые; выраженный циклон — сильные). Берём верхний процентиль распределения
+# градиента в ЭТОМ прогоне (адаптивно), но не ниже абсолютного пола, чтобы в тихую погоду
+# не рисовать фронты из чистого шума полей.
+FRONT_GRAD_PERCENTILE = float(os.environ.get("ICON_FRONT_GRAD_PERCENTILE", "94"))
+FRONT_GRAD_FLOOR = float(os.environ.get("ICON_FRONT_GRAD_FLOOR", "5.0"))   # K/100км, абсолютный пол
+FRONT_MIN_KM = float(os.environ.get("ICON_FRONT_MIN_KM", "400"))
+FRONT_MIN_STRAIGHTNESS = float(os.environ.get("ICON_FRONT_MIN_STRAIGHTNESS", "0.22"))
+# отношение (расстояние между концами) / (длина линии). Настоящий фронт тянется через
+# карту более-менее в одну сторону; шумовая петля вокруг локального пятна градиента
+# извивается на месте и почти возвращается к себе — у неё это отношение близко к 0.
+FRONT_SMOOTH_CELLS = 6.0   # ~37 км на сетке ICON-EU 0.0625° — жёстче гасим мелкий шум поля
 STATIONARY_MS = 1.5        # |нормальная к фронту скорость ветра 850| меньше — стационарный
 FRONT_COLORS = {"cold": "#3d8bff", "warm": "#ff4545", "stat": "#c07bff"}
 
@@ -487,13 +496,16 @@ def compute_fronts(fields, lats, lons):
     tfy, tfx = np.gradient(tfp, dy_km, dx_km)
     across = tfx * nx + tfy * ny                 # >0 ⇒ вдоль n градиент проходит максимум
     grad100 = gm * 100.0
-    valid = (grad100 > FRONT_GRAD_MIN) & (across > 0) & np.isfinite(tfp)
+    grad_thresh = max(FRONT_GRAD_FLOOR, float(np.nanpercentile(grad100, FRONT_GRAD_PERCENTILE)))
+    valid = (grad100 > grad_thresh) & (across > 0) & np.isfinite(tfp)
     hsurf = fields.get("hsurf")
     if hsurf is not None:
         valid &= gaussian_filter(hsurf, 2.0) <= TERRAIN_MASK_M
     stats = {"grad100_p50": float(np.nanpercentile(grad100, 50)),
              "grad100_p90": float(np.nanpercentile(grad100, 90)),
+             "grad100_p99": float(np.nanpercentile(grad100, 99)),
              "grad100_max": float(np.nanmax(grad100)),
+             "threshold_used": grad_thresh,
              "valid_frac": float(valid.mean())}
     z = np.ma.masked_where(~valid, tfp)
     cg = contour_generator(lons, lats, z, name="serial", line_type=LineType.Separate)
@@ -507,6 +519,9 @@ def compute_fronts(fields, lats, lons):
         length_km = float(np.sum(np.hypot(np.diff(seg[:, 0]) * kx, np.diff(seg[:, 1]) * 111.32)))
         if length_km < FRONT_MIN_KM:
             continue
+        span_km = float(np.hypot((seg[-1, 0] - seg[0, 0]) * kx, (seg[-1, 1] - seg[0, 1]) * 111.32))
+        if span_km / length_km < FRONT_MIN_STRAIGHTNESS:
+            continue  # шумовая петля/завиток, а не протяжённая линия
         ii = np.clip(np.round((seg[:, 1] - lats[0]) / dlat).astype(int), 0, len(lats) - 1)
         jj = np.clip(np.round((seg[:, 0] - lons[0]) / dlon).astype(int), 0, len(lons) - 1)
         c = u[ii, jj] * nx[ii, jj] + v[ii, jj] * ny[ii, jj]
@@ -774,7 +789,8 @@ def main():
                 fields["_fronts"], fst = compute_fronts(fields, lats, lons)
                 log(f"фронты: сегментов {fst['n_segments']}, суммарно {fst['km_total']:.0f} км; "
                     f"|∇θe850| К/100км p50={fst['grad100_p50']:.2f} p90={fst['grad100_p90']:.2f} max={fst['grad100_max']:.2f}; "
-                    f"порог {FRONT_GRAD_MIN}, валидных точек {fst['valid_frac']*100:.1f}%")
+                    f"порог(адапт.) {fst['threshold_used']:.2f} (перцентиль {FRONT_GRAD_PERCENTILE}, "
+                    f"p99={fst['grad100_p99']:.2f}), валидных точек {fst['valid_frac']*100:.1f}%")
             except Exception as e:
                 log(f"фронты не посчитаны: {e}"); log(traceback.format_exc())
         else:
