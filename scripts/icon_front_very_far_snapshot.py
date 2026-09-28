@@ -40,7 +40,7 @@ from datetime import datetime, timedelta, timezone
 import numpy as np
 import requests
 from PIL import Image
-from scipy.ndimage import maximum_filter, minimum_filter, gaussian_filter, binary_closing
+from scipy.ndimage import maximum_filter, minimum_filter, gaussian_filter, binary_closing, binary_dilation
 
 import matplotlib
 matplotlib.use("Agg")
@@ -454,10 +454,15 @@ def draw_pressure_centers(ax, centers, bbox, px):
 # все градиенты слабые; выраженный циклон — сильные). Берём верхний процентиль распределения
 # градиента в ЭТОМ прогоне (адаптивно), но не ниже абсолютного пола, чтобы в тихую погоду
 # не рисовать фронты из чистого шума полей.
-FRONT_GRAD_PERCENTILE = float(os.environ.get("ICON_FRONT_GRAD_PERCENTILE", "90"))
+FRONT_GRAD_PERCENTILE = float(os.environ.get("ICON_FRONT_GRAD_PERCENTILE", "93"))
 FRONT_GRAD_FLOOR = float(os.environ.get("ICON_FRONT_GRAD_FLOOR", "4.0"))   # K/100км, абсолютный пол
-FRONT_MIN_KM = float(os.environ.get("ICON_FRONT_MIN_KM", "300"))
-FRONT_MIN_STRAIGHTNESS = float(os.environ.get("ICON_FRONT_MIN_STRAIGHTNESS", "0.15"))
+FRONT_MIN_KM = float(os.environ.get("ICON_FRONT_MIN_KM", "350"))
+FRONT_MIN_STRAIGHTNESS = float(os.environ.get("ICON_FRONT_MIN_STRAIGHTNESS", "0.20"))
+# после фильтров всё ещё остаются почти-дубли: соседние параллельные обрывки одной и той же
+# зоны градиента (контур цепляет её с двух сторон) — убираем не-максимальным подавлением по
+# расстоянию, оставляя более длинный из пары.
+FRONT_DEDUP_RADIUS_KM = float(os.environ.get("ICON_FRONT_DEDUP_RADIUS_KM", "35"))
+FRONT_MAX_SEGMENTS = int(os.environ.get("ICON_FRONT_MAX_SEGMENTS", "8"))  # на всю область сразу
 # отношение (расстояние между концами) / (длина линии). Настоящий фронт тянется через
 # карту более-менее в одну сторону; шумовая петля вокруг локального пятна градиента
 # извивается на месте и почти возвращается к себе — у неё это отношение близко к 0.
@@ -500,7 +505,7 @@ def compute_fronts(fields, lats, lons):
     strong = grad100 > grad_thresh
     # смыкаем разрывы в 1-2 ячейки (~10-15км) вдоль почти непрерывной зоны сильного градиента —
     # иначе контур рвётся на обрывки там, где градиент на мгновение чуть просел ниже порога
-    strong_bridged = binary_closing(strong, structure=np.ones((5, 5)))
+    strong_bridged = binary_closing(strong, structure=np.ones((3, 3)))
     valid = strong_bridged & (across > 0) & np.isfinite(tfp)
     hsurf = fields.get("hsurf")
     if hsurf is not None:
@@ -514,7 +519,7 @@ def compute_fronts(fields, lats, lons):
     z = np.ma.masked_where(~valid, tfp)
     cg = contour_generator(lons, lats, z, name="serial", line_type=LineType.Separate)
     dlat = float(lats[1] - lats[0]); dlon = float(lons[1] - lons[0])
-    segs = []
+    candidates = []
     for seg in cg.lines(0.0):
         if len(seg) < 6:
             continue
@@ -528,6 +533,24 @@ def compute_fronts(fields, lats, lons):
             continue  # шумовая петля/завиток, а не протяжённая линия
         ii = np.clip(np.round((seg[:, 1] - lats[0]) / dlat).astype(int), 0, len(lats) - 1)
         jj = np.clip(np.round((seg[:, 0] - lons[0]) / dlon).astype(int), 0, len(lons) - 1)
+        candidates.append((length_km, seg, ii, jj))
+
+    # неMax-подавление: сортируем по длине, длинную линию принимаем и «застолбливаем» полосу
+    # вокруг неё; более короткую, которая почти целиком лежит в уже застолблённой полосе —
+    # выбрасываем как дубль/обрывок той же зоны градиента, а не отдельный фронт.
+    dedup_cells = max(1, int(round(FRONT_DEDUP_RADIUS_KM / abs(dx_km))))
+    occupied = np.zeros(gm.shape, dtype=bool)
+    candidates.sort(key=lambda c: -c[0])
+    segs = []
+    for length_km, seg, ii, jj in candidates:
+        if len(segs) >= FRONT_MAX_SEGMENTS:
+            break
+        if occupied[ii, jj].mean() > 0.5:
+            continue
+        m = np.zeros(gm.shape, dtype=bool)
+        m[ii, jj] = True
+        m = binary_dilation(m, iterations=dedup_cells)
+        occupied |= m
         c = u[ii, jj] * nx[ii, jj] + v[ii, jj] * ny[ii, jj]
         k = min(15, len(c) | 1)
         c = np.convolve(np.pad(c, k // 2, mode="edge"), np.ones(k) / k, mode="valid")
