@@ -82,6 +82,14 @@ function ifvfRenderSnapshot(idx) {
     document.getElementById("ifvfGeocolour").src = base + snap.files.geocolour + bust;
     document.getElementById("ifvfIsobars").src = base + snap.files.isobars + bust;
     document.getElementById("ifvfPfront").src = base + snap.files.pfront + bust;
+    const frEl = document.getElementById("ifvfFronts");
+    if (snap.files.fronts) {
+        frEl.src = base + snap.files.fronts + bust;
+        frEl.style.display = document.getElementById("ifvfChkFronts").checked ? "block" : "none";
+    } else {
+        frEl.removeAttribute("src");
+        frEl.style.display = "none";
+    }
 
     let eumetsatNote = "";
     if (snap.eumetsat_actual_time && new Date(snap.eumetsat_actual_time).getTime() !== new Date(snap.valid_time).getTime()) {
