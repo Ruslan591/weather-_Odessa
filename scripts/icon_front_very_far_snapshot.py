@@ -55,6 +55,7 @@ GIT_LOCK_FILE = "/tmp/vps_git.lock"
 OWN_LOCK_FILE = "/tmp/icon_front_very_far.lock"
 
 KEEP_LAST = 5
+FORCE_REGEN = os.environ.get("ICON_FRONT_FORCE") == "1"  # пересобрать текущий valid_time, не трогая историю
 PAD_DEG = 1.5  # запас за пределами видимого bbox для сглаживания без edge-артефактов
 DWD_BASE = "https://opendata.dwd.de/weather/nwp/icon-eu/grib"
 G = 9.80665
@@ -268,28 +269,81 @@ def compute_pfront(fields, lats, lons, bbox):
     return crop_to_bbox(p_c, lats, lons, west, south, east, north)
 
 
-def render_transparent_isobars(pmsl, lats, lons, out_path, bbox, px):
+TERRAIN_MASK_M = 800.0     # выше этой высоты рельефа изобары не рисуем (PMSL там — артефакт приведения)
+MIN_CLOSED_LOOP_PX = 100   # замкнутые петли короче — выбрасываем (мелкие «пятна» у гор)
+MIN_OPEN_SEG_PX = 40       # открытые обрывки короче (остаются между замаскированными зонами) — тоже
+
+
+def render_transparent_isobars(pmsl, hsurf, lats, lons, out_path, bbox, px):
+    """Изобары без «неподвижного мусора»: приведение давления к уровню моря
+    над высоким рельефом (Альпы, Пиренеи, Балканы, Анатолия, Атлас…) даёт
+    мелкие замкнутые петли, привязанные к рельефу — а рельеф не меняется,
+    поэтому эти петли стоят на месте при любой погоде. Их не рисуем:
+    (1) не рисуем изобары там, где сглаженный HSURF > TERRAIN_MASK_M;
+    (2) выбрасываем мелкие замкнутые петли и короткие обрывки (в пикселях,
+    чтобы порог был одинаков для всех тиров)."""
+    from contourpy import contour_generator, LineType
+
     west, south, east, north = bbox
     sat_w, sat_h = px
     pmsl_smooth = gaussian_filter(pmsl, 4.0)
+    if hsurf is not None:
+        hs = gaussian_filter(hsurf, 2.0)
+        pmsl_smooth = np.where(hs > TERRAIN_MASK_M, np.nan, pmsl_smooth)
     pmsl_vis, lats_vis, lons_vis = crop_to_bbox(pmsl_smooth, lats, lons, west, south, east, north)
+    z = np.ma.masked_invalid(pmsl_vis)
 
     dpi = 100
     fig = plt.figure(figsize=(sat_w / dpi, sat_h / dpi), dpi=dpi)
     ax = fig.add_axes([0, 0, 1, 1])
     ax.set_xlim(west, east); ax.set_ylim(south, north)
     ax.axis("off")
-    vmin, vmax = float(np.nanmin(pmsl_vis)), float(np.nanmax(pmsl_vis))
+
+    px_per_lon = sat_w / (east - west)
+    px_per_lat = sat_h / (north - south)
+
+    valid = pmsl_vis[np.isfinite(pmsl_vis)]
+    if valid.size == 0:
+        fig.savefig(out_path, dpi=dpi, transparent=True)
+        plt.close(fig)
+        return
+    vmin, vmax = float(valid.min()), float(valid.max())
     levels = np.arange(math.floor(vmin / 2) * 2, math.ceil(vmax / 2) * 2 + 2, 2)
-    cs = ax.contour(lons_vis, lats_vis, pmsl_vis, levels=levels, colors="white", linewidths=1.4)
-    try:
-        cs.set_path_effects([pe.withStroke(linewidth=3.2, foreground="black")])
-    except AttributeError:
-        for line in cs.collections:
-            line.set_path_effects([pe.withStroke(linewidth=3.2, foreground="black")])
-    clabels = ax.clabel(cs, inline=True, fontsize=7, fmt="%d", colors="yellow")
-    for txt in clabels:
-        txt.set_path_effects([pe.withStroke(linewidth=2.5, foreground="black")])
+
+    cg = contour_generator(lons_vis, lats_vis, z, name="serial", line_type=LineType.Separate)
+    halo_line = [pe.withStroke(linewidth=3.2, foreground="black")]
+    halo_text = [pe.withStroke(linewidth=2.5, foreground="black")]
+    kept = dropped = 0
+    for level in levels:
+        for seg in cg.lines(float(level)):
+            if len(seg) < 2:
+                continue
+            dxp = np.diff(seg[:, 0]) * px_per_lon
+            dyp = np.diff(seg[:, 1]) * px_per_lat
+            length_px = float(np.sum(np.hypot(dxp, dyp)))
+            closed = bool(np.allclose(seg[0], seg[-1]))
+            if length_px < (MIN_CLOSED_LOOP_PX if closed else MIN_OPEN_SEG_PX):
+                dropped += 1
+                continue
+            kept += 1
+            ax.plot(seg[:, 0], seg[:, 1], color="white", linewidth=1.4,
+                    solid_capstyle="round", path_effects=halo_line)
+            if length_px > 140:
+                mid = len(seg) // 2
+                x0, y0 = seg[mid]
+                px_x = (x0 - west) * px_per_lon
+                px_y = (north - y0) * px_per_lat
+                if 14 < px_x < sat_w - 14 and 14 < px_y < sat_h - 14:
+                    i0, i1 = max(mid - 2, 0), min(mid + 2, len(seg) - 1)
+                    ang = math.degrees(math.atan2((seg[i1, 1] - seg[i0, 1]) * px_per_lat,
+                                                  (seg[i1, 0] - seg[i0, 0]) * px_per_lon))
+                    if ang > 90: ang -= 180
+                    if ang < -90: ang += 180
+                    ax.text(x0, y0, f"{int(level)}", color="yellow", fontsize=7,
+                            rotation=ang, rotation_mode="anchor", ha="center", va="center",
+                            path_effects=halo_text,
+                            bbox=dict(boxstyle="round,pad=0.12", fc="black", ec="none", alpha=0.55))
+    log(f"изобары: оставлено {kept} линий, отброшено {dropped} мелких/над-горных фрагментов")
     fig.savefig(out_path, dpi=dpi, transparent=True)
     plt.close(fig)
 
@@ -361,6 +415,13 @@ def process_tier(tier_key, tier_cfg, fields, lats, lons, run_dt, lead, valid_dt)
             log(f"[{tier_key}] manifest.json повреждён, начинаем заново")
 
     valid_iso = valid_dt.isoformat()
+    if FORCE_REGEN and manifest["snapshots"] and manifest["snapshots"][-1]["valid_time"] == valid_iso:
+        stale = manifest["snapshots"].pop()
+        for fn in stale["files"].values():
+            p = os.path.join(out_dir, fn)
+            if os.path.exists(p):
+                os.remove(p)
+        log(f"[{tier_key}] FORCE: пересобираю снимок {valid_iso}, история остальных сохранена")
     if manifest["snapshots"] and manifest["snapshots"][-1]["valid_time"] == valid_iso:
         log(f"[{tier_key}] уже есть снимок на {valid_iso} — пропускаю")
         with open(log_path, "w") as f:
@@ -398,7 +459,7 @@ def process_tier(tier_key, tier_cfg, fields, lats, lons, run_dt, lead, valid_dt)
     Image.fromarray(arr).save(geocolour_path)
 
     log(f"[{tier_key}] рендерю изобары и P_front...")
-    render_transparent_isobars(fields["pmsl"], lats, lons, isobars_path, bbox, px)
+    render_transparent_isobars(fields["pmsl"], fields.get("hsurf"), lats, lons, isobars_path, bbox, px)
     render_transparent_pfront(p_front, p_lats, p_lons, pfront_path, bbox, px)
 
     snapshot = {
@@ -469,7 +530,7 @@ def main():
                         last_valid = m["snapshots"][-1]["valid_time"]
                 except Exception:
                     pass
-            needs_update[tier_key] = (last_valid != valid_dt.isoformat())
+            needs_update[tier_key] = FORCE_REGEN or (last_valid != valid_dt.isoformat())
 
         if not any(needs_update.values()):
             log("Все три тира уже на этом valid_time — новых данных нет, выходим")
