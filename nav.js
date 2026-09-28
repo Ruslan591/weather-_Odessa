@@ -11,7 +11,7 @@ var TABS = [
       submenu: [
           { label: "Радар",       href: "radar.html" },
           { label: "Поблизости",  href: "nearby.html" },
-          { label: "Тест: фронты (very_far)", href: "front_test.html" },
+          { label: "Тест: изобары + P_front", href: "front_test.html" },
       ]
     },
     { label: "Море",     icon: "🌊", href: "marine.html",   match: ["marine.html"] },
