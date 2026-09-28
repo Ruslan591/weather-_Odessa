@@ -501,6 +501,26 @@ def compute_fronts(fields, lats, lons):
     tfy, tfx = np.gradient(tfp, dy_km, dx_km)
     across = tfx * nx + tfy * ny                 # >0 ⇒ вдоль n градиент проходит максимум
     grad100 = gm * 100.0
+
+    # подавление у берега и в горах — то же самое, что уже сделано для P_front: линия θe850
+    # хорошо ловит границу суша/море и подветренный перепад в горах, это не фронт, а рельеф/берег.
+    # Гасим там, где градиент θe идёт вдоль градиента доли суши (fr_land) или орографии.
+    fr_land = fields.get("fr_land")
+    if fr_land is not None:
+        coast_grad, coast_dx, coast_dy = grad_mag_per_100km(fr_land, lats, lons)
+        near_coast = coast_grad > np.nanpercentile(coast_grad, 80)
+        denom = (gm * np.hypot(coast_dx, coast_dy)) + eps
+        align = np.abs((gx * coast_dx + gy * coast_dy) / denom)
+        grad100 = grad100 * (1 - 0.7 * align * near_coast.astype(float))
+    hsurf_raw = fields.get("hsurf")
+    if hsurf_raw is not None:
+        oro_grad, oro_dx, oro_dy = grad_mag_per_100km(hsurf_raw, lats, lons)
+        local_relief = maximum_filter(hsurf_raw, size=5) - minimum_filter(hsurf_raw, size=5)
+        near_mountain = (oro_grad > np.nanpercentile(oro_grad, 80)) & (local_relief > 150.0)
+        denom = (gm * np.hypot(oro_dx, oro_dy)) + eps
+        align = np.abs((gx * oro_dx + gy * oro_dy) / denom)
+        grad100 = grad100 * (1 - 0.7 * align * near_mountain.astype(float))
+
     grad_thresh = max(FRONT_GRAD_FLOOR, float(np.nanpercentile(grad100, FRONT_GRAD_PERCENTILE)))
     strong = grad100 > grad_thresh
     # смыкаем разрывы в 1-2 ячейки (~10-15км) вдоль почти непрерывной зоны сильного градиента —
