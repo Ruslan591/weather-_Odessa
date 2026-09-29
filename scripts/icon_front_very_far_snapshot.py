@@ -1,5 +1,5 @@
 """
-v.2.0 gemini
+v.2.1 gemini
 scripts/icon_front_very_far_snapshot.py
 
 Периодический (cron, раз в час в :06, отдельный процесс — НЕ часть
@@ -467,34 +467,20 @@ def draw_pressure_centers(ax, centers, bbox, px):
 
 
 # ---------- линейные фронты (Renard–Clarke по θe на 850 гПа) ----------
-FRONT_GRAD_PERCENTILE = float(os.environ.get("ICON_FRONT_GRAD_PERCENTILE", "90"))
-FRONT_GRAD_FLOOR = float(os.environ.get("ICON_FRONT_GRAD_FLOOR", "4.5"))   # K/100км
-FRONT_MIN_KM = float(os.environ.get("ICON_FRONT_MIN_KM", "380"))          # Увеличенный порог длины убирает обрывки над морем
-FRONT_MIN_STRAIGHTNESS = float(os.environ.get("ICON_FRONT_MIN_STRAIGHTNESS", "0.08"))
-FRONT_DEDUP_RADIUS_KM = float(os.environ.get("ICON_FRONT_DEDUP_RADIUS_KM", "110")) # Увеличено, чтобы избежать параллельных линий
-FRONT_MAX_SEGMENTS = int(os.environ.get("ICON_FRONT_MAX_SEGMENTS", "12"))
+FRONT_GRAD_PERCENTILE = float(os.environ.get("ICON_FRONT_GRAD_PERCENTILE", "85"))
+FRONT_GRAD_FLOOR = float(os.environ.get("ICON_FRONT_GRAD_FLOOR", "3.0"))   # K/100км
+FRONT_MIN_KM = float(os.environ.get("ICON_FRONT_MIN_KM", "180"))          # Возвращаем адекватную длину отрезков
+FRONT_MIN_STRAIGHTNESS = float(os.environ.get("ICON_FRONT_MIN_STRAIGHTNESS", "0.05"))
+FRONT_DEDUP_RADIUS_KM = float(os.environ.get("ICON_FRONT_DEDUP_RADIUS_KM", "80"))
+FRONT_MAX_SEGMENTS = int(os.environ.get("ICON_FRONT_MAX_SEGMENTS", "15"))
 FRONT_COAST_MOUNTAIN_WEIGHT = float(os.environ.get("ICON_FRONT_COAST_MOUNTAIN_WEIGHT", "0.7"))
 FRONT_COAST_MOUNTAIN_PERCENTILE = float(os.environ.get("ICON_FRONT_COAST_MOUNTAIN_PERCENTILE", "80"))
 FRONT_MOUNTAIN_RELIEF_M = float(os.environ.get("ICON_FRONT_MOUNTAIN_RELIEF_M", "150.0"))
-FRONT_REQUIRE_CYCLONIC_VORTICITY = os.environ.get("ICON_FRONT_REQUIRE_VORTICITY", "1") == "1"
-FRONT_SMOOTH_CELLS = 8.0
+FRONT_SMOOTH_CELLS = 6.0
 STATIONARY_MS = 1.5
 FRONT_COLORS = {"cold": "#3d8bff", "warm": "#ff4545", "stat": "#c07bff"}
 
-
-def theta_e_bolton(t_k, rh_pct, p_hpa):
-    tc = t_k - 273.15
-    es = 6.112 * np.exp(17.67 * tc / (tc + 243.5))
-    e = np.clip(rh_pct, 1.0, 100.0) / 100.0 * es
-    r = 0.622 * e / (p_hpa - e)
-    tl = 2840.0 / (3.5 * np.log(t_k) - np.log(e) - 4.805) + 55.0
-    return t_k * (1000.0 / p_hpa) ** (0.2854 * (1 - 0.28 * r)) * \
-        np.exp((3.376 / tl - 0.00254) * r * 1000.0 * (1 + 0.81 * r))
-
-
 def compute_fronts(fields, lats, lons, centers=None):
-    """Линии фронтов по всей области: нули TFP = -∇|∇θ|·∇θ/|∇θ| там, где градиент θe
-    значим и достигает максимума поперёк линии."""
     from contourpy import contour_generator, LineType
     th = theta_e_bolton(fields["t850"], fields["relhum850"], 850.0)
     th = gaussian_filter(th, FRONT_SMOOTH_CELLS)
@@ -511,6 +497,16 @@ def compute_fronts(fields, lats, lons, centers=None):
     across = tfx * nx + tfy * ny
     grad100 = gm * 100.0
 
+    # Вычисляем завихренность и конвергенцию для мягкого весового фильтра
+    dudy, dudx = np.gradient(u, dy_km, dx_km)
+    dvdy, dvdx = np.gradient(v, dy_km, dx_km)
+    vorticity = (dvdx - dudy) / 1000.0
+    convergence = -(dudx + dvdy) / 1000.0
+
+    # Подавляем антициклонические зоны (vorticity < 0) и зоны сходимости через мультипликативный штраф
+    cyclonic_factor = np.clip((vorticity + 1e-5) / 2e-5, 0.2, 1.0)
+    grad100 = grad100 * cyclonic_factor
+
     fr_land = fields.get("fr_land")
     if fr_land is not None:
         coast_grad, coast_dx, coast_dy = grad_mag_per_100km(fr_land, lats, lons)
@@ -518,6 +514,7 @@ def compute_fronts(fields, lats, lons, centers=None):
         denom = (gm * np.hypot(coast_dx, coast_dy)) + eps
         align = np.abs((gx * coast_dx + gy * coast_dy) / denom)
         grad100 = grad100 * (1 - FRONT_COAST_MOUNTAIN_WEIGHT * align * near_coast.astype(float))
+        
     hsurf_raw = fields.get("hsurf")
     if hsurf_raw is not None:
         oro_grad, oro_dx, oro_dy = grad_mag_per_100km(hsurf_raw, lats, lons)
@@ -532,15 +529,6 @@ def compute_fronts(fields, lats, lons, centers=None):
     strong = grad100 > grad_thresh
     strong_bridged = binary_closing(strong, structure=np.ones((3, 3)))
     valid = strong_bridged & (across > 0) & np.isfinite(tfp)
-
-    dudy, dudx = np.gradient(u, dy_km, dx_km)
-    dvdy, dvdx = np.gradient(v, dy_km, dx_km)
-    vorticity = (dvdx - dudy) / 1000.0
-    divergence = (dudx + dvdy) / 1000.0
-
-    if FRONT_REQUIRE_CYCLONIC_VORTICITY:
-        # Требуем строго циклоническую завихренность И сходимость ветра (div < 0)
-        valid &= (vorticity > 1.2e-5) & (divergence < 0)
 
     hsurf = fields.get("hsurf")
     if hsurf is not None:
@@ -558,7 +546,7 @@ def compute_fronts(fields, lats, lons, centers=None):
     dlat = float(lats[1] - lats[0]); dlon = float(lons[1] - lons[0])
     candidates = []
     for seg in cg.lines(0.0):
-        if len(seg) < 6:
+        if len(seg) < 5:
             continue
         mlat = float(np.mean(seg[:, 1]))
         kx = 111.32 * math.cos(math.radians(mlat))
@@ -579,7 +567,7 @@ def compute_fronts(fields, lats, lons, centers=None):
     for length_km, seg, ii, jj in candidates:
         if len(segs) >= FRONT_MAX_SEGMENTS:
             break
-        if occupied[ii, jj].mean() > 0.4:
+        if occupied[ii, jj].mean() > 0.45:
             continue
         m = np.zeros(gm.shape, dtype=bool)
         m[ii, jj] = True
@@ -595,6 +583,7 @@ def compute_fronts(fields, lats, lons, centers=None):
     stats["km_total"] = float(sum(s["km"] for s in segs))
 
     return segs, stats
+
 
 
 def render_transparent_fronts(segs, hl_centers, out_path, bbox, px):
