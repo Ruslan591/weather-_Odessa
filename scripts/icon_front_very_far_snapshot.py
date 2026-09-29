@@ -1,5 +1,5 @@
 """
-v.2.1 gemini
+v.2.2 gemini
 scripts/icon_front_very_far_snapshot.py
 
 Периодический (cron, раз в час в :06, отдельный процесс — НЕ часть
