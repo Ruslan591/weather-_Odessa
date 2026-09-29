@@ -467,46 +467,49 @@ def draw_pressure_centers(ax, centers, bbox, px):
 
 
 # ---------- линейные фронты (Renard–Clarke по θe на 850 гПа) ----------
-FRONT_GRAD_PERCENTILE = float(os.environ.get("ICON_FRONT_GRAD_PERCENTILE", "85"))
-FRONT_GRAD_FLOOR = float(os.environ.get("ICON_FRONT_GRAD_FLOOR", "3.0"))   # K/100км
-FRONT_MIN_KM = float(os.environ.get("ICON_FRONT_MIN_KM", "180"))          # Возвращаем адекватную длину отрезков
-FRONT_MIN_STRAIGHTNESS = float(os.environ.get("ICON_FRONT_MIN_STRAIGHTNESS", "0.05"))
-FRONT_DEDUP_RADIUS_KM = float(os.environ.get("ICON_FRONT_DEDUP_RADIUS_KM", "80"))
-FRONT_MAX_SEGMENTS = int(os.environ.get("ICON_FRONT_MAX_SEGMENTS", "15"))
-FRONT_COAST_MOUNTAIN_WEIGHT = float(os.environ.get("ICON_FRONT_COAST_MOUNTAIN_WEIGHT", "0.7"))
-FRONT_COAST_MOUNTAIN_PERCENTILE = float(os.environ.get("ICON_FRONT_COAST_MOUNTAIN_PERCENTILE", "80"))
-FRONT_MOUNTAIN_RELIEF_M = float(os.environ.get("ICON_FRONT_MOUNTAIN_RELIEF_M", "150.0"))
-FRONT_SMOOTH_CELLS = 6.0
+# Физические дефолты без жестких глобальных отсечений
+FRONT_GRAD_FLOOR = float(os.environ.get("ICON_FRONT_GRAD_FLOOR", "1.8"))   # K/100км
+FRONT_MIN_KM = float(os.environ.get("ICON_FRONT_MIN_KM", "120"))          # Минимальная длина линии
+FRONT_MIN_STRAIGHTNESS = float(os.environ.get("ICON_FRONT_MIN_STRAIGHTNESS", "0.03"))
+FRONT_DEDUP_RADIUS_KM = float(os.environ.get("ICON_FRONT_DEDUP_RADIUS_KM", "60"))
+FRONT_MAX_SEGMENTS = int(os.environ.get("ICON_FRONT_MAX_SEGMENTS", "25"))
+FRONT_COAST_MOUNTAIN_WEIGHT = float(os.environ.get("ICON_FRONT_COAST_MOUNTAIN_WEIGHT", "0.6"))
+FRONT_COAST_MOUNTAIN_PERCENTILE = float(os.environ.get("ICON_FRONT_COAST_MOUNTAIN_PERCENTILE", "85"))
+FRONT_MOUNTAIN_RELIEF_M = float(os.environ.get("ICON_FRONT_MOUNTAIN_RELIEF_M", "200.0"))
+FRONT_SMOOTH_CELLS = 5.0
 STATIONARY_MS = 1.5
 FRONT_COLORS = {"cold": "#3d8bff", "warm": "#ff4545", "stat": "#c07bff"}
 
+
 def compute_fronts(fields, lats, lons, centers=None):
     from contourpy import contour_generator, LineType
+
     th = theta_e_bolton(fields["t850"], fields["relhum850"], 850.0)
     th = gaussian_filter(th, FRONT_SMOOTH_CELLS)
     u = gaussian_filter(fields["u850"], FRONT_SMOOTH_CELLS)
     v = gaussian_filter(fields["v850"], FRONT_SMOOTH_CELLS)
+
     dy_km, dx_km = km_scale(lats, lons)
     gy, gx = np.gradient(th, dy_km, dx_km)
     gm = np.hypot(gx, gy)
     gmy, gmx = np.gradient(gm, dy_km, dx_km)
     eps = 1e-9
     nx, ny = gx / (gm + eps), gy / (gm + eps)
+
+    # Thermal Front Parameter (TFP)
     tfp = gaussian_filter(-(gmx * nx + gmy * ny), 2.0)
     tfy, tfx = np.gradient(tfp, dy_km, dx_km)
     across = tfx * nx + tfy * ny
     grad100 = gm * 100.0
 
-    # Вычисляем завихренность и конвергенцию для мягкого весового фильтра
+    # Мягкое подавление антициклонических зон (vorticity < 0)
     dudy, dudx = np.gradient(u, dy_km, dx_km)
     dvdy, dvdx = np.gradient(v, dy_km, dx_km)
     vorticity = (dvdx - dudy) / 1000.0
-    convergence = -(dudx + dvdy) / 1000.0
-
-    # Подавляем антициклонические зоны (vorticity < 0) и зоны сходимости через мультипликативный штраф
-    cyclonic_factor = np.clip((vorticity + 1e-5) / 2e-5, 0.2, 1.0)
+    cyclonic_factor = np.clip((vorticity + 1.5e-5) / 2.5e-5, 0.3, 1.0)
     grad100 = grad100 * cyclonic_factor
 
+    # Штраф за берега и рельеф
     fr_land = fields.get("fr_land")
     if fr_land is not None:
         coast_grad, coast_dx, coast_dy = grad_mag_per_100km(fr_land, lats, lons)
@@ -514,19 +517,19 @@ def compute_fronts(fields, lats, lons, centers=None):
         denom = (gm * np.hypot(coast_dx, coast_dy)) + eps
         align = np.abs((gx * coast_dx + gy * coast_dy) / denom)
         grad100 = grad100 * (1 - FRONT_COAST_MOUNTAIN_WEIGHT * align * near_coast.astype(float))
-        
+
     hsurf_raw = fields.get("hsurf")
     if hsurf_raw is not None:
         oro_grad, oro_dx, oro_dy = grad_mag_per_100km(hsurf_raw, lats, lons)
         local_relief = maximum_filter(hsurf_raw, size=5) - minimum_filter(hsurf_raw, size=5)
         near_mountain = (oro_grad > np.nanpercentile(oro_grad, FRONT_COAST_MOUNTAIN_PERCENTILE)) & \
-            (local_relief > FRONT_MOUNTAIN_RELIEF_M)
+                        (local_relief > FRONT_MOUNTAIN_RELIEF_M)
         denom = (gm * np.hypot(oro_dx, oro_dy)) + eps
         align = np.abs((gx * oro_dx + gy * oro_dy) / denom)
         grad100 = grad100 * (1 - FRONT_COAST_MOUNTAIN_WEIGHT * align * near_mountain.astype(float))
 
-    grad_thresh = max(FRONT_GRAD_FLOOR, float(np.nanpercentile(grad100, FRONT_GRAD_PERCENTILE)))
-    strong = grad100 > grad_thresh
+    # Фиксированный минимальный порог без перцентильного завышения
+    strong = grad100 >= FRONT_GRAD_FLOOR
     strong_bridged = binary_closing(strong, structure=np.ones((3, 3)))
     valid = strong_bridged & (across > 0) & np.isfinite(tfp)
 
@@ -534,19 +537,22 @@ def compute_fronts(fields, lats, lons, centers=None):
     if hsurf is not None:
         valid &= gaussian_filter(hsurf, 2.0) <= TERRAIN_MASK_M
 
-    stats = {"grad100_p50": float(np.nanpercentile(grad100, 50)),
-             "grad100_p90": float(np.nanpercentile(grad100, 90)),
-             "grad100_p99": float(np.nanpercentile(grad100, 99)),
-             "grad100_max": float(np.nanmax(grad100)),
-             "threshold_used": grad_thresh,
-             "valid_frac": float(valid.mean())}
+    stats = {
+        "grad100_p50": float(np.nanpercentile(grad100, 50)),
+        "grad100_p90": float(np.nanpercentile(grad100, 90)),
+        "grad100_max": float(np.nanmax(grad100)),
+        "threshold_used": FRONT_GRAD_FLOOR,
+        "valid_frac": float(valid.mean())
+    }
 
     z = np.ma.masked_where(~valid, tfp)
     cg = contour_generator(lons, lats, z, name="serial", line_type=LineType.Separate)
-    dlat = float(lats[1] - lats[0]); dlon = float(lons[1] - lons[0])
+    dlat = float(lats[1] - lats[0])
+    dlon = float(lons[1] - lons[0])
     candidates = []
+
     for seg in cg.lines(0.0):
-        if len(seg) < 5:
+        if len(seg) < 4:
             continue
         mlat = float(np.mean(seg[:, 1]))
         kx = 111.32 * math.cos(math.radians(mlat))
@@ -564,15 +570,17 @@ def compute_fronts(fields, lats, lons, centers=None):
     occupied = np.zeros(gm.shape, dtype=bool)
     candidates.sort(key=lambda c: -c[0])
     segs = []
+
     for length_km, seg, ii, jj in candidates:
         if len(segs) >= FRONT_MAX_SEGMENTS:
             break
-        if occupied[ii, jj].mean() > 0.45:
+        if occupied[ii, jj].mean() > 0.5:
             continue
         m = np.zeros(gm.shape, dtype=bool)
         m[ii, jj] = True
         m = binary_dilation(m, iterations=dedup_cells)
         occupied |= m
+
         c = u[ii, jj] * nx[ii, jj] + v[ii, jj] * ny[ii, jj]
         k = min(15, len(c) | 1)
         c = np.convolve(np.pad(c, k // 2, mode="edge"), np.ones(k) / k, mode="valid")
@@ -583,6 +591,7 @@ def compute_fronts(fields, lats, lons, centers=None):
     stats["km_total"] = float(sum(s["km"] for s in segs))
 
     return segs, stats
+
 
 
 
