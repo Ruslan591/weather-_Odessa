@@ -269,25 +269,13 @@ def compute_pfront(fields, lats, lons, bbox):
     return crop_to_bbox(p_c, lats, lons, west, south, east, north)
 
 
-TERRAIN_MASK_M = 800.0     # выше этой высоты рельефа изобары не рисуем (PMSL там — артефакт приведения)
-MIN_CLOSED_LOOP_PX = 120   # замкнутые петли короче — выбрасываем (мелкие «пятна» у гор)
-MIN_OPEN_SEG_PX = 90       # открытые обрывки короче (остаются между замаскированными зонами) — тоже
-# контур считаем на поле чуть шире видимого тайла и обрезаем уже готовую картинку осями (ax.set_xlim/
-# ylim ниже) — иначе кольцо изобары вокруг центра у самого края тайла упирается в границу МАССИВА
-# ДАННЫХ и рисуется как разомкнутая дуга, хотя в реальности петля замкнута, просто чуть шире кадра.
-# Ограничено тем, что реально скачано (PAD_DEG за пределами САМОГО ШИРОКОГО тира, см. выше) — для
-# very_far запас меньше, чем для near/far, т.к. для него самого расширять уже особо некуда.
+TERRAIN_MASK_M = 800.0     # выше этой высоты рельефа изобары не рисуем
+MIN_CLOSED_LOOP_PX = 120   # замкнутые петли короче — выбрасываем
+MIN_OPEN_SEG_PX = 90       # открытые обрывки короче — тоже
 ISOBAR_CONTOUR_PAD_DEG = float(os.environ.get("ICON_ISOBAR_CONTOUR_PAD_DEG", "3.0"))
 
 
 def render_transparent_isobars(pmsl, hsurf, lats, lons, out_path, bbox, px, centers=None):
-    """Изобары без «неподвижного мусора»: приведение давления к уровню моря
-    над высоким рельефом (Альпы, Пиренеи, Балканы, Анатолия, Атлас…) даёт
-    мелкие замкнутые петли, привязанные к рельефу — а рельеф не меняется,
-    поэтому эти петли стоят на месте при любой погоде. Их не рисуем:
-    (1) не рисуем изобары там, где сглаженный HSURF > TERRAIN_MASK_M;
-    (2) выбрасываем мелкие замкнутые петли и короткие обрывки (в пикселях,
-    чтобы порог был одинаков для всех тиров)."""
     from contourpy import contour_generator, LineType
 
     west, south, east, north = bbox
@@ -410,12 +398,7 @@ def git_commit_push(paths, message):
         fcntl.flock(lock, fcntl.LOCK_UN)
 
 
-
 def save_testcase(path, fields, lats, lons, run_dt, lead):
-    """Замороженный снимок реально скачанных полей — чтобы подбирать пороги ICON_FRONT_*/
-    ICON_ISOBAR_* офлайн, на одном и том же случае, без повторного скачивания и без того, что
-    погода успела смениться между попытками. Сохраняет только сырые массивы (не _centers/_fronts —
-    их каждый раз считает заново тот, кто грузит снимок, уже с новыми параметрами)."""
     arrays = {"lats": lats, "lons": lons,
               "run_dt": np.array(run_dt.isoformat()), "lead": np.array(lead)}
     for k, v in fields.items():
@@ -438,12 +421,11 @@ def load_testcase(path):
 
 
 # ---------- L/H центры давления ----------
-HL_WINDOW_KM = 500.0   # экстремум должен быть лучшим в радиусе этого размера
-HL_PROMINENCE_HPA = 1.5  # и отличаться от среднего по окну не меньше чем на это
+HL_WINDOW_KM = 500.0
+HL_PROMINENCE_HPA = 1.5
 
 
 def find_pressure_centers(pmsl, hsurf, lats, lons):
-    """Список (lat, lon, 'L'|'H', hPa) по всей скачанной области."""
     from scipy.ndimage import uniform_filter
     dy_km, dx_km = km_scale(lats, lons)
     wy = max(3, int(round(HL_WINDOW_KM / abs(dy_km))) | 1)
@@ -484,34 +466,18 @@ def draw_pressure_centers(ax, centers, bbox, px):
 
 
 # ---------- линейные фронты (Renard–Clarke по θe на 850 гПа) ----------
-# Порог не фиксированный: сила фронтов у нас от прогона к прогону разная (тихая погода —
-# все градиенты слабые; выраженный циклон — сильные). Берём верхний процентиль распределения
-# градиента в ЭТОМ прогоне (адаптивно), но не ниже абсолютного пола, чтобы в тихую погоду
-# не рисовать фронты из чистого шума полей.
-FRONT_GRAD_PERCENTILE = float(os.environ.get("ICON_FRONT_GRAD_PERCENTILE", "88"))
-FRONT_GRAD_FLOOR = float(os.environ.get("ICON_FRONT_GRAD_FLOOR", "4.0"))   # K/100км, абсолютный пол
-FRONT_MIN_KM = float(os.environ.get("ICON_FRONT_MIN_KM", "300"))
+FRONT_GRAD_PERCENTILE = float(os.environ.get("ICON_FRONT_GRAD_PERCENTILE", "90"))
+FRONT_GRAD_FLOOR = float(os.environ.get("ICON_FRONT_GRAD_FLOOR", "4.5"))   # K/100км
+FRONT_MIN_KM = float(os.environ.get("ICON_FRONT_MIN_KM", "380"))          # Увеличенный порог длины убирает обрывки над морем
 FRONT_MIN_STRAIGHTNESS = float(os.environ.get("ICON_FRONT_MIN_STRAIGHTNESS", "0.08"))
-# после фильтров всё ещё остаются почти-дубли: соседние параллельные обрывки одной и той же
-# зоны градиента (контур цепляет её с двух сторон) — убираем не-максимальным подавлением по
-# расстоянию, оставляя более длинный из пары.
-FRONT_DEDUP_RADIUS_KM = float(os.environ.get("ICON_FRONT_DEDUP_RADIUS_KM", "80"))
-FRONT_MAX_SEGMENTS = int(os.environ.get("ICON_FRONT_MAX_SEGMENTS", "12"))  # на всю область сразу
-# подавление у берега/гор (как у P_front) — доля выбранного градиента, которая срезается там, где
-# градиент θe идёт вдоль берега/склона, и пороги "мы точно рядом с берегом/горой"
+FRONT_DEDUP_RADIUS_KM = float(os.environ.get("ICON_FRONT_DEDUP_RADIUS_KM", "110")) # Увеличено, чтобы избежать параллельных линий
+FRONT_MAX_SEGMENTS = int(os.environ.get("ICON_FRONT_MAX_SEGMENTS", "12"))
 FRONT_COAST_MOUNTAIN_WEIGHT = float(os.environ.get("ICON_FRONT_COAST_MOUNTAIN_WEIGHT", "0.7"))
 FRONT_COAST_MOUNTAIN_PERCENTILE = float(os.environ.get("ICON_FRONT_COAST_MOUNTAIN_PERCENTILE", "80"))
 FRONT_MOUNTAIN_RELIEF_M = float(os.environ.get("ICON_FRONT_MOUNTAIN_RELIEF_M", "150.0"))
-# требуем циклоническую завихренность на линии фронта — отсекает случаи, когда сильный градиент
-# θe есть, но он лежит поперёк гладкого антициклона, а не в барической ложбине/у циклона
 FRONT_REQUIRE_CYCLONIC_VORTICITY = os.environ.get("ICON_FRONT_REQUIRE_VORTICITY", "1") == "1"
-# если конец линии обрывается не дальше этого расстояния от центра L — мягко дотягиваем до него
-FRONT_ATTRACT_TO_LOW_KM = float(os.environ.get("ICON_FRONT_ATTRACT_TO_LOW_KM", "300.0"))
-# отношение (расстояние между концами) / (длина линии). Настоящий фронт тянется через
-# карту более-менее в одну сторону; шумовая петля вокруг локального пятна градиента
-# извивается на месте и почти возвращается к себе — у неё это отношение близко к 0.
-FRONT_SMOOTH_CELLS = 8.0   # ~50 км на сетке ICON-EU 0.0625° — жёстче гасим мелкий шум поля
-STATIONARY_MS = 1.5        # |нормальная к фронту скорость ветра 850| меньше — стационарный
+FRONT_SMOOTH_CELLS = 8.0
+STATIONARY_MS = 1.5
 FRONT_COLORS = {"cold": "#3d8bff", "warm": "#ff4545", "stat": "#c07bff"}
 
 
@@ -527,9 +493,7 @@ def theta_e_bolton(t_k, rh_pct, p_hpa):
 
 def compute_fronts(fields, lats, lons, centers=None):
     """Линии фронтов по всей области: нули TFP = -∇|∇θ|·∇θ/|∇θ| там, где градиент θe
-    значим и достигает максимума поперёк линии. Тип — по знаку нормальной к фронту
-    компоненты ветра 850: в сторону тёплого воздуха → холодный, в сторону холодного →
-    тёплый, мало → стационарный. Возвращает (segments, stats)."""
+    значим и достигает максимума поперёк линии."""
     from contourpy import contour_generator, LineType
     th = theta_e_bolton(fields["t850"], fields["relhum850"], 850.0)
     th = gaussian_filter(th, FRONT_SMOOTH_CELLS)
@@ -540,15 +504,12 @@ def compute_fronts(fields, lats, lons, centers=None):
     gm = np.hypot(gx, gy)
     gmy, gmx = np.gradient(gm, dy_km, dx_km)
     eps = 1e-9
-    nx, ny = gx / (gm + eps), gy / (gm + eps)   # n смотрит в сторону более тёплого воздуха
+    nx, ny = gx / (gm + eps), gy / (gm + eps)
     tfp = gaussian_filter(-(gmx * nx + gmy * ny), 2.0)
     tfy, tfx = np.gradient(tfp, dy_km, dx_km)
-    across = tfx * nx + tfy * ny                 # >0 ⇒ вдоль n градиент проходит максимум
+    across = tfx * nx + tfy * ny
     grad100 = gm * 100.0
 
-    # подавление у берега и в горах — то же самое, что уже сделано для P_front: линия θe850
-    # хорошо ловит границу суша/море и подветренный перепад в горах, это не фронт, а рельеф/берег.
-    # Гасим там, где градиент θe идёт вдоль градиента доли суши (fr_land) или орографии.
     fr_land = fields.get("fr_land")
     if fr_land is not None:
         coast_grad, coast_dx, coast_dy = grad_mag_per_100km(fr_land, lats, lons)
@@ -568,28 +529,29 @@ def compute_fronts(fields, lats, lons, centers=None):
 
     grad_thresh = max(FRONT_GRAD_FLOOR, float(np.nanpercentile(grad100, FRONT_GRAD_PERCENTILE)))
     strong = grad100 > grad_thresh
-    # смыкаем разрывы в 1-2 ячейки (~10-15км) вдоль почти непрерывной зоны сильного градиента —
-    # иначе контур рвётся на обрывки там, где градиент на мгновение чуть просел ниже порога
     strong_bridged = binary_closing(strong, structure=np.ones((3, 3)))
     valid = strong_bridged & (across > 0) & np.isfinite(tfp)
+
+    dudy, dudx = np.gradient(u, dy_km, dx_km)
+    dvdy, dvdx = np.gradient(v, dy_km, dx_km)
+    vorticity = (dvdx - dudy) / 1000.0
+    divergence = (dudx + dvdy) / 1000.0
+
     if FRONT_REQUIRE_CYCLONIC_VORTICITY:
-        # относительная завихренность на 850 гПа (не пересчитываем u/v — те же сглаженные поля,
-        # что уже использованы для градиента θe и для определения типа фронта по ветру):
-        # ζ = dv/dx - du/dy, из (м/с)/км в 1/с делим на 1000. >0 — циклонический изгиб (СШ) —
-        # фронт должен лежать в барической ложбине/у циклона, а не поперёк гладкого антициклона.
-        dudy, dudx = np.gradient(u, dy_km, dx_km)
-        dvdy, dvdx = np.gradient(v, dy_km, dx_km)
-        vorticity = (dvdx - dudy) / 1000.0
-        valid &= vorticity > 0
+        # Требуем строго циклоническую завихренность И сходимость ветра (div < 0)
+        valid &= (vorticity > 1.2e-5) & (divergence < 0)
+
     hsurf = fields.get("hsurf")
     if hsurf is not None:
         valid &= gaussian_filter(hsurf, 2.0) <= TERRAIN_MASK_M
+
     stats = {"grad100_p50": float(np.nanpercentile(grad100, 50)),
              "grad100_p90": float(np.nanpercentile(grad100, 90)),
              "grad100_p99": float(np.nanpercentile(grad100, 99)),
              "grad100_max": float(np.nanmax(grad100)),
              "threshold_used": grad_thresh,
              "valid_frac": float(valid.mean())}
+
     z = np.ma.masked_where(~valid, tfp)
     cg = contour_generator(lons, lats, z, name="serial", line_type=LineType.Separate)
     dlat = float(lats[1] - lats[0]); dlon = float(lons[1] - lons[0])
@@ -604,14 +566,11 @@ def compute_fronts(fields, lats, lons, centers=None):
             continue
         span_km = float(np.hypot((seg[-1, 0] - seg[0, 0]) * kx, (seg[-1, 1] - seg[0, 1]) * 111.32))
         if span_km / length_km < FRONT_MIN_STRAIGHTNESS:
-            continue  # шумовая петля/завиток, а не протяжённая линия
+            continue
         ii = np.clip(np.round((seg[:, 1] - lats[0]) / dlat).astype(int), 0, len(lats) - 1)
         jj = np.clip(np.round((seg[:, 0] - lons[0]) / dlon).astype(int), 0, len(lons) - 1)
         candidates.append((length_km, seg, ii, jj))
 
-    # неMax-подавление: сортируем по длине, длинную линию принимаем и «застолбливаем» полосу
-    # вокруг неё; более короткую, которая почти целиком лежит в уже застолблённой полосе —
-    # выбрасываем как дубль/обрывок той же зоны градиента, а не отдельный фронт.
     dedup_cells = max(1, int(round(FRONT_DEDUP_RADIUS_KM / abs(dx_km))))
     occupied = np.zeros(gm.shape, dtype=bool)
     candidates.sort(key=lambda c: -c[0])
@@ -619,7 +578,7 @@ def compute_fronts(fields, lats, lons, centers=None):
     for length_km, seg, ii, jj in candidates:
         if len(segs) >= FRONT_MAX_SEGMENTS:
             break
-        if occupied[ii, jj].mean() > 0.5:
+        if occupied[ii, jj].mean() > 0.4:
             continue
         m = np.zeros(gm.shape, dtype=bool)
         m[ii, jj] = True
@@ -630,48 +589,9 @@ def compute_fronts(fields, lats, lons, centers=None):
         c = np.convolve(np.pad(c, k // 2, mode="edge"), np.ones(k) / k, mode="valid")
         kind = np.where(c > STATIONARY_MS, "cold", np.where(c < -STATIONARY_MS, "warm", "stat"))
         segs.append({"xy": seg, "kind": kind, "nx": nx[ii, jj], "ny": ny[ii, jj], "km": length_km})
+
     stats["n_segments"] = len(segs)
     stats["km_total"] = float(sum(s["km"] for s in segs))
-
-    # притягиваем обрывающийся конец линии к ближайшему центру L, если он рядом (по умолчанию
-    # ближе 300 км) — иначе фронт визуально "не доходит" до своего циклона на пару ячеек сетки,
-    # хотя физически он именно туда и идёт. Достраиваем xy ПРЯМОЙ линией до центра и синхронно
-    # растягиваем kind/nx/ny той же длины — иначе покраска и значки на новых точках разъедутся.
-    centers_L = [(lat, lon) for lat, lon, kind, _ in (centers or []) if kind == "L"]
-    if centers_L:
-        for s in segs:
-            for end_idx in (0, -1):
-                x_end, y_end = s["xy"][end_idx]
-                best = min(centers_L, key=lambda c: math.hypot(
-                    (x_end - c[1]) * 111.32 * math.cos(math.radians((y_end + c[0]) / 2.0)),
-                    (y_end - c[0]) * 111.32))
-                l_lat, l_lon = best
-                mlat = (y_end + l_lat) / 2.0
-                kx = 111.32 * math.cos(math.radians(mlat))
-                dist_km = math.hypot((x_end - l_lon) * kx, (y_end - l_lat) * 111.32)
-                if dist_km >= FRONT_ATTRACT_TO_LOW_KM:
-                    continue
-                n_steps = max(2, int(dist_km / 15.0))
-                lons_ext = np.linspace(x_end, l_lon, n_steps)[1:]
-                lats_ext = np.linspace(y_end, l_lat, n_steps)[1:]
-                if len(lons_ext) == 0:
-                    continue
-                ext_pts = np.column_stack([lons_ext, lats_ext])
-                n_new = len(ext_pts)
-                pad_kind = np.full(n_new, s["kind"][end_idx])
-                pad_nx = np.full(n_new, s["nx"][end_idx])
-                pad_ny = np.full(n_new, s["ny"][end_idx])
-                if end_idx == 0:
-                    s["xy"] = np.vstack([ext_pts[::-1], s["xy"]])
-                    s["kind"] = np.concatenate([pad_kind, s["kind"]])
-                    s["nx"] = np.concatenate([pad_nx, s["nx"]])
-                    s["ny"] = np.concatenate([pad_ny, s["ny"]])
-                else:
-                    s["xy"] = np.vstack([s["xy"], ext_pts])
-                    s["kind"] = np.concatenate([s["kind"], pad_kind])
-                    s["nx"] = np.concatenate([s["nx"], pad_nx])
-                    s["ny"] = np.concatenate([s["ny"], pad_ny])
-                s["km"] += dist_km
 
     return segs, stats
 
@@ -705,7 +625,6 @@ def render_transparent_fronts(segs, hl_centers, out_path, bbox, px):
         ax.add_collection(LineCollection(pieces, colors=cols, linewidths=2.6, capstyle="round", zorder=5))
         if not can_sym:
             continue
-        # значки каждые ~55 px: треугольник (холодный) / полукруг (тёплый) в сторону движения
         dpx = np.hypot(np.diff(xy[:, 0]) * pxl, np.diff(xy[:, 1]) * pyl)
         cum = np.concatenate([[0], np.cumsum(dpx)])
         for d in np.arange(30.0, cum[-1], 55.0):
@@ -773,8 +692,6 @@ def process_tier(tier_key, tier_cfg, fields, lats, lons, run_dt, lead, valid_dt)
     log(f"[{tier_key}] запрашиваю EUMETSAT GeoColour...")
     arr = None
     eumetsat_actual_iso = None
-    # по статистике прогонов EUMETSAT ни разу не публикует кадр на :00 и почти никогда на :55 —
-    # кадр на :50 (-10 мин) есть практически всегда, поэтому пробуем его первым и экономим запросы
     for back_min in (10, 15, 5, 20, 25, 0, 30):
         t_try = valid_dt - timedelta(minutes=back_min)
         t_iso = t_try.strftime("%Y-%m-%dT%H:%M:00Z")
@@ -926,8 +843,7 @@ def main():
         if testcase_path:
             try:
                 save_testcase(testcase_path, fields, lats, lons, run_dt, lead)
-                log(f"тестовый снимок сохранён: {testcase_path} "
-                    f"(дальше можно гонять scripts/icon_front_replay.py офлайн, без скачивания)")
+                log(f"тестовый снимок сохранён: {testcase_path} ")
             except Exception as e:
                 log(f"не удалось сохранить тестовый снимок: {e}")
 
