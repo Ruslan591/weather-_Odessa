@@ -54,7 +54,7 @@ def main():
 
     fronts = None
     if all(fields.get(k) is not None for k in ("t850", "relhum850", "u850", "v850")):
-        fronts, stats = vf.compute_fronts(fields, lats, lons)
+        fronts, stats = vf.compute_fronts(fields, lats, lons, centers=centers)
         print("фронты:", stats)
     else:
         print("в снимке нет T850/RH850/U850/V850 — фронты пропущены")
