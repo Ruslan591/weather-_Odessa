@@ -411,6 +411,32 @@ def git_commit_push(paths, message):
 
 
 
+def save_testcase(path, fields, lats, lons, run_dt, lead):
+    """Замороженный снимок реально скачанных полей — чтобы подбирать пороги ICON_FRONT_*/
+    ICON_ISOBAR_* офлайн, на одном и том же случае, без повторного скачивания и без того, что
+    погода успела смениться между попытками. Сохраняет только сырые массивы (не _centers/_fronts —
+    их каждый раз считает заново тот, кто грузит снимок, уже с новыми параметрами)."""
+    arrays = {"lats": lats, "lons": lons,
+              "run_dt": np.array(run_dt.isoformat()), "lead": np.array(lead)}
+    for k, v in fields.items():
+        if isinstance(v, np.ndarray):
+            arrays[k] = v
+    d = os.path.dirname(path)
+    if d:
+        os.makedirs(d, exist_ok=True)
+    np.savez_compressed(path, **arrays)
+
+
+def load_testcase(path):
+    d = np.load(path, allow_pickle=False)
+    lats = d["lats"]
+    lons = d["lons"]
+    run_dt = datetime.fromisoformat(str(d["run_dt"]))
+    lead = int(d["lead"])
+    fields = {k: d[k] for k in d.files if k not in ("lats", "lons", "run_dt", "lead")}
+    return fields, lats, lons, run_dt, lead
+
+
 # ---------- L/H центры давления ----------
 HL_WINDOW_KM = 500.0   # экстремум должен быть лучшим в радиусе этого размера
 HL_PROMINENCE_HPA = 1.5  # и отличаться от среднего по окну не меньше чем на это
@@ -840,6 +866,15 @@ def main():
 
         if fields["pmsl"] is None or fields["fi500"] is None:
             raise RuntimeError("нет обязательных полей (PMSL/FI500) — прерываю")
+
+        testcase_path = os.environ.get("ICON_FRONT_SAVE_TESTCASE")
+        if testcase_path:
+            try:
+                save_testcase(testcase_path, fields, lats, lons, run_dt, lead)
+                log(f"тестовый снимок сохранён: {testcase_path} "
+                    f"(дальше можно гонять scripts/icon_front_replay.py офлайн, без скачивания)")
+            except Exception as e:
+                log(f"не удалось сохранить тестовый снимок: {e}")
 
         try:
             fields["_centers"] = find_pressure_centers(fields["pmsl"], fields.get("hsurf"), lats, lons)
