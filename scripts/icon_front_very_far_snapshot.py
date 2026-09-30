@@ -438,27 +438,52 @@ def load_testcase(path):
 
 
 # ---------- L/H центры давления ----------
-HL_WINDOW_KM = 500.0   # экстремум должен быть лучшим в радиусе этого размера
-HL_PROMINENCE_HPA = 1.5  # и отличаться от среднего по окну не меньше чем на это
+# Циклоны у нас обычно компактные и глубокие — за 500 км давление вокруг них успевает
+# заметно вырасти, узкое окно легко ловит их выделенность. Антициклоны в этом регионе чаще
+# широкие пологие купола континентального масштаба: при том же 500-километровом окне оно
+# целиком лежит внутри самого гребня, даже в истинном пике локальное среднее почти равно
+# самому пику (проверено на синтетике: широкий гребень при окне 500км даёт выделенность
+# всего ~0.3 гПа — ниже почти любого разумного порога). Окно нужно РАСШИРИТЬ, чтобы оно
+# доставало до настоящего фона за пределами гребня — тогда даже тем же порядком порога
+# выделенность растёт кратно (на той же синтетике: 500км→0.34, 800км→0.85, 1200км→2.08 гПа).
+# Поэтому у L и H — разные окна и разные пороги, настраиваются независимо.
+HL_WINDOW_KM_L = float(os.environ.get("ICON_HL_WINDOW_KM_L", "500"))
+HL_WINDOW_KM_H = float(os.environ.get("ICON_HL_WINDOW_KM_H", "1200"))
+HL_PROMINENCE_HPA_L = float(os.environ.get("ICON_HL_PROMINENCE_HPA_L", "1.5"))
+HL_PROMINENCE_HPA_H = float(os.environ.get("ICON_HL_PROMINENCE_HPA_H", "1.0"))
 
 
-def find_pressure_centers(pmsl, hsurf, lats, lons):
+def find_pressure_centers(pmsl, hsurf, lats, lons, debug_log=None):
     """Список (lat, lon, 'L'|'H', hPa) по всей скачанной области."""
     from scipy.ndimage import uniform_filter
     dy_km, dx_km = km_scale(lats, lons)
-    wy = max(3, int(round(HL_WINDOW_KM / abs(dy_km))) | 1)
-    wx = max(3, int(round(HL_WINDOW_KM / abs(dx_km))) | 1)
     p = gaussian_filter(pmsl, 5.0)
-    mean = uniform_filter(p, size=(wy, wx), mode="nearest")
-    mx = maximum_filter(p, size=(wy, wx), mode="nearest")
-    mn = minimum_filter(p, size=(wy, wx), mode="nearest")
     hs = gaussian_filter(hsurf, 2.0) if hsurf is not None else np.zeros_like(p)
     ok = (hs <= TERRAIN_MASK_M)
     out = []
-    for kind, mask in (("L", (p == mn) & (p < mean - HL_PROMINENCE_HPA)),
-                       ("H", (p == mx) & (p > mean + HL_PROMINENCE_HPA))):
+    for kind, win_km, prom_hpa in (("L", HL_WINDOW_KM_L, HL_PROMINENCE_HPA_L),
+                                    ("H", HL_WINDOW_KM_H, HL_PROMINENCE_HPA_H)):
+        wy = max(3, min(p.shape[0] - 1, int(round(win_km / abs(dy_km))) | 1))
+        wx = max(3, min(p.shape[1] - 1, int(round(win_km / abs(dx_km))) | 1))
+        mean = uniform_filter(p, size=(wy, wx), mode="nearest")
+        if kind == "H":
+            mx = maximum_filter(p, size=(wy, wx), mode="nearest")
+            mask = (p == mx) & (p > mean + prom_hpa)
+            prom = mx - mean
+        else:
+            mn = minimum_filter(p, size=(wy, wx), mode="nearest")
+            mask = (p == mn) & (p < mean - prom_hpa)
+            prom = mean - mn
         for i, j in zip(*np.where(mask & ok)):
             out.append((float(lats[i]), float(lons[j]), kind, float(p[i, j])))
+        if debug_log is not None:
+            # выделенность по всей области, даже там, где порог не пройден — чтобы было видно,
+            # насколько близко/далеко реальные пики от текущего порога, без гадания вслепую
+            debug_log(f"L/H диагностика [{kind}]: окно {win_km:.0f}км, порог {prom_hpa} гПа, "
+                      f"выделенность p50={float(np.nanpercentile(prom,50)):.2f} "
+                      f"p90={float(np.nanpercentile(prom,90)):.2f} "
+                      f"p99={float(np.nanpercentile(prom,99)):.2f} "
+                      f"max={float(np.nanmax(prom)):.2f}, найдено {(mask & ok).sum()}")
     return out
 
 
@@ -491,7 +516,7 @@ def draw_pressure_centers(ax, centers, bbox, px):
 FRONT_GRAD_PERCENTILE = float(os.environ.get("ICON_FRONT_GRAD_PERCENTILE", "88"))
 FRONT_GRAD_FLOOR = float(os.environ.get("ICON_FRONT_GRAD_FLOOR", "4.0"))   # K/100км, абсолютный пол
 FRONT_MIN_KM = float(os.environ.get("ICON_FRONT_MIN_KM", "300"))
-FRONT_MIN_STRAIGHTNESS = float(os.environ.get("ICON_FRONT_MIN_STRAIGHTNESS", "0.08"))
+FRONT_MIN_STRAIGHTNESS = float(os.environ.get("ICON_FRONT_MIN_STRAIGHTNESS", "0.12"))  # было 0.08 — слишком тонкие шумовые зигзаги проходили
 # после фильтров всё ещё остаются почти-дубли: соседние параллельные обрывки одной и той же
 # зоны градиента (контур цепляет её с двух сторон) — убираем не-максимальным подавлением по
 # расстоянию, оставляя более длинный из пары.
@@ -505,6 +530,10 @@ FRONT_MOUNTAIN_RELIEF_M = float(os.environ.get("ICON_FRONT_MOUNTAIN_RELIEF_M", "
 # требуем циклоническую завихренность на линии фронта — отсекает случаи, когда сильный градиент
 # θe есть, но он лежит поперёк гладкого антициклона, а не в барической ложбине/у циклона
 FRONT_REQUIRE_CYCLONIC_VORTICITY = os.environ.get("ICON_FRONT_REQUIRE_VORTICITY", "1") == "1"
+# окно смыкания разрывов маски "циклоническая завихренность" (в ячейках сетки) — шире, чем
+# для градиента (3), потому что провалы ζ<0 вдоль длинной дуги бывают протяжённее по времени/
+# пространству, чем мгновенный проседания градиента θe
+FRONT_VORTICITY_BRIDGE_CELLS = int(os.environ.get("ICON_FRONT_VORTICITY_BRIDGE_CELLS", "7"))
 # если конец линии обрывается не дальше этого расстояния от центра L — мягко дотягиваем до него
 FRONT_ATTRACT_TO_LOW_KM = float(os.environ.get("ICON_FRONT_ATTRACT_TO_LOW_KM", "300.0"))
 # отношение (расстояние между концами) / (длина линии). Настоящий фронт тянется через
@@ -580,7 +609,13 @@ def compute_fronts(fields, lats, lons, centers=None):
         dudy, dudx = np.gradient(u, dy_km, dx_km)
         dvdy, dvdx = np.gradient(v, dy_km, dx_km)
         vorticity = (dvdx - dudy) / 1000.0
-        valid &= vorticity > 0
+        vort_ok = vorticity > 0
+        # то же смыкание разрывов, что и для градиента — иначе длинный, в целом циклонический
+        # фронт (особенно вдоль дуги атлантического циклона) рвётся на куски там, где
+        # завихренность на мгновение чуть проседает ниже нуля вдоль в целом верной дуги
+        vort_bridged = binary_closing(vort_ok, structure=np.ones((FRONT_VORTICITY_BRIDGE_CELLS,
+                                                                    FRONT_VORTICITY_BRIDGE_CELLS)))
+        valid &= vort_bridged
     hsurf = fields.get("hsurf")
     if hsurf is not None:
         valid &= gaussian_filter(hsurf, 2.0) <= TERRAIN_MASK_M
@@ -932,7 +967,7 @@ def main():
                 log(f"не удалось сохранить тестовый снимок: {e}")
 
         try:
-            fields["_centers"] = find_pressure_centers(fields["pmsl"], fields.get("hsurf"), lats, lons)
+            fields["_centers"] = find_pressure_centers(fields["pmsl"], fields.get("hsurf"), lats, lons, debug_log=log)
             log(f"L/H: найдено {len(fields['_centers'])} центров в области")
         except Exception as e:
             log(f"L/H не посчитаны: {e}"); fields["_centers"] = None
