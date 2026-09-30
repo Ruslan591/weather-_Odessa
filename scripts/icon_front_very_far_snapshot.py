@@ -517,6 +517,35 @@ FRONT_GRAD_PERCENTILE = float(os.environ.get("ICON_FRONT_GRAD_PERCENTILE", "88")
 FRONT_GRAD_FLOOR = float(os.environ.get("ICON_FRONT_GRAD_FLOOR", "4.0"))   # K/100км, абсолютный пол
 FRONT_MIN_KM = float(os.environ.get("ICON_FRONT_MIN_KM", "300"))
 FRONT_MIN_STRAIGHTNESS = float(os.environ.get("ICON_FRONT_MIN_STRAIGHTNESS", "0.12"))  # было 0.08 — слишком тонкие шумовые зигзаги проходили
+# прямолинейность считается по всей линии целиком и не ловит "крючок" — резкий излом на одном
+# конце линии, когда всё остальное вполне ровное. Ловим его отдельно: пересэмплируем линию с
+# равным шагом по расстоянию (чтобы не зависеть от того, насколько густо contourpy расставил
+# точки) и смотрим на максимальный угол поворота между соседними отрезками.
+FRONT_MAX_TURN_DEG = float(os.environ.get("ICON_FRONT_MAX_TURN_DEG", "40"))  # ~радиус разворота <30км режем, >40км пропускаем
+FRONT_TURN_STEP_KM = float(os.environ.get("ICON_FRONT_TURN_STEP_KM", "12"))  # близко к разрешению сетки ICON-EU (~7км)
+
+
+def _resample_by_arclen(seg, kx, step_km):
+    d = np.hypot(np.diff(seg[:, 0]) * kx, np.diff(seg[:, 1]) * 111.32)
+    cum = np.concatenate([[0.0], np.cumsum(d)])
+    total = cum[-1]
+    if total < step_km * 2:
+        return seg
+    n = max(3, int(total / step_km))
+    new_cum = np.linspace(0.0, total, n)
+    lon_r = np.interp(new_cum, cum, seg[:, 0])
+    lat_r = np.interp(new_cum, cum, seg[:, 1])
+    return np.column_stack([lon_r, lat_r])
+
+
+def _max_turn_deg(seg):
+    if len(seg) < 3:
+        return 0.0
+    v = np.diff(seg, axis=0)
+    ang = np.arctan2(v[:, 1], v[:, 0])
+    dang = np.diff(ang)
+    dang = (dang + np.pi) % (2 * np.pi) - np.pi
+    return float(np.degrees(np.max(np.abs(dang)))) if len(dang) else 0.0
 # после фильтров всё ещё остаются почти-дубли: соседние параллельные обрывки одной и той же
 # зоны градиента (контур цепляет её с двух сторон) — убираем не-максимальным подавлением по
 # расстоянию, оставляя более длинный из пары.
@@ -640,6 +669,8 @@ def compute_fronts(fields, lats, lons, centers=None):
         span_km = float(np.hypot((seg[-1, 0] - seg[0, 0]) * kx, (seg[-1, 1] - seg[0, 1]) * 111.32))
         if span_km / length_km < FRONT_MIN_STRAIGHTNESS:
             continue  # шумовая петля/завиток, а не протяжённая линия
+        if _max_turn_deg(_resample_by_arclen(seg, kx, FRONT_TURN_STEP_KM)) > FRONT_MAX_TURN_DEG:
+            continue  # резкий "крючок" на одном участке — не бывает у настоящего фронта
         ii = np.clip(np.round((seg[:, 1] - lats[0]) / dlat).astype(int), 0, len(lats) - 1)
         jj = np.clip(np.round((seg[:, 0] - lons[0]) / dlon).astype(int), 0, len(lons) - 1)
         candidates.append((length_km, seg, ii, jj))
