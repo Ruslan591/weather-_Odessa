@@ -1,5 +1,5 @@
 {
-  "task_id": "fronts_v3_log_1790848130",
-  "cmd": "grep -E 'изобары|L/H|FORCE|Скачано|git push|ОШИБКА|Traceback|Error|фронт' /tmp/icon_front_v3.log | tail -25; echo ---; tail -n 3 /tmp/icon_front_v3.log | cut -c1-200",
+  "task_id": "fronts_v3_log2_1790848261",
+  "cmd": "grep -E 'изобары|L/H|FORCE|Скачано|git push|ОШИБКА|Traceback|Error|fronts|фронт|клеток' /tmp/icon_front_v3.log | tail -25; echo ---; tail -n 2 /tmp/icon_front_v3.log | cut -c1-200; pgrep -f icon_front_very_far_snapshot >/dev/null && echo RUNNING || echo DONE",
   "timeout": 20
 }
