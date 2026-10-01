@@ -1,5 +1,5 @@
 {
-  "task_id": "force6_1790849669",
-  "cmd": "flock /tmp/vps_git.lock -c 'cd /opt/weather-pipeline/repo && git fetch --depth 20 origin main --update-shallow >/dev/null 2>&1 && git reset --hard origin/main >/dev/null 2>&1'; cd /opt/weather-pipeline/repo && rm -rf scripts/__pycache__ && grep -c 'ICON_FRONT_GRAD_LOW_FRAC\", \"0.5\"' scripts/icon_front_very_far_snapshot.py; (nohup env ICON_FRONT_FORCE=1 python3 scripts/icon_front_very_far_snapshot.py > /tmp/icon_front_v6.log 2>&1 &); sleep 1; echo started",
-  "timeout": 40
+  "task_id": "force6_log_1790849760",
+  "cmd": "grep -E 'фронты:|git push|Traceback|ОШИБКА' /tmp/icon_front_v6.log | cut -c1-260 | tail -n 8; pgrep -f icon_front_very_far_snapshot >/dev/null && echo RUNNING || echo DONE",
+  "timeout": 15
 }
