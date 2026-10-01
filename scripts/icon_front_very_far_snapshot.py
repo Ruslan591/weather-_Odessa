@@ -280,6 +280,45 @@ MIN_OPEN_SEG_PX = 90       # открытые обрывки короче (ос�
 ISOBAR_CONTOUR_PAD_DEG = float(os.environ.get("ICON_ISOBAR_CONTOUR_PAD_DEG", "3.0"))
 
 
+def _fill_masked_laplace(field, mask):
+    """Гармоническое (лапласово) заполнение клеток mask значениями по их границе: внутри маски
+    нет локальных экстремумов, изолинии проходят насквозь плавно, без дырок и «пятен».
+    Возвращает новый массив или None, если заполнить нельзя (тогда вызывающий код делает fallback)."""
+    from scipy.sparse import coo_matrix, diags
+    from scipy.sparse.linalg import spsolve
+    mask = np.asarray(mask, dtype=bool)
+    n = int(mask.sum())
+    if n == 0:
+        return field.copy()
+    if n == mask.size or not np.all(np.isfinite(field[~mask])):
+        return None
+    ni, nj = field.shape
+    idx = -np.ones(field.shape, dtype=np.int64)
+    idx[mask] = np.arange(n)
+    ii, jj = np.where(mask)
+    me = np.arange(n)
+    diag = np.zeros(n)
+    rhs = np.zeros(n)
+    rows, cols, vals = [], [], []
+    for di, dj in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        ti, tj = ii + di, jj + dj
+        inb = (ti >= 0) & (ti < ni) & (tj >= 0) & (tj < nj)
+        diag[inb] += 1.0
+        t_idx = np.full(n, -1, dtype=np.int64)
+        t_idx[inb] = idx[ti[inb], tj[inb]]
+        m = t_idx >= 0                      # сосед тоже внутри маски -> неизвестная
+        rows.append(me[m]); cols.append(t_idx[m]); vals.append(-np.ones(int(m.sum())))
+        known = inb & (t_idx < 0)           # сосед известен -> в правую часть
+        rhs[known] += field[ti[known], tj[known]]
+    a = coo_matrix((np.concatenate(vals), (np.concatenate(rows), np.concatenate(cols))), shape=(n, n)) + diags(diag)
+    x = spsolve(a.tocsr(), rhs)
+    if not np.all(np.isfinite(x)):
+        return None
+    out = field.copy()
+    out[mask] = x
+    return out
+
+
 def render_transparent_isobars(pmsl, hsurf, lats, lons, out_path, bbox, px, centers=None):
     """Изобары без «неподвижного мусора»: приведение давления к уровню моря
     над высоким рельефом (Альпы, Пиренеи, Балканы, Анатолия, Атлас…) даёт
@@ -292,14 +331,34 @@ def render_transparent_isobars(pmsl, hsurf, lats, lons, out_path, bbox, px, cent
 
     west, south, east, north = bbox
     sat_w, sat_h = px
-    pmsl_smooth = gaussian_filter(pmsl, 4.0)
+    # Над высоким рельефом PMSL — артефакт приведения. Раньше там ставили NaN, и изобары получали
+    # дырки. Теперь значения в этих клетках заменяются гармоническим продолжением с границы (см.
+    # _fill_masked_laplace): линии остаются непрерывными, а участки над горами рисуются пунктиром.
+    terrain = None
+    pmsl_src = pmsl
     if hsurf is not None:
-        hs = gaussian_filter(hsurf, 2.0)
-        pmsl_smooth = np.where(hs > TERRAIN_MASK_M, np.nan, pmsl_smooth)
+        terrain = gaussian_filter(hsurf, 2.0) > TERRAIN_MASK_M
+        if terrain.any():
+            try:
+                filled = _fill_masked_laplace(pmsl, terrain)
+            except Exception as e:
+                log(f"изобары: заполнение над горами не удалось ({e!r}), fallback на маску")
+                filled = None
+            if filled is None:
+                pmsl_src = np.where(terrain, np.nan, pmsl)
+                terrain = None
+            else:
+                pmsl_src = filled
+                log(f"изобары: над рельефом (>{TERRAIN_MASK_M:.0f} м) продолжено {int(terrain.sum())} клеток")
+    pmsl_smooth = gaussian_filter(pmsl_src, 4.0)
     pad = ISOBAR_CONTOUR_PAD_DEG
     pmsl_vis, lats_vis, lons_vis = crop_to_bbox(pmsl_smooth, lats, lons,
                                                  west - pad, south - pad, east + pad, north + pad)
     z = np.ma.masked_invalid(pmsl_vis)
+    terrain_vis = None
+    if terrain is not None:
+        terrain_vis = crop_to_bbox(terrain.astype(float), lats, lons,
+                                   west - pad, south - pad, east + pad, north + pad)[0] > 0.5
 
     dpi = 100
     fig = plt.figure(figsize=(sat_w / dpi, sat_h / dpi), dpi=dpi)
@@ -334,10 +393,26 @@ def render_transparent_isobars(pmsl, hsurf, lats, lons, out_path, bbox, px, cent
                 dropped += 1
                 continue
             kept += 1
-            ax.plot(seg[:, 0], seg[:, 1], color="white", linewidth=1.4,
-                    solid_capstyle="round", path_effects=halo_line)
-            if length_px > 140:
-                mid = len(seg) // 2
+            flags = np.zeros(len(seg), dtype=bool)
+            if terrain_vis is not None and len(lats_vis) > 1 and len(lons_vis) > 1:
+                ti = np.clip(np.round((seg[:, 1] - lats_vis[0]) / (lats_vis[1] - lats_vis[0])).astype(int), 0, len(lats_vis) - 1)
+                tj = np.clip(np.round((seg[:, 0] - lons_vis[0]) / (lons_vis[1] - lons_vis[0])).astype(int), 0, len(lons_vis) - 1)
+                flags = terrain_vis[ti, tj]
+            cut = np.flatnonzero(flags[1:] != flags[:-1]) + 1
+            bounds = [0] + [int(c) for c in cut] + [len(seg)]
+            for a_, b_ in zip(bounds[:-1], bounds[1:]):
+                part = seg[max(a_ - 1, 0):b_]   # перекрытие на одну вершину, чтобы не было щелей
+                if len(part) < 2:
+                    continue
+                if flags[a_]:
+                    ax.plot(part[:, 0], part[:, 1], color="white", linewidth=1.1, alpha=0.7,
+                            linestyle=(0, (3, 3)), path_effects=halo_line)
+                else:
+                    ax.plot(part[:, 0], part[:, 1], color="white", linewidth=1.4,
+                            solid_capstyle="round", path_effects=halo_line)
+            free = np.flatnonzero(~flags)
+            if length_px > 140 and len(free) > 0:
+                mid = int(free[np.argmin(np.abs(free - len(seg) // 2))])
                 x0, y0 = seg[mid]
                 px_x = (x0 - west) * px_per_lon
                 px_y = (north - y0) * px_per_lat
@@ -644,7 +719,8 @@ FRONT_ATTRACT_TO_LOW_KM = float(os.environ.get("ICON_FRONT_ATTRACT_TO_LOW_KM", "
 # извивается на месте и почти возвращается к себе — у неё это отношение близко к 0.
 FRONT_SMOOTH_CELLS = 8.0   # ~50 км на сетке ICON-EU 0.0625° — жёстче гасим мелкий шум поля
 STATIONARY_MS = 1.5        # |нормальная к фронту скорость ветра 850| меньше — стационарный
-FRONT_COLORS = {"cold": "#3d8bff", "warm": "#ff4545", "stat": "#c07bff"}
+FRONT_COLORS = {"cold": "#3d8bff", "warm": "#ff4545", "stat": "#c07bff"}  # "stat" рисуется чередованием cold/warm
+STAT_DASH_PX = 28.0
 
 
 def theta_e_bolton(t_k, rh_pct, p_hpa):
@@ -846,20 +922,22 @@ def render_transparent_fronts(segs, hl_centers, out_path, bbox, px):
         drawn += 1
         pts = xy.reshape(-1, 1, 2)
         pieces = np.concatenate([pts[:-1], pts[1:]], axis=1)
-        cols = [FRONT_COLORS[k] for k in kind[:-1]]
+        dpx = np.hypot(np.diff(xy[:, 0]) * pxl, np.diff(xy[:, 1]) * pyl)
+        cum = np.concatenate([[0], np.cumsum(dpx)])
+        # стационарный фронт — как на синоптических картах: чередование синего и красного
+        cols = [(FRONT_COLORS["cold"] if int(cum[i] // STAT_DASH_PX) % 2 == 0 else FRONT_COLORS["warm"])
+                if k == "stat" else FRONT_COLORS[k] for i, k in enumerate(kind[:-1])]
         ax.add_collection(LineCollection(pieces, colors="black", linewidths=5.0, alpha=0.65, capstyle="round", zorder=4))
         ax.add_collection(LineCollection(pieces, colors=cols, linewidths=2.6, capstyle="round", zorder=5))
         if not can_sym:
             continue
         # значки каждые ~55 px: треугольник (холодный) / полукруг (тёплый) в сторону движения
-        dpx = np.hypot(np.diff(xy[:, 0]) * pxl, np.diff(xy[:, 1]) * pyl)
-        cum = np.concatenate([[0], np.cumsum(dpx)])
-        for d in np.arange(30.0, cum[-1], 55.0):
+        for m_, d in enumerate(np.arange(30.0, cum[-1], 55.0)):
             i = int(np.searchsorted(cum, d))
             i = min(i, len(xy) - 1)
             k = kind[i]
-            if k == "stat":
-                continue
+            if k == "stat":   # чередуем: треугольник холодного с одной стороны, полукруг тёплого с другой
+                k = "cold" if m_ % 2 == 0 else "warm"
             sgn = 1.0 if k == "cold" else -1.0
             mx_, my_ = sgn * s["nx"][i], sgn * s["ny"][i]
             ang = math.degrees(math.atan2(my_ * pyl, mx_ * pxl))
