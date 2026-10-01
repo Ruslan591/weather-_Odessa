@@ -1,5 +1,5 @@
 {
-  "task_id": "img2_1790849316",
-  "cmd": "python3 -c \"from PIL import Image; im=Image.open('/tmp/rp_view.jpg'); im=im.resize((480,int(im.size[1]*480/im.size[0]))); im.save('/tmp/rp_small.jpg',quality=50)\" && ls -l /tmp/rp_small.jpg | cut -c20-60 && echo ===B64 && base64 -w0 /tmp/rp_small.jpg && echo && echo ===END",
-  "timeout": 30
+  "task_id": "img3_1790849414",
+  "cmd": "cd /opt/weather-pipeline/repo && rm -rf /tmp/rp2 && ICON_FRONT_GRAD_LOW_FRAC=0.5 ICON_FRONT_REQUIRE_VORTICITY=0 python3 scripts/icon_front_replay.py /tmp/case_oct1.npz /tmp/rp2 > /tmp/rp2.log 2>&1; python3 /tmp/comp.py /tmp/rp2 && python3 -c \"from PIL import Image; im=Image.open('/tmp/rp_view.jpg'); im=im.resize((480,int(im.size[1]*480/im.size[0]))); im.save('/tmp/rp_small2.jpg',quality=50)\" && echo ===B64 && base64 -w0 /tmp/rp_small2.jpg && echo && echo ===END",
+  "timeout": 55
 }
