@@ -1,5 +1,5 @@
 {
-  "task_id": "fronts_v3b_1790847958",
-  "cmd": "git -C /opt/weather-pipeline/repo log -1 --format='HEAD %h %cd' ; grep -c '_fill_masked_laplace' /opt/weather-pipeline/repo/scripts/icon_front_very_far_snapshot.py ; date -u; tail -n 3 /var/log/vps-github-bridge.log | cut -c1-200",
-  "timeout": 30
+  "task_id": "fronts_v3_force_1790848054",
+  "cmd": "cd /opt/weather-pipeline/repo && rm -rf scripts/__pycache__ && (nohup env ICON_FRONT_FORCE=1 python3 scripts/icon_front_very_far_snapshot.py > /tmp/icon_front_v3.log 2>&1 &) ; sleep 1; echo started",
+  "timeout": 20
 }
