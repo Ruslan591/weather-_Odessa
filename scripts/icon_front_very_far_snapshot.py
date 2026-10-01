@@ -582,7 +582,7 @@ def draw_pressure_centers(ax, centers, bbox, px):
 # не рисовать фронты из чистого шума полей.
 FRONT_GRAD_PERCENTILE = float(os.environ.get("ICON_FRONT_GRAD_PERCENTILE", "88"))
 FRONT_GRAD_FLOOR = float(os.environ.get("ICON_FRONT_GRAD_FLOOR", "4.0"))   # K/100км, абсолютный пол
-FRONT_GRAD_LOW_FRAC = float(os.environ.get("ICON_FRONT_GRAD_LOW_FRAC", "1.0"))  # <1 включает гистерезис (доля основного порога)
+FRONT_GRAD_LOW_FRAC = float(os.environ.get("ICON_FRONT_GRAD_LOW_FRAC", "0.5"))  # <1 включает гистерезис (доля основного порога); 1.0 = выкл.
 FRONT_MIN_KM = float(os.environ.get("ICON_FRONT_MIN_KM", "300"))
 FRONT_MIN_STRAIGHTNESS = float(os.environ.get("ICON_FRONT_MIN_STRAIGHTNESS", "0.12"))  # было 0.08 — слишком тонкие шумовые зигзаги проходили
 # прямолинейность считается по всей линии целиком и не ловит "крючок" — резкий излом на одном
@@ -704,7 +704,7 @@ FRONT_REQUIRE_CYCLONIC_VORTICITY = os.environ.get("ICON_FRONT_REQUIRE_VORTICITY"
 # окно смыкания разрывов маски "циклоническая завихренность" (в ячейках сетки) — шире, чем
 # для градиента (3), потому что провалы ζ<0 вдоль длинной дуги бывают протяжённее по времени/
 # пространству, чем мгновенный проседания градиента θe
-FRONT_VORTICITY_BRIDGE_CELLS = int(os.environ.get("ICON_FRONT_VORTICITY_BRIDGE_CELLS", "7"))
+FRONT_VORTICITY_BRIDGE_CELLS = int(os.environ.get("ICON_FRONT_VORTICITY_BRIDGE_CELLS", "31"))  # было 7: на замороженном случае 01.10 фронты были вдвое короче
 # если конец линии обрывается не дальше этого расстояния от центра L — мягко дотягиваем до него
 FRONT_ATTRACT_TO_LOW_KM = float(os.environ.get("ICON_FRONT_ATTRACT_TO_LOW_KM", "300.0"))
 # отношение (расстояние между концами) / (длина линии). Настоящий фронт тянется через
