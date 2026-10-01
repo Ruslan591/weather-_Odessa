@@ -1,5 +1,5 @@
 {
-  "task_id": "sweep_read_1790848899",
-  "cmd": "cat /tmp/sweep.log | cut -c1-400",
-  "timeout": 15
+  "task_id": "sweep2_1790849024",
+  "cmd": "flock /tmp/vps_git.lock -c 'cd /opt/weather-pipeline/repo && git fetch --depth 20 origin main --update-shallow >/dev/null 2>&1 && git reset --hard origin/main >/dev/null 2>&1'; grep -c ICON_FRONT_GRAD_LOW_FRAC /opt/weather-pipeline/repo/scripts/icon_front_very_far_snapshot.py; (for c in 'base 1.0 1 7' 'h80 0.8 1 7' 'h65 0.65 1 7' 'h50 0.5 1 7' 'v0 1.0 0 7' 'h65_v0 0.65 0 7' 'h65_b15 0.65 1 15'; do set -- $c; TAG=$1 ICON_FRONT_GRAD_LOW_FRAC=$2 ICON_FRONT_REQUIRE_VORTICITY=$3 ICON_FRONT_VORTICITY_BRIDGE_CELLS=$4 python3 /tmp/sweep.py 2>&1 | tail -n 3; done > /tmp/sweep2.log 2>&1 &); sleep 1; echo started",
+  "timeout": 40
 }
