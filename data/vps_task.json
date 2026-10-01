@@ -1,5 +1,5 @@
 {
-  "task_id": "case_save_1790848660",
-  "cmd": "flock /tmp/vps_git.lock -c 'cd /opt/weather-pipeline/repo && git fetch --depth 20 origin main --update-shallow >/dev/null 2>&1 && git reset --hard origin/main >/dev/null 2>&1'; cd /opt/weather-pipeline/repo && rm -rf scripts/__pycache__ && grep -c 'linestyle=(0, (3, 3))' scripts/icon_front_very_far_snapshot.py; (nohup env ICON_FRONT_FORCE=1 ICON_FRONT_SAVE_TESTCASE=/tmp/case_oct1.npz python3 scripts/icon_front_very_far_snapshot.py > /tmp/icon_front_v4.log 2>&1 &) ; sleep 1; echo started",
-  "timeout": 40
+  "task_id": "sweep_1790848809",
+  "cmd": "cat > /tmp/sweep.py <<'PYEOF'\n\nimport importlib.util, os, sys, numpy as np\nspec=importlib.util.spec_from_file_location(\"vf\",\"/opt/weather-pipeline/repo/scripts/icon_front_very_far_snapshot.py\")\nvf=importlib.util.module_from_spec(spec); spec.loader.exec_module(vf)\nfields,lats,lons,run_dt,lead=vf.load_testcase(\"/tmp/case_oct1.npz\")\ncenters=vf.find_pressure_centers(fields[\"pmsl\"],fields.get(\"hsurf\"),lats,lons)\nfronts,stats=vf.compute_fronts(fields,lats,lons,centers=centers)\nL=[]\nfor s in fronts:\n    xy=s[\"xy\"]; kx=111.32*np.cos(np.radians(xy[:,1].mean()))\n    L.append(float(np.sum(np.hypot(np.diff(xy[:,0])*kx,np.diff(xy[:,1])*111.32))))\nL=sorted(L,reverse=True)\nprint(os.environ.get(\"TAG\",\"?\"), \"n=%d total=%.0f\"%(len(L),sum(L)), \"lens=\",[round(x) for x in L])\nPYEOF\nls -la /tmp/case_oct1.npz | cut -c1-80; tail -n 2 /tmp/icon_front_v4.log | cut -c1-160; (for c in 'cur 55 300' 'h80 80 300' 'h110 110 300' 'off 999 300' 'h80_min200 80 200'; do set -- $c; TAG=$1 ICON_FRONT_HOOK_MAX_TURN_DEG=$2 ICON_FRONT_MIN_KM=$3 python3 /tmp/sweep.py 2>&1 | tail -n 3; done > /tmp/sweep.log 2>&1 &) ; sleep 1; echo started",
+  "timeout": 30
 }
