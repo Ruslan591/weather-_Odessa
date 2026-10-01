@@ -333,7 +333,7 @@ def render_transparent_isobars(pmsl, hsurf, lats, lons, out_path, bbox, px, cent
     sat_w, sat_h = px
     # Над высоким рельефом PMSL — артефакт приведения. Раньше там ставили NaN, и изобары получали
     # дырки. Теперь значения в этих клетках заменяются гармоническим продолжением с границы (см.
-    # _fill_masked_laplace): линии остаются непрерывными, а участки над горами рисуются пунктиром.
+    # _fill_masked_laplace): линии остаются непрерывными и сплошными.
     terrain = None
     pmsl_src = pmsl
     if hsurf is not None:
@@ -398,18 +398,10 @@ def render_transparent_isobars(pmsl, hsurf, lats, lons, out_path, bbox, px, cent
                 ti = np.clip(np.round((seg[:, 1] - lats_vis[0]) / (lats_vis[1] - lats_vis[0])).astype(int), 0, len(lats_vis) - 1)
                 tj = np.clip(np.round((seg[:, 0] - lons_vis[0]) / (lons_vis[1] - lons_vis[0])).astype(int), 0, len(lons_vis) - 1)
                 flags = terrain_vis[ti, tj]
-            cut = np.flatnonzero(flags[1:] != flags[:-1]) + 1
-            bounds = [0] + [int(c) for c in cut] + [len(seg)]
-            for a_, b_ in zip(bounds[:-1], bounds[1:]):
-                part = seg[max(a_ - 1, 0):b_]   # перекрытие на одну вершину, чтобы не было щелей
-                if len(part) < 2:
-                    continue
-                if flags[a_]:
-                    ax.plot(part[:, 0], part[:, 1], color="white", linewidth=1.1, alpha=0.7,
-                            linestyle=(0, (3, 3)), path_effects=halo_line)
-                else:
-                    ax.plot(part[:, 0], part[:, 1], color="white", linewidth=1.4,
-                            solid_capstyle="round", path_effects=halo_line)
+            # линия сплошная по всей длине (над рельефом — тоже); flags нужны только чтобы не
+            # ставить подпись давления на продолженный участок
+            ax.plot(seg[:, 0], seg[:, 1], color="white", linewidth=1.4,
+                    solid_capstyle="round", path_effects=halo_line)
             free = np.flatnonzero(~flags)
             if length_px > 140 and len(free) > 0:
                 mid = int(free[np.argmin(np.abs(free - len(seg) // 2))])
