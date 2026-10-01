@@ -546,6 +546,80 @@ def _max_turn_deg(seg):
     dang = np.diff(ang)
     dang = (dang + np.pi) % (2 * np.pi) - np.pi
     return float(np.degrees(np.max(np.abs(dang)))) if len(dang) else 0.0
+# --- обрезка крючков (01.10): мелкий порог по одному шагу ловит только шумовые разворота <30км;
+# крючок радиусом ~100км (U-образный хвост линии) по одному шагу даёт ~12° и проходит. Поэтому
+# смотрим на СУММАРНЫЙ поворот курса на окне FRONT_HOOK_WINDOW_KM; где он больше порога —
+# вырезаем участок и оставляем куски линии (а не выбрасываем весь фронт).
+FRONT_HOOK_WINDOW_KM = float(os.environ.get("ICON_FRONT_HOOK_WINDOW_KM", "150"))
+FRONT_HOOK_MAX_TURN_DEG = float(os.environ.get("ICON_FRONT_HOOK_MAX_TURN_DEG", "55"))  # ~радиус кривизны <150км
+# минимальная длина одного типа (cold/warm/stat) вдоль линии: более короткие куски поглощаются
+# соседним — иначе тип «мигает» там, где нормальная компонента ветра переходит через ноль.
+FRONT_KIND_MIN_RUN_KM = float(os.environ.get("ICON_FRONT_KIND_MIN_RUN_KM", "250"))
+
+
+def _split_hooks(seg, kx, step_km):
+    """Пересэмплирует линию и режет её по крючкам. Возвращает список кусков (массивы lon/lat)."""
+    r = _resample_by_arclen(seg, kx, step_km)
+    if len(r) < 4:
+        return [r]
+    v = np.diff(r, axis=0)
+    h = np.unwrap(np.arctan2(v[:, 1], v[:, 0]))
+    kw = max(2, int(round(FRONT_HOOK_WINDOW_KM / step_km)))
+    bad = np.zeros(len(r), dtype=bool)
+    # резкий излом на одном шаге
+    d1 = np.abs(np.degrees(np.diff(h)))
+    for i in np.where(d1 > FRONT_MAX_TURN_DEG)[0]:
+        bad[i:i + 3] = True
+    # суммарный поворот на окне
+    if len(h) > kw:
+        w = np.abs(np.degrees(h[kw:] - h[:-kw]))
+        for i in np.where(w > FRONT_HOOK_MAX_TURN_DEG)[0]:
+            bad[i:i + kw + 2] = True
+    pieces, start = [], None
+    for i, b in enumerate(bad):
+        if not b and start is None:
+            start = i
+        if b and start is not None:
+            if i - start >= 3:
+                pieces.append(r[start:i])
+            start = None
+    if start is not None and len(r) - start >= 3:
+        pieces.append(r[start:])
+    return pieces
+
+
+def _merge_short_kind_runs(kind, step_km_arr, min_run_km):
+    """kind — массив строк по точкам линии, step_km_arr — длина шага до следующей точки.
+    Куски короче min_run_km отдаются соседу (более длинному)."""
+    kind = np.array(kind, dtype=object)
+    n = len(kind)
+    if n < 2:
+        return kind
+    for _ in range(10):
+        runs = []
+        s = 0
+        for i in range(1, n + 1):
+            if i == n or kind[i] != kind[s]:
+                runs.append([s, i, float(np.sum(step_km_arr[s:min(i, len(step_km_arr))]))])
+                s = i
+        if len(runs) <= 1:
+            break
+        short = [r for r in runs if r[2] < min_run_km]
+        if not short:
+            break
+        r = min(short, key=lambda x: x[2])
+        k = runs.index(r)
+        left = runs[k - 1] if k > 0 else None
+        right = runs[k + 1] if k < len(runs) - 1 else None
+        if left is None:
+            new = kind[right[0]]
+        elif right is None:
+            new = kind[left[0]]
+        else:
+            new = kind[left[0]] if left[2] >= right[2] else kind[right[0]]
+        kind[r[0]:r[1]] = new
+    return kind
+
 # после фильтров всё ещё остаются почти-дубли: соседние параллельные обрывки одной и той же
 # зоны градиента (контур цепляет её с двух сторон) — убираем не-максимальным подавлением по
 # расстоянию, оставляя более длинный из пары.
@@ -669,11 +743,16 @@ def compute_fronts(fields, lats, lons, centers=None):
         span_km = float(np.hypot((seg[-1, 0] - seg[0, 0]) * kx, (seg[-1, 1] - seg[0, 1]) * 111.32))
         if span_km / length_km < FRONT_MIN_STRAIGHTNESS:
             continue  # шумовая петля/завиток, а не протяжённая линия
-        if _max_turn_deg(_resample_by_arclen(seg, kx, FRONT_TURN_STEP_KM)) > FRONT_MAX_TURN_DEG:
-            continue  # резкий "крючок" на одном участке — не бывает у настоящего фронта
-        ii = np.clip(np.round((seg[:, 1] - lats[0]) / dlat).astype(int), 0, len(lats) - 1)
-        jj = np.clip(np.round((seg[:, 0] - lons[0]) / dlon).astype(int), 0, len(lons) - 1)
-        candidates.append((length_km, seg, ii, jj))
+        # крючки не выбрасывают линию целиком, а вырезаются; остаются гладкие куски
+        for piece in _split_hooks(seg, kx, FRONT_TURN_STEP_KM):
+            if len(piece) < 4:
+                continue
+            p_len = float(np.sum(np.hypot(np.diff(piece[:, 0]) * kx, np.diff(piece[:, 1]) * 111.32)))
+            if p_len < FRONT_MIN_KM:
+                continue
+            ii = np.clip(np.round((piece[:, 1] - lats[0]) / dlat).astype(int), 0, len(lats) - 1)
+            jj = np.clip(np.round((piece[:, 0] - lons[0]) / dlon).astype(int), 0, len(lons) - 1)
+            candidates.append((p_len, piece, ii, jj))
 
     # неMax-подавление: сортируем по длине, длинную линию принимаем и «застолбливаем» полосу
     # вокруг неё; более короткую, которая почти целиком лежит в уже застолблённой полосе —
@@ -692,9 +771,10 @@ def compute_fronts(fields, lats, lons, centers=None):
         m = binary_dilation(m, iterations=dedup_cells)
         occupied |= m
         c = u[ii, jj] * nx[ii, jj] + v[ii, jj] * ny[ii, jj]
-        k = min(15, len(c) | 1)
+        k = min(max(3, int(round(FRONT_KIND_MIN_RUN_KM / FRONT_TURN_STEP_KM)) | 1), len(c) | 1)
         c = np.convolve(np.pad(c, k // 2, mode="edge"), np.ones(k) / k, mode="valid")
         kind = np.where(c > STATIONARY_MS, "cold", np.where(c < -STATIONARY_MS, "warm", "stat"))
+        kind = _merge_short_kind_runs(kind, np.full(max(len(kind) - 1, 1), FRONT_TURN_STEP_KM), FRONT_KIND_MIN_RUN_KM)
         segs.append({"xy": seg, "kind": kind, "nx": nx[ii, jj], "ny": ny[ii, jj], "km": length_km})
     stats["n_segments"] = len(segs)
     stats["km_total"] = float(sum(s["km"] for s in segs))
