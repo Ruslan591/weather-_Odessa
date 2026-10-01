@@ -582,6 +582,7 @@ def draw_pressure_centers(ax, centers, bbox, px):
 # не рисовать фронты из чистого шума полей.
 FRONT_GRAD_PERCENTILE = float(os.environ.get("ICON_FRONT_GRAD_PERCENTILE", "88"))
 FRONT_GRAD_FLOOR = float(os.environ.get("ICON_FRONT_GRAD_FLOOR", "4.0"))   # K/100км, абсолютный пол
+FRONT_GRAD_LOW_FRAC = float(os.environ.get("ICON_FRONT_GRAD_LOW_FRAC", "1.0"))  # <1 включает гистерезис (доля основного порога)
 FRONT_MIN_KM = float(os.environ.get("ICON_FRONT_MIN_KM", "300"))
 FRONT_MIN_STRAIGHTNESS = float(os.environ.get("ICON_FRONT_MIN_STRAIGHTNESS", "0.12"))  # было 0.08 — слишком тонкие шумовые зигзаги проходили
 # прямолинейность считается по всей линии целиком и не ловит "крючок" — резкий излом на одном
@@ -768,6 +769,18 @@ def compute_fronts(fields, lats, lons, centers=None):
 
     grad_thresh = max(FRONT_GRAD_FLOOR, float(np.nanpercentile(grad100, FRONT_GRAD_PERCENTILE)))
     strong = grad100 > grad_thresh
+    if FRONT_GRAD_LOW_FRAC < 0.999:
+        # гистерезис (как в Canny): зёрна — клетки выше основного порога; линия продолжается
+        # через более слабый градиент (выше FRONT_GRAD_LOW_FRAC * порога), если он связан с зерном.
+        # Реальный фронт ослабевает вдоль своей длины; один порог рвёт его на обрывки.
+        from scipy.ndimage import label as _label
+        weak = grad100 > grad_thresh * FRONT_GRAD_LOW_FRAC
+        lab, nlab = _label(weak, structure=np.ones((3, 3)))
+        if nlab:
+            keep = np.zeros(nlab + 1, dtype=bool)
+            keep[np.unique(lab[strong & weak])] = True
+            keep[0] = False
+            strong = keep[lab]
     # смыкаем разрывы в 1-2 ячейки (~10-15км) вдоль почти непрерывной зоны сильного градиента —
     # иначе контур рвётся на обрывки там, где градиент на мгновение чуть просел ниже порога
     strong_bridged = binary_closing(strong, structure=np.ones((3, 3)))
