@@ -1,5 +1,5 @@
 {
-  "task_id": "img3_1790849414",
-  "cmd": "cd /opt/weather-pipeline/repo && rm -rf /tmp/rp2 && ICON_FRONT_GRAD_LOW_FRAC=0.5 ICON_FRONT_REQUIRE_VORTICITY=0 python3 scripts/icon_front_replay.py /tmp/case_oct1.npz /tmp/rp2 > /tmp/rp2.log 2>&1; python3 /tmp/comp.py /tmp/rp2 && python3 -c \"from PIL import Image; im=Image.open('/tmp/rp_view.jpg'); im=im.resize((480,int(im.size[1]*480/im.size[0]))); im.save('/tmp/rp_small2.jpg',quality=50)\" && echo ===B64 && base64 -w0 /tmp/rp_small2.jpg && echo && echo ===END",
-  "timeout": 55
+  "task_id": "img4_1790849532",
+  "cmd": "cd /opt/weather-pipeline/repo && rm -rf /tmp/rp3 && export ICON_FRONT_GRAD_LOW_FRAC=0.5 ICON_FRONT_VORTICITY_BRIDGE_CELLS=31 && python3 scripts/icon_front_replay.py /tmp/case_oct1.npz /tmp/rp3 > /tmp/rp3.log 2>&1; TAG=h50_b31 python3 /tmp/sweep.py 2>&1 | tail -n 1 | cut -c1-200; python3 /tmp/comp.py /tmp/rp3 && python3 -c \"from PIL import Image; im=Image.open('/tmp/rp_view.jpg'); im=im.resize((480,int(im.size[1]*480/im.size[0]))); im.save('/tmp/rp_small3.jpg',quality=50)\" && echo ===B64 && base64 -w0 /tmp/rp_small3.jpg && echo && echo ===END",
+  "timeout": 58
 }
