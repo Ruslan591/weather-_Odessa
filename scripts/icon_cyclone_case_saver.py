@@ -9,8 +9,12 @@
 KEEP штук. Дешёвая проверка: сначала скачивается только PMSL (+HSURF); остальные 8 полей — только если
 циклон найден.
 
-ENV: ICON_CASE_DIR, ICON_CASE_MAX_P (гПа, по умолч. 1000), ICON_CASE_EDGE_DEG (отступ от края, 5),
-     ICON_CASE_KEEP (10), ICON_CASE_FORCE=1 (игнорировать «уже проверяли этот run» и дедупликацию).
+Критерий «развитого циклона»: давление в центре ≤ ICON_CASE_MAX_P И глубина ≥ ICON_CASE_MIN_DEPTH_HPA —
+давление в центре минус среднее по квадрату 1500 км вокруг (одно давление в центре плохой критерий: 1012 гПа
+в области высокого давления — слабая ложбина, а 1008 в низком фоне — уже циклон).
+
+ENV: ICON_CASE_DIR, ICON_CASE_MAX_P (гПа, по умолч. 1010), ICON_CASE_MIN_DEPTH_HPA (8), ICON_CASE_EDGE_DEG (5),
+     ICON_CASE_KEEP (20), ICON_CASE_FORCE=1 (игнорировать «уже проверяли этот run» и дедупликацию).
 """
 import json
 import math
@@ -25,9 +29,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import icon_front_very_far_snapshot as vf  # noqa: E402
 
 CASE_DIR = os.environ.get("ICON_CASE_DIR", "/opt/weather-pipeline/cases")
-MAX_P = float(os.environ.get("ICON_CASE_MAX_P", "1000"))
+MAX_P = float(os.environ.get("ICON_CASE_MAX_P", "1010"))
+MIN_DEPTH = float(os.environ.get("ICON_CASE_MIN_DEPTH_HPA", "8"))
+DEPTH_WINDOW_KM = 1500.0
 EDGE_DEG = float(os.environ.get("ICON_CASE_EDGE_DEG", "5"))
-KEEP = int(os.environ.get("ICON_CASE_KEEP", "10"))
+KEEP = int(os.environ.get("ICON_CASE_KEEP", "20"))
 FORCE = os.environ.get("ICON_CASE_FORCE") == "1"
 LOCK = "/tmp/icon_cyclone_case_saver.lock"
 
@@ -49,6 +55,23 @@ SPECS_REST = {
 def dist_deg(la1, lo1, la2, lo2):
     dx = (lo1 - lo2) * math.cos(math.radians((la1 + la2) / 2))
     return math.hypot(dx, la1 - la2)
+
+
+def center_depths(pmsl, lats, lons, centers):
+    """Глубина каждого L: среднее по квадрату DEPTH_WINDOW_KM минус давление в центре (гПа)."""
+    import numpy as np
+    from scipy.ndimage import gaussian_filter, uniform_filter
+    dy_km, dx_km = vf.km_scale(lats, lons)
+    p = gaussian_filter(pmsl, 5.0)
+    wy = max(3, min(p.shape[0] - 1, int(round(DEPTH_WINDOW_KM / abs(dy_km))) | 1))
+    wx = max(3, min(p.shape[1] - 1, int(round(DEPTH_WINDOW_KM / abs(dx_km))) | 1))
+    mean = uniform_filter(p, size=(wy, wx), mode="nearest")
+    out = []
+    for la, lo, kind, pv in centers:
+        i = int(np.argmin(np.abs(lats - la)))
+        j = int(np.argmin(np.abs(lons - lo)))
+        out.append(float(mean[i, j] - p[i, j]))
+    return out
 
 
 def load_state():
@@ -99,14 +122,19 @@ def main():
     pmsl = pmsl_g / 100.0
     hs_g, _, _ = fetch("hsurf", run_dt, lead, ("hsurf", "time-invariant", None, "HSURF"))
     centers = vf.find_pressure_centers(pmsl, hs_g, lats, lons)
-    ok = [c for c in centers if c[2] == "L" and c[3] <= MAX_P
+    depths = center_depths(pmsl, lats, lons, centers)
+    for c, d in zip(centers, depths):
+        if c[2] == "L":
+            vf.log(f"  L {c[3]:.0f} гПа на {c[0]:.1f}N {c[1]:.1f}E, глубина {d:.1f} гПа")
+    ok = [c for c, d in zip(centers, depths) if c[2] == "L" and c[3] <= MAX_P and d >= MIN_DEPTH
           and FULL_S + EDGE_DEG <= c[0] <= FULL_N - EDGE_DEG and FULL_W + EDGE_DEG <= c[1] <= FULL_E - EDGE_DEG]
-    vf.log(f"L-центров всего {sum(1 for c in centers if c[2]=='L')}, подходящих (≤{MAX_P:.0f} гПа, ≥{EDGE_DEG:.0f}° от края): {len(ok)}")
+    vf.log(f"L-центров всего {sum(1 for c in centers if c[2]=='L')}, подходящих (≤{MAX_P:.0f} гПа, глубина ≥{MIN_DEPTH:.0f}, "
+           f"≥{EDGE_DEG:.0f}° от края): {len(ok)}")
     st["checked_runs"].append(tag)
     if not ok:
         save_state(st)
         return
-    best = min(ok, key=lambda c: c[3])
+    best = min(ok, key=lambda c: c[3])  # самый глубокий по давлению в центре
     valid = run_dt.timestamp() + lead * 3600
     if not FORCE:
         for c in st["cases"]:
