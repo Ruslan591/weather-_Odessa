@@ -1,5 +1,5 @@
 {
-  "task_id": "saver_log_1790923735",
-  "cmd": "tail -n 12 /tmp/saver_test.log | cut -c1-240; ls -la /tmp/cases_test 2>&1 | tail -n 4",
+  "task_id": "saver_log2_1790923825",
+  "cmd": "tail -n 5 /tmp/saver_test.log | cut -c1-260; ls -la /tmp/cases_test | tail -n 3; python3 -c \"import json;d=json.load(open('/tmp/cases_test/state.json'));print([ (c['file'],round(c['lat'],1),round(c['lon'],1),round(c['p'])) for c in d['cases']])\" 2>&1 | tail -n 1",
   "timeout": 15
 }
