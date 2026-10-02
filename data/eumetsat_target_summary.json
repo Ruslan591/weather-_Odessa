@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-10-02T15:08:30Z",
+  "timestamp": "2026-10-02T15:12:22Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-10-02T14:45:00.000Z",
-  "target_id": 0,
-  "target_area_km2": 272.2,
-  "target_distance_km": 25.4,
-  "target_bearing_deg": 88.0,
-  "target_compass": "В",
+  "target_id": 3,
+  "target_area_km2": 121.4,
+  "target_distance_km": 63.2,
+  "target_bearing_deg": 53.0,
+  "target_compass": "СВ",
   "system": {
     "target_id": 1,
     "area_km2": 719.2,
@@ -36,7 +36,7 @@
       "frontlike": false,
       "phase_label": "безоблачно",
       "type_label": "плотная/высокая",
-      "has_precip": null,
+      "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": true,
       "geocolour_confirmed": false
@@ -91,7 +91,7 @@
       "window_spanning": false,
       "phase_label": "безоблачно",
       "type_label": "плотная/высокая",
-      "has_precip": null,
+      "has_precip": true,
       "has_lightning": false,
       "ir_confirmed": true,
       "geocolour_confirmed": false
@@ -109,25 +109,7 @@
       "window_spanning": false,
       "phase_label": "безоблачно",
       "type_label": "плотная/высокая",
-      "has_precip": null,
-      "has_lightning": false,
-      "ir_confirmed": true,
-      "geocolour_confirmed": false
-    },
-    {
-      "target_id": 8,
-      "area_km2": 304.2,
-      "distance_km": 96.6,
-      "bearing_deg": 244.0,
-      "compass": "ЮЗ",
-      "elongation_aspect_ratio": 1.47,
-      "elongation_axis_deg": 24.0,
-      "elongation_axis_compass": "СВ-ЮЗ",
-      "frontlike": false,
-      "window_spanning": false,
-      "phase_label": "безоблачно",
-      "type_label": "плотная/высокая",
-      "has_precip": null,
+      "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": true,
       "geocolour_confirmed": false
@@ -145,7 +127,7 @@
       "window_spanning": false,
       "phase_label": "безоблачно",
       "type_label": "плотная/высокая",
-      "has_precip": null,
+      "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": true,
       "geocolour_confirmed": false
@@ -181,13 +163,13 @@
       "window_spanning": false,
       "phase_label": "безоблачно",
       "type_label": "плотная/высокая",
-      "has_precip": null,
+      "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": true,
       "geocolour_confirmed": false
     }
   ],
-  "system_suppressed_count": 8,
+  "system_suppressed_count": 9,
   "frontal_tracks": [
     {
       "track_id": 992,
@@ -291,12 +273,9 @@
       "front_type_confidence": null
     }
   ],
-  "target_movement": {
-    "speed_kmh": 74.8,
-    "direction_compass": "ЮЗ",
-    "cpa_km": 18.4,
-    "eta_min": null,
-    "verdict": "пройдёт мимо, город, скорее всего, не заденет"
+  "also_suppressed_nearby": {
+    "signature": "25_0",
+    "area_km2": 272.2
   },
   "target_phase": {
     "label": "безоблачно",
@@ -305,8 +284,8 @@
   "existence": {
     "modules": {
       "ir_motion": {
-        "confirmed": false,
-        "timestamp": "2026-10-02T14:40:00.000Z"
+        "confirmed": true,
+        "timestamp": "2026-10-02T14:50:00.000Z"
       },
       "geocolour_motion": {
         "confirmed": false,
@@ -317,19 +296,19 @@
         "timestamp": "2026-10-02T15:08:02Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
       "confirmed": false,
-      "timestamp": "2026-10-02T14:54:12Z"
+      "timestamp": "2026-10-02T15:12:05Z"
     },
     "lightning_forecast": {
       "confirmed": false,
       "timestamp": "2026-10-02T15:08:16Z"
     }
   },
-  "verdict": "CLM отметил цель в 25км В, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (719км²) в 35км СЗ."
+  "verdict": "Цель в 63км СВ, безоблачно — каналы расходятся: ir_motion подтверждают, geocolour_motion/cloud_phase_type нет. Отдельно: система синоптического масштаба (719км²) в 35км СЗ."
 }
