@@ -1,7 +1,7 @@
 {
-  "task_id": "saver_log2_1790923825",
+  "task_id": "cron_1790923920",
   "returncode": 0,
-  "stdout": "[2026-10-02T06:48:04.910241+00:00] run=2026-10-02T00:00:00+00:00 lead=6\n[2026-10-02T06:48:19.058948+00:00] L-центров всего 7, подходящих (≤1025 гПа, ≥5° от края): 2\n[2026-10-02T06:49:17.367748+00:00] СОХРАНЁН случай case_2026100200_006.npz: L 1012 гПа на 35.2N 30.6E (17.8 МБ), всего в копилке 1\ndrwxrwxrwt 31 root root     4096 Oct  2 06:49 ..\n-rw-r--r--  1 root root 17820500 Oct  2 06:49 case_2026100200_006.npz\n-rw-r--r--  1 root root      980 Oct  2 06:49 state.json\n[('case_2026100200_006.npz', 35.2, 30.6, 1012)]\n",
+  "stdout": "ADDED\n6\n1\n40 3,9,15,21 * * * /opt/weather-pipeline/run_timed.sh cyclone_cases /var/log/vps-cyclone-cases.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/icon_cyclone_case_saver.py\n",
   "stderr": "",
-  "completed_at_utc": "2026-10-02T06:51:01Z"
+  "completed_at_utc": "2026-10-02T06:52:01Z"
 }
