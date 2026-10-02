@@ -1,5 +1,5 @@
 {
-  "task_id": "saver_log2_1790923825",
-  "cmd": "tail -n 5 /tmp/saver_test.log | cut -c1-260; ls -la /tmp/cases_test | tail -n 3; python3 -c \"import json;d=json.load(open('/tmp/cases_test/state.json'));print([ (c['file'],round(c['lat'],1),round(c['lon'],1),round(c['p'])) for c in d['cases']])\" 2>&1 | tail -n 1",
-  "timeout": 15
+  "task_id": "cron_1790923920",
+  "cmd": "rm -rf /tmp/cases_test; mkdir -p /opt/weather-pipeline/cases; crontab -l > /root/crontab.bak.$(date +%s) 2>/dev/null; if crontab -l | grep -q icon_cyclone_case_saver; then echo ALREADY; else (crontab -l; echo '40 3,9,15,21 * * * /opt/weather-pipeline/run_timed.sh cyclone_cases /var/log/vps-cyclone-cases.log /usr/bin/python3 /opt/weather-pipeline/repo/scripts/icon_cyclone_case_saver.py') | crontab - && echo ADDED; fi; crontab -l | wc -l; crontab -l | grep -c vps_github_bridge; crontab -l | grep cyclone | cut -c1-200",
+  "timeout": 20
 }
