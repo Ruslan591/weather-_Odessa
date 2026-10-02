@@ -1,5 +1,5 @@
 {
-  "task_id": "scan_log_1790901402",
-  "cmd": "grep -v скачиваю /tmp/scan.log | cut -c1-300 | tail -n 20",
-  "timeout": 15
+  "task_id": "upcase_1790901708",
+  "cmd": "cat > /tmp/upcase.py <<'PYEOF'\n\nimport base64,json,urllib.request\ntok=[l.split(\"=\",1)[1].strip() for l in open(\"/etc/vps-github-bridge/token\") if l.startswith(\"GITHUB_TOKEN=\")][0]\nH={\"Authorization\":\"token \"+tok,\"Accept\":\"application/vnd.github+json\",\"User-Agent\":\"v\"}\nB=\"https://api.github.com/repos/ruslan591/weather-_Odessa/\"\ndef api(path,data=None,method=None):\n    req=urllib.request.Request(B+path,data=json.dumps(data).encode() if data is not None else None,headers=H,method=method)\n    return json.load(urllib.request.urlopen(req,timeout=120))\nmain=api(\"git/ref/heads/main\")[\"object\"][\"sha\"]\ntry: print(\"ref\",api(\"git/refs\",{\"ref\":\"refs/heads/exp-case-oct1\",\"sha\":main},\"POST\")[\"ref\"])\nexcept Exception as e: print(\"ref err\",e)\nd=base64.b64encode(open(\"/tmp/case_oct1.npz\",\"rb\").read()).decode()\nr=api(\"contents/case_oct1.npz\",{\"message\":\"exp: frozen case 01.10 (temporary branch, not for main)\",\"content\":d,\"branch\":\"exp-case-oct1\"},\"PUT\")\nprint(\"uploaded\",r[\"content\"][\"size\"])\nPYEOF\n(nohup python3 /tmp/upcase.py > /tmp/upcase.log 2>&1 &); sleep 1; echo started",
+  "timeout": 20
 }
