@@ -1,5 +1,5 @@
 {
-  "task_id": "saver3_1790933122",
-  "cmd": "flock /tmp/vps_git.lock -c 'cd /opt/weather-pipeline/repo && git fetch --depth 20 origin main --update-shallow >/dev/null 2>&1 && git reset --hard origin/main >/dev/null 2>&1'; grep -c ICON_CASE_REG_KEEP /opt/weather-pipeline/repo/scripts/icon_cyclone_case_saver.py; (nohup env ICON_CASE_DIR=/tmp/cases_test3 ICON_CASE_FORCE=1 python3 /opt/weather-pipeline/repo/scripts/icon_cyclone_case_saver.py > /tmp/saver_test3.log 2>&1 &); echo started",
-  "timeout": 30
+  "task_id": "saver3_chk_1790933221",
+  "cmd": "date -u +%H:%M:%S; pgrep -fa icon_cyclone_case_saver | cut -c1-120; echo ---; tr -d '\\000' < /tmp/saver_test3.log | cut -c1-220 | tail -n 14; echo ---; ls -la /tmp/cases_test3 2>&1 | tail -n 5",
+  "timeout": 15
 }
