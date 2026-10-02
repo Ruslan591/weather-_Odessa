@@ -25,7 +25,13 @@ os.makedirs(outdir, exist_ok=True)
 fields, lats, lons, run_dt, lead = vf.load_testcase(case)
 dlat, dlon = lats[1] - lats[0], lons[1] - lons[0]
 centers = vf.find_pressure_centers(fields["pmsl"], fields.get("hsurf"), lats, lons)
-Ls = sorted([c for c in centers if c[2] == "L"], key=lambda c: c[3])
+def _inside(c, margin_km=900.0):
+    dl = margin_km / 111.32
+    dlo = dl / np.cos(np.radians(c[0]))
+    return (lats.min() + dl <= c[0] <= lats.max() - dl) and (lons.min() + dlo <= c[1] <= lons.max() - dlo)
+_all_L = sorted([c for c in centers if c[2] == "L"], key=lambda c: c[3])
+Ls = [c for c in _all_L if _inside(c)]
+print("L у края области (пропущены):", [(round(c[0], 1), round(c[1], 1), round(c[3], 1)) for c in _all_L if not _inside(c)])
 print("run", run_dt, "lead", lead, "| центры:", [(round(c[0], 1), round(c[1], 1), c[2], round(c[3], 1)) for c in centers])
 
 hs = fields.get("hsurf")
@@ -88,7 +94,7 @@ for n, (lat0, lon0, kind, pc) in enumerate(Ls[:4]):
         t = np.linspace(0, 2 * np.pi, 200)
         ax1.plot(lon0 + rr * np.cos(t) / (111.32 * np.cos(np.radians(lat0))), lat0 + rr * np.sin(t) / 111.32, "g:", lw=0.8)
     ax1.set_xlim(w, e); ax1.set_ylim(s, nn); ax1.set_title(f"L{n} {pc:.0f} гПа: θe850 (красное=тепло), изобары, текущие фронты")
-    ax2.imshow(Ap, origin="lower", aspect="auto", cmap="PuOr", extent=[0, 360, R[0], R[-1]],
+    ax2.imshow(Ap, origin="lower", aspect="auto", cmap="PuOr_r", extent=[0, 360, R[0], R[-1]],
                vmin=-max(2, np.abs(Ap).max()), vmax=max(2, np.abs(Ap).max()))
     c2 = ax2.contour(PHI_DEG, R, At, levels=[-2, 0, 2, 4, 6], colors=["b", "gray", "orange", "r", "darkred"], linewidths=1.2)
     ax2.clabel(c2, fmt="%d", fontsize=7)
