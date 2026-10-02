@@ -110,6 +110,18 @@ def prune(st_list, keep, protect_strong=False):
             pass
 
 
+def prune(st_list, keep, protect_strong=False):
+    """Удаляет лишние случаи: сначала слабые (глубина <8) от старых к новым, иначе просто самые старые."""
+    while len(st_list) > keep:
+        weak = [c for c in st_list[:-1] if protect_strong and c.get("depth", 99) < 8]
+        victim = weak[0] if weak else st_list[0]
+        st_list.remove(victim)
+        try:
+            os.remove(os.path.join(CASE_DIR, victim["file"]))
+        except OSError:
+            pass
+
+
 def main():
     lock = open(LOCK, "w")
     try:
