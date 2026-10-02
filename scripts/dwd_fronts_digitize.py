@@ -8,8 +8,8 @@ from collections import deque
 from skimage.morphology import skeletonize
 from skimage.measure import label, regionprops
 
-# калибровка по forecast 1280x910 (lon0, k/W, x0/W, y0/W); ПЕРЕКАЛИБРОВАТЬ на реальном файле opendata
-PROJ = dict(lon0=6.064, k=901.09/1280, x0=766.0/1280, y0=-119.29/1280)
+# калибровка по реальному ico_tkb_na 1280x910 с opendata (проверено 02.10.2026)
+PROJ = dict(lon0=6.2, k=903.6/1280, x0=765.6/1280, y0=-122.4/1280)
 MIN_LEN_PX = 60          # минимальная длина компоненты (отсекает подписи систем)
 CLOSE_PX = 41            # склейка разрывов на месте значков
 KIND_MIN_RUN_PX = 40     # короткие вставки другого цвета схлопываются
