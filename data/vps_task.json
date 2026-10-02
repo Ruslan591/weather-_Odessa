@@ -1,5 +1,5 @@
 {
-  "task_id": "sector2_log_1790901156",
-  "cmd": "grep -E 'run |центры|пропущены|^L[0-9]|push|done|Traceback|Error' /tmp/sector2.log | cut -c1-330 | tail -n 14; tail -n 2 /tmp/icon_front_v8.log | cut -c1-200; ls /opt/weather-pipeline/repo/data/experiments/sector_case_oct2 2>&1 | head",
-  "timeout": 15
+  "task_id": "scan_1790901261",
+  "cmd": "cat > /tmp/scan.py <<'PYEOF'\nimport importlib.util, numpy as np, sys\ns=importlib.util.spec_from_file_location(\"vf\",\"/opt/weather-pipeline/repo/scripts/icon_front_very_far_snapshot.py\")\nvf=importlib.util.module_from_spec(s); s.loader.exec_module(vf)\nrun_dt,lead0=vf.find_latest_run_lead()\nprint(\"run\",run_dt,\"lead0\",lead0)\nfor lead in range(6,79,6):\n    url=vf.build_url(run_dt,lead,\"pmsl\",\"single-level\",None,\"PMSL\")\n    res,meta=vf.download_and_parse(url,\"pmsl_scan\")\n    if res is None:\n        print(lead,\"нет данных\",str(meta)[:80]); continue\n    g,la,lo=res; p=g/100.0\n    cs=vf.find_pressure_centers(p,None,la,lo)\n    out=[]\n    for c in cs:\n        if c[2]!=\"L\": continue\n        dl=900/111.32; dlo=dl/np.cos(np.radians(c[0]))\n        inside=(la.min()+dl<=c[0]<=la.max()-dl) and (lo.min()+dlo<=c[1]<=lo.max()-dlo)\n        out.append((round(c[0],1),round(c[1],1),round(c[3],1),\"IN\" if inside else \"edge\"))\n    print(lead,\"valid\",(run_dt+__import__(\"datetime\").timedelta(hours=lead)).strftime(\"%d.%m %H\"),\"L:\",out,flush=True)\nPYEOF\ncd /opt/weather-pipeline/repo && (nohup python3 /tmp/scan.py > /tmp/scan.log 2>&1 &); sleep 1; echo started",
+  "timeout": 20
 }
