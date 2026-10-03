@@ -1,4 +1,4 @@
 {
-  "task_id": "diag_fa_1791068951",
-  "cmd": "R=/opt/weather-pipeline/repo; L=/var/log/vps-front-very-far.log; echo '--func in vps copy:'; grep -c 'def save_front_archive' $R/scripts/icon_front_very_far_snapshot.py; echo '--vps HEAD:'; cd $R && git log -1 --format='%h %cd' ; echo '--archive log lines:'; grep -n 'архив фронтов' $L | tail -8; echo '--archive dir:'; ls -la $R/data/front_archive 2>&1 | tail -6; echo '--log mtime:'; stat -c '%y' $L; echo '--tail:'; tail -n 14 $L | cut -c1-220"
+  "task_id": "rec_fa_1791069036",
+  "cmd": "cd /opt/weather-pipeline/repo/data/front_archive && for f in 20261003T12Z 20261003T18Z; do echo \"FILE $f\"; base64 -w0 $f.geojson; echo; done; rm -f /opt/weather-pipeline/repo/data/front_archive/20261003T12Z.geojson /opt/weather-pipeline/repo/data/front_archive/20261003T18Z.geojson; ls -la /opt/weather-pipeline/repo/data/front_archive | tail -3"
 }
