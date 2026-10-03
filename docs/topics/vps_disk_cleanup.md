@@ -102,9 +102,15 @@ forward) → `git rebase -X theirs origin/main` — и в результате �
 - Другое: `/var/log/journal` 557M, `repo-backup-20260916.bundle` 100M (помечен как ненужный), `/opt/weather-pipeline/cases` 42M (активно пишется), `/tmp` 146M.
 - Локи для остановки пайплайнов перед gc: `/tmp/vps_git.lock`, `/tmp/vps_pipeline.lock`, `/tmp/vps_satellite_pipeline.lock`, `/tmp/vps_ai_pipeline.lock`.
 
+### Выполнено (2026-10-03 10:17 UTC)
+- [x] `reflog expire --expire=now --all` + `git gc --prune=now` под 4 локами: `.git` 5.4G → 182M, локи держались ~55 с. Запуск — автономным скриптом `/opt/weather-pipeline/gc_cleanup.sh` в `nohup setsid timeout 900` (лог `/tmp/gc_cleanup.log`): flock снимается при смерти процесса, пайплайны не могут зависнуть дольше лимита, даже если сессия оборвётся
+- [x] `core.logAllRefUpdates=false`, `gc.reflogExpire=now`, `gc.reflogExpireUnreachable=now`
+- [x] journald: `/etc/systemd/journald.conf.d/size.conf` (`SystemMaxUse=100M`), 557M → 98M
+- [x] Удалён `repo-backup-20260916.bundle`
+- Итог по диску: 13G → 7.1G (30% → 17%)
+
 ### Открытые пункты
-- [ ] `git reflog expire --expire=now --all` + `git gc --prune=now` под локами (nohup, дольше 60 с)
-- [ ] `core.logAllRefUpdates=false` и `gc.reflogExpire=now`, чтобы не росло снова
-- [ ] Недельный cron с `git gc --prune=now` под `GIT_LOCK_FILE`
-- [ ] `journalctl --vacuum-size=100M` + `SystemMaxUse=100M`
-- [ ] Удалить `repo-backup-20260916.bundle`
+- [ ] Недельный cron с `git gc --prune=now` под локами (по шаблону `gc_cleanup.sh`) — на случай, если рост вернётся
+- [ ] Через пару дней проверить `du -sh .git` (должен держаться <500M)
+- [ ] `/tmp` (146M) — посмотреть содержимое
+- [ ] `.git/shallow` раньше имел 8 425 строк — проверить, не копится ли снова
