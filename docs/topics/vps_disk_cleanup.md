@@ -88,3 +88,23 @@ forward) → `git rebase -X theirs origin/main` — и в результате �
 - Резервная копия старого (раздутого, уже неактуального) shallow-состояния:
   `/opt/weather-pipeline/repo-backup-20260916.bundle` (100M, можно удалить —
   ценности не несёт, т.к. это тот же shallow-срез, что и был).
+
+---
+
+## Повторный рост .git (диагностика 2026-10-03)
+
+Диск снова 13G/45G. `/opt/weather-pipeline/repo/.git` = 5.4G (один пак 5.1G).
+
+### Технические детали
+- В HEAD всего 30 коммитов и ~1 545 достижимых объектов, а в паках 101 019 объектов.
+- Причина — **reflog**: `.git/logs/HEAD` 51 041 запись, `refs/heads/main` 10 474, `refs/remotes/origin/main` 10 461. Каждый цикл трёх пайплайнов делает fetch/reset, reflog хранит все старые коммиты (со снапшотами data/), `git gc` их не прунит (reflogExpire по умолчанию 90 дней).
+- `.git/shallow`: 8 425 строк (накопленные границы).
+- Другое: `/var/log/journal` 557M, `repo-backup-20260916.bundle` 100M (помечен как ненужный), `/opt/weather-pipeline/cases` 42M (активно пишется), `/tmp` 146M.
+- Локи для остановки пайплайнов перед gc: `/tmp/vps_git.lock`, `/tmp/vps_pipeline.lock`, `/tmp/vps_satellite_pipeline.lock`, `/tmp/vps_ai_pipeline.lock`.
+
+### Открытые пункты
+- [ ] `git reflog expire --expire=now --all` + `git gc --prune=now` под локами (nohup, дольше 60 с)
+- [ ] `core.logAllRefUpdates=false` и `gc.reflogExpire=now`, чтобы не росло снова
+- [ ] Недельный cron с `git gc --prune=now` под `GIT_LOCK_FILE`
+- [ ] `journalctl --vacuum-size=100M` + `SystemMaxUse=100M`
+- [ ] Удалить `repo-backup-20260916.bundle`
