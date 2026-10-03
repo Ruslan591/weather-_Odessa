@@ -1,5 +1,5 @@
 {
-  "task_id": "diag_1791023116",
-  "cmd": "cd /opt/weather-pipeline/repo; date -u +%T; git fetch -q origin main 2>&1|tail -1; git log -15 --format=\"%cI %s\" origin/main | grep -v -E \"task diag|vps-bridge\" | head -4 | cut -c1-90; du -sh .git",
+  "task_id": "diag_1791040675",
+  "cmd": "echo ---PROC; ps -eo pid,etime,pcpu,pmem,cmd --sort=-pcpu | grep -E \"sector|case_oct|python|nohup|screen|tmux\" | grep -v grep | cut -c1-150 | head -12; echo ---SEARCH; pgrep -af \"sector_exp|case_oct1\" | grep -v pgrep | cut -c1-150; echo ---CRON; crontab -l 2>/dev/null | grep -iE \"sector|case|exp\" ; ls /etc/cron.d 2>/dev/null; echo ---CASES; ls -la --time-style=+%F_%T /opt/weather-pipeline/cases | head -15; echo ---FILES; find /opt /root /home /tmp -name \"sector_exp*\" -o -name \"case_oct1*\" 2>/dev/null | head; echo ---LOAD; uptime; echo ---LOGS; ls -lat --time-style=+%F_%T /tmp/*.log /opt/weather-pipeline/*.log 2>/dev/null | head -6",
   "timeout": 50
 }
