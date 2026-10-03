@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-03T08:20:00.000Z",
+  "timestamp": "2026-10-03T08:30:00.000Z",
   "buffer_size": 6,
   "buffer_span_minutes": 50,
   "observed_area": {
@@ -12,69 +12,84 @@
     "local_trend_radius_km": 50
   },
   "valid": true,
-  "speed_kmh": 0.3,
-  "direction_compass": "ЮЗ",
-  "bearing_deg": 246.6,
-  "frame_pairs_used": 2,
+  "speed_kmh": 0.2,
+  "direction_compass": "З",
+  "bearing_deg": 251.2,
+  "frame_pairs_used": 3,
+  "acceleration_kmh": 0.2,
+  "turning_deg": 170.5,
+  "acceleration_verdict": "скорость стабильна",
+  "turning_verdict": "меняет направление (по часовой)",
+  "forecast_displacement": {
+    "30min": {
+      "distance_km": 0.3,
+      "bearing_deg": 255.0,
+      "compass": "З"
+    },
+    "60min": {
+      "distance_km": 0.8,
+      "bearing_deg": 255.0,
+      "compass": "З"
+    },
+    "120min": {
+      "distance_km": 2.5,
+      "bearing_deg": 256.0,
+      "compass": "З"
+    }
+  },
   "area_fraction_over_time": [
-    0.25,
     0.222,
     0.203,
     0.189,
     0.18,
-    0.182
+    0.182,
+    0.185
   ],
-  "area_trend_delta": -0.067,
+  "area_trend_delta": -0.037,
   "area_trend_verdict": "без существенных изменений",
   "mean_brightness_over_time": [
-    35.6,
     34.5,
     33.5,
     32.6,
     31.9,
-    31.3
+    31.3,
+    30.7
   ],
-  "brightness_trend_delta": -4.3,
+  "brightness_trend_delta": -3.8,
   "station_state": "clear",
-  "station_area_fraction": 0.018,
-  "cloud_mass_distance_km": 10.1,
-  "cloud_mass_bearing_deg": 86.0,
+  "station_area_fraction": 0.009,
+  "cloud_mass_distance_km": 11.2,
+  "cloud_mass_bearing_deg": 79.0,
   "cloud_mass_compass": "В",
-  "cloud_mass_area_km2": 4385,
-  "cloud_mass_contrast_sigma": 1.32,
+  "cloud_mass_area_km2": 4403,
+  "cloud_mass_contrast_sigma": 1.22,
   "temperature_trend_verdict": "потепление верхней границы (возможно ослабление конвекции)",
   "target_confirmation": {
     "confirmed": true,
-    "target_id": 0,
-    "target_area_km2": 125.4,
-    "roi_contrast_sigma": 1.15,
+    "target_id": 1,
+    "target_area_km2": 117.4,
+    "roi_contrast_sigma": 0.87,
     "verdict": "ИК подтверждает: в ROI CLM-цели повышенная яркость (облако)"
   },
   "system_analysis_all": [
     {
-      "target_id": 3,
-      "available": true,
-      "roi_contrast_sigma": 3.11,
-      "confirmed": true
-    }
-  ],
-  "local_analysis_all": [
-    {
       "target_id": 0,
       "available": true,
-      "roi_contrast_sigma": 1.15,
-      "confirmed": true
-    },
-    {
-      "target_id": 1,
-      "available": true,
-      "roi_contrast_sigma": 1.15,
+      "roi_contrast_sigma": 0.99,
       "confirmed": true
     },
     {
       "target_id": 2,
       "available": true,
-      "roi_contrast_sigma": 1.0,
+      "roi_contrast_sigma": 2.4,
+      "confirmed": true
+    }
+  ],
+  "local_analysis_all": [
+    {
+      "target_id": 1,
+      "available": true,
+      "roi_contrast_sigma": 0.87,
       "confirmed": true
     }
   ],
