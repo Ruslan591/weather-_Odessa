@@ -1,5 +1,5 @@
 {
-  "task_id": "clean3_1790933318",
-  "cmd": "rm -rf /tmp/cases_test3; echo ok",
-  "timeout": 10
+  "task_id": "diag_1791021347",
+  "cmd": "cd /opt/weather-pipeline; du -xh --max-depth=1 . 2>/dev/null | sort -rh | head -15; echo ---REPO; du -xh --max-depth=1 repo 2>/dev/null | sort -rh | head -12; echo ---DATA; du -xh --max-depth=1 repo/data 2>/dev/null | sort -rh | head -12; echo ---GIT; du -sh repo/.git; ls -la /opt/weather-pipeline | head -30",
+  "timeout": 50
 }
