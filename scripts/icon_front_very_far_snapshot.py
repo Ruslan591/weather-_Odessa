@@ -1083,6 +1083,7 @@ def save_front_archive(fields, run_dt, lead, valid_dt):
     """Векторный архив НАШИХ фронтов и центров L/H на синоптические сроки — для сравнения с анализом DWD
     (см. docs/topics/icon_eu_fronts.md). Один GeoJSON на срок: data/front_archive/YYYYMMDDTHHZ.geojson.
     Возвращает относительный путь каталога (для git add) или None. Любая ошибка логируется и НЕ роняет пайплайн."""
+    import re  # локально: на модульном уровне re в скрипте не импортирован
     try:
         if valid_dt.minute != 0 or valid_dt.hour not in ARCHIVE_HOURS:
             return None
