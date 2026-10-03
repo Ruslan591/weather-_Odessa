@@ -1,5 +1,5 @@
 {
-  "task_id": "diag_1791042059",
-  "cmd": "echo ---CRON-ROOT; crontab -l 2>/dev/null | grep -v \"^#\" | cut -c1-170; echo ---CRON-UBUNTU; crontab -l -u ubuntu 2>/dev/null | grep -v \"^#\" | cut -c1-170; echo ---SYSTEMD; systemctl list-units --type=service --state=running 2>/dev/null | grep -iE \"vps|weather|bridge|agent\" | cut -c1-110; systemctl list-timers 2>/dev/null | grep -iE \"vps|weather\" | cut -c1-110; echo ---GITDIRS; find /opt /root /home -maxdepth 4 -name .git -type d 2>/dev/null; echo ---REMOTES; for d in $(find /opt /root /home -maxdepth 4 -name .git -type d 2>/dev/null); do r=$(dirname $d); echo $r $(git -C $r remote get-url origin 2>/dev/null | sed \"s#//.*@#//***@#\") $(git -C $r rev-parse --short HEAD 2>/dev/null); done; echo ---BRIDGE; grep -nE \"git |push|commit|api.github|repo\" /opt/vps-github-bridge/vps_github_bridge.py | head -25 | cut -c1-150",
+  "task_id": "diag_1791042117",
+  "cmd": "cat /opt/weather-pipeline/run_timed.sh | head -40; echo ---; grep -nE \"update-shallow|_preserve_unpushed|reset --hard|git\\\", *\\\"fetch|def sync_repo|depth\" /opt/weather-pipeline/repo/scripts/vps_pipeline.py /opt/weather-pipeline/repo/scripts/*sync*.py 2>/dev/null | head -20 | cut -c1-170",
   "timeout": 50
 }
