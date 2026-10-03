@@ -1,5 +1,5 @@
 {
-  "task_id": "diag_1791022692",
-  "cmd": "rm -f /opt/weather-pipeline/repo-backup-20260916.bundle; journalctl --vacuum-size=100M 2>&1 | tail -1; mkdir -p /etc/systemd/journald.conf.d && printf \"[Journal]\\nSystemMaxUse=100M\\n\" > /etc/systemd/journald.conf.d/size.conf && systemctl restart systemd-journald && echo journald_ok; echo ---; df -h / | tail -1; du -sh /opt/weather-pipeline /var/log/journal; echo ---CRON; crontab -l 2>/dev/null | head -0; ls -la --time-style=+%T /opt/weather-pipeline/repo/data/vps_*.json 2>/dev/null | head; for L in pipeline satellite_pipeline ai_pipeline; do flock -n /tmp/vps_$L.lock -c \"echo $L FREE\" || echo \"$L busy(running)\"; done; cd /opt/weather-pipeline/repo; git log -3 --format=\"%h %cI %s\" | cut -c1-90; date -u",
+  "task_id": "diag_1791022795",
+  "cmd": "cd /opt/weather-pipeline/repo; date -u +%T; git fetch -q origin main --depth 20 --update-shallow 2>&1 | tail -1; git log -4 --format=\"%cI %s\" origin/main | cut -c1-80; git status -sb | head -2; du -sh .git; df -h / | tail -1",
   "timeout": 50
 }
