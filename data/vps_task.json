@@ -1,5 +1,5 @@
 {
-  "task_id": "diag_1791021347",
-  "cmd": "cd /opt/weather-pipeline; du -xh --max-depth=1 . 2>/dev/null | sort -rh | head -15; echo ---REPO; du -xh --max-depth=1 repo 2>/dev/null | sort -rh | head -12; echo ---DATA; du -xh --max-depth=1 repo/data 2>/dev/null | sort -rh | head -12; echo ---GIT; du -sh repo/.git; ls -la /opt/weather-pipeline | head -30",
+  "task_id": "diag_1791021377",
+  "cmd": "cd /opt/weather-pipeline/repo; git count-objects -vH; echo ---SHALLOW; wc -l .git/shallow; git rev-list --count HEAD; echo ---GIT_TOP; du -sh .git/* 2>/dev/null | sort -rh | head -8; echo ---PACKS; ls -laS .git/objects/pack | head -8; echo ---TMP; ls -la .git/objects/pack | grep -c tmp_; echo ---CFG; git config --get-regexp \"gc|pack|fetch|prune\" ; cat .git/gc.log 2>/dev/null | head -5; echo ---REFLOG; git reflog | wc -l; git for-each-ref | wc -l",
   "timeout": 50
 }
