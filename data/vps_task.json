@@ -1,5 +1,5 @@
 {
-  "task_id": "diag_1791042857",
-  "cmd": "cat /tmp/cutover_state; cat /tmp/cutover.log; pgrep -af \"vps_pipeline|vps_satellite|vps_ai|update_local|git_push_locked|icon_|dwd_fetch\" | grep -v pgrep | cut -c1-100",
+  "task_id": "diag_1791042945",
+  "cmd": "cat /tmp/cutover_state; cat /tmp/cutover.log; echo ---CRON; crontab -l | grep -c \"^#CUTOVER#\"; crontab -l | grep -vc \"^#\"; echo ---GIT; cd /opt/weather-pipeline/repo; git log --format=\"%h %cI %s\" -2 | cut -c1-80; du -sh .git; git status -sb | head -3; df -h / | tail -1",
   "timeout": 50
 }
