@@ -1,7 +1,7 @@
 {
-  "task_id": "diag_1791043263",
+  "task_id": "diag_1791044619",
   "returncode": 0,
-  "stdout": "== vps-pipeline\n15:15:02  WARNING [BUFR] fetch ошибка 2026-10-03 09:00 UTC: HTTP Error 403: Forbidden\n15:15:02  WARNING [BUFR] fetch ошибка 2026-10-03 15:00 UTC: HTTP Error 403: Forbidden\n== vps-satellite-pipeline\n ! [rejected]        main -> main (fetch first)\nerror: failed to push some refs to 'https://github.com/Ruslan591/weather-_Odessa.git'\nhint: Updates were rejected because the remote contains work that you do not\n== vps-ai-pipeline\n---\n## main...origin/main\n?? data/_open_meteo_cooldown.json\n0\n32\n176M\t.git\n",
+  "stdout": "---CRON\n30 4 * * 0 timeout 900 /opt/weather-pipeline/git_gc_weekly.sh >> /var/log/vps-git-gc.log 2>&1\n---TEST\n[2026-10-03T16:24:02Z] .git=191MB limit=500MB\nskip (below limit)\nrc=0\n8\n",
   "stderr": "",
-  "completed_at_utc": "2026-10-03T16:02:02Z"
+  "completed_at_utc": "2026-10-03T16:24:02Z"
 }
