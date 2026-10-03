@@ -1,17 +1,17 @@
 {
-  "timestamp": "2026-10-03T08:22:13Z",
+  "timestamp": "2026-10-03T08:37:21Z",
   "mode": "day",
-  "unclassified_fraction_now": 0.472,
+  "unclassified_fraction_now": 0.471,
   "phase_ordinal_now": 0.0,
   "phase_ordinal_delta": 0.0,
   "phase_verdict": "без существенных изменений",
   "type_group_now": 0.0,
-  "type_group_delta": -0.16,
+  "type_group_delta": -0.12,
   "type_verdict": "без существенных изменений",
   "target_confirmation": {
     "confirmed": false,
     "target_id": 0,
-    "target_area_km2": 149.4,
+    "target_area_km2": 125.4,
     "roi_cloud_fraction": 0.0,
     "roi_dominant_phase_ordinal": 0.0,
     "roi_dominant_phase_label": "безоблачно",
@@ -19,9 +19,16 @@
   },
   "system_analysis": {
     "available": false,
-    "reason": "среди кандидатов нет систем синоптического масштаба (только локальные массы)"
+    "reason": "мало классифицированных пикселей в ROI системы (облачно, но цвет неуверенный, либо вне окна)",
+    "target_id": 3
   },
-  "system_analysis_all": [],
+  "system_analysis_all": [
+    {
+      "target_id": 3,
+      "available": false,
+      "reason": "мало классифицированных пикселей в ROI (облачно, но цвет неуверенный, либо вне окна)"
+    }
+  ],
   "local_analysis_all": [
     {
       "target_id": 0,
@@ -41,8 +48,11 @@
     },
     {
       "target_id": 2,
-      "available": false,
-      "reason": "мало классифицированных пикселей в ROI (облачно, но цвет неуверенный, либо вне окна)"
+      "available": true,
+      "roi_cloud_fraction": 0.0,
+      "confirmed": false,
+      "roi_dominant_phase_label": "безоблачно",
+      "roi_dominant_type_label": "безоблачно"
     }
   ],
   "buffer_status": {
