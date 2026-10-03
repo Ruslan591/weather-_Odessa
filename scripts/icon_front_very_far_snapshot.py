@@ -1074,6 +1074,66 @@ def process_tier(tier_key, tier_cfg, fields, lats, lons, run_dt, lead, valid_dt)
     return True
 
 
+ARCHIVE_DIR = os.path.join(REPO_DIR, "data", "front_archive")
+ARCHIVE_HOURS = (0, 6, 12, 18)   # синоптические сроки: совпадают со сроками анализов DWD
+ARCHIVE_KEEP_DAYS = 60
+
+
+def save_front_archive(fields, run_dt, lead, valid_dt):
+    """Векторный архив НАШИХ фронтов и центров L/H на синоптические сроки — для сравнения с анализом DWD
+    (см. docs/topics/icon_eu_fronts.md). Один GeoJSON на срок: data/front_archive/YYYYMMDDTHHZ.geojson.
+    Возвращает относительный путь каталога (для git add) или None. Любая ошибка логируется и НЕ роняет пайплайн."""
+    try:
+        if valid_dt.minute != 0 or valid_dt.hour not in ARCHIVE_HOURS:
+            return None
+        segs = fields.get("_fronts")
+        if segs is None:
+            return None
+        feats = []
+        for sid, s in enumerate(segs):
+            xy = np.asarray(s["xy"], dtype=float)
+            kind = list(s["kind"])
+            n = len(xy)
+            i = 0
+            while i < n - 1:
+                j = i
+                while j + 1 < n and kind[j + 1] == kind[i]:
+                    j += 1
+                end = min(j + 1, n - 1)   # +1 точка, чтобы куски разных типов смыкались
+                part = xy[i:end + 1]
+                if len(part) >= 2:
+                    idx = list(range(0, len(part), 2))
+                    if idx[-1] != len(part) - 1:
+                        idx.append(len(part) - 1)
+                    coords = [[round(float(part[k_, 0]), 3), round(float(part[k_, 1]), 3)] for k_ in idx]
+                    feats.append({"type": "Feature",
+                                  "properties": {"seg": sid, "kind": str(kind[i]), "km": round(float(s.get("km", 0.0)))},
+                                  "geometry": {"type": "LineString", "coordinates": coords}})
+                i = j + 1 if j + 1 > i else i + 1
+        for c in (fields.get("_centers") or []):
+            feats.append({"type": "Feature",
+                          "properties": {"type": str(c[2]), "hPa": round(float(c[3]), 1)},
+                          "geometry": {"type": "Point", "coordinates": [round(float(c[1]), 3), round(float(c[0]), 3)]}})
+        fcoll = {"type": "FeatureCollection",
+                 "properties": {"valid_time": valid_dt.isoformat(), "run": run_dt.isoformat(), "lead_hours": lead,
+                                "source": "ICON-EU theta_e850, Renard-Clarke (icon_front_very_far_snapshot.py)"},
+                 "features": feats}
+        os.makedirs(ARCHIVE_DIR, exist_ok=True)
+        fn = valid_dt.strftime("%Y%m%dT%HZ") + ".geojson"
+        with open(os.path.join(ARCHIVE_DIR, fn), "w") as f:
+            json.dump(fcoll, f, separators=(",", ":"))
+        cutoff = valid_dt - timedelta(days=ARCHIVE_KEEP_DAYS)
+        for old in os.listdir(ARCHIVE_DIR):
+            m = re.match(r"^(\d{8})T\d{2}Z\.geojson$", old)
+            if m and datetime.strptime(m.group(1), "%Y%m%d").replace(tzinfo=valid_dt.tzinfo) < cutoff:
+                os.remove(os.path.join(ARCHIVE_DIR, old))
+        log(f"архив фронтов: {fn} ({len(feats)} объектов)")
+        return "data/front_archive/"
+    except Exception as e:
+        log(f"архив фронтов не записан: {e}")
+        return None
+
+
 def main():
     own_lock = open(OWN_LOCK_FILE, "w")
     try:
@@ -1189,6 +1249,10 @@ def main():
             except Exception as e:
                 log(f"[{tier_key}] ОШИБКА: {e}")
                 log(traceback.format_exc())
+
+        arch_dir = save_front_archive(fields, run_dt, lead, valid_dt)
+        if arch_dir:
+            touched_dirs.append(arch_dir)
 
         if touched_dirs:
             log(f"Коммичу и пушу: {touched_dirs}")
