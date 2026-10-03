@@ -1,5 +1,5 @@
 {
-  "task_id": "diag_1791021377",
-  "cmd": "cd /opt/weather-pipeline/repo; git count-objects -vH; echo ---SHALLOW; wc -l .git/shallow; git rev-list --count HEAD; echo ---GIT_TOP; du -sh .git/* 2>/dev/null | sort -rh | head -8; echo ---PACKS; ls -laS .git/objects/pack | head -8; echo ---TMP; ls -la .git/objects/pack | grep -c tmp_; echo ---CFG; git config --get-regexp \"gc|pack|fetch|prune\" ; cat .git/gc.log 2>/dev/null | head -5; echo ---REFLOG; git reflog | wc -l; git for-each-ref | wc -l",
+  "task_id": "diag_1791021443",
+  "cmd": "cd /opt/weather-pipeline/repo; echo ---REACH; timeout 25 git rev-list --objects HEAD 2>/dev/null | wc -l; echo ---REFLOGBYREF; wc -l .git/logs/HEAD .git/logs/refs/heads/* .git/logs/refs/remotes/origin/* 2>/dev/null; echo ---LOCKS; grep -rhoE \"[A-Z_]*LOCK_FILE *= *[^ ]+\" scripts/vps_*.py 2>/dev/null | sort -u; echo ---ROOT; du -xh --max-depth=1 / 2>/dev/null | sort -rh | head -10; echo ---VARLOG; du -xh --max-depth=1 /var/log 2>/dev/null | sort -rh | head -8; journalctl --disk-usage 2>/dev/null; echo ---OPT; du -xh --max-depth=1 /opt/dwd-fronts /opt/unified-monitoring-agent 2>/dev/null | sort -rh | head -10",
   "timeout": 50
 }
