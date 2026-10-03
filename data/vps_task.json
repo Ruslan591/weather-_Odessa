@@ -1,5 +1,5 @@
 {
-  "task_id": "diag_1791022983",
-  "cmd": "cd /opt/weather-pipeline/repo; date -u +%T; git fetch -q origin main 2>&1|tail -1; git log -12 --format=\"%cI %s\" origin/main | grep -v -E \"task diag|vps-bridge\" | head -4 | cut -c1-90; ls -la --time-style=+%T /var/log/vps-*.log 2>/dev/null | cut -c30-120; du -sh .git",
+  "task_id": "diag_1791023116",
+  "cmd": "cd /opt/weather-pipeline/repo; date -u +%T; git fetch -q origin main 2>&1|tail -1; git log -15 --format=\"%cI %s\" origin/main | grep -v -E \"task diag|vps-bridge\" | head -4 | cut -c1-90; du -sh .git",
   "timeout": 50
 }
