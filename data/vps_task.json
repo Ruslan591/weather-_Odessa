@@ -1,4 +1,4 @@
 {
-  "task_id": "diag_video_audio_1",
-  "cmd": "cd /opt/weather-pipeline/repo && date -u && ls -l --time-style=full-iso data/blocks_gemini/block_?_*.mp3 data/blocks_gemini/block_v_*.mp3 data/blocks_gemini/blocks_meta.json data/forecast_video_gemini.mp4 && echo --STATUS && git status --short data/blocks_gemini | head -20 && echo --HEAD && git log -1 --format='%h %cd' && for f in block_1_tomorrow block_2_next3 block_4_marine; do echo  disk= head=e3b0c44298fc; done"
+  "task_id": "d1791119335",
+  "cmd": "date -u; echo; sudo crontab -l 2>/dev/null | grep -v '^#'; echo; ls -la --time-style=full-iso /var/log/ | grep -i \"vps\\|weather\\|pipeline\\|ai\" ; ls -la /opt/weather-pipeline/ | head -30\n"
 }
