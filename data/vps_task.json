@@ -1,4 +1,4 @@
 {
-  "task_id": "d1791120201",
-  "cmd": "cd /opt/weather-pipeline/repo/data && printf '{\\n  \"models\": [\\n    \"ICON EU\"\\n  ],\\n  \"queued_at\": \"%s\"\\n}\\n' \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\" > _ai_pending_models.json && cat _ai_pending_models.json && date -u && git -C /opt/weather-pipeline/repo log -1 --format='%h %cd %s' | iconv -c -t utf-8"
+  "task_id": "d1791120510",
+  "cmd": "L=/var/log/vps-ai-pipeline.log\ndate -u\nawk '/Цикл AI-анализа  04.10 13:(29|3)/{p=1} p' $L | grep -v '^$\\|^─\\|DeprecationWarning\\|now_utc = ' | tail -60 | iconv -f utf-8 -t utf-8 -c\necho ---; cat /opt/weather-pipeline/repo/data/_ai_pending_models.json | tr -d '\\n'; echo; git -C /opt/weather-pipeline/repo log -3 --format='%h %cd' -- scripts/vps_ai_pipeline.py | iconv -c -t utf-8"
 }
