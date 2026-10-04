@@ -1,4 +1,4 @@
 {
-  "task_id": "rec_fa_1791069036",
-  "cmd": "cd /opt/weather-pipeline/repo/data/front_archive && for f in 20261003T12Z 20261003T18Z; do echo \"FILE $f\"; base64 -w0 $f.geojson; echo; done; rm -f /opt/weather-pipeline/repo/data/front_archive/20261003T12Z.geojson /opt/weather-pipeline/repo/data/front_archive/20261003T18Z.geojson; ls -la /opt/weather-pipeline/repo/data/front_archive | tail -3"
+  "task_id": "diag_video_audio_1",
+  "cmd": "cd /opt/weather-pipeline/repo && date -u && ls -l --time-style=full-iso data/blocks_gemini/block_?_*.mp3 data/blocks_gemini/block_v_*.mp3 data/blocks_gemini/blocks_meta.json data/forecast_video_gemini.mp4 && echo --STATUS && git status --short data/blocks_gemini | head -20 && echo --HEAD && git log -1 --format='%h %cd' && for f in block_1_tomorrow block_2_next3 block_4_marine; do echo  disk= head=e3b0c44298fc; done"
 }
