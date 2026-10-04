@@ -1,4 +1,4 @@
 {
-  "task_id": "d1791119350",
-  "cmd": "L=/var/log/vps-ai-pipeline.log\nawk '/Цикл AI-анализа  04.10 (08|09|1[0-3]):/{p=1} p' $L | grep -v \"^─\\|^$\\|ai push\\|⏱\" | grep -i \"цикл\\|AI:\\|Триггер\\|Точка\\|пропуска\\|Gemini\\|429\\|pending\\|в очереди\\|очередь\\|свежий\\|не изменил\\|ошибк\\|WARN\\|упал\\|завис\\|make_\\|block\\|✓\\|✗\" | cut -c1-200 | awk '!seen[$0]++ || /Цикл/' | head -120\n"
+  "task_id": "d1791119416",
+  "cmd": "L=/var/log/vps-ai-pipeline.log\nawk '/Цикл AI-анализа  04.10 11:54/{p=1} /Цикл AI-анализа  04.10 12:19/{p=0} p' $L | grep -v \"^$\\|^─\" | cut -c1-220 | head -90\necho ======STATE\ncd /opt/weather-pipeline/repo/data; python3 - <<'PY'\nimport json\nd=json.load(open('forecast_analysis_gemini.json'))\nprint({k:(v if k!='text' else len(v)) for k,v in d.items() if k not in('prompt',)})\nm=json.load(open('blocks_gemini/blocks_meta.json'));print('meta',m['generated_at'],m['data_hash'])\nPY\ncat _ai_pending_models.json; ls -l --time-style=full-iso forecast_analysis_gemini.json forecast_video_gemini.mp4\n"
 }
