@@ -303,6 +303,19 @@ def check_ai_new_models(force=False):
     print(f"\n  🤖 AI: в очереди {len(models)} новых прогонов ({', '.join(models)})")
     print(  "     Запускаю generate_ai_analysis.py...\n")
 
+    # [ИЗМЕНЕНО 2026-10-04] Запоминаем generated_at ДО генерации: флаг "changed"
+    # в forecast_analysis_claude.json навсегда застрял в True (Claude отключён,
+    # файл от 22.08), из-за чего КАЖДЫЙ разбор очереди гонял make_blocks_cloud +
+    # make_video claude (~13 мин, держит process-лок, весь Gemini откладывался).
+    def _gen_at(_p):
+        try:
+            with open(_p, encoding="utf-8") as _f:
+                return json.load(_f).get("generated_at")
+        except Exception:
+            return None
+    _before_claude = _gen_at(os.path.join(BASE_DIR, "data", "forecast_analysis_claude.json"))
+    _before_gemini = _gen_at(os.path.join(BASE_DIR, "data", "forecast_analysis_gemini.json"))
+
     ai_cmd = [PYTHON, os.path.join(SCRIPTS_DIR, "generate_ai_analysis.py")]
     if force:
         ai_cmd.append("--force")
@@ -321,7 +334,8 @@ def check_ai_new_models(force=False):
     claude_changed = False
     try:
         with open(claude_file, encoding="utf-8") as f:
-            claude_changed = json.load(f).get("changed", False)
+            _cd = json.load(f)
+            claude_changed = bool(_cd.get("changed")) and _cd.get("generated_at") != _before_claude
     except Exception:
         pass
 
@@ -329,7 +343,8 @@ def check_ai_new_models(force=False):
     gemini_changed = False
     try:
         with open(gemini_file, encoding="utf-8") as f:
-            gemini_changed = json.load(f).get("changed", False)
+            _gd = json.load(f)
+            gemini_changed = bool(_gd.get("changed")) and _gd.get("generated_at") != _before_gemini
     except Exception:
         pass
 
