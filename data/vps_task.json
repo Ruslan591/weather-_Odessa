@@ -1,4 +1,4 @@
 {
-  "task_id": "d1791120013",
-  "cmd": "L=/var/log/vps-ai-pipeline.log\nawk '/Цикл AI-анализа  04.10 11:5[4-9]/{p=1} /Цикл AI-анализа  04.10 12:1[4-9]/{p=0} p' $L | grep -v '^$' | head -80 | iconv -f utf-8 -t utf-8 -c\necho ======STATE\ncd /opt/weather-pipeline/repo/data\npython3 - <<'PY'\nimport json\nd=json.load(open('forecast_analysis_gemini.json'))\nprint({k:(v if k not in ('text','prompt') else len(v)) for k,v in d.items()})\nm=json.load(open('blocks_gemini/blocks_meta.json'));print('meta',m['generated_at'],m['data_hash'])\nPY\ncat _ai_pending_models.json; echo; ls -l --time-style=full-iso forecast_analysis_gemini.json forecast_video_gemini.mp4 | iconv -c -t utf-8"
+  "task_id": "d1791120201",
+  "cmd": "cd /opt/weather-pipeline/repo/data && printf '{\\n  \"models\": [\\n    \"ICON EU\"\\n  ],\\n  \"queued_at\": \"%s\"\\n}\\n' \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\" > _ai_pending_models.json && cat _ai_pending_models.json && date -u && git -C /opt/weather-pipeline/repo log -1 --format='%h %cd %s' | iconv -c -t utf-8"
 }
