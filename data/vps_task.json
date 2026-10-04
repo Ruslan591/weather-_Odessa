@@ -1,4 +1,4 @@
 {
-  "task_id": "d1791145991",
-  "cmd": "head -c 1500 /tmp/manual_video.log | cut -c1-150 | iconv -c -t utf-8; grep -n \"rc=\\|Итоговое\\|WARN\\|Готово\" /tmp/manual_video.log | cut -c1-150 | iconv -c -t utf-8\n"
+  "task_id": "d1791149388",
+  "cmd": "date -u; TZ=Europe/Kyiv date\ncd /opt/weather-pipeline/repo/data\necho ---next_expected; python3 -c \"\nimport json;d=json.load(open('model_next_expected.json'));print(json.dumps(d,ensure_ascii=False)[:1500])\" 2>&1 | head -20\necho ---queue; cat _ai_pending_models.json | tr -d '\\n '; echo\nKEY=$(grep -h '^GEMINI_API_KEY=' ../.env | cut -d= -f2- | tr -d '\"' | tr -d \"'\")\necho ---models; curl -s \"https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=$KEY\" | python3 -c \"\nimport sys,json\nd=json.load(sys.stdin)\nif 'error' in d: print('ERR',d['error'].get('code'),d['error'].get('message','')[:150])\nelse:\n    n=[m['name'].replace('models/','') for m in d.get('models',[]) if 'generateContent' in m.get('supportedGenerationMethods',[])]\n    print([x for x in n if 'flash' in x and 'image' not in x and 'tts' not in x and 'live' not in x and 'audio' not in x])\n\" "
 }
