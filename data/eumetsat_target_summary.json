@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-04T07:07:34Z",
+  "timestamp": "2026-10-04T07:12:11Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-10-04T06:45:00.000Z",
   "target_id": 0,
@@ -9,23 +9,6 @@
   "target_compass": "З",
   "system": null,
   "local_candidates": [
-    {
-      "target_id": 0,
-      "area_km2": 182.8,
-      "distance_km": 37.1,
-      "bearing_deg": 256.0,
-      "compass": "З",
-      "elongation_aspect_ratio": 3.2,
-      "elongation_axis_deg": 138.0,
-      "elongation_axis_compass": "ЮВ-СЗ",
-      "frontlike": false,
-      "phase_label": "безоблачно",
-      "type_label": "безоблачно",
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": true,
-      "geocolour_confirmed": false
-    },
     {
       "target_id": 1,
       "area_km2": 117.4,
@@ -61,7 +44,7 @@
       "geocolour_confirmed": false
     }
   ],
-  "local_suppressed_count": 0,
+  "local_suppressed_count": 1,
   "system_candidates": [],
   "system_suppressed_count": 0,
   "frontal_tracks": [],
@@ -79,8 +62,8 @@
   "existence": {
     "modules": {
       "ir_motion": {
-        "confirmed": true,
-        "timestamp": "2026-10-04T06:40:00.000Z"
+        "confirmed": false,
+        "timestamp": "2026-10-04T06:50:00.000Z"
       },
       "geocolour_motion": {
         "confirmed": false,
@@ -91,9 +74,9 @@
         "timestamp": "2026-10-04T07:07:11Z"
       }
     },
-    "votes_confirmed": 1,
-    "votes_not_confirmed": 2,
-    "consensus": "disputed"
+    "votes_confirmed": 0,
+    "votes_not_confirmed": 3,
+    "consensus": "not_confirmed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -105,5 +88,5 @@
       "timestamp": "2026-10-04T07:07:26Z"
     }
   },
-  "verdict": "Цель в 37км З, безоблачно — каналы расходятся: ir_motion подтверждают, geocolour_motion/cloud_phase_type нет. Почти не движется."
+  "verdict": "CLM отметил цель в 37км З, но остальные каналы облачность там не видят — вероятно, ложное срабатывание."
 }
