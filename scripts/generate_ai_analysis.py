@@ -1019,6 +1019,71 @@ def _load_gemini_retry_cache(expected_run_key, max_age_hours=3):
     except Exception:
         return None
 
+GIT_LOCK_FILE_VPS = "/tmp/vps_git.lock"
+
+def _write_json_and_push(path, obj, label):
+    """[ДОБАВЛЕНО 2026-10-04, ПРИЧИНА: потеря свежего Gemini-анализа]
+    Пишет JSON, коммитит и пушит его под общим GIT_LOCK_FILE СРАЗУ, ДО долгого
+    generate_tts() (десятки секунд). Раньше json писался без лока и жил
+    незакоммиченным до выхода всего скрипта; sync_repo() соседнего пайплайна
+    (такт :00/:05...) откатывал его к origin/main -> vps_ai_pipeline видел
+    старый generated_at/hash, не запускал блоки и видео, свежий анализ терялся
+    (04.10 11:59 UTC: ICON EU, json перезаписан откатом в 12:00:02).
+    На не-VPS окружениях (Actions, телефон) просто пишет файл, как раньше."""
+    on_vps = BASE_DIR.startswith("/opt/weather-pipeline")
+    if not on_vps:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(obj, f, ensure_ascii=False, indent=2)
+        return
+    import fcntl, subprocess, time as _t
+    lock_fd = open(GIT_LOCK_FILE_VPS, "w")
+    got = False
+    for _ in range(90):
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB); got = True; break
+        except BlockingIOError:
+            _t.sleep(1)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(obj, f, ensure_ascii=False, indent=2)
+        if not got:
+            print(f"  [AI] git-лок не получен — ранний push {label} пропущен")
+            return
+        rels = [os.path.relpath(path, BASE_DIR)] + [
+            p for p in ("data/forecast_days.json", "data/verification_snapshots.json")
+            if os.path.exists(os.path.join(BASE_DIR, p))]
+        subprocess.run(["git", "-C", BASE_DIR, "add"] + rels, capture_output=True, timeout=30)
+        st = subprocess.run(["git", "-C", BASE_DIR, "diff", "--cached", "--name-only"],
+                            capture_output=True, text=True, timeout=15)
+        if not st.stdout.strip():
+            return
+        subprocess.run(["git", "-C", BASE_DIR, "commit", "-m", f"vps ai: {label}"],
+                       capture_output=True, text=True, timeout=30)
+        for attempt in range(3):
+            pr = subprocess.run(["git", "-C", BASE_DIR, "push"],
+                                capture_output=True, text=True, timeout=60)
+            if pr.returncode == 0:
+                print(f"  [AI] {label}: ранний push ✓")
+                return
+            if attempt < 2:
+                _t.sleep([5, 10][attempt])
+                subprocess.run(["git", "-C", BASE_DIR, "fetch", "origin", "main",
+                                "--depth", "30", "--update-shallow"],
+                               capture_output=True, timeout=60)
+                rb = subprocess.run(["git", "-C", BASE_DIR, "rebase", "--autostash", "origin/main"],
+                                    capture_output=True, text=True, timeout=60)
+                if rb.returncode != 0:
+                    subprocess.run(["git", "-C", BASE_DIR, "rebase", "--abort"],
+                                   capture_output=True, timeout=15)
+        print(f"  [AI] {label}: ранний push ✗ (3 попытки)")
+    except Exception as e:
+        print(f"  [AI] ранний push {label} error: {e}")
+    finally:
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN); lock_fd.close()
+        except Exception:
+            pass
+
 def generate_gemini_analysis(prompt, now_iso, current_hash, days, run_key, mode=None):
     api_key = load_gemini_api_key()
     if not api_key:
@@ -1081,8 +1146,7 @@ def generate_gemini_analysis(prompt, now_iso, current_hash, days, run_key, mode=
         "provider": "gemini",
         "mode": mode,
     }
-    with open(OUTPUT_FILE_GEMINI, "w", encoding="utf-8") as f:
-        json.dump(result, f, ensure_ascii=False, indent=2)
+    _write_json_and_push(OUTPUT_FILE_GEMINI, result, "forecast_analysis_gemini (early)")
 
     print(f"  [AI-Gemini] ✅ Анализ сохранён ({len(text)} символов)")
 
