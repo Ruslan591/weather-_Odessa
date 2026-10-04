@@ -805,6 +805,28 @@ def main():
     if not blocks:
         print("  Нет блоков"); return
     print(f"  Шрифт: {FONT_DIR}\n  Блоков: {len(blocks)}")
+
+    # [ДОБАВЛЕНО 2026-10-04] Защита от рассинхрона текст<->озвучка (gemini):
+    # длительность в meta считается как size/16000 от mp3 в момент генерации.
+    # Если mp3 на диске потом подменили (откат sync_repo() соседнего пайплайна),
+    # размер не совпадёт — не публикуем видео со старым звуком под новым текстом,
+    # оставляем предыдущее видео.
+    if SOURCE == "gemini":
+        _bad = []
+        for _b in blocks:
+            _fn = _b.get("filename")
+            _p = os.path.join(BLOCKS_DIR, _fn) if _fn else None
+            if not _p or not os.path.exists(_p):
+                _bad.append(f"{_fn}: файла нет"); continue
+            _real = os.path.getsize(_p) / 16000.0
+            _exp = _b.get("duration")
+            if _exp is not None and abs(_real - _exp) > 0.5:
+                _bad.append(f"{_fn}: meta {_exp}с, на диске {_real:.1f}с")
+        if _bad:
+            print("  [WARN] озвучка не соответствует blocks_meta.json — видео НЕ пересобрано:")
+            for _x in _bad: print(f"    - {_x}")
+            sys.exit(3)
+
     os.makedirs(TMP_DIR, exist_ok=True)
 
     INTRO_FPS = 25
