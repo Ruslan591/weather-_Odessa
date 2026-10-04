@@ -1,4 +1,4 @@
 {
-  "task_id": "d1791120793",
-  "cmd": "date -u; ls -l /tmp/manual_gen.log; pgrep -af 'manual_gen|vps_ai_pipeline|generate_ai|make_blocks|make_video' | iconv -c -t utf-8 | head; echo; tail -5 /var/log/vps-ai-pipeline.log | iconv -c -f utf-8 -t utf-8"
+  "task_id": "d1791120856",
+  "cmd": "pkill -f 'flock /tmp/vps_ai_pipeline.lock' ; sleep 1; pgrep -af manual_gen | iconv -c -t utf-8 | head -3; echo ---\nawk '/Цикл AI-анализа  04.10 13:24/{p=1} p' /var/log/vps-ai-pipeline.log | grep -v '^$\\|^─\\|DeprecationWarning\\|now_utc = \\|предыдущий цикл' | head -40 | iconv -f utf-8 -t utf-8 -c"
 }
