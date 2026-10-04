@@ -448,16 +448,27 @@ def generate_block_tts(text, out_path, retries=3, delay=5, trim_silence=False, c
     clean = preprocess_tts(text)
     if not clean.strip():
         return (0, []) if collect_boundaries else 0
+    # [ИЗМЕНЕНО 2026-10-04] Пишем во временный *.part и подменяем os.replace
+    # только при успехе: раньше при сбое TTS оставался 0-байтный файл
+    # (block_5_trend_p1.mp3), который потом коммитился в git.
+    part = out_path + ".part"
     for attempt in range(1, retries + 1):
         try:
-            boundaries = asyncio.run(_tts_async(clean, out_path, collect_boundaries))
+            boundaries = asyncio.run(_tts_async(clean, part, collect_boundaries))
+            if not os.path.exists(part) or os.path.getsize(part) < 1000:
+                raise RuntimeError("TTS вернул пустой/слишком маленький mp3")
             if trim_silence:
-                strip_silence(out_path)
+                strip_silence(part)
+            os.replace(part, out_path)
             size_kb = os.path.getsize(out_path) // 1024
             print(f"    \u2192 {os.path.basename(out_path)} ({size_kb} кб)")
             return (size_kb, boundaries) if collect_boundaries else size_kb
         except Exception as e:
             print(f"    [TTS] Ошибка (попытка {attempt}/{retries}): {e}")
+            try:
+                if os.path.exists(part): os.remove(part)
+            except Exception:
+                pass
             if attempt < retries:
                 time.sleep(delay)
     print(f"    [TTS] Не удалось сгенерировать {os.path.basename(out_path)} — пропускаю")
@@ -524,7 +535,7 @@ def _release_git_lock(lock_fd):
     except Exception:
         pass
 
-def _git_push_block0_now(filenames):
+def _git_push_block0_now(filenames, label="block_0 early push"):
     """[ДОБАВЛЕНО 2026-09-22, ROOT CAUSE block_0 STALE SINCE 29.08]
     Коммитит и пушит файлы block_0 (today/tonight + их страницы) СРАЗУ
     после генерации, под общим GIT_LOCK_FILE.
@@ -561,7 +572,7 @@ def _git_push_block0_now(filenames):
             capture_output=True, text=True, timeout=15)
         if not status.stdout.strip():
             return
-        subprocess.run(["git", "-C", BASE_DIR, "commit", "-m", "vps ai: block_0 early push"],
+        subprocess.run(["git", "-C", BASE_DIR, "commit", "-m", f"vps ai: {label}"],
                         capture_output=True, text=True, timeout=30)
         import time as _t
         for _attempt in range(3):
@@ -572,7 +583,19 @@ def _git_push_block0_now(filenames):
                 return
             if _attempt < 2:
                 _t.sleep([10, 20][_attempt])
-        print("  [BLOCKS-Gemini] block_0 ранний пуш \u2717 (3 попытки)")
+                # [ИЗМЕНЕНО 2026-10-04] non-fast-forward (другой пайплайн успел
+                # запушить за время генерации) — подтягиваем origin и повторяем.
+                # --autostash: в дереве лежат ещё не закоммиченные mp3 других блоков.
+                subprocess.run(["git", "-C", BASE_DIR, "fetch", "origin", "main",
+                                "--depth", "30", "--update-shallow"],
+                               capture_output=True, timeout=60)
+                _rb = subprocess.run(["git", "-C", BASE_DIR, "rebase", "--autostash", "origin/main"],
+                                     capture_output=True, text=True, timeout=60)
+                if _rb.returncode != 0:
+                    print(f"  [BLOCKS-Gemini] rebase не прошёл: {_rb.stderr.strip()[:150]} — abort")
+                    subprocess.run(["git", "-C", BASE_DIR, "rebase", "--abort"],
+                                   capture_output=True, timeout=15)
+        print(f"  [BLOCKS-Gemini] {label} \u2717 (3 попытки)")
     finally:
         _release_git_lock(lock_fd)
 
@@ -591,6 +614,10 @@ def main(force=False):
         return
 
     os.makedirs(BLOCKS_DIR, exist_ok=True)
+    for _fn in os.listdir(BLOCKS_DIR):
+        if _fn.endswith(".part") or _fn.endswith(".part.tmp.mp3"):
+            try: os.remove(os.path.join(BLOCKS_DIR, _fn))
+            except Exception: pass
     sections = parse_sections(text)
     print(f"\n  [BLOCKS-Gemini] Найдено секций: {list(sections.keys())}")
 
@@ -718,11 +745,36 @@ def main(force=False):
                 "t_min":    _t_min,
                 "t_max":    _t_max,
             })
-            if key in ("today", "tonight"):
-                _git_push_block0_now(
-                    [f"data/blocks_gemini/{filename}"] +
-                    [pf["path"] for pf in page_files]
-                )
+            # [ИЗМЕНЕНО 2026-10-04] ранний push теперь после КАЖДОГО блока, а не
+            # только today/tonight: tomorrow/next3/marine откатывались
+            # sync_repo() соседних пайплайнов, и видео собиралось со старым
+            # звуком под свежим текстом (docs/topics/video_generation.md).
+            _git_push_block0_now(
+                [f"data/blocks_gemini/{filename}"] +
+                [pf["path"] for pf in page_files],
+                label=f"block {key} early push")
+
+    # [ИЗМЕНЕНО 2026-10-04] чистим устаревшие страницы _pN сгенерированных
+    # блоков (которых нет в meta) и 0-байтные mp3 — раньше они оставались
+    # в git вечно. Целые блоки, которых нет в этом прогоне, не трогаем.
+    try:
+        _keep = set()
+        for _b in blocks_meta:
+            _keep.add(_b["filename"])
+            _keep.update(_p["filename"] for _p in _b.get("pages", []))
+        for _b in blocks_meta:
+            _stem = _b["filename"][:-4]
+            for _fn in os.listdir(BLOCKS_DIR):
+                if re.fullmatch(re.escape(_stem) + r"_p\d+\.mp3", _fn) and _fn not in _keep:
+                    os.remove(os.path.join(BLOCKS_DIR, _fn))
+                    print(f"    [CLEAN] удалён устаревший {_fn}")
+        for _fn in os.listdir(BLOCKS_DIR):
+            _fp = os.path.join(BLOCKS_DIR, _fn)
+            if _fn.endswith(".mp3") and os.path.isfile(_fp) and os.path.getsize(_fp) == 0:
+                os.remove(_fp)
+                print(f"    [CLEAN] удалён пустой {_fn}")
+    except Exception as _e:
+        print(f"    [CLEAN] ошибка очистки: {_e}")
 
     meta = {
         "generated_at": data.get('generated_at', ''),
@@ -733,6 +785,8 @@ def main(force=False):
     }
     with open(META_FILE, 'w', encoding='utf-8') as f:
         json.dump(meta, f, ensure_ascii=False, indent=2)
+
+    _git_push_block0_now(["data/blocks_gemini/blocks_meta.json"], label="blocks_meta")
 
     total_dur = sum(b['duration'] for b in blocks_meta)
     print(f"  [BLOCKS-Gemini] \u2705 {len(blocks_meta)} блоков, ~{total_dur:.0f} сек суммарно")
