@@ -1,4 +1,4 @@
 {
-  "task_id": "d1791144758",
-  "cmd": "date -u; awk '/Цикл AI-анализа  04.10 20:0/{p=1} p' /var/log/vps-ai-pipeline.log | grep -v '^$\\|^─\\|DeprecationWarning\\|now_utc = \\|repo synced\\|ai push\\|цикл занял' | cut -c1-160 | iconv -f utf-8 -t utf-8 -c | tail -25\n"
+  "task_id": "d1791144806",
+  "cmd": "awk '/Цикл AI-анализа  04.10 16:2[0-9]/{p=1} /Цикл AI-анализа  04.10 16:59/{p=0} p' /var/log/vps-ai-pipeline.log | grep -v '^$\\|^─\\|DeprecationWarning\\|now_utc = \\|repo synced\\|цикл занял\\|\\[FFM\\] готов\\|modified:\\|Untracked\\|data/_\\|data/eumetsat\\|data/model_next\\|git add\\|git restore\\|use \"git' | cut -c1-190 | iconv -f utf-8 -t utf-8 -c | head -90\n"
 }
