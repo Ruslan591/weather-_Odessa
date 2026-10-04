@@ -1,4 +1,4 @@
 {
-  "task_id": "d1791119335",
-  "cmd": "date -u; echo; sudo crontab -l 2>/dev/null | grep -v '^#'; echo; ls -la --time-style=full-iso /var/log/ | grep -i \"vps\\|weather\\|pipeline\\|ai\" ; ls -la /opt/weather-pipeline/ | head -30\n"
+  "task_id": "d1791119350",
+  "cmd": "L=/var/log/vps-ai-pipeline.log\nawk '/Цикл AI-анализа  04.10 (08|09|1[0-3]):/{p=1} p' $L | grep -v \"^─\\|^$\\|ai push\\|⏱\" | grep -i \"цикл\\|AI:\\|Триггер\\|Точка\\|пропуска\\|Gemini\\|429\\|pending\\|в очереди\\|очередь\\|свежий\\|не изменил\\|ошибк\\|WARN\\|упал\\|завис\\|make_\\|block\\|✓\\|✗\" | cut -c1-200 | awk '!seen[$0]++ || /Цикл/' | head -120\n"
 }
