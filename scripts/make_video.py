@@ -458,7 +458,9 @@ def build_chrome(block, theme, out_path, reveal_frac=1.0, counter_reveal=None):
     draw = ImageDraw.Draw(img)
 
     draw.text((card_x+185, card_y+62), title, font=F(50, "bold"), fill=(255, 255, 255, 255), anchor="lm")
-    draw.text((card_x+187, card_y+108), datetime.now().strftime("%d.%m"), font=F(28, "medium"), fill=(*acc, 220), anchor="lm")
+    # [2026-10-04] дата под заголовком: у блока "Завтра" была сегодняшняя (04.10 вместо 05.10)
+    _lbl_dt = datetime.utcnow() + timedelta(hours=LOCAL_OFFSET_H) + timedelta(days=1 if key == "tomorrow" else 0)
+    draw.text((card_x+187, card_y+108), _lbl_dt.strftime("%d.%m"), font=F(28, "medium"), fill=(*acc, 220), anchor="lm")
 
     t_min, t_max = extract_temp_range(text)
     temp_str = ""
@@ -812,16 +814,27 @@ def main():
     # размер не совпадёт — не публикуем видео со старым звуком под новым текстом,
     # оставляем предыдущее видео.
     if SOURCE == "gemini":
+        import hashlib
         _bad = []
         for _b in blocks:
             _fn = _b.get("filename")
             _p = os.path.join(BLOCKS_DIR, _fn) if _fn else None
             if not _p or not os.path.exists(_p):
                 _bad.append(f"{_fn}: файла нет"); continue
-            _real = os.path.getsize(_p) / 16000.0
-            _exp = _b.get("duration")
-            if _exp is not None and abs(_real - _exp) > 0.5:
-                _bad.append(f"{_fn}: meta {_exp}с, на диске {_real:.1f}с")
+            _esz, _esha = _b.get("size_bytes"), _b.get("sha256")
+            if _esha:
+                # Точная сверка: meta пишется из staged-файла в момент генерации.
+                _h = hashlib.sha256()
+                with open(_p, "rb") as _f:
+                    for _chunk in iter(lambda: _f.read(1 << 20), b""):
+                        _h.update(_chunk)
+                if _h.hexdigest() != _esha:
+                    _bad.append(f"{_fn}: sha256 не совпал (meta {_esz} Б, на диске {os.path.getsize(_p)} Б)")
+            else:
+                _real = os.path.getsize(_p) / 16000.0
+                _exp = _b.get("duration")
+                if _exp is not None and abs(_real - _exp) > 0.5:
+                    _bad.append(f"{_fn}: meta {_exp}с, на диске {_real:.1f}с")
         if _bad:
             print("  [WARN] озвучка не соответствует blocks_meta.json — видео НЕ пересобрано:")
             for _x in _bad: print(f"    - {_x}")
