@@ -1,4 +1,4 @@
 {
-  "task_id": "d1791119953",
-  "cmd": "date -u; stat -c '%y' /var/log/vps-github-bridge.log; tail -5 /var/log/vps-github-bridge.log | cut -c1-300; cat /opt/vps-github-bridge/last_task_id.txt 2>/dev/null; pgrep -af 'vps_github_bridge|awk|python3 -' | head"
+  "task_id": "d1791120013",
+  "cmd": "L=/var/log/vps-ai-pipeline.log\nawk '/Цикл AI-анализа  04.10 11:5[4-9]/{p=1} /Цикл AI-анализа  04.10 12:1[4-9]/{p=0} p' $L | grep -v '^$' | head -80 | iconv -f utf-8 -t utf-8 -c\necho ======STATE\ncd /opt/weather-pipeline/repo/data\npython3 - <<'PY'\nimport json\nd=json.load(open('forecast_analysis_gemini.json'))\nprint({k:(v if k not in ('text','prompt') else len(v)) for k,v in d.items()})\nm=json.load(open('blocks_gemini/blocks_meta.json'));print('meta',m['generated_at'],m['data_hash'])\nPY\ncat _ai_pending_models.json; echo; ls -l --time-style=full-iso forecast_analysis_gemini.json forecast_video_gemini.mp4 | iconv -c -t utf-8"
 }
