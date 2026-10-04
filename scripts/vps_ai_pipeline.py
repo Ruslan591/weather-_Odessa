@@ -389,10 +389,10 @@ def check_ai_new_models(force=False):
         try:
             blocks_result = subprocess.run(
                 [PYTHON, os.path.join(SCRIPTS_DIR, "make_blocks_gemini_cloud.py")],
-                cwd=BASE_DIR, capture_output=False, timeout=600
+                cwd=BASE_DIR, capture_output=False, timeout=900
             )
         except subprocess.TimeoutExpired:
-            print("  [AI-Gemini] make_blocks_gemini_cloud.py завис дольше 600с — прерван")
+            print("  [AI-Gemini] make_blocks_gemini_cloud.py завис дольше 900с — прерван")
             blocks_result = None
         if blocks_result is not None:
             if blocks_result.returncode != 0:
@@ -408,12 +408,12 @@ def check_ai_new_models(force=False):
                     # (было 240с — гарантированно убивало рендер на середине).
                     video_result = subprocess.run(
                         [PYTHON, os.path.join(SCRIPTS_DIR, "make_video.py"), "gemini"],
-                        cwd=BASE_DIR, capture_output=False, timeout=700
+                        cwd=BASE_DIR, capture_output=False, timeout=1500
                     )
                     if video_result.returncode != 0:
-                        print("  [AI-Gemini] make_video.py (gemini) упал")
+                        print("  [AI-Gemini] make_video.py (gemini) упал/пропущен (rc!=0)")
                 except subprocess.TimeoutExpired:
-                    print("  [AI-Gemini] make_video.py завис дольше 700с — прерван")
+                    print("  [AI-Gemini] make_video.py завис дольше 1500с — прерван")
 
     try:
         with open(AI_QUEUE_FILE, "w", encoding="utf-8") as f:
@@ -496,10 +496,10 @@ def check_ai_gemini_pending():
             try:
                 blocks_r = subprocess.run(
                     [PYTHON, os.path.join(SCRIPTS_DIR, "make_blocks_gemini_cloud.py")],
-                    cwd=BASE_DIR, capture_output=False, timeout=600
+                    cwd=BASE_DIR, capture_output=False, timeout=900
                 )
             except subprocess.TimeoutExpired:
-                print("  [AI-Gemini] retry: make_blocks_gemini_cloud.py завис дольше 600с — прерван")
+                print("  [AI-Gemini] retry: make_blocks_gemini_cloud.py завис дольше 900с — прерван")
                 blocks_r = None
             if blocks_r is not None and blocks_r.returncode == 0:
                 # 02.09.2026: тот же ранний push блоков, что и в check_ai_new_models().
@@ -507,10 +507,10 @@ def check_ai_gemini_pending():
                 try:
                     subprocess.run(
                         [PYTHON, os.path.join(SCRIPTS_DIR, "make_video.py"), "gemini"],
-                        cwd=BASE_DIR, capture_output=False, timeout=700
+                        cwd=BASE_DIR, capture_output=False, timeout=1500
                     )
                 except subprocess.TimeoutExpired:
-                    print("  [AI-Gemini] retry: make_video.py завис дольше 700с — прерван")
+                    print("  [AI-Gemini] retry: make_video.py завис дольше 1500с — прерван")
     except Exception:
         pass
 
