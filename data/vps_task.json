@@ -1,4 +1,4 @@
 {
-  "task_id": "d1791120720",
-  "cmd": "date -u; tail -40 /tmp/manual_gen.log | cut -c1-200 | iconv -c -f utf-8 -t utf-8"
+  "task_id": "d1791120793",
+  "cmd": "date -u; ls -l /tmp/manual_gen.log; pgrep -af 'manual_gen|vps_ai_pipeline|generate_ai|make_blocks|make_video' | iconv -c -t utf-8 | head; echo; tail -5 /var/log/vps-ai-pipeline.log | iconv -c -f utf-8 -t utf-8"
 }
