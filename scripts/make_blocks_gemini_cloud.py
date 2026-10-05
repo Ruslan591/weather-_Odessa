@@ -9,7 +9,7 @@ Cloud-версия для GitHub Actions. Идентична телефонно�
 Запуск: python3 scripts/make_blocks.py [--force]
 """
 
-import json, os, re, asyncio, argparse, random, subprocess, sys
+import json, os, re, asyncio, argparse, random, subprocess
 from datetime import datetime, timezone, timedelta
 import edge_tts
 from PIL import Image, ImageDraw, ImageFont
@@ -72,10 +72,6 @@ BASE_DIR    = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INPUT_FILE  = os.path.join(BASE_DIR, "data", "forecast_analysis_gemini.json")
 BLOCKS_DIR  = os.path.join(BASE_DIR, "data", "blocks_gemini")
 META_FILE   = os.path.join(BLOCKS_DIR, "blocks_meta.json")
-# [2026-10-04] Генерация идёт в STAGE_DIR ВНЕ git-дерева; в репозиторную папку файлы
-# переносятся одним шагом под git-локом (_publish_blocks). Иначе sync_repo()
-# соседнего пайплайна откатывал не закоммиченные mp3 посреди генерации.
-STAGE_DIR   = "/tmp/blocks_gemini_stage"
 
 VOICES = [
     "ru-RU-SvetlanaNeural",
@@ -514,14 +510,14 @@ def build_text_segments(section_text, date_prefix, boundaries):
 GIT_LOCK_FILE = "/tmp/vps_git.lock"
 GIT_LOCK_TIMEOUT_SEC = 60
 
-def _acquire_git_lock(timeout=None):
+def _acquire_git_lock():
     """Тот же лок-файл, что и во всех VPS-пайплайнах (vps_pipeline.py,
     vps_ai_pipeline.py) — берём его тоже здесь, чтобы ранний коммит
     block_0 не пересекался с их sync_repo()/git_push_ai()."""
     import fcntl
     lock_fd = open(GIT_LOCK_FILE, "w")
     waited = 0
-    while waited < (timeout or GIT_LOCK_TIMEOUT_SEC):
+    while waited < GIT_LOCK_TIMEOUT_SEC:
         try:
             fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             return lock_fd
@@ -604,93 +600,6 @@ def _git_push_block0_now(filenames, label="block_0 early push"):
         _release_git_lock(lock_fd)
 
 
-def _file_info(path):
-    """size_bytes + sha256 файла — пишем в meta в момент генерации, чтобы
-    make_video.py мог убедиться, что на диске ровно тот mp3, что описан в meta."""
-    import hashlib
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(1 << 20), b""):
-            h.update(chunk)
-    return os.path.getsize(path), h.hexdigest()
-
-
-def _commit_and_push_locked(label):
-    """Коммит + push (с rebase-повтором при non-fast-forward). Вызывать ТОЛЬКО
-    под GIT_LOCK_FILE."""
-    import time as _t
-    subprocess.run(["git", "-C", BASE_DIR, "add", "-A", "--", "data/blocks_gemini"],
-                   capture_output=True, timeout=60)
-    st = subprocess.run(["git", "-C", BASE_DIR, "diff", "--cached", "--name-only"],
-                        capture_output=True, text=True, timeout=15)
-    if not st.stdout.strip():
-        print(f"  [BLOCKS-Gemini] {label}: нечего коммитить")
-        return True
-    subprocess.run(["git", "-C", BASE_DIR, "commit", "-m", f"vps ai: {label}"],
-                   capture_output=True, text=True, timeout=30)
-    for attempt in range(3):
-        push = subprocess.run(["git", "-C", BASE_DIR, "push"],
-                              capture_output=True, text=True, timeout=60)
-        if push.returncode == 0:
-            print(f"  [BLOCKS-Gemini] {label}: push ✓")
-            return True
-        if attempt < 2:
-            _t.sleep([5, 10][attempt])
-            subprocess.run(["git", "-C", BASE_DIR, "fetch", "origin", "main",
-                            "--depth", "30", "--update-shallow"],
-                           capture_output=True, timeout=60)
-            rb = subprocess.run(["git", "-C", BASE_DIR, "rebase", "--autostash", "origin/main"],
-                                capture_output=True, text=True, timeout=60)
-            if rb.returncode != 0:
-                print(f"  [BLOCKS-Gemini] rebase не прошёл: {rb.stderr.strip()[:150]} — abort")
-                subprocess.run(["git", "-C", BASE_DIR, "rebase", "--abort"],
-                               capture_output=True, timeout=15)
-    print(f"  [BLOCKS-Gemini] {label}: push ✗ (3 попытки; коммит остался локально, его допушит vps_ai_pipeline)")
-    return False
-
-
-def _publish_blocks(blocks_meta, meta):
-    """[2026-10-04] Атомарная публикация: под git-локом переносим готовые mp3 из
-    STAGE_DIR в data/blocks_gemini, чистим устаревшие страницы, пишем meta,
-    коммитим и пушим. Пока лок держится, sync_repo() соседей не может откатить
-    файлы, а после коммита рабочее дерево == HEAD (откат безвреден)."""
-    import shutil
-    lock_fd = _acquire_git_lock(timeout=240)
-    if lock_fd is None:
-        print("  [BLOCKS-Gemini] ✗ git-лок не получен за 240 с — публикация пропущена, "
-              "прежние блоки и meta остаются согласованными между собой")
-        return False
-    try:
-        os.makedirs(BLOCKS_DIR, exist_ok=True)
-        names = set()
-        for b in blocks_meta:
-            names.add(b["filename"])
-            names.update(p["filename"] for p in b.get("pages", []))
-        for fn in sorted(names):
-            dst = os.path.join(BLOCKS_DIR, fn)
-            shutil.copyfile(os.path.join(STAGE_DIR, fn), dst + ".part")
-            os.replace(dst + ".part", dst)
-        for b in blocks_meta:
-            stem = b["filename"][:-4]
-            for fn in os.listdir(BLOCKS_DIR):
-                if re.fullmatch(re.escape(stem) + r"_p\d+\.mp3", fn) and fn not in names:
-                    os.remove(os.path.join(BLOCKS_DIR, fn))
-                    print(f"    [CLEAN] удалён устаревший {fn}")
-        for fn in os.listdir(BLOCKS_DIR):
-            fp = os.path.join(BLOCKS_DIR, fn)
-            if fn.endswith(".mp3") and os.path.isfile(fp) and os.path.getsize(fp) == 0:
-                os.remove(fp)
-                print(f"    [CLEAN] удалён пустой {fn}")
-        with open(META_FILE, "w", encoding="utf-8") as f:
-            json.dump(meta, f, ensure_ascii=False, indent=2)
-        return _commit_and_push_locked("blocks (staged publish)")
-    except Exception as e:
-        print(f"  [BLOCKS-Gemini] ✗ ошибка публикации: {e}")
-        return False
-    finally:
-        _release_git_lock(lock_fd)
-
-
 def main(force=False):
     if not os.path.exists(INPUT_FILE):
         print(f"  [BLOCKS-Gemini] Файл не найден: {INPUT_FILE}")
@@ -728,9 +637,6 @@ def main(force=False):
     global _selected_voice
     _selected_voice = random.choice(VOICES)
     print(f"  [BLOCKS-Gemini] Голос: {_selected_voice}")
-    import shutil as _sh
-    _sh.rmtree(STAGE_DIR, ignore_errors=True)
-    os.makedirs(STAGE_DIR, exist_ok=True)
     print("  [BLOCKS-Gemini] Генерирую блоки озвучки...")
 
     gen_at = data.get('generated_at', '')
@@ -804,8 +710,8 @@ def main(force=False):
             continue
 
         tts_text = DATE_PREFIX.get(key, '') + section_text
-        out_path = os.path.join(STAGE_DIR, filename)
-        size_kb, _boundaries = generate_block_tts(tts_text, out_path, retries=5, delay=8, trim_silence=True, collect_boundaries=True)
+        out_path = os.path.join(BLOCKS_DIR, filename)
+        size_kb, _boundaries = generate_block_tts(tts_text, out_path, trim_silence=True, collect_boundaries=True)
         text_segments = build_text_segments(section_text, DATE_PREFIX.get(key, ''), _boundaries)
 
         if size_kb > 0:
@@ -815,12 +721,10 @@ def main(force=False):
             for pi, page_text in enumerate(pages):
                 page_tts = DATE_PREFIX.get(key, '') + page_text if pi == 0 else page_text
                 page_fn = filename.replace('.mp3', f'_p{pi+1}.mp3')
-                page_path = os.path.join(STAGE_DIR, page_fn)
+                page_path = os.path.join(BLOCKS_DIR, page_fn)
                 psize = generate_block_tts(page_tts, page_path, trim_silence=False)
                 if psize > 0:
-                    _psz, _psha = _file_info(page_path)
                     page_files.append({
-                        "size_bytes": _psz, "sha256": _psha,
                         "filename": page_fn,
                         "path": f"data/blocks_gemini/{page_fn}",
                         "duration": get_mp3_duration(page_path),
@@ -828,9 +732,7 @@ def main(force=False):
                     })
             _day_idx = _key_to_day.get(key)
             _t_min, _t_max = _days_by_idx.get(_day_idx, (None, None)) if _day_idx is not None else (None, None)
-            _msz, _msha = _file_info(out_path)
             blocks_meta.append({
-                "size_bytes": _msz, "sha256": _msha,
                 "key":      key,
                 "filename": filename,
                 "path":     f"data/blocks_gemini/{filename}",
@@ -843,22 +745,49 @@ def main(force=False):
                 "t_min":    _t_min,
                 "t_max":    _t_max,
             })
-            # [2026-10-04] ранних push больше нет: файлы лежат в STAGE_DIR вне git-дерева,
-            # публикация одним шагом под локом — _publish_blocks() ниже.
+            # [ИЗМЕНЕНО 2026-10-04] ранний push теперь после КАЖДОГО блока, а не
+            # только today/tonight: tomorrow/next3/marine откатывались
+            # sync_repo() соседних пайплайнов, и видео собиралось со старым
+            # звуком под свежим текстом (docs/topics/video_generation.md).
+            _git_push_block0_now(
+                [f"data/blocks_gemini/{filename}"] +
+                [pf["path"] for pf in page_files],
+                label=f"block {key} early push")
+
+    # [ИЗМЕНЕНО 2026-10-04] чистим устаревшие страницы _pN сгенерированных
+    # блоков (которых нет в meta) и 0-байтные mp3 — раньше они оставались
+    # в git вечно. Целые блоки, которых нет в этом прогоне, не трогаем.
+    try:
+        _keep = set()
+        for _b in blocks_meta:
+            _keep.add(_b["filename"])
+            _keep.update(_p["filename"] for _p in _b.get("pages", []))
+        for _b in blocks_meta:
+            _stem = _b["filename"][:-4]
+            for _fn in os.listdir(BLOCKS_DIR):
+                if re.fullmatch(re.escape(_stem) + r"_p\d+\.mp3", _fn) and _fn not in _keep:
+                    os.remove(os.path.join(BLOCKS_DIR, _fn))
+                    print(f"    [CLEAN] удалён устаревший {_fn}")
+        for _fn in os.listdir(BLOCKS_DIR):
+            _fp = os.path.join(BLOCKS_DIR, _fn)
+            if _fn.endswith(".mp3") and os.path.isfile(_fp) and os.path.getsize(_fp) == 0:
+                os.remove(_fp)
+                print(f"    [CLEAN] удалён пустой {_fn}")
+    except Exception as _e:
+        print(f"    [CLEAN] ошибка очистки: {_e}")
 
     meta = {
         "generated_at": data.get('generated_at', ''),
         "data_hash":    src_hash,
         "voice":        _selected_voice,
+        "model":        data.get("model"),
         "blocks_count": len(blocks_meta),
         "blocks":       blocks_meta,
     }
-    if not blocks_meta:
-        print("  [BLOCKS-Gemini] ✗ ни одного блока не сгенерировано — публикация пропущена")
-        sys.exit(2)
-    if not _publish_blocks(blocks_meta, meta):
-        print("  [BLOCKS-Gemini] ✗ блоки не опубликованы — видео не пересобираем")
-        sys.exit(2)
+    with open(META_FILE, 'w', encoding='utf-8') as f:
+        json.dump(meta, f, ensure_ascii=False, indent=2)
+
+    _git_push_block0_now(["data/blocks_gemini/blocks_meta.json"], label="blocks_meta")
 
     total_dur = sum(b['duration'] for b in blocks_meta)
     print(f"  [BLOCKS-Gemini] \u2705 {len(blocks_meta)} блоков, ~{total_dur:.0f} сек суммарно")
