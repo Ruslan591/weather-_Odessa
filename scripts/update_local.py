@@ -189,20 +189,6 @@ def main():
         _upd.log.info("  [local] Шаг 2 (modelData) пропущен")
 
     _upd.main()
-
-    # ── Шаг 3б: BUFR-fallback из SYNOP (ogimet) ────────────────────────────
-    # [ДОБАВЛЕНО 2026-10-06] Meteomanz отдаёт с VPS HTTP 403 → BUFR приходил
-    # только ночью (1–2 раза в сутки). SYNOP уже скачан _upd.main() выше —
-    # для сроков 03/09/15/21Z без записи достраиваем её из SYNOP (сеть не
-    # нужна). Настоящий BUFR при следующем успешном запросе заменит её.
-    try:
-        from fetch_bufr_obs import synop_fallback_for_missing
-        for _p in synop_fallback_for_missing():
-            if _p not in _GIT_CHANGED:
-                _GIT_CHANGED.append(_p)
-    except Exception as e:
-        _upd.log.warning("  [BUFR] SYNOP-fallback ошибка: %s", e)
-
     git_commit_push(no_push=args.no_push)
 
 if __name__ == "__main__":
