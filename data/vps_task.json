@@ -1,4 +1,4 @@
 {
-  "task_id": "d1791192920",
-  "cmd": "date -u; grep -v '^$' /tmp/manual_gen2.log | sed -n '/=== blocks/,$p' | grep -i \"===\\|Голос\\|секц\\|staged\\|push\\|WARN\\|пропущен\\|CLEAN\\|блоков\\|rc=\\|Итоговое\\|Готово\" | cut -c1-180 | tail -20"
+  "task_id": "d1791193175",
+  "cmd": "date -u; tail -c 1800 /tmp/manual_gen2.log | cut -c1-170 | iconv -c -f utf-8 -t utf-8; pgrep -af '[m]ake_blocks|[m]ake_video' | cut -c1-90"
 }
