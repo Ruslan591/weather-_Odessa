@@ -138,6 +138,10 @@ def main():
                 "eta_min": eta_min if verdict in ("приближается", "уже у города") else None,
                 "blob_area_km2": round(blob_area_km2, 0),
                 "verdict": verdict,
+                # [ДОБАВЛЕНО 2026-10-05] dot_pv < 0 — край реально сближается с
+                # городом; verdict "уже у города" (cpa<=15км, eta=0) раньше мог
+                # выдаваться и для края, который стоит/уходит в 12км от города.
+                "approaching": bool(dot_pv < 0),
                 "frame_pairs_used": n_pairs,
             }
             if target_type == "precip_mass":
@@ -321,6 +325,12 @@ def main():
         "distance_km_now": out.get("distance_km_now"),
         "verdict": out.get("verdict"),
         "probability_percent": out.get("probability_percent"),
+        # [ДОБАВЛЕНО 2026-10-05] для текста push: где край, куда движется
+        "compass": out.get("compass"),
+        "bearing_deg": out.get("bearing_deg"),
+        "speed_kmh": out.get("speed_kmh"),
+        "direction_compass": out.get("direction_compass"),
+        "approaching": out.get("approaching"),
     }
     try:
         with open(ALERT_FILE, "w", encoding="utf-8") as af:
