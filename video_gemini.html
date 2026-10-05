@@ -44,7 +44,7 @@
 
 <div class="container">
   <div style="text-align:center">
-    <span class="badge">GEMINI 2.5 FLASH</span>
+    <span class="badge" id="modelBadge">GEMINI</span>
   </div>
 
   <div class="video-card" id="videoCard">
@@ -65,6 +65,22 @@ function fmtDate(iso) {
     return d.toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
   } catch(e) { return iso || '—'; }
 }
+
+// [2026-10-05] Бейдж модели: blocks_meta.model, иначе model из forecast_analysis_gemini.json
+function fmtModel(id) {
+  if (!id) return 'GEMINI';
+  return String(id).replace(/^models\//, '').split('-').join(' ').toUpperCase();
+}
+function setModelBadge(id) {
+  var b = document.getElementById('modelBadge');
+  if (b) b.textContent = fmtModel(id);
+}
+fetch(META_URL, {cache:'no-store'}).then(function(r){ return r.ok ? r.json() : null; }).then(function(meta){
+  if (meta && meta.model) { setModelBadge(meta.model); return; }
+  return fetch(RAW_BASE + 'data/forecast_analysis_gemini.json?_=' + Date.now(), {cache:'no-store'})
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(a){ if (a && a.model) setModelBadge(a.model); });
+}).catch(function(){});
 
 fetch(META_URL, {cache:'no-store'}).then(function(r){ return r.ok ? r.json() : null; }).then(function(meta){
   var card = document.getElementById('videoCard');
