@@ -1,4 +1,4 @@
 {
-  "task_id": "d1791191897",
-  "cmd": "cp /tmp/ab_out.json /tmp/ab_out1.json\npython3 - <<'PY'\nimport re\ns=open('/tmp/ab_gemini.py').read()\ns=s.replace('''runs=[(\"gemini-2.5-flash\",None),(\"gemini-3.8-flash\",{\"thinkingLevel\":\"low\"}),(\"gemini-3.8-flash\",{\"thinkingLevel\":\"minimal\"}),(\"gemini-3.7-flash\",{\"thinkingLevel\":\"low\"})]''',\n'''runs=[(\"gemini-3.8-flash\",{\"thinkingLevel\":\"low\"}),(\"gemini-3.7-flash\",{\"thinkingLevel\":\"low\"}),(\"gemini-3.6-flash\",{\"thinkingLevel\":\"low\"}),(\"gemini-3.5-flash\",{\"thinkingLevel\":\"low\"}),(\"gemini-3.8-flash\",{\"thinkingLevel\":\"medium\"})]''')\ns=s.replace('''    out[k]=call(m,t); o=out[k]''','''    for _a in range(4):\n        out[k]=call(m,t); o=out[k]\n        if not (o.get('err') or '').startswith('503'): break\n        time.sleep(20)''')\ns=s.replace(\"/tmp/ab_out.json\",\"/tmp/ab_out2.json\")\nopen('/tmp/ab_gemini2.py','w').write(s)\nPY\nnohup python3 /tmp/ab_gemini2.py > /tmp/ab2.log 2>&1 &\nsleep 2; echo started"
+  "task_id": "d1791192101",
+  "cmd": "cut -c1-420 /tmp/ab2.log; pgrep -af '[a]b_gemini2' | head -1"
 }
