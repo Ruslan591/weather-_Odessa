@@ -1,4 +1,4 @@
 {
-  "task_id": "d1791191548",
-  "cmd": "date -u; TZ=Europe/Kyiv date\nawk '/Цикл AI-анализа  04.10 21:[3-5]/{p=1} p' /var/log/vps-ai-pipeline.log | grep -v '^$\\|^─\\|DeprecationWarning\\|now_utc = \\|repo synced\\|цикл занял\\|\\[FFM\\]\\|modified:\\|Untracked\\|git add\\|git restore\\|use \"git\\|\\.png\\|\\.json' | grep -i \"цикл\\|AI:\\|Gemini\\|BLOCKS\\|publish\\|push\\|WARN\\|завис\\|ошибк\\|упал\\|TTS\\|Голос\\|make_video\\|видео\\|✓\\|✗\\|CLEAN\\|Не удалось\" | cut -c1-190 | iconv -f utf-8 -t utf-8 -c | head -80"
+  "task_id": "d1791191612",
+  "cmd": "awk '/Генерация вертикального видео/{p=1} p' /var/log/vps-ai-pipeline.log | grep -i \"рендер\\|готов\\|итог\\|WARN\\|завис\\|сохран\\|размер\\|упал\\|rc=\\|Видео\\|секунд\\|мин\" | cut -c1-170 | iconv -f utf-8 -t utf-8 -c | head -20\n"
 }
