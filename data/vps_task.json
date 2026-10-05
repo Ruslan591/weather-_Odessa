@@ -1,4 +1,1 @@
-{
-  "task_id": "d1791211258",
-  "cmd": "date -u; tail -c 500 /tmp/manual_video2.log | cut -c1-160 | iconv -c -f utf-8 -t utf-8"
-}
+{"task_id": "d1791228399", "cmd": "cd /opt/weather-pipeline/repo; date -u; echo --STATE; stat -c \"%y\" data/eumetsat_alert_state.json; cat data/eumetsat_alert_state.json; echo --FC; python3 -c \"import json;d=json.load(open(\\\"data/eumetsat_precip_forecast.json\\\"));print(d[\\\"timestamp\\\"],d.get(\\\"verdict\\\"),d.get(\\\"eta_min\\\"),d.get(\\\"probability_percent\\\"))\"; echo --HIST; tail -n 12 data/eumetsat_precip_history.jsonl | cut -c1-230; echo --CRON; sudo crontab -l | grep -i satell", "timeout": 50}
