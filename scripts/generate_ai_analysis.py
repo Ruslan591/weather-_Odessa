@@ -20,12 +20,12 @@ GEMINI_MODEL  = "gemini-3.7-flash"
 # [2026-10-05] Переход с gemini-2.5-flash (доступ в Developer API ограничен,
 # 503 по утрам, ~43 с и ~6800 токенов "размышлений" на промпт) на 3.x.
 # A/B на реальном промпте: 3.7 low 12 с / 4673 симв. / структура 1:1 с 2.5;
-# 3.8 low часто 503 (новая модель, высокий спрос) — стоит первым запасным.
+# 3.8 low часто 503 (новая модель, высокий спрос) — в цепочке после 3.5.
 # Цепочка: если основная модель отвечает 5xx/429 — пробуем следующую.
 GEMINI_MODEL_CHAIN = [
     ("gemini-3.7-flash", {"thinkingLevel": "low"}),
-    ("gemini-3.8-flash", {"thinkingLevel": "low"}),
-    ("gemini-3.5-flash", {"thinkingLevel": "low"}),
+    ("gemini-3.5-flash", {"thinkingLevel": "low"}),   # стабильная (>=12 мес.), отвечала, когда 3.7/3.8 давали 503
+    ("gemini-3.8-flash", {"thinkingLevel": "low"}),   # новая, 05.10 утром 503 почти на каждый запрос
     ("gemini-2.5-flash", None),
 ]
 GEMINI_LAST_MODEL = None
