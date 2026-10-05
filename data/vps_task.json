@@ -1,4 +1,4 @@
 {
-  "task_id": "d1791191612",
-  "cmd": "awk '/Генерация вертикального видео/{p=1} p' /var/log/vps-ai-pipeline.log | grep -i \"рендер\\|готов\\|итог\\|WARN\\|завис\\|сохран\\|размер\\|упал\\|rc=\\|Видео\\|секунд\\|мин\" | cut -c1-170 | iconv -f utf-8 -t utf-8 -c | head -20\n"
+  "task_id": "d1791191661",
+  "cmd": "L=/var/log/vps-ai-pipeline.log\nawk '/Цикл AI-анализа  05.10 05:5[4-9]|Цикл AI-анализа  05.10 06:/{p=1} /Цикл AI-анализа  05.10 07:2/{p=0} p' $L | grep -i \"Цикл\\|Триггер\\|Gemini\\|BLOCKS\\|staged\\|WARN\\|завис\\|упал\\|ошибк\\|источник\\|Итоговое\\|Готово\\|ранний\\|CLEAN\\|пропущен\\|Голос\\|No audio\\|Не удалось\" | grep -v \"в очереди\\|Deprecation\" | cut -c1-170 | iconv -f utf-8 -t utf-8 -c | head -60\necho ===claude-video-check\ngrep -c \"источник: claude\" $L; awk '/Цикл AI-анализа  04.10 22:3/{p=1} p' $L | grep -c \"источник: claude\" "
 }
