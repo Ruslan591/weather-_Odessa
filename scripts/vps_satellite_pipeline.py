@@ -831,6 +831,54 @@ def _ntfy_post(topic_url, title, priority, tags, body, click=None):
     return False
 
 
+_COMPASS8 = ["С", "СВ", "В", "ЮВ", "Ю", "ЮЗ", "З", "СЗ"]
+
+
+def _opposite_compass(c):
+    try:
+        return _COMPASS8[(_COMPASS8.index(c) + 4) % 8]
+    except ValueError:
+        return None
+
+
+def _precip_push_text(state):
+    """[ИЗМЕНЕНО 2026-10-05] Текст push об осадках: откуда идут, где ближайший
+    край, когда дойдут, скорость. ETA 0 больше не показывается как '~0.0 мин';
+    число 'probability_percent' — эвристика (близость+размер+уверенность в
+    скорости), не вероятность осадков, поэтому подаётся как индекс."""
+    edge = state.get("compass")            # где сейчас ближайший край (от города)
+    dist = state.get("distance_km_now")
+    heading = state.get("direction_compass")  # куда движется поле
+    origin = _opposite_compass(heading) if heading else None
+    speed = state.get("speed_kmh")
+    eta = state.get("eta_min")
+    approaching = state.get("approaching")
+    idx = state.get("probability_percent")
+    parts = []
+    if approaching is False:
+        title = "🌧️ Осадки рядом с городом"
+        head = "Край осадков" + (f" в {dist} км" if dist is not None else "") + (f" к {edge}" if edge else "")
+        head += ", но он не сближается с городом"
+        if heading:
+            head += f" (движется на {heading})"
+        parts.append(head + ".")
+    else:
+        title = "🌧️ Осадки приближаются"
+        if origin:
+            parts.append(f"Идут с {origin}.")
+        elif edge:
+            parts.append(f"Край осадков к {edge} от города.")
+        if dist is not None:
+            parts.append(f"Ближайший край в {dist} км" + (f" ({edge})" if edge and origin else "") + ".")
+        if eta is not None:
+            parts.append("Дойдут менее чем через 5 мин." if eta <= 5 else f"Дойдут через ~{int(round(eta))} мин.")
+    if speed:
+        parts.append(f"Скорость ~{int(round(speed))} км/ч.")
+    if idx is not None:
+        parts.append(f"Индекс {idx}/100 (оценка, не вероятность).")
+    return title, " ".join(parts)
+
+
 def _already_notified(state):
     """[ДОБАВЛЕНО 2026-10-05] Защита от дублей push. check_eumetsat_precip_forecast()/
     check_eumetsat_lightning_forecast() пересчитывают состояние раз в >=15 мин
@@ -864,14 +912,10 @@ def notify_precip_alert():
         return
     if not state.get("just_triggered") or _already_notified(state):
         return
-    eta = state.get("eta_min", "?")
-    dist = state.get("distance_km_now", "?")
-    verdict = state.get("verdict", "?")
-    prob = state.get("probability_percent", "?")
+    _title, _body = _precip_push_text(state)
     ok = _ntfy_post(
-        NTFY_STORM_TOPIC, "🌧️ Осадки приближаются", "high", "cloud_with_rain",
-        f"{verdict} / ETA ~{eta} мин / {dist} км / вероятность {prob}%",
-        click=NEARBY_URL)
+        NTFY_STORM_TOPIC, _title, "high", "cloud_with_rain",
+        _body, click=NEARBY_URL)
     if ok:
         _mark_notified(state_file, state)
         print("  push (осадки) отправлен")
