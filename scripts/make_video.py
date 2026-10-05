@@ -19,7 +19,13 @@ BASE_DIR   = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BLOCKS_DIR = os.path.join(BASE_DIR, "data", "blocks" if SOURCE == "claude" else "blocks_gemini")
 ICONS_DIR  = os.path.join(BASE_DIR, "data", "icons")
 META_FILE  = os.path.join(BLOCKS_DIR, "blocks_meta.json")
-TMP_DIR    = os.path.join(BLOCKS_DIR, "tmp")
+# [2026-10-05] Рабочая папка рендера ВНЕ git-дерева. Раньше data/blocks_gemini/tmp:
+# в ней лежали закоммиченные loop_NN (кадры лупов warnings/marine) и ничего не
+# чистилось, а имя папки зависит от индекса блока. После появления блока
+# "Проверка" индексы сдвинулись: новый луп warnings (50 кадров) перезаписывал только
+# начало старого лупа marine (100 кадров), хвост со старой датой (18.09/03.09) оставался
+# и ffmpeg читал f%04d.png подряд -> в видео "переплетались" разные блоки.
+TMP_DIR    = f"/tmp/video_render_{SOURCE}"
 MP4_FILE   = os.path.join(BASE_DIR, "data",
                            "forecast_video.mp4" if SOURCE == "claude" else "forecast_video_gemini.mp4")
 ENSEMBLE_PWS_FILE = os.path.join(BASE_DIR, "data", "ensemble_snapshots_pws.json")
@@ -840,6 +846,8 @@ def main():
             for _x in _bad: print(f"    - {_x}")
             sys.exit(3)
 
+    import shutil
+    shutil.rmtree(TMP_DIR, ignore_errors=True)   # каждый рендер начинается с чистой папки
     os.makedirs(TMP_DIR, exist_ok=True)
 
     INTRO_FPS = 25
@@ -888,7 +896,7 @@ def main():
             # цикла (тот самый баг "температура крутится по кругу").
             loop_dur = LOOP_DURATIONS[key]
             n_loop = int(INTRO_FPS * loop_dur)
-            loop_dir = os.path.join(TMP_DIR, f"loop_{idx:02d}")
+            loop_dir = os.path.join(TMP_DIR, f"loop_{idx:02d}_{key}")
             os.makedirs(loop_dir, exist_ok=True)
             for i in range(n_loop):
                 # линейная фаза 0..1, БЕЗ eased-рампы и БЕЗ повтора граничного
@@ -903,7 +911,7 @@ def main():
             # замерла в стартовой позе (reveal_frac=0.0 — она в любом случае
             # не видна отдельно, зритель видит только то, что сверху), а
             # счётчик считает вверх один раз и на этом интро-слое заканчивается.
-            intro_dir = os.path.join(TMP_DIR, f"intro_{idx:02d}")
+            intro_dir = os.path.join(TMP_DIR, f"intro_{idx:02d}_{key}")
             os.makedirs(intro_dir, exist_ok=True)
             for i in range(n_intro):
                 linear = (i+1)/n_intro
@@ -916,7 +924,7 @@ def main():
             # интро-анимация (прорисовка графика + счётчик) — только если для
             # этого блока вообще есть график (get_temp_curve вернул данные)
             if get_temp_curve(key) or key in DECORATIVE_INTRO_KEYS:
-                intro_dir = os.path.join(TMP_DIR, f"intro_{idx:02d}")
+                intro_dir = os.path.join(TMP_DIR, f"intro_{idx:02d}_{key}")
                 os.makedirs(intro_dir, exist_ok=True)
                 for i in range(n_intro):
                     linear = (i+1)/n_intro
@@ -943,7 +951,7 @@ def main():
             if fname.startswith(('chrome_', 'strip_', 'block_')) or fname == 'concat_list.txt':
                 try: os.remove(full)
                 except: pass
-            elif fname.startswith('intro_') and os.path.isdir(full):
+            elif fname.startswith(('intro_', 'loop_')) and os.path.isdir(full):
                 try:
                     for sub in os.listdir(full):
                         os.remove(os.path.join(full, sub))
