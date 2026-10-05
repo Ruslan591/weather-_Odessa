@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-05T15:17:20Z",
+  "timestamp": "2026-10-05T15:24:20Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-10-05T14:45:00.000Z",
   "target_id": 2,
@@ -19,7 +19,7 @@
     "frontlike": false,
     "window_spanning": false,
     "phase_label": "безоблачно",
-    "cloud_fraction": 0.186,
+    "cloud_fraction": 0.039,
     "has_precip": true,
     "has_lightning": false
   },
@@ -57,7 +57,7 @@
       "window_spanning": false,
       "phase_label": "безоблачно",
       "type_label": "плотная/высокая",
-      "has_precip": null,
+      "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": true,
       "geocolour_confirmed": false
@@ -270,36 +270,36 @@
   ],
   "target_phase": {
     "label": "безоблачно",
-    "cloud_fraction": 0.706
+    "cloud_fraction": 0.0
   },
   "existence": {
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-10-05T14:50:00.000Z"
+        "timestamp": "2026-10-05T15:00:00.000Z"
       },
       "geocolour_motion": {
         "confirmed": false,
-        "timestamp": "2026-10-05T14:50:00.000Z"
+        "timestamp": "2026-10-05T15:00:00.000Z"
       },
       "cloud_phase_type": {
-        "confirmed": true,
-        "timestamp": "2026-10-05T15:12:35Z"
+        "confirmed": false,
+        "timestamp": "2026-10-05T15:23:47Z"
       }
     },
-    "votes_confirmed": 1,
-    "votes_not_confirmed": 2,
-    "consensus": "disputed"
+    "votes_confirmed": 0,
+    "votes_not_confirmed": 3,
+    "consensus": "not_confirmed"
   },
   "phenomena": {
     "precip_forecast": {
       "confirmed": false,
-      "timestamp": "2026-10-05T15:07:15Z"
+      "timestamp": "2026-10-05T15:24:07Z"
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-10-05T15:12:57Z"
+      "timestamp": "2026-10-05T15:24:09Z"
     }
   },
-  "verdict": "Цель в 25км С, безоблачно — каналы расходятся: cloud_phase_type подтверждают, ir_motion/geocolour_motion нет. Отдельно: система синоптического масштаба (7328км²) в 9км Ю (осадки)."
+  "verdict": "CLM отметил цель в 25км С, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (7328км²) в 9км Ю (осадки)."
 }
