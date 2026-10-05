@@ -16,7 +16,19 @@ import verification
 BASE_DIR      = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUTPUT_FILE   = os.path.join(BASE_DIR, "data", "forecast_analysis_claude.json")
 OUTPUT_FILE_GEMINI = os.path.join(BASE_DIR, "data", "forecast_analysis_gemini.json")
-GEMINI_MODEL  = "gemini-2.5-flash"
+GEMINI_MODEL  = "gemini-3.7-flash"
+# [2026-10-05] Переход с gemini-2.5-flash (доступ в Developer API ограничен,
+# 503 по утрам, ~43 с и ~6800 токенов "размышлений" на промпт) на 3.x.
+# A/B на реальном промпте: 3.7 low 12 с / 4673 симв. / структура 1:1 с 2.5;
+# 3.8 low часто 503 (новая модель, высокий спрос) — стоит первым запасным.
+# Цепочка: если основная модель отвечает 5xx/429 — пробуем следующую.
+GEMINI_MODEL_CHAIN = [
+    ("gemini-3.7-flash", {"thinkingLevel": "low"}),
+    ("gemini-3.8-flash", {"thinkingLevel": "low"}),
+    ("gemini-3.5-flash", {"thinkingLevel": "low"}),
+    ("gemini-2.5-flash", None),
+]
+GEMINI_LAST_MODEL = None
 ENV_FILE      = os.path.join(BASE_DIR, ".env")
 TIMEOUT       = 30
 
@@ -971,29 +983,58 @@ GEMINI_STYLE_INSTRUCTION = (
     "все значения целые. Уровни атмосферы: 850 гПа, 500 гПа, 10 гПа — без пояснений в скобках."
 )
 
-def call_gemini(prompt, api_key, model=GEMINI_MODEL):
-    payload = json.dumps({
+def _call_gemini_once(prompt, api_key, model, thinking):
+    body = {
         "contents": [{"parts": [{"text": prompt}]}],
         "systemInstruction": {"parts": [{"text": GEMINI_STYLE_INSTRUCTION}]}
-    }).encode()
-
+    }
+    if thinking:
+        body["generationConfig"] = {"thinkingConfig": thinking}
     url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
            f"{model}:generateContent?key={api_key}")
-
     req = urllib.request.Request(
-        url,
-        data=payload,
-        headers={"Content-Type": "application/json"},
-        method="POST"
-    )
+        url, data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json"}, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=60) as r:
-            raw = r.read().decode()
-        resp = json.loads(raw)
+        with urllib.request.urlopen(req, timeout=150) as r:
+            resp = json.loads(r.read().decode())
     except urllib.error.HTTPError as e:
-        body = e.read().decode()
-        raise Exception(f"HTTP Error {e.code}: {e.reason} | {body[:300]}")
-    return resp["candidates"][0]["content"]["parts"][0]["text"]
+        err = e.read().decode()
+        ex = Exception(f"HTTP Error {e.code}: {e.reason} | {model} | {err[:300]}")
+        ex.http_code = e.code
+        raise ex
+    cand = resp["candidates"][0]
+    # Склеиваем все текстовые части, кроме "мыслей" (у 3.x частей может быть >1)
+    text = "".join(p.get("text", "") for p in cand["content"]["parts"] if not p.get("thought"))
+    if not text.strip():
+        raise Exception(f"Пустой ответ {model}, finishReason={cand.get('finishReason')}")
+    if cand.get("finishReason") not in (None, "STOP"):
+        print(f"  [AI-Gemini] ⚠ {model}: finishReason={cand.get('finishReason')}")
+    return text
+
+
+def call_gemini(prompt, api_key, model=None):
+    """Цепочка моделей: GEMINI_MODEL_CHAIN, по 2 попытки на модель при 5xx/429."""
+    global GEMINI_LAST_MODEL
+    import time as _t
+    chain = GEMINI_MODEL_CHAIN if model is None else [(model, None)]
+    last = None
+    for m, thinking in chain:
+        for attempt in (1, 2):
+            try:
+                text = _call_gemini_once(prompt, api_key, m, thinking)
+                GEMINI_LAST_MODEL = m
+                if m != chain[0][0]:
+                    print(f"  [AI-Gemini] ответила запасная модель {m}")
+                return text
+            except Exception as e:
+                last = e
+                code = getattr(e, "http_code", None)
+                print(f"  [AI-Gemini] {m} попытка {attempt}: {str(e)[:160]}")
+                if code in (500, 502, 503, 504, 429) and attempt == 1:
+                    _t.sleep(6); continue
+                break
+    raise last
 
 # [ДОБАВЛЕНО 2026-09-22] Кэш промпта для повторных попыток Gemini при
 # pending (см. GEMINI_RETRY_CACHE_FILE ниже) — файл в /tmp, сознательно
@@ -1144,6 +1185,7 @@ def generate_gemini_analysis(prompt, now_iso, current_hash, days, run_key, mode=
         "text": text,
         "last_run_key": run_key,
         "provider": "gemini",
+        "model": GEMINI_LAST_MODEL,
         "mode": mode,
     }
     _write_json_and_push(OUTPUT_FILE_GEMINI, result, "forecast_analysis_gemini (early)")
