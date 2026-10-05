@@ -1,4 +1,4 @@
 {
-  "task_id": "d1791192426",
-  "cmd": "cd /opt/weather-pipeline/repo\nfor i in $(seq 1 6); do grep -q GEMINI_MODEL_CHAIN scripts/generate_ai_analysis.py && break; sleep 10; done\ngrep -c GEMINI_MODEL_CHAIN scripts/generate_ai_analysis.py; date -u\ncat > /tmp/manual_gen2.sh <<'EOS'\n#!/bin/bash\ncd /opt/weather-pipeline/repo || exit 1\nP=/usr/bin/python3\necho \"=== analysis $(date -u +%T)\"\ntimeout 290 $P scripts/generate_ai_analysis.py --force-gemini 2>&1 | iconv -c -f utf-8 -t utf-8 | grep -v 'DeprecationWarning\\|now_utc\\|utcnow'\necho \"=== blocks $(date -u +%T)\"\ntimeout 900 $P scripts/make_blocks_gemini_cloud.py 2>&1 | iconv -c -f utf-8 -t utf-8\necho \"=== video $(date -u +%T)\"\ntimeout 1500 $P scripts/make_video.py gemini 2>&1 | iconv -c -f utf-8 -t utf-8 | grep -v 'DeprecationWarning\\|now_utc\\|utcnow'\necho \"video rc=${PIPESTATUS[0]}\"\n$P - <<'PY'\nimport sys; sys.path.insert(0,'scripts')\nimport vps_ai_pipeline as v\nv.git_push_ai()\nPY\necho \"=== done $(date -u +%T)\"\nEOS\nchmod +x /tmp/manual_gen2.sh\nnohup flock /tmp/vps_ai_pipeline.lock bash /tmp/manual_gen2.sh > /tmp/manual_gen2.log 2>&1 &\nsleep 20; cut -c1-200 /tmp/manual_gen2.log | head -20"
+  "task_id": "d1791192602",
+  "cmd": "cut -c1-220 /tmp/manual_gen2.log | head -40; date -u"
 }
