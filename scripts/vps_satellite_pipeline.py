@@ -831,6 +831,27 @@ def _ntfy_post(topic_url, title, priority, tags, body, click=None):
     return False
 
 
+def _already_notified(state):
+    """[ДОБАВЛЕНО 2026-10-05] Защита от дублей push. check_eumetsat_precip_forecast()/
+    check_eumetsat_lightning_forecast() пересчитывают состояние раз в >=15 мин
+    (гейт по timestamp выходного json), а notify_*() вызываются КАЖДЫЙ 5-минутный
+    цикл и читают флаг just_triggered из gitignored state-файла, который живёт до
+    следующего пересчёта — итого один и тот же алерт уходил 3 раза подряд с шагом
+    5 минут. Теперь шлём не чаще одного раза на один timestamp состояния."""
+    return bool(state.get("timestamp")) and state.get("notified_for") == state.get("timestamp")
+
+
+def _mark_notified(state_file, state):
+    try:
+        state["notified_for"] = state.get("timestamp")
+        tmp = state_file + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(state, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, state_file)
+    except Exception as e:
+        print(f"  [WARN] не удалось отметить notified_for в {state_file}: {e}")
+
+
 def notify_precip_alert():
     # Push ТОЛЬКО на переход false→true (just_triggered), не на каждый цикл.
     state_file = os.path.join(BASE_DIR, "data", "eumetsat_alert_state.json")
@@ -841,7 +862,7 @@ def notify_precip_alert():
             state = json.load(f)
     except Exception:
         return
-    if not state.get("just_triggered"):
+    if not state.get("just_triggered") or _already_notified(state):
         return
     eta = state.get("eta_min", "?")
     dist = state.get("distance_km_now", "?")
@@ -852,6 +873,7 @@ def notify_precip_alert():
         f"{verdict} / ETA ~{eta} мин / {dist} км / вероятность {prob}%",
         click=NEARBY_URL)
     if ok:
+        _mark_notified(state_file, state)
         print("  push (осадки) отправлен")
 
 
@@ -864,7 +886,7 @@ def notify_lightning_alert():
             state = json.load(f)
     except Exception:
         return
-    if not state.get("just_triggered"):
+    if not state.get("just_triggered") or _already_notified(state):
         return
     eta = state.get("eta_min", "?")
     dist = state.get("distance_km_now", "?")
@@ -875,6 +897,7 @@ def notify_lightning_alert():
         f"{verdict} / ETA ~{eta} мин / {dist} км / вероятность {prob}%",
         click=NEARBY_URL)
     if ok:
+        _mark_notified(state_file, state)
         print("  push (гроза) отправлен")
 
 
