@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-10-06T05:32:23Z",
+  "timestamp": "2026-10-06T05:42:16Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-10-06T05:00:00.000Z",
-  "target_id": 2,
-  "target_area_km2": 120.1,
-  "target_distance_km": 77.9,
-  "target_bearing_deg": 278.0,
-  "target_compass": "З",
+  "target_id": 3,
+  "target_area_km2": 80.1,
+  "target_distance_km": 90.5,
+  "target_bearing_deg": 8.0,
+  "target_compass": "С",
   "system": {
     "target_id": 0,
     "area_km2": 1180.9,
@@ -121,7 +121,7 @@
       "track_id": 1184,
       "first_seen": "2026-10-06T03:30:00.000Z",
       "last_seen": "2026-10-06T05:00:00.000Z",
-      "points_count": 3,
+      "points_count": 5,
       "age_minutes": 90.0,
       "distance_from_odessa_km": 19.4,
       "dx_km": -11.03,
@@ -166,14 +166,52 @@
       },
       "direction_compass": "СЗ",
       "current_target_id": 0,
-      "has_precip": null,
-      "has_lightning": null,
-      "ahead_obs": null,
-      "behind_obs": null,
-      "front_type": null,
-      "front_type_confidence": null
+      "has_precip": false,
+      "has_lightning": false,
+      "ahead_obs": {
+        "obs_time": "2026-10-06T03:00:00Z",
+        "raw": "33892,2026,10,06,03,00,AAXX 06031 33892 42997 83501 10136 20055 30020 40230 57001 88030 555 20128 7000/=",
+        "temp": 13.6,
+        "station_pressure": 1002.0,
+        "sea_pressure": 1023.0,
+        "pressure_tendency_code": "7",
+        "pressure_tendency_value": -0.1,
+        "total_cloud_okta": 8,
+        "wind_dir_deg": 350,
+        "wind_speed_ms": 1,
+        "precip_mm": null,
+        "precip_period_hours": null,
+        "present_weather_code": null,
+        "present_weather_label": null,
+        "is_extreme_weather": false,
+        "obs_source": "SYNOP"
+      },
+      "behind_obs": {
+        "obs_time": "2026-10-06T03:00:00Z",
+        "raw": "33902,2026,10,06,03,00,AAXX 06031 33902 42960 60000 10119 20116 30145 40204 57001 80001 333 55089==",
+        "temp": 11.9,
+        "station_pressure": 1014.5,
+        "sea_pressure": 1020.4,
+        "pressure_tendency_code": "7",
+        "pressure_tendency_value": -0.1,
+        "total_cloud_okta": 6,
+        "wind_dir_deg": null,
+        "wind_speed_ms": 0,
+        "precip_mm": null,
+        "precip_period_hours": null,
+        "present_weather_code": null,
+        "present_weather_label": null,
+        "is_extreme_weather": false,
+        "obs_source": "SYNOP"
+      },
+      "front_type": "cold",
+      "front_type_confidence": "station"
     }
   ],
+  "also_suppressed_nearby": {
+    "signature": "-75_10",
+    "area_km2": 120.1
+  },
   "target_phase": {
     "label": "низкая водяная",
     "cloud_fraction": 0.259
@@ -186,7 +224,7 @@
       },
       "geocolour_motion": {
         "confirmed": false,
-        "timestamp": "2026-10-06T05:00:00.000Z"
+        "timestamp": "2026-10-06T05:10:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": false,
@@ -200,12 +238,12 @@
   "phenomena": {
     "precip_forecast": {
       "confirmed": false,
-      "timestamp": "2026-10-06T05:27:05Z"
+      "timestamp": "2026-10-06T05:42:07Z"
     },
     "lightning_forecast": {
       "confirmed": false,
       "timestamp": "2026-10-06T05:32:05Z"
     }
   },
-  "verdict": "CLM отметил цель в 78км З, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (1181км²) в 19км СЗ (вытянута СВ-ЮЗ (39°), похоже на фронт, средняя водяная)."
+  "verdict": "CLM отметил цель в 90км С, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (1181км²) в 19км СЗ (вытянута СВ-ЮЗ (39°), похоже на фронт, средняя водяная)."
 }
