@@ -63,9 +63,10 @@ def _save_cooldown(data):
         log.debug("  cooldown save error: %s", e)
 
 
-def in_cooldown(station, dt):
+def in_cooldown(station, dt, minutes=None):
     """True, если (station, час) уже пытались недавно и неудачно —
-    пропускаем сетевой запрос."""
+    пропускаем сетевой запрос. minutes — свой интервал (по умолчанию
+    COOLDOWN_MIN)."""
     data = _load_cooldown()
     ts = data.get(_cooldown_key(station, dt))
     if not ts:
@@ -74,7 +75,7 @@ def in_cooldown(station, dt):
         last = datetime.datetime.fromisoformat(ts)
     except Exception:
         return False
-    return (datetime.datetime.utcnow() - last).total_seconds() < COOLDOWN_MIN * 60
+    return (datetime.datetime.utcnow() - last).total_seconds() < (minutes or COOLDOWN_MIN) * 60
 
 
 def mark_attempt(station, dt):
@@ -785,6 +786,9 @@ def fetch_latest_bufr_essentials(station_id: str, hours_back: int = 4):
 # и bufr.html не меняются. Meteomanz остаётся запасным источником.
 OGIMET_ECENTER = "UKMS"
 OGIMET_TTAAII_FIRST = ("ISID10",)   # в каком бюллетене лежит Одесса (проверено 2026-10-05)
+# [2026-10-06] ogimet публикует BUFR ~hh:22; BUFR-окно пайплайна hh:25–35 с
+# циклом ~5 мин → повтор нужен через ~5 мин, а не через 20 (COOLDOWN_MIN).
+OGIMET_COOLDOWN_MIN = 4
 OGIMET_MAX_FILES = 8                # потолок страниц decobufr на один срок (квота ogimet — 2000 файлов)
 OGIMET_HEADERS = {
     "User-Agent": HEADERS["User-Agent"],
@@ -914,7 +918,7 @@ def fetch_and_append(dt: datetime.datetime, dry_run=False, station: str = None) 
 
     html = None
     src = "meteomanz"
-    if station == STATION and not in_cooldown("ogimet:" + station, dt):
+    if station == STATION and not in_cooldown("ogimet:" + station, dt, OGIMET_COOLDOWN_MIN):
         try:
             html = fetch_ogimet_html(dt, station=station)
         except Exception as e:
