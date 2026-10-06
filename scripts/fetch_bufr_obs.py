@@ -773,6 +773,138 @@ def fetch_latest_bufr_essentials(station_id: str, hours_back: int = 4):
 
 # ── Основная логика (штатный запуск для ст. 33837, без изменений) ────────
 
+# ── ogimet BUFR (основной источник для STATION) ────────────────────────────
+# [ДОБАВЛЕНО 2026-10-06] НАХОДКА: с VPS Meteomanz отдаёт HTTP 403 почти весь
+# день → BUFR попадал в bufr_YYYY.json только ночью (1–2 раза в сутки).
+# ogimet.com публикует те же BUFR (центр UKMS, бюллетени ISID10/ISID11 на
+# сроки 03/09/15/21Z) через ~20 мин после срока: список файлов отдаёт
+# getbufr.php (ТРЕБУЕТ заголовок Referer — без него HTTP 403), расшифровку
+# всех подмножеств одной HTML-страницей — cgi-bin/decobufr?file=ИМЯ.
+# Строки расшифровки приводим к виду страницы Meteomanz ("<b>010004 <i>..</i> </b>
+# значение (raw)<br>") и отдаём в неизменный parse_obs() — формат записей
+# и bufr.html не меняются. Meteomanz остаётся запасным источником.
+OGIMET_ECENTER = "UKMS"
+OGIMET_TTAAII_FIRST = ("ISID10",)   # в каком бюллетене лежит Одесса (проверено 2026-10-05)
+OGIMET_MAX_FILES = 8                # потолок страниц decobufr на один срок (квота ogimet — 2000 файлов)
+OGIMET_HEADERS = {
+    "User-Agent": HEADERS["User-Agent"],
+    "Referer":    "https://www.ogimet.com/bufr.phtml.en",
+}
+
+
+def _ogimet_get(url: str, timeout: int = 30) -> str:
+    req = urllib.request.Request(url, headers=OGIMET_HEADERS)
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read().decode("utf-8", errors="replace")
+
+
+def ogimet_list_files(dt: datetime.datetime, ecenter: str = OGIMET_ECENTER) -> list:
+    """Имена BUFR-файлов (type=IS) центра ecenter с номинальным временем dt."""
+    beg = dt.strftime("%Y%m%d%H%M")
+    html = _ogimet_get(
+        f"https://www.ogimet.com/getbufr.php?res=list&beg={beg}&end={beg}"
+        f"&ecenter={ecenter}&type=IS"
+    )
+    names = []
+    for n in re.findall(r'decobufr\?file=([^"&\s]+\.bufr)', html):
+        if n not in names:
+            names.append(n)
+    return names
+
+
+_OGIMET_ROW = re.compile(r"<tr><td class='ndesc' id='d_(\d+)_(\d+)'[^>]*>#\d+</td>(.*?)</tr>", re.S)
+_OGIMET_CELL = re.compile(r"<td class='(\w+)'[^>]*>(.*?)</td>", re.S)
+
+
+def ogimet_station_rows(page: str, station: str, dt: datetime.datetime):
+    """Из страницы decobufr достаёт подмножество станции за срок dt.
+    Возвращает [(descriptor6, name, value_str)] в порядке BUFR или None."""
+    block, num = int(station[:2]), int(station[2:])
+    subsets = {}
+    for sub, _n, body in _OGIMET_ROW.findall(page):
+        d = {c: re.sub(r"<[^>]+>", "", v).strip() for c, v in _OGIMET_CELL.findall(body)}
+        val = d.get("rval") or d.get("ival") or ""
+        subsets.setdefault(int(sub), []).append((d.get("desc", ""), d.get("name", ""), val))
+
+    def first(rows, desc):
+        for dsc, _nm, v in rows:
+            if dsc == desc and v != "":
+                try:
+                    return int(float(v))
+                except ValueError:
+                    return None
+        return None
+
+    for rows in subsets.values():
+        if first(rows, "0 01 001") != block or first(rows, "0 01 002") != num:
+            continue
+        got = (first(rows, "0 04 001"), first(rows, "0 04 002"),
+               first(rows, "0 04 003"), first(rows, "0 04 004"))
+        if got != (dt.year, dt.month, dt.day, dt.hour):
+            continue  # та же станция, но другой срок
+        return [(dsc.replace(" ", ""), nm, v) for dsc, nm, v in rows]
+    return None
+
+
+def ogimet_rows_to_html(rows: list) -> str:
+    """Строки BUFR -> псевдо-HTML в формате Meteomanz для parse_obs()."""
+    out = ["<html><body>BUFR report<br>"]
+    for d6, name, val in rows:
+        name = name.replace("<", "(").replace(">", ")")
+        if val == "":
+            v = "-"
+        elif d6 == "011002":
+            try:
+                ms = float(val)
+                v = f"{round(ms * 3.6, 1)} Km/h ({ms})"
+            except ValueError:
+                v = "-"
+        else:
+            v = f"{val} ({val})"
+        out.append(f"<b>{d6} <i>{name}</i> </b> {v}<br>")
+    out.append("</body></html>")
+    return "\n".join(out)
+
+
+def fetch_ogimet_html(dt: datetime.datetime, station: str = None):
+    """Псевдо-HTML записи станции за срок dt из ogimet BUFR или None
+    (файлов ещё нет / станции нет в файлах). Сетевые ошибки — исключением."""
+    station = station or STATION
+    names = ogimet_list_files(dt)
+    if not names:
+        log.info(f"[BUFR] ogimet: файлов {OGIMET_ECENTER} за {dt:%Y-%m-%d %H}:00 UTC ещё нет")
+        return None
+    groups = {}
+    for n in names:
+        parts = n.split("_")
+        groups.setdefault(parts[1] if len(parts) > 1 else "?", []).append(n)
+    order = [g for g in OGIMET_TTAAII_FIRST if g in groups] + \
+            [g for g in sorted(groups) if g not in OGIMET_TTAAII_FIRST]
+
+    def sort_key(n):  # сначала оригинал, потом поправки RRA/RRB..., внутри — по времени приёма
+        p = n.split("_")
+        return (p[0], p[4] if len(p) > 4 else "")
+
+    fetched = 0
+    for tt in order:
+        rows = None
+        for fn in sorted(groups[tt], key=sort_key):
+            if fetched >= OGIMET_MAX_FILES:
+                break
+            if fetched:
+                time.sleep(1.5)
+            page = _ogimet_get(f"https://www.ogimet.com/cgi-bin/decobufr?file={fn}")
+            fetched += 1
+            found = ogimet_station_rows(page, station, dt)
+            if found:
+                rows = found  # поправка (RRA/RRB) перекрывает оригинал
+                log.info(f"[BUFR] ogimet: {station} найдена в {fn}")
+        if rows:
+            return ogimet_rows_to_html(rows)
+    log.info(f"[BUFR] ogimet: {station} не найдена в {fetched} файлах за {dt:%Y-%m-%d %H}:00 UTC")
+    return None
+
+
 def fetch_and_append(dt: datetime.datetime, dry_run=False, station: str = None) -> bool:
     station = station or STATION
     records = load_bufr_json(dt.year)
@@ -780,21 +912,37 @@ def fetch_and_append(dt: datetime.datetime, dry_run=False, station: str = None) 
         log.info(f"[BUFR] уже есть: {dt:%Y-%m-%d %H}:00 UTC")
         return False
 
-    if in_cooldown(station, dt):
-        log.info(f"[BUFR] кулдаун активен, пропуск: {dt:%Y-%m-%d %H}:00 UTC")
-        return False
+    html = None
+    src = "meteomanz"
+    if station == STATION and not in_cooldown("ogimet:" + station, dt):
+        try:
+            html = fetch_ogimet_html(dt, station=station)
+        except Exception as e:
+            log.warning(f"[BUFR] ogimet ошибка {dt:%Y-%m-%d %H}:00 UTC: {e}")
+            html = None
+        if html is None:
+            mark_attempt("ogimet:" + station, dt)
+        else:
+            src = "ogimet-BUFR"
 
-    try:
-        html = fetch_html(dt, station=station)
-    except Exception as e:
-        log.warning(f"[BUFR] fetch ошибка {dt:%Y-%m-%d %H}:00 UTC: {e}")
-        mark_attempt(station, dt)
-        return False
+    if html is None:
+        # запасной путь: Meteomanz (как раньше)
+        if in_cooldown(station, dt):
+            log.info(f"[BUFR] кулдаун активен, пропуск: {dt:%Y-%m-%d %H}:00 UTC")
+            return False
+        try:
+            html = fetch_html(dt, station=station)
+        except Exception as e:
+            log.warning(f"[BUFR] fetch ошибка {dt:%Y-%m-%d %H}:00 UTC: {e}")
+            mark_attempt(station, dt)
+            return False
 
     obs = parse_obs(html, dt, station=station)
     if obs is None:
         log.info(f"[BUFR] нет данных: {dt:%Y-%m-%d %H}:00 UTC")
         return False
+    if src != "meteomanz":
+        obs["obs_source"] = src
 
     non_null = sum(1 for v in obs.values() if v is not None and v != obs["dt"] and v != obs["station"])
     log.info(f"[BUFR] {dt:%Y-%m-%d %H}:00 UTC  T={obs.get('temp')}°C  "
