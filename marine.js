@@ -33,6 +33,59 @@ let _tiktokSeaTemp    = [];
 let _tiktokFetchedAt  = 0;
 
 /* =========================================================
+   КОРРЕКЦИЯ ТЕМПЕРАТУРЫ ВОДЫ ПО ГМЦ ЧАМ
+   Модель (Open-Meteo/CMEMS) систематически завышает SST относительно
+   утреннего факта ГМЦ ЧАМ (t.me/HMC_Odesa → hmcbas_telegram_sea_temp.json).
+   Поправка = среднее (модель − факт) за последние SST_CORR_WINDOW_DAYS дней,
+   модельные значения берутся из marine_history.json (±3 ч от замера).
+   Walk-forward бэктест на 87 замерах (июль–октябрь 2026): MAE 2.07° → ~0.6°.
+   Сырое значение модели (_marineData.sst) НЕ меняется — сверка и точность
+   модели считаются по нему; корректируется только отображаемое значение.
+========================================================= */
+const SST_CORR_WINDOW_DAYS = 30;
+const SST_CORR_MIN_N       = 10;
+let _sstCorrCache = { key: null, val: null };
+
+function marineSstCorrection(){
+    if(!_hmcbasTelegramArr || !_hmcbasTelegramArr.length) return null;
+    if(!_marineHistArr || !_marineHistArr.length) return null;
+    const key = _hmcbasTelegramArr.length + ":" + _marineHistArr.length + ":" +
+                _marineHistArr[_marineHistArr.length - 1].time;
+    if(_sstCorrCache.key === key) return _sstCorrCache.val;
+
+    const since = Date.now() - SST_CORR_WINDOW_DAYS * 86400000;
+    const diffs = [];
+    for(const e of _hmcbasTelegramArr){
+        if(e.sea_temp == null) continue;
+        const ts = Date.parse(e.timestamp);
+        if(isNaN(ts) || ts < since) continue;
+        const model = nearestMarineSst(ts, 3 * 3600000);
+        if(model == null) continue;
+        diffs.push(model - e.sea_temp);
+    }
+    const val = diffs.length >= SST_CORR_MIN_N
+        ? { bias: diffs.reduce((a,b)=>a+b,0) / diffs.length, n: diffs.length }
+        : null;
+    _sstCorrCache = { key, val };
+    return val;
+}
+
+/* → { value, raw, corr } ; value — скорректированная (или сырая, если данных мало) */
+function marineSstCorrected(m){
+    const raw = m && m.sst != null ? m.sst : null;
+    if(raw == null) return { value: null, raw: null, corr: null };
+    const corr = marineSstCorrection();
+    if(!corr) return { value: raw, raw, corr: null };
+    return { value: Math.round((raw - corr.bias) * 10) / 10, raw, corr };
+}
+
+function marineSstCorrNote(c){
+    if(!c.corr) return "";
+    const adj = c.value - c.raw;
+    return `модель ${c.raw.toFixed(1)}° · поправка ${adj >= 0 ? "+" : "−"}${Math.abs(adj).toFixed(1)}° по ГМЦ ЧАМ (${c.corr.n} зам.)`;
+}
+
+/* =========================================================
    МОРСКОЙ API (open-meteo marine + ветер над морем)
 ========================================================= */
 async function loadMarine(){
@@ -534,7 +587,7 @@ function seaLevelDangerColor(cm){
 /* =========================================================
    ИНДИКАТОР: ТЕМПЕРАТУРА ВОДЫ (дуга, 0..30°C)
 ========================================================= */
-function seaTempIndicatorSvg(sst){
+function seaTempIndicatorSvg(sst, note){
     const tMin = 0, tMax = 30, tMid = 15;
     const tC    = sst != null ? Math.max(tMin, Math.min(tMax, sst)) : null;
     const angle = tC != null ? (tC - tMid) / tMid * 90 : 0;
@@ -581,6 +634,7 @@ function seaTempIndicatorSvg(sst){
             </text>
             <text x="80" y="65" text-anchor="middle" font-size="9" fill="currentColor" fill-opacity="0.50">°C</text>
         </svg>
+        ${note ? `<div style="font-size:10px;color:#777;text-align:center;line-height:1.3;margin-top:2px;">${note}</div>` : ""}
     </div>`;
 }
 
@@ -851,7 +905,7 @@ function buildMarineIndicatorCards(m){
     const cards = [];
     const variants = getMarineVariants();
 
-    if(m.sst != null) cards.push(seaTempIndicatorSvg(m.sst));
+    if(m.sst != null){ const sc = marineSstCorrected(m); cards.push(seaTempIndicatorSvg(sc.value, marineSstCorrNote(sc))); }
     if(m.seaLevel != null || m.seaLevelAbs != null){
         cards.push(variants.seaLevel === "abs"
             ? seaLevelAbsIndicatorSvg(m.seaLevelAbs)
@@ -928,10 +982,12 @@ function makeMarineIndicatorsGrid(m){
    БЛОК: МОРЕ (карточка "Море · Чёрное море")
 ========================================================= */
 function makeMarineTextRows(m){
-    const sstColor = m.sst == null ? "#aaa"
-        : m.sst < 12 ? "#74b9ff"
-        : m.sst < 20 ? "#00cec9"
-        : m.sst < 26 ? "#55efc4"
+    const sc = marineSstCorrected(m);
+    const sstV = sc.value;
+    const sstColor = sstV == null ? "#aaa"
+        : sstV < 12 ? "#74b9ff"
+        : sstV < 20 ? "#00cec9"
+        : sstV < 26 ? "#55efc4"
         :               "#ffd166";
 
     const fV    = v => v != null ? v.toFixed(1) : "—";
@@ -945,8 +1001,8 @@ function makeMarineTextRows(m){
     const sstHtml = m.sst != null ? `
         <div style="display:flex;justify-content:space-between;align-items:center;
                     padding:8px 0 10px;border-bottom:1px solid #1e1e1e;margin-bottom:6px;">
-            <span style="font-size:14px;color:#888;">🌡️ Температура воды</span>
-            <span style="font-size:26px;font-weight:800;color:${sstColor};">${m.sst.toFixed(1)}°C</span>
+            <span style="font-size:14px;color:#888;">🌡️ Температура воды${sc.corr ? `<br><span style="font-size:11px;color:#666;">${marineSstCorrNote(sc)}</span>` : ""}</span>
+            <span style="font-size:26px;font-weight:800;color:${sstColor};">${sstV.toFixed(1)}°C</span>
         </div>` : "";
 
     const seaLevelHtml = m.seaLevel != null ? (() => {
