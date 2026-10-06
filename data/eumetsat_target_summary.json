@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-10-06T23:38:15Z",
+  "timestamp": "2026-10-06T23:42:09Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-10-06T23:15:00.000Z",
-  "target_id": 3,
-  "target_area_km2": 173.5,
-  "target_distance_km": 54.2,
-  "target_bearing_deg": 89.0,
-  "target_compass": "В",
+  "target_id": 5,
+  "target_area_km2": 161.4,
+  "target_distance_km": 76.6,
+  "target_bearing_deg": 238.0,
+  "target_compass": "ЮЗ",
   "system": {
     "target_id": 0,
     "area_km2": 588.4,
@@ -42,7 +42,7 @@
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": true,
-      "geocolour_confirmed": false
+      "geocolour_confirmed": true
     }
   ],
   "system_suppressed_count": 11,
@@ -450,6 +450,10 @@
       "front_type_confidence": "station"
     }
   ],
+  "also_suppressed_nearby": {
+    "signature": "55_0",
+    "area_km2": 173.5
+  },
   "target_phase": {
     "label": "безоблачно",
     "cloud_fraction": 0.0
@@ -461,17 +465,17 @@
         "timestamp": "2026-10-06T23:20:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-10-06T23:10:00.000Z"
+        "confirmed": true,
+        "timestamp": "2026-10-06T23:20:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": false,
         "timestamp": "2026-10-06T16:57:12Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -483,5 +487,5 @@
       "timestamp": "2026-10-06T23:38:01Z"
     }
   },
-  "verdict": "CLM отметил цель в 54км В, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (588км²) в 12км ЮВ (вытянута В-З (75°), похоже на фронт)."
+  "verdict": "Цель в 77км ЮЗ, безоблачно — каналы расходятся: geocolour_motion подтверждают, ir_motion/cloud_phase_type нет. Отдельно: система синоптического масштаба (588км²) в 12км ЮВ (вытянута В-З (75°), похоже на фронт)."
 }
