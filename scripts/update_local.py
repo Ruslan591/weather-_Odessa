@@ -135,36 +135,8 @@ def git_commit_push(no_push=False):
 
 # ── Точка входа ───────────────────────────────────────────────────────────────
 
-def main():
-    parser = argparse.ArgumentParser(description="update_local.py — локальный апдейтер")
-    parser.add_argument("--no-push",   action="store_true", help="Не делать git push")
-    parser.add_argument("--no-synop",  action="store_true", help="Пропустить шаг 1 (SYNOP)")
-    parser.add_argument("--no-model",  action="store_true", help="Пропустить шаг 2 (modelData)")
-    parser.add_argument("--snap-only", action="store_true", help="Только снять снимок (шаг 3+4)")
-    parser.add_argument("--no-fill",   action="store_true", help="Не заполнять modeldata")
-    args = parser.parse_args()
-
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-        datefmt="%H:%M:%S"
-    )
-
-    # ── Шаг 0: заполнение modeldata ───────────────────────────────────────────
-    if not args.snap_only and not args.no_fill:
-        from fill_modeldata_local import fill_missing_months, update_current_month
-        fill_missing_months(_GIT_CHANGED)
-        update_current_month(_GIT_CHANGED)
-    else:
-        _upd.log.info("  [local] Шаг 0 (fill modeldata) пропущен")
-
-    # ── Шаг 1: SYNOP ──────────────────────────────────────────────────────────
-    if args.snap_only or args.no_synop:
-        _upd.fetch_synop_ogimet = lambda d: None
-        _upd.time.sleep = lambda s: None
-        _upd.log.info("  [local] Шаг 1 (SYNOP) пропущен")
-
-    # ── Шаг 1б: BUFR с Meteomanz (выполняется всегда, включая --snap-only) ────
+def _bufr_step():
+    """Шаг 1б: BUFR (ogimet, запасной — Meteomanz) за два последних срока."""
     try:
         from fetch_bufr_obs import fetch_and_append
         import datetime
@@ -182,6 +154,47 @@ def main():
                 _GIT_CHANGED.append(f'data/bufr_{dt.year}.json')
     except Exception as e:
         _upd.log.warning("  [BUFR] ошибка: %s", e)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="update_local.py — локальный апдейтер")
+    parser.add_argument("--no-push",   action="store_true", help="Не делать git push")
+    parser.add_argument("--no-synop",  action="store_true", help="Пропустить шаг 1 (SYNOP)")
+    parser.add_argument("--no-model",  action="store_true", help="Пропустить шаг 2 (modelData)")
+    parser.add_argument("--snap-only", action="store_true", help="Только снять снимок (шаг 3+4)")
+    parser.add_argument("--no-fill",   action="store_true", help="Не заполнять modeldata")
+    # [ДОБАВЛЕНО 2026-10-06] лёгкий запуск для BUFR-окна hh:25–35 (ogimet
+    # публикует BUFR ~hh:22): только шаг 1б + коммит, без SYNOP/моделей/снимка.
+    parser.add_argument("--bufr-only", action="store_true", help="Только BUFR (шаг 1б) и git-коммит")
+    args = parser.parse_args()
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+        datefmt="%H:%M:%S"
+    )
+
+    if args.bufr_only:
+        _bufr_step()
+        git_commit_push(no_push=args.no_push)
+        return
+
+    # ── Шаг 0: заполнение modeldata ───────────────────────────────────────────
+    if not args.snap_only and not args.no_fill:
+        from fill_modeldata_local import fill_missing_months, update_current_month
+        fill_missing_months(_GIT_CHANGED)
+        update_current_month(_GIT_CHANGED)
+    else:
+        _upd.log.info("  [local] Шаг 0 (fill modeldata) пропущен")
+
+    # ── Шаг 1: SYNOP ──────────────────────────────────────────────────────────
+    if args.snap_only or args.no_synop:
+        _upd.fetch_synop_ogimet = lambda d: None
+        _upd.time.sleep = lambda s: None
+        _upd.log.info("  [local] Шаг 1 (SYNOP) пропущен")
+
+    # ── Шаг 1б: BUFR (выполняется всегда, включая --snap-only) ───────────────
+    _bufr_step()
 
     # ── Шаг 2: modelData (через update.py) ────────────────────────────────────
     if args.snap_only or args.no_model:
