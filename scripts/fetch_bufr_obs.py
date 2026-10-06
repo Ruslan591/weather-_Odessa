@@ -374,7 +374,8 @@ def parse_obs(html: str, dt: datetime.datetime, station: str = None) -> dict | N
         # Давление (Па → гПа, тенденция Па*10 → гПа)
         "station_pressure":       round(_ext_val(html, "010004") / 100, 1) if _ext_val(html, "010004") else None,
         "slp":                    round(_ext_val(html, "010051") / 100, 1) if _ext_val(html, "010051") else None,
-        "pressure_tendency_val":  round(_ext_val(html, "010061") / 100, 1) if _ext_val(html, "010061") else None,
+        # [2026-10-06] явная проверка None: 0 Па (тенденция "без изменений") раньше терялся как "ложное" значение
+        "pressure_tendency_val":  round(_ext_val(html, "010061") / 100, 1) if _ext_val(html, "010061") is not None else None,
         "pressure_tendency_code": _ext_val(html, "010063"),
         "pressure_tendency_txt":  _ru(_ext_val(html, "010063"), TEND_RU),
         "pressure_change_24h":    _ext_val(html, "010062"),
