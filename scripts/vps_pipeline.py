@@ -494,6 +494,18 @@ def is_synop_window(now_dt):
     обычно hh:10–hh:20, окно чуть шире для запаса). Согласовано 29.08.2026."""
     return now_dt.hour in SYNOP_HOURS_UTC and 11 <= now_dt.minute <= 21
 
+
+BUFR_HOURS_UTC = {3, 9, 15, 21}
+
+
+def is_bufr_window(now_dt):
+    """[ДОБАВЛЕНО 06.10.2026] BUFR-окно: сроки 03/09/15/21 UTC (других BUFR у
+    центра UKMS на ogimet нет), минуты 25–35. Файлы ogimet стабильно
+    собираются из GTS в hh:21–22 (наблюдалось 03:22, 09:21, 15:22, 21:21);
+    окно после этого + запас на повторы (цикл ~5 мин). SYNOP-окно hh:11–21
+    не меняется — оно для SYNOP и снимка ансамбля."""
+    return now_dt.hour in BUFR_HOURS_UTC and 25 <= now_dt.minute <= 35
+
 # ── запрос к open-meteo ───────────────────────────────────────────────────────
 
 def fetch_run_time(meta_id):
@@ -1351,6 +1363,20 @@ def _main_body():
         git_push_history()
     elif is_synop_window(now_dt):
         print("  [SYNOP-окно] пропущено — update_local.py уже вызывался в этом цикле (см. докстринг выше)")
+
+    # [ДОБАВЛЕНО 06.10.2026] BUFR-окно hh:25–35: только BUFR с ogimet (шаг 1б
+    # update_local.py + коммит), без SYNOP/моделей/снимка ансамбля. Если в
+    # этом цикле update_local.py уже отработал целиком — BUFR в нём уже был.
+    if is_bufr_window(now_dt) and not ran_update_local_this_cycle:
+        print("  [BUFR-окно] забираю BUFR с ogimet")
+        try:
+            subprocess.run(
+                [PYTHON, os.path.join(SCRIPTS_DIR, "update_local.py"), "--bufr-only"],
+                cwd=BASE_DIR, capture_output=False, timeout=300
+            )
+        except subprocess.TimeoutExpired:
+            print("  ✗ update_local.py --bufr-only завис дольше 300с — прерван по таймауту")
+        git_push_history()
 
     # [ПЕРЕСМОТРЕНО 29.08.2026] check_pws_sync()/check_pws_calibration()
     # раньше вызывались каждый цикл вхолостую — теперь только в PWS-окне
