@@ -79,12 +79,6 @@ function marineSstCorrected(m){
     return { value: Math.round((raw - corr.bias) * 10) / 10, raw, corr };
 }
 
-function marineSstCorrNote(c){
-    if(!c.corr) return "";
-    const adj = c.value - c.raw;
-    return `модель ${c.raw.toFixed(1)}° · поправка ${adj >= 0 ? "+" : "−"}${Math.abs(adj).toFixed(1)}° по ГМЦ ЧАМ (${c.corr.n} зам.)`;
-}
-
 /* =========================================================
    МОРСКОЙ API (open-meteo marine + ветер над морем)
 ========================================================= */
@@ -587,7 +581,7 @@ function seaLevelDangerColor(cm){
 /* =========================================================
    ИНДИКАТОР: ТЕМПЕРАТУРА ВОДЫ (дуга, 0..30°C)
 ========================================================= */
-function seaTempIndicatorSvg(sst, note){
+function seaTempIndicatorSvg(sst){
     const tMin = 0, tMax = 30, tMid = 15;
     const tC    = sst != null ? Math.max(tMin, Math.min(tMax, sst)) : null;
     const angle = tC != null ? (tC - tMid) / tMid * 90 : 0;
@@ -634,7 +628,6 @@ function seaTempIndicatorSvg(sst, note){
             </text>
             <text x="80" y="65" text-anchor="middle" font-size="9" fill="currentColor" fill-opacity="0.50">°C</text>
         </svg>
-        ${note ? `<div style="font-size:10px;color:#777;text-align:center;line-height:1.3;margin-top:2px;">${note}</div>` : ""}
     </div>`;
 }
 
@@ -905,7 +898,7 @@ function buildMarineIndicatorCards(m){
     const cards = [];
     const variants = getMarineVariants();
 
-    if(m.sst != null){ const sc = marineSstCorrected(m); cards.push(seaTempIndicatorSvg(sc.value, marineSstCorrNote(sc))); }
+    if(m.sst != null){ const sc = marineSstCorrected(m); cards.push(seaTempIndicatorSvg(sc.value)); }
     if(m.seaLevel != null || m.seaLevelAbs != null){
         cards.push(variants.seaLevel === "abs"
             ? seaLevelAbsIndicatorSvg(m.seaLevelAbs)
@@ -1001,7 +994,7 @@ function makeMarineTextRows(m){
     const sstHtml = m.sst != null ? `
         <div style="display:flex;justify-content:space-between;align-items:center;
                     padding:8px 0 10px;border-bottom:1px solid #1e1e1e;margin-bottom:6px;">
-            <span style="font-size:14px;color:#888;">🌡️ Температура воды${sc.corr ? `<br><span style="font-size:11px;color:#666;">${marineSstCorrNote(sc)}</span>` : ""}</span>
+            <span style="font-size:14px;color:#888;">🌡️ Температура воды</span>
             <span style="font-size:26px;font-weight:800;color:${sstColor};">${sstV.toFixed(1)}°C</span>
         </div>` : "";
 
