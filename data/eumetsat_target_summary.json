@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-10-07T10:07:35Z",
+  "timestamp": "2026-10-07T10:12:38Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-10-07T09:45:00.000Z",
-  "target_id": 1,
-  "target_area_km2": 80.1,
-  "target_distance_km": 40.1,
-  "target_bearing_deg": 157.0,
-  "target_compass": "ЮВ",
+  "target_id": 5,
+  "target_area_km2": 56.0,
+  "target_distance_km": 124.4,
+  "target_bearing_deg": 19.0,
+  "target_compass": "С",
   "system": {
     "target_id": 0,
     "area_km2": 22764.4,
@@ -19,7 +19,7 @@
     "frontlike": true,
     "window_spanning": false,
     "phase_label": "средняя водяная",
-    "cloud_fraction": 0.804,
+    "cloud_fraction": 0.776,
     "has_precip": true,
     "has_lightning": false
   },
@@ -34,8 +34,8 @@
       "elongation_axis_deg": 59.0,
       "elongation_axis_compass": "СВ-ЮЗ",
       "frontlike": false,
-      "phase_label": null,
-      "type_label": null,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
@@ -51,10 +51,10 @@
       "elongation_axis_deg": 70.0,
       "elongation_axis_compass": "В-З",
       "frontlike": false,
-      "phase_label": null,
-      "type_label": null,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
       "has_precip": null,
-      "has_lightning": null,
+      "has_lightning": false,
       "ir_confirmed": false,
       "geocolour_confirmed": true
     },
@@ -125,10 +125,10 @@
       "elongation_axis_compass": "СВ-ЮЗ",
       "frontlike": false,
       "window_spanning": false,
-      "phase_label": null,
-      "type_label": null,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
       "has_precip": null,
-      "has_lightning": null,
+      "has_lightning": false,
       "ir_confirmed": false,
       "geocolour_confirmed": true
     },
@@ -143,10 +143,10 @@
       "elongation_axis_compass": "В-З",
       "frontlike": true,
       "window_spanning": false,
-      "phase_label": null,
-      "type_label": null,
+      "phase_label": "средняя водяная",
+      "type_label": "плотная/высокая",
       "has_precip": null,
-      "has_lightning": null,
+      "has_lightning": false,
       "ir_confirmed": false,
       "geocolour_confirmed": true
     }
@@ -390,28 +390,32 @@
       "front_type_confidence": "station"
     }
   ],
+  "also_suppressed_nearby": {
+    "signature": "15_-35",
+    "area_km2": 80.1
+  },
   "target_phase": {
     "label": "безоблачно",
-    "cloud_fraction": 0.18
+    "cloud_fraction": 1.0
   },
   "existence": {
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-10-07T09:40:00.000Z"
+        "timestamp": "2026-10-07T09:50:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-10-07T09:40:00.000Z"
+        "confirmed": true,
+        "timestamp": "2026-10-07T09:50:00.000Z"
       },
       "cloud_phase_type": {
-        "confirmed": false,
-        "timestamp": "2026-10-07T10:02:05Z"
+        "confirmed": true,
+        "timestamp": "2026-10-07T10:12:12Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 2,
+    "votes_not_confirmed": 1,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -420,8 +424,8 @@
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-10-07T10:02:52Z"
+      "timestamp": "2026-10-07T10:12:27Z"
     }
   },
-  "verdict": "CLM отметил цель в 40км ЮВ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (22764км²) в 10км С (вытянута В-З (76°), похоже на фронт, средняя водяная, осадки)."
+  "verdict": "Цель в 124км С, безоблачно — каналы расходятся: geocolour_motion/cloud_phase_type подтверждают, ir_motion нет. Отдельно: система синоптического масштаба (22764км²) в 10км С (вытянута В-З (76°), похоже на фронт, средняя водяная, осадки)."
 }
