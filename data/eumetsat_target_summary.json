@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-07T11:17:27Z",
+  "timestamp": "2026-10-07T11:22:55Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-10-07T10:45:00.000Z",
   "target_id": 1,
@@ -19,11 +19,28 @@
     "frontlike": false,
     "window_spanning": false,
     "phase_label": "средняя водяная",
-    "cloud_fraction": 0.803,
+    "cloud_fraction": 0.7,
     "has_precip": false,
     "has_lightning": false
   },
   "local_candidates": [
+    {
+      "target_id": 1,
+      "area_km2": 260.2,
+      "distance_km": 15.0,
+      "bearing_deg": 209.0,
+      "compass": "ЮЗ",
+      "elongation_aspect_ratio": 1.32,
+      "elongation_axis_deg": 54.0,
+      "elongation_axis_compass": "СВ-ЮЗ",
+      "frontlike": false,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
+      "has_precip": false,
+      "has_lightning": false,
+      "ir_confirmed": false,
+      "geocolour_confirmed": true
+    },
     {
       "target_id": 9,
       "area_km2": 68.0,
@@ -34,8 +51,8 @@
       "elongation_axis_deg": 73.0,
       "elongation_axis_compass": "В-З",
       "frontlike": false,
-      "phase_label": null,
-      "type_label": null,
+      "phase_label": "средняя водяная",
+      "type_label": "плотная/высокая",
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
@@ -93,8 +110,26 @@
       "geocolour_confirmed": true
     }
   ],
-  "local_suppressed_count": 9,
+  "local_suppressed_count": 8,
   "system_candidates": [
+    {
+      "target_id": 0,
+      "area_km2": 19789.0,
+      "distance_km": 6.7,
+      "bearing_deg": 339.0,
+      "compass": "С",
+      "elongation_aspect_ratio": 1.53,
+      "elongation_axis_deg": 94.0,
+      "elongation_axis_compass": "В-З",
+      "frontlike": false,
+      "window_spanning": false,
+      "phase_label": "средняя водяная",
+      "type_label": "плотная/высокая",
+      "has_precip": false,
+      "has_lightning": false,
+      "ir_confirmed": false,
+      "geocolour_confirmed": true
+    },
     {
       "target_id": 13,
       "area_km2": 4400.5,
@@ -106,8 +141,8 @@
       "elongation_axis_compass": "В-З",
       "frontlike": false,
       "window_spanning": false,
-      "phase_label": null,
-      "type_label": null,
+      "phase_label": "средняя водяная",
+      "type_label": "плотная/высокая",
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
@@ -124,8 +159,8 @@
       "elongation_axis_compass": "В-З",
       "frontlike": true,
       "window_spanning": false,
-      "phase_label": null,
-      "type_label": null,
+      "phase_label": "средняя водяная",
+      "type_label": "плотная/высокая",
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
@@ -150,7 +185,7 @@
       "geocolour_confirmed": true
     }
   ],
-  "system_suppressed_count": 2,
+  "system_suppressed_count": 1,
   "frontal_tracks": [
     {
       "track_id": 1270,
@@ -243,6 +278,10 @@
       "front_type_confidence": "station"
     }
   ],
+  "target_phase": {
+    "label": "безоблачно",
+    "cloud_fraction": 0.844
+  },
   "existence": {
     "modules": {
       "ir_motion": {
@@ -254,11 +293,11 @@
         "timestamp": "2026-10-07T10:50:00.000Z"
       },
       "cloud_phase_type": {
-        "confirmed": null,
-        "timestamp": "2026-10-07T11:07:23Z"
+        "confirmed": true,
+        "timestamp": "2026-10-07T11:22:18Z"
       }
     },
-    "votes_confirmed": 1,
+    "votes_confirmed": 2,
     "votes_not_confirmed": 1,
     "consensus": "disputed"
   },
@@ -269,8 +308,8 @@
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-10-07T11:17:11Z"
+      "timestamp": "2026-10-07T11:22:40Z"
     }
   },
-  "verdict": "Цель в 15км ЮЗ — каналы расходятся: geocolour_motion подтверждают, ir_motion нет. Отдельно: система синоптического масштаба (19789км²) в 7км С (средняя водяная)."
+  "verdict": "Цель в 15км ЮЗ, безоблачно — каналы расходятся: geocolour_motion/cloud_phase_type подтверждают, ir_motion нет. Отдельно: система синоптического масштаба (19789км²) в 7км С (средняя водяная)."
 }
