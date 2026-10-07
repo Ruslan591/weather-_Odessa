@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.join(REPO, "scripts"))
 OUT = "/tmp/tts_samples"
 os.makedirs(OUT, exist_ok=True)
 API = "https://api.github.com/repos/ruslan591/weather-_Odessa/contents/"
-TOKEN = open("/etc/vps-github-bridge/token").read().strip()
+TOKEN = next(l.split("=", 1)[1].strip().strip("\"'") for l in open("/etc/vps-github-bridge/token") if l.startswith("GITHUB_TOKEN="))
 
 import make_blocks_gemini_cloud as m  # preprocess_tts, parse_sections, edge-tts
 
