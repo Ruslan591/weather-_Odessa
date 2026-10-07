@@ -1,1 +1,1 @@
-{"task_id": "tts-poll3-1791388957", "cmd": "pgrep -fa 'run_tts|[t]ts_samples.py' | cut -c1-80\necho \"--- log:\"; tail -15 /tmp/tts_samples.log; ls -la /tmp/tts_samples 2>/dev/null | tail -10", "timeout": 30}
+{"task_id": "tts-poll4-1791389168", "cmd": "pgrep -fa 'run_tts' | grep -v pgrep | cut -c1-60\necho \"--- log:\"; tail -14 /tmp/tts_samples.log | cut -c1-200; ls -la /tmp/tts_samples | tail -10", "timeout": 30}
