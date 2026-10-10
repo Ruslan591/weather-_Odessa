@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-10-10T13:27:38Z",
+  "timestamp": "2026-10-10T13:33:04Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-10-10T12:45:00.000Z",
-  "target_id": 1,
-  "target_area_km2": 89.4,
-  "target_distance_km": 35.6,
-  "target_bearing_deg": 248.0,
-  "target_compass": "З",
+  "target_id": 2,
+  "target_area_km2": 101.4,
+  "target_distance_km": 39.2,
+  "target_bearing_deg": 134.0,
+  "target_compass": "ЮВ",
   "system": {
     "target_id": 0,
     "area_km2": 30751.5,
@@ -19,7 +19,7 @@
     "frontlike": true,
     "window_spanning": false,
     "phase_label": "безоблачно",
-    "cloud_fraction": 0.121,
+    "cloud_fraction": 0.155,
     "has_precip": false,
     "has_lightning": false
   },
@@ -86,24 +86,7 @@
       "elongation_axis_compass": "В-З",
       "frontlike": false,
       "phase_label": "безоблачно",
-      "type_label": "плотная/высокая",
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": true,
-      "geocolour_confirmed": false
-    },
-    {
-      "target_id": 7,
-      "area_km2": 65.4,
-      "distance_km": 88.7,
-      "bearing_deg": 90.0,
-      "compass": "В",
-      "elongation_aspect_ratio": 1.51,
-      "elongation_axis_deg": 123.0,
-      "elongation_axis_compass": "ЮВ-СЗ",
-      "frontlike": false,
-      "phase_label": "безоблачно",
-      "type_label": "плотная/высокая",
+      "type_label": "безоблачно",
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": true,
@@ -123,7 +106,7 @@
       "type_label": null,
       "has_precip": false,
       "has_lightning": false,
-      "ir_confirmed": true,
+      "ir_confirmed": false,
       "geocolour_confirmed": true
     },
     {
@@ -153,7 +136,7 @@
       "elongation_axis_deg": 30.0,
       "elongation_axis_compass": "СВ-ЮЗ",
       "frontlike": false,
-      "phase_label": "средняя водяная",
+      "phase_label": "безоблачно",
       "type_label": "плотная/высокая",
       "has_precip": false,
       "has_lightning": false,
@@ -222,7 +205,7 @@
       "elongation_axis_compass": "В-З",
       "frontlike": false,
       "phase_label": "безоблачно",
-      "type_label": "плотная/высокая",
+      "type_label": "безоблачно",
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": true,
@@ -280,7 +263,7 @@
       "geocolour_confirmed": false
     }
   ],
-  "local_suppressed_count": 1,
+  "local_suppressed_count": 2,
   "system_candidates": [
     {
       "target_id": 0,
@@ -466,15 +449,19 @@
       "front_type_confidence": "station"
     }
   ],
+  "also_suppressed_nearby": {
+    "signature": "-35_-15",
+    "area_km2": 89.4
+  },
   "target_phase": {
     "label": "безоблачно",
-    "cloud_fraction": 0.03
+    "cloud_fraction": 0.0
   },
   "existence": {
     "modules": {
       "ir_motion": {
-        "confirmed": false,
-        "timestamp": "2026-10-10T13:00:00.000Z"
+        "confirmed": true,
+        "timestamp": "2026-10-10T13:10:00.000Z"
       },
       "geocolour_motion": {
         "confirmed": false,
@@ -482,12 +469,12 @@
       },
       "cloud_phase_type": {
         "confirmed": false,
-        "timestamp": "2026-10-10T13:17:30Z"
+        "timestamp": "2026-10-10T13:32:16Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -496,8 +483,8 @@
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-10-10T13:27:17Z"
+      "timestamp": "2026-10-10T13:32:41Z"
     }
   },
-  "verdict": "CLM отметил цель в 36км З, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (30752км²) в 1км СЗ (вытянута СВ-ЮЗ (43°), похоже на фронт)."
+  "verdict": "Цель в 39км ЮВ, безоблачно — каналы расходятся: ir_motion подтверждают, geocolour_motion/cloud_phase_type нет. Отдельно: система синоптического масштаба (30752км²) в 1км СЗ (вытянута СВ-ЮЗ (43°), похоже на фронт)."
 }
