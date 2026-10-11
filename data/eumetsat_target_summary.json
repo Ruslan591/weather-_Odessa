@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-11T14:32:21Z",
+  "timestamp": "2026-10-11T14:38:12Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-10-11T14:00:00.000Z",
   "target_id": 1,
@@ -19,7 +19,7 @@
     "frontlike": true,
     "window_spanning": false,
     "phase_label": "безоблачно",
-    "cloud_fraction": 0.483,
+    "cloud_fraction": 0.714,
     "has_precip": false,
     "has_lightning": false
   },
@@ -34,43 +34,9 @@
       "elongation_axis_deg": 149.0,
       "elongation_axis_compass": "ЮВ-СЗ",
       "frontlike": false,
-      "phase_label": null,
-      "type_label": null,
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": false,
-      "geocolour_confirmed": true
-    },
-    {
-      "target_id": 2,
-      "area_km2": 165.5,
-      "distance_km": 109.0,
-      "bearing_deg": 325.0,
-      "compass": "СЗ",
-      "elongation_aspect_ratio": 1.08,
-      "elongation_axis_deg": 107.0,
-      "elongation_axis_compass": "В-З",
-      "frontlike": false,
       "phase_label": "безоблачно",
       "type_label": "плотная/высокая",
       "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": false,
-      "geocolour_confirmed": true
-    },
-    {
-      "target_id": 9,
-      "area_km2": 89.4,
-      "distance_km": 215.2,
-      "bearing_deg": 353.0,
-      "compass": "С",
-      "elongation_aspect_ratio": 3.11,
-      "elongation_axis_deg": 20.0,
-      "elongation_axis_compass": "С-Ю",
-      "frontlike": false,
-      "phase_label": "безоблачно",
-      "type_label": "плотная/высокая",
-      "has_precip": null,
       "has_lightning": false,
       "ir_confirmed": false,
       "geocolour_confirmed": true
@@ -85,15 +51,15 @@
       "elongation_axis_deg": 163.0,
       "elongation_axis_compass": "Ю-С",
       "frontlike": false,
-      "phase_label": null,
-      "type_label": null,
+      "phase_label": "безоблачно",
+      "type_label": "низкая/средняя",
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
       "geocolour_confirmed": true
     }
   ],
-  "local_suppressed_count": 2,
+  "local_suppressed_count": 4,
   "system_candidates": [
     {
       "target_id": 0,
@@ -126,7 +92,7 @@
       "window_spanning": false,
       "phase_label": "безоблачно",
       "type_label": "плотная/высокая",
-      "has_precip": null,
+      "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
       "geocolour_confirmed": true
@@ -198,7 +164,7 @@
       "window_spanning": false,
       "phase_label": "безоблачно",
       "type_label": "плотная/высокая",
-      "has_precip": null,
+      "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
       "geocolour_confirmed": true
@@ -215,7 +181,7 @@
       "frontlike": false,
       "window_spanning": false,
       "phase_label": "безоблачно",
-      "type_label": "плотная/высокая",
+      "type_label": "низкая/средняя",
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
@@ -281,6 +247,10 @@
       "front_type_confidence": null
     }
   ],
+  "target_phase": {
+    "label": "безоблачно",
+    "cloud_fraction": 1.0
+  },
   "existence": {
     "modules": {
       "ir_motion": {
@@ -289,26 +259,26 @@
       },
       "geocolour_motion": {
         "confirmed": true,
-        "timestamp": "2026-10-11T14:00:00.000Z"
+        "timestamp": "2026-10-11T14:10:00.000Z"
       },
       "cloud_phase_type": {
-        "confirmed": null,
-        "timestamp": "2026-10-11T14:22:22Z"
+        "confirmed": true,
+        "timestamp": "2026-10-11T14:37:24Z"
       }
     },
-    "votes_confirmed": 1,
+    "votes_confirmed": 2,
     "votes_not_confirmed": 1,
     "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
       "confirmed": false,
-      "timestamp": "2026-10-11T14:17:05Z"
+      "timestamp": "2026-10-11T14:37:57Z"
     },
     "lightning_forecast": {
       "confirmed": false,
       "timestamp": "2026-10-11T14:22:39Z"
     }
   },
-  "verdict": "Цель в 86км ЮЗ — каналы расходятся: geocolour_motion подтверждают, ir_motion нет. Отдельно: система синоптического масштаба (583км²) в 75км Ю (вытянута Ю-С (174°), похоже на фронт)."
+  "verdict": "Цель в 86км ЮЗ, безоблачно — каналы расходятся: geocolour_motion/cloud_phase_type подтверждают, ir_motion нет. Отдельно: система синоптического масштаба (583км²) в 75км Ю (вытянута Ю-С (174°), похоже на фронт)."
 }
