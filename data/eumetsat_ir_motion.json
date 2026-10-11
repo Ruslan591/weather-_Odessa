@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-11T04:50:00.000Z",
+  "timestamp": "2026-10-11T05:00:00.000Z",
   "buffer_size": 6,
   "buffer_span_minutes": 50,
   "observed_area": {
@@ -14,45 +14,62 @@
   "valid": false,
   "verdict": "недостаточно контраста для оценки (вероятно, однородная сцена)",
   "area_fraction_over_time": [
-    0.269,
     0.234,
     0.174,
     0.185,
     0.136,
-    0.107
+    0.107,
+    0.098
   ],
-  "area_trend_delta": -0.162,
+  "area_trend_delta": -0.136,
   "area_trend_verdict": "сокращается",
   "mean_brightness_over_time": [
-    44.7,
     44.6,
     44.4,
     44.5,
     44.3,
+    44.2,
     44.2
   ],
-  "brightness_trend_delta": -0.5,
+  "brightness_trend_delta": -0.4,
   "station_state": "clear",
   "station_area_fraction": 0.0,
-  "cloud_mass_distance_km": null,
-  "cloud_mass_contrast_sigma": 0.78,
-  "cloud_mass_verdict": "значимой облачной массы в поле зрения нет (кадр однородный)",
+  "cloud_mass_distance_km": 215.0,
+  "cloud_mass_bearing_deg": 360.0,
+  "cloud_mass_compass": "С",
+  "cloud_mass_area_km2": 312,
+  "cloud_mass_contrast_sigma": 1.18,
   "temperature_trend_verdict": "без существенных изменений",
   "target_confirmation": {
-    "confirmed": null,
-    "reason": "известный шумовой объект в этой точке подавлен (сигнатура 40_-35), других локальных целей нет"
+    "confirmed": false,
+    "target_id": 3,
+    "target_area_km2": 56.0,
+    "roi_contrast_sigma": -1.18,
+    "verdict": "ИК НЕ подтверждает: в ROI CLM-цели нет значимого контраста — возможна тонкая/низкая облачность, невидимая на ИК, либо расхождение слоёв"
   },
   "system_analysis_all": [
     {
       "target_id": 0,
       "available": true,
-      "roi_contrast_sigma": -1.03,
+      "roi_contrast_sigma": -0.48,
       "confirmed": false
     },
     {
       "target_id": 2,
       "available": true,
-      "roi_contrast_sigma": -1.48,
+      "roi_contrast_sigma": -0.82,
+      "confirmed": false
+    },
+    {
+      "target_id": 5,
+      "available": true,
+      "roi_contrast_sigma": -1.06,
+      "confirmed": false
+    },
+    {
+      "target_id": 6,
+      "available": true,
+      "roi_contrast_sigma": -0.94,
       "confirmed": false
     }
   ],
@@ -60,7 +77,19 @@
     {
       "target_id": 1,
       "available": true,
-      "roi_contrast_sigma": -1.15,
+      "roi_contrast_sigma": -0.75,
+      "confirmed": false
+    },
+    {
+      "target_id": 3,
+      "available": true,
+      "roi_contrast_sigma": -1.18,
+      "confirmed": false
+    },
+    {
+      "target_id": 4,
+      "available": true,
+      "roi_contrast_sigma": -1.16,
       "confirmed": false
     }
   ],
