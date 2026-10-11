@@ -1,12 +1,17 @@
 {
-  "timestamp": "2026-10-11T05:08:22Z",
-  "status": "ok",
+  "timestamp": "2026-10-11T05:12:16Z",
+  "status": "suppressed_known_false_positive",
   "cloud_forecast_timestamp": "2026-10-11T04:45:00.000Z",
-  "target_id": 1,
-  "target_area_km2": 174.8,
-  "target_distance_km": 50.0,
-  "target_bearing_deg": 131.0,
-  "target_compass": "ЮВ",
+  "suppressed_target": {
+    "signature": "40_-35",
+    "area_km2": 174.8,
+    "distance_km": 50.0,
+    "bearing_deg": 131.0,
+    "compass": "ЮВ",
+    "not_confirmed_streak": 6,
+    "total_not_confirmed": 6,
+    "excluded_since": "2026-10-11T05:08:22Z"
+  },
   "system": {
     "target_id": 0,
     "area_km2": 2337.7,
@@ -27,6 +32,7 @@
   "local_suppressed_count": 1,
   "system_candidates": [],
   "system_suppressed_count": 2,
+  "verdict": "Известный шумовой объект в 50км ЮВ (~175км²) — подавлено (не подтверждался 6 раз подряд). Отдельно: система синоптического масштаба (2338км²) в 13км Ю (вытянута СВ-ЮЗ (37°), похоже на фронт).",
   "frontal_tracks": [
     {
       "track_id": 1479,
@@ -146,39 +152,5 @@
       "front_type": null,
       "front_type_confidence": null
     }
-  ],
-  "target_phase": {
-    "label": "безоблачно",
-    "cloud_fraction": 0.271
-  },
-  "existence": {
-    "modules": {
-      "ir_motion": {
-        "confirmed": false,
-        "timestamp": "2026-10-11T04:40:00.000Z"
-      },
-      "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-10-11T04:40:00.000Z"
-      },
-      "cloud_phase_type": {
-        "confirmed": false,
-        "timestamp": "2026-10-11T05:07:58Z"
-      }
-    },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
-  },
-  "phenomena": {
-    "precip_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-10-11T04:57:06Z"
-    },
-    "lightning_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-10-11T05:08:07Z"
-    }
-  },
-  "verdict": "CLM отметил цель в 50км ЮВ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (2338км²) в 13км Ю (вытянута СВ-ЮЗ (37°), похоже на фронт)."
+  ]
 }
