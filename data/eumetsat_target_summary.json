@@ -1,12 +1,17 @@
 {
-  "timestamp": "2026-10-12T21:22:35Z",
-  "status": "ok",
+  "timestamp": "2026-10-12T21:27:17Z",
+  "status": "suppressed_known_false_positive",
   "cloud_forecast_timestamp": "2026-10-12T21:00:00.000Z",
-  "target_id": 2,
-  "target_area_km2": 204.1,
-  "target_distance_km": 188.9,
-  "target_bearing_deg": 107.0,
-  "target_compass": "В",
+  "suppressed_target": {
+    "signature": "-30_-20",
+    "area_km2": 56.0,
+    "distance_km": 35.6,
+    "bearing_deg": 238.0,
+    "compass": "ЮЗ",
+    "not_confirmed_streak": 4,
+    "total_not_confirmed": 46,
+    "excluded_since": "2026-10-12T20:08:04Z"
+  },
   "system": {
     "target_id": 0,
     "area_km2": 206410.4,
@@ -27,39 +32,6 @@
   "local_suppressed_count": 2,
   "system_candidates": [],
   "system_suppressed_count": 1,
-  "frontal_tracks": [],
-  "also_suppressed_nearby": {
-    "signature": "-30_-20",
-    "area_km2": 56.0
-  },
-  "existence": {
-    "modules": {
-      "ir_motion": {
-        "confirmed": false,
-        "timestamp": "2026-10-12T21:00:00.000Z"
-      },
-      "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-10-12T21:00:00.000Z"
-      },
-      "cloud_phase_type": {
-        "confirmed": null,
-        "timestamp": "2026-10-12T16:52:36Z"
-      }
-    },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 2,
-    "consensus": "not_confirmed"
-  },
-  "phenomena": {
-    "precip_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-10-12T21:17:04Z"
-    },
-    "lightning_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-10-12T21:22:20Z"
-    }
-  },
-  "verdict": "CLM отметил цель в 189км В, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (206410км²) в 1км СВ (площадь/форма ненадёжны — объект упирается в границы окна обзора, осадки)."
+  "verdict": "Известный шумовой объект в 36км ЮЗ (~56км²) — подавлено (не подтверждался 4 раз подряд). Отдельно: система синоптического масштаба (206410км²) в 1км СВ (площадь/форма ненадёжны — объект упирается в границы окна обзора, осадки).",
+  "frontal_tracks": []
 }
