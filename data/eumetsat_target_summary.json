@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-12T04:57:20Z",
+  "timestamp": "2026-10-12T05:02:53Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-10-12T04:30:00.000Z",
   "target_id": 4,
@@ -19,7 +19,7 @@
     "frontlike": false,
     "window_spanning": false,
     "phase_label": "безоблачно",
-    "cloud_fraction": 0.008,
+    "cloud_fraction": 0.512,
     "has_precip": false,
     "has_lightning": false
   },
@@ -37,8 +37,8 @@
       "elongation_axis_compass": "Ю-С",
       "frontlike": false,
       "window_spanning": false,
-      "phase_label": null,
-      "type_label": null,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": true,
@@ -143,26 +143,26 @@
   },
   "target_phase": {
     "label": "безоблачно",
-    "cloud_fraction": 0.0
+    "cloud_fraction": 1.0
   },
   "existence": {
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-10-12T04:30:00.000Z"
+        "timestamp": "2026-10-12T04:40:00.000Z"
       },
       "geocolour_motion": {
         "confirmed": false,
-        "timestamp": "2026-10-12T04:30:00.000Z"
+        "timestamp": "2026-10-12T04:40:00.000Z"
       },
       "cloud_phase_type": {
-        "confirmed": false,
-        "timestamp": "2026-10-12T04:47:05Z"
+        "confirmed": true,
+        "timestamp": "2026-10-12T05:02:04Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -171,8 +171,8 @@
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-10-12T04:52:24Z"
+      "timestamp": "2026-10-12T05:02:41Z"
     }
   },
-  "verdict": "CLM отметил цель в 115км ЮЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (54648км²) в 3км В."
+  "verdict": "Цель в 115км ЮЗ, безоблачно — каналы расходятся: cloud_phase_type подтверждают, ir_motion/geocolour_motion нет. Отдельно: система синоптического масштаба (54648км²) в 3км В."
 }
