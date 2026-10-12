@@ -1,12 +1,17 @@
 {
-  "timestamp": "2026-10-12T20:47:17Z",
-  "status": "ok",
+  "timestamp": "2026-10-12T20:52:26Z",
+  "status": "suppressed_known_false_positive",
   "cloud_forecast_timestamp": "2026-10-12T20:15:00.000Z",
-  "target_id": 2,
-  "target_area_km2": 62.7,
-  "target_distance_km": 217.4,
-  "target_bearing_deg": 122.0,
-  "target_compass": "ЮВ",
+  "suppressed_target": {
+    "signature": "-30_-20",
+    "area_km2": 56.0,
+    "distance_km": 35.6,
+    "bearing_deg": 238.0,
+    "compass": "ЮЗ",
+    "not_confirmed_streak": 4,
+    "total_not_confirmed": 46,
+    "excluded_since": "2026-10-12T20:08:04Z"
+  },
   "system": {
     "target_id": 0,
     "area_km2": 204801.3,
@@ -46,39 +51,6 @@
     }
   ],
   "system_suppressed_count": 0,
-  "frontal_tracks": [],
-  "also_suppressed_nearby": {
-    "signature": "-30_-20",
-    "area_km2": 56.0
-  },
-  "existence": {
-    "modules": {
-      "ir_motion": {
-        "confirmed": false,
-        "timestamp": "2026-10-12T20:20:00.000Z"
-      },
-      "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-10-12T20:20:00.000Z"
-      },
-      "cloud_phase_type": {
-        "confirmed": null,
-        "timestamp": "2026-10-12T16:52:36Z"
-      }
-    },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 2,
-    "consensus": "not_confirmed"
-  },
-  "phenomena": {
-    "precip_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-10-12T20:37:33Z"
-    },
-    "lightning_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-10-12T20:37:34Z"
-    }
-  },
-  "verdict": "CLM отметил цель в 217км ЮВ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (204801км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора, осадки)."
+  "verdict": "Известный шумовой объект в 36км ЮЗ (~56км²) — подавлено (не подтверждался 4 раз подряд). Отдельно: система синоптического масштаба (204801км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора, осадки).",
+  "frontal_tracks": []
 }
