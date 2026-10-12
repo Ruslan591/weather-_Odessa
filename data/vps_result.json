@@ -1,7 +1,7 @@
 {
-  "task_id": "cl-1791775102",
+  "task_id": "cl-1791775150",
   "returncode": 0,
-  "stdout": "через 0.35 с: заявка снята: True | ('buy_cancel', 'стенку сняли, реакция 350 мс')\n\n=== D. панель: стоп, тейк, диапазон, книга\nдиапазон обзора 99.00–101.80 (тейк 101.60 внутри: True, стоп 99.750 внутри: True)\npos: {'closed': 25, 'be': 100.1001, 'stop': 99.7501, 'stop_q': 75, 'tp': 101.6, 'tp_q': 25, 'trail': True} | feed: {'lag': 42.0, 'events': 5}\nsnapshot feed: 5\n\n=== E. история зон: подход цены не считается снятием\nстенка зарегистрирована: [('wall', 99.5)]\nцена подошла на 2 б.п., окно поиска пусто: стенка ещё жива: True | min_dist 2.0 б.п. | записей в zones: 0\nпосле торговли и исчезновения: [('wall', 'съедена', 59700.0, 49750.0, 2.0, 2)]\nTraceback (most recent call last):\n  File \"/opt/trading-bot/test_v5.py\", line 125, in <module>\n    eng, s, db = mk5(); s[\"floor\"] = 1000.0\n                 ^^^^^\n  File \"/opt/trading-bot/test_v5.py\", line 100, in mk5\n    eng, s, db = mk()\n                 ^^^^\n  File \"/opt/trading-bot/test_v5.py\", line 6, in mk\n    db.executescript(w.SCHEMA); db.executescript(w.SCHEMA2)\n                     ^^^^^^^^\nAttributeError: 'list' object has no attribute 'SCHEMA'\n",
+  "stdout": "snapshot feed: 5\n\n=== E. история зон: подход цены не считается снятием\nстенка зарегистрирована: [('wall', 99.5)]\nцена подошла на 2 б.п., окно поиска пусто: стенка ещё жива: True | min_dist 2.0 б.п. | записей в zones: 0\nпосле торговли и исчезновения: [('wall', 'съедена', 59700.0, 49750.0, 2.0, 2)]\nстенка снята заранее (цена далеко): [('wall', 'снята', 3.4, 69.0)] | ожидаем жизнь ≈ 3.4 с (время снятия 100 мс-точности, не снимка)\nмелкая стенка короче 3 с: записей в zones: 0 (ожидаем 0)\nВСЁ ВЫПОЛНЕНО БЕЗ ОШИБОК\n",
   "stderr": "",
-  "completed_at_utc": "2026-10-12T03:19:02Z"
+  "completed_at_utc": "2026-10-12T03:20:02Z"
 }
