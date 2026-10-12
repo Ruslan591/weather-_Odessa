@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-12T21:52:22Z",
+  "timestamp": "2026-10-12T21:57:17Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-10-12T21:30:00.000Z",
   "target_id": 2,
@@ -38,28 +38,11 @@
       "type_label": null,
       "has_precip": false,
       "has_lightning": false,
-      "ir_confirmed": null,
+      "ir_confirmed": false,
       "geocolour_confirmed": true
-    },
-    {
-      "target_id": 3,
-      "area_km2": 60.0,
-      "distance_km": 203.1,
-      "bearing_deg": 117.0,
-      "compass": "ЮВ",
-      "elongation_aspect_ratio": 2.2,
-      "elongation_axis_deg": 55.0,
-      "elongation_axis_compass": "СВ-ЮЗ",
-      "frontlike": false,
-      "phase_label": null,
-      "type_label": null,
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": null,
-      "geocolour_confirmed": false
     }
   ],
-  "local_suppressed_count": 1,
+  "local_suppressed_count": 2,
   "system_candidates": [
     {
       "target_id": 0,
@@ -89,8 +72,8 @@
   "existence": {
     "modules": {
       "ir_motion": {
-        "confirmed": null,
-        "timestamp": "2026-10-12T21:30:00.000Z"
+        "confirmed": false,
+        "timestamp": "2026-10-12T21:40:00.000Z"
       },
       "geocolour_motion": {
         "confirmed": true,
@@ -102,8 +85,8 @@
       }
     },
     "votes_confirmed": 1,
-    "votes_not_confirmed": 0,
-    "consensus": "confirmed"
+    "votes_not_confirmed": 1,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -115,5 +98,5 @@
       "timestamp": "2026-10-12T21:52:15Z"
     }
   },
-  "verdict": "Облачная масса (97км²) в 98км ЮЗ подтверждена всеми доступными каналами. Отдельно: система синоптического масштаба (206482км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора, осадки)."
+  "verdict": "Цель в 98км ЮЗ — каналы расходятся: geocolour_motion подтверждают, ir_motion нет. Отдельно: система синоптического масштаба (206482км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора, осадки)."
 }
