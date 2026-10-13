@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-13T17:50:00.000Z",
+  "timestamp": "2026-10-13T18:00:00.000Z",
   "buffer_size": 6,
   "buffer_span_minutes": 50,
   "observed_area": {
@@ -13,76 +13,97 @@
     "state_radius_km": 12
   },
   "valid": true,
-  "speed_kmh": 0.5,
+  "speed_kmh": 0.6,
   "direction_compass": "СВ",
-  "bearing_deg": 36.7,
+  "bearing_deg": 22.6,
   "frame_pairs_used": 5,
-  "acceleration_kmh": 0.4,
-  "turning_deg": 5.2,
+  "acceleration_kmh": 0.6,
+  "turning_deg": -34.6,
   "acceleration_verdict": "скорость стабильна",
-  "turning_verdict": "направление стабильно",
+  "turning_verdict": "меняет направление (против часовой)",
   "forecast_displacement": {
     "30min": {
-      "distance_km": 0.5,
-      "bearing_deg": 40.0,
-      "compass": "СВ"
+      "distance_km": 0.7,
+      "bearing_deg": 5.0,
+      "compass": "С"
     },
     "60min": {
-      "distance_km": 1.2,
-      "bearing_deg": 40.0,
-      "compass": "СВ"
+      "distance_km": 1.8,
+      "bearing_deg": 2.0,
+      "compass": "С"
     },
     "120min": {
-      "distance_km": 3.4,
-      "bearing_deg": 41.0,
-      "compass": "СВ"
+      "distance_km": 5.2,
+      "bearing_deg": 359.0,
+      "compass": "С"
     }
   },
   "area_fraction_over_time": [
-    0.935,
     0.934,
     0.918,
     0.917,
     0.925,
-    0.942
+    0.942,
+    0.937
   ],
-  "area_trend_delta": 0.007,
+  "area_trend_delta": 0.004,
   "area_trend_verdict": "без существенных изменений",
   "station_state": "cloud",
-  "station_area_fraction": 0.771,
+  "station_area_fraction": 0.872,
   "cloud_mass_distance_km": 0.8,
   "cloud_mass_bearing_deg": 325.0,
   "cloud_mass_compass": "СЗ",
-  "cloud_mass_area_km2": 121895,
+  "cloud_mass_area_km2": 128238,
   "target_confirmation": {
-    "confirmed": null,
-    "reason": "известный шумовой объект в этой точке подавлен (сигнатура 145_-255), других локальных целей нет"
+    "confirmed": true,
+    "target_id": 1,
+    "target_area_km2": 53.4,
+    "roi_cloud_fraction": 0.988,
+    "verdict": "GeoColour подтверждает: в ROI CLM-цели преобладает облачность"
   },
   "system_analysis_all": [
     {
       "target_id": 0,
       "available": true,
-      "roi_cloud_fraction": 1.0,
+      "roi_cloud_fraction": 0.982,
       "confirmed": true
     },
     {
-      "target_id": 1,
+      "target_id": 2,
       "available": true,
-      "roi_cloud_fraction": 0.425,
+      "roi_cloud_fraction": 0.406,
+      "confirmed": false
+    },
+    {
+      "target_id": 4,
+      "available": true,
+      "roi_cloud_fraction": 0.1,
       "confirmed": false
     }
   ],
   "local_analysis_all": [
     {
-      "target_id": 2,
+      "target_id": 1,
       "available": true,
-      "roi_cloud_fraction": 0.473,
-      "confirmed": false
+      "roi_cloud_fraction": 0.988,
+      "confirmed": true
     },
     {
       "target_id": 3,
       "available": true,
-      "roi_cloud_fraction": 0.038,
+      "roi_cloud_fraction": 0.035,
+      "confirmed": false
+    },
+    {
+      "target_id": 5,
+      "available": true,
+      "roi_cloud_fraction": 0.061,
+      "confirmed": false
+    },
+    {
+      "target_id": 6,
+      "available": true,
+      "roi_cloud_fraction": 0.153,
       "confirmed": false
     }
   ],
