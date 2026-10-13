@@ -1,7 +1,7 @@
 {
-  "task_id": "cl-1791843993",
-  "returncode": 0,
-  "stdout": "UTC 22:27\nob_wall7: 12.10 00:16 … 13.10 01:25 (местное)\nсделок 192, net -2.382$\nпо парам: пара | сделок | плюсовых | дошли до безубытка | средний net % | сумма $\n  ZEC        55   20   17  -0.19%  -0.636$\n  SUI        22    9    6  -0.18%  -0.235$\n  NEAR       21    7    6  -0.18%  -0.226$\n  XRP        19    1    1  -0.29%  -0.327$\n  AVAX       15    7    4  -0.16%  -0.141$\n  UNI        14    3    1  -0.25%  -0.211$\n  WLD        11    5    4  -0.19%  -0.128$\n  ONDO       11    3    2  -0.22%  -0.144$\n  SAND       10    4    4  -0.13%  -0.078$\n  SOL         8    1    0  -0.29%  -0.141$\n  DOGE        4    0    0  -0.26%  -0.062$\n  ADA         2    0    0  -0.44%  -0.053$\nzones v=2: записей 189488, с 12.10 06:21 по 13.10 01:26\nстенки v=2: 148214, жизнь медиана 12 с, 90% 109 с, дольше 5 мин: 5579 (3.8%), дольше 10 мин: 2463\n  из дожививших >= 5 мин: подошла цена на <= 5 б.п.: 858, съедено торговлей: 164, снято: 5415\n",
+  "task_id": "cl-1791864417",
+  "returncode": 2,
+  "stdout": "[Unit]\nDescription=Wall paper bot\nAfter=network-online.target\n\n[Service]\nUser=tbot\nWorkingDirectory=/opt/trading-bot\nExecStart=/opt/trading-bot/venv/bin/python /opt/trading-bot/wallbot.py\nRestart=always\nRestartSec=5\n\n[Install]\nWantedBy=multi-user.target\n---\n",
   "stderr": "",
-  "completed_at_utc": "2026-10-12T22:27:02Z"
+  "completed_at_utc": "2026-10-13T04:07:02Z"
 }
