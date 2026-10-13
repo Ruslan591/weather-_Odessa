@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-13T15:30:00.000Z",
+  "timestamp": "2026-10-13T15:40:00.000Z",
   "buffer_size": 6,
   "buffer_span_minutes": 50,
   "observed_area": {
@@ -12,110 +12,82 @@
     "local_trend_radius_km": 50
   },
   "valid": true,
-  "speed_kmh": 48.9,
+  "speed_kmh": 45.4,
   "direction_compass": "С",
-  "bearing_deg": 0.3,
+  "bearing_deg": 0.6,
   "frame_pairs_used": 5,
-  "acceleration_kmh": -14.3,
-  "turning_deg": 0.2,
+  "acceleration_kmh": -9.0,
+  "turning_deg": 1.4,
   "acceleration_verdict": "замедляется",
   "turning_verdict": "направление стабильно",
   "forecast_displacement": {
     "30min": {
-      "distance_km": 15.9,
-      "bearing_deg": 1.0,
+      "distance_km": 17.3,
+      "bearing_deg": 3.0,
       "compass": "С"
     },
     "60min": {
-      "distance_km": 23.2,
-      "bearing_deg": 1.0,
+      "distance_km": 29.2,
+      "bearing_deg": 4.0,
       "compass": "С"
     },
     "120min": {
-      "distance_km": 12.0,
-      "bearing_deg": 4.0,
+      "distance_km": 37.2,
+      "bearing_deg": 10.0,
       "compass": "С"
     }
   },
   "area_fraction_over_time": [
-    0.384,
-    0.313,
-    0.26,
-    0.226,
-    0.188,
-    0.142
+    0.38,
+    0.326,
+    0.288,
+    0.243,
+    0.183,
+    0.134
   ],
-  "area_trend_delta": -0.241,
+  "area_trend_delta": -0.246,
   "area_trend_verdict": "сокращается",
   "mean_brightness_over_time": [
-    111.7,
     109.7,
     107.5,
     106.2,
     104.8,
-    103.0
+    103.0,
+    101.2
   ],
-  "brightness_trend_delta": -8.8,
+  "brightness_trend_delta": -8.5,
   "station_state": "clear",
   "station_area_fraction": 0.0,
-  "cloud_mass_distance_km": 143.6,
+  "cloud_mass_distance_km": 141.9,
   "cloud_mass_bearing_deg": 40.0,
   "cloud_mass_compass": "СВ",
-  "cloud_mass_area_km2": 1669,
-  "cloud_mass_contrast_sigma": 1.08,
+  "cloud_mass_area_km2": 2356,
+  "cloud_mass_contrast_sigma": 1.03,
   "temperature_trend_verdict": "без существенных изменений",
   "target_confirmation": {
-    "confirmed": false,
-    "target_id": 1,
-    "target_area_km2": 116.1,
-    "roi_contrast_sigma": -2.31,
-    "verdict": "ИК НЕ подтверждает: в ROI CLM-цели нет значимого контраста — возможна тонкая/низкая облачность, невидимая на ИК, либо расхождение слоёв"
+    "confirmed": null,
+    "reason": "среди кандидатов нет локальных масс (только системы синоптического масштаба)"
   },
   "system_analysis_all": [
     {
-      "target_id": 2,
-      "available": true,
-      "roi_contrast_sigma": -2.35,
-      "confirmed": false
-    },
-    {
-      "target_id": 5,
-      "available": true,
-      "roi_contrast_sigma": -2.31,
-      "confirmed": false
-    }
-  ],
-  "local_analysis_all": [
-    {
       "target_id": 0,
       "available": true,
-      "roi_contrast_sigma": -2.24,
+      "roi_contrast_sigma": -2.13,
       "confirmed": false
     },
     {
       "target_id": 1,
       "available": true,
-      "roi_contrast_sigma": -2.31,
+      "roi_contrast_sigma": -2.36,
       "confirmed": false
     },
     {
-      "target_id": 3,
+      "target_id": 2,
       "available": true,
-      "roi_contrast_sigma": -2.1,
-      "confirmed": false
-    },
-    {
-      "target_id": 4,
-      "available": true,
-      "roi_contrast_sigma": -2.27,
-      "confirmed": false
-    },
-    {
-      "target_id": 6,
-      "available": true,
-      "roi_contrast_sigma": -2.26,
+      "roi_contrast_sigma": -2.37,
       "confirmed": false
     }
   ],
+  "local_analysis_all": [],
   "method_note": "Буфер 6/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин, crs=EPSG:4326, всегда явный TIME — не 'latest'), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. cloud_mass_* — положение (не движение) ближайшей значимой облачной массы относительно станции. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
 }
