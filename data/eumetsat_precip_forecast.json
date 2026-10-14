@@ -1,15 +1,15 @@
 {
-  "timestamp": "2026-10-14T07:02:05Z",
+  "timestamp": "2026-10-14T07:17:05Z",
   "current_state": "no_precip",
   "target_type": "precip_mass",
   "distance_km_now": 187.9,
   "bearing_deg": 315.0,
   "compass": "СЗ",
-  "speed_kmh": 32.4,
+  "speed_kmh": 15.8,
   "direction_compass": "СВ",
   "cpa_km": 187.9,
   "eta_min": null,
-  "blob_area_km2": 11035.0,
+  "blob_area_km2": 10913.0,
   "verdict": "удаляется",
   "approaching": false,
   "frame_pairs_used": 3,
@@ -18,23 +18,27 @@
   "method_note": "Скорость усреднена по 4 кадрам msg_fes:h60b (шаг 15 мин, phase correlation). Presence = непрозрачный пиксель. Край ищется только среди связных областей >= 40px (~53км²). Линейная экстраполяция, годится на ~1 час.",
   "target_confirmation": {
     "confirmed": false,
-    "target_id": 0,
-    "target_area_km2": 142.8,
+    "target_id": 1,
+    "target_area_km2": 109.4,
     "roi_precip_fraction": 0.0,
     "verdict": "Осадков из этой конкретной массы не наблюдается (сухое облако либо осадки не достигают земли)"
   },
   "system_analysis": {
-    "available": false,
-    "reason": "среди кандидатов нет систем синоптического масштаба (только локальные массы)"
+    "available": true,
+    "target_id": 0,
+    "area_km2": 353.6,
+    "roi_precip_fraction": 0.0,
+    "has_precip": false
   },
-  "system_analysis_all": [],
-  "local_analysis_all": [
+  "system_analysis_all": [
     {
       "target_id": 0,
       "available": true,
       "roi_precip_fraction": 0.0,
       "has_precip": false
-    },
+    }
+  ],
+  "local_analysis_all": [
     {
       "target_id": 1,
       "available": true,
@@ -43,6 +47,12 @@
     },
     {
       "target_id": 2,
+      "available": true,
+      "roi_precip_fraction": 0.0,
+      "has_precip": false
+    },
+    {
+      "target_id": 3,
       "available": true,
       "roi_precip_fraction": 0.0,
       "has_precip": false
