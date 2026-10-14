@@ -1,7 +1,7 @@
 {
-  "task_id": "cl-1791988183",
+  "task_id": "cl-1792004416",
   "returncode": 0,
-  "stdout": "patched 1784\nCOMPILED\nсигнал: True\nвход 99.99 стоп 100.2900 тейк 99.6498\nпосле -0.2%: стадия 1 стоп 99.7403\nу стенки: частей 1 остаток 50% стоп 99.7403\nпозиция закрыта: True\nсделки: [('TESTUSDT', 99.99, 99.72989999999999, 'S:tp+stop', 0.06, 0.0036)]\nстоп-сценарий: ('S:tp+stop', 0.06)\n411:        self.restart_pending = None\n1575:    if \"RESTART\" in ctl and ctl[\"RESTART\"] != ids.get(\"RESTART\") and eng.restart_pending is None:\n1576:        eng.restart_pending = (time.time(), ctl[\"RESTART\"])\n1583:        rp = eng.restart_pending\n1596:    if not newp or newp == eng.c[\"PAIRS\"] or eng.restart_pending is not None:\n1602:    eng.restart_pending = (time.time(), \"новый список пар\")\nasync def restart_loop(eng):\n    while True:\n        await asyncio.sleep(2)\n        rp = eng.restart_pending\n        if rp is None:\n            continue\n        open_n = sum(1 for s in eng.s.values() if s[\"pos\"] or s.get(\"bo\"))\n        waited = time.time() - rp[0]\n        eng.feed[\"restart\"] = \"ожидает перезапуска: открытых позиций %d, ждём %d с\" % (open_n, waited)\n        if open_n == 0 or waited >= 1800:\n            do_restart(eng, \"RESTART=%s%s\" % (rp[1], \"\" if open_n == 0 else \" (ожидание вышло)\"), eng.c.ctl, _ids_load())\n\n\nasync def check_new_pairs(eng, ses, errs):\n",
+  "stdout": "сигнал: True\nвход 99.99 стоп 100.2900 тейк 99.6498\nстоп-сценарий: [('S:stop', -0.52, -0.0312)]\n",
   "stderr": "",
-  "completed_at_utc": "2026-10-14T14:30:02Z"
+  "completed_at_utc": "2026-10-14T19:01:01Z"
 }
