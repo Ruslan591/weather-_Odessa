@@ -1,7 +1,7 @@
 {
-  "task_id": "cl-1792006564",
+  "task_id": "cl-1792007307",
   "returncode": 0,
-  "stdout": "    def _state(s):\n        if s[\"pos\"]:\n            return \"выход по рынку\" if s[\"mkt\"] else \"в позиции\"\n        return \"заявка выставлена\" if s[\"order\"] else \"ждёт стенку\"\n\n    def book_view(self, sym):\n",
+  "stdout": "1376\n document.getElementById('info').innerHTML=`<b>${d.sym}</b> · ${d.state}`+(d.mode?` · режим: ${d.mode.entry==='bounce'?'отскок':d.mode.entry==='breakout'?'пробой':'отскок+пробой'}${d.mode.trade?'':' (только наблюдение)'}`:'')+(d.pos?` · <b>${d.pos.short?'ШОРТ':'позиция'}</b> ${d.pos.parts}/4 частей, закрыто ${d.pos.closed}% · мин <span style=\"color:#ef5350\">${d.pos.lo.toFixed(2)}% (${d.pos.lo_usd.toFixed(3)}$)</span> · макс <span style=\"color:#4caf50\">${d.pos.hi.toFixed(2)}% (${d.pos.hi_usd.toFixed(3)}$)</span>`+(d.pos.be?` · безубыток поз. <span style=\"color:#ffcc80\">${d.pos.be.toFixed(d.dec)}</span> (вход ${d.pos.entry.toFixed(d.dec)})`:'')+(d.pos.stop?` · стоп ${d.pos.stop.toFixed(d.dec)} (${((d.pos.stop/d.pos.entry-1)*100).toFixed(2)}% от входа, на ${d.pos.stop_q}% позиции${d.pos.trail?', трейлинг':''})`:'')+(d.pos.tp?` · тейк ${d.pos.tp.toFixed(d.dec)} (${((d.pos.tp/d.pos.entry-1)*100).toFixed(2)}% от входа, ${d.pos.tp_q}% позиции)`:''):'')+(d.bid?` · bid ${d.bid} / ask ${d.ask} · снимок ${d.age}с назад`:'')+\n414:            s.update(wall=None, seen={}, snap={}, bids_snap=[], asks_snap=[], snap_t=0.0, tracked={}, clus=None, ctracked={}, pm=None, zact=[], tape=dict(buy=0.0, sell=0.0, n=0, t=0.0), tape_last=\n1213:                   wall=None, band=None, view=None, tick=0, dec=4, bid=None, ask=None, age=None, trend={}, piv=[], clus=None, aclus=None, floor=None, pos=None, tape=None, feed=None, mode=None)\n1278:        out[\"tape\"] = s.get(\"tape_last\")\n1279:        out[\"mode\"] = dict(entry=self.c[\"ENTRY_MODE\"], trade=sym in self.c[\"TRADE_PAIRS\"])\n",
   "stderr": "",
-  "completed_at_utc": "2026-10-14T19:37:01Z"
+  "completed_at_utc": "2026-10-14T19:49:01Z"
 }
