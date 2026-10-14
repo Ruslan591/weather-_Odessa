@@ -1,7 +1,7 @@
 {
-  "task_id": "cl-1792007353",
+  "task_id": "cl-1792007433",
   "returncode": 0,
-  "stdout": "  (d.wall?` · <span style=\"color:#fc3\">стенка ${fm(d.wall.usdt)} USDT, на ${d.wall.dist.toFixed(1)} б.п. ниже цены</span>`:' · подходящих стенок нет')+\n  (d.clus?` · <span style=\"color:#e0e0e0\">плотность покупок ${fm(d.clus.usdt)} USDT, ${d.clus.d1.toFixed(0)}–${d.clus.d2.toFixed(0)} б.п. ниже</span>`:'')+\n  (d.aclus?` · <span style=\"color:#ff8a80\">плотность продаж ${fm(d.aclus.usdt)} USDT, ${d.aclus.d1.toFixed(0)}–${d.aclus.d2.toFixed(0)} б.п. выше</span>`:'')+\n  (d.floor?` · порог стенки ${fm(d.floor)}`:'')+(d.tape?` · лента 10с: покупки ${fm(d.tape.buy)}, продажи ${fm(d.tape.sell)}`:'')+(d.feed&&d.feed.events?` · книга: лаг ${d.feed.lag.toFixed(0)} мс, пересинхр. ${d.feed.resyncs}${d.feed.disk_gb?', диск '+d.feed.disk_gb.toFixed(0)+' ГБ':''}`:'')+(d.feed&&d.feed.cfg_ver?` · параметры ${d.feed.cfg_ver}${d.feed.cfg_note?' «'+d.feed.cfg_note+'»':''}`:'')+(d.feed&&d.feed.cfg_err?` · <span style=\"color:#ef5350\">ошибка параметров: ${d.feed.cfg_err}</span>`:'')+(d.feed&&d.feed.restart?` · <span style=\"color:#ffb74d\">${d.feed.restart}</span>`:'');\n const ar={up:'▲',down:'▼',flat:'▬'},ac={up:'#4caf50',down:'#ef5350',flat:'#999'},tr=d.trend||{};\n const ts=['5m','15m','1h'].map(t=>tr[t]?`${t} <span style=\"color:${ac[tr[t]]}\">${ar[tr[t]]}</span>`:`${t} …`).join(' · ');\n const pv=(d.piv||[]).map(v=>`${v.tf} ${v.k==='L'?'опора':'сопр.'} ${v.dist.toFixed(0)} б.п.`).join(' · ');\n const cf=(d.wall&&d.wall.piv&&d.wall.piv.length)?` · <span style=\"color:#26c6da\">★ стенка у pivot ${d.wall.piv.join('/')}</span>`:'';\n",
+  "stdout": "ok\nCOMPILED\nшорт: все условия есть\nшорт ждёт: стенка слишком близко (18 б.п., нужно 35–80)\n8\n",
   "stderr": "",
-  "completed_at_utc": "2026-10-14T19:50:02Z"
+  "completed_at_utc": "2026-10-14T19:51:02Z"
 }
