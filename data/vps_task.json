@@ -1,1 +1,1 @@
-{"task_id": "cl-1791987015", "cmd": "cd /opt/trading-bot && systemctl cat wallbot.service | grep -i exec; diff -q wallbot.py wallbot_v8.py; sed -n 386,500p wallbot.py; echo ======; sed -n 580,640p wallbot.py", "timeout": 100}
+{"task_id": "cl-1791987076", "cmd": "cd /opt/trading-bot && head -48 wallbot.py | grep -n 'import\\|Engine'; diff wallbot.py wallbot_v9.py | grep '^[<>]' | cut -c1-170 | head -60; echo =====; sed -n 676,890p wallbot.py", "timeout": 100}
