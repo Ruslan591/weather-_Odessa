@@ -1,1 +1,1 @@
-{"task_id": "cl-1791986998", "cmd": "cd /opt/trading-bot && ls -la --time-style=+%m-%d_%H:%M *.py | head -40; wc -l wallbot*.py; systemctl list-units --no-pager | grep -i wall; grep -n -i 'breakout\\|def \\|class ' wallbot.py | head -150", "timeout": 100}
+{"task_id": "cl-1791987015", "cmd": "cd /opt/trading-bot && systemctl cat wallbot.service | grep -i exec; diff -q wallbot.py wallbot_v8.py; sed -n 386,500p wallbot.py; echo ======; sed -n 580,640p wallbot.py", "timeout": 100}
