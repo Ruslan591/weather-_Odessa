@@ -1,7 +1,7 @@
 {
-  "task_id": "cl-1792010897",
+  "task_id": "cl-1792010954",
   "returncode": 0,
-  "stdout": "ok\nCOMPILED\nлимит: 2.0\nTraceback (most recent call last):\n  File \"/opt/trading-bot/t14.py\", line 27, in <module>\n    b3,a3=book(99.9); eng2._short_step(S,b3,a3,now+61); print(\"таймаут отскока -> отмена:\",s2.get(\"sho\") is None)\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/trading-bot/wallbot.py\", line 660, in _short_step\n    self.log(now, sym, \"short_skip\", bids[0][0], \"отскока не было за %.0f с\" % c[\"SHORT_PULLBACK_SEC\"])\n  File \"/opt/trading-bot/obbot.py\", line 48, in log\n    self.db.execute(\"INSERT INTO events(ts,symbol,kind,price,info) VALUES(?,?,?,?,?)\",\nsqlite3.OperationalError: no such table: events\n",
+  "stdout": "тренд вверх -> сигнала нет: True | шорт ждёт: тренд не вниз на 5m/15m/1h\nтренд вниз -> сигнал, ждёт отскок: False\nбез отскока позиции нет: True\nотскок +0.11% -> вход взведён: True\nвход 100.10 стоп 100.400 тейк 99.450\nлимит: 2.0\nтаймаут отскока -> отмена: True\n",
   "stderr": "",
-  "completed_at_utc": "2026-10-14T20:49:01Z"
+  "completed_at_utc": "2026-10-14T20:50:02Z"
 }
