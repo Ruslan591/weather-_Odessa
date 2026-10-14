@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-14T14:12:39Z",
+  "timestamp": "2026-10-14T14:18:10Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-10-14T13:30:00.000Z",
   "target_id": 1,
@@ -19,7 +19,7 @@
     "frontlike": true,
     "window_spanning": false,
     "phase_label": "безоблачно",
-    "cloud_fraction": 0.311,
+    "cloud_fraction": 0.421,
     "has_precip": false,
     "has_lightning": false
   },
@@ -34,8 +34,8 @@
       "elongation_axis_deg": 18.0,
       "elongation_axis_compass": "С-Ю",
       "frontlike": false,
-      "phase_label": null,
-      "type_label": null,
+      "phase_label": "средняя водяная",
+      "type_label": "плотная/высокая",
       "has_precip": null,
       "has_lightning": false,
       "ir_confirmed": false,
@@ -103,6 +103,10 @@
       "front_type_confidence": null
     }
   ],
+  "target_phase": {
+    "label": "средняя водяная",
+    "cloud_fraction": 1.0
+  },
   "existence": {
     "modules": {
       "ir_motion": {
@@ -114,11 +118,11 @@
         "timestamp": "2026-10-14T13:50:00.000Z"
       },
       "cloud_phase_type": {
-        "confirmed": null,
-        "timestamp": "2026-10-14T13:58:58Z"
+        "confirmed": true,
+        "timestamp": "2026-10-14T14:17:20Z"
       }
     },
-    "votes_confirmed": 1,
+    "votes_confirmed": 2,
     "votes_not_confirmed": 1,
     "consensus": "disputed"
   },
@@ -129,8 +133,8 @@
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-10-14T14:12:23Z"
+      "timestamp": "2026-10-14T14:17:45Z"
     }
   },
-  "verdict": "Цель в 281км С — каналы расходятся: geocolour_motion подтверждают, ir_motion нет. Отдельно: система синоптического масштаба (10277км²) в 191км СЗ (вытянута С-Ю (9°), похоже на фронт)."
+  "verdict": "Цель в 281км С, средняя водяная — каналы расходятся: geocolour_motion/cloud_phase_type подтверждают, ir_motion нет. Отдельно: система синоптического масштаба (10277км²) в 191км СЗ (вытянута С-Ю (9°), похоже на фронт)."
 }
