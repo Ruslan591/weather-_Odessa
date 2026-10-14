@@ -1,7 +1,7 @@
 {
-  "task_id": "cl-1791950335",
+  "task_id": "cl-1791968751",
   "returncode": 0,
-  "stdout": "позиций нет: True \nactive\nOct 14 03:59:01 weather-odessa-vps systemd[1]: wallbot.service: Deactivated successfully.\nOct 14 03:59:01 weather-odessa-vps python[74451]: панель: http://127.0.0.1:8091\nOct 14 03:59:02 weather-odessa-vps python[74451]: параметры обновлены: без изменений\nOct 14 03:59:02 weather-odessa-vps python[74451]: подключено (локальная книга)\nпар в работе: 12 | торгуют: ['ZECUSDT', 'AVAXUSDT'] | параметры: a3341c0 | ошибка параметров: нет | лаг 119 мс, разрывов 0\n",
+  "stdout": "48:        self.db.execute(\"INSERT INTO events(ts,symbol,kind,price,info) VALUES(?,?,?,?,?)\",\n201:        self.db.execute(\"INSERT INTO trades(ts_open,ts_close,symbol,entry,exit,qty,exit_type,gross_pct,\"\n226:                  \"COALESCE(AVG(gross_pct),0)*100,COALESCE(SUM(net_pct>0),0) FROM trades\").fetchone(),\n227:            by_exit=q(\"SELECT exit_type,COUNT(*),AVG(net_pct)*100 FROM trades GROUP BY exit_type\").fetchall(),\n228:            by_sym=q(\"SELECT symbol,COUNT(*),SUM(net_usdt),AVG(net_pct)*100 FROM trades GROUP BY symbol\").fetchall(),\n229:            ev=dict(q(\"SELECT kind,COUNT(*) FROM events GROUP BY kind\").fetchall()),\n230:            sig=q(\"SELECT COUNT(*),AVG((mid30/mid0-1)*1e4),AVG((mid60/mid0-1)*1e4) FROM signals\").fetchone(),\n231:            last=q(\"SELECT ts_close,symbol,exit_type,entry,exit,net_pct*100,hold_sec FROM trades \"\n233:            evl=q(\"SELECT ts,symbol,kind,price,info FROM events ORDER BY id DESC LIMIT 12\").fetchall())\n",
   "stderr": "",
-  "completed_at_utc": "2026-10-14T04:00:21Z"
+  "completed_at_utc": "2026-10-14T09:06:01Z"
 }
