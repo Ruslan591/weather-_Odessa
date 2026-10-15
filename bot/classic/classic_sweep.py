@@ -6,7 +6,10 @@ import classic_strategy as cs
 
 PAGES = 3
 HERE = os.path.dirname(os.path.abspath(__file__))
-pairs = json.load(open(os.path.join(HERE, "pairs.json")))
+try:
+    pairs = json.load(open(os.path.join(HERE, "pairs.json")))
+except Exception:
+    pairs = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT", "ADAUSDT", "NEARUSDT", "AVAXUSDT", "ZECUSDT"]
 
 
 def fetch(sym):
