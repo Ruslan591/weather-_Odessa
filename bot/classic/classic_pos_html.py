@@ -14,24 +14,25 @@ td:first-child,th:first-child{text-align:left}.sc{overflow-x:auto}
 canvas{display:block;width:100%;height:420px;touch-action:none}
 </style></head><body>
 <div class=card><h4 id=ttl>Позиции за 24 ч</h4><div id=rules style="color:#8b949e;font-size:11.5px"></div></div>
-<div class=t id=pairs></div>
+<div class=t id=pairs></div><div class=t id=patsw></div>
 <div class=card><div class=grid id=sum></div></div>
 <div class=card id=cch style="display:none"><h4 id=chT></h4><div class=t id=rng></div><div id=chinfo style="font:11.5px ui-monospace,monospace;color:#8b949e;min-height:30px"></div><canvas id=c></canvas><div style="color:#8b949e;font-size:11px">жёлтая EMA20, фиолетовая EMA200; ▲ лонг / ▼ шорт — вход, ■ — выход, красный пунктир — начальный стоп, линия вход→выход зелёная при плюсе. Время локальное. Перетаскивание — прокрутка, щипок или колесо — масштаб, тап — перекрестие. Страницу прокручивай, касаясь вне графика.</div></div>
 <div class=card><h4>Сделки</h4><div class=sc id=tbl>загрузка…</div></div>
 <div class=card id=cpair style="display:none"><h4>По парам</h4><div class=sc id=pp></div></div>
 <script>
 const $=id=>document.getElementById(id);
-const S={sym:'ALL',pairs:[],D:null};
+const S={sym:'ALL',pairs:[],D:null,pat:1};
 const V={n:480,off:0},Gc={start:0,end:0,bw:5,L:4,hover:-1};
 const wl=h=>h>=48?(h/24)+' сут':h+' ч';
 function fmt(p){if(p==null)return'—';const a=Math.abs(p);const d=a>=1000?2:a>=100?3:a>=10?4:a>=1?5:7;return p.toFixed(d)}
 const p2=n=>String(n).padStart(2,'0');
 function ft(t){const d=new Date(t);return p2(d.getDate())+'.'+p2(d.getMonth()+1)+' '+p2(d.getHours())+':'+p2(d.getMinutes())}
 const sg=v=>(v>=0?'+':'')+v.toFixed(2);const cls=v=>v>0?'up':v<0?'dn':'fl';
+function mkp(){$('patsw').innerHTML='';const b=document.createElement('button');b.textContent='Выход по паттерну: '+(S.pat?'ВКЛ':'ВЫКЛ');if(S.pat)b.className='on';b.onclick=()=>{S.pat=S.pat?0:1;mkp();load()};$('patsw').appendChild(b)}
 function mkr(){$('rng').innerHTML='';[[192,'48 ч'],[480,'5 сут'],[960,'10 сут']].forEach(([n,l])=>{const b=document.createElement('button');b.textContent=l;if(V.n===n)b.className='on';b.onclick=()=>{V.n=n;V.off=0;Gc.hover=-1;mkr();chart()};$('rng').appendChild(b)})}
 function mk(){$('pairs').innerHTML='';['ALL'].concat(S.pairs).forEach(p=>{const b=document.createElement('button');b.textContent=p==='ALL'?'ВСЕ':p.replace('USDT','');if(p===S.sym)b.className='on';b.onclick=()=>{S.sym=p;V.off=0;Gc.hover=-1;mk();load()};$('pairs').appendChild(b)})}
 async function load(){
- try{const r=await fetch('/api/trades?sym='+S.sym+'&bars=960');const j=await r.json();if(j.error){$('tbl').textContent='Ошибка: '+j.error;return}
+ try{const r=await fetch('/api/trades?sym='+S.sym+'&bars=960&pat='+S.pat);const j=await r.json();if(j.error){$('tbl').textContent='Ошибка: '+j.error;return}
   if(j.sym!==S.sym)return;S.D=j;render()}catch(e){$('tbl').textContent='Ошибка: '+e}
 }
 function render(){
@@ -39,7 +40,7 @@ function render(){
  $('ttl').textContent='Позиции за '+wl(P.window_h)+' · '+(S.sym==='ALL'?'все пары':S.sym)+' · '+P.tf;
  const stp=P.stop_mode==='prev'?'за экстремумом предыдущей свечи (лонг — её low, шорт — её high), но не ближе '+P.min_stop_pct+'%'+(P.min_stop_atr?' и '+P.min_stop_atr+' ATR':''):'на последнем подтверждённом pivot';
  const trl={none:'без трейлинга',pct:'трейлинг на расстоянии '+P.trail_dist+'% от экстремума',atr:'трейлинг на расстоянии '+P.trail_dist+' ATR от экстремума',pivot:'трейлинг по pivot'}[P.trail_mode];
- $('rules').textContent='Вход: пересечение EMA20 × EMA200 (лонг и шорт), по открытию следующей свечи. Стоп: '+stp+'. +'+P.be_trigger+'% → безубыток, затем '+trl+'. Разворот при обратном пересечении.'+(P.pat_exit?' Выход по свечному паттерну разворота (для шорта: молот / бычье поглощение / утренняя звезда; для лонга: падающая звезда / медвежье поглощение / вечерняя звезда), если открытый плюс ≥ '+P.pat_min+'%; после такого выхода — вход в обратную сторону по открытию свечи после первого закрытия за EMA20 (до '+P.rearm_k+' свечей).':'')+' Комиссия '+P.fee+'% за сторону (учтена в Net), объём условный '+P.notional+' USDT.';
+ $('rules').textContent='Вход: пересечение EMA20 × EMA200 (лонг и шорт), по открытию следующей свечи. Стоп: '+stp+'. +'+P.be_trigger+'% → стоп на +'+P.be_lock+'% от входа (после комиссий выход в небольшой плюс), затем '+trl+'. Разворот при обратном пересечении.'+(P.pat_exit?' Выход по свечному паттерну разворота (для шорта: молот / бычье поглощение / утренняя звезда; для лонга: падающая звезда / медвежье поглощение / вечерняя звезда), если открытый плюс ≥ '+P.pat_min+'%; после такого выхода — вход в обратную сторону по открытию свечи после первого закрытия за EMA20 (до '+P.rearm_k+' свечей).':'')+' Комиссия '+P.fee+'% за сторону (учтена в Net), объём условный '+P.notional+' USDT.';
  const T=D.trades,n=T.length,w=T.filter(x=>x.net>0).length,s=T.reduce((a,x)=>a+x.net,0),sp=T.reduce((a,x)=>a+x.net*P.notional/100,0);
  const best=n?Math.max(...T.map(x=>x.net)):0,worst=n?Math.min(...T.map(x=>x.net)):0,be=T.filter(x=>x.be).length,op=T.filter(x=>x.open).length;
  const gs=T.reduce((a,x)=>a+x.gross,0);
@@ -97,5 +98,5 @@ cvv.addEventListener('pointerup',e=>{if(ptrs.size===1&&!moved&&S.D&&S.D.chart){G
 cvv.addEventListener('pointercancel',e=>ptrs.delete(e.pointerId));
 cvv.addEventListener('wheel',e=>{e.preventDefault();V.n=Math.max(20,Math.min(960,Math.round(V.n*(e.deltaY>0?1.15:0.87))));chart()},{passive:false});
 window.addEventListener('resize',()=>{if(S.D&&S.sym!=='ALL')chart()});
-(async()=>{try{const r=await fetch('/api/pairs');S.pairs=(await r.json()).pairs}catch(e){}mk();mkr();load();setInterval(load,15000)})();
+(async()=>{try{const r=await fetch('/api/pairs');S.pairs=(await r.json()).pairs}catch(e){}mk();mkr();mkp();load();setInterval(load,15000)})();
 </script></body></html>'''
