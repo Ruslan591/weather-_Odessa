@@ -1,7 +1,7 @@
 {
-  "task_id": "cl-1792058828",
-  "returncode": 1,
-  "stdout": "COMPILED\nactive\n",
+  "task_id": "cl-1792058903",
+  "returncode": 0,
+  "stdout": "-rw-r--r-- 1 root root 55 Oct 15 10:09 /tmp/tr2.json\n500 Internal Server Error\n\nServer got itself in trouble\nOct 15 10:09:02 weather-odessa-vps python[199160]:   File \"/usr/lib/python3.12/json/encoder.py\", line 258, in iterencode\nOct 15 10:09:02 weather-odessa-vps python[199160]:     return _iterencode(o, 0)\nOct 15 10:09:02 weather-odessa-vps python[199160]:            ^^^^^^^^^^^^^^^^^\nOct 15 10:09:02 weather-odessa-vps python[199160]:   File \"/usr/lib/python3.12/json/encoder.py\", line 180, in default\nOct 15 10:09:02 weather-odessa-vps python[199160]:     raise TypeError(f'Object of type {o.__class__.__name__} '\nOct 15 10:09:02 weather-odessa-vps python[199160]: TypeError: Object of type bool is not JSON serializable\n",
   "stderr": "Traceback (most recent call last):\n  File \"<string>\", line 3, in <module>\n  File \"/usr/lib/python3.12/json/__init__.py\", line 293, in load\n    return loads(fp.read(),\n           ^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/json/__init__.py\", line 346, in loads\n    return _default_decoder.decode(s)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/json/decoder.py\", line 340, in decode\n    raise JSONDecodeError(\"Extra data\", s, end)\njson.decoder.JSONDecodeError: Extra data: line 1 column 5 (char 4)\n",
-  "completed_at_utc": "2026-10-15T10:08:16Z"
+  "completed_at_utc": "2026-10-15T10:09:02Z"
 }
