@@ -34,7 +34,7 @@ def prepare(df, now_ms):
     return pre
 
 
-def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None):
+def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
     pre = pre or prepare(df, now_ms)
     if not pre["ok"] or pre["M"] < P["warmup"] + 30:
         return []
@@ -43,7 +43,7 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None):
     o, h, l, c, t = pre["o"], pre["h"], pre["l"], pre["c"], pre["t"]
     fee2 = 2 * P["fee"]
     tm, td = P["trail_mode"], P["trail_dist"]
-    trades, pos, pend = [], None, None
+    trades, pos, pend, pexit = [], None, None, False
 
     def finish(i, price, reason):
         nonlocal pos
@@ -54,6 +54,10 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None):
         pos = None
 
     for i in range(1, T):
+        if pexit:
+            pexit = False
+            if pos:
+                finish(i, o[i], "паттерн")
         if pend:
             (xc, side, allow), pend = pend, None
             if xc and pos and pos["side"] != xc:
@@ -104,6 +108,8 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None):
                             q = None
                     if q is not None:
                         pos["stop"], pos["stage"] = float(q), "trail"
+        if exits is not None and i < M and pos and exits.get(i) and exits[i] != pos["side"]:
+            pexit = True
         if P["warmup"] <= i < M:
             pr, cu = e20[i - 1] - e200[i - 1], e20[i] - e200[i]
             xc = "L" if pr <= 0 < cu else "S" if pr >= 0 > cu else None
