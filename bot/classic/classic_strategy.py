@@ -12,6 +12,8 @@ import classic_analysis as an
 PARAMS = dict(tf="15m", be_trigger=1.0, fee=0.05, window_h=240, notional=100.0, warmup=200,
               stop_mode="prev", min_stop_pct=1.5, min_stop_atr=0.0, trail_mode="none", trail_dist=0.0, be_atr=0.0)
 
+PANEL = dict(PARAMS, pat_exit=True, pat_min=8.0, rearm_k=12)  # правила панели 18091: + выход по паттерну разворота при плюсе >= pat_min%, перевход после закрытия за EMA20
+
 
 def _last_piv(piv, kind, maxconf, ok):
     for q in reversed(piv):
@@ -29,13 +31,20 @@ def prepare(df, now_ms):
         return pre
     closed = df.iloc[:M].reset_index(drop=True)
     ind = an.indicators(closed)
-    pre.update(ok=True, piv=an.find_pivots(closed), e20=ind["ema20"].values, e200=ind["ema200"].values,
+    pats = an.detect_patterns(closed, ind)
+    bu = {p["i"] for p in pats if p["d"] > 0}
+    be_ = {p["i"] for p in pats if p["d"] < 0}
+    exs = {i: "L" for i in bu - be_}
+    exs.update({i: "S" for i in be_ - bu})
+    pre.update(ok=True, exits=exs, piv=an.find_pivots(closed), e20=ind["ema20"].values, e200=ind["ema200"].values,
                atr=ind["atr"].values, o=df.o.values, h=df.h.values, l=df.l.values, c=df.c.values, t=df.t.values)
     return pre
 
 
 def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
     pre = pre or prepare(df, now_ms)
+    if exits is None and P.get("pat_exit") and pre.get("ok"):
+        exits = pre["exits"]
     if not pre["ok"] or pre["M"] < P["warmup"] + 30:
         return []
     T, M, piv = pre["T"], pre["M"], pre["piv"]
