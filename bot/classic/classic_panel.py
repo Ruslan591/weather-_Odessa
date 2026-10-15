@@ -178,7 +178,7 @@ async def api_trades(req):
     sym = req.query.get("sym", "ALL").upper()
     if sym != "ALL" and not ok_sym(sym):
         return web.json_response({"error": "bad params"}, status=400)
-    P = cs.PARAMS
+    P = cs.PANEL
     now = int(time.time() * 1000)
     cutoff = now - P["window_h"] * 3600 * 1000
     targets = load_pairs() if sym == "ALL" else [sym]
@@ -193,7 +193,7 @@ async def api_trades(req):
         if df is None:
             err = "нет данных по " + s
             continue
-        for x in cs.simulate(df, now):
+        for x in cs.simulate(df, now, P):
             if x["open"] or x["t_in"] >= cutoff or x["t_out"] >= cutoff:
                 d = cs.pack([x])[0]
                 d["sym"] = s
