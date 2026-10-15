@@ -1,12 +1,16 @@
 """classic_strategy.py — стратегия «пересечение EMA20 × EMA200», 15m, лонг и шорт (симуляция по истории, бумага).
 Вход: по открытию свечи, следующей за свечой пересечения (сигнал только по ЗАКРЫТОЙ свече).
-Начальный стоп: последний подтверждённый pivot (для лонга pivot-low ниже входа, для шорта pivot-high выше входа).
-+BE_TRIGGER% в нашу сторону → стоп в безубыток (цена входа). Далее стоп-трейлинг по последним подтверждённым pivot.
+Начальный стоп (stop_mode):
+  prev  — за экстремумом предыдущей свечи (лонг: её low, шорт: её high), но не ближе min_stop (в % и/или в ATR);
+  pivot — на последнем подтверждённом pivot (старый вариант).
++be_trigger% в нашу сторону → стоп в безубыток (цена входа).
+Трейлинг после безубытка (trail_mode): none | pct (экстремум − trail_dist%) | atr (экстремум − trail_dist·ATR) | pivot.
 Выход: стоп, либо обратное пересечение (разворот: закрытие и вход в другую сторону).
 Внутри одной свечи считаем консервативно: сначала проверяется стоп, потом движение в плюс."""
 import classic_analysis as an
 
-PARAMS = dict(tf="15m", be_trigger=1.0, fee=0.05, window_h=240, notional=100.0, warmup=200)
+PARAMS = dict(tf="15m", be_trigger=1.0, fee=0.05, window_h=240, notional=100.0, warmup=200,
+              stop_mode="prev", min_stop_pct=0.3, min_stop_atr=0.0, trail_mode="none", trail_dist=0.0)
 
 
 def _last_piv(piv, kind, maxconf, ok):
@@ -16,26 +20,36 @@ def _last_piv(piv, kind, maxconf, ok):
     return None
 
 
-def simulate(df, now_ms, P=PARAMS):
+def prepare(df, now_ms):
     T = len(df)
     live = T > 0 and df.ct.iloc[-1] > now_ms
     M = T - 1 if live else T
-    if M < P["warmup"] + 30:
-        return []
+    pre = {"T": T, "M": M, "ok": False}
+    if M < 230:
+        return pre
     closed = df.iloc[:M].reset_index(drop=True)
     ind = an.indicators(closed)
-    piv = an.find_pivots(closed)
-    e20, e200 = ind["ema20"].values, ind["ema200"].values
-    o, h, l, c, t = df.o.values, df.h.values, df.l.values, df.c.values, df.t.values
+    pre.update(ok=True, piv=an.find_pivots(closed), e20=ind["ema20"].values, e200=ind["ema200"].values,
+               atr=ind["atr"].values, o=df.o.values, h=df.h.values, l=df.l.values, c=df.c.values, t=df.t.values)
+    return pre
+
+
+def simulate(df, now_ms, P=PARAMS, pre=None):
+    pre = pre or prepare(df, now_ms)
+    if not pre["ok"] or pre["M"] < P["warmup"] + 30:
+        return []
+    T, M, piv = pre["T"], pre["M"], pre["piv"]
+    e20, e200, atr = pre["e20"], pre["e200"], pre["atr"]
+    o, h, l, c, t = pre["o"], pre["h"], pre["l"], pre["c"], pre["t"]
     fee2 = 2 * P["fee"]
+    tm, td = P["trail_mode"], P["trail_dist"]
     trades, pos, pend = [], None, None
 
     def finish(i, price, reason):
         nonlocal pos
         s = 1 if pos["side"] == "L" else -1
         gross = s * (price / pos["p_in"] - 1) * 100
-        pos.update(i_out=i, t_out=int(t[i]), p_out=float(price), reason=reason,
-                   gross=gross, net=gross - fee2, open=False)
+        pos.update(i_out=i, t_out=int(t[i]), p_out=float(price), reason=reason, gross=gross, net=gross - fee2, open=False)
         trades.append(pos)
         pos = None
 
@@ -46,13 +60,18 @@ def simulate(df, now_ms, P=PARAMS):
                 finish(i, o[i], "разворот")
             if pos is None:
                 entry = float(o[i])
-                if side == "L":
-                    st = _last_piv(piv, "L", i - 1, lambda p: p < entry)
+                clamped = False
+                if P["stop_mode"] == "pivot":
+                    st = _last_piv(piv, "L", i - 1, lambda p: p < entry) if side == "L" else _last_piv(piv, "H", i - 1, lambda p: p > entry)
                 else:
-                    st = _last_piv(piv, "H", i - 1, lambda p: p > entry)
+                    mind = max(entry * P["min_stop_pct"] / 100, P["min_stop_atr"] * atr[i - 1])
+                    if side == "L":
+                        st = min(l[i - 1], entry - mind); clamped = st != l[i - 1]
+                    else:
+                        st = max(h[i - 1], entry + mind); clamped = st != h[i - 1]
                 if st is not None:
-                    pos = dict(side=side, i_in=i, t_in=int(t[i]), p_in=entry, stop0=st, stop=st, stage="init",
-                               risk=abs(entry - st) / entry * 100, mfe=0.0, mae=0.0, be=False)
+                    pos = dict(side=side, i_in=i, t_in=int(t[i]), p_in=entry, stop0=float(st), stop=float(st), stage="init",
+                               risk=abs(entry - st) / entry * 100, mfe=0.0, mae=0.0, be=False, clamped=clamped, ext=entry)
         if pos:
             L_ = pos["side"] == "L"
             e = pos["p_in"]
@@ -65,19 +84,25 @@ def simulate(df, now_ms, P=PARAMS):
                     px = o[i] if o[i] <= pos["stop"] else pos["stop"]
                 else:
                     px = o[i] if o[i] >= pos["stop"] else pos["stop"]
-                nm = {"init": "стоп (pivot)", "be": "безубыток", "trail": "трейлинг"}[pos["stage"]]
-                finish(i, px, nm)
+                finish(i, px, {"init": "стоп", "be": "безубыток", "trail": "трейлинг"}[pos["stage"]])
             else:
                 pos["mfe"] = max(pos["mfe"], fav)
+                pos["ext"] = max(pos["ext"], h[i]) if L_ else min(pos["ext"], l[i])
                 if (not pos["be"]) and fav >= P["be_trigger"]:
                     pos["be"], pos["stop"], pos["stage"] = True, e, "be"
-                if pos["be"] and i < M:
-                    if L_:
-                        q = _last_piv(piv, "L", i, lambda p: p > pos["stop"] and p < c[i])
-                        if q is not None: pos["stop"], pos["stage"] = q, "trail"
+                if pos["be"] and i < M and tm != "none":
+                    if tm == "pivot":
+                        if L_:
+                            q = _last_piv(piv, "L", i, lambda p: p > pos["stop"] and p < c[i])
+                        else:
+                            q = _last_piv(piv, "H", i, lambda p: p < pos["stop"] and p > c[i])
                     else:
-                        q = _last_piv(piv, "H", i, lambda p: p < pos["stop"] and p > c[i])
-                        if q is not None: pos["stop"], pos["stage"] = q, "trail"
+                        d = pos["ext"] * td / 100 if tm == "pct" else td * atr[i]
+                        q = pos["ext"] - d if L_ else pos["ext"] + d
+                        if (L_ and not q > pos["stop"]) or ((not L_) and not q < pos["stop"]):
+                            q = None
+                    if q is not None:
+                        pos["stop"], pos["stage"] = float(q), "trail"
         if P["warmup"] <= i < M:
             pr, cu = e20[i - 1] - e200[i - 1], e20[i] - e200[i]
             if pr <= 0 < cu: pend = "L"
@@ -85,8 +110,7 @@ def simulate(df, now_ms, P=PARAMS):
     if pos:
         s = 1 if pos["side"] == "L" else -1
         gross = s * (c[T - 1] / pos["p_in"] - 1) * 100
-        pos.update(i_out=T - 1, t_out=int(t[T - 1]), p_out=float(c[T - 1]), reason="открыта", gross=gross,
-                   net=gross - fee2, open=True)
+        pos.update(i_out=T - 1, t_out=int(t[T - 1]), p_out=float(c[T - 1]), reason="открыта", gross=gross, net=gross - fee2, open=True)
         trades.append(pos)
     return trades
 
@@ -94,7 +118,7 @@ def simulate(df, now_ms, P=PARAMS):
 def pack(trades):
     out = []
     for x in trades:
-        d = {k: x[k] for k in ("side", "t_in", "t_out", "reason", "be", "open")}
+        d = {k: x[k] for k in ("side", "t_in", "t_out", "reason", "be", "open", "clamped")}
         for k in ("p_in", "p_out", "stop0", "stop"):
             d[k] = an._r(float(x[k]))
         for k in ("risk", "gross", "net", "mfe", "mae"):
