@@ -10,7 +10,7 @@
 import classic_analysis as an
 
 PARAMS = dict(tf="15m", be_trigger=1.0, fee=0.05, window_h=240, notional=100.0, warmup=200,
-              stop_mode="prev", min_stop_pct=0.3, min_stop_atr=0.0, trail_mode="atr", trail_dist=1.0)
+              stop_mode="prev", min_stop_pct=0.3, min_stop_atr=0.0, trail_mode="atr", trail_dist=1.0, be_atr=0.0)
 
 
 def _last_piv(piv, kind, maxconf, ok):
@@ -71,7 +71,8 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None):
                         st = max(h[i - 1], entry + mind); clamped = bool(st != h[i - 1])
                 if st is not None:
                     pos = dict(side=side, i_in=i, t_in=int(t[i]), p_in=entry, stop0=float(st), stop=float(st), stage="init",
-                               risk=abs(entry - st) / entry * 100, mfe=0.0, mae=0.0, be=False, clamped=clamped, ext=entry)
+                               risk=abs(entry - st) / entry * 100, mfe=0.0, mae=0.0, be=False, clamped=clamped, ext=entry,
+                               be_thr=(P.get("be_atr", 0) * atr[i - 1] / entry * 100) if P.get("be_atr", 0) else P["be_trigger"])
         if pos:
             L_ = pos["side"] == "L"
             e = pos["p_in"]
@@ -88,7 +89,7 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None):
             else:
                 pos["mfe"] = max(pos["mfe"], fav)
                 pos["ext"] = max(pos["ext"], h[i]) if L_ else min(pos["ext"], l[i])
-                if (not pos["be"]) and fav >= P["be_trigger"]:
+                if (not pos["be"]) and fav >= pos["be_thr"]:
                     pos["be"], pos["stop"], pos["stage"] = True, e, "be"
                 if pos["be"] and i < M and tm != "none":
                     if tm == "pivot":
