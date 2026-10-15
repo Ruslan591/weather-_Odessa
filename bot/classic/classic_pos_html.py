@@ -1,5 +1,5 @@
 HTML = r'''<!doctype html><html><head><meta charset=utf-8>
-<meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1"><title>Классика · позиции</title>
+<meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>Классика · позиции</title>
 <style>
 body{margin:0;background:#0d1117;color:#c9d1d9;font:13px system-ui,sans-serif}
 .t{display:flex;flex-wrap:wrap;gap:4px;padding:4px 6px}
@@ -11,12 +11,12 @@ button.on{background:#1f6feb;border-color:#1f6feb;color:#fff}
 table{border-collapse:collapse;width:100%}td,th{padding:3px 5px;text-align:right;border-bottom:1px solid #21262d;font-size:11.5px;white-space:nowrap}
 td:first-child,th:first-child{text-align:left}.sc{overflow-x:auto}
 .up{color:#26a69a}.dn{color:#ef5350}.fl{color:#8b949e}
-canvas{display:block;width:100%;height:420px;touch-action:pan-y}
+canvas{display:block;width:100%;height:420px;touch-action:none}
 </style></head><body>
 <div class=card><h4 id=ttl>Позиции за 24 ч</h4><div id=rules style="color:#8b949e;font-size:11.5px"></div></div>
 <div class=t id=pairs></div>
 <div class=card><div class=grid id=sum></div></div>
-<div class=card id=cch style="display:none"><h4 id=chT></h4><div class=t id=rng></div><div id=chinfo style="font:11.5px ui-monospace,monospace;color:#8b949e;min-height:30px"></div><canvas id=c></canvas><div style="color:#8b949e;font-size:11px">жёлтая EMA20, фиолетовая EMA200; ▲ лонг / ▼ шорт — вход, ■ — выход, красный пунктир — начальный стоп, линия вход→выход зелёная при плюсе. Время локальное. Перетаскивание — прокрутка, щипок или колесо — масштаб, тап — перекрестие.</div></div>
+<div class=card id=cch style="display:none"><h4 id=chT></h4><div class=t id=rng></div><div id=chinfo style="font:11.5px ui-monospace,monospace;color:#8b949e;min-height:30px"></div><canvas id=c></canvas><div style="color:#8b949e;font-size:11px">жёлтая EMA20, фиолетовая EMA200; ▲ лонг / ▼ шорт — вход, ■ — выход, красный пунктир — начальный стоп, линия вход→выход зелёная при плюсе. Время локальное. Перетаскивание — прокрутка, щипок или колесо — масштаб, тап — перекрестие. Страницу прокручивай, касаясь вне графика.</div></div>
 <div class=card><h4>Сделки</h4><div class=sc id=tbl>загрузка…</div></div>
 <div class=card id=cpair style="display:none"><h4>По парам</h4><div class=sc id=pp></div></div>
 <script>
