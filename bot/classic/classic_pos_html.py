@@ -39,7 +39,7 @@ function render(){
  $('ttl').textContent='Позиции за '+wl(P.window_h)+' · '+(S.sym==='ALL'?'все пары':S.sym)+' · '+P.tf;
  const stp=P.stop_mode==='prev'?'за экстремумом предыдущей свечи (лонг — её low, шорт — её high), но не ближе '+P.min_stop_pct+'%'+(P.min_stop_atr?' и '+P.min_stop_atr+' ATR':''):'на последнем подтверждённом pivot';
  const trl={none:'без трейлинга',pct:'трейлинг на расстоянии '+P.trail_dist+'% от экстремума',atr:'трейлинг на расстоянии '+P.trail_dist+' ATR от экстремума',pivot:'трейлинг по pivot'}[P.trail_mode];
- $('rules').textContent='Вход: пересечение EMA20 × EMA200 (лонг и шорт), по открытию следующей свечи. Стоп: '+stp+'. +'+P.be_trigger+'% → безубыток, затем '+trl+'. Разворот при обратном пересечении. Комиссия '+P.fee+'% за сторону (учтена в Net), объём условный '+P.notional+' USDT.';
+ $('rules').textContent='Вход: пересечение EMA20 × EMA200 (лонг и шорт), по открытию следующей свечи. Стоп: '+stp+'. +'+P.be_trigger+'% → безубыток, затем '+trl+'. Разворот при обратном пересечении.'+(P.pat_exit?' Выход по свечному паттерну разворота (для шорта: молот / бычье поглощение / утренняя звезда; для лонга: падающая звезда / медвежье поглощение / вечерняя звезда), если открытый плюс ≥ '+P.pat_min+'%; после такого выхода — вход в обратную сторону по открытию свечи после первого закрытия за EMA20 (до '+P.rearm_k+' свечей).':'')+' Комиссия '+P.fee+'% за сторону (учтена в Net), объём условный '+P.notional+' USDT.';
  const T=D.trades,n=T.length,w=T.filter(x=>x.net>0).length,s=T.reduce((a,x)=>a+x.net,0),sp=T.reduce((a,x)=>a+x.net*P.notional/100,0);
  const best=n?Math.max(...T.map(x=>x.net)):0,worst=n?Math.min(...T.map(x=>x.net)):0,be=T.filter(x=>x.be).length,op=T.filter(x=>x.open).length;
  const gs=T.reduce((a,x)=>a+x.gross,0);
