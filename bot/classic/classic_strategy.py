@@ -10,7 +10,7 @@
 import classic_analysis as an
 
 PARAMS = dict(tf="15m", be_trigger=1.0, fee=0.05, window_h=240, notional=100.0, warmup=200,
-              stop_mode="prev", min_stop_pct=1.5, min_stop_atr=0.0, trail_mode="none", trail_dist=0.0, be_atr=0.0)
+              stop_mode="prev", min_stop_pct=1.5, min_stop_atr=0.0, trail_mode="none", trail_dist=0.0, be_atr=0.0, be_lock=0.2)
 
 PANEL = dict(PARAMS, pat_exit=True, pat_min=8.0, rearm_k=12)  # правила панели 18091: + выход по паттерну разворота при плюсе >= pat_min%, перевход после закрытия за EMA20
 
@@ -106,7 +106,7 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                 pos["mfe"] = max(pos["mfe"], fav)
                 pos["ext"] = max(pos["ext"], h[i]) if L_ else min(pos["ext"], l[i])
                 if (not pos["be"]) and fav >= pos["be_thr"]:
-                    pos["be"], pos["stop"], pos["stage"] = True, e, "be"
+                    pos["be"], pos["stop"], pos["stage"] = True, e * (1 + (1 if L_ else -1) * P.get("be_lock", 0) / 100), "be"
                 if pos["be"] and i < M and tm != "none":
                     if tm == "pivot":
                         if L_:
