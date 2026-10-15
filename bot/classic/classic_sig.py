@@ -162,7 +162,8 @@ rows = []
 pms = (0, 2, 4, 8)
 for fn, ff in FILT.items():
     ex, arms = build(ff)
-    for tname, sg in (("перевход", dict(arms, **CR)), ("только паттерн-входы", dict(arms)), ("выход без перевхода", None)):
+    mg = dict(arms); mg.update(CR)
+    for tname, sg in (("перевход", mg), ("только паттерн-входы", dict(arms)), ("выход без перевхода", None)):
         for pm in pms:
             P = dict(P0, pat_min=pm)
             s = stat(run(P, sg, ex))
@@ -184,7 +185,8 @@ for fn, tn, pm, s in sorted(rob, key=lambda r: -(r[3]["ins"] + r[3]["oos"]))[:10
 if rob:
     fn, tn, pm, s = sorted(rob, key=lambda r: -(r[3]["ins"] + r[3]["oos"]))[0]
     ex, arms = build(FILT[fn])
-    sg = dict(arms, **CR) if tn == "перевход" else (dict(arms) if tn == "только паттерн-входы" else None)
+    mg = dict(arms); mg.update(CR)
+    sg = mg if tn == "перевход" else (dict(arms) if tn == "только паттерн-входы" else None)
     T = run(dict(P0, pat_min=pm), sg, ex)
     lo, hi = int(pd.Timestamp("2026-10-14 12:00", tz="UTC").value // 10**6), int(pd.Timestamp("2026-10-16 00:00", tz="UTC").value // 10**6)
     print("\nПример 14–15.10 (UTC+3) — %s | %s | плюс ≥%d%%" % (fn, tn, pm))
