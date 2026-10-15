@@ -1,5 +1,6 @@
 """classic_diag.py — разбор устойчивости выбранных конфигураций: топ-сделки, по парам, по месяцам, без лучших сделок."""
-import json, os, sys, time, datetime
+import json, os, sys, time, datetime, warnings
+warnings.filterwarnings('ignore')
 import urllib.request
 import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -7,7 +8,7 @@ import classic_strategy as cs
 
 TF = sys.argv[1] if len(sys.argv) > 1 else "1h"
 STEP = {"15m": 900, "1h": 3600, "4h": 14400}[TF] * 1000
-PAGES = 3
+PAGES = int(sys.argv[2]) if len(sys.argv) > 2 else 3
 pairs = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT", "ADAUSDT", "NEARUSDT", "AVAXUSDT", "ZECUSDT"]
 
 
