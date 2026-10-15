@@ -1,40 +1,31 @@
 {
-  "timestamp": "2026-10-15T17:07:34Z",
+  "timestamp": "2026-10-15T17:22:58Z",
   "current_state": "no_precip",
   "target_type": "precip_mass",
-  "distance_km_now": 150.3,
-  "bearing_deg": 342.0,
+  "distance_km_now": 165.8,
+  "bearing_deg": 346.0,
   "compass": "С",
-  "speed_kmh": 94.6,
-  "direction_compass": "С",
-  "cpa_km": 150.3,
-  "eta_min": null,
-  "blob_area_km2": 2611.0,
-  "verdict": "удаляется",
-  "approaching": false,
-  "frame_pairs_used": 1,
-  "probability_percent": 38,
-  "probability_note": "эвристика (близость точки сближения + размер поля + уверенность в скорости), не физическая модель осадков",
+  "blob_area_km2": 2099.0,
+  "verdict": "скорость посчитать не удалось (поле слишком однородно во всех кадрах)",
+  "probability_percent": 36,
+  "probability_note": "эвристика (близость + размер поля), скорость не посчиталась",
   "method_note": "Скорость усреднена по 4 кадрам msg_fes:h60b (шаг 15 мин, phase correlation). Presence = непрозрачный пиксель. Край ищется только среди связных областей >= 40px (~53км²). Линейная экстраполяция, годится на ~1 час.",
   "target_confirmation": {
-    "confirmed": false,
-    "target_id": 3,
-    "target_area_km2": 189.5,
-    "roi_precip_fraction": 0.0,
-    "verdict": "Осадков из этой конкретной массы не наблюдается (сухое облако либо осадки не достигают земли)"
+    "confirmed": null,
+    "reason": "известный шумовой объект в этой точке подавлен (сигнатура -155_225), других локальных целей нет"
   },
   "system_analysis": {
     "available": true,
     "target_id": 0,
     "area_km2": 179024.0,
-    "roi_precip_fraction": 0.017,
+    "roi_precip_fraction": 0.013,
     "has_precip": false
   },
   "system_analysis_all": [
     {
       "target_id": 0,
       "available": true,
-      "roi_precip_fraction": 0.017,
+      "roi_precip_fraction": 0.013,
       "has_precip": false
     },
     {
