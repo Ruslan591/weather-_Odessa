@@ -68,6 +68,50 @@ async def get_df(sym, tf):
         return df
 
 
+async def get_df_long(sym, tf, pages=2):
+    """до pages*1000 свечей (для стратегии нужен прогрев EMA200 + 10 суток)."""
+    key = (sym, tf, "long")
+    lock = LOCKS.setdefault(key, asyncio.Lock())
+    async with lock:
+        c = CACHE.get(key)
+        if c and time.time() - c[0] < TTL.get(tf, 30):
+            return c[1]
+        parts, end, err = [], None, None
+        for _ in range(pages):
+            data = None
+            for base in BASES:
+                try:
+                    prm = {"symbol": sym, "interval": tf, "limit": 1000}
+                    if end is not None:
+                        prm["endTime"] = end
+                    async with SES.get(base + "/api/v3/klines", params=prm) as r:
+                        if r.status != 200:
+                            raise RuntimeError("%s %s %s" % (base, r.status, (await r.text())[:120]))
+                        data = await r.json()
+                    break
+                except Exception as e:
+                    err = e
+            if not data:
+                break
+            parts.insert(0, data)
+            end = int(data[0][0]) - 1
+            if len(data) < 1000:
+                break
+        if not parts:
+            if c:
+                return c[1]
+            raise RuntimeError(str(err))
+        df = pd.DataFrame([r for p in parts for r in p]).iloc[:, [0, 1, 2, 3, 4, 5, 6]]
+        df.columns = ["t", "o", "h", "l", "c", "v", "ct"]
+        for col in "ohlcv":
+            df[col] = df[col].astype(float)
+        df["t"] = df["t"].astype("int64")
+        df["ct"] = df["ct"].astype("int64")
+        df = df.drop_duplicates("t").reset_index(drop=True)
+        CACHE[key] = (time.time(), df)
+        return df
+
+
 def split_closed(df):
     now = time.time() * 1000
     if len(df) and df.ct.iloc[-1] > now:
@@ -141,7 +185,7 @@ async def api_trades(req):
 
     async def one(s):
         try:
-            return s, await get_df(s, P["tf"])
+            return s, await get_df_long(s, P["tf"])
         except Exception:
             return s, None
     out, chart, err = [], None, None
@@ -157,7 +201,7 @@ async def api_trades(req):
         if sym != "ALL":
             closed, live = split_closed(df)
             ind = an.indicators(closed)
-            k = 192
+            k = max(48, min(960, int(req.query.get("bars", 192))))
             def sl(v):
                 return [None if z is None else an._r(float(z)) for z in v]
             chart = {"t": [int(z) for z in df.t.values[-k:]]}
