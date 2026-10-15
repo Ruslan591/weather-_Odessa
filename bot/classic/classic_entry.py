@@ -115,42 +115,47 @@ def line(lab, T):
         lab, n, net, net / n, sum(x["net"] > 0 for x in T) / n * 100, net - top5, sum(v > 0 for v in mm.values()), len(mm), h1, h2))
 
 
-base = run()
-print("\n=== БАЗА (конфиг C без фильтра входа)")
-line("все сделки", base)
-nets = np.array([x["net"] for x in base])
-print("\n=== РАЗБОР ПО ПРИЗНАКАМ (по направлению сделки; каждая корзина — сделки базы)")
-for name, qs in [("slope", 4), ("adx", 4), ("volr", 4), ("atrp", 4)]:
-    f = feat(base, name); edges = np.quantile(f, np.linspace(0, 1, qs + 1))
-    print("-- %s (квартили: %s)" % (name, ", ".join("%.2f" % e for e in edges)))
-    for q in range(qs):
-        m = (f >= edges[q]) & ((f <= edges[q + 1]) if q == qs - 1 else (f < edges[q + 1]))
-        sub = [x for x, ok in zip(base, m) if ok]; line("Q%d [%.2f..%.2f]" % (q + 1, edges[q], edges[q + 1]), sub)
-for name in ("sc4", "sc1"):
-    f = feat(base, name); print("-- %s (согласие с трендом %s: +2 по тренду, −2 против)" % (name, "4h" if name == "sc4" else "1d"))
-    for v in (-2, 0, 2):
-        sub = [x for x, a in zip(base, f) if a == v]; line("%+d" % v, sub)
+def main():
+    base = run()
+    print("\n=== БАЗА (конфиг C без фильтра входа)")
+    line("все сделки", base)
+    nets = np.array([x["net"] for x in base])
+    print("\n=== РАЗБОР ПО ПРИЗНАКАМ (по направлению сделки; каждая корзина — сделки базы)")
+    for name, qs in [("slope", 4), ("adx", 4), ("volr", 4), ("atrp", 4)]:
+        f = feat(base, name); edges = np.quantile(f, np.linspace(0, 1, qs + 1))
+        print("-- %s (квартили: %s)" % (name, ", ".join("%.2f" % e for e in edges)))
+        for q in range(qs):
+            m = (f >= edges[q]) & ((f <= edges[q + 1]) if q == qs - 1 else (f < edges[q + 1]))
+            sub = [x for x, ok in zip(base, m) if ok]; line("Q%d [%.2f..%.2f]" % (q + 1, edges[q], edges[q + 1]), sub)
+    for name in ("sc4", "sc1"):
+        f = feat(base, name); print("-- %s (согласие с трендом %s: +2 по тренду, −2 против)" % (name, "4h" if name == "sc4" else "1d"))
+        for v in (-2, 0, 2):
+            sub = [x for x, a in zip(base, f) if a == v]; line("%+d" % v, sub)
 
-F = {
-    "4h по тренду (=+2)": lambda d, side, i: d["sc4"][i] * sg(side) == 2,
-    "4h не против (>=0)": lambda d, side, i: d["sc4"][i] * sg(side) >= 0,
-    "1d по тренду (=+2)": lambda d, side, i: d["sc1"][i] * sg(side) == 2,
-    "1d не против (>=0)": lambda d, side, i: d["sc1"][i] * sg(side) >= 0,
-    "4h=+2 и 1d>=0": lambda d, side, i: d["sc4"][i] * sg(side) == 2 and d["sc1"][i] * sg(side) >= 0,
-    "slope>=0": lambda d, side, i: d["slope"][i] * sg(side) >= 0,
-    "slope>=0.02": lambda d, side, i: d["slope"][i] * sg(side) >= 0.02,
-    "slope>=0.05": lambda d, side, i: d["slope"][i] * sg(side) >= 0.05,
-    "ADX>=15": lambda d, side, i: d["adx"][i] >= 15,
-    "ADX>=20": lambda d, side, i: d["adx"][i] >= 20,
-    "ADX>=25": lambda d, side, i: d["adx"][i] >= 25,
-    "объём>=1.0": lambda d, side, i: d["volr"][i] >= 1.0,
-    "объём>=1.5": lambda d, side, i: d["volr"][i] >= 1.5,
-    "4h>=0 и ADX>=20": lambda d, side, i: d["sc4"][i] * sg(side) >= 0 and d["adx"][i] >= 20,
-    "1d>=0 и ADX>=20": lambda d, side, i: d["sc1"][i] * sg(side) >= 0 and d["adx"][i] >= 20,
-    "4h>=0, slope>=0.02": lambda d, side, i: d["sc4"][i] * sg(side) >= 0 and d["slope"][i] * sg(side) >= 0.02,
-    "4h=+2, ADX>=20": lambda d, side, i: d["sc4"][i] * sg(side) == 2 and d["adx"][i] >= 20,
-}
-print("\n=== ФИЛЬТРЫ ВХОДА (полная симуляция с выходом C; сигнал против позиции по-прежнему закрывает её)")
-line("без фильтра", base)
-for lab, c in F.items():
-    line(lab, run(c))
+    F = {
+        "4h по тренду (=+2)": lambda d, side, i: d["sc4"][i] * sg(side) == 2,
+        "4h не против (>=0)": lambda d, side, i: d["sc4"][i] * sg(side) >= 0,
+        "1d по тренду (=+2)": lambda d, side, i: d["sc1"][i] * sg(side) == 2,
+        "1d не против (>=0)": lambda d, side, i: d["sc1"][i] * sg(side) >= 0,
+        "4h=+2 и 1d>=0": lambda d, side, i: d["sc4"][i] * sg(side) == 2 and d["sc1"][i] * sg(side) >= 0,
+        "slope>=0": lambda d, side, i: d["slope"][i] * sg(side) >= 0,
+        "slope>=0.02": lambda d, side, i: d["slope"][i] * sg(side) >= 0.02,
+        "slope>=0.05": lambda d, side, i: d["slope"][i] * sg(side) >= 0.05,
+        "ADX>=15": lambda d, side, i: d["adx"][i] >= 15,
+        "ADX>=20": lambda d, side, i: d["adx"][i] >= 20,
+        "ADX>=25": lambda d, side, i: d["adx"][i] >= 25,
+        "объём>=1.0": lambda d, side, i: d["volr"][i] >= 1.0,
+        "объём>=1.5": lambda d, side, i: d["volr"][i] >= 1.5,
+        "4h>=0 и ADX>=20": lambda d, side, i: d["sc4"][i] * sg(side) >= 0 and d["adx"][i] >= 20,
+        "1d>=0 и ADX>=20": lambda d, side, i: d["sc1"][i] * sg(side) >= 0 and d["adx"][i] >= 20,
+        "4h>=0, slope>=0.02": lambda d, side, i: d["sc4"][i] * sg(side) >= 0 and d["slope"][i] * sg(side) >= 0.02,
+        "4h=+2, ADX>=20": lambda d, side, i: d["sc4"][i] * sg(side) == 2 and d["adx"][i] >= 20,
+    }
+    print("\n=== ФИЛЬТРЫ ВХОДА (полная симуляция с выходом C; сигнал против позиции по-прежнему закрывает её)")
+    line("без фильтра", base)
+    for lab, c in F.items():
+        line(lab, run(c))
+
+
+if __name__ == "__main__":
+    main()
