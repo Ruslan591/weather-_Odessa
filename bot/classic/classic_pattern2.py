@@ -71,7 +71,7 @@ def exit_sigs():
 
 
 EX = exit_sigs()
-base = dict(cs.PARAMS, stop_mode="prev", min_stop_pct=1.5, trail_mode="none", trail_dist=0.0)
+base = dict(cs.PARAMS, stop_mode="prev", min_stop_pct=1.5, trail_mode="none", trail_dist=0.0, pat_exit=False)
 BE1 = dict(base, be_trigger=1.0); NOBE = dict(base, be_trigger=999.0)
 VAR = [("0 как сейчас (БУ+1%, без паттернов)", BE1, None)]
 for pm in (3, 5, 8, 12):
