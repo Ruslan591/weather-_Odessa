@@ -9,8 +9,8 @@
 Внутри одной свечи считаем консервативно: сначала проверяется стоп, потом движение в плюс."""
 import classic_analysis as an
 
-PARAMS = dict(tf="15m", be_trigger=1.0, fee=0.05, window_h=240, notional=100.0, warmup=200,
-              stop_mode="prev", min_stop_pct=1.5, min_stop_atr=0.0, trail_mode="none", trail_dist=0.0, be_atr=0.0, be_lock=0.2)
+PARAMS = dict(tf="15m", be_trigger=1.5, fee=0.05, window_h=240, notional=100.0, warmup=200,
+              stop_mode="prev", min_stop_pct=1.5, min_stop_atr=0.0, trail_mode="none", trail_dist=0.0, be_atr=0.0, be_lock=0.3)
 
 PANEL = dict(PARAMS, pat_exit=True, pat_min=8.0, rearm_k=12)  # правила панели 18091: + выход по паттерну разворота при плюсе >= pat_min%, перевход после закрытия за EMA20
 
