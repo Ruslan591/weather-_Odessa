@@ -73,7 +73,7 @@ def exit_sigs():
 CR = cross_sigs(); EX = exit_sigs()
 def merged(K):
     m = dict(pat_sigs(K)); m.update(CR); return m
-base = dict(cs.PARAMS, stop_mode="prev", min_stop_pct=1.5, trail_mode="none", trail_dist=0.0)
+base = dict(cs.PARAMS, stop_mode="prev", min_stop_pct=1.5, trail_mode="none", trail_dist=0.0, pat_exit=False)
 BE1 = dict(base, be_trigger=1.0); NOBE = dict(base, be_trigger=999.0); BE1T = dict(BE1, trail_mode="atr", trail_dist=3.0)
 VAR = [
     ("0 как сейчас: вход пересечение, БУ+1%", BE1, None, None),
