@@ -34,7 +34,7 @@ def prepare(df, now_ms):
     return pre
 
 
-def simulate(df, now_ms, P=PARAMS, pre=None, filt=None):
+def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None):
     pre = pre or prepare(df, now_ms)
     if not pre["ok"] or pre["M"] < P["warmup"] + 30:
         return []
@@ -55,10 +55,10 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None):
 
     for i in range(1, T):
         if pend:
-            (side, allow), pend = pend, None
-            if pos and pos["side"] != side:
+            (xc, side, allow), pend = pend, None
+            if xc and pos and pos["side"] != xc:
                 finish(i, o[i], "разворот")
-            if pos is None and allow:
+            if pos is None and side and allow:
                 entry = float(o[i])
                 clamped = False
                 if P["stop_mode"] == "pivot":
@@ -106,8 +106,10 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None):
                         pos["stop"], pos["stage"] = float(q), "trail"
         if P["warmup"] <= i < M:
             pr, cu = e20[i - 1] - e200[i - 1], e20[i] - e200[i]
-            if pr <= 0 < cu: pend = ("L", filt is None or bool(filt("L", i)))
-            elif pr >= 0 > cu: pend = ("S", filt is None or bool(filt("S", i)))
+            xc = "L" if pr <= 0 < cu else "S" if pr >= 0 > cu else None
+            en = (xc if sigs is None else sigs.get(i))
+            if xc or en:
+                pend = (xc, en, (filt is None) or (en is None) or bool(filt(en, i)))
     if pos:
         s = 1 if pos["side"] == "L" else -1
         gross = s * (c[T - 1] / pos["p_in"] - 1) * 100
