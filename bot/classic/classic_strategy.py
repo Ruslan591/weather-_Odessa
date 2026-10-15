@@ -43,7 +43,7 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
     o, h, l, c, t = pre["o"], pre["h"], pre["l"], pre["c"], pre["t"]
     fee2 = 2 * P["fee"]
     tm, td = P["trail_mode"], P["trail_dist"]
-    trades, pos, pend, pexit = [], None, None, False
+    trades, pos, pend, pexit, arm = [], None, None, False, None
 
     def finish(i, price, reason):
         nonlocal pos
@@ -57,7 +57,10 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
         if pexit:
             pexit = False
             if pos:
+                sc_ = pos["side"]
                 finish(i, o[i], "паттерн")
+                if P.get("rearm_k", 0):
+                    arm = ("S" if sc_ == "L" else "L", i - 1 + P["rearm_k"])
         if pend:
             (xc, side, allow), pend = pend, None
             if xc and pos and pos["side"] != xc:
@@ -109,11 +112,19 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                     if q is not None:
                         pos["stop"], pos["stage"] = float(q), "trail"
         if exits is not None and i < M and pos and exits.get(i) and exits[i] != pos["side"]:
-            pexit = True
+            sg_ = 1 if pos["side"] == "L" else -1
+            if sg_ * (c[i] / pos["p_in"] - 1) * 100 >= P.get("pat_min", 0):
+                pexit = True
         if P["warmup"] <= i < M:
             pr, cu = e20[i - 1] - e200[i - 1], e20[i] - e200[i]
             xc = "L" if pr <= 0 < cu else "S" if pr >= 0 > cu else None
             en = (xc if sigs is None else sigs.get(i))
+            if arm is not None:
+                if i > arm[1]:
+                    arm = None
+                elif pos is None and ((arm[0] == "L" and c[i] > e20[i]) or (arm[0] == "S" and c[i] < e20[i])):
+                    if en is None: en = arm[0]
+                    arm = None
             if xc or en:
                 pend = (xc, en, (filt is None) or (en is None) or bool(filt(en, i)))
     if pos:
