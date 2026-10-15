@@ -6,7 +6,7 @@
 Внутри одной свечи считаем консервативно: сначала проверяется стоп, потом движение в плюс."""
 import classic_analysis as an
 
-PARAMS = dict(tf="15m", be_trigger=1.0, fee=0.05, window_h=24, notional=100.0, warmup=200)
+PARAMS = dict(tf="15m", be_trigger=1.0, fee=0.05, window_h=240, notional=100.0, warmup=200)
 
 
 def _last_piv(piv, kind, maxconf, ok):
