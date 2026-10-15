@@ -66,9 +66,9 @@ def simulate(df, now_ms, P=PARAMS, pre=None):
                 else:
                     mind = max(entry * P["min_stop_pct"] / 100, P["min_stop_atr"] * atr[i - 1])
                     if side == "L":
-                        st = min(l[i - 1], entry - mind); clamped = st != l[i - 1]
+                        st = min(l[i - 1], entry - mind); clamped = bool(st != l[i - 1])
                     else:
-                        st = max(h[i - 1], entry + mind); clamped = st != h[i - 1]
+                        st = max(h[i - 1], entry + mind); clamped = bool(st != h[i - 1])
                 if st is not None:
                     pos = dict(side=side, i_in=i, t_in=int(t[i]), p_in=entry, stop0=float(st), stop=float(st), stage="init",
                                risk=abs(entry - st) / entry * 100, mfe=0.0, mae=0.0, be=False, clamped=clamped, ext=entry)
@@ -118,7 +118,9 @@ def simulate(df, now_ms, P=PARAMS, pre=None):
 def pack(trades):
     out = []
     for x in trades:
-        d = {k: x[k] for k in ("side", "t_in", "t_out", "reason", "be", "open", "clamped")}
+        d = {k: x[k] for k in ("side", "t_in", "t_out", "reason")}
+        for k in ("be", "open", "clamped"):
+            d[k] = bool(x[k])
         for k in ("p_in", "p_out", "stop0", "stop"):
             d[k] = an._r(float(x[k]))
         for k in ("risk", "gross", "net", "mfe", "mae"):
