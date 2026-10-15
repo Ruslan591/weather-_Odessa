@@ -5,8 +5,11 @@ import aiohttp
 from aiohttp import web
 import pandas as pd
 import classic_analysis as an
+import classic_strategy as cs
+from classic_pos_html import HTML as POS_HTML
 
 PORT = 18093
+PORT2 = 8091  # панель позиций: на ноутбуке/телефоне проброс 18091 -> 8091
 BASES = ["https://api.binance.com", "https://data-api.binance.vision"]
 TTL = {"1m": 5, "5m": 10, "15m": 15, "30m": 20, "1h": 30, "4h": 60, "1d": 120}
 ALLTF = ["5m", "15m", "1h", "4h", "1d"]
@@ -127,17 +130,54 @@ async def api_pairs(req):
     return web.json_response({"pairs": p})
 
 
+async def api_trades(req):
+    sym = req.query.get("sym", "ALL").upper()
+    if sym != "ALL" and not ok_sym(sym):
+        return web.json_response({"error": "bad params"}, status=400)
+    P = cs.PARAMS
+    now = int(time.time() * 1000)
+    cutoff = now - P["window_h"] * 3600 * 1000
+    targets = load_pairs() if sym == "ALL" else [sym]
+
+    async def one(s):
+        try:
+            return s, await get_df(s, P["tf"])
+        except Exception:
+            return s, None
+    out, chart, err = [], None, None
+    for s, df in await asyncio.gather(*[one(x) for x in targets]):
+        if df is None:
+            err = "нет данных по " + s
+            continue
+        for x in cs.simulate(df, now):
+            if x["open"] or x["t_in"] >= cutoff or x["t_out"] >= cutoff:
+                d = cs.pack([x])[0]
+                d["sym"] = s
+                out.append(d)
+        if sym != "ALL":
+            closed, live = split_closed(df)
+            ind = an.indicators(closed)
+            k = 192
+            def sl(v):
+                return [None if z is None else an._r(float(z)) for z in v]
+            chart = {"t": [int(z) for z in df.t.values[-k:]]}
+            for c_ in "ohlc":
+                chart[c_] = sl(df[c_].values[-k:])
+            e20, e200 = list(ind["ema20"].values), list(ind["ema200"].values)
+            if live is not None:
+                e20.append(None); e200.append(None)
+            chart["ema20"], chart["ema200"] = sl(e20[-k:]), sl(e200[-k:])
+    if sym != "ALL" and chart is None:
+        return web.json_response({"error": err or "нет данных"}, status=502)
+    return web.json_response({"sym": sym, "params": P, "trades": out, "chart": chart, "now": now})
+
+
+async def pos_index(req):
+    return web.Response(text=POS_HTML, content_type="text/html")
+
+
 async def index(req):
     return web.Response(text=HTML, content_type="text/html")
-
-
-async def on_start(app):
-    global SES
-    SES = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15))
-
-
-async def on_stop(app):
-    await SES.close()
 
 
 HTML = r'''<!doctype html><html><head><meta charset=utf-8>
@@ -320,15 +360,27 @@ window.addEventListener('resize',draw);
 </script></body></html>'''
 
 
+async def serve():
+    global SES
+    SES = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15))
+    app1 = web.Application()
+    app1.router.add_get("/", index)
+    app1.router.add_get("/api/chart", api_chart)
+    app1.router.add_get("/api/mtf", api_mtf)
+    app1.router.add_route("*", "/api/pairs", api_pairs)
+    app2 = web.Application()
+    app2.router.add_get("/", pos_index)
+    app2.router.add_get("/api/trades", api_trades)
+    app2.router.add_route("*", "/api/pairs", api_pairs)
+    for app, port in ((app1, PORT), (app2, PORT2)):
+        r = web.AppRunner(app)
+        await r.setup()
+        await web.TCPSite(r, "127.0.0.1", port).start()
+    await asyncio.Event().wait()
+
+
 def main():
-    app = web.Application()
-    app.on_startup.append(on_start)
-    app.on_cleanup.append(on_stop)
-    app.router.add_get("/", index)
-    app.router.add_get("/api/chart", api_chart)
-    app.router.add_get("/api/mtf", api_mtf)
-    app.router.add_route("*", "/api/pairs", api_pairs)
-    web.run_app(app, host="127.0.0.1", port=PORT, print=None)
+    asyncio.run(serve())
 
 
 if __name__ == "__main__":
