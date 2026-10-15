@@ -16,24 +16,26 @@ canvas{display:block;width:100%;height:340px}
 <div class=card><h4 id=ttl>Позиции за 24 ч</h4><div id=rules style="color:#8b949e;font-size:11.5px"></div></div>
 <div class=t id=pairs></div>
 <div class=card><div class=grid id=sum></div></div>
-<div class=card id=cch style="display:none"><h4 id=chT></h4><canvas id=c></canvas><div style="color:#8b949e;font-size:11px">жёлтая EMA20, фиолетовая EMA200; ▲ лонг / ▼ шорт — вход, ■ — выход, красный пунктир — начальный стоп, линия вход→выход зелёная при плюсе. Время локальное.</div></div>
+<div class=card id=cch style="display:none"><h4 id=chT></h4><div class=t id=rng></div><canvas id=c></canvas><div style="color:#8b949e;font-size:11px">жёлтая EMA20, фиолетовая EMA200; ▲ лонг / ▼ шорт — вход, ■ — выход, красный пунктир — начальный стоп, линия вход→выход зелёная при плюсе. Время локальное.</div></div>
 <div class=card><h4>Сделки</h4><div class=sc id=tbl>загрузка…</div></div>
 <div class=card id=cpair style="display:none"><h4>По парам</h4><div class=sc id=pp></div></div>
 <script>
 const $=id=>document.getElementById(id);
-const S={sym:'ALL',pairs:[],D:null};
+const S={sym:'ALL',pairs:[],D:null,bars:192};
+const wl=h=>h>=48?(h/24)+' сут':h+' ч';
 function fmt(p){if(p==null)return'—';const a=Math.abs(p);const d=a>=1000?2:a>=100?3:a>=10?4:a>=1?5:7;return p.toFixed(d)}
 const p2=n=>String(n).padStart(2,'0');
 function ft(t){const d=new Date(t);return p2(d.getDate())+'.'+p2(d.getMonth()+1)+' '+p2(d.getHours())+':'+p2(d.getMinutes())}
 const sg=v=>(v>=0?'+':'')+v.toFixed(2);const cls=v=>v>0?'up':v<0?'dn':'fl';
+function mkr(){$('rng').innerHTML='';[[192,'48 ч'],[480,'5 сут'],[960,'10 сут']].forEach(([n,l])=>{const b=document.createElement('button');b.textContent=l;if(S.bars===n)b.className='on';b.onclick=()=>{S.bars=n;mkr();load()};$('rng').appendChild(b)})}
 function mk(){$('pairs').innerHTML='';['ALL'].concat(S.pairs).forEach(p=>{const b=document.createElement('button');b.textContent=p==='ALL'?'ВСЕ':p.replace('USDT','');if(p===S.sym)b.className='on';b.onclick=()=>{S.sym=p;mk();load()};$('pairs').appendChild(b)})}
 async function load(){
- try{const r=await fetch('/api/trades?sym='+S.sym);const j=await r.json();if(j.error){$('tbl').textContent='Ошибка: '+j.error;return}
+ try{const r=await fetch('/api/trades?sym='+S.sym+'&bars='+S.bars);const j=await r.json();if(j.error){$('tbl').textContent='Ошибка: '+j.error;return}
   if(j.sym!==S.sym)return;S.D=j;render()}catch(e){$('tbl').textContent='Ошибка: '+e}
 }
 function render(){
  const D=S.D,P=D.params;
- $('ttl').textContent='Позиции за '+P.window_h+' ч · '+(S.sym==='ALL'?'все пары':S.sym)+' · '+P.tf;
+ $('ttl').textContent='Позиции за '+wl(P.window_h)+' · '+(S.sym==='ALL'?'все пары':S.sym)+' · '+P.tf;
  $('rules').textContent='Вход: пересечение EMA20 × EMA200 (лонг и шорт), по открытию следующей свечи. Начальный стоп — последний подтверждённый pivot. +'+P.be_trigger+'% → стоп в безубыток, далее трейлинг по pivot. Разворот при обратном пересечении. Комиссия '+P.fee+'% за сторону (учтена в Net), объём условный '+P.notional+' USDT.';
  const T=D.trades,n=T.length,w=T.filter(x=>x.net>0).length,s=T.reduce((a,x)=>a+x.net,0),sp=T.reduce((a,x)=>a+x.net*P.notional/100,0);
  const best=n?Math.max(...T.map(x=>x.net)):0,worst=n?Math.min(...T.map(x=>x.net)):0,be=T.filter(x=>x.be).length,op=T.filter(x=>x.open).length;
@@ -46,7 +48,7 @@ function render(){
   let q='<table><tr><th>Пара</th><th>Сделок</th><th>Плюс</th><th>Net %</th></tr>';
   Object.keys(m).sort().forEach(k=>{const a=m[k],ss=a.reduce((z,x)=>z+x.net,0);q+='<tr><td>'+k.replace('USDT','')+'</td><td>'+a.length+'</td><td>'+a.filter(x=>x.net>0).length+'</td><td class="'+cls(ss)+'">'+sg(ss)+'</td></tr>'});
   $('pp').innerHTML=q+'</table>';$('cpair').style.display='block';$('cch').style.display='none'}
- else{$('cpair').style.display='none';$('cch').style.display='block';$('chT').textContent=S.sym+' · 15m · последние ~48 ч';chart()}
+ else{$('cpair').style.display='none';$('cch').style.display='block';$('chT').textContent=S.sym+' · 15m · '+wl(S.bars/4);chart()}
 }
 function chart(){
  const C=S.D.chart;if(!C)return;const cv=$('c'),dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=340;
@@ -68,5 +70,5 @@ function chart(){
   if(b>=0&&!x.open){g.fillStyle=col;g.fillRect(xb-3,Y(x.p_out)-3,6,6)}});
 }
 window.addEventListener('resize',()=>{if(S.D&&S.sym!=='ALL')chart()});
-(async()=>{try{const r=await fetch('/api/pairs');S.pairs=(await r.json()).pairs}catch(e){}mk();load();setInterval(load,15000)})();
+(async()=>{try{const r=await fetch('/api/pairs');S.pairs=(await r.json()).pairs}catch(e){}mk();mkr();load();setInterval(load,15000)})();
 </script></body></html>'''
