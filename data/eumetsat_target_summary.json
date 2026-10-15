@@ -1,12 +1,17 @@
 {
-  "timestamp": "2026-10-15T22:37:32Z",
-  "status": "ok",
+  "timestamp": "2026-10-15T22:42:23Z",
+  "status": "suppressed_known_false_positive",
   "cloud_forecast_timestamp": "2026-10-15T22:15:00.000Z",
-  "target_id": 2,
-  "target_area_km2": 226.8,
-  "target_distance_km": 131.9,
-  "target_bearing_deg": 271.0,
-  "target_compass": "З",
+  "suppressed_target": {
+    "signature": "-80_-90",
+    "area_km2": 129.4,
+    "distance_km": 119.9,
+    "bearing_deg": 223.0,
+    "compass": "ЮЗ",
+    "not_confirmed_streak": 6,
+    "total_not_confirmed": 21,
+    "excluded_since": "2026-10-15T22:32:31Z"
+  },
   "system": {
     "target_id": 0,
     "area_km2": 173162.4,
@@ -46,6 +51,7 @@
     }
   ],
   "system_suppressed_count": 1,
+  "verdict": "Известный шумовой объект в 120км ЮЗ (~129км²) — подавлено (не подтверждался 6 раз подряд). Отдельно: система синоптического масштаба (173162км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора).",
   "frontal_tracks": [
     {
       "track_id": 1654,
@@ -137,43 +143,5 @@
       "front_type": "warm",
       "front_type_confidence": "station"
     }
-  ],
-  "also_suppressed_nearby": {
-    "signature": "-80_-90",
-    "area_km2": 129.4
-  },
-  "target_phase": {
-    "label": "безоблачно",
-    "cloud_fraction": 0.0
-  },
-  "existence": {
-    "modules": {
-      "ir_motion": {
-        "confirmed": false,
-        "timestamp": "2026-10-15T22:10:00.000Z"
-      },
-      "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-10-15T22:10:00.000Z"
-      },
-      "cloud_phase_type": {
-        "confirmed": false,
-        "timestamp": "2026-10-15T16:52:25Z"
-      }
-    },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
-  },
-  "phenomena": {
-    "precip_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-10-15T22:27:04Z"
-    },
-    "lightning_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-10-15T22:32:14Z"
-    }
-  },
-  "verdict": "CLM отметил цель в 132км З, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (173162км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора)."
+  ]
 }
