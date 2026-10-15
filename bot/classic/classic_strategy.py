@@ -10,7 +10,7 @@
 import classic_analysis as an
 
 PARAMS = dict(tf="15m", be_trigger=1.0, fee=0.05, window_h=240, notional=100.0, warmup=200,
-              stop_mode="prev", min_stop_pct=0.3, min_stop_atr=0.0, trail_mode="none", trail_dist=0.0)
+              stop_mode="prev", min_stop_pct=0.3, min_stop_atr=0.0, trail_mode="atr", trail_dist=1.0)
 
 
 def _last_piv(piv, kind, maxconf, ok):
