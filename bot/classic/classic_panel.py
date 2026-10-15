@@ -178,7 +178,9 @@ async def api_trades(req):
     sym = req.query.get("sym", "ALL").upper()
     if sym != "ALL" and not ok_sym(sym):
         return web.json_response({"error": "bad params"}, status=400)
-    P = cs.PANEL
+    P = dict(cs.PANEL)
+    if req.query.get("pat") == "0":
+        P["pat_exit"] = False
     now = int(time.time() * 1000)
     cutoff = now - P["window_h"] * 3600 * 1000
     targets = load_pairs() if sym == "ALL" else [sym]
