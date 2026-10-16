@@ -6,13 +6,23 @@
 +be_trigger% в нашу сторону → стоп в безубыток (цена входа).
 Трейлинг после безубытка (trail_mode): none | pct (экстремум − trail_dist%) | atr (экстремум − trail_dist·ATR) | pivot.
 Выход: стоп, либо обратное пересечение (разворот: закрытие и вход в другую сторону).
-Внутри одной свечи считаем консервативно: сначала проверяется стоп, потом движение в плюс."""
+Внутри одной свечи считаем консервативно: сначала проверяется стоп, потом движение в плюс.
+
+Конструктор правил (все параметры задаются в config, см. DEFAULT_CFG / PANEL):
+  entry_mode: cross200 (пересечение EMA20 и EMA200) | close20 (первое закрытие свечи за EMA20 после пересечения) | state20 (любое закрытие за EMA20, когда позиции нет)
+  rev_exit: обратный сигнал входа закрывает позицию (разворот)
+  stop_mode: prev (за экстремумом предыдущей свечи, не ближе min_stop_pct/min_stop_atr) | pct (фиксированный min_stop_pct) | pivot
+  be_trigger (точка перехода в безубыток, %), be_lock (размер безубытка: стоп на вход ± be_lock%)
+  trail_mode: none | pct | atr | pivot (после безубытка), trail_dist
+  pat_mode: off | exit (паттерн закрывает позицию при плюсе >= pat_min%) | trail (паттерн включает трейлинг под минимумом/максимумом предыдущей свечи, не хуже безубытка)
+  sim_from_ms: начать симуляцию «с нуля» с этого момента (для живой бумажной торговли)"""
 import classic_analysis as an
 
 PARAMS = dict(tf="15m", be_trigger=1.5, fee=0.05, window_h=240, notional=100.0, warmup=200,
-              stop_mode="prev", min_stop_pct=1.5, min_stop_atr=0.0, trail_mode="none", trail_dist=0.0, be_atr=0.0, be_lock=0.3)
+              stop_mode="prev", min_stop_pct=1.5, min_stop_atr=0.0, trail_mode="none", trail_dist=0.0, be_atr=0.0, be_lock=0.3,
+              entry_mode="cross200", rev_exit=True, pat_mode="off")
 
-PANEL = dict(PARAMS, pat_exit=True, pat_min=8.0, rearm_k=12)  # правила панели 18091: + выход по паттерну разворота при плюсе >= pat_min%, перевход после закрытия за EMA20
+PANEL = dict(PARAMS, be_trigger=1.5, be_lock=0.4, entry_mode="close20", rev_exit=True, pat_mode="trail", pat_min=0.0)  # правила панели 18091 по умолчанию (конструктор может менять)
 
 
 def _last_piv(piv, kind, maxconf, ok):
@@ -43,7 +53,10 @@ def prepare(df, now_ms):
 
 def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
     pre = pre or prepare(df, now_ms)
-    if exits is None and P.get("pat_exit") and pre.get("ok"):
+    pm = P.get("pat_mode")
+    if pm in (None, "", "off"):
+        pm = "exit" if (P.get("pat_exit") or exits is not None) else "off"
+    if exits is None and pm in ("exit", "trail") and pre.get("ok"):
         exits = pre["exits"]
     if not pre["ok"] or pre["M"] < P["warmup"] + 30:
         return []
@@ -62,7 +75,10 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
         trades.append(pos)
         pos = None
 
-    for i in range(1, T):
+    i0 = 1
+    if P.get("sim_from_ms"):
+        i0 = max(1, int(t.searchsorted(P["sim_from_ms"])))
+    for i in range(i0, T):
         if pexit:
             pexit = False
             if pos:
@@ -79,6 +95,8 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                 clamped = False
                 if P["stop_mode"] == "pivot":
                     st = _last_piv(piv, "L", i - 1, lambda p: p < entry) if side == "L" else _last_piv(piv, "H", i - 1, lambda p: p > entry)
+                elif P["stop_mode"] == "pct":
+                    st = entry * (1 - P["min_stop_pct"] / 100) if side == "L" else entry * (1 + P["min_stop_pct"] / 100)
                 else:
                     mind = max(entry * P["min_stop_pct"] / 100, P["min_stop_atr"] * atr[i - 1])
                     if side == "L":
@@ -87,7 +105,7 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                         st = max(h[i - 1], entry + mind); clamped = bool(st != h[i - 1])
                 if st is not None:
                     pos = dict(side=side, i_in=i, t_in=int(t[i]), p_in=entry, stop0=float(st), stop=float(st), stage="init",
-                               risk=abs(entry - st) / entry * 100, mfe=0.0, mae=0.0, be=False, clamped=clamped, ext=entry,
+                               risk=abs(entry - st) / entry * 100, mfe=0.0, mae=0.0, be=False, clamped=clamped, ext=entry, ptrail=False,
                                be_thr=(P.get("be_atr", 0) * atr[i - 1] / entry * 100) if P.get("be_atr", 0) else P["be_trigger"])
         if pos:
             L_ = pos["side"] == "L"
@@ -101,7 +119,7 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                     px = o[i] if o[i] <= pos["stop"] else pos["stop"]
                 else:
                     px = o[i] if o[i] >= pos["stop"] else pos["stop"]
-                finish(i, px, {"init": "стоп", "be": "безубыток", "trail": "трейлинг"}[pos["stage"]])
+                finish(i, px, {"init": "стоп", "be": "безубыток", "trail": "трейлинг", "ptrail": "трейлинг по паттерну"}[pos["stage"]])
             else:
                 pos["mfe"] = max(pos["mfe"], fav)
                 pos["ext"] = max(pos["ext"], h[i]) if L_ else min(pos["ext"], l[i])
@@ -120,22 +138,44 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                             q = None
                     if q is not None:
                         pos["stop"], pos["stage"] = float(q), "trail"
-        if exits is not None and i < M and pos and exits.get(i) and exits[i] != pos["side"]:
+                if pm == "trail" and exits is not None and i < M:
+                    if exits.get(i) and exits[i] != pos["side"]:
+                        pos["ptrail"] = True
+                    if pos["ptrail"]:
+                        lk = P.get("be_lock", 0) / 100
+                        if L_:
+                            cand = l[i]; bep = e * (1 + lk)
+                            if c[i] > bep: cand = max(cand, bep)
+                            if cand > pos["stop"] and cand < c[i]:
+                                pos["stop"], pos["stage"] = float(cand), "ptrail"
+                        else:
+                            cand = h[i]; bep = e * (1 - lk)
+                            if c[i] < bep: cand = min(cand, bep)
+                            if cand < pos["stop"] and cand > c[i]:
+                                pos["stop"], pos["stage"] = float(cand), "ptrail"
+        if pm == "exit" and exits is not None and i < M and pos and exits.get(i) and exits[i] != pos["side"]:
             sg_ = 1 if pos["side"] == "L" else -1
             if sg_ * (c[i] / pos["p_in"] - 1) * 100 >= P.get("pat_min", 0):
                 pexit = True
         if P["warmup"] <= i < M:
-            pr, cu = e20[i - 1] - e200[i - 1], e20[i] - e200[i]
+            em = P.get("entry_mode", "cross200")
+            if em == "cross200":
+                pr, cu = e20[i - 1] - e200[i - 1], e20[i] - e200[i]
+            else:
+                pr, cu = c[i - 1] - e20[i - 1], c[i] - e20[i]
             xc = "L" if pr <= 0 < cu else "S" if pr >= 0 > cu else None
             en = (xc if sigs is None else sigs.get(i))
+            if em == "state20" and sigs is None:
+                en = "L" if cu > 0 else "S" if cu < 0 else None
             if arm is not None:
                 if i > arm[1]:
                     arm = None
                 elif pos is None and ((arm[0] == "L" and c[i] > e20[i]) or (arm[0] == "S" and c[i] < e20[i])):
                     if en is None: en = arm[0]
                     arm = None
-            if xc or en:
-                pend = (xc, en, (filt is None) or (en is None) or bool(filt(en, i)))
+            rx = xc if P.get("rev_exit", True) else None
+            if rx or en:
+                pend = (rx, en, (filt is None) or (en is None) or bool(filt(en, i)))
     if pos:
         s = 1 if pos["side"] == "L" else -1
         gross = s * (c[T - 1] / pos["p_in"] - 1) * 100
