@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-10-16T17:18:01Z",
+  "timestamp": "2026-10-16T17:22:40Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-10-16T16:30:00.000Z",
-  "target_id": 0,
-  "target_area_km2": 84.1,
-  "target_distance_km": 28.0,
-  "target_bearing_deg": 330.0,
-  "target_compass": "СЗ",
+  "target_id": 2,
+  "target_area_km2": 129.4,
+  "target_distance_km": 51.5,
+  "target_bearing_deg": 21.0,
+  "target_compass": "С",
   "system": {
     "target_id": 1,
     "area_km2": 342.9,
@@ -60,12 +60,9 @@
   "system_candidates": [],
   "system_suppressed_count": 8,
   "frontal_tracks": [],
-  "target_movement": {
-    "speed_kmh": 0.0,
-    "direction_compass": "ЮВ",
-    "cpa_km": 14.8,
-    "eta_min": null,
-    "verdict": "почти стоит на месте"
+  "also_suppressed_nearby": {
+    "signature": "-15_25",
+    "area_km2": 84.1
   },
   "target_phase": {
     "label": "безоблачно",
@@ -75,20 +72,20 @@
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-10-16T16:50:00.000Z"
+        "timestamp": "2026-10-16T17:00:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-10-16T16:50:00.000Z"
+        "confirmed": true,
+        "timestamp": "2026-10-16T17:00:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": false,
         "timestamp": "2026-10-16T16:52:37Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -100,5 +97,5 @@
       "timestamp": "2026-10-16T17:17:31Z"
     }
   },
-  "verdict": "CLM отметил цель в 28км СЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (343км²) в 38км С."
+  "verdict": "Цель в 52км С, безоблачно — каналы расходятся: geocolour_motion подтверждают, ir_motion/cloud_phase_type нет. Отдельно: система синоптического масштаба (343км²) в 38км С."
 }
