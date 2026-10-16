@@ -9,20 +9,111 @@
 Внутри одной свечи считаем консервативно: сначала проверяется стоп, потом движение в плюс.
 
 Конструктор правил (все параметры задаются в config, см. DEFAULT_CFG / PANEL):
-  entry_mode: cross200 (пересечение EMA20 и EMA200) | close20 (первое закрытие свечи за EMA20 после пересечения) | state20 (любое закрытие за EMA20, когда позиции нет)
+  entry_mode: stages (уровни фильтра входа: триггер → подтверждения по очереди, пустой уровень пропускается; см. stage_signals) | pattern20 (паттерн разворота «взводит» вход, вход по первому закрытию за EMA20 в пределах arm_k свечей) | cross200 (пересечение EMA20 и EMA200) | close20 (первое закрытие свечи за EMA20 после пересечения) | state20 (любое закрытие за EMA20, когда позиции нет)
   rev_exit: обратный сигнал входа закрывает позицию (разворот)
   stop_mode: prev (за экстремумом предыдущей свечи, не ближе min_stop_pct/min_stop_atr) | pct (фиксированный min_stop_pct) | pivot
   be_trigger (точка перехода в безубыток, %), be_lock (размер безубытка: стоп на вход ± be_lock%)
   trail_mode: none | pct | atr | pivot (после безубытка), trail_dist
   pat_mode: off | exit (паттерн закрывает позицию при плюсе >= pat_min%) | trail (паттерн включает трейлинг под минимумом/максимумом предыдущей свечи, не хуже безубытка)
+  pat_filter: значимость паттерна — none | level (у pivot-уровня) | volume (объём ≥1.5× среднего) | extreme (новый экстремум 12 ч для 15m) | stretch (растяжение ≥1.5 ATR от EMA20) | level+volume | extreme+volume
   sim_from_ms: начать симуляцию «с нуля» с этого момента (для живой бумажной торговли)"""
+import numpy as np
+import pandas as pd
 import classic_analysis as an
 
 PARAMS = dict(tf="15m", be_trigger=1.5, fee=0.05, window_h=240, notional=100.0, warmup=200,
               stop_mode="prev", min_stop_pct=1.5, min_stop_atr=0.0, trail_mode="none", trail_dist=0.0, be_atr=0.0, be_lock=0.3,
-              entry_mode="cross200", rev_exit=True, pat_mode="off")
+              entry_mode="cross200", rev_exit=True, pat_mode="off", arm_k=12, pat_filter="none",
+              stages=[{"t": "pattern", "p": 0, "w": 0, "f": "none"}, {"t": "close_ema20", "p": 0, "w": 12, "f": "none"}])
 
 PANEL = dict(PARAMS, be_trigger=1.5, be_lock=0.4, entry_mode="cross200", rev_exit=True, pat_mode="off", pat_min=0.0)  # «рекомендованные» правила конструктора (лучшие по проверке на ZEC 15m; пользователь может менять)
+
+
+TRIGGERS = ("pattern", "cross200", "cross20")
+CONFIRMS = ("close_ema20", "break_trigger", "ema20_slope", "rsi_level", "macd_turn", "volume", "strong_body", "break_swing")
+
+
+def stage_signals(pre, P, warmup=None):
+    """Уровни фильтра входа. Возвращает {индекс закрытой свечи: (сторона, индекс свечи-триггера)}: на этой свече выполнены все уровни.
+    Уровни идут по очереди: триггер (первый непустой уровень), затем подтверждения; каждое подтверждение должно выполниться
+    не позже чем через w свечей после предыдущего уровня, при этом на свече-триггере подтверждения не проверяются.
+    Паттерн-триггер отменяется, если цена закрылась за экстремумом свечи-паттерна против направления."""
+    stages = [x for x in (P.get("stages") or []) if x and x.get("t")]
+    out = {}
+    if not stages or not pre.get("ok"):
+        return out
+    M = pre["M"]
+    W = P["warmup"] if warmup is None else warmup
+    o, h, l, c, e20, e200, atr = pre["o"], pre["h"], pre["l"], pre["c"], pre["e20"], pre["e200"], pre["atr"]
+    rsi, hist, v, vavg, piv = pre["rsi"], pre["hist"], pre["v"], pre["vavg"], pre["piv"]
+    trig = stages[0]
+    if trig["t"] not in TRIGGERS:
+        return out
+    bull = bear = set()
+    if trig["t"] == "pattern":
+        bull, bear = pat_sets(pre, trig.get("f", "none"))
+    conf = stages[1:]
+
+    def swing(i, side):
+        for q in reversed(piv):
+            if q["conf"] > i: continue
+            if i - q["i"] > 150: break
+            if q["k"] == ("H" if side == "L" else "L"):
+                return q["p"]
+        return None
+
+    def ok(st, side, i, tr):
+        t, p = st["t"], float(st.get("p") or 0)
+        sd = 1 if side == "L" else -1
+        if t == "close_ema20": return sd * (c[i] - e20[i]) > 0
+        if t == "break_trigger": return c[i] > h[tr] if side == "L" else c[i] < l[tr]
+        if t == "ema20_slope":
+            k = int(p) if p >= 1 else 3
+            return sd * (e20[i] - e20[i - k]) > 0
+        if t == "rsi_level":
+            lv = p if p > 0 else 45.0
+            return rsi[i] >= lv if side == "L" else rsi[i] <= 100 - lv
+        if t == "macd_turn": return sd * (hist[i] - hist[i - 1]) > 0 and sd * (hist[i - 1] - hist[i - 2]) > 0
+        if t == "volume":
+            return (v[i] >= (p if p > 0 else 1.2) * vavg[i]) if vavg[i] == vavg[i] else False
+        if t == "strong_body": return sd * (c[i] - o[i]) >= (p if p > 0 else 0.8) * atr[i]
+        if t == "break_swing":
+            sw = swing(i, side)
+            return sw is not None and ((c[i] > sw) if side == "L" else (c[i] < sw))
+        return False
+    pend = None
+    for i in range(max(W, 3), M):
+        if pend is not None:
+            side, tr, idx, dead = pend
+            if trig["t"] == "pattern" and ((side == "L" and c[i] < l[tr]) or (side == "S" and c[i] > h[tr])):
+                pend = None
+            elif i > dead:
+                pend = None
+            else:
+                while idx < len(conf) and ok(conf[idx], side, i, tr):
+                    idx += 1
+                    if idx < len(conf):
+                        dead = i + int(conf[idx].get("w") or 12)
+                if idx >= len(conf):
+                    out[i] = (side, tr)
+                    pend = None
+                else:
+                    pend = (side, tr, idx, dead)
+        ns = None
+        if trig["t"] == "pattern":
+            ns = "L" if (i in bull and i not in bear) else "S" if (i in bear and i not in bull) else None
+        elif trig["t"] == "cross200":
+            pr, cu = e20[i - 1] - e200[i - 1], e20[i] - e200[i]
+            ns = "L" if pr <= 0 < cu else "S" if pr >= 0 > cu else None
+        else:
+            pr, cu = c[i - 1] - e20[i - 1], c[i] - e20[i]
+            ns = "L" if pr <= 0 < cu else "S" if pr >= 0 > cu else None
+        if ns:
+            if not conf:
+                out[i] = (ns, i)
+            else:
+                pend = (ns, i, 0, i + int(conf[0].get("w") or 12))
+    return out
 
 
 def _last_piv(piv, kind, maxconf, ok):
@@ -30,6 +121,21 @@ def _last_piv(piv, kind, maxconf, ok):
         if q["k"] == kind and q["conf"] <= maxconf and ok(q["p"]):
             return q["p"]
     return None
+
+
+PAT_FILTERS = {
+    "none": lambda f: True, "level": lambda f: f[0], "volume": lambda f: f[1], "extreme": lambda f: f[2], "stretch": lambda f: f[3],
+    "level+volume": lambda f: f[0] and f[1], "extreme+volume": lambda f: f[2] and f[1],
+}
+
+
+def pat_sets(pre, name):
+    ff = PAT_FILTERS.get(name or "none", PAT_FILTERS["none"])
+    bull, bear = set(), set()
+    for (i, up, a, b, c, d) in pre["pfeat"]:
+        if ff((a, b, c, d)):
+            (bull if up else bear).add(i)
+    return bull, bear
 
 
 def prepare(df, now_ms):
@@ -42,11 +148,37 @@ def prepare(df, now_ms):
     closed = df.iloc[:M].reset_index(drop=True)
     ind = an.indicators(closed)
     pats = an.detect_patterns(closed, ind)
+    h_, l_, c_, v_ = df.h.values, df.l.values, df.c.values, df.v.values
+    a_, e20_ = ind["atr"].values, ind["ema20"].values
+    pv = an.find_pivots(closed)
+    PL = [(q["i"], q["p"], q["conf"]) for q in pv if q["k"] == "L"]
+    PH = [(q["i"], q["p"], q["conf"]) for q in pv if q["k"] == "H"]
+
+    def near_level(i, low, price, tol):
+        for pi, pp, pc in reversed(PL if low else PH):
+            if pc > i: continue
+            if i - pi > 300: break
+            if abs(price - pp) <= tol: return True
+        return False
+    pfeat = []
+    for p in pats:
+        i = p["i"]
+        if p["d"] == 0: continue
+        up = p["d"] > 0
+        if i < 48:
+            pfeat.append((i, up, False, False, False, False)); continue
+        pfeat.append((i, up,
+                      near_level(i, up, l_[i] if up else h_[i], 0.5 * a_[i]),
+                      bool(v_[i] >= 1.5 * v_[i - 20:i].mean()),
+                      bool(l_[i - 47:i + 1].min() == l_[i]) if up else bool(h_[i - 47:i + 1].max() == h_[i]),
+                      bool((e20_[i] - c_[i]) >= 1.5 * a_[i]) if up else bool((c_[i] - e20_[i]) >= 1.5 * a_[i])))
     bu = {p["i"] for p in pats if p["d"] > 0}
     be_ = {p["i"] for p in pats if p["d"] < 0}
     exs = {i: "L" for i in bu - be_}
     exs.update({i: "S" for i in be_ - bu})
-    pre.update(ok=True, exits=exs, piv=an.find_pivots(closed), e20=ind["ema20"].values, e200=ind["ema200"].values,
+    vv = pd.Series(df.v.values)
+    pre.update(ok=True, exits=exs, pfeat=pfeat, piv=pv, rsi=ind["rsi"].values, hist=ind["hist"].values,
+               v=df.v.values, vavg=vv.rolling(20).mean().shift(1).values, e20=ind["ema20"].values, e200=ind["ema200"].values,
                atr=ind["atr"].values, o=df.o.values, h=df.h.values, l=df.l.values, c=df.c.values, t=df.t.values)
     return pre
 
@@ -56,8 +188,15 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
     pm = P.get("pat_mode")
     if pm in (None, "", "off"):
         pm = "exit" if (P.get("pat_exit") or exits is not None) else "off"
+    bull = bear = set()
+    if pre.get("ok") and (pm in ("exit", "trail") or P.get("entry_mode") == "pattern20"):
+        bull, bear = pat_sets(pre, P.get("pat_filter", "none"))
     if exits is None and pm in ("exit", "trail") and pre.get("ok"):
-        exits = pre["exits"]
+        if P.get("pat_filter", "none") == "none":
+            exits = pre["exits"]
+        else:
+            exits = {i: "L" for i in bull - bear}
+            exits.update({i: "S" for i in bear - bull})
     if not pre["ok"] or pre["M"] < P["warmup"] + 30:
         return []
     T, M, piv = pre["T"], pre["M"], pre["piv"]
@@ -65,7 +204,8 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
     o, h, l, c, t = pre["o"], pre["h"], pre["l"], pre["c"], pre["t"]
     fee2 = 2 * P["fee"]
     tm, td = P["trail_mode"], P["trail_dist"]
-    trades, pos, pend, pexit, arm = [], None, None, False, None
+    trades, pos, pend, pexit, arm, parm = [], None, None, False, None, None
+    st_sigs = stage_signals(pre, P) if P.get("entry_mode") == "stages" else None
 
     def finish(i, price, reason):
         nonlocal pos
@@ -159,23 +299,50 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                 pexit = True
         if P["warmup"] <= i < M:
             em = P.get("entry_mode", "cross200")
-            if em == "cross200":
-                pr, cu = e20[i - 1] - e200[i - 1], e20[i] - e200[i]
+            if em == "stages":
+                g = st_sigs.get(i)
+                if g:
+                    xc = en = None
+                    if pos is None:
+                        en = g[0]
+                    elif pos["side"] != g[0] and P.get("rev_exit", True):
+                        xc = en = g[0]
+                    if xc or en:
+                        pend = (xc, en, (filt is None) or (en is None) or bool(filt(en, i)))
+            elif em == "pattern20":
+                xc = en = None
+                na = "L" if (i in bull and i not in bear) else "S" if (i in bear and i not in bull) else None
+                if na:
+                    parm = (na, i + int(P.get("arm_k", 12)))
+                elif parm is not None:
+                    if i > parm[1]:
+                        parm = None
+                    elif (parm[0] == "L" and c[i] > e20[i]) or (parm[0] == "S" and c[i] < e20[i]):
+                        if pos is None:
+                            en = parm[0]
+                        elif pos["side"] != parm[0] and P.get("rev_exit", True):
+                            xc = en = parm[0]
+                        parm = None
+                if xc or en:
+                    pend = (xc, en, (filt is None) or (en is None) or bool(filt(en, i)))
             else:
-                pr, cu = c[i - 1] - e20[i - 1], c[i] - e20[i]
-            xc = "L" if pr <= 0 < cu else "S" if pr >= 0 > cu else None
-            en = (xc if sigs is None else sigs.get(i))
-            if em == "state20" and sigs is None:
-                en = "L" if cu > 0 else "S" if cu < 0 else None
-            if arm is not None:
-                if i > arm[1]:
-                    arm = None
-                elif pos is None and ((arm[0] == "L" and c[i] > e20[i]) or (arm[0] == "S" and c[i] < e20[i])):
-                    if en is None: en = arm[0]
-                    arm = None
-            rx = xc if P.get("rev_exit", True) else None
-            if rx or en:
-                pend = (rx, en, (filt is None) or (en is None) or bool(filt(en, i)))
+                if em == "cross200":
+                    pr, cu = e20[i - 1] - e200[i - 1], e20[i] - e200[i]
+                else:
+                    pr, cu = c[i - 1] - e20[i - 1], c[i] - e20[i]
+                xc = "L" if pr <= 0 < cu else "S" if pr >= 0 > cu else None
+                en = (xc if sigs is None else sigs.get(i))
+                if em == "state20" and sigs is None:
+                    en = "L" if cu > 0 else "S" if cu < 0 else None
+                if arm is not None:
+                    if i > arm[1]:
+                        arm = None
+                    elif pos is None and ((arm[0] == "L" and c[i] > e20[i]) or (arm[0] == "S" and c[i] < e20[i])):
+                        if en is None: en = arm[0]
+                        arm = None
+                rx = xc if P.get("rev_exit", True) else None
+                if rx or en:
+                    pend = (rx, en, (filt is None) or (en is None) or bool(filt(en, i)))
     if pos:
         s = 1 if pos["side"] == "L" else -1
         gross = s * (c[T - 1] / pos["p_in"] - 1) * 100
