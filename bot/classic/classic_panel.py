@@ -214,7 +214,9 @@ CONFIG_FILE = os.path.join(HERE, "config.json")
 RUNS_FILE = os.path.join(HERE, "runs.json")
 SPEC = {
     "tf": ("sel", ["5m", "15m", "1h", "4h"]),
-    "entry_mode": ("sel", ["cross200", "close20", "state20"]),
+    "entry_mode": ("sel", ["stages", "pattern20", "cross200", "close20", "state20"]),
+    "arm_k": ("num", 1, 200),
+    "pat_filter": ("sel", ["none", "level", "volume", "extreme", "stretch", "level+volume", "extreme+volume"]),
     "rev_exit": ("bool",),
     "stop_mode": ("sel", ["prev", "pct", "pivot"]),
     "min_stop_pct": ("num", 0.05, 15), "min_stop_atr": ("num", 0, 10),
@@ -224,6 +226,37 @@ SPEC = {
     "fee": ("num", 0, 0.5), "window_h": ("num", 6, 2000),
 }
 DEFAULT_CFG = {k: cs.PANEL[k] for k in SPEC}
+DEFAULT_CFG["stages"] = cs.PANEL["stages"]
+STAGE_TYPES = ["", "pattern", "cross200", "cross20", "close_ema20", "break_trigger", "ema20_slope", "rsi_level", "macd_turn", "volume", "strong_body", "break_swing"]
+
+
+def clean_stages(v):
+    if not isinstance(v, list) or len(v) > 5:
+        raise ValueError("stages: список до 5 уровней")
+    out = []
+    for x in v:
+        if not isinstance(x, dict):
+            raise ValueError("stages: неверный уровень")
+        t = x.get("t", "") or ""
+        if t not in STAGE_TYPES:
+            raise ValueError("stages: неизвестное условие")
+        try:
+            pp = float(x.get("p") or 0)
+            w = int(float(x.get("w") or 12))
+        except Exception:
+            raise ValueError("stages: параметр и окно — числа")
+        f = x.get("f", "none") or "none"
+        if f not in cs.PAT_FILTERS:
+            raise ValueError("stages: неизвестный фильтр паттерна")
+        if not (0 <= pp <= 100) or not (1 <= w <= 200):
+            raise ValueError("stages: параметр 0–100, окно 1–200 свечей")
+        out.append({"t": t, "p": pp, "w": w, "f": f})
+    ne = [x for x in out if x["t"]]
+    if ne and ne[0]["t"] not in cs.TRIGGERS:
+        raise ValueError("первый непустой уровень должен быть триггером: паттерн, пересечение EMA20×EMA200 или пересечение цены и EMA20")
+    if any(x["t"] in cs.TRIGGERS for x in ne[1:]):
+        raise ValueError("триггер может быть только первым непустым уровнем")
+    return out
 
 
 def jload(path, default):
@@ -262,6 +295,8 @@ def clean_cfg(inp, base=None):
             if k == "window_h":
                 v = int(v)
         cfg[k] = v
+    if "stages" in inp:
+        cfg["stages"] = clean_stages(inp["stages"])
     if cfg["be_lock"] >= cfg["be_trigger"]:
         raise ValueError("размер безубытка должен быть меньше точки перехода в безубыток")
     return cfg
