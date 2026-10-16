@@ -22,7 +22,7 @@ PARAMS = dict(tf="15m", be_trigger=1.5, fee=0.05, window_h=240, notional=100.0, 
               stop_mode="prev", min_stop_pct=1.5, min_stop_atr=0.0, trail_mode="none", trail_dist=0.0, be_atr=0.0, be_lock=0.3,
               entry_mode="cross200", rev_exit=True, pat_mode="off")
 
-PANEL = dict(PARAMS, be_trigger=1.5, be_lock=0.4, entry_mode="close20", rev_exit=True, pat_mode="trail", pat_min=0.0)  # правила панели 18091 по умолчанию (конструктор может менять)
+PANEL = dict(PARAMS, be_trigger=1.5, be_lock=0.4, entry_mode="cross200", rev_exit=True, pat_mode="off", pat_min=0.0)  # «рекомендованные» правила конструктора (лучшие по проверке на ZEC 15m; пользователь может менять)
 
 
 def _last_piv(piv, kind, maxconf, ok):
