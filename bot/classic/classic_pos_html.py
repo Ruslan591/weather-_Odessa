@@ -2,60 +2,128 @@ HTML = r'''<!doctype html><html><head><meta charset=utf-8>
 <meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>Классика · позиции</title>
 <style>
 body{margin:0;background:#0d1117;color:#c9d1d9;font:13px system-ui,sans-serif}
-.t{display:flex;flex-wrap:wrap;gap:4px;padding:4px 6px}
-button{background:#21262d;color:#c9d1d9;border:1px solid #30363d;border-radius:5px;padding:4px 8px;font-size:12px}
-button.on{background:#1f6feb;border-color:#1f6feb;color:#fff}
+.t{display:flex;flex-wrap:wrap;gap:4px;padding:4px 6px;align-items:center}
+button{background:#21262d;color:#c9d1d9;border:1px solid #30363d;border-radius:5px;padding:5px 9px;font-size:12px}
+button.on{background:#1f6feb;border-color:#1f6feb;color:#fff}button.go{background:#238636;border-color:#238636;color:#fff}button.bad{background:#8b2d2d;border-color:#8b2d2d;color:#fff}
 .card{margin:6px;padding:8px 10px;background:#161b22;border:1px solid #30363d;border-radius:8px}
 .card h4{margin:0 0 6px;font-size:13px;color:#e6edf3}
+summary{cursor:pointer}
 .grid{display:flex;flex-wrap:wrap;gap:14px}.grid div span{display:block;font-size:11px;color:#8b949e}.grid div b{font-size:16px}
 table{border-collapse:collapse;width:100%}td,th{padding:3px 5px;text-align:right;border-bottom:1px solid #21262d;font-size:11.5px;white-space:nowrap}
 td:first-child,th:first-child{text-align:left}.sc{overflow-x:auto}
 .up{color:#26a69a}.dn{color:#ef5350}.fl{color:#8b949e}
 canvas{display:block;width:100%;height:420px;touch-action:none}
+.f{display:flex;flex-direction:column;gap:2px;margin:6px 0}.f label{font-size:11.5px;color:#8b949e}
+.f input,.f select{background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:5px;padding:6px;font-size:13px}
+.sec{margin-top:10px;font-weight:600;color:#e6edf3;border-bottom:1px solid #30363d;padding-bottom:2px}
+.sm{font-size:11.5px;color:#8b949e}
+input.nm{background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:5px;padding:6px;font-size:13px;flex:1;min-width:120px}
 </style></head><body>
-<div class=card><h4 id=ttl>Позиции за 24 ч</h4><div id=rules style="color:#8b949e;font-size:11.5px"></div></div>
-<div class=t id=pairs></div><div class=t id=patsw></div>
-<div class=card><div class=grid id=sum></div></div>
-<div class=card id=cch style="display:none"><h4 id=chT></h4><div class=t id=rng></div><div id=chinfo style="font:11.5px ui-monospace,monospace;color:#8b949e;min-height:30px"></div><canvas id=c></canvas><div style="color:#8b949e;font-size:11px">жёлтая EMA20, фиолетовая EMA200; ▲ лонг / ▼ шорт — вход, ■ — выход, красный пунктир — начальный стоп, линия вход→выход зелёная при плюсе. Время локальное. Перетаскивание — прокрутка, щипок или колесо — масштаб, тап — перекрестие. Страницу прокручивай, касаясь вне графика.</div></div>
-<div class=card><h4>Сделки</h4><div class=sc id=tbl>загрузка…</div></div>
-<div class=card id=cpair style="display:none"><h4>По парам</h4><div class=sc id=pp></div></div>
+<div class=card><h4 id=ttl>Классика · позиции</h4><div id=rules class=sm></div></div>
+<div class=t id=pairs></div>
+<div class=t id=tabs></div>
+<details class=card id=cfgBox><summary><b>⚙ Конструктор правил</b> <span class=sm>— свои значения стопа, безубытка, трейлинга, входа и паттернов</span></summary>
+ <div id=cfgForm></div>
+ <div class=t><button id=bApply class=on>Применить к истории</button><button id=bReset>Сбросить к рекомендованным</button></div>
+ <div class=t><input id=runName class=nm placeholder="Название живого прогона"><button id=bRun class=go>▶ Запустить живой прогон</button></div>
+ <div id=cfgMsg class=sm></div>
+ <div class=sm>«Применить» пересчитывает историю по этим правилам. «Живой прогон» фиксирует правила и копит сделки вперёд на бумаге (с текущего момента); историю можно менять, прогон не изменится.</div>
+</details>
+<div id=vHist>
+ <div class=card><div class=grid id=sum></div></div>
+ <div class=card id=cch><h4 id=chT></h4><div class=t id=rng></div>
+  <div id=chinfo style="font:11.5px ui-monospace,monospace;color:#8b949e;min-height:30px;white-space:pre-line"></div><canvas id=c></canvas>
+  <div class=sm>жёлтая EMA20, фиолетовая EMA200; ▲ лонг / ▼ шорт — вход, ■ — выход, красный пунктир — начальный стоп, линия вход→выход зелёная при плюсе. Время локальное. Перетаскивание — прокрутка, щипок или колесо — масштаб, тап — перекрестие. Страницу прокручивай, касаясь вне графика.</div></div>
+ <div class=card><h4>Сделки</h4><div class=sc id=tbl>загрузка…</div></div>
+</div>
+<div id=vLive style="display:none"><div id=runs>загрузка…</div></div>
 <script>
 const $=id=>document.getElementById(id);
-const S={sym:'ALL',pairs:[],D:null,pat:1};
+const S={sym:null,pairs:[],cfg:null,tab:'hist',D:null,runs:null};
 const V={n:480,off:0},Gc={start:0,end:0,bw:5,L:4,hover:-1};
-const wl=h=>h>=48?(h/24)+' сут':h+' ч';
 function fmt(p){if(p==null)return'—';const a=Math.abs(p);const d=a>=1000?2:a>=100?3:a>=10?4:a>=1?5:7;return p.toFixed(d)}
 const p2=n=>String(n).padStart(2,'0');
 function ft(t){const d=new Date(t);return p2(d.getDate())+'.'+p2(d.getMonth()+1)+' '+p2(d.getHours())+':'+p2(d.getMinutes())}
 const sg=v=>(v>=0?'+':'')+v.toFixed(2);const cls=v=>v>0?'up':v<0?'dn':'fl';
-function mkp(){$('patsw').innerHTML='';const b=document.createElement('button');b.textContent='Выход по паттерну: '+(S.pat?'ВКЛ':'ВЫКЛ');if(S.pat)b.className='on';b.onclick=()=>{S.pat=S.pat?0:1;mkp();load()};$('patsw').appendChild(b)}
-function mkr(){$('rng').innerHTML='';[[192,'48 ч'],[480,'5 сут'],[960,'10 сут']].forEach(([n,l])=>{const b=document.createElement('button');b.textContent=l;if(V.n===n)b.className='on';b.onclick=()=>{V.n=n;V.off=0;Gc.hover=-1;mkr();chart()};$('rng').appendChild(b)})}
-function mk(){$('pairs').innerHTML='';['ALL'].concat(S.pairs).forEach(p=>{const b=document.createElement('button');b.textContent=p==='ALL'?'ВСЕ':p.replace('USDT','');if(p===S.sym)b.className='on';b.onclick=()=>{S.sym=p;V.off=0;Gc.hover=-1;mk();load()};$('pairs').appendChild(b)})}
+async function api(path,body){const r=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});const j=await r.json();if(j.error)throw new Error(j.error);return j}
+function describe(c){
+ const em={cross200:'вход: пересечение EMA20 × EMA200',close20:'вход: закрытие свечи за EMA20 после пересечения (выше — лонг, ниже — шорт)',state20:'вход: любая свеча, закрывшаяся за EMA20, когда позиции нет'}[c.entry_mode];
+ const st={prev:'стоп за экстремумом предыдущей свечи (не ближе '+c.min_stop_pct+'%'+(c.min_stop_atr?' и '+c.min_stop_atr+' ATR':'')+')',pct:'стоп '+c.min_stop_pct+'% от входа',pivot:'стоп на последнем pivot'}[c.stop_mode];
+ const be='при +'+c.be_trigger+'% стоп переносится на +'+c.be_lock+'% от входа';
+ const tr={none:'без трейлинга',pct:'трейлинг '+c.trail_dist+'% от экстремума',atr:'трейлинг '+c.trail_dist+' ATR от экстремума',pivot:'трейлинг по pivot'}[c.trail_mode];
+ const pt={off:'паттерны не используются',trail:'паттерн разворота включает трейлинг под минимумом (лонг) / максимумом (шорт) предыдущей свечи, не хуже безубытка',exit:'паттерн закрывает позицию при плюсе ≥ '+c.pat_min+'%'}[c.pat_mode];
+ return [c.tf,em,c.rev_exit?'обратный сигнал закрывает позицию':'обратный сигнал позицию не закрывает',st,be,tr,pt,'комиссия '+c.fee+'% за сторону'].join('; ')+'.';
+}
+const FIELDS=[
+ {k:'tf',l:'Таймфрейм',t:'sel',o:[['5m','5 минут'],['15m','15 минут'],['1h','1 час'],['4h','4 часа']]},
+ {sec:'Вход'},
+ {k:'entry_mode',l:'Правило входа',t:'sel',o:[['cross200','пересечение EMA20 × EMA200'],['close20','закрытие свечи за EMA20 после пересечения'],['state20','любая свеча, закрывшаяся за EMA20, когда позиции нет']]},
+ {k:'rev_exit',l:'Обратный сигнал входа закрывает позицию (разворот)',t:'chk'},
+ {sec:'Начальный стоп'},
+ {k:'stop_mode',l:'Правило стопа',t:'sel',o:[['prev','за экстремумом предыдущей свечи'],['pct','фиксированный процент от входа'],['pivot','на последнем подтверждённом pivot']]},
+ {k:'min_stop_pct',l:'Не ближе, % от входа («предыдущая свеча») / размер стопа, % («фиксированный»)',t:'num'},
+ {k:'min_stop_atr',l:'Не ближе, ATR (0 — не использовать)',t:'num'},
+ {sec:'Безубыток'},
+ {k:'be_trigger',l:'Точка перехода в безубыток: при какой прибыли, %',t:'num'},
+ {k:'be_lock',l:'Размер безубытка: стоп переносится на вход ± %',t:'num'},
+ {sec:'Трейлинг после безубытка'},
+ {k:'trail_mode',l:'Правило трейлинга',t:'sel',o:[['none','нет'],['pct','на расстоянии, % от экстремума'],['atr','на расстоянии, ATR от экстремума'],['pivot','по pivot']]},
+ {k:'trail_dist',l:'Расстояние трейлинга (% или ATR по выбранному правилу)',t:'num'},
+ {sec:'Свечные паттерны разворота'},
+ {k:'pat_mode',l:'Что делает паттерн (против позиции)',t:'sel',o:[['off','ничего'],['trail','включает трейлинг под минимумом/максимумом предыдущей свечи (не хуже безубытка)'],['exit','закрывает позицию, если плюс не меньше порога']]},
+ {k:'pat_min',l:'Порог плюса для закрытия по паттерну, %',t:'num'},
+ {sec:'Издержки и показ'},
+ {k:'fee',l:'Комиссия за сторону, %',t:'num'},
+ {k:'window_h',l:'Показывать сделки за последние, часов',t:'num'},
+];
+function buildForm(){
+ let h='';FIELDS.forEach(f=>{
+  if(f.sec){h+='<div class=sec>'+f.sec+'</div>';return}
+  h+='<div class=f><label for=f_'+f.k+'>'+f.l+'</label>';
+  if(f.t==='sel')h+='<select id=f_'+f.k+'>'+f.o.map(o=>'<option value="'+o[0]+'">'+o[1]+'</option>').join('')+'</select>';
+  else if(f.t==='chk')h+='<input type=checkbox id=f_'+f.k+' style="width:22px;height:22px">';
+  else h+='<input id=f_'+f.k+' type=number step=any inputmode=decimal>';
+  h+='</div>'});
+ $('cfgForm').innerHTML=h;
+}
+function setForm(c){FIELDS.forEach(f=>{if(f.sec)return;const e=$('f_'+f.k);if(f.t==='chk')e.checked=!!c[f.k];else e.value=c[f.k]})}
+function readForm(){const c={};FIELDS.forEach(f=>{if(f.sec)return;const e=$('f_'+f.k);c[f.k]=f.t==='chk'?e.checked:f.t==='num'?parseFloat(e.value):e.value});return c}
+function mkTabs(){$('tabs').innerHTML='';[['hist','История / текущие правила'],['live','Живая бумага']].forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l;if(S.tab===k)b.className='on';b.onclick=()=>setTab(k);$('tabs').appendChild(b)})}
+function setTab(k){S.tab=k;$('vHist').style.display=k==='hist'?'block':'none';$('vLive').style.display=k==='live'?'block':'none';mkTabs();if(k==='live')loadRuns();else load()}
+function mkPairs(){$('pairs').innerHTML='';S.pairs.forEach(p=>{const b=document.createElement('button');b.textContent=p.replace('USDT','');if(p===S.sym)b.className='on';b.onclick=()=>{S.sym=p;V.off=0;Gc.hover=-1;mkPairs();load()};$('pairs').appendChild(b)})}
+function mkr(){$('rng').innerHTML='';[[192,'192 св.'],[480,'480 св.'],[960,'все 960']].forEach(([n,l])=>{const b=document.createElement('button');b.textContent=l;if(V.n===n)b.className='on';b.onclick=()=>{V.n=n;V.off=0;Gc.hover=-1;mkr();chart()};$('rng').appendChild(b)})}
 async function load(){
- try{const r=await fetch('/api/trades?sym='+S.sym+'&bars=960&pat='+S.pat);const j=await r.json();if(j.error){$('tbl').textContent='Ошибка: '+j.error;return}
-  if(j.sym!==S.sym)return;S.D=j;render()}catch(e){$('tbl').textContent='Ошибка: '+e}
+ try{const j=await api('/api/trades?sym='+S.sym+'&bars=960');if(j.sym!==S.sym)return;S.D=j;S.cfg=j.cfg;renderHist()}catch(e){$('tbl').textContent='Ошибка: '+e.message}
 }
-function render(){
- const D=S.D,P=D.params;
- $('ttl').textContent='Позиции за '+wl(P.window_h)+' · '+(S.sym==='ALL'?'все пары':S.sym)+' · '+P.tf;
- const stp=P.stop_mode==='prev'?'за экстремумом предыдущей свечи (лонг — её low, шорт — её high), но не ближе '+P.min_stop_pct+'%'+(P.min_stop_atr?' и '+P.min_stop_atr+' ATR':''):'на последнем подтверждённом pivot';
- const trl={none:'без трейлинга',pct:'трейлинг на расстоянии '+P.trail_dist+'% от экстремума',atr:'трейлинг на расстоянии '+P.trail_dist+' ATR от экстремума',pivot:'трейлинг по pivot'}[P.trail_mode];
- $('rules').textContent='Вход: пересечение EMA20 × EMA200 (лонг и шорт), по открытию следующей свечи. Стоп: '+stp+'. +'+P.be_trigger+'% → стоп на +'+P.be_lock+'% от входа (после комиссий выход в небольшой плюс), затем '+trl+'. Разворот при обратном пересечении.'+(P.pat_exit?' Выход по свечному паттерну разворота (для шорта: молот / бычье поглощение / утренняя звезда; для лонга: падающая звезда / медвежье поглощение / вечерняя звезда), если открытый плюс ≥ '+P.pat_min+'%; после такого выхода — вход в обратную сторону по открытию свечи после первого закрытия за EMA20 (до '+P.rearm_k+' свечей).':'')+' Комиссия '+P.fee+'% за сторону (учтена в Net), объём условный '+P.notional+' USDT.';
- const T=D.trades,n=T.length,w=T.filter(x=>x.net>0).length,s=T.reduce((a,x)=>a+x.net,0),sp=T.reduce((a,x)=>a+x.net*P.notional/100,0);
+function renderHist(){
+ const D=S.D,c=D.cfg,T=D.trades,n=T.length,N=D.notional;
+ $('ttl').textContent='Позиции · '+D.sym+' · '+c.tf+' · за '+(c.window_h>=48?(c.window_h/24)+' сут':c.window_h+' ч');
+ $('rules').textContent=describe(c);
+ const w=T.filter(x=>x.net>0).length,s=T.reduce((a,x)=>a+x.net,0),sp=s*N/100,gs=T.reduce((a,x)=>a+x.gross,0);
  const best=n?Math.max(...T.map(x=>x.net)):0,worst=n?Math.min(...T.map(x=>x.net)):0,be=T.filter(x=>x.be).length,op=T.filter(x=>x.open).length;
- const gs=T.reduce((a,x)=>a+x.gross,0);
- $('sum').innerHTML=[['Сделок',n],['Прибыльных',n?w+' ('+Math.round(w/n*100)+'%)':'—'],['Сумма Net %','<span class="'+cls(s)+'" style="display:inline;font-size:16px">'+sg(s)+'%</span>'],['Net, USDT','<span class="'+cls(sp)+'" style="display:inline;font-size:16px">'+sg(sp)+'</span>'],['До комиссий %',sg(gs)+'%'],['Дошли до БУ',be+' из '+n],['Лучшая / худшая',sg(best)+' / '+sg(worst)],['Открытых',op]].map(x=>'<div><span>'+x[0]+'</span><b>'+x[1]+'</b></div>').join('');
- let h='<table><tr><th>Пара</th><th>Сторона</th><th>Вход</th><th>Цена</th><th>Стоп0</th><th>Риск%</th><th>Выход</th><th>Цена</th><th>Причина</th><th>Net%</th><th>MFE</th><th>MAE</th></tr>';
- T.slice().sort((a,b)=>b.t_in-a.t_in).forEach(x=>{h+='<tr><td>'+x.sym.replace('USDT','')+'</td><td class="'+(x.side==='L'?'up':'dn')+'">'+(x.side==='L'?'ЛОНГ':'ШОРТ')+'</td><td>'+ft(x.t_in)+'</td><td>'+fmt(x.p_in)+'</td><td>'+fmt(x.stop0)+'</td><td>'+x.risk.toFixed(2)+'</td><td>'+(x.open?'—':ft(x.t_out))+'</td><td>'+(x.open?fmt(x.p_out)+' (тек.)':fmt(x.p_out))+'</td><td>'+x.reason+(x.be&&x.reason!=='безубыток'?' ✓БУ':'')+'</td><td class="'+cls(x.net)+'"><b>'+sg(x.net)+'</b></td><td>'+x.mfe.toFixed(2)+'</td><td>'+x.mae.toFixed(2)+'</td></tr>'});
+ $('sum').innerHTML=[['Сделок',n],['Прибыльных',n?w+' ('+Math.round(w/n*100)+'%)':'—'],['Сумма Net %','<span class="'+cls(s)+'" style="display:inline;font-size:16px">'+sg(s)+'%</span>'],['Net, USDT (на '+N+')','<span class="'+cls(sp)+'" style="display:inline;font-size:16px">'+sg(sp)+'</span>'],['До комиссий %',sg(gs)+'%'],['Дошли до БУ',be+' из '+n],['Лучшая / худшая',sg(best)+' / '+sg(worst)],['Открытых',op]].map(x=>'<div><span>'+x[0]+'</span><b>'+x[1]+'</b></div>').join('');
+ let h='<table><tr><th>Сторона</th><th>Вход</th><th>Цена</th><th>Стоп0</th><th>Риск%</th><th>Выход</th><th>Цена</th><th>Причина</th><th>Net%</th><th>MFE</th><th>MAE</th></tr>';
+ T.slice().sort((a,b)=>b.t_in-a.t_in).forEach(x=>{h+='<tr><td class="'+(x.side==='L'?'up':'dn')+'">'+(x.side==='L'?'ЛОНГ':'ШОРТ')+'</td><td>'+ft(x.t_in)+'</td><td>'+fmt(x.p_in)+'</td><td>'+fmt(x.stop0)+'</td><td>'+x.risk.toFixed(2)+'</td><td>'+(x.open?'—':ft(x.t_out))+'</td><td>'+(x.open?fmt(x.p_out)+' (тек.)':fmt(x.p_out))+'</td><td>'+x.reason+(x.be&&x.reason!=='безубыток'?' ✓БУ':'')+'</td><td class="'+cls(x.net)+'"><b>'+sg(x.net)+'</b></td><td>'+x.mfe.toFixed(2)+'</td><td>'+x.mae.toFixed(2)+'</td></tr>'});
  $('tbl').innerHTML=n?h+'</table>':'За выбранный период сигналов не было';
- if(S.sym==='ALL'){const m={};T.forEach(x=>{(m[x.sym]=m[x.sym]||[]).push(x)});
-  let q='<table><tr><th>Пара</th><th>Сделок</th><th>Плюс</th><th>Net %</th></tr>';
-  Object.keys(m).sort().forEach(k=>{const a=m[k],ss=a.reduce((z,x)=>z+x.net,0);q+='<tr><td>'+k.replace('USDT','')+'</td><td>'+a.length+'</td><td>'+a.filter(x=>x.net>0).length+'</td><td class="'+cls(ss)+'">'+sg(ss)+'</td></tr>'});
-  $('pp').innerHTML=q+'</table>';$('cpair').style.display='block';$('cch').style.display='none'}
- else{$('cpair').style.display='none';$('cch').style.display='block';$('chT').textContent=S.sym+' · 15m';chart()}
+ $('chT').textContent=D.sym+' · '+c.tf;chart();
 }
+function runCard(r){
+ const st=r.stats,N=S.runs?S.notional:100,act=r.stop_ms==null;
+ let h='<div class=card><h4>#'+r.id+' · '+r.name+' · '+r.sym+' · '+(act?'<span class=up>идёт</span>':'<span class=fl>остановлен '+ft(r.stop_ms)+'</span>')+'</h4>';
+ h+='<div class=sm>с '+ft(r.start_ms)+' · '+describe(r.cfg)+'</div>';
+ const wr=st.n?Math.round(st.win/st.n*100)+'%':'—',sp=st.net*N/100;
+ h+='<div class=grid style="margin-top:6px">'+[['Сделок',st.n+(st.open?' (открыта '+st.open+')':'')],['Прибыльных',wr],['Net %','<span class="'+cls(st.net)+'" style="display:inline;font-size:16px">'+sg(st.net)+'%</span>'],['Net, USDT (на '+N+')',sg(sp)],['До комиссий %',sg(st.gross)+'%']].map(x=>'<div><span>'+x[0]+'</span><b>'+x[1]+'</b></div>').join('')+'</div>';
+ h+='<details style="margin-top:6px"><summary class=sm>Сделки ('+r.trades.length+')</summary><div class=sc>';
+ if(r.trades.length){h+='<table><tr><th>Сторона</th><th>Вход</th><th>Цена</th><th>Стоп0</th><th>Выход</th><th>Цена</th><th>Причина</th><th>Net%</th></tr>';
+  r.trades.slice().sort((a,b)=>b.t_in-a.t_in).forEach(x=>{h+='<tr><td class="'+(x.side==='L'?'up':'dn')+'">'+(x.side==='L'?'ЛОНГ':'ШОРТ')+'</td><td>'+ft(x.t_in)+'</td><td>'+fmt(x.p_in)+'</td><td>'+fmt(x.stop0)+'</td><td>'+(x.open?'—':ft(x.t_out))+'</td><td>'+(x.open?fmt(x.p_out)+' (тек.)':fmt(x.p_out))+'</td><td>'+x.reason+'</td><td class="'+cls(x.net)+'"><b>'+sg(x.net)+'</b></td></tr>'});h+='</table>'}else h+='<div class=sm>пока сделок нет</div>';
+ h+='</div></details><div class=t>'+(act?'<button class=bad onclick="runAct(\'stop\','+r.id+')">■ Остановить</button>':'')+'<button onclick="runAct(\'delete\','+r.id+')">Удалить</button></div></div>';
+ return h;
+}
+function renderRuns(){const R=S.runs||[];$('runs').innerHTML=R.length?R.slice().reverse().map(runCard).join(''):'<div class=card>Прогонов пока нет. Задай правила в конструкторе и нажми «Запустить живой прогон».</div>'}
+async function loadRuns(){try{const j=await api('/api/runs');S.runs=j.runs;S.notional=j.notional;renderRuns()}catch(e){$('runs').textContent='Ошибка: '+e.message}}
+async function runAct(a,id){if(a==='delete'&&!confirm('Удалить прогон #'+id+'?'))return;if(a==='stop'&&!confirm('Остановить прогон #'+id+'? Открытая позиция будет закрыта по текущей цене.'))return;try{const j=await api('/api/runs',{action:a,id:id});S.runs=j.runs;S.notional=j.notional;renderRuns()}catch(e){alert(e.message)}}
 function chart(){
- const C=S.D.chart;if(!C)return;const cv=$('c'),dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=420;
+ const C=S.D&&S.D.chart;if(!C)return;const cv=$('c'),dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=420;
  cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);const g=cv.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);g.fillStyle='#0d1117';g.fillRect(0,0,W,H);
  const N=C.t.length,L=4,R=58,B=16,pw=W-L-R;
  V.n=Math.max(20,Math.min(V.n,N));V.off=Math.max(0,Math.min(V.off,N-20));
@@ -83,7 +151,7 @@ function chart(){
  let hv=Gc.hover;if(hv>=start&&hv<end){const x=X(hv);g.strokeStyle='rgba(201,209,217,.4)';g.setLineDash([3,3]);g.beginPath();g.moveTo(x,0);g.lineTo(x,H-B);g.stroke();g.setLineDash([])}else hv=-1;
  const i=hv>=0?hv:N-1;let s=ft(C.t[i])+'  O '+fmt(C.o[i])+' H '+fmt(C.h[i])+' L '+fmt(C.l[i])+' C '+fmt(C.c[i])+'  EMA20 '+fmt(C.ema20[i])+' EMA200 '+fmt(C.ema200[i]);
  TR.forEach(x=>{if(x.a===i)s+='\n▸ вход '+(x.side==='L'?'ЛОНГ':'ШОРТ')+' '+fmt(x.p_in)+', стоп '+fmt(x.stop0)+' (риск '+x.risk.toFixed(2)+'%)';if(x.b===i&&!x.open)s+='\n■ выход '+fmt(x.p_out)+' · '+x.reason+' · Net '+sg(x.net)+'%'});
- $('chinfo').style.whiteSpace='pre-line';$('chinfo').textContent=s;
+ $('chinfo').textContent=s;
 }
 const cvv=document.getElementById('c'),ptrs=new Map();let sx=0,so=0,moved=false,p0=0,pn=0;
 const idxAt=x=>{const r=cvv.getBoundingClientRect();return Math.max(Gc.start,Math.min(Gc.end-1,Gc.start+Math.floor((x-r.left-Gc.L)/Gc.bw)))};
@@ -97,6 +165,13 @@ cvv.addEventListener('pointermove',e=>{
 cvv.addEventListener('pointerup',e=>{if(ptrs.size===1&&!moved&&S.D&&S.D.chart){Gc.hover=idxAt(e.clientX);chart()}ptrs.delete(e.pointerId)});
 cvv.addEventListener('pointercancel',e=>ptrs.delete(e.pointerId));
 cvv.addEventListener('wheel',e=>{e.preventDefault();V.n=Math.max(20,Math.min(960,Math.round(V.n*(e.deltaY>0?1.15:0.87))));chart()},{passive:false});
-window.addEventListener('resize',()=>{if(S.D&&S.sym!=='ALL')chart()});
-(async()=>{try{const r=await fetch('/api/pairs');S.pairs=(await r.json()).pairs}catch(e){}mk();mkr();mkp();load();setInterval(load,15000)})();
+window.addEventListener('resize',()=>{if(S.D&&S.tab==='hist')chart()});
+$('bApply').onclick=async()=>{try{const j=await api('/api/config',{config:readForm()});S.cfg=j.config;setForm(j.config);$('cfgMsg').textContent='Применено, история пересчитана';load()}catch(e){$('cfgMsg').textContent='Ошибка: '+e.message}};
+$('bReset').onclick=async()=>{try{const j=await api('/api/config',{reset:true});S.cfg=j.config;setForm(j.config);$('cfgMsg').textContent='Сброшено к рекомендованным';load()}catch(e){$('cfgMsg').textContent='Ошибка: '+e.message}};
+$('bRun').onclick=async()=>{try{const j=await api('/api/runs',{action:'start',name:$('runName').value||('Прогон '+S.sym),sym:S.sym,config:readForm()});S.runs=j.runs;S.notional=j.notional;$('cfgMsg').textContent='Прогон запущен';$('cfgBox').open=false;setTab('live')}catch(e){$('cfgMsg').textContent='Ошибка: '+e.message}};
+(async()=>{buildForm();mkTabs();mkr();
+ try{const r=await api('/api/pairs');S.pairs=r.pairs}catch(e){S.pairs=['ZECUSDT']}
+ S.sym=S.pairs[0];mkPairs();
+ try{const c=await api('/api/config');S.cfg=c.config;setForm(c.config)}catch(e){}
+ load();setInterval(()=>{if(S.tab==='hist')load();else loadRuns()},15000)})();
 </script></body></html>'''
