@@ -175,51 +175,179 @@ async def api_pairs(req):
 
 
 async def api_trades(req):
-    sym = req.query.get("sym", "ALL").upper()
-    if sym != "ALL" and not ok_sym(sym):
+    sym = req.query.get("sym", "").upper() or load_pairs()[0]
+    if not ok_sym(sym):
         return web.json_response({"error": "bad params"}, status=400)
-    P = dict(cs.PANEL)
-    if req.query.get("pat") == "0":
-        P["pat_exit"] = False
+    cfg = load_cfg()
+    P = dict(cs.PARAMS, **cfg)
     now = int(time.time() * 1000)
-    cutoff = now - P["window_h"] * 3600 * 1000
-    targets = load_pairs() if sym == "ALL" else [sym]
+    cutoff = now - cfg["window_h"] * 3600 * 1000
+    try:
+        df = await get_df_long(sym, cfg["tf"])
+    except Exception as e:
+        return web.json_response({"error": "нет данных: " + str(e)[:150]}, status=502)
+    out = []
+    for x in cs.simulate(df, now, P):
+        if x["open"] or x["t_in"] >= cutoff or x["t_out"] >= cutoff:
+            out.append(cs.pack([x])[0])
+    closed, live = split_closed(df)
+    ind = an.indicators(closed)
+    k = max(48, min(960, int(req.query.get("bars", 960))))
 
-    async def one(s):
-        try:
-            return s, await get_df_long(s, P["tf"])
-        except Exception:
-            return s, None
-    out, chart, err = [], None, None
-    for s, df in await asyncio.gather(*[one(x) for x in targets]):
-        if df is None:
-            err = "нет данных по " + s
-            continue
-        for x in cs.simulate(df, now, P):
-            if x["open"] or x["t_in"] >= cutoff or x["t_out"] >= cutoff:
-                d = cs.pack([x])[0]
-                d["sym"] = s
-                out.append(d)
-        if sym != "ALL":
-            closed, live = split_closed(df)
-            ind = an.indicators(closed)
-            k = max(48, min(960, int(req.query.get("bars", 192))))
-            def sl(v):
-                return [None if z is None else an._r(float(z)) for z in v]
-            chart = {"t": [int(z) for z in df.t.values[-k:]]}
-            for c_ in "ohlc":
-                chart[c_] = sl(df[c_].values[-k:])
-            e20, e200 = list(ind["ema20"].values), list(ind["ema200"].values)
-            if live is not None:
-                e20.append(None); e200.append(None)
-            chart["ema20"], chart["ema200"] = sl(e20[-k:]), sl(e200[-k:])
-    if sym != "ALL" and chart is None:
-        return web.json_response({"error": err or "нет данных"}, status=502)
-    return web.json_response({"sym": sym, "params": P, "trades": out, "chart": chart, "now": now})
+    def sl(v):
+        return [None if z is None else an._r(float(z)) for z in v]
+    chart = {"t": [int(z) for z in df.t.values[-k:]]}
+    for c_ in "ohlc":
+        chart[c_] = sl(df[c_].values[-k:])
+    e20, e200 = list(ind["ema20"].values), list(ind["ema200"].values)
+    if live is not None:
+        e20.append(None); e200.append(None)
+    chart["ema20"], chart["ema200"] = sl(e20[-k:]), sl(e200[-k:])
+    return web.json_response({"sym": sym, "cfg": cfg, "notional": P["notional"], "trades": out, "chart": chart, "now": now})
 
 
 async def pos_index(req):
     return web.Response(text=POS_HTML, content_type="text/html")
+
+
+CONFIG_FILE = os.path.join(HERE, "config.json")
+RUNS_FILE = os.path.join(HERE, "runs.json")
+SPEC = {
+    "tf": ("sel", ["5m", "15m", "1h", "4h"]),
+    "entry_mode": ("sel", ["cross200", "close20", "state20"]),
+    "rev_exit": ("bool",),
+    "stop_mode": ("sel", ["prev", "pct", "pivot"]),
+    "min_stop_pct": ("num", 0.05, 15), "min_stop_atr": ("num", 0, 10),
+    "be_trigger": ("num", 0.1, 30), "be_lock": ("num", 0, 10),
+    "trail_mode": ("sel", ["none", "pct", "atr", "pivot"]), "trail_dist": ("num", 0, 20),
+    "pat_mode": ("sel", ["off", "trail", "exit"]), "pat_min": ("num", 0, 50),
+    "fee": ("num", 0, 0.5), "window_h": ("num", 6, 2000),
+}
+DEFAULT_CFG = {k: cs.PANEL[k] for k in SPEC}
+
+
+def jload(path, default):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except Exception:
+        return default
+
+
+def jsave(path, obj):
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(obj, f, ensure_ascii=False)
+    os.replace(tmp, path)
+
+
+def clean_cfg(inp, base=None):
+    cfg = dict(base or DEFAULT_CFG)
+    for k, sp in SPEC.items():
+        if k not in inp:
+            continue
+        v = inp[k]
+        if sp[0] == "sel":
+            if v not in sp[1]:
+                raise ValueError("%s: недопустимое значение" % k)
+        elif sp[0] == "bool":
+            v = bool(v)
+        else:
+            try:
+                v = float(v)
+            except Exception:
+                raise ValueError("%s: нужно число" % k)
+            if not (sp[1] <= v <= sp[2]):
+                raise ValueError("%s: допустимо от %s до %s" % (k, sp[1], sp[2]))
+            if k == "window_h":
+                v = int(v)
+        cfg[k] = v
+    if cfg["be_lock"] >= cfg["be_trigger"]:
+        raise ValueError("размер безубытка должен быть меньше точки перехода в безубыток")
+    return cfg
+
+
+def load_cfg():
+    try:
+        return clean_cfg(jload(CONFIG_FILE, {}))
+    except Exception:
+        return dict(DEFAULT_CFG)
+
+
+async def api_config(req):
+    try:
+        if req.method == "POST":
+            j = await req.json()
+            if j.get("reset"):
+                cfg = dict(DEFAULT_CFG)
+            else:
+                cfg = clean_cfg(j.get("config") or {}, base=load_cfg())
+            jsave(CONFIG_FILE, cfg)
+        return web.json_response({"config": load_cfg(), "default": DEFAULT_CFG})
+    except ValueError as e:
+        return web.json_response({"error": str(e)}, status=400)
+
+
+def run_stats(tr):
+    n = len(tr)
+    return {"n": n, "open": sum(1 for x in tr if x["open"]), "net": round(sum(x["net"] for x in tr), 3),
+            "gross": round(sum(x["gross"] for x in tr), 3), "win": sum(1 for x in tr if x["net"] > 0)}
+
+
+async def run_trades(run, now):
+    df = await get_df_long(run["sym"], run["cfg"]["tf"])
+    P = dict(cs.PARAMS, **run["cfg"])
+    P["sim_from_ms"] = run["start_ms"]
+    return cs.simulate(df, now, P)
+
+
+async def api_runs(req):
+    now = int(time.time() * 1000)
+    runs = jload(RUNS_FILE, [])
+    try:
+        if req.method == "POST":
+            j = await req.json()
+            act = j.get("action")
+            if act == "start":
+                sym = str(j.get("sym", "")).upper()
+                if not ok_sym(sym):
+                    raise ValueError("плохая пара")
+                cfg = clean_cfg(j.get("config") or {}, base=load_cfg())
+                await get_df_long(sym, cfg["tf"])
+                rid = max([r["id"] for r in runs] + [0]) + 1
+                runs.append({"id": rid, "name": (str(j.get("name") or "Прогон")[:60]), "sym": sym, "cfg": cfg,
+                             "start_ms": now, "stop_ms": None, "trades": None})
+            elif act in ("stop", "delete"):
+                r = next((x for x in runs if x["id"] == j.get("id")), None)
+                if r is None:
+                    raise ValueError("прогон не найден")
+                if act == "delete":
+                    runs.remove(r)
+                elif r["stop_ms"] is None:
+                    tr = await run_trades(r, now)
+                    for x in tr:
+                        if x["open"]:
+                            x["open"] = False
+                            x["reason"] = "остановлен"
+                    r["trades"] = cs.pack(tr)
+                    r["stop_ms"] = now
+            else:
+                raise ValueError("неизвестное действие")
+            jsave(RUNS_FILE, runs)
+        out = []
+        for r in runs:
+            if r["stop_ms"] is None:
+                try:
+                    tr = cs.pack(await run_trades(r, now))
+                except Exception as e:
+                    tr = []
+            else:
+                tr = r["trades"] or []
+            out.append({"id": r["id"], "name": r["name"], "sym": r["sym"], "cfg": r["cfg"], "start_ms": r["start_ms"],
+                        "stop_ms": r["stop_ms"], "stats": run_stats(tr), "trades": tr[-300:]})
+        return web.json_response({"runs": out, "now": now, "notional": cs.PARAMS["notional"]})
+    except ValueError as e:
+        return web.json_response({"error": str(e)}, status=400)
 
 
 async def index(req):
@@ -418,6 +546,8 @@ async def serve():
     app2.router.add_get("/", pos_index)
     app2.router.add_get("/api/trades", api_trades)
     app2.router.add_route("*", "/api/pairs", api_pairs)
+    app2.router.add_route("*", "/api/config", api_config)
+    app2.router.add_route("*", "/api/runs", api_runs)
     for app, port in ((app1, PORT), (app2, PORT2)):
         r = web.AppRunner(app)
         await r.setup()
