@@ -46,18 +46,23 @@ const p2=n=>String(n).padStart(2,'0');
 function ft(t){const d=new Date(t);return p2(d.getDate())+'.'+p2(d.getMonth()+1)+' '+p2(d.getHours())+':'+p2(d.getMinutes())}
 const sg=v=>(v>=0?'+':'')+v.toFixed(2);const cls=v=>v>0?'up':v<0?'dn':'fl';
 async function api(path,body){const r=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});const j=await r.json();if(j.error)throw new Error(j.error);return j}
+const ST_NAME={pattern:'паттерн разворота',cross200:'пересечение EMA20×EMA200',cross20:'пересечение цены и EMA20',close_ema20:'закрытие за EMA20',break_trigger:'закрытие за экстремумом паттерна',ema20_slope:'разворот EMA20',rsi_level:'RSI вернулся',macd_turn:'MACD растёт',volume:'объём',strong_body:'сильное тело свечи',break_swing:'слом структуры'};
+function stDesc(st){return (st||[]).filter(x=>x.t).map((x,i)=>{let s=ST_NAME[x.t];if(x.t==='pattern'&&x.f&&x.f!=='none')s+=' ('+x.f+')';if(x.p&&['volume','strong_body','rsi_level','ema20_slope'].includes(x.t))s+=' '+x.p;if(i>0)s+=' (≤'+x.w+' св.)';return s}).join(' → ')}
 function describe(c){
- const em={cross200:'вход: пересечение EMA20 × EMA200',close20:'вход: закрытие свечи за EMA20 после пересечения (выше — лонг, ниже — шорт)',state20:'вход: любая свеча, закрывшаяся за EMA20, когда позиции нет'}[c.entry_mode];
+ const em={stages:'вход по уровням фильтра: '+(stDesc(c.stages)||'—'),pattern20:'вход: после паттерна разворота — первое закрытие свечи за EMA20 (выше — лонг, ниже — шорт) в пределах '+c.arm_k+' свечей',cross200:'вход: пересечение EMA20 × EMA200',close20:'вход: закрытие свечи за EMA20 после пересечения (выше — лонг, ниже — шорт)',state20:'вход: любая свеча, закрывшаяся за EMA20, когда позиции нет'}[c.entry_mode];
  const st={prev:'стоп за экстремумом предыдущей свечи (не ближе '+c.min_stop_pct+'%'+(c.min_stop_atr?' и '+c.min_stop_atr+' ATR':'')+')',pct:'стоп '+c.min_stop_pct+'% от входа',pivot:'стоп на последнем pivot'}[c.stop_mode];
  const be='при +'+c.be_trigger+'% стоп переносится на +'+c.be_lock+'% от входа';
  const tr={none:'без трейлинга',pct:'трейлинг '+c.trail_dist+'% от экстремума',atr:'трейлинг '+c.trail_dist+' ATR от экстремума',pivot:'трейлинг по pivot'}[c.trail_mode];
- const pt={off:'паттерны не используются',trail:'паттерн разворота включает трейлинг под минимумом (лонг) / максимумом (шорт) предыдущей свечи, не хуже безубытка',exit:'паттерн закрывает позицию при плюсе ≥ '+c.pat_min+'%'}[c.pat_mode];
+ const pt0=(c.pat_filter&&c.pat_filter!=='none'?' (только значимые: '+({level:'у уровня',volume:'с повышенным объёмом',extreme:'на новом экстремуме',stretch:'после растяжения от EMA20','level+volume':'у уровня и с объёмом','extreme+volume':'на экстремуме и с объёмом'}[c.pat_filter])+')':''),pt={off:'паттерны не используются',trail:'паттерн разворота включает трейлинг под минимумом (лонг) / максимумом (шорт) предыдущей свечи, не хуже безубытка',exit:'паттерн закрывает позицию при плюсе ≥ '+c.pat_min+'%'}[c.pat_mode]+(c.pat_mode!=='off'||c.entry_mode==='pattern20'?pt0:'');
  return [c.tf,em,c.rev_exit?'обратный сигнал закрывает позицию':'обратный сигнал позицию не закрывает',st,be,tr,pt,'комиссия '+c.fee+'% за сторону'].join('; ')+'.';
 }
 const FIELDS=[
  {k:'tf',l:'Таймфрейм',t:'sel',o:[['5m','5 минут'],['15m','15 минут'],['1h','1 час'],['4h','4 часа']]},
  {sec:'Вход'},
- {k:'entry_mode',l:'Правило входа',t:'sel',o:[['cross200','пересечение EMA20 × EMA200'],['close20','закрытие свечи за EMA20 после пересечения'],['state20','любая свеча, закрывшаяся за EMA20, когда позиции нет']]},
+ {k:'entry_mode',l:'Правило входа',t:'sel',o:[['stages','уровни фильтра (редактор ниже)'],['pattern20','после паттерна разворота: первое закрытие за EMA20'],['cross200','пересечение EMA20 × EMA200'],['close20','закрытие свечи за EMA20 после пересечения'],['state20','любая свеча, закрывшаяся за EMA20, когда позиции нет']]},
+ {stg:1},
+ {k:'arm_k',l:'Сколько свечей ждать закрытия за EMA20 после паттерна (для входа «после паттерна»)',t:'num'},
+ {k:'pat_filter',l:'Какие паттерны считать значимыми',t:'sel',o:[['none','все'],['level','только у уровня (pivot ±0.5 ATR)'],['volume','только с объёмом ≥1.5× среднего'],['extreme','только на новом экстремуме (12 ч на 15m)'],['stretch','только после растяжения ≥1.5 ATR от EMA20'],['level+volume','у уровня и с объёмом'],['extreme+volume','на экстремуме и с объёмом']]},
  {k:'rev_exit',l:'Обратный сигнал входа закрывает позицию (разворот)',t:'chk'},
  {sec:'Начальный стоп'},
  {k:'stop_mode',l:'Правило стопа',t:'sel',o:[['prev','за экстремумом предыдущей свечи'],['pct','фиксированный процент от входа'],['pivot','на последнем подтверждённом pivot']]},
@@ -76,8 +81,16 @@ const FIELDS=[
  {k:'fee',l:'Комиссия за сторону, %',t:'num'},
  {k:'window_h',l:'Показывать сделки за последние, часов',t:'num'},
 ];
+const ST_OPT=[['','— пусто, уровень пропускается —'],['pattern','ТРИГГЕР: свечной паттерн разворота'],['cross200','ТРИГГЕР: пересечение EMA20 × EMA200'],['cross20','ТРИГГЕР: цена закрылась по другую сторону EMA20'],['close_ema20','закрытие свечи за EMA20 (выше — лонг, ниже — шорт)'],['break_trigger','закрытие за экстремумом свечи-триггера'],['ema20_slope','EMA20 развернулась (P — за сколько свечей, по умолч. 3)'],['rsi_level','RSI вернулся выше P (лонг) / ниже 100−P (шорт), по умолч. 45'],['macd_turn','гистограмма MACD растёт 2 свечи подряд (лонг) / падает (шорт)'],['volume','объём свечи ≥ P × среднего за 20 (по умолч. 1.2)'],['strong_body','тело свечи ≥ P ATR в сторону входа (по умолч. 0.8)'],['break_swing','закрытие за последним pivot-экстремумом (слом структуры)']];
+const PF_OPT=[['none','все паттерны'],['level','только у уровня'],['volume','только с объёмом'],['extreme','только на новом экстремуме'],['stretch','только после растяжения от EMA20'],['level+volume','у уровня и с объёмом'],['extreme+volume','на экстремуме и с объёмом']];
+function stageForm(){let h='<div class=sec>Фильтр входа по уровням</div><div class=sm>Работает при правиле входа «уровни фильтра». Первый непустой уровень — триггер, остальные — подтверждения: каждое проверяется только после предыдущего, пустой пропускается. «Окно» — сколько свечей ждать этот уровень после предыдущего. P — параметр условия (0 — по умолчанию).</div>';
+ for(let i=0;i<5;i++){h+='<div class=f><label>Уровень '+(i+1)+'</label><select id=s'+i+'_t>'+ST_OPT.map(o=>'<option value="'+o[0]+'">'+o[1]+'</option>').join('')+'</select>'+
+  '<div class=t style="padding:2px 0"><span class=sm>P</span><input id=s'+i+'_p type=number step=any inputmode=decimal style="width:70px;background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:5px;padding:6px"> <span class=sm>окно, св.</span><input id=s'+i+'_w type=number inputmode=numeric style="width:70px;background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:5px;padding:6px"></div>'+
+  '<select id=s'+i+'_f>'+PF_OPT.map(o=>'<option value="'+o[0]+'">'+o[1]+' (для триггера-паттерна)</option>').join('')+'</select></div>'}
+ return h}
 function buildForm(){
  let h='';FIELDS.forEach(f=>{
+  if(f.stg){h+=stageForm();return}
   if(f.sec){h+='<div class=sec>'+f.sec+'</div>';return}
   h+='<div class=f><label for=f_'+f.k+'>'+f.l+'</label>';
   if(f.t==='sel')h+='<select id=f_'+f.k+'>'+f.o.map(o=>'<option value="'+o[0]+'">'+o[1]+'</option>').join('')+'</select>';
@@ -86,8 +99,8 @@ function buildForm(){
   h+='</div>'});
  $('cfgForm').innerHTML=h;
 }
-function setForm(c){FIELDS.forEach(f=>{if(f.sec)return;const e=$('f_'+f.k);if(f.t==='chk')e.checked=!!c[f.k];else e.value=c[f.k]})}
-function readForm(){const c={};FIELDS.forEach(f=>{if(f.sec)return;const e=$('f_'+f.k);c[f.k]=f.t==='chk'?e.checked:f.t==='num'?parseFloat(e.value):e.value});return c}
+function setForm(c){const st=(c.stages||[]).slice(0,5);while(st.length<5)st.push({t:'',p:0,w:12,f:'none'});st.forEach((x,i)=>{$('s'+i+'_t').value=x.t||'';$('s'+i+'_p').value=x.p||0;$('s'+i+'_w').value=x.w||12;$('s'+i+'_f').value=x.f||'none'});FIELDS.forEach(f=>{if(f.sec||f.stg)return;const e=$('f_'+f.k);if(f.t==='chk')e.checked=!!c[f.k];else e.value=c[f.k]})}
+function readForm(){const c={};c.stages=[0,1,2,3,4].map(i=>({t:$('s'+i+'_t').value,p:parseFloat($('s'+i+'_p').value)||0,w:parseInt($('s'+i+'_w').value)||12,f:$('s'+i+'_f').value}));FIELDS.forEach(f=>{if(f.sec||f.stg)return;const e=$('f_'+f.k);c[f.k]=f.t==='chk'?e.checked:f.t==='num'?parseFloat(e.value):e.value});return c}
 function mkTabs(){$('tabs').innerHTML='';[['hist','История / текущие правила'],['live','Живая бумага']].forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l;if(S.tab===k)b.className='on';b.onclick=()=>setTab(k);$('tabs').appendChild(b)})}
 function setTab(k){S.tab=k;$('vHist').style.display=k==='hist'?'block':'none';$('vLive').style.display=k==='live'?'block':'none';mkTabs();if(k==='live')loadRuns();else load()}
 function mkPairs(){$('pairs').innerHTML='';S.pairs.forEach(p=>{const b=document.createElement('button');b.textContent=p.replace('USDT','');if(p===S.sym)b.className='on';b.onclick=()=>{S.sym=p;V.off=0;Gc.hover=-1;mkPairs();load()};$('pairs').appendChild(b)})}
