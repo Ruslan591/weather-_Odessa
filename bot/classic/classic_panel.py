@@ -385,6 +385,45 @@ async def api_runs(req):
         return web.json_response({"error": str(e)}, status=400)
 
 
+LABELS_FILE = os.path.join(HERE, "labels.json")
+
+
+async def api_labels(req):
+    labels = jload(LABELS_FILE, [])
+    try:
+        if req.method == "POST":
+            j = await req.json()
+            act = j.get("action")
+            sym = str(j.get("sym", "")).upper()
+            tf = j.get("tf")
+            if not ok_sym(sym) or tf not in ALLTF:
+                raise ValueError("плохая пара или таймфрейм")
+            if act == "add":
+                kind = j.get("kind")
+                if kind not in ("L", "S", "X"):
+                    raise ValueError("метка: L, S или X")
+                t, price = int(j.get("t")), float(j.get("p"))
+                labels = [x for x in labels if not (x["sym"] == sym and x["tf"] == tf and x["t"] == t)]
+                labels.append({"id": max([x["id"] for x in labels] + [0]) + 1, "sym": sym, "tf": tf, "t": t,
+                               "kind": kind, "p": price, "ts": int(time.time() * 1000)})
+            elif act == "del_at":
+                t = int(j.get("t"))
+                labels = [x for x in labels if not (x["sym"] == sym and x["tf"] == tf and x["t"] == t)]
+            elif act == "del":
+                labels = [x for x in labels if x["id"] != j.get("id")]
+            else:
+                raise ValueError("неизвестное действие")
+            jsave(LABELS_FILE, labels)
+        else:
+            sym = req.query.get("sym", "").upper()
+            tf = req.query.get("tf", "")
+            if req.query.get("all"):
+                return web.json_response({"labels": labels})
+        return web.json_response({"labels": [x for x in labels if x["sym"] == sym and x["tf"] == tf]})
+    except (ValueError, TypeError) as e:
+        return web.json_response({"error": str(e)}, status=400)
+
+
 async def index(req):
     return web.Response(text=HTML, content_type="text/html")
 
@@ -408,14 +447,14 @@ td:first-child,th:first-child{text-align:left}
 .badge.up{background:#12332f}.badge.dn{background:#3a1b1d}.badge.fl{background:#262c34}
 ul{margin:4px 0 0;padding-left:18px}
 </style></head><body>
-<div class=t id=pairs></div><div class=t id=tfs></div><div class=t id=opts></div>
+<div class=t id=pairs></div><div class=t id=tfs></div><div class=t id=opts></div><div class=t id=labbar></div>
 <div id=info>загрузка…</div><canvas id=c></canvas>
 <div id=legend>Паттерны: Мол=молот · ПЗ=падающая звезда · П↑/П↓=поглощение · УЗ/ВЗ=утренняя/вечерняя звезда · Д=доджи. Треугольники — подтверждённые pivot (с задержкой 5 свечей). Пунктирная справа — формирующаяся свеча (в анализе не участвует).</div>
-<div class=card id=cTrend></div><div class=card id=cMtf></div><div class=card id=cLv></div><div class=card id=cPat></div>
+<div class=card id=cTrend></div><div class=card id=cMtf></div><div class=card id=cLv></div><div class=card id=cPat></div><div class=card id=cLab style="display:none"></div>
 <script>
 const TFS=['5m','15m','1h','4h','1d'];
 const OPTN={ema:'EMA',bb:'Bollinger',lv:'Уровни',pv:'Pivot',pt:'Паттерны',vol:'Объём',rsi:'RSI',macd:'MACD'};
-const S={sym:localStorage.csym||'BTCUSDT',tf:localStorage.ctf||'15m',n:120,off:0,hover:-1,D:null,pairs:[],
+const S={sym:localStorage.csym||'BTCUSDT',tf:localStorage.ctf||'15m',n:120,off:0,hover:-1,D:null,pairs:[],lab:{on:0,items:[]},
  opt:Object.assign({ema:1,bb:0,lv:1,pv:1,pt:1,vol:1,rsi:1,macd:0},JSON.parse(localStorage.copt||'{}'))};
 const G={start:0,end:0,bw:5,L:4};
 const $=id=>document.getElementById(id);
@@ -430,7 +469,19 @@ function mk(){
  $('pairs').innerHTML='';S.pairs.forEach(p=>{const b=document.createElement('button');b.textContent=p.replace('USDT','');if(p===S.sym)b.className='on';b.onclick=()=>{S.sym=p;localStorage.csym=p;S.off=0;S.hover=-1;S.D=null;mk();load();loadMtf()};$('pairs').appendChild(b)});
  const a=document.createElement('button');a.textContent='+';a.onclick=async()=>{const s=prompt('Пара (например SOL или PEPEUSDT):');if(!s)return;const r=await fetch('/api/pairs',{method:'POST',body:JSON.stringify({add:s})});const j=await r.json();if(j.error){alert(j.error);return}S.pairs=j.pairs;S.sym=s.toUpperCase().replace('/','').match(/USDT|USDC|BTC$/)?s.toUpperCase().replace('/',''):s.toUpperCase()+'USDT';localStorage.csym=S.sym;S.D=null;mk();load();loadMtf()};$('pairs').appendChild(a);
  const d=document.createElement('button');d.textContent='−';d.onclick=async()=>{if(!confirm('Убрать '+S.sym+' из списка?'))return;const r=await fetch('/api/pairs',{method:'POST',body:JSON.stringify({del:S.sym})});const j=await r.json();S.pairs=j.pairs;S.sym=S.pairs[0];localStorage.csym=S.sym;S.D=null;mk();load();loadMtf()};$('pairs').appendChild(d);
+ mkLab();
 }
+async function loadLabels(){try{const r=await fetch('/api/labels?sym='+S.sym+'&tf='+S.tf);const j=await r.json();S.lab.items=j.labels||[];renderLab();if(S.D)draw()}catch(e){}}
+function renderLab(){const c=$('cLab');const it=S.lab.items;if(!S.lab.on&&!it.length){c.style.display='none';return}c.style.display='block';
+ let h='<h4>Разметка: идеальные входы и выходы · '+S.sym+' '+S.tf+'</h4><div style="color:#8b949e;font-size:11.5px">Метка ставится на свечу: вход или выход — по закрытию этой свечи. Время локальное.</div>';
+ h+=it.length?'<table><tr><th>Время</th><th>Метка</th><th>Цена</th><th></th></tr>'+it.slice().sort((a,b)=>b.t-a.t).map(b=>'<tr><td>'+fts(b.t,S.tf,true)+'</td><td>'+({L:'вход ЛОНГ',S:'вход ШОРТ',X:'выход'}[b.kind])+'</td><td>'+fmt(b.p)+'</td><td><button onclick="labDel('+b.id+')">✕</button></td></tr>').join('')+'</table>':'<div style="margin-top:6px">меток пока нет</div>';c.innerHTML=h}
+async function labPost(o){try{const r=await fetch('/api/labels',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)});const j=await r.json();if(j.error){alert(j.error);return}S.lab.items=j.labels||[];renderLab();draw()}catch(e){alert(e)}}
+function labAct(k){const D=S.D;if(!D)return;const i=S.hover;if(i<0||i>=D.t.length){alert('Сначала тапни по закрытой свече на графике');return}
+ if(k==='DEL')return labPost({action:'del_at',sym:S.sym,tf:S.tf,t:D.t[i]});
+ labPost({action:'add',sym:S.sym,tf:S.tf,t:D.t[i],kind:k,p:D.c[i]})}
+function labDel(id){labPost({action:'del',id:id,sym:S.sym,tf:S.tf})}
+function mkLab(){const b=$('labbar');b.innerHTML='';const t=document.createElement('button');t.textContent='✎ Разметка'+(S.lab.on?': ВКЛ':'');if(S.lab.on)t.className='on';t.onclick=()=>{S.lab.on=S.lab.on?0:1;mkLab();renderLab()};b.appendChild(t);
+ if(S.lab.on){[['L','▲ Вход ЛОНГ'],['S','▼ Вход ШОРТ'],['X','■ Выход'],['DEL','✕ Снять']].forEach(([k,l])=>{const x=document.createElement('button');x.textContent=l;x.onclick=()=>labAct(k);b.appendChild(x)});const h=document.createElement('span');h.style.cssText='font-size:11px;color:#8b949e';h.textContent='тапни свечу, потом кнопку';b.appendChild(h)}}
 async function load(){
  const key=S.sym+S.tf;
  try{const r=await fetch('/api/chart?sym='+S.sym+'&tf='+S.tf);const j=await r.json();
@@ -438,7 +489,7 @@ async function load(){
   if(key!==S.sym+S.tf)return;
   const pn=S.D&&S.D.sym===j.sym&&S.D.tf===j.tf?S.D.t.length:0;
   if(S.off>0&&pn&&j.t.length!==pn)S.off+=j.t.length-pn;
-  S.D=j;draw();cards()}catch(e){$('info').textContent='Ошибка: '+e}
+  S.D=j;draw();cards();loadLabels()}catch(e){$('info').textContent='Ошибка: '+e}
 }
 async function loadMtf(){
  try{const r=await fetch('/api/mtf?sym='+S.sym);const j=await r.json();if(j.sym!==S.sym)return;
@@ -516,6 +567,11 @@ function draw(){
  if(S.opt.pt){g.textAlign='center';g.font='bold 9px system-ui';D.patterns.forEach(p=>{if(p.i<start||p.i>=end)return;const x=X(p.i);
   const col=p.d>0?'#3fb950':p.d<0?'#f85149':'#8b949e';g.fillStyle=col;
   if(p.d>0)g.fillText('▲'+p.c,x,py(D.l[p.i])+(S.opt.pv?24:14));else g.fillText(p.c+(p.d<0?'▼':''),x,py(D.h[p.i])-(S.opt.pv?24:14))});g.font='10px system-ui'}
+ // labels
+ if(S.lab.items.length){const tix={};D.t.forEach((t,i)=>{tix[t]=i});S.lab.items.forEach(b=>{const i=tix[b.t];if(i==null||i<start||i>=end)return;const x=X(i);g.textAlign='center';g.font='bold 12px system-ui';
+   if(b.kind==='L'){g.fillStyle='#00e676';g.fillText('▲ЛОНГ',x,py(D.l[i])+(S.opt.pv?40:30))}
+   else if(b.kind==='S'){g.fillStyle='#ff1744';g.fillText('ШОРТ▼',x,py(D.h[i])-(S.opt.pv?40:30))}
+   else{g.fillStyle='#ffd600';g.fillText('■ВЫХОД',x,py(D.c[i]))}});g.font='10px system-ui'}
  // last price
  const lp=live?live.c:D.c[N-1],lc=lp>=(live?live.o:D.o[N-1])?'#26a69a':'#ef5350';
  if(lp>=lo&&lp<=hi){g.strokeStyle=lc;g.setLineDash([2,3]);g.beginPath();g.moveTo(L,py(lp));g.lineTo(L+plotW,py(lp));g.stroke();g.setLineDash([]);
@@ -577,6 +633,7 @@ async def serve():
     app1.router.add_get("/api/chart", api_chart)
     app1.router.add_get("/api/mtf", api_mtf)
     app1.router.add_route("*", "/api/pairs", api_pairs)
+    app1.router.add_route("*", "/api/labels", api_labels)
     app2 = web.Application()
     app2.router.add_get("/", pos_index)
     app2.router.add_get("/api/trades", api_trades)
