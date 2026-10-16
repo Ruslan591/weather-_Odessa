@@ -1,12 +1,17 @@
 {
-  "timestamp": "2026-10-16T20:37:38Z",
-  "status": "ok",
+  "timestamp": "2026-10-16T20:42:47Z",
+  "status": "suppressed_known_false_positive",
   "cloud_forecast_timestamp": "2026-10-16T19:30:00.000Z",
-  "target_id": 1,
-  "target_area_km2": 97.4,
-  "target_distance_km": 184.0,
-  "target_bearing_deg": 214.0,
-  "target_compass": "ЮЗ",
+  "suppressed_target": {
+    "signature": "-105_-150",
+    "area_km2": 97.4,
+    "distance_km": 184.0,
+    "bearing_deg": 214.0,
+    "compass": "ЮЗ",
+    "not_confirmed_streak": 6,
+    "total_not_confirmed": 6,
+    "excluded_since": "2026-10-16T20:37:38Z"
+  },
   "system": {
     "target_id": 0,
     "area_km2": 193124.8,
@@ -45,6 +50,7 @@
     }
   ],
   "system_suppressed_count": 1,
+  "verdict": "Известный шумовой объект в 184км ЮЗ (~97км²) — подавлено (не подтверждался 6 раз подряд). Отдельно: система синоптического масштаба (193125км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора).",
   "frontal_tracks": [
     {
       "track_id": 1700,
@@ -88,39 +94,5 @@
       "front_type": null,
       "front_type_confidence": null
     }
-  ],
-  "target_phase": {
-    "label": "безоблачно",
-    "cloud_fraction": 0.0
-  },
-  "existence": {
-    "modules": {
-      "ir_motion": {
-        "confirmed": false,
-        "timestamp": "2026-10-16T20:10:00.000Z"
-      },
-      "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-10-16T20:10:00.000Z"
-      },
-      "cloud_phase_type": {
-        "confirmed": false,
-        "timestamp": "2026-10-16T16:52:37Z"
-      }
-    },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
-  },
-  "phenomena": {
-    "precip_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-10-16T15:23:03Z"
-    },
-    "lightning_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-10-16T20:32:38Z"
-    }
-  },
-  "verdict": "CLM отметил цель в 184км ЮЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (193125км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора)."
+  ]
 }
