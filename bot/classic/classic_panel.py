@@ -227,7 +227,7 @@ SPEC = {
 }
 DEFAULT_CFG = {k: cs.PANEL[k] for k in SPEC}
 DEFAULT_CFG["stages"] = cs.PANEL["stages"]
-STAGE_TYPES = ["", "pattern", "cross200", "cross20", "close_ema20", "break_trigger", "ema20_slope", "rsi_level", "macd_turn", "volume", "strong_body", "break_swing"]
+STAGE_TYPES = ["", "pattern", "cross200", "cross20", "close_ema20", "break_trigger", "ema20_slope", "rsi_level", "macd_turn", "volume", "strong_body", "break_swing", "pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sign", "ema50_slope"]
 
 
 def clean_stages(v):
