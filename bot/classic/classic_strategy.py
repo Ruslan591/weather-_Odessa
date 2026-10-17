@@ -15,7 +15,7 @@
   be_trigger (точка перехода в безубыток, %), be_lock (размер безубытка: стоп на вход ± be_lock%)
   trail_mode: none | pct | atr | pivot (после безубытка), trail_dist
   pat_mode: off | exit (паттерн закрывает позицию при плюсе >= pat_min%) | trail (паттерн включает трейлинг под минимумом/максимумом предыдущей свечи, не хуже безубытка)
-  pat_filter: значимость паттерна — none | level (у pivot-уровня) | volume (объём ≥1.5× среднего) | extreme (новый экстремум 12 ч для 15m) | stretch (растяжение ≥1.5 ATR от EMA20) | level+volume | extreme+volume
+  pat_filter: значимость паттерна — none | level (у pivot-уровня) | volume (объём ≥1.5× среднего) | extreme (новый экстремум 12 ч для 15m) | stretch (растяжение ≥1.5 ATR от EMA20) | level+volume | extreme+volume | sweep (паттерн снял экстремум 48 свечей=12 ч и закрылся обратно) | sweep16 (то же за 16 свечей=4 ч) | sweep+volume
   sim_from_ms: начать симуляцию «с нуля» с этого момента (для живой бумажной торговли)"""
 import numpy as np
 import pandas as pd
@@ -126,14 +126,15 @@ def _last_piv(piv, kind, maxconf, ok):
 PAT_FILTERS = {
     "none": lambda f: True, "level": lambda f: f[0], "volume": lambda f: f[1], "extreme": lambda f: f[2], "stretch": lambda f: f[3],
     "level+volume": lambda f: f[0] and f[1], "extreme+volume": lambda f: f[2] and f[1],
+    "sweep": lambda f: f[5], "sweep16": lambda f: f[4], "sweep+volume": lambda f: f[5] and f[1],
 }
 
 
 def pat_sets(pre, name):
     ff = PAT_FILTERS.get(name or "none", PAT_FILTERS["none"])
     bull, bear = set(), set()
-    for (i, up, a, b, c, d) in pre["pfeat"]:
-        if ff((a, b, c, d)):
+    for (i, up, a, b, c, d, e, g) in pre["pfeat"]:
+        if ff((a, b, c, d, e, g)):
             (bull if up else bear).add(i)
     return bull, bear
 
@@ -160,18 +161,27 @@ def prepare(df, now_ms):
             if i - pi > 300: break
             if abs(price - pp) <= tol: return True
         return False
+    def sweep(i, up, N):
+        # съём ликвидности: паттерн (3 свечи) вышел за экстремум предыдущих N свечей и закрылся обратно в диапазон
+        if i < N + 3: return False
+        if up:
+            prev = l_[i - 3 - N:i - 2].min()
+            return bool(l_[i - 2:i + 1].min() < prev and c_[i] > prev)
+        prev = h_[i - 3 - N:i - 2].max()
+        return bool(h_[i - 2:i + 1].max() > prev and c_[i] < prev)
     pfeat = []
     for p in pats:
         i = p["i"]
         if p["d"] == 0: continue
         up = p["d"] > 0
         if i < 48:
-            pfeat.append((i, up, False, False, False, False)); continue
+            pfeat.append((i, up, False, False, False, False, False, False)); continue
         pfeat.append((i, up,
                       near_level(i, up, l_[i] if up else h_[i], 0.5 * a_[i]),
                       bool(v_[i] >= 1.5 * v_[i - 20:i].mean()),
                       bool(l_[i - 47:i + 1].min() == l_[i]) if up else bool(h_[i - 47:i + 1].max() == h_[i]),
-                      bool((e20_[i] - c_[i]) >= 1.5 * a_[i]) if up else bool((c_[i] - e20_[i]) >= 1.5 * a_[i])))
+                      bool((e20_[i] - c_[i]) >= 1.5 * a_[i]) if up else bool((c_[i] - e20_[i]) >= 1.5 * a_[i]),
+                      sweep(i, up, 16), sweep(i, up, 48)))
     bu = {p["i"] for p in pats if p["d"] > 0}
     be_ = {p["i"] for p in pats if p["d"] < 0}
     exs = {i: "L" for i in bu - be_}
