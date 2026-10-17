@@ -216,7 +216,7 @@ SPEC = {
     "tf": ("sel", ["5m", "15m", "1h", "4h"]),
     "entry_mode": ("sel", ["stages", "pattern20", "cross200", "close20", "state20"]),
     "arm_k": ("num", 1, 200),
-    "pat_filter": ("sel", ["none", "level", "volume", "extreme", "stretch", "level+volume", "extreme+volume"]),
+    "pat_filter": ("sel", ["none", "level", "volume", "extreme", "stretch", "level+volume", "extreme+volume", "sweep", "sweep16", "sweep+volume"]),
     "rev_exit": ("bool",),
     "stop_mode": ("sel", ["prev", "pct", "pivot"]),
     "min_stop_pct": ("num", 0.05, 15), "min_stop_atr": ("num", 0, 10),
