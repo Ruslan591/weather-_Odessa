@@ -15,6 +15,7 @@
   be_trigger (точка перехода в безубыток, %), be_lock (размер безубытка: стоп на вход ± be_lock%)
   trail_mode: none | pct | atr | pivot (после безубытка), trail_dist
   pat_mode: off | exit (паттерн закрывает позицию при плюсе >= pat_min%) | trail (паттерн включает трейлинг под минимумом/максимумом предыдущей свечи, не хуже безубытка)
+  Подтверждения «возврата» (из разметки): pullback_ema20 (P ATR от EMA20) | rsi_band (RSI 49±P) | ext_dist (P…P+2.1 ATR от экстремума 12 ч) | stoch_dir (StochK14 в сторону, порог P) | macd_sign (гист. MACD по знаку и растёт) | ema50_slope (наклон EMA50 за P св.)
   pat_filter: значимость паттерна — none | level (у pivot-уровня) | volume (объём ≥1.5× среднего) | extreme (новый экстремум 12 ч для 15m) | stretch (растяжение ≥1.5 ATR от EMA20) | level+volume | extreme+volume | sweep (паттерн снял экстремум 48 свечей=12 ч и закрылся обратно) | sweep16 (то же за 16 свечей=4 ч) | sweep+volume
   sim_from_ms: начать симуляцию «с нуля» с этого момента (для живой бумажной торговли)"""
 import numpy as np
@@ -30,7 +31,9 @@ PANEL = dict(PARAMS, be_trigger=1.5, be_lock=0.4, entry_mode="cross200", rev_exi
 
 
 TRIGGERS = ("pattern", "cross200", "cross20")
-CONFIRMS = ("close_ema20", "break_trigger", "ema20_slope", "rsi_level", "macd_turn", "volume", "strong_body", "break_swing")
+CONFIRMS = ("close_ema20", "break_trigger", "ema20_slope", "rsi_level", "macd_turn", "volume", "strong_body", "break_swing",
+            "pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sign", "ema50_slope")
+TF_MIN = {"1m": 1, "3m": 3, "5m": 5, "15m": 15, "30m": 30, "1h": 60, "4h": 240}
 
 
 def stage_signals(pre, P, warmup=None):
@@ -46,6 +49,8 @@ def stage_signals(pre, P, warmup=None):
     W = P["warmup"] if warmup is None else warmup
     o, h, l, c, e20, e200, atr = pre["o"], pre["h"], pre["l"], pre["c"], pre["e20"], pre["e200"], pre["atr"]
     rsi, hist, v, vavg, piv = pre["rsi"], pre["hist"], pre["v"], pre["vavg"], pre["piv"]
+    st14, e50 = pre["stoch"], pre["e50"]
+    N12 = max(4, 720 // TF_MIN.get(P.get("tf", "15m"), 15))  # окно «экстремум 12 ч» в свечах
     trig = stages[0]
     if trig["t"] not in TRIGGERS:
         return out
@@ -80,6 +85,21 @@ def stage_signals(pre, P, warmup=None):
         if t == "break_swing":
             sw = swing(i, side)
             return sw is not None and ((c[i] > sw) if side == "L" else (c[i] < sw))
+        if t == "pullback_ema20": return abs(c[i] - e20[i]) <= (p if p > 0 else 0.9) * atr[i]  # возврат к EMA20: цена в пределах P ATR от неё
+        if t == "rsi_band": return abs(rsi[i] - 49.0) <= (p if p > 0 else 9.0)  # RSI в нейтральной зоне 49±P (по умолч. 40–58)
+        if t == "ext_dist":  # расстояние от экстремума 12 ч в сторону сделки: от P до P+2.1 ATR (по умолч. 2.4–4.5)
+            if i < N12: return False
+            ex = l[i - N12:i + 1].min() if side == "L" else h[i - N12:i + 1].max()
+            d = sd * (c[i] - ex) / atr[i]
+            lo = p if p > 0 else 2.4
+            return lo <= d <= lo + 2.1
+        if t == "stoch_dir":  # StochK(14) в сторону сделки: лонг выше P, шорт ниже 100−P (по умолч. 50)
+            thr = p if p > 0 else 50.0
+            return (st14[i] > thr) if side == "L" else (st14[i] < 100.0 - thr)
+        if t == "macd_sign": return sd * hist[i] > 0 and sd * (hist[i] - hist[i - 1]) > 0  # гистограмма MACD по знаку сделки и растёт
+        if t == "ema50_slope":
+            k = int(p) if p >= 1 else 5
+            return sd * (e50[i] - e50[i - k]) > 0  # EMA50 наклонена в сторону сделки
         return False
     pend = None
     for i in range(max(W, 3), M):
@@ -187,7 +207,10 @@ def prepare(df, now_ms):
     exs = {i: "L" for i in bu - be_}
     exs.update({i: "S" for i in be_ - bu})
     vv = pd.Series(df.v.values)
-    pre.update(ok=True, exits=exs, pfeat=pfeat, piv=pv, rsi=ind["rsi"].values, hist=ind["hist"].values,
+    hh14, ll14 = pd.Series(df.h.values).rolling(14).max(), pd.Series(df.l.values).rolling(14).min()
+    stoch = (100.0 * (pd.Series(df.c.values) - ll14) / (hh14 - ll14 + 1e-9)).values
+    e50 = pd.Series(df.c.values).ewm(span=50, adjust=False).mean().values
+    pre.update(ok=True, stoch=stoch, e50=e50, exits=exs, pfeat=pfeat, piv=pv, rsi=ind["rsi"].values, hist=ind["hist"].values,
                v=df.v.values, vavg=vv.rolling(20).mean().shift(1).values, e20=ind["ema20"].values, e200=ind["ema200"].values,
                atr=ind["atr"].values, o=df.o.values, h=df.h.values, l=df.l.values, c=df.c.values, t=df.t.values)
     return pre
