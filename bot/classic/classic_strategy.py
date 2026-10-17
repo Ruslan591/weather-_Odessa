@@ -15,7 +15,7 @@
   be_trigger (точка перехода в безубыток, %), be_lock (размер безубытка: стоп на вход ± be_lock%)
   trail_mode: none | pct | atr | pivot (после безубытка), trail_dist
   pat_mode: off | exit (паттерн закрывает позицию при плюсе >= pat_min%) | trail (паттерн включает трейлинг под минимумом/максимумом предыдущей свечи, не хуже безубытка)
-  Подтверждения «возврата» (из разметки): pullback_ema20 (P ATR от EMA20) | rsi_band (RSI 49±P) | ext_dist (P…P+2.1 ATR от экстремума 12 ч) | stoch_dir (StochK14 в сторону, порог P) | macd_sign (гист. MACD по знаку и растёт) | ema50_slope (наклон EMA50 за P св.)
+  Подтверждения «возврата» (из разметки; подряд идущие такие уровни считаются на одной свече, а ext_dist ещё требует паттерн у экстремума 12 ч): pullback_ema20 (P ATR от EMA20) | rsi_band (RSI 49±P) | ext_dist (P…P+2.1 ATR от экстремума 12 ч) | stoch_dir (StochK14 в сторону, порог P) | macd_sign (гист. MACD по знаку и растёт) | ema50_slope (наклон EMA50 за P св.)
   pat_filter: значимость паттерна — none | level (у pivot-уровня) | volume (объём ≥1.5× среднего) | extreme (новый экстремум 12 ч для 15m) | stretch (растяжение ≥1.5 ATR от EMA20) | level+volume | extreme+volume | sweep (паттерн снял экстремум 48 свечей=12 ч и закрылся обратно) | sweep16 (то же за 16 свечей=4 ч) | sweep+volume
   sim_from_ms: начать симуляцию «с нуля» с этого момента (для живой бумажной торговли)"""
 import numpy as np
@@ -33,6 +33,7 @@ PANEL = dict(PARAMS, be_trigger=1.5, be_lock=0.4, entry_mode="cross200", rev_exi
 TRIGGERS = ("pattern", "cross200", "cross20")
 CONFIRMS = ("close_ema20", "break_trigger", "ema20_slope", "rsi_level", "macd_turn", "volume", "strong_body", "break_swing",
             "pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sign", "ema50_slope")
+STATE_STAGES = ("pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sign", "ema50_slope")
 TF_MIN = {"1m": 1, "3m": 3, "5m": 5, "15m": 15, "30m": 30, "1h": 60, "4h": 240}
 
 
@@ -57,7 +58,13 @@ def stage_signals(pre, P, warmup=None):
     bull = bear = set()
     if trig["t"] == "pattern":
         bull, bear = pat_sets(pre, trig.get("f", "none"))
-    conf = stages[1:]
+    conf = []
+    for st_ in stages[1:]:  # подряд идущие «состояния» объединяются в одно подтверждение: все условия на одной свече
+        if st_["t"] in STATE_STAGES:
+            if conf and conf[-1]["t"] == "group": conf[-1]["items"].append(st_)
+            else: conf.append({"t": "group", "items": [st_], "w": st_.get("w"), "p": 0})
+        else:
+            conf.append(st_)
 
     def swing(i, side):
         for q in reversed(piv):
@@ -70,6 +77,7 @@ def stage_signals(pre, P, warmup=None):
     def ok(st, side, i, tr):
         t, p = st["t"], float(st.get("p") or 0)
         sd = 1 if side == "L" else -1
+        if t == "group": return all(ok(it, side, i, tr) for it in st["items"])
         if t == "close_ema20": return sd * (c[i] - e20[i]) > 0
         if t == "break_trigger": return c[i] > h[tr] if side == "L" else c[i] < l[tr]
         if t == "ema20_slope":
@@ -92,6 +100,8 @@ def stage_signals(pre, P, warmup=None):
             ex = l[i - N12:i + 1].min() if side == "L" else h[i - N12:i + 1].max()
             d = sd * (c[i] - ex) / atr[i]
             lo = p if p > 0 else 2.4
+            if side == "L" and l[tr] > ex + 0.5 * atr[i]: return False  # паттерн должен быть у экстремума 12 ч
+            if side == "S" and h[tr] < ex - 0.5 * atr[i]: return False
             return lo <= d <= lo + 2.1
         if t == "stoch_dir":  # StochK(14) в сторону сделки: лонг выше P, шорт ниже 100−P (по умолч. 50)
             thr = p if p > 0 else 50.0
