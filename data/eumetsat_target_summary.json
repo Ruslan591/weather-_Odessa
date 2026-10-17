@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-17T06:37:47Z",
+  "timestamp": "2026-10-17T06:43:19Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-10-17T06:15:00.000Z",
   "target_id": 2,
@@ -19,11 +19,28 @@
     "frontlike": false,
     "window_spanning": false,
     "phase_label": "безоблачно",
-    "cloud_fraction": 0.553,
+    "cloud_fraction": 0.875,
     "has_precip": false,
     "has_lightning": false
   },
   "local_candidates": [
+    {
+      "target_id": 1,
+      "area_km2": 56.0,
+      "distance_km": 129.9,
+      "bearing_deg": 335.0,
+      "compass": "СЗ",
+      "elongation_aspect_ratio": 1.24,
+      "elongation_axis_deg": 0.0,
+      "elongation_axis_compass": "С-Ю",
+      "frontlike": false,
+      "phase_label": null,
+      "type_label": null,
+      "has_precip": false,
+      "has_lightning": false,
+      "ir_confirmed": false,
+      "geocolour_confirmed": true
+    },
     {
       "target_id": 2,
       "area_km2": 93.4,
@@ -34,8 +51,8 @@
       "elongation_axis_deg": 18.0,
       "elongation_axis_compass": "С-Ю",
       "frontlike": false,
-      "phase_label": null,
-      "type_label": null,
+      "phase_label": "смешанная фаза",
+      "type_label": "низкая/средняя",
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
@@ -51,8 +68,8 @@
       "elongation_axis_deg": 90.0,
       "elongation_axis_compass": "В-З",
       "frontlike": false,
-      "phase_label": null,
-      "type_label": null,
+      "phase_label": "смешанная фаза",
+      "type_label": "низкая/средняя",
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
@@ -68,7 +85,7 @@
       "elongation_axis_deg": 15.0,
       "elongation_axis_compass": "С-Ю",
       "frontlike": false,
-      "phase_label": "смешанная фаза",
+      "phase_label": "безоблачно",
       "type_label": "низкая/средняя",
       "has_precip": false,
       "has_lightning": false,
@@ -86,14 +103,14 @@
       "elongation_axis_compass": "С-Ю",
       "frontlike": false,
       "phase_label": "безоблачно",
-      "type_label": "низкая/средняя",
+      "type_label": "плотная/высокая",
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
       "geocolour_confirmed": true
     }
   ],
-  "local_suppressed_count": 1,
+  "local_suppressed_count": 0,
   "system_candidates": [
     {
       "target_id": 0,
@@ -124,8 +141,8 @@
       "elongation_axis_compass": "С-Ю",
       "frontlike": false,
       "window_spanning": false,
-      "phase_label": null,
-      "type_label": null,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
@@ -139,26 +156,26 @@
     "area_km2": 56.0
   },
   "target_phase": {
-    "label": "безоблачно",
-    "cloud_fraction": 0.446
+    "label": "смешанная фаза",
+    "cloud_fraction": 1.0
   },
   "existence": {
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-10-17T06:10:00.000Z"
+        "timestamp": "2026-10-17T06:20:00.000Z"
       },
       "geocolour_motion": {
         "confirmed": true,
         "timestamp": "2026-10-17T06:10:00.000Z"
       },
       "cloud_phase_type": {
-        "confirmed": false,
-        "timestamp": "2026-10-17T06:27:36Z"
+        "confirmed": true,
+        "timestamp": "2026-10-17T06:42:10Z"
       }
     },
-    "votes_confirmed": 1,
-    "votes_not_confirmed": 2,
+    "votes_confirmed": 2,
+    "votes_not_confirmed": 1,
     "consensus": "disputed"
   },
   "phenomena": {
@@ -168,8 +185,8 @@
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-10-17T06:37:26Z"
+      "timestamp": "2026-10-17T06:42:50Z"
     }
   },
-  "verdict": "Цель в 149км СЗ, безоблачно — каналы расходятся: geocolour_motion подтверждают, ir_motion/cloud_phase_type нет. Отдельно: система синоптического масштаба (358км²) в 119км З."
+  "verdict": "Цель в 149км СЗ, смешанная фаза — каналы расходятся: geocolour_motion/cloud_phase_type подтверждают, ir_motion нет. Отдельно: система синоптического масштаба (358км²) в 119км З."
 }
