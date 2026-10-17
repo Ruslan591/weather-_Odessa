@@ -1,1 +1,1 @@
-{"task_id": "cl-1792250648", "cmd": "cd /opt/trading-bot/classic; for tf in 15m 5m; do echo \"######## $tf\"; grep -v \"^$\" out_pb2_$tf.txt | grep -v \"^\u0432\u044b\u0445\u043e\u0434\\|\u0441\u0432\u0435\u0447\u0435\u0439\" | cut -c1-200; done", "timeout": 30}
+{"task_id": "cl-1792250756", "cmd": "cd /opt/trading-bot/classic; ls -la out_pb2_*; head -c 6000 out_pb2_15m.txt | cut -c1-200", "timeout": 30}
