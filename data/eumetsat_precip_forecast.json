@@ -1,27 +1,37 @@
 {
-  "timestamp": "2026-10-17T10:12:23Z",
+  "timestamp": "2026-10-17T10:28:05Z",
   "current_state": "precip",
   "target_type": "clearing",
-  "distance_km_now": 43.9,
-  "bearing_deg": 183.0,
+  "distance_km_now": 29.9,
+  "bearing_deg": 181.0,
   "compass": "Ю",
-  "speed_kmh": 25.0,
+  "speed_kmh": 34.8,
   "direction_compass": "СЗ",
-  "cpa_km": 31.4,
+  "cpa_km": 25.5,
   "eta_min": null,
-  "blob_area_km2": 53830.0,
+  "blob_area_km2": 58127.0,
   "verdict": "пройдёт мимо, город, скорее всего, не заденет",
   "approaching": true,
   "frame_pairs_used": 3,
   "method_note": "Скорость усреднена по 4 кадрам msg_fes:h60b (шаг 15 мин, phase correlation). Presence = непрозрачный пиксель. Край ищется только среди связных областей >= 40px (~53км²). Линейная экстраполяция, годится на ~1 час.",
   "target_confirmation": {
-    "confirmed": null,
-    "reason": "candidates пуст или отсутствует (снапшот от старой версии cloud_forecast.py?)"
+    "confirmed": false,
+    "target_id": 0,
+    "target_area_km2": 164.1,
+    "roi_precip_fraction": 0.0,
+    "verdict": "Осадков из этой конкретной массы не наблюдается (сухое облако либо осадки не достигают земли)"
   },
   "system_analysis": {
     "available": false,
-    "reason": "candidates пуст или отсутствует"
+    "reason": "среди кандидатов нет систем синоптического масштаба (только локальные массы)"
   },
   "system_analysis_all": [],
-  "local_analysis_all": []
+  "local_analysis_all": [
+    {
+      "target_id": 0,
+      "available": true,
+      "roi_precip_fraction": 0.0,
+      "has_precip": false
+    }
+  ]
 }
