@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-10-17T18:37:51Z",
+  "timestamp": "2026-10-17T18:42:24Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-10-17T18:15:00.000Z",
-  "target_id": 1,
-  "target_area_km2": 65.4,
-  "target_distance_km": 125.3,
-  "target_bearing_deg": 216.0,
-  "target_compass": "ЮЗ",
+  "target_id": 2,
+  "target_area_km2": 77.4,
+  "target_distance_km": 144.2,
+  "target_bearing_deg": 316.0,
+  "target_compass": "СЗ",
   "system": {
     "target_id": 0,
     "area_km2": 183674.0,
@@ -133,6 +133,10 @@
   ],
   "system_suppressed_count": 0,
   "frontal_tracks": [],
+  "also_suppressed_nearby": {
+    "signature": "-75_-100",
+    "area_km2": 65.4
+  },
   "target_phase": {
     "label": "безоблачно",
     "cloud_fraction": 0.0
@@ -141,10 +145,10 @@
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-10-17T18:10:00.000Z"
+        "timestamp": "2026-10-17T18:20:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": false,
+        "confirmed": true,
         "timestamp": "2026-10-17T18:10:00.000Z"
       },
       "cloud_phase_type": {
@@ -152,19 +156,19 @@
         "timestamp": "2026-10-17T16:52:36Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
       "confirmed": false,
-      "timestamp": "2026-10-17T18:22:32Z"
+      "timestamp": "2026-10-17T18:42:04Z"
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-10-17T18:32:09Z"
+      "timestamp": "2026-10-17T18:42:06Z"
     }
   },
-  "verdict": "CLM отметил цель в 125км ЮЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (183674км²) в 3км В (площадь/форма ненадёжны — объект упирается в границы окна обзора)."
+  "verdict": "Цель в 144км СЗ, безоблачно — каналы расходятся: geocolour_motion подтверждают, ir_motion/cloud_phase_type нет. Отдельно: система синоптического масштаба (183674км²) в 3км В (площадь/форма ненадёжны — объект упирается в границы окна обзора)."
 }
