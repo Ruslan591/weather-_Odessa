@@ -66,7 +66,7 @@ def swing_target(D, i, e, L, R):
 
 
 def sim(D, i, tr, L, ex):
-    pre = D["pre"]; o, h, l, c, atr = pre["o"], pre["h"], pre["l"], pre["c"], pre["atr"]; T = len(o)
+    pre = D["pre"]; o, h, l, c, atr = pre["o"], pre["h"], pre["l"], pre["c"], pre["atr"]; T = len(atr)
     e = o[i + 1]; a = atr[i]
     ext = l[tr:i + 1].min() if L else h[tr:i + 1].max()
     stop = ext - 0.1 * a if L else ext + 0.1 * a
@@ -113,7 +113,7 @@ def sim(D, i, tr, L, ex):
 
 def run(sym, stages, pred, ex):
     D = DATA[sym]; pre = D["pre"]
-    g = cs.stage_signals(pre, dict(cs.PARAMS, stages=stages)); T = len(pre["o"]); rows = []
+    g = cs.stage_signals(pre, dict(cs.PARAMS, stages=stages)); T = len(pre["atr"]); rows = []
     for i, (sd, tr) in sorted(g.items()):
         if pre["t"][i] < D["t0"] or i + 1 >= T: continue
         if pred and not pred(i, tr, sd, pre): continue
