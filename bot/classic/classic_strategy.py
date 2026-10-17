@@ -10,6 +10,8 @@
 
 Конструктор правил (все параметры задаются в config, см. DEFAULT_CFG / PANEL):
   entry_mode: stages (уровни фильтра входа: триггер → подтверждения по очереди, пустой уровень пропускается; см. stage_signals) | pattern20 (паттерн разворота «взводит» вход, вход по первому закрытию за EMA20 в пределах arm_k свечей) | cross200 (пересечение EMA20 и EMA200) | close20 (первое закрытие свечи за EMA20 после пересечения) | state20 (любое закрытие за EMA20, когда позиции нет)
+  entry_trigger: open (по открытию следующей свечи) | breakout (по пробою экстремума сигнальной свечи, до bo_wait свечей; отмена: закрытие за EMA50 / пробит локальный экстремум); stop_mode sig3: за экстремумом 3 свечей сигнала −0.2 ATR, не ближе 0.5 ATR; tp_r: цель в R (0 — нет)
+  Подтверждения правил EMA50+StochRSI: ema50_trend | ema50_pullback (P ATR) | stochrsi_cross (зона P, умолч. 20) — считаются на одной свече, в т.ч. на сигнальной
   rev_exit: обратный сигнал входа закрывает позицию (разворот)
   stop_mode: prev (за экстремумом предыдущей свечи, не ближе min_stop_pct/min_stop_atr) | pct (фиксированный min_stop_pct) | pivot
   be_trigger (точка перехода в безубыток, %), be_lock (размер безубытка: стоп на вход ± be_lock%)
@@ -24,7 +26,7 @@ import classic_analysis as an
 
 PARAMS = dict(tf="15m", be_trigger=1.5, fee=0.05, window_h=240, notional=100.0, warmup=200,
               stop_mode="prev", min_stop_pct=1.5, min_stop_atr=0.0, trail_mode="none", trail_dist=0.0, be_atr=0.0, be_lock=0.3,
-              entry_mode="cross200", rev_exit=True, pat_mode="off", arm_k=12, pat_filter="none",
+              entry_mode="cross200", rev_exit=True, pat_mode="off", arm_k=12, pat_filter="none", entry_trigger="open", bo_wait=3, tp_r=0.0,
               stages=[{"t": "pattern", "p": 0, "w": 0, "f": "none"}, {"t": "close_ema20", "p": 0, "w": 12, "f": "none"}])
 
 PANEL = dict(PARAMS, be_trigger=1.5, be_lock=0.4, entry_mode="cross200", rev_exit=True, pat_mode="off", pat_min=0.0)  # «рекомендованные» правила конструктора (лучшие по проверке на ZEC 15m; пользователь может менять)
@@ -32,8 +34,8 @@ PANEL = dict(PARAMS, be_trigger=1.5, be_lock=0.4, entry_mode="cross200", rev_exi
 
 TRIGGERS = ("pattern", "cross200", "cross20")
 CONFIRMS = ("close_ema20", "break_trigger", "ema20_slope", "rsi_level", "macd_turn", "volume", "strong_body", "break_swing",
-            "pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sign", "ema50_slope")
-STATE_STAGES = ("pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sign", "ema50_slope")
+            "pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sign", "ema50_slope", "ema50_trend", "ema50_pullback", "stochrsi_cross")
+STATE_STAGES = ("pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sign", "ema50_slope", "ema50_trend", "ema50_pullback", "stochrsi_cross")
 TF_MIN = {"1m": 1, "3m": 3, "5m": 5, "15m": 15, "30m": 30, "1h": 60, "4h": 240}
 
 
@@ -50,7 +52,7 @@ def stage_signals(pre, P, warmup=None):
     W = P["warmup"] if warmup is None else warmup
     o, h, l, c, e20, e200, atr = pre["o"], pre["h"], pre["l"], pre["c"], pre["e20"], pre["e200"], pre["atr"]
     rsi, hist, v, vavg, piv = pre["rsi"], pre["hist"], pre["v"], pre["vavg"], pre["piv"]
-    st14, e50 = pre["stoch"], pre["e50"]
+    st14, e50, srk, srd = pre["stoch"], pre["e50"], pre["srk"], pre["srd"]
     N12 = max(4, 720 // TF_MIN.get(P.get("tf", "15m"), 15))  # окно «экстремум 12 ч» в свечах
     trig = stages[0]
     if trig["t"] not in TRIGGERS:
@@ -107,6 +109,17 @@ def stage_signals(pre, P, warmup=None):
             thr = p if p > 0 else 50.0
             return (st14[i] > thr) if side == "L" else (st14[i] < 100.0 - thr)
         if t == "macd_sign": return sd * hist[i] > 0 and sd * (hist[i] - hist[i - 1]) > 0  # гистограмма MACD по знаку сделки и растёт
+        if t == "ema50_trend":  # цена по сторону EMA50 и EMA50 не направлена против сделки (5 св.)
+            return (c[i] > e50[i] and e50[i] >= e50[i - 5]) if side == "L" else (c[i] < e50[i] and e50[i] <= e50[i - 5])
+        if t == "ema50_pullback":  # откат: за 6 св. экстремум подходил к EMA50 ближе P ATR (по умолч. 0.8)
+            lim = (p if p > 0 else 0.8) * atr[i]
+            return bool((l[i - 5:i + 1] - e50[i - 5:i + 1]).min() <= lim) if side == "L" else bool((e50[i - 5:i + 1] - h[i - 5:i + 1]).min() <= lim)
+        if t == "stochrsi_cross":  # Stoch RSI (3,3,14,14): K пересекла D в зоне <P (лонг) / >100−P (шорт) за последние 3 св.
+            zone = p if p > 0 else 20.0
+            for j in range(i - 3, i + 1):
+                if side == "L" and srk[j - 1] <= srd[j - 1] and srk[j] > srd[j] and min(srk[j - 1], srd[j - 1]) < zone: return True
+                if side == "S" and srk[j - 1] >= srd[j - 1] and srk[j] < srd[j] and max(srk[j - 1], srd[j - 1]) > 100.0 - zone: return True
+            return False
         if t == "ema50_slope":
             k = int(p) if p >= 1 else 5
             return sd * (e50[i] - e50[i - k]) > 0  # EMA50 наклонена в сторону сделки
@@ -142,7 +155,12 @@ def stage_signals(pre, P, warmup=None):
             if not conf:
                 out[i] = (ns, i)
             else:
-                pend = (ns, i, 0, i + int(conf[0].get("w") or 12))
+                k0, dead0 = 0, i + int(conf[0].get("w") or 12)
+                while k0 < len(conf) and conf[k0]["t"] == "group" and ok(conf[k0], ns, i, i):  # «состояния» проверяются и на сигнальной свече
+                    k0 += 1
+                    if k0 < len(conf): dead0 = i + int(conf[k0].get("w") or 12)
+                if k0 >= len(conf): out[i] = (ns, i)
+                else: pend = (ns, i, k0, dead0)
     return out
 
 
@@ -220,7 +238,12 @@ def prepare(df, now_ms):
     hh14, ll14 = pd.Series(df.h.values).rolling(14).max(), pd.Series(df.l.values).rolling(14).min()
     stoch = (100.0 * (pd.Series(df.c.values) - ll14) / (hh14 - ll14 + 1e-9)).values
     e50 = pd.Series(df.c.values).ewm(span=50, adjust=False).mean().values
-    pre.update(ok=True, stoch=stoch, e50=e50, exits=exs, pfeat=pfeat, piv=pv, rsi=ind["rsi"].values, hist=ind["hist"].values,
+    cc = pd.Series(df.c.values); dd = cc.diff()
+    upm = dd.clip(lower=0).ewm(alpha=1 / 14, adjust=False).mean(); dnm = (-dd.clip(upper=0)).ewm(alpha=1 / 14, adjust=False).mean()
+    rsi14 = 100 - 100 / (1 + upm / (dnm + 1e-12))
+    srs = 100 * (rsi14 - rsi14.rolling(14).min()) / (rsi14.rolling(14).max() - rsi14.rolling(14).min() + 1e-9)
+    srk = srs.rolling(3).mean(); srd = srk.rolling(3).mean()  # Stoch RSI (3, 3, 14, 14)
+    pre.update(ok=True, stoch=stoch, e50=e50, srk=srk.values, srd=srd.values, exits=exs, pfeat=pfeat, piv=pv, rsi=ind["rsi"].values, hist=ind["hist"].values,
                v=df.v.values, vavg=vv.rolling(20).mean().shift(1).values, e20=ind["ema20"].values, e200=ind["ema200"].values,
                atr=ind["atr"].values, o=df.o.values, h=df.h.values, l=df.l.values, c=df.c.values, t=df.t.values)
     return pre
@@ -243,11 +266,25 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
     if not pre["ok"] or pre["M"] < P["warmup"] + 30:
         return []
     T, M, piv = pre["T"], pre["M"], pre["piv"]
-    e20, e200, atr = pre["e20"], pre["e200"], pre["atr"]
+    e20, e200, atr, e50 = pre["e20"], pre["e200"], pre["atr"], pre["e50"]
     o, h, l, c, t = pre["o"], pre["h"], pre["l"], pre["c"], pre["t"]
     fee2 = 2 * P["fee"]
     tm, td = P["trail_mode"], P["trail_dist"]
-    trades, pos, pend, pexit, arm, parm = [], None, None, False, None, None
+    trades, pos, pend, pexit, arm, parm, bo = [], None, None, False, None, None, None
+
+    def sig3(side, si, entry):  # стоп за экстремумом 3 свечей до сигнальной включительно −0.2 ATR, не ближе 0.5 ATR
+        a = atr[si]
+        if side == "L":
+            return min(l[si - 2:si + 1].min() - 0.2 * a, entry - 0.5 * a)
+        return max(h[si - 2:si + 1].max() + 0.2 * a, entry + 0.5 * a)
+
+    def mkpos(side, i, entry, st, clamped, ai):
+        p_ = dict(side=side, i_in=i, t_in=int(t[i]), p_in=entry, stop0=float(st), stop=float(st), stage="init",
+                  risk=abs(entry - st) / entry * 100, mfe=0.0, mae=0.0, be=False, clamped=clamped, ext=entry, ptrail=False,
+                  be_thr=(P.get("be_atr", 0) * atr[ai] / entry * 100) if P.get("be_atr", 0) else P["be_trigger"])
+        if P.get("tp_r"):
+            p_["tp"] = entry + (1 if side == "L" else -1) * P["tp_r"] * abs(entry - st)
+        return p_
     st_sigs = stage_signals(pre, P) if P.get("entry_mode") == "stages" else None
 
     def finish(i, price, reason):
@@ -280,6 +317,8 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                     st = _last_piv(piv, "L", i - 1, lambda p: p < entry) if side == "L" else _last_piv(piv, "H", i - 1, lambda p: p > entry)
                 elif P["stop_mode"] == "pct":
                     st = entry * (1 - P["min_stop_pct"] / 100) if side == "L" else entry * (1 + P["min_stop_pct"] / 100)
+                elif P["stop_mode"] == "sig3":
+                    st = sig3(side, i - 1, entry)
                 else:
                     mind = max(entry * P["min_stop_pct"] / 100, P["min_stop_atr"] * atr[i - 1])
                     if side == "L":
@@ -287,9 +326,25 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                     else:
                         st = max(h[i - 1], entry + mind); clamped = bool(st != h[i - 1])
                 if st is not None:
-                    pos = dict(side=side, i_in=i, t_in=int(t[i]), p_in=entry, stop0=float(st), stop=float(st), stage="init",
-                               risk=abs(entry - st) / entry * 100, mfe=0.0, mae=0.0, be=False, clamped=clamped, ext=entry, ptrail=False,
-                               be_thr=(P.get("be_atr", 0) * atr[i - 1] / entry * 100) if P.get("be_atr", 0) else P["be_trigger"])
+                    pos = mkpos(side, i, entry, st, clamped, i - 1)
+        if bo is not None and pos is None:  # вход по пробою экстремума сигнальной свечи
+            bside, si, bloc = bo
+            if i > si:
+                if i > si + 1:  # отмена только по уже закрытым свечам: закрытие за EMA50 или пробит локальный экстремум
+                    pc = i - 1
+                    if (bside == "L" and (c[pc] < e50[pc] or l[pc] < bloc)) or (bside == "S" and (c[pc] > e50[pc] or h[pc] > bloc)):
+                        bo = None
+                if bo is not None and i > si + int(P.get("bo_wait", 3)):
+                    bo = None
+                if bo is not None:
+                    trig = h[si] if bside == "L" else l[si]
+                    if (bside == "L" and h[i] >= trig) or (bside == "S" and l[i] <= trig):
+                        entry = float(max(o[i], trig) if bside == "L" else min(o[i], trig))
+                        pos = mkpos(bside, i, entry, sig3(bside, si, entry), False, si)
+                        pos["bo"] = True
+                        bo = None
+        elif bo is not None:
+            bo = None
         if pos:
             L_ = pos["side"] == "L"
             e = pos["p_in"]
@@ -303,6 +358,8 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                 else:
                     px = o[i] if o[i] >= pos["stop"] else pos["stop"]
                 finish(i, px, {"init": "стоп", "be": "безубыток", "trail": "трейлинг", "ptrail": "трейлинг по паттерну"}[pos["stage"]])
+            elif pos.get("tp") and not (pos.get("bo") and pos["i_in"] == i) and ((L_ and h[i] >= pos["tp"]) or ((not L_) and l[i] <= pos["tp"])):
+                finish(i, pos["tp"], "цель")
             else:
                 pos["mfe"] = max(pos["mfe"], fav)
                 pos["ext"] = max(pos["ext"], h[i]) if L_ else min(pos["ext"], l[i])
@@ -351,7 +408,13 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                     elif pos["side"] != g[0] and P.get("rev_exit", True):
                         xc = en = g[0]
                     if xc or en:
-                        pend = (xc, en, (filt is None) or (en is None) or bool(filt(en, i)))
+                        allow_ = (filt is None) or (en is None) or bool(filt(en, i))
+                        if P.get("entry_trigger") == "breakout":
+                            if xc: pend = (xc, None, False)  # закрыть противоположную позицию по открытию
+                            if en and allow_:
+                                bo = (en, i, float(l[i - 2:i + 1].min()) if en == "L" else float(h[i - 2:i + 1].max()))
+                        else:
+                            pend = (xc, en, allow_)
             elif em == "pattern20":
                 xc = en = None
                 na = "L" if (i in bull and i not in bear) else "S" if (i in bear and i not in bull) else None
