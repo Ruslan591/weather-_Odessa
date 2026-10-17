@@ -1,11 +1,11 @@
 {
-  "timestamp": "2026-10-17T13:44:32Z",
+  "timestamp": "2026-10-17T13:56:27Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-10-17T13:00:00.000Z",
-  "target_id": 0,
-  "target_area_km2": 93.4,
-  "target_distance_km": 45.9,
-  "target_bearing_deg": 207.0,
+  "target_id": 2,
+  "target_area_km2": 69.4,
+  "target_distance_km": 151.3,
+  "target_bearing_deg": 243.0,
   "target_compass": "ЮЗ",
   "system": {
     "target_id": 1,
@@ -174,6 +174,10 @@
       "front_type_confidence": "station"
     }
   ],
+  "also_suppressed_nearby": {
+    "signature": "-20_-40",
+    "area_km2": 93.4
+  },
   "target_phase": {
     "label": "безоблачно",
     "cloud_fraction": 0.263
@@ -182,20 +186,20 @@
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-10-17T13:20:00.000Z"
+        "timestamp": "2026-10-17T13:30:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-10-17T13:10:00.000Z"
+        "confirmed": true,
+        "timestamp": "2026-10-17T13:20:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": false,
         "timestamp": "2026-10-17T13:22:37Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -207,5 +211,5 @@
       "timestamp": "2026-10-17T13:23:08Z"
     }
   },
-  "verdict": "CLM отметил цель в 46км ЮЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (809км²) в 110км ЮЗ (вытянута Ю-С (166°), похоже на фронт)."
+  "verdict": "Цель в 151км ЮЗ, безоблачно — каналы расходятся: geocolour_motion подтверждают, ir_motion/cloud_phase_type нет. Отдельно: система синоптического масштаба (809км²) в 110км ЮЗ (вытянута Ю-С (166°), похоже на фронт)."
 }
