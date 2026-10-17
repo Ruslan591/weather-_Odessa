@@ -1,1 +1,1 @@
-{"task_id": "cl-1792243373", "cmd": "tail -c 12000 /opt/trading-bot/classic/out_exit.txt", "timeout": 30}
+{"task_id": "cl-1792243407", "cmd": "curl -s http://127.0.0.1:8091/api/runs | /opt/trading-bot/venv/bin/python -c \"\nimport json,sys\nfor r in json.load(sys.stdin)[\\\"runs\\\"]: print(r[\\\"id\\\"],\\\"\u0438\u0434\u0451\u0442\\\" if not r[\\\"stop_ms\\\"] else \\\"\u0441\u0442\u043e\u043f\\\",r[\\\"stats\\\"])\"", "timeout": 30}
