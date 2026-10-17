@@ -1,14 +1,15 @@
-"""classic_labels.py — разбор разметки пользователя (labels.json): что предшествует идеальным входам/выходам. ZEC 15m, время UTC+3."""
+"""classic_labels.py — разбор разметки пользователя (labels.json): что предшествует идеальным входам/выходам. ZEC, ТФ из argv (15m|5m), время UTC+3. Запуск: python classic_labels.py 15m"""
 import json, os, sys, time, datetime, warnings, urllib.request
 import numpy as np, pandas as pd
 warnings.filterwarnings("ignore")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import classic_strategy as cs, classic_analysis as an
-now = int(time.time() * 1000); STEP = 900 * 1000
-labels = [x for x in json.load(open("/opt/trading-bot/classic/labels.json")) if x["sym"] == "ZECUSDT" and x["tf"] == "15m"]
+TF = sys.argv[1] if len(sys.argv) > 1 else "15m"; MIN = {"5m": 5, "15m": 15}[TF]
+now = int(time.time() * 1000); STEP = MIN * 60000
+labels = [x for x in json.load(open("/opt/trading-bot/classic/labels.json")) if x["sym"] == "ZECUSDT" and x["tf"] == TF]
 parts, end = [], None
 for _ in range(6):
-    u = "https://api.binance.com/api/v3/klines?symbol=ZECUSDT&interval=15m&limit=1000" + ("&endTime=%d" % end if end else "")
+    u = "https://api.binance.com/api/v3/klines?symbol=ZECUSDT&interval=%s&limit=1000" % TF + ("&endTime=%d" % end if end else "")
     d = json.load(urllib.request.urlopen(u, timeout=20)); parts.insert(0, d); end = int(d[0][0]) - 1
 df = pd.DataFrame([r for p in parts for r in p]).iloc[:, [0, 1, 2, 3, 4, 5, 6]]
 df.columns = ["t", "o", "h", "l", "c", "v", "ct"]
@@ -40,13 +41,13 @@ trades = []; cur = None
 for x in rows:
     if x["kind"] in "LS": cur = x
     elif x["kind"] == "X" and cur: trades.append((cur, x)); cur = None
-print("\n=== РАЗМЕТКА: %d меток, %d сделок" % (len(rows), len(trades)))
+print("\n=== ТФ %s РАЗМЕТКА: %d меток, %d сделок" % (TF, len(rows), len(trades)))
 for en, ex in trades:
     a, b = idx[en["t"]], idx[ex["t"]]; Lg = en["kind"] == "L"; sg = 1 if Lg else -1
     pnl = sg * (ex["p"] / en["p"] - 1) * 100
     seg_h, seg_l = h[a + 1:b + 1].max(), l[a + 1:b + 1].min()
     best = (seg_h if Lg else seg_l); peak = sg * (best / en["p"] - 1) * 100
-    print("\n--- %s %s → выход %s: %.2f → %.2f = %+.1f%% (пик за сделку %+.1f%%, держал %.1f ч)" % ("ЛОНГ" if Lg else "ШОРТ", L3(en["t"]), L3(ex["t"]), en["p"], ex["p"], pnl, peak, (b - a) / 4))
+    print("\n--- %s %s → выход %s: %.2f → %.2f = %+.2f%% (net после комиссии %+.2f%%; пик за сделку %+.2f%%, держал %.1f ч)" % ("ЛОНГ" if Lg else "ШОРТ", L3(en["t"]), L3(ex["t"]), en["p"], ex["p"], pnl, pnl - 0.10, peak, (b - a) * MIN / 60.0))
     i = a
     ext_n = 48; ex_idx = (l[i - ext_n:i + 1].argmin() if Lg else h[i - ext_n:i + 1].argmax()); since = ext_n - ex_idx
     exv = (l[i - ext_n:i + 1].min() if Lg else h[i - ext_n:i + 1].max())
