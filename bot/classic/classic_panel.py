@@ -217,8 +217,9 @@ SPEC = {
     "entry_mode": ("sel", ["stages", "pattern20", "cross200", "close20", "state20"]),
     "arm_k": ("num", 1, 200),
     "pat_filter": ("sel", ["none", "level", "volume", "extreme", "stretch", "level+volume", "extreme+volume", "sweep", "sweep16", "sweep+volume"]),
+    "entry_trigger": ("sel", ["open", "breakout"]), "tp_r": ("num", 0, 20),
     "rev_exit": ("bool",),
-    "stop_mode": ("sel", ["prev", "pct", "pivot"]),
+    "stop_mode": ("sel", ["prev", "pct", "pivot", "sig3"]),
     "min_stop_pct": ("num", 0.05, 15), "min_stop_atr": ("num", 0, 10),
     "be_trigger": ("num", 0.1, 30), "be_lock": ("num", 0, 10),
     "trail_mode": ("sel", ["none", "pct", "atr", "pivot"]), "trail_dist": ("num", 0, 20),
@@ -227,7 +228,7 @@ SPEC = {
 }
 DEFAULT_CFG = {k: cs.PANEL[k] for k in SPEC}
 DEFAULT_CFG["stages"] = cs.PANEL["stages"]
-STAGE_TYPES = ["", "pattern", "cross200", "cross20", "close_ema20", "break_trigger", "ema20_slope", "rsi_level", "macd_turn", "volume", "strong_body", "break_swing", "pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sign", "ema50_slope"]
+STAGE_TYPES = ["", "pattern", "cross200", "cross20", "close_ema20", "break_trigger", "ema20_slope", "rsi_level", "macd_turn", "volume", "strong_body", "break_swing", "pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sign", "ema50_slope", "ema50_trend", "ema50_pullback", "stochrsi_cross"]
 
 
 def clean_stages(v):
