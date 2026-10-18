@@ -274,6 +274,7 @@ async def api_trades(req):
         for x in cs.simulate(df, now, P):
             if x["open"] or x["t_in"] >= cutoff or x["t_out"] >= cutoff:
                 out.append(cs.pack([x])[0])
+    money = apply_stakes(out, P)
     closed, live = split_closed(df)
     ind = an.indicators(closed)
     k = max(48, min(960, int(req.query.get("bars", 960))))
@@ -287,7 +288,7 @@ async def api_trades(req):
     if live is not None:
         e20.append(None); e200.append(None)
     chart["ema20"], chart["ema200"] = sl(e20[-k:]), sl(e200[-k:])
-    return web.json_response({"sym": sym, "cfg": cfg, "notional": P["notional"], "trades": out, "chart": chart, "now": now, "period": period})
+    return web.json_response({"sym": sym, "cfg": cfg, "notional": P["notional"], "trades": out, "chart": chart, "now": now, "period": period, "money": money})
 
 
 async def pos_index(req):
@@ -310,6 +311,8 @@ SPEC = {
     "pat_mode": ("sel", ["off", "trail", "exit"]), "pat_min": ("num", 0, 50),
     "fee": ("num", 0, 0.5), "window_h": ("num", 6, 2000),
     "period_from": ("date",), "period_to": ("date",),
+    "stake_mode": ("sel", ["fixed", "fixed_profit"]), "stake_base": ("num", 6, 1000000), "stake_min": ("num", 1, 1000),
+    "martingale": ("sel", ["off", "double", "double_plus"]), "mart_pct": ("num", 0, 500), "mart_max": ("num", 0, 20),
 }
 DEFAULT_CFG = {k: cs.PANEL[k] for k in SPEC}
 DEFAULT_CFG["stages"] = cs.PANEL["stages"]
@@ -390,6 +393,8 @@ def clean_cfg(inp, base=None):
         cfg[k] = v
     if "stages" in inp:
         cfg["stages"] = clean_stages(inp["stages"])
+    if cfg["stake_base"] < cfg["stake_min"]:
+        raise ValueError("базовая ставка меньше минимальной")
     if cfg.get("period_from") and cfg.get("period_to") and cfg["period_from"] > cfg["period_to"]:
         raise ValueError("период: дата «с» позже даты «по»")
     if cfg["be_lock"] >= cfg["be_trigger"]:
@@ -416,6 +421,45 @@ async def api_config(req):
         return web.json_response({"config": load_cfg(), "default": DEFAULT_CFG})
     except ValueError as e:
         return web.json_response({"error": str(e)}, status=400)
+
+
+def apply_stakes(trs, cfg):
+    """Размер ставки и профит в USDT по сделкам (в порядке входа). Ставка: фиксированная (stake_base) или фиксированная + накопленный
+    положительный профит; минимум stake_min. Мартингейл после убыточной сделки (net <= 0): double — вдвое больше предыдущей ставки;
+    double_plus — вдвое + mart_pct% от долларового убытка предыдущей сделки; после прибыльной — возврат к обычной ставке;
+    mart_max > 0 — после стольких увеличений подряд ставка больше не растёт. pnl$ = ставка × net% / 100."""
+    base, smin = float(cfg.get("stake_base", 100.0)), float(cfg.get("stake_min", 6.0))
+    mode, mart = cfg.get("stake_mode", "fixed"), cfg.get("martingale", "off")
+    pct, mmax = float(cfg.get("mart_pct", 50.0)) / 100.0, int(cfg.get("mart_max", 0) or 0)
+    prof = peak = max_dd = max_stake = tot = 0.0
+    prev_stake, prev_loss, streak = None, 0.0, 0
+    for x in sorted(trs, key=lambda t: t["t_in"]):
+        s0 = base + (max(prof, 0.0) if mode == "fixed_profit" else 0.0)
+        if mart != "off" and streak > 0 and prev_stake:
+            if mmax and streak > mmax:
+                s = prev_stake
+            else:
+                s = 2 * prev_stake + (pct * prev_loss if mart == "double_plus" else 0.0)
+        else:
+            s = s0
+        s = max(s, smin)
+        usd = s * x["net"] / 100.0
+        x["stake"], x["usd"] = round(s, 2), round(usd, 2)
+        tot += s
+        max_stake = max(max_stake, s)
+        if not x["open"]:
+            prof += usd
+            peak = max(peak, prof)
+            max_dd = max(max_dd, peak - prof)
+        if x["net"] <= 0:
+            streak += 1
+            prev_loss = -usd
+        else:
+            streak, prev_loss = 0, 0.0
+        prev_stake = s
+    open_usd = sum(x["usd"] for x in trs if x["open"])
+    return {"profit": round(prof + open_usd, 2), "max_stake": round(max_stake, 2), "max_dd": round(max_dd, 2),
+            "avg_stake": round(tot / len(trs), 2) if trs else 0.0}
 
 
 def run_stats(tr):
@@ -474,8 +518,10 @@ async def api_runs(req):
                     tr = []
             else:
                 tr = r["trades"] or []
+            st = run_stats(tr)
+            st["money"] = apply_stakes(tr, dict(cs.PARAMS, **r["cfg"]))
             out.append({"id": r["id"], "name": r["name"], "sym": r["sym"], "cfg": r["cfg"], "start_ms": r["start_ms"],
-                        "stop_ms": r["stop_ms"], "stats": run_stats(tr), "trades": tr[-300:]})
+                        "stop_ms": r["stop_ms"], "stats": st, "trades": tr[-300:]})
         return web.json_response({"runs": out, "now": now, "notional": cs.PARAMS["notional"]})
     except ValueError as e:
         return web.json_response({"error": str(e)}, status=400)
