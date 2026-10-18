@@ -10,7 +10,7 @@
 
 Конструктор правил (все параметры задаются в config, см. DEFAULT_CFG / PANEL):
   entry_mode: stages (уровни фильтра входа: триггер → подтверждения по очереди, пустой уровень пропускается; см. stage_signals) | pattern20 (паттерн разворота «взводит» вход, вход по первому закрытию за EMA20 в пределах arm_k свечей) | cross200 (пересечение EMA20 и EMA200) | close20 (первое закрытие свечи за EMA20 после пересечения) | state20 (любое закрытие за EMA20, когда позиции нет)
-  entry_trigger: open (по открытию следующей свечи) | breakout (по пробою экстремума сигнальной свечи, до bo_wait свечей; отмена: закрытие за EMA50 / пробит локальный экстремум); stop_mode sig3: за экстремумом 3 свечей сигнала −0.2 ATR, не ближе 0.5 ATR; tp_r: цель в R (0 — нет)
+  entry_trigger: open (по открытию следующей свечи) | breakout (по пробою экстремума сигнальной свечи, до bo_wait свечей; отмена: закрытие за EMA50 / пробит локальный экстремум); stop_mode sig3: за экстремумом 3 свечей сигнала −0.2 ATR, не ближе 0.5 ATR; tp_r: цель в R (0 — нет); max_bars: выход по времени через столько свечей (0 — нет)
   Подтверждения правил EMA50+StochRSI: ema50_trend | ema50_pullback (P ATR) | stochrsi_cross (зона P, умолч. 20) — считаются на одной свече, в т.ч. на сигнальной
   rev_exit: обратный сигнал входа закрывает позицию (разворот)
   stop_mode: prev (за экстремумом предыдущей свечи, не ближе min_stop_pct/min_stop_atr) | pct (фиксированный min_stop_pct) | pivot
@@ -26,7 +26,7 @@ import classic_analysis as an
 
 PARAMS = dict(tf="15m", be_trigger=1.5, fee=0.05, window_h=240, notional=100.0, warmup=200,
               stop_mode="prev", min_stop_pct=1.5, min_stop_atr=0.0, trail_mode="none", trail_dist=0.0, be_atr=0.0, be_lock=0.3,
-              entry_mode="cross200", rev_exit=True, pat_mode="off", arm_k=12, pat_filter="none", entry_trigger="open", bo_wait=3, tp_r=0.0,
+              entry_mode="cross200", rev_exit=True, pat_mode="off", arm_k=12, pat_filter="none", entry_trigger="open", bo_wait=3, tp_r=0.0, max_bars=0,
               stages=[{"t": "pattern", "p": 0, "w": 0, "f": "none"}, {"t": "close_ema20", "p": 0, "w": 12, "f": "none"}])
 
 PANEL = dict(PARAMS, be_trigger=1.5, be_lock=0.4, entry_mode="cross200", rev_exit=True, pat_mode="off", pat_min=0.0)  # «рекомендованные» правила конструктора (лучшие по проверке на ZEC 15m; пользователь может менять)
@@ -155,10 +155,11 @@ def stage_signals(pre, P, warmup=None):
             if not conf:
                 out[i] = (ns, i)
             else:
-                k0, dead0 = 0, i + int(conf[0].get("w") or 12)
+                gw = lambda st_: int(st_.get("w") or 12) - (1 if st_["t"] == "group" else 0)  # окно группы: w=1 — только сигнальная свеча
+                k0, dead0 = 0, i + gw(conf[0])
                 while k0 < len(conf) and conf[k0]["t"] == "group" and ok(conf[k0], ns, i, i):  # «состояния» проверяются и на сигнальной свече
                     k0 += 1
-                    if k0 < len(conf): dead0 = i + int(conf[k0].get("w") or 12)
+                    if k0 < len(conf): dead0 = i + gw(conf[k0])
                 if k0 >= len(conf): out[i] = (ns, i)
                 else: pend = (ns, i, k0, dead0)
     return out
@@ -397,6 +398,8 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
             sg_ = 1 if pos["side"] == "L" else -1
             if sg_ * (c[i] / pos["p_in"] - 1) * 100 >= P.get("pat_min", 0):
                 pexit = True
+        if pos and P.get("max_bars") and i - pos["i_in"] >= P["max_bars"]:
+            finish(i, c[i], "время")  # выход по времени: закрытие свечи через max_bars свечей после входа
         if P["warmup"] <= i < M:
             em = P.get("entry_mode", "cross200")
             if em == "stages":
