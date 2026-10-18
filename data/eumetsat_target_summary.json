@@ -1,57 +1,68 @@
 {
-  "timestamp": "2026-10-18T12:12:27Z",
+  "timestamp": "2026-10-18T12:18:42Z",
   "status": "ok",
-  "cloud_forecast_timestamp": "2026-10-18T11:30:00.000Z",
-  "target_id": 1,
-  "target_area_km2": 82.7,
-  "target_distance_km": 217.2,
-  "target_bearing_deg": 124.0,
+  "cloud_forecast_timestamp": "2026-10-18T11:45:00.000Z",
+  "target_id": 0,
+  "target_area_km2": 180.1,
+  "target_distance_km": 212.4,
+  "target_bearing_deg": 125.0,
   "target_compass": "ЮВ",
-  "system": null,
+  "system": {
+    "target_id": 1,
+    "area_km2": 356.3,
+    "distance_km": 216.3,
+    "bearing_deg": 141.0,
+    "compass": "ЮВ",
+    "elongation_aspect_ratio": 1.68,
+    "elongation_axis_deg": 39.0,
+    "elongation_axis_compass": "СВ-ЮЗ",
+    "frontlike": false,
+    "window_spanning": false,
+    "phase_label": "безоблачно",
+    "cloud_fraction": 0.108,
+    "has_precip": false,
+    "has_lightning": false
+  },
   "local_candidates": [
     {
-      "target_id": 1,
-      "area_km2": 82.7,
-      "distance_km": 217.2,
-      "bearing_deg": 124.0,
+      "target_id": 0,
+      "area_km2": 180.1,
+      "distance_km": 212.4,
+      "bearing_deg": 125.0,
       "compass": "ЮВ",
-      "elongation_aspect_ratio": 1.8,
-      "elongation_axis_deg": 41.0,
-      "elongation_axis_compass": "СВ-ЮЗ",
+      "elongation_aspect_ratio": 1.17,
+      "elongation_axis_deg": 75.0,
+      "elongation_axis_compass": "В-З",
       "frontlike": false,
-      "phase_label": "низкая водяная",
+      "phase_label": "безоблачно",
       "type_label": "плотная/высокая",
-      "has_precip": true,
+      "has_precip": false,
       "has_lightning": true,
       "ir_confirmed": false,
       "geocolour_confirmed": true
     }
   ],
-  "local_suppressed_count": 3,
+  "local_suppressed_count": 1,
   "system_candidates": [],
-  "system_suppressed_count": 0,
+  "system_suppressed_count": 1,
   "frontal_tracks": [],
-  "also_suppressed_nearby": {
-    "signature": "120_-150",
-    "area_km2": 157.4
-  },
   "target_phase": {
-    "label": "низкая водяная",
+    "label": "безоблачно",
     "cloud_fraction": 1.0
   },
   "existence": {
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-10-18T11:30:00.000Z"
+        "timestamp": "2026-10-18T11:50:00.000Z"
       },
       "geocolour_motion": {
         "confirmed": true,
-        "timestamp": "2026-10-18T11:30:00.000Z"
+        "timestamp": "2026-10-18T11:50:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": true,
-        "timestamp": "2026-10-18T12:07:12Z"
+        "timestamp": "2026-10-18T12:17:49Z"
       }
     },
     "votes_confirmed": 2,
@@ -61,12 +72,12 @@
   "phenomena": {
     "precip_forecast": {
       "confirmed": false,
-      "timestamp": "2026-10-18T11:57:05Z"
+      "timestamp": "2026-10-18T12:18:23Z"
     },
     "lightning_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-10-18T11:52:34Z"
+      "confirmed": true,
+      "timestamp": "2026-10-18T12:18:25Z"
     }
   },
-  "verdict": "Цель в 217км ЮВ, низкая водяная — каналы расходятся: geocolour_motion/cloud_phase_type подтверждают, ir_motion нет."
+  "verdict": "Цель в 212км ЮВ, безоблачно — каналы расходятся: geocolour_motion/cloud_phase_type подтверждают, ir_motion нет. Зафиксирована гроза. Отдельно: система синоптического масштаба (356км²) в 216км ЮВ."
 }
