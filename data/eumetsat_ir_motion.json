@@ -1,7 +1,7 @@
 {
   "timestamp": "2026-10-18T13:10:00.000Z",
-  "buffer_size": 4,
-  "buffer_span_minutes": 30,
+  "buffer_size": 6,
+  "buffer_span_minutes": 50,
   "observed_area": {
     "center_lat": 46.4406,
     "center_lon": 30.7703,
@@ -12,46 +12,50 @@
     "local_trend_radius_km": 50
   },
   "valid": true,
-  "speed_kmh": 45.8,
+  "speed_kmh": 45.9,
   "direction_compass": "З",
-  "bearing_deg": 269.4,
-  "frame_pairs_used": 3,
-  "acceleration_kmh": -0.1,
-  "turning_deg": -0.6,
+  "bearing_deg": 269.1,
+  "frame_pairs_used": 5,
+  "acceleration_kmh": -0.2,
+  "turning_deg": -0.1,
   "acceleration_verdict": "скорость стабильна",
   "turning_verdict": "направление стабильно",
   "forecast_displacement": {
     "30min": {
       "distance_km": 22.9,
-      "bearing_deg": 268.0,
+      "bearing_deg": 269.0,
       "compass": "З"
     },
     "60min": {
-      "distance_km": 45.7,
-      "bearing_deg": 268.0,
+      "distance_km": 45.6,
+      "bearing_deg": 269.0,
       "compass": "З"
     },
     "120min": {
-      "distance_km": 91.2,
-      "bearing_deg": 266.0,
+      "distance_km": 90.9,
+      "bearing_deg": 269.0,
       "compass": "З"
     }
   },
   "area_fraction_over_time": [
-    0.385,
-    0.445,
-    0.487,
-    0.55
+    0.396,
+    0.468,
+    0.539,
+    0.594,
+    0.651,
+    0.711
   ],
-  "area_trend_delta": 0.165,
+  "area_trend_delta": 0.314,
   "area_trend_verdict": "растёт",
   "mean_brightness_over_time": [
+    126.4,
+    134.1,
     141.7,
     149.6,
     156.5,
     163.7
   ],
-  "brightness_trend_delta": 22.0,
+  "brightness_trend_delta": 37.3,
   "station_state": "cloud",
   "station_area_fraction": 1.0,
   "cloud_mass_distance_km": 0.8,
@@ -63,15 +67,15 @@
   "target_confirmation": {
     "confirmed": false,
     "target_id": 0,
-    "target_area_km2": 80.1,
-    "roi_contrast_sigma": -1.74,
+    "target_area_km2": 256.2,
+    "roi_contrast_sigma": -1.45,
     "verdict": "ИК НЕ подтверждает: в ROI CLM-цели нет значимого контраста — возможна тонкая/низкая облачность, невидимая на ИК, либо расхождение слоёв"
   },
   "system_analysis_all": [
     {
-      "target_id": 2,
+      "target_id": 1,
       "available": true,
-      "roi_contrast_sigma": -1.67,
+      "roi_contrast_sigma": -1.69,
       "confirmed": false
     }
   ],
@@ -79,15 +83,9 @@
     {
       "target_id": 0,
       "available": true,
-      "roi_contrast_sigma": -1.74,
-      "confirmed": false
-    },
-    {
-      "target_id": 1,
-      "available": true,
-      "roi_contrast_sigma": -1.27,
+      "roi_contrast_sigma": -1.45,
       "confirmed": false
     }
   ],
-  "method_note": "Буфер 4/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин, crs=EPSG:4326, всегда явный TIME — не 'latest'), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. cloud_mass_* — положение (не движение) ближайшей значимой облачной массы относительно станции. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
+  "method_note": "Буфер 6/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин, crs=EPSG:4326, всегда явный TIME — не 'latest'), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. cloud_mass_* — положение (не движение) ближайшей значимой облачной массы относительно станции. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
 }
