@@ -1,1 +1,1 @@
-{"task_id": "cl-1792349406", "cmd": "cd /opt/trading-bot/classic; grep -c \u0413\u041e\u0422\u041e\u0412\u041e out_tl_4h.txt out_rob_4h.txt; nohup sudo -u tbot /opt/trading-bot/venv/bin/python classic_tl_robust.py 1h > out_rob_1h.txt 2>&1 & sleep 1; echo 1h started", "timeout": 60}
+{"task_id": "cl-1792349467", "cmd": "cd /opt/trading-bot/classic; cut -c1-230 out_tl_4h.txt | grep -v \"^[A-Z]*USDT [0-9]\"; echo; echo \"######## ROBUST 4h\"; cut -c1-270 out_rob_4h.txt | grep -v \"^[A-Z]*USDT [0-9]\"", "timeout": 80}
