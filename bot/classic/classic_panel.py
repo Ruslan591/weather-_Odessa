@@ -1,6 +1,6 @@
 """classic_panel.py — панель «классического» бота (localhost:18093).
 Шаг 1: графики + то, что бот «видит» (тренд по ТФ, pivot, уровни, индикаторы, свечные паттерны). Торговли пока нет."""
-import asyncio, json, os, re, time
+import asyncio, datetime, json, os, re, time
 import aiohttp
 from aiohttp import web
 import pandas as pd
@@ -66,6 +66,78 @@ async def get_df(sym, tf):
         df["ct"] = df["ct"].astype("int64")
         CACHE[key] = (time.time(), df)
         return df
+
+
+TFMS = {"1m": 60000, "3m": 180000, "5m": 300000, "15m": 900000, "30m": 1800000, "1h": 3600000, "2h": 7200000, "4h": 14400000,
+        "6h": 21600000, "8h": 28800000, "12h": 43200000, "1d": 86400000}
+DEEP = {}
+
+
+async def fetch_back(sym, tf, need_ms, max_pages=120):
+    """Свечи назад от текущего момента, пока самая ранняя не станет <= need_ms (или не кончится история монеты)."""
+    parts, end, err, listing = [], None, None, False
+    for _ in range(max_pages):
+        data = None
+        for base in BASES:
+            try:
+                prm = {"symbol": sym, "interval": tf, "limit": 1000}
+                if end is not None:
+                    prm["endTime"] = end
+                async with SES.get(base + "/api/v3/klines", params=prm) as r:
+                    if r.status != 200:
+                        raise RuntimeError("%s %s %s" % (base, r.status, (await r.text())[:120]))
+                    data = await r.json()
+                break
+            except Exception as e:
+                err = e
+        if not data:
+            break
+        parts.insert(0, data)
+        end = int(data[0][0]) - 1
+        if len(data) < 1000:
+            listing = True
+            break
+        if int(data[0][0]) <= need_ms:
+            break
+    if not parts:
+        raise RuntimeError(str(err))
+    df = pd.DataFrame([r for p in parts for r in p]).iloc[:, [0, 1, 2, 3, 4, 5, 6]]
+    df.columns = ["t", "o", "h", "l", "c", "v", "ct"]
+    for col in "ohlcv":
+        df[col] = df[col].astype(float)
+    df["t"] = df["t"].astype("int64")
+    df["ct"] = df["ct"].astype("int64")
+    return df.drop_duplicates("t").reset_index(drop=True), listing
+
+
+async def get_df_range(sym, tf, start_ms):
+    """История с запасом на прогрев (260 свечей до start_ms): глубокая часть кэшируется на час, свежие свечи подмешиваются."""
+    need = start_ms - 260 * TFMS[tf]
+    key = (sym, tf)
+    lock = LOCKS.setdefault(("deep",) + key, asyncio.Lock())
+    async with lock:
+        d = DEEP.get(key)
+        if not (d and time.time() - d[0] < 3600 and (int(d[1].t.iloc[0]) <= need or d[2])):
+            df0, listing = await fetch_back(sym, tf, need)
+            d = (time.time(), df0, listing)
+            DEEP[key] = d
+    recent = await get_df(sym, tf)
+    return pd.concat([d[1], recent]).drop_duplicates("t", keep="last").sort_values("t").reset_index(drop=True)
+
+
+def period_ms(cfg, now):
+    """Период выборки из конфига (даты по UTC): (начало_мс, конец_мс) или None, если не задан."""
+    pf, pt = cfg.get("period_from") or "", cfg.get("period_to") or ""
+    if not pf and not pt:
+        return None
+
+    def day(s, end):
+        d = datetime.date.fromisoformat(s)
+        ms = int(datetime.datetime(d.year, d.month, d.day, tzinfo=datetime.timezone.utc).timestamp() * 1000)
+        return ms + 86400000 - 1 if end else ms
+    end_ms = min(day(pt, True), now) if pt else now
+    start_ms = day(pf, False) if pf else end_ms - int(cfg["window_h"]) * 3600 * 1000
+    return (start_ms, end_ms) if end_ms > start_ms else None
 
 
 async def get_df_long(sym, tf, pages=2):
@@ -182,14 +254,26 @@ async def api_trades(req):
     P = dict(cs.PARAMS, **cfg)
     now = int(time.time() * 1000)
     cutoff = now - cfg["window_h"] * 3600 * 1000
+    per = period_ms(cfg, now)
     try:
-        df = await get_df_long(sym, cfg["tf"])
+        df = await (get_df_range(sym, cfg["tf"], per[0]) if per else get_df_long(sym, cfg["tf"]))
     except Exception as e:
         return web.json_response({"error": "нет данных: " + str(e)[:150]}, status=502)
-    out = []
-    for x in cs.simulate(df, now, P):
-        if x["open"] or x["t_in"] >= cutoff or x["t_out"] >= cutoff:
-            out.append(cs.pack([x])[0])
+    out, period = [], None
+    if per:
+        start_ms, end_ms = per
+        data_from = int(df.t.iloc[0])
+        df = df[df.t <= end_ms].reset_index(drop=True)
+        trs = cs.simulate(df, min(end_ms, now), dict(P, sim_from_ms=start_ms))
+        for x in trs:
+            if x["open"] and end_ms < now:
+                x["open"], x["reason"] = False, "конец периода"
+        out = [cs.pack([x])[0] for x in trs]
+        period = {"from_ms": start_ms, "to_ms": end_ms, "data_from_ms": data_from}
+    else:
+        for x in cs.simulate(df, now, P):
+            if x["open"] or x["t_in"] >= cutoff or x["t_out"] >= cutoff:
+                out.append(cs.pack([x])[0])
     closed, live = split_closed(df)
     ind = an.indicators(closed)
     k = max(48, min(960, int(req.query.get("bars", 960))))
@@ -203,7 +287,7 @@ async def api_trades(req):
     if live is not None:
         e20.append(None); e200.append(None)
     chart["ema20"], chart["ema200"] = sl(e20[-k:]), sl(e200[-k:])
-    return web.json_response({"sym": sym, "cfg": cfg, "notional": P["notional"], "trades": out, "chart": chart, "now": now})
+    return web.json_response({"sym": sym, "cfg": cfg, "notional": P["notional"], "trades": out, "chart": chart, "now": now, "period": period})
 
 
 async def pos_index(req):
@@ -225,6 +309,7 @@ SPEC = {
     "trail_mode": ("sel", ["none", "pct", "atr", "pivot"]), "trail_dist": ("num", 0, 20),
     "pat_mode": ("sel", ["off", "trail", "exit"]), "pat_min": ("num", 0, 50),
     "fee": ("num", 0, 0.5), "window_h": ("num", 6, 2000),
+    "period_from": ("date",), "period_to": ("date",),
 }
 DEFAULT_CFG = {k: cs.PANEL[k] for k in SPEC}
 DEFAULT_CFG["stages"] = cs.PANEL["stages"]
@@ -286,6 +371,13 @@ def clean_cfg(inp, base=None):
                 raise ValueError("%s: недопустимое значение" % k)
         elif sp[0] == "bool":
             v = bool(v)
+        elif sp[0] == "date":
+            v = str(v or "").strip()
+            if v:
+                try:
+                    datetime.date.fromisoformat(v)
+                except Exception:
+                    raise ValueError("%s: дата в формате ГГГГ-ММ-ДД" % k)
         else:
             try:
                 v = float(v)
@@ -298,6 +390,8 @@ def clean_cfg(inp, base=None):
         cfg[k] = v
     if "stages" in inp:
         cfg["stages"] = clean_stages(inp["stages"])
+    if cfg.get("period_from") and cfg.get("period_to") and cfg["period_from"] > cfg["period_to"]:
+        raise ValueError("период: дата «с» позже даты «по»")
     if cfg["be_lock"] >= cfg["be_trigger"]:
         raise ValueError("размер безубытка должен быть меньше точки перехода в безубыток")
     return cfg
@@ -349,6 +443,7 @@ async def api_runs(req):
                 if not ok_sym(sym):
                     raise ValueError("плохая пара")
                 cfg = clean_cfg(j.get("config") or {}, base=load_cfg())
+                cfg["period_from"] = cfg["period_to"] = ""  # живой прогон идёт вперёд от текущего момента
                 await get_df_long(sym, cfg["tf"])
                 rid = max([r["id"] for r in runs] + [0]) + 1
                 runs.append({"id": rid, "name": (str(j.get("name") or "Прогон")[:60]), "sym": sym, "cfg": cfg,
