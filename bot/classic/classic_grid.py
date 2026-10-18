@@ -11,7 +11,7 @@ import classic_strategy as cs
 now = int(time.time() * 1000); STEP = 14400000
 _orig = cs.prepare; _cache = {}
 def _prep(df, n_):
-    k = (len(df), int(df.t.iloc[0]), int(df.t.iloc[-1]))
+    k = (len(df), int(df.t.iloc[0]), int(df.t.iloc[-1]), round(float(df.c.iloc[0]), 8), round(float(df.c.iloc[-2]), 8), round(float(df.v.iloc[len(df) // 2]), 6))  # ключ различает монеты
     if k not in _cache: _cache[k] = _orig(df, n_)
     return _cache[k]
 cs.prepare = _prep
