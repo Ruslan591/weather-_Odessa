@@ -217,7 +217,7 @@ SPEC = {
     "entry_mode": ("sel", ["stages", "pattern20", "cross200", "close20", "state20"]),
     "arm_k": ("num", 1, 200),
     "pat_filter": ("sel", ["none", "level", "volume", "extreme", "stretch", "level+volume", "extreme+volume", "sweep", "sweep16", "sweep+volume"]),
-    "entry_trigger": ("sel", ["open", "breakout"]), "tp_r": ("num", 0, 20),
+    "entry_trigger": ("sel", ["open", "breakout"]), "tp_r": ("num", 0, 20), "max_bars": ("num", 0, 2000),
     "rev_exit": ("bool",),
     "stop_mode": ("sel", ["prev", "pct", "pivot", "sig3"]),
     "min_stop_pct": ("num", 0.05, 15), "min_stop_atr": ("num", 0, 10),
@@ -293,7 +293,7 @@ def clean_cfg(inp, base=None):
                 raise ValueError("%s: нужно число" % k)
             if not (sp[1] <= v <= sp[2]):
                 raise ValueError("%s: допустимо от %s до %s" % (k, sp[1], sp[2]))
-            if k == "window_h":
+            if k in ("window_h", "max_bars"):
                 v = int(v)
         cfg[k] = v
     if "stages" in inp:
