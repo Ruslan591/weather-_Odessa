@@ -1,7 +1,7 @@
 {
-  "task_id": "cl-1792330630",
+  "task_id": "cl-1792330760",
   "returncode": 0,
-  "stdout": "{\"tf\": \"4h\", \"entry_mode\": \"stages\", \"arm_k\": 12.0, \"pat_filter\": \"none\", \"entry_trigger\": \"open\", \"tp_r\": 0.0, \"max_bars\": 0, \"rev_exit\": true, \"stop_mode\": \"prev\", \"min_stop_pct\": 3.0, \"min_stop_atr\": 3.0, \"be_trigger\": 1.8, \"be_lock\": 1.1, \"trail_mode\": \"none\", \"trail_dist\": 0.7, \"pat_mode\": \"trail\", \"pat_min\": 2.0, \"fee\": 0.05, \"window_h\": 960, \"period_from\": \"2025-10-01\", \"period_to\": \"2026-10-18\", \"stake_mode\": \"fixed_profit\", \"stake_base\": 6.0, \"stake_min\": 6.0, \"martingale\": \"off\", \"mart_pct\": 100.0, \"mart_max\": 0.0, \"stages\": [{\"t\": \"pattern\", \"p\": 0.0, \"w\": 12, \"f\": \"none\"}, {\"t\": \"macd_sign\", \"p\": 0.0, \"w\": 2, \"f\": \"none\"}, {\"t\": \"stoch_dir\", \"p\": 0.0, \"w\": 2, \"f\": \"none\"}, {\"t\": \"\", \"p\": 0.0, \"w\": 2, \"f\": \"none\"}, {\"t\": \"\", \"p\": 0.0, \"w\": 12, \"f\": \"none\"}]}\nNEARUSDT 4h первая свеча 2020-10-14\nZECUSDT 4h первая свеча 2019-03-21\n",
+  "stdout": "2\nZECUSDT 16607 свечей с 2019-03-21\nNEARUSDT 13173 свечей с 2020-10-14\nTraceback (most recent call last):\n  File \"/opt/trading-bot/classic/classic_grid.py\", line 81, in <module>\n    HIS = run_cfg(\"none\", None, [{\"t\": \"pattern\", \"p\": 0, \"w\": 12, \"f\": \"none\"}, {\"t\": \"macd_sign\", \"p\": 0, \"w\": 2, \"f\": \"none\"}, {\"t\": \"stoch_dir\", \"p\": 0, \"w\": 2, \"f\": \"none\"}])\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/trading-bot/classic/classic_grid.py\", line 57, in run_cfg\n    P = dict(cs.PARAMS, **BASE, pat_filter=pf, stages=stages or stages_of(cset), sim_from_ms=t0)\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nTypeError: dict() got multiple values for keyword argument 'pat_filter'\n",
   "stderr": "",
-  "completed_at_utc": "2026-10-18T13:38:02Z"
+  "completed_at_utc": "2026-10-18T13:41:01Z"
 }
