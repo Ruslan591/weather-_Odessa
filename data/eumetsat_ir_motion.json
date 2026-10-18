@@ -63,8 +63,11 @@
   "cloud_mass_verdict": "значимой облачной массы в поле зрения нет (кадр однородный)",
   "temperature_trend_verdict": "без существенных изменений",
   "target_confirmation": {
-    "confirmed": null,
-    "reason": "известный шумовой объект в этой точке подавлен (сигнатура 95_5), других локальных целей нет"
+    "confirmed": false,
+    "target_id": 2,
+    "target_area_km2": 121.4,
+    "roi_contrast_sigma": -2.1,
+    "verdict": "ИК НЕ подтверждает: в ROI CLM-цели нет значимого контраста — возможна тонкая/низкая облачность, невидимая на ИК, либо расхождение слоёв"
   },
   "system_analysis_all": [
     {
@@ -74,9 +77,15 @@
       "confirmed": false
     },
     {
-      "target_id": 2,
+      "target_id": 4,
       "available": true,
-      "roi_contrast_sigma": -2.13,
+      "roi_contrast_sigma": -2.07,
+      "confirmed": false
+    },
+    {
+      "target_id": 5,
+      "available": true,
+      "roi_contrast_sigma": -2.16,
       "confirmed": false
     }
   ],
@@ -85,6 +94,18 @@
       "target_id": 1,
       "available": true,
       "roi_contrast_sigma": -2.27,
+      "confirmed": false
+    },
+    {
+      "target_id": 2,
+      "available": true,
+      "roi_contrast_sigma": -2.1,
+      "confirmed": false
+    },
+    {
+      "target_id": 3,
+      "available": true,
+      "roi_contrast_sigma": -2.19,
       "confirmed": false
     }
   ],
