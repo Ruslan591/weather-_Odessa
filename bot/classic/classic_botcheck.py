@@ -28,8 +28,8 @@ def load(sym, pages):
     return df.drop_duplicates("t").reset_index(drop=True)
 
 
-for sym, pg in (("ZECUSDT", 40), ("SOLUSDT", 20), ("XRPUSDT", 20), ("ETHUSDT", 20), ("BTCUSDT", 20)):
-    df = load(sym, pg); P = dict(cs.PARAMS, **CFG)
+for mb, sym, pg in ((0, "ZECUSDT", 40), (96, "ZECUSDT", 40), (96, "SOLUSDT", 20), (96, "XRPUSDT", 20), (96, "ETHUSDT", 20), (96, "BTCUSDT", 20)):
+    df = load(sym, pg); P = dict(cs.PARAMS, **CFG, max_bars=mb); sym = "%s max_bars=%d" % (sym, mb)
     tr = [x for x in cs.simulate(df, now, P) if not x["open"]]
     if not tr: print(sym, "сделок нет"); continue
     R = np.array([x["net"] / x["risk"] for x in tr]); G = np.array([x["gross"] / x["risk"] for x in tr])
