@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-18T18:29:31Z",
+  "timestamp": "2026-10-18T18:34:10Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-10-18T16:45:00.000Z",
   "target_id": 2,
@@ -23,26 +23,8 @@
     "has_precip": false,
     "has_lightning": false
   },
-  "local_candidates": [
-    {
-      "target_id": 2,
-      "area_km2": 58.7,
-      "distance_km": 184.7,
-      "bearing_deg": 92.0,
-      "compass": "В",
-      "elongation_aspect_ratio": 1.59,
-      "elongation_axis_deg": 22.0,
-      "elongation_axis_compass": "С-Ю",
-      "frontlike": false,
-      "phase_label": null,
-      "type_label": null,
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": false,
-      "geocolour_confirmed": true
-    }
-  ],
-  "local_suppressed_count": 0,
+  "local_candidates": [],
+  "local_suppressed_count": 1,
   "system_candidates": [],
   "system_suppressed_count": 2,
   "frontal_tracks": [],
@@ -57,17 +39,17 @@
         "timestamp": "2026-10-18T17:50:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": true,
-        "timestamp": "2026-10-18T17:50:00.000Z"
+        "confirmed": false,
+        "timestamp": "2026-10-18T18:10:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": false,
         "timestamp": "2026-10-18T16:52:35Z"
       }
     },
-    "votes_confirmed": 1,
-    "votes_not_confirmed": 2,
-    "consensus": "disputed"
+    "votes_confirmed": 0,
+    "votes_not_confirmed": 3,
+    "consensus": "not_confirmed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -79,5 +61,5 @@
       "timestamp": "2026-10-18T17:42:26Z"
     }
   },
-  "verdict": "Цель в 185км В, безоблачно — каналы расходятся: geocolour_motion подтверждают, ir_motion/cloud_phase_type нет. Отдельно: система синоптического масштаба (204860км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора)."
+  "verdict": "CLM отметил цель в 185км В, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (204860км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора)."
 }
