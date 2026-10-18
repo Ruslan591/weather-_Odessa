@@ -11,8 +11,8 @@ from classic_pos_html import HTML as POS_HTML
 PORT = 18093
 PORT2 = 8091  # панель позиций: на ноутбуке/телефоне проброс 18091 -> 8091
 BASES = ["https://api.binance.com", "https://data-api.binance.vision"]
-TTL = {"1m": 5, "5m": 10, "15m": 15, "30m": 20, "1h": 30, "4h": 60, "1d": 120}
-ALLTF = ["5m", "15m", "1h", "4h", "1d"]
+TTL = {"1m": 5, "3m": 8, "5m": 10, "15m": 15, "30m": 20, "1h": 30, "2h": 40, "4h": 60, "6h": 80, "8h": 90, "12h": 100, "1d": 120}
+ALLTF = ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d"]
 MTF = ["1d", "4h", "1h", "15m", "5m"]
 HERE = os.path.dirname(os.path.abspath(__file__))
 PAIRS_FILE = os.path.join(HERE, "pairs.json")
@@ -213,7 +213,7 @@ async def pos_index(req):
 CONFIG_FILE = os.path.join(HERE, "config.json")
 RUNS_FILE = os.path.join(HERE, "runs.json")
 SPEC = {
-    "tf": ("sel", ["5m", "15m", "1h", "4h"]),
+    "tf": ("sel", ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d"]),
     "entry_mode": ("sel", ["stages", "pattern20", "cross200", "close20", "state20"]),
     "arm_k": ("num", 1, 200),
     "pat_filter": ("sel", ["none", "level", "volume", "extreme", "stretch", "level+volume", "extreme+volume", "sweep", "sweep16", "sweep+volume"]),
@@ -453,7 +453,7 @@ ul{margin:4px 0 0;padding-left:18px}
 <div id=legend>Паттерны: Мол=молот · ПЗ=падающая звезда · П↑/П↓=поглощение · УЗ/ВЗ=утренняя/вечерняя звезда · Д=доджи. Треугольники — подтверждённые pivot (с задержкой 5 свечей). Пунктирная справа — формирующаяся свеча (в анализе не участвует).</div>
 <div class=card id=cTrend></div><div class=card id=cMtf></div><div class=card id=cLv></div><div class=card id=cPat></div><div class=card id=cLab style="display:none"></div>
 <script>
-const TFS=['5m','15m','1h','4h','1d'];
+const TFS=['1m','3m','5m','15m','30m','1h','2h','4h','6h','8h','12h','1d'];
 const OPTN={ema:'EMA',bb:'Bollinger',lv:'Уровни',pv:'Pivot',pt:'Паттерны',vol:'Объём',rsi:'RSI',macd:'MACD'};
 const S={sym:localStorage.csym||'BTCUSDT',tf:localStorage.ctf||'15m',n:120,off:0,hover:-1,D:null,pairs:[],lab:{on:0,items:[]},
  opt:Object.assign({ema:1,bb:0,lv:1,pv:1,pt:1,vol:1,rsi:1,macd:0},JSON.parse(localStorage.copt||'{}'))};
