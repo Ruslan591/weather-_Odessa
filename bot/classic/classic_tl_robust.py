@@ -8,7 +8,7 @@ import classic_strategy as cs
 TF = sys.argv[1]; STEP = {"1h": 3600000, "4h": 14400000}[TF]; now = int(time.time() * 1000)
 _o = cs.prepare; _c = {}
 def _p(df, n_):
-    k = (len(df), int(df.t.iloc[0]), int(df.t.iloc[-1]))
+    k = (len(df), int(df.t.iloc[0]), int(df.t.iloc[-1]), round(float(df.c.iloc[0]), 8), round(float(df.c.iloc[-2]), 8), round(float(df.v.iloc[len(df) // 2]), 6))  # ключ различает монеты
     if k not in _c: _c[k] = _o(df, n_)
     return _c[k]
 cs.prepare = _p
