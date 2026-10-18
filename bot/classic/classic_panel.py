@@ -5,6 +5,7 @@ import aiohttp
 from aiohttp import web
 import pandas as pd
 import classic_analysis as an
+import classic_trendline as tl
 import classic_strategy as cs
 from classic_pos_html import HTML as POS_HTML
 
@@ -203,6 +204,12 @@ async def api_chart(req):
         df = await get_df(sym, tf)
         closed, live = split_closed(df)
         res = an.analyze(closed)
+        try:  # линии тренда для графика (индексы в окне последних 500 свечей, как у остальных рядов)
+            ind_ = an.indicators(closed)
+            res["tl"] = tl.chart_info(closed.o.values, closed.h.values, closed.l.values, closed.c.values, ind_["atr"].values, an.find_pivots(closed),
+                                      len(closed), shift=max(0, len(closed) - 500))
+        except Exception as e_:
+            res["tl"] = {"lines": {}, "struct": None, "label": "ошибка линий: " + str(e_)[:80], "sigs": []}
         res["live"] = None if live is None else {k: float(live[k]) for k in "ohlcv"} | {"t": int(live.t)}
         res["sym"], res["tf"] = sym, tf
         return web.json_response(res)
@@ -316,7 +323,7 @@ SPEC = {
 }
 DEFAULT_CFG = {k: cs.PANEL[k] for k in SPEC}
 DEFAULT_CFG["stages"] = cs.PANEL["stages"]
-STAGE_TYPES = ["", "pattern", "cross200", "cross20", "close_ema20", "break_trigger", "ema20_slope", "rsi_level", "macd_turn", "volume", "strong_body", "break_swing", "pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sign", "ema50_slope", "ema50_trend", "ema50_pullback", "stochrsi_cross"]
+STAGE_TYPES = ["", "pattern", "cross200", "cross20", "tl_bounce", "tl_breakout", "close_ema20", "break_trigger", "ema20_slope", "rsi_level", "macd_turn", "volume", "strong_body", "break_swing", "pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sign", "ema50_slope", "ema50_trend", "ema50_pullback", "stochrsi_cross"]
 
 
 def clean_stages(v):
@@ -595,9 +602,9 @@ ul{margin:4px 0 0;padding-left:18px}
 <div class=card id=cTrend></div><div class=card id=cMtf></div><div class=card id=cLv></div><div class=card id=cPat></div><div class=card id=cLab style="display:none"></div>
 <script>
 const TFS=['1m','3m','5m','15m','30m','1h','2h','4h','6h','8h','12h','1d'];
-const OPTN={ema:'EMA',bb:'Bollinger',lv:'Уровни',pv:'Pivot',pt:'Паттерны',vol:'Объём',rsi:'RSI',macd:'MACD'};
+const OPTN={ema:'EMA',bb:'Bollinger',lv:'Уровни',pv:'Pivot',pt:'Паттерны',tl:'Линии тренда',vol:'Объём',rsi:'RSI',macd:'MACD'};
 const S={sym:localStorage.csym||'BTCUSDT',tf:localStorage.ctf||'15m',n:120,off:0,hover:-1,D:null,pairs:[],lab:{on:0,items:[]},
- opt:Object.assign({ema:1,bb:0,lv:1,pv:1,pt:1,vol:1,rsi:1,macd:0},JSON.parse(localStorage.copt||'{}'))};
+ opt:Object.assign({ema:1,bb:0,lv:1,pv:1,pt:1,tl:1,vol:1,rsi:1,macd:0},JSON.parse(localStorage.copt||'{}'))};
 const G={start:0,end:0,bw:5,L:4};
 const $=id=>document.getElementById(id);
 const cl=(x,a,b)=>Math.max(a,Math.min(b,x));
@@ -706,6 +713,14 @@ function draw(){
  if(S.opt.pv)D.pivots.forEach(p=>{if(p.i<start||p.i>=end)return;const x=X(p.i);g.fillStyle=p.k==='H'?'#f0883e':'#79c0ff';g.beginPath();
   if(p.k==='H'){const yy=py(D.h[p.i])-5;g.moveTo(x-3.5,yy-5);g.lineTo(x+3.5,yy-5);g.lineTo(x,yy)}else{const yy=py(D.l[p.i])+5;g.moveTo(x-3.5,yy+5);g.lineTo(x+3.5,yy+5);g.lineTo(x,yy)}g.fill()});
  // patterns
+ // линии тренда: поддержка (зелёная), сопротивление (красная), пунктир — линия уже пробита; ⬆/⬇ — сигналы бота (отбой / пробой)
+ if(S.opt.tl&&D.tl){const TL=D.tl;g.save();g.beginPath();g.rect(L,m.y0,plotW,m.y1-m.y0);g.clip();
+  [['S','#3fb950'],['R','#f85149']].forEach(([k,col])=>{const ln=TL.lines[k];if(!ln)return;const a=Math.max(start,ln.i1),b=end-1+(S.off===0?2:0);if(b<a)return;
+   g.strokeStyle=col;g.lineWidth=1.8;g.setLineDash(ln.broken?[6,4]:[]);g.beginPath();g.moveTo(X(a),py(ln.p1+ln.s*(a-ln.i1)));g.lineTo(X(b),py(ln.p1+ln.s*(b-ln.i1)));g.stroke();g.setLineDash([]);g.lineWidth=1;
+   g.fillStyle=col;[[ln.i1,ln.p1],[ln.i2,ln.p2]].forEach(([ii,pp])=>{if(ii<start||ii>=end)return;g.beginPath();g.arc(X(ii),py(pp),3.2,0,6.3);g.fill()})});
+  g.font='bold 11px system-ui';g.textAlign='center';TL.sigs.forEach(s=>{if(s.i<start||s.i>=end)return;const x=X(s.i),t=(s.kind==='b'?'отбой':'пробой');
+   if(s.side==='L'){g.fillStyle='#00e676';g.fillText('⬆'+t,x,py(D.l[s.i])+(S.opt.pv?52:42))}else{g.fillStyle='#ff1744';g.fillText('⬇'+t,x,py(D.h[s.i])-(S.opt.pv?52:42))}});
+  g.restore();g.font='11px system-ui';g.textAlign='left';g.fillStyle='#c9d1d9';g.fillText('Линии тренда: '+TL.label,L+6,m.y0+12);g.font='10px system-ui'}
  if(S.opt.pt){g.textAlign='center';g.font='bold 9px system-ui';D.patterns.forEach(p=>{if(p.i<start||p.i>=end)return;const x=X(p.i);
   const col=p.d>0?'#3fb950':p.d<0?'#f85149':'#8b949e';g.fillStyle=col;
   if(p.d>0)g.fillText('▲'+p.c,x,py(D.l[p.i])+(S.opt.pv?24:14));else g.fillText(p.c+(p.d<0?'▼':''),x,py(D.h[p.i])-(S.opt.pv?24:14))});g.font='10px system-ui'}
