@@ -36,7 +36,7 @@ TRIGGERS = ("pattern", "cross200", "cross20")
 CONFIRMS = ("close_ema20", "break_trigger", "ema20_slope", "rsi_level", "macd_turn", "volume", "strong_body", "break_swing",
             "pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sign", "ema50_slope", "ema50_trend", "ema50_pullback", "stochrsi_cross")
 STATE_STAGES = ("pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sign", "ema50_slope", "ema50_trend", "ema50_pullback", "stochrsi_cross")
-TF_MIN = {"1m": 1, "3m": 3, "5m": 5, "15m": 15, "30m": 30, "1h": 60, "4h": 240}
+TF_MIN = {"1m": 1, "3m": 3, "5m": 5, "15m": 15, "30m": 30, "1h": 60, "2h": 120, "4h": 240, "6h": 360, "8h": 480, "12h": 720, "1d": 1440}
 
 
 def stage_signals(pre, P, warmup=None):
