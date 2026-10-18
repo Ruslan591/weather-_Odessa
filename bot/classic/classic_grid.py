@@ -123,5 +123,27 @@ if __name__ == "__main__":
         top = sel[:20]
         print("\nТОП-20: среднее LAST на сделку %+.2f%% (все отобранные: %+.2f%%); доля с LAST>0: %.0f%%" % (np.mean([r["L"].mean() for r in top if len(r["L"])]),
               np.mean([r["L"].mean() for r in sel if len(r["L"])]), 100 * np.mean([r["L"].sum() > 0 for r in top])))
+    # --- предсказательная сила: подбор только на A, проверка на B и LAST
+    okA = [r for r in ok if len(r["A"]) >= 15 and len(r["B"]) >= 10]
+    xa = np.array([r["A"].mean() for r in okA]); yb = np.array([r["B"].mean() for r in okA]); yl = np.array([r["L"].mean() if len(r["L"]) else 0 for r in okA])
+    rk = lambda v: pd.Series(v).rank().values
+    print("\n== ПРЕДСКАЗАТЕЛЬНАЯ СИЛА ПОДБОРА (подбор только на A)")
+    print("корреляция рангов A↔B: %.2f; A↔LAST: %.2f (по %d конфигурациям)" % (np.corrcoef(rk(xa), rk(yb))[0, 1], np.corrcoef(rk(xa), rk(yl))[0, 1], len(okA)))
+    topA = sorted(okA, key=lambda r: -st(r["A"]))[:20]
+    print("ТОП-20 по A (t подбора %.1f…%.1f): средний net на сделку A %+.2f → B %+.2f → LAST %+.2f; доля с B>0: %.0f%% (по всем конфигурациям B>0: %.0f%%)" % (
+        st(topA[0]["A"]), st(topA[-1]["A"]), np.mean([r["A"].mean() for r in topA]), np.mean([r["B"].mean() for r in topA]), np.mean([r["L"].mean() for r in topA if len(r["L"])]),
+        100 * np.mean([r["B"].sum() > 0 for r in topA]), 100 * np.mean([r["B"].sum() > 0 for r in okA])))
+    print("медиана среднего net на сделку по всем конфигурациям: A %+.2f, B %+.2f, LAST %+.2f" % (np.median(xa), np.median(yb), np.median(yl)))
+    # --- по календарным годам
+    def yearly(R, name):
+        by = {}
+        for s in R:
+            for tt, n in R[s]:
+                y = datetime.datetime.fromtimestamp(tt / 1000, datetime.UTC).year; by.setdefault(y, []).append(n)
+        print("%-58s" % name + " ".join("%d: %3d/%+6.1f" % (y, len(by[y]), sum(by[y])) for y in sorted(by)))
+    print("\n== ПО КАЛЕНДАРНЫМ ГОДАМ (пул ZEC+NEAR; сделок / сумма net %)")
+    yearly(NOF, "база: только паттерн"); yearly(HIS, "текущие правила пользователя (macd_sign + stoch_dir)")
+    for pf, cset in (("none", ("ema20_slope", "stochrsi_cross")), ("sweep", ("ema20_slope", "stochrsi_cross")), ("level+volume", ("rsi_level", "ema50_slope")), ("none", ("ema50_slope",)), ("none", ("ema50_trend",)), ("none", ("stochrsi_cross",))):
+        yearly(res[CONFIGS.index((pf, cset))], desc(pf, cset)[:58])
     print("\nВремя расчёта: %.0f с" % (time.time() - t0))
     print("ГОТОВО", flush=True)
