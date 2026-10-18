@@ -35,7 +35,7 @@ def load(sym):
 def ms(s): return int(datetime.datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=datetime.timezone.utc).timestamp() * 1000)
 T_A, T_LAST = ms("2023-07-01"), ms("2025-10-01")
 BASE = dict(tf="4h", entry_mode="stages", entry_trigger="open", tp_r=0.0, max_bars=0, rev_exit=True, stop_mode="prev", min_stop_pct=3.0, min_stop_atr=3.0,
-            be_trigger=1.8, be_lock=1.1, trail_mode="none", trail_dist=0.7, pat_mode="trail", pat_min=2.0, fee=0.05, pat_filter="none")
+            be_trigger=1.8, be_lock=1.1, trail_mode="none", trail_dist=0.7, pat_mode="trail", pat_min=2.0, fee=0.05)
 DATA = {}
 for sym in ("ZECUSDT", "NEARUSDT"):
     df = load(sym); DATA[sym] = (df, int(df.t.iloc[0]) + 450 * STEP)
