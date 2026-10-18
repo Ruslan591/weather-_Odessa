@@ -81,9 +81,12 @@ const FIELDS=[
  {sec:'Свечные паттерны разворота'},
  {k:'pat_mode',l:'Что делает паттерн (против позиции)',t:'sel',o:[['off','ничего'],['trail','включает трейлинг под минимумом/максимумом предыдущей свечи (не хуже безубытка)'],['exit','закрывает позицию, если плюс не меньше порога']]},
  {k:'pat_min',l:'Порог плюса для закрытия по паттерну, %',t:'num'},
+ {sec:'Период выборки (даты по UTC)'},
+ {k:'period_from',l:'С даты (пусто — по часам ниже)',t:'date'},
+ {k:'period_to',l:'По дату включительно (пусто — до сейчас)',t:'date'},
  {sec:'Издержки и показ'},
  {k:'fee',l:'Комиссия за сторону, %',t:'num'},
- {k:'window_h',l:'Показывать сделки за последние, часов',t:'num'},
+ {k:'window_h',l:'Показывать сделки за последние, часов (если период задан — не используется, кроме «по» без «с»: тогда это длина периода)',t:'num'},
 ];
 const ST_OPT=[['','— пусто, уровень пропускается —'],['pattern','ТРИГГЕР: свечной паттерн разворота'],['cross200','ТРИГГЕР: пересечение EMA20 × EMA200'],['cross20','ТРИГГЕР: цена закрылась по другую сторону EMA20'],['close_ema20','закрытие свечи за EMA20 (выше — лонг, ниже — шорт)'],['break_trigger','закрытие за экстремумом свечи-триггера'],['ema20_slope','EMA20 развернулась (P — за сколько свечей, по умолч. 3)'],['rsi_level','RSI вернулся выше P (лонг) / ниже 100−P (шорт), по умолч. 45'],['macd_turn','гистограмма MACD растёт 2 свечи подряд (лонг) / падает (шорт)'],['volume','объём свечи ≥ P × среднего за 20 (по умолч. 1.2)'],['strong_body','тело свечи ≥ P ATR в сторону входа (по умолч. 0.8)'],['break_swing','закрытие за последним pivot-экстремумом (слом структуры)'],['pullback_ema20','возврат к EMA20: цена в пределах P ATR от неё (по умолч. 0.9)'],['rsi_band','RSI в нейтральной зоне 49±P (по умолч. 9, т.е. 40–58)'],['ext_dist','расстояние от экстремума 12 ч в сторону сделки от P до P+2.1 ATR (по умолч. 2.4–4.5)'],['stoch_dir','Stochastic(14) в сторону сделки: лонг выше P, шорт ниже 100−P (по умолч. 50)'],['macd_sign','гистограмма MACD по знаку сделки и растёт'],['ema50_slope','EMA50 наклонена в сторону сделки (P — за сколько свечей, по умолч. 5)'],['ema50_trend','тренд: цена по сторону EMA50 и EMA50 не направлена против сделки (5 св.)'],['ema50_pullback','откат: за 6 св. цена подходила к EMA50 ближе P ATR (по умолч. 0.8)'],['stochrsi_cross','Stoch RSI (3,3,14,14): K пересекла D в зоне <P / >100−P за 3 св. (по умолч. 20)']];
 const PF_OPT=[['none','все паттерны'],['level','только у уровня'],['volume','только с объёмом'],['extreme','только на новом экстремуме'],['stretch','только после растяжения от EMA20'],['level+volume','у уровня и с объёмом'],['extreme+volume','на экстремуме и с объёмом'],['sweep','со съёмом экстремума 12 ч'],['sweep16','со съёмом экстремума 4 ч'],['sweep+volume','со съёмом 12 ч и объёмом']];
@@ -99,6 +102,7 @@ function buildForm(){
   h+='<div class=f><label for=f_'+f.k+'>'+f.l+'</label>';
   if(f.t==='sel')h+='<select id=f_'+f.k+'>'+f.o.map(o=>'<option value="'+o[0]+'">'+o[1]+'</option>').join('')+'</select>';
   else if(f.t==='chk')h+='<input type=checkbox id=f_'+f.k+' style="width:22px;height:22px">';
+  else if(f.t==='date')h+='<input id=f_'+f.k+' type=date>';
   else h+='<input id=f_'+f.k+' type=number step=any inputmode=decimal>';
   h+='</div>'});
  $('cfgForm').innerHTML=h;
@@ -114,11 +118,11 @@ async function load(){
 }
 function renderHist(){
  const D=S.D,c=D.cfg,T=D.trades,n=T.length,N=D.notional;
- $('ttl').textContent='Позиции · '+D.sym+' · '+c.tf+' · за '+(c.window_h>=48?(c.window_h/24)+' сут':c.window_h+' ч');
+ const dts=ms=>new Date(ms).toISOString().slice(0,10);$('ttl').textContent='Позиции · '+D.sym+' · '+c.tf+' · '+(D.period?'период '+dts(D.period.from_ms)+' — '+dts(D.period.to_ms)+(D.period.data_from_ms>D.period.from_ms?' (данные только с '+dts(D.period.data_from_ms)+')':''):'за '+(c.window_h>=48?(c.window_h/24)+' сут':c.window_h+' ч'));
  $('rules').textContent=describe(c);
  const w=T.filter(x=>x.net>0).length,s=T.reduce((a,x)=>a+x.net,0),sp=s*N/100,gs=T.reduce((a,x)=>a+x.gross,0);
  const best=n?Math.max(...T.map(x=>x.net)):0,worst=n?Math.min(...T.map(x=>x.net)):0,be=T.filter(x=>x.be).length,op=T.filter(x=>x.open).length;
- $('sum').innerHTML=[['Сделок',n],['Прибыльных',n?w+' ('+Math.round(w/n*100)+'%)':'—'],['Сумма Net %','<span class="'+cls(s)+'" style="display:inline;font-size:16px">'+sg(s)+'%</span>'],['Net, USDT (на '+N+')','<span class="'+cls(sp)+'" style="display:inline;font-size:16px">'+sg(sp)+'</span>'],['До комиссий %',sg(gs)+'%'],['Дошли до БУ',be+' из '+n],['Лучшая / худшая',sg(best)+' / '+sg(worst)],['Открытых',op]].map(x=>'<div><span>'+x[0]+'</span><b>'+x[1]+'</b></div>').join('');
+ $('sum').innerHTML=[['Сделок',n],['Прибыльных',n?w+' ('+Math.round(w/n*100)+'%)':'—'],['Сумма Net %','<span class="'+cls(s)+'" style="display:inline;font-size:16px">'+sg(s)+'%</span>'],['Net, USDT (на '+N+')','<span class="'+cls(sp)+'" style="display:inline;font-size:16px">'+sg(sp)+'</span>'],['До комиссий %',sg(gs)+'%'],['Дошли до БУ',be+' из '+n],['Лучшая / худшая',sg(best)+' / '+sg(worst)],['Открытых',op]].concat(D.period?(()=>{const sp0=D.period.from_ms+0.6*(D.period.to_ms-D.period.from_ms),A=T.filter(x=>x.t_in<sp0),B=T.filter(x=>x.t_in>=sp0),sa=A.reduce((a,x)=>a+x.net,0),sb=B.reduce((a,x)=>a+x.net,0);return [['Подбор (первые 60%): сделок / Net %',A.length+' / '+sg(sa)+'%'],['Проверка (последние 40%): сделок / Net %',B.length+' / '+sg(sb)+'%']]})():[]).map(x=>'<div><span>'+x[0]+'</span><b>'+x[1]+'</b></div>').join('');
  let h='<table><tr><th>Сторона</th><th>Вход</th><th>Цена</th><th>Стоп0</th><th>Риск%</th><th>Выход</th><th>Цена</th><th>Причина</th><th>Net%</th><th>MFE</th><th>MAE</th></tr>';
  T.slice().sort((a,b)=>b.t_in-a.t_in).forEach(x=>{h+='<tr><td class="'+(x.side==='L'?'up':'dn')+'">'+(x.side==='L'?'ЛОНГ':'ШОРТ')+'</td><td>'+ft(x.t_in)+'</td><td>'+fmt(x.p_in)+'</td><td>'+fmt(x.stop0)+'</td><td>'+x.risk.toFixed(2)+'</td><td>'+(x.open?'—':ft(x.t_out))+'</td><td>'+(x.open?fmt(x.p_out)+' (тек.)':fmt(x.p_out))+'</td><td>'+x.reason+(x.be&&x.reason!=='безубыток'?' ✓БУ':'')+'</td><td class="'+cls(x.net)+'"><b>'+sg(x.net)+'</b></td><td>'+x.mfe.toFixed(2)+'</td><td>'+x.mae.toFixed(2)+'</td></tr>'});
  $('tbl').innerHTML=n?h+'</table>':'За выбранный период сигналов не было';
