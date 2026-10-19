@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-10-19T10:12:38Z",
+  "timestamp": "2026-10-19T10:17:45Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-10-19T09:30:00.000Z",
-  "target_id": 0,
-  "target_area_km2": 65.4,
-  "target_distance_km": 85.3,
-  "target_bearing_deg": 194.0,
-  "target_compass": "Ю",
+  "target_id": 1,
+  "target_area_km2": 81.4,
+  "target_distance_km": 148.5,
+  "target_bearing_deg": 229.0,
+  "target_compass": "ЮЗ",
   "system": null,
   "local_candidates": [
     {
@@ -56,7 +56,7 @@
       "phase_label": "безоблачно",
       "type_label": "плотная/высокая",
       "has_precip": null,
-      "has_lightning": null,
+      "has_lightning": false,
       "ir_confirmed": false,
       "geocolour_confirmed": true
     },
@@ -90,7 +90,7 @@
       "phase_label": "безоблачно",
       "type_label": "плотная/высокая",
       "has_precip": null,
-      "has_lightning": null,
+      "has_lightning": false,
       "ir_confirmed": false,
       "geocolour_confirmed": true
     }
@@ -99,12 +99,9 @@
   "system_candidates": [],
   "system_suppressed_count": 0,
   "frontal_tracks": [],
-  "target_movement": {
-    "speed_kmh": 0.1,
-    "direction_compass": "С",
-    "cpa_km": 9.1,
-    "eta_min": null,
-    "verdict": "почти стоит на месте"
+  "also_suppressed_nearby": {
+    "signature": "-20_-85",
+    "area_km2": 65.4
   },
   "target_phase": {
     "label": "безоблачно",
@@ -117,7 +114,7 @@
         "timestamp": "2026-10-19T09:40:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": false,
+        "confirmed": true,
         "timestamp": "2026-10-19T09:40:00.000Z"
       },
       "cloud_phase_type": {
@@ -125,9 +122,9 @@
         "timestamp": "2026-10-19T10:12:17Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -136,8 +133,8 @@
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-10-19T10:07:30Z"
+      "timestamp": "2026-10-19T10:17:35Z"
     }
   },
-  "verdict": "CLM отметил цель в 85км Ю, но остальные каналы облачность там не видят — вероятно, ложное срабатывание."
+  "verdict": "Цель в 148км ЮЗ, безоблачно — каналы расходятся: geocolour_motion подтверждают, ir_motion/cloud_phase_type нет."
 }
