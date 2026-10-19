@@ -11,6 +11,7 @@
 Конструктор правил (все параметры задаются в config, см. DEFAULT_CFG / PANEL):
   entry_mode: stages (уровни фильтра входа: триггер → подтверждения по очереди, пустой уровень пропускается; см. stage_signals) | pattern20 (паттерн разворота «взводит» вход, вход по первому закрытию за EMA20 в пределах arm_k свечей) | cross200 (пересечение EMA20 и EMA200) | close20 (первое закрытие свечи за EMA20 после пересечения) | state20 (любое закрытие за EMA20, когда позиции нет)
   Триггеры по линиям тренда: tl_bounce (отбой от границы канала/флэта, P — допуск касания в ATR, 0.3) | tl_breakout (пробой треугольника, P — запас за линией в ATR, 0.2); линии строятся по подтверждённым pivot (см. classic_trendline.py)
+  Триггеры по линиям, нарисованным пользователем: hand_bounce (отбой от границы канала/флэта) | hand_breakout (пробой границы); hand_forward — торговать только после момента рисования (иначе по всей истории — с подглядыванием). P: допуск касания/запас пробоя в ATR
   entry_trigger: open (по открытию следующей свечи) | breakout (по пробою экстремума сигнальной свечи, до bo_wait свечей; отмена: закрытие за EMA50 / пробит локальный экстремум); stop_mode sig3: за экстремумом 3 свечей сигнала −0.2 ATR, не ближе 0.5 ATR; tp_r: цель в R (0 — нет); max_bars: выход по времени через столько свечей (0 — нет)
   Подтверждения правил EMA50+StochRSI: ema50_trend | ema50_pullback (P ATR) | stochrsi_cross (зона P, умолч. 20) — считаются на одной свече, в т.ч. на сигнальной
   rev_exit: обратный сигнал входа закрывает позицию (разворот)
@@ -25,17 +26,18 @@ import numpy as np
 import pandas as pd
 import classic_analysis as an
 import classic_trendline as tl
+import classic_hand as hand
 
 PARAMS = dict(tf="15m", be_trigger=1.5, fee=0.05, window_h=240, notional=100.0, warmup=200,
               stop_mode="prev", min_stop_pct=1.5, min_stop_atr=0.0, trail_mode="none", trail_dist=0.0, be_atr=0.0, be_lock=0.3,
-              entry_mode="cross200", rev_exit=True, pat_mode="off", arm_k=12, pat_filter="none", entry_trigger="open", bo_wait=3, tp_r=0.0, max_bars=0, period_from="", period_to="",
+              entry_mode="cross200", rev_exit=True, pat_mode="off", arm_k=12, pat_filter="none", entry_trigger="open", bo_wait=3, tp_r=0.0, max_bars=0, period_from="", period_to="", sym="", hand_forward=True,
               stake_mode="fixed", stake_base=100.0, stake_min=6.0, martingale="off", mart_pct=50.0, mart_max=0,
               stages=[{"t": "pattern", "p": 0, "w": 0, "f": "none"}, {"t": "close_ema20", "p": 0, "w": 12, "f": "none"}])
 
 PANEL = dict(PARAMS, be_trigger=1.5, be_lock=0.4, entry_mode="cross200", rev_exit=True, pat_mode="off", pat_min=0.0)  # «рекомендованные» правила конструктора (лучшие по проверке на ZEC 15m; пользователь может менять)
 
 
-TRIGGERS = ("pattern", "cross200", "cross20", "tl_bounce", "tl_breakout")
+TRIGGERS = ("pattern", "cross200", "cross20", "tl_bounce", "tl_breakout", "hand_bounce", "hand_breakout")
 CONFIRMS = ("close_ema20", "break_trigger", "ema20_slope", "rsi_level", "macd_turn", "volume", "strong_body", "break_swing",
             "pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sign", "ema50_slope", "ema50_trend", "ema50_pullback", "stochrsi_cross")
 STATE_STAGES = ("pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sign", "ema50_slope", "ema50_trend", "ema50_pullback", "stochrsi_cross")
@@ -67,9 +69,15 @@ def stage_signals(pre, P, warmup=None):
     elif trig["t"] in ("tl_bounce", "tl_breakout"):  # линии тренда: отбой в канале/флэте или пробой треугольника
         tlp = float(trig.get("p") or 0)
         cache = pre.setdefault("_tl", {})
-        if (trig["t"], tlp) not in cache:
-            cache[(trig["t"], tlp)] = tl.tl_signals(o, h, l, c, atr, pre["piv"], M, trig["t"], tlp)
-        tlsig = cache[(trig["t"], tlp)]
+        key_ = (trig["t"], tlp, tl.cfg_key())
+        if key_ not in cache:
+            pv_ = None  # опорные точки и pivot модуль считает сам по текущим (в т.ч. обученным по рисункам пользователя) параметрам
+            cache[key_] = tl.tl_signals(o, h, l, c, atr, pv_, M, trig["t"], tlp)
+        tlsig = cache[key_]
+    elif trig["t"] in ("hand_bounce", "hand_breakout"):  # линии, нарисованные пользователем (hand.json)
+        hp = float(trig.get("p") or 0)
+        structs_ = hand.for_sym(P.get("sym")) if P.get("sym") else []
+        tlsig = hand.hand_signals(o, h, l, c, atr, pre["t"], M, structs_, trig["t"], hp, bool(P.get("hand_forward", True)))
     conf = []
     for st_ in stages[1:]:  # подряд идущие «состояния» объединяются в одно подтверждение: все условия на одной свече
         if st_["t"] in STATE_STAGES:
@@ -158,7 +166,7 @@ def stage_signals(pre, P, warmup=None):
         elif trig["t"] == "cross200":
             pr, cu = e20[i - 1] - e200[i - 1], e20[i] - e200[i]
             ns = "L" if pr <= 0 < cu else "S" if pr >= 0 > cu else None
-        elif trig["t"] in ("tl_bounce", "tl_breakout"):
+        elif trig["t"] in ("tl_bounce", "tl_breakout", "hand_bounce", "hand_breakout"):
             ns = tlsig.get(i)
         else:
             pr, cu = c[i - 1] - e20[i - 1], c[i] - e20[i]
