@@ -1,25 +1,20 @@
 {
-  "timestamp": "2026-10-19T22:52:20Z",
-  "status": "suppressed_known_false_positive",
-  "cloud_forecast_timestamp": "2026-10-19T21:45:00.000Z",
-  "suppressed_target": {
-    "signature": "10_-25",
-    "area_km2": 153.4,
-    "distance_km": 28.6,
-    "bearing_deg": 161.0,
-    "compass": "Ю",
-    "not_confirmed_streak": 6,
-    "total_not_confirmed": 6,
-    "excluded_since": "2026-10-19T22:37:29Z"
-  },
+  "timestamp": "2026-10-19T22:57:29Z",
+  "status": "ok",
+  "cloud_forecast_timestamp": "2026-10-19T22:15:00.000Z",
+  "target_id": 1,
+  "target_area_km2": 130.8,
+  "target_distance_km": 135.8,
+  "target_bearing_deg": 114.0,
+  "target_compass": "ЮВ",
   "system": {
     "target_id": 0,
-    "area_km2": 202743.8,
-    "distance_km": 0.8,
-    "bearing_deg": 326.0,
-    "compass": "СЗ",
-    "elongation_aspect_ratio": 1.46,
-    "elongation_axis_deg": 179.0,
+    "area_km2": 201577.6,
+    "distance_km": 6.3,
+    "bearing_deg": 356.0,
+    "compass": "С",
+    "elongation_aspect_ratio": 1.47,
+    "elongation_axis_deg": 177.0,
     "elongation_axis_compass": "Ю-С",
     "frontlike": false,
     "window_spanning": true,
@@ -27,17 +22,35 @@
     "cloud_fraction": 0.0,
     "has_lightning": false
   },
-  "local_candidates": [],
+  "local_candidates": [
+    {
+      "target_id": 2,
+      "area_km2": 100.1,
+      "distance_km": 271.7,
+      "bearing_deg": 215.0,
+      "compass": "ЮЗ",
+      "elongation_aspect_ratio": 1.91,
+      "elongation_axis_deg": 26.0,
+      "elongation_axis_compass": "СВ-ЮЗ",
+      "frontlike": false,
+      "phase_label": null,
+      "type_label": null,
+      "has_precip": false,
+      "has_lightning": false,
+      "ir_confirmed": false,
+      "geocolour_confirmed": true
+    }
+  ],
   "local_suppressed_count": 1,
   "system_candidates": [
     {
       "target_id": 0,
-      "area_km2": 202743.8,
-      "distance_km": 0.8,
-      "bearing_deg": 326.0,
-      "compass": "СЗ",
-      "elongation_aspect_ratio": 1.46,
-      "elongation_axis_deg": 179.0,
+      "area_km2": 201577.6,
+      "distance_km": 6.3,
+      "bearing_deg": 356.0,
+      "compass": "С",
+      "elongation_aspect_ratio": 1.47,
+      "elongation_axis_deg": 177.0,
       "elongation_axis_compass": "Ю-С",
       "frontlike": false,
       "window_spanning": true,
@@ -50,6 +63,35 @@
     }
   ],
   "system_suppressed_count": 0,
-  "verdict": "Известный шумовой объект в 29км Ю (~153км²) — подавлено (не подтверждался 6 раз подряд). Отдельно: система синоптического масштаба (202744км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора).",
-  "frontal_tracks": []
+  "frontal_tracks": [],
+  "existence": {
+    "modules": {
+      "ir_motion": {
+        "confirmed": false,
+        "timestamp": "2026-10-19T22:30:00.000Z"
+      },
+      "geocolour_motion": {
+        "confirmed": false,
+        "timestamp": "2026-10-19T22:30:00.000Z"
+      },
+      "cloud_phase_type": {
+        "confirmed": null,
+        "timestamp": "2026-10-19T16:57:24Z"
+      }
+    },
+    "votes_confirmed": 0,
+    "votes_not_confirmed": 2,
+    "consensus": "not_confirmed"
+  },
+  "phenomena": {
+    "precip_forecast": {
+      "confirmed": false,
+      "timestamp": "2026-10-19T12:42:30Z"
+    },
+    "lightning_forecast": {
+      "confirmed": false,
+      "timestamp": "2026-10-19T22:57:17Z"
+    }
+  },
+  "verdict": "CLM отметил цель в 136км ЮВ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (201578км²) в 6км С (площадь/форма ненадёжны — объект упирается в границы окна обзора)."
 }
