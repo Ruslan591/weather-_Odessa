@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-19T19:32:29Z",
+  "timestamp": "2026-10-19T19:37:26Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-10-19T18:15:00.000Z",
   "target_id": 1,
@@ -22,26 +22,8 @@
     "cloud_fraction": 0.0,
     "has_lightning": false
   },
-  "local_candidates": [
-    {
-      "target_id": 1,
-      "area_km2": 153.4,
-      "distance_km": 120.2,
-      "bearing_deg": 216.0,
-      "compass": "ЮЗ",
-      "elongation_aspect_ratio": 1.46,
-      "elongation_axis_deg": 163.0,
-      "elongation_axis_compass": "Ю-С",
-      "frontlike": false,
-      "phase_label": null,
-      "type_label": null,
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": false,
-      "geocolour_confirmed": true
-    }
-  ],
-  "local_suppressed_count": 1,
+  "local_candidates": [],
+  "local_suppressed_count": 2,
   "system_candidates": [
     {
       "target_id": 0,
@@ -71,17 +53,17 @@
         "timestamp": "2026-10-19T19:10:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": true,
-        "timestamp": "2026-10-19T19:00:00.000Z"
+        "confirmed": false,
+        "timestamp": "2026-10-19T19:10:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": null,
         "timestamp": "2026-10-19T16:57:24Z"
       }
     },
-    "votes_confirmed": 1,
-    "votes_not_confirmed": 1,
-    "consensus": "disputed"
+    "votes_confirmed": 0,
+    "votes_not_confirmed": 2,
+    "consensus": "not_confirmed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -90,8 +72,8 @@
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-10-19T19:27:30Z"
+      "timestamp": "2026-10-19T19:37:16Z"
     }
   },
-  "verdict": "Цель в 120км ЮЗ — каналы расходятся: geocolour_motion подтверждают, ir_motion нет. Отдельно: система синоптического масштаба (199384км²) в 1км СВ (площадь/форма ненадёжны — объект упирается в границы окна обзора)."
+  "verdict": "CLM отметил цель в 120км ЮЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (199384км²) в 1км СВ (площадь/форма ненадёжны — объект упирается в границы окна обзора)."
 }
