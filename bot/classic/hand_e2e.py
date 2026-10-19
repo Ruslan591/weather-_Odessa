@@ -2,7 +2,10 @@ import json, urllib.request, sys, warnings, time, os
 warnings.filterwarnings("ignore")
 sys.path.insert(0, "/opt/trading-bot/classic")
 import pandas as pd, numpy as np, classic_analysis as an, classic_trendline as tl, classic_hand as hd, classic_strategy as cs
-def post(u, o): return json.load(urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:18093" + u, json.dumps(o).encode(), {"Content-Type": "application/json"}), timeout=120))
+def post(u, o):
+    try: return json.load(urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:18093" + u, json.dumps(o).encode(), {"Content-Type": "application/json"}), timeout=120))
+    except urllib.error.HTTPError as e:
+        print("HTTP", e.code, "действие", o.get("action"), "->", e.read().decode()[:300]); raise SystemExit
 def get(u): return json.load(urllib.request.urlopen("http://127.0.0.1:18093" + u, timeout=120))
 d = json.load(urllib.request.urlopen("https://api.binance.com/api/v3/klines?symbol=ZECUSDT&interval=4h&limit=1000", timeout=20))
 df = pd.DataFrame(d).iloc[:, [0,1,2,3,4,5,6]]; df.columns = ["t","o","h","l","c","v","ct"]
