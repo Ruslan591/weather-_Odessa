@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-10-19T22:57:29Z",
+  "timestamp": "2026-10-19T23:02:42Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-10-19T22:15:00.000Z",
-  "target_id": 1,
-  "target_area_km2": 130.8,
-  "target_distance_km": 135.8,
-  "target_bearing_deg": 114.0,
-  "target_compass": "ЮВ",
+  "target_id": 2,
+  "target_area_km2": 100.1,
+  "target_distance_km": 271.7,
+  "target_bearing_deg": 215.0,
+  "target_compass": "ЮЗ",
   "system": {
     "target_id": 0,
     "area_km2": 201577.6,
@@ -64,24 +64,28 @@
   ],
   "system_suppressed_count": 0,
   "frontal_tracks": [],
+  "also_suppressed_nearby": {
+    "signature": "125_-55",
+    "area_km2": 130.8
+  },
   "existence": {
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-10-19T22:30:00.000Z"
+        "timestamp": "2026-10-19T22:40:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-10-19T22:30:00.000Z"
+        "confirmed": true,
+        "timestamp": "2026-10-19T22:40:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": null,
         "timestamp": "2026-10-19T16:57:24Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 2,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 1,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -90,8 +94,8 @@
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-10-19T22:57:17Z"
+      "timestamp": "2026-10-19T23:02:22Z"
     }
   },
-  "verdict": "CLM отметил цель в 136км ЮВ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (201578км²) в 6км С (площадь/форма ненадёжны — объект упирается в границы окна обзора)."
+  "verdict": "Цель в 272км ЮЗ — каналы расходятся: geocolour_motion подтверждают, ir_motion нет. Отдельно: система синоптического масштаба (201578км²) в 6км С (площадь/форма ненадёжны — объект упирается в границы окна обзора)."
 }
