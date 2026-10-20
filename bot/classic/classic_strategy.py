@@ -30,7 +30,7 @@ import classic_hand as hand
 
 PARAMS = dict(tf="15m", be_trigger=1.5, fee=0.05, window_h=240, notional=100.0, warmup=200,
               stop_mode="prev", min_stop_pct=1.5, min_stop_atr=0.0, trail_mode="none", trail_dist=0.0, be_atr=0.0, be_lock=0.3,
-              entry_mode="cross200", rev_exit=True, pat_mode="off", arm_k=12, pat_filter="none", entry_trigger="open", bo_wait=3, tp_r=0.0, max_bars=0, period_from="", period_to="", sym="", hand_forward=True,
+              entry_mode="cross200", rev_exit=True, pat_mode="off", arm_k=12, pat_filter="none", entry_trigger="open", bo_wait=3, tp_r=0.0, max_bars=0, tp_mode="r", ch_stop_pct=0.3, ch_stop_atr=0.0, ch_min_stop_pct=0.0, ch_tp_gap_pct=0.2, ch_tp_gap_atr=0.0, ch_min_rr=0.0, ch_follow=False, period_from="", period_to="", sym="", hand_forward=True,
               stake_mode="fixed", stake_base=100.0, stake_min=6.0, martingale="off", mart_pct=50.0, mart_max=0,
               stages=[{"t": "pattern", "p": 0, "w": 0, "f": "none"}, {"t": "close_ema20", "p": 0, "w": 12, "f": "none"}])
 
@@ -51,6 +51,7 @@ def stage_signals(pre, P, warmup=None):
     Паттерн-триггер отменяется, если цена закрылась за экстремумом свечи-паттерна против направления."""
     stages = [x for x in (P.get("stages") or []) if x and x.get("t")]
     out = {}
+    pre["_chan"] = {}  # линии канала на момент сигнала триггера: {свеча: (нижняя(j), верхняя(j))} — для стопа/цели по каналу
     if not stages or not pre.get("ok"):
         return out
     M = pre["M"]
@@ -64,6 +65,7 @@ def stage_signals(pre, P, warmup=None):
         return out
     bull = bear = set()
     tlsig = {}
+    chan = {}
     if trig["t"] == "pattern":
         bull, bear = pat_sets(pre, trig.get("f", "none"))
     elif trig["t"] in ("tl_bounce", "tl_breakout"):  # линии тренда: отбой в канале/флэте или пробой треугольника
@@ -72,12 +74,13 @@ def stage_signals(pre, P, warmup=None):
         key_ = (trig["t"], tlp, tl.cfg_key())
         if key_ not in cache:
             pv_ = None  # опорные точки и pivot модуль считает сам по текущим (в т.ч. обученным по рисункам пользователя) параметрам
-            cache[key_] = tl.tl_signals(o, h, l, c, atr, pv_, M, trig["t"], tlp)
-        tlsig = cache[key_]
+            inf_ = {}
+            cache[key_] = (tl.tl_signals(o, h, l, c, atr, pv_, M, trig["t"], tlp, info=inf_), inf_)
+        tlsig, chan = cache[key_]
     elif trig["t"] in ("hand_bounce", "hand_breakout"):  # линии, нарисованные пользователем (hand.json)
         hp = float(trig.get("p") or 0)
         structs_ = hand.for_sym(P.get("sym")) if P.get("sym") else []
-        tlsig = hand.hand_signals(o, h, l, c, atr, pre["t"], M, structs_, trig["t"], hp, bool(P.get("hand_forward", True)))
+        tlsig = hand.hand_signals(o, h, l, c, atr, pre["t"], M, structs_, trig["t"], hp, bool(P.get("hand_forward", True)), info=chan)
     conf = []
     for st_ in stages[1:]:  # подряд идущие «состояния» объединяются в одно подтверждение: все условия на одной свече
         if st_["t"] in STATE_STAGES:
@@ -187,6 +190,7 @@ def stage_signals(pre, P, warmup=None):
                     if k0 < len(conf): dead0 = i + gw(conf[k0])
                 if k0 >= len(conf): out[i] = (ns, i)
                 else: pend = (ns, i, k0, dead0)
+    pre["_chan"] = chan
     return out
 
 
@@ -297,6 +301,25 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
     fee2 = 2 * P["fee"]
     tm, td = P["trail_mode"], P["trail_dist"]
     trades, pos, pend, pexit, arm, parm, bo = [], None, None, False, None, None, None
+    chan = pre.get("_chan") or {}  # линии канала на сигнале (для stop_mode=channel / tp_mode=channel)
+    pend_ch = bo_ch = pos_ch = None
+    ch_stop_on = P.get("stop_mode") == "channel"
+    ch_tp_on = P.get("tp_mode", "r") == "channel"
+
+    def ch_levels(side, ch, j, entry, a):
+        """Стоп за линией канала (+запас в % и ATR, не ближе ch_min_stop_pct) и цель на противоположной линии (с отступом внутрь). (стоп, цель, запас стопа, отступ цели) или None, если уровни неверны."""
+        lo, up = ch
+        gs = entry * P.get("ch_stop_pct", 0.0) / 100 + P.get("ch_stop_atr", 0.0) * a
+        fl = entry * P.get("ch_min_stop_pct", 0.0) / 100
+        gt = entry * P.get("ch_tp_gap_pct", 0.0) / 100 + P.get("ch_tp_gap_atr", 0.0) * a
+        if side == "L":
+            st, tp = min(lo(j) - gs, entry - fl), up(j) - gt
+            if not st < entry or (ch_tp_on and not tp > entry): return None
+        else:
+            st, tp = max(up(j) + gs, entry + fl), lo(j) + gt
+            if not st > entry or (ch_tp_on and not tp < entry): return None
+        if ch_tp_on and P.get("ch_min_rr", 0.0) and abs(tp - entry) < P["ch_min_rr"] * abs(entry - st): return None
+        return float(st), float(tp), float(gs), float(gt)
 
     def sig3(side, si, entry):  # стоп за экстремумом 3 свечей до сигнальной включительно −0.2 ATR, не ближе 0.5 ATR
         a = atr[si]
@@ -308,13 +331,15 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
         p_ = dict(side=side, i_in=i, t_in=int(t[i]), p_in=entry, stop0=float(st), stop=float(st), stage="init",
                   risk=abs(entry - st) / entry * 100, mfe=0.0, mae=0.0, be=False, clamped=clamped, ext=entry, ptrail=False,
                   be_thr=(P.get("be_atr", 0) * atr[ai] / entry * 100) if P.get("be_atr", 0) else P["be_trigger"])
-        if P.get("tp_r"):
+        if P.get("tp_r") and not ch_tp_on:
             p_["tp"] = entry + (1 if side == "L" else -1) * P["tp_r"] * abs(entry - st)
         return p_
     st_sigs = stage_signals(pre, P) if P.get("entry_mode") == "stages" else None
+    chan = pre.get("_chan") or {}  # линии считаются в stage_signals — читаем после него
 
     def finish(i, price, reason):
-        nonlocal pos
+        nonlocal pos, pos_ch
+        pos_ch = None
         s = 1 if pos["side"] == "L" else -1
         gross = s * (price / pos["p_in"] - 1) * 100
         pos.update(i_out=i, t_out=int(t[i]), p_out=float(price), reason=reason, gross=gross, net=gross - fee2, open=False)
@@ -334,12 +359,18 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                     arm = ("S" if sc_ == "L" else "L", i - 1 + P["rearm_k"])
         if pend:
             (xc, side, allow), pend = pend, None
+            ch_ = pend_ch; pend_ch = None
             if xc and pos and pos["side"] != xc:
                 finish(i, o[i], "разворот")
             if pos is None and side and allow:
                 entry = float(o[i])
                 clamped = False
-                if P["stop_mode"] == "pivot":
+                lv = None
+                if ch_stop_on and ch_ is not None:
+                    lv = ch_levels(side, ch_, i, entry, atr[i - 1])
+                if ch_stop_on and ch_ is not None:
+                    st = lv[0] if lv else None
+                elif P["stop_mode"] == "pivot":
                     st = _last_piv(piv, "L", i - 1, lambda p: p < entry) if side == "L" else _last_piv(piv, "H", i - 1, lambda p: p > entry)
                 elif P["stop_mode"] == "pct":
                     st = entry * (1 - P["min_stop_pct"] / 100) if side == "L" else entry * (1 + P["min_stop_pct"] / 100)
@@ -353,6 +384,9 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                         st = max(h[i - 1], entry + mind); clamped = bool(st != h[i - 1])
                 if st is not None:
                     pos = mkpos(side, i, entry, st, clamped, i - 1)
+                    if lv:
+                        pos_ch = ch_; pos["ch_gap_s"], pos["ch_gap_t"] = lv[2], lv[3]
+                        if ch_tp_on: pos["tp"] = lv[1]
         if bo is not None and pos is None:  # вход по пробою экстремума сигнальной свечи
             bside, si, bloc = bo
             if i > si:
@@ -366,9 +400,16 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                     trig = h[si] if bside == "L" else l[si]
                     if (bside == "L" and h[i] >= trig) or (bside == "S" and l[i] <= trig):
                         entry = float(max(o[i], trig) if bside == "L" else min(o[i], trig))
-                        pos = mkpos(bside, i, entry, sig3(bside, si, entry), False, si)
-                        pos["bo"] = True
-                        bo = None
+                        lv = ch_levels(bside, bo_ch, i, entry, atr[si]) if (ch_stop_on and bo_ch is not None) else None
+                        if ch_stop_on and bo_ch is not None and not lv:
+                            bo = None
+                        else:
+                            pos = mkpos(bside, i, entry, lv[0] if lv else sig3(bside, si, entry), False, si)
+                            pos["bo"] = True
+                            if lv:
+                                pos_ch = bo_ch; pos["ch_gap_s"], pos["ch_gap_t"] = lv[2], lv[3]
+                                if ch_tp_on: pos["tp"] = lv[1]
+                            bo = None
         elif bo is not None:
             bo = None
         if pos:
@@ -404,6 +445,17 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                             q = None
                     if q is not None:
                         pos["stop"], pos["stage"] = float(q), "trail"
+                if pos_ch is not None and P.get("ch_follow") and i + 1 < T:  # стоп/цель следуют за наклонными линиями канала (стоп только подтягивается)
+                    j_ = i + 1
+                    lo_, up_ = pos_ch
+                    if pos["stage"] == "init":
+                        q_ = (lo_(j_) - pos["ch_gap_s"]) if L_ else (up_(j_) + pos["ch_gap_s"])
+                        if (L_ and q_ > pos["stop"] and q_ < c[i]) or ((not L_) and q_ < pos["stop"] and q_ > c[i]):
+                            pos["stop"] = float(q_)
+                    if ch_tp_on:
+                        tq_ = (up_(j_) - pos["ch_gap_t"]) if L_ else (lo_(j_) + pos["ch_gap_t"])
+                        if (L_ and tq_ > c[i]) or ((not L_) and tq_ < c[i]):
+                            pos["tp"] = float(tq_)
                 if pm == "trail" and exits is not None and i < M:
                     if exits.get(i) and exits[i] != pos["side"]:
                         pos["ptrail"] = True
@@ -441,8 +493,10 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                             if xc: pend = (xc, None, False)  # закрыть противоположную позицию по открытию
                             if en and allow_:
                                 bo = (en, i, float(l[i - 2:i + 1].min()) if en == "L" else float(h[i - 2:i + 1].max()))
+                                bo_ch = chan.get(g[1])
                         else:
                             pend = (xc, en, allow_)
+                            pend_ch = chan.get(g[1])
             elif em == "pattern20":
                 xc = en = None
                 na = "L" if (i in bull and i not in bear) else "S" if (i in bear and i not in bull) else None
