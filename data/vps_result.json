@@ -1,7 +1,7 @@
 {
-  "task_id": "git-1792487507",
-  "returncode": 0,
-  "stdout": "--- repo on VPS:\n2a32e19 vps: marine_history\nscripts/silero_worker.py\nscripts/tts_samples.py\n25\n--- procs using silero:\n 684241 /bin/sh -c echo \"--- repo on VPS:\"; cd /opt/weather-pipeline/repo; git log -1 --format='%h %s' | cut -c1-90; ls scripts/silero_worker.py scripts/tts_samples.py 2>&1 | head -2; grep -c -i silero scripts/make_blocks_gemini_cloud.py echo \"--- procs using silero:\"; ps -eo pid,cmd | grep -i \"[s]ilero\" | head -3 echo \"--- reference outside repo:\"; grep -rIl -i silero /opt/weather-pipeline/*.sh /etc/cron* 2>/dev/null | head echo \"--- removing\"; du -sh /opt/silero-venv /opt/silero-models /tmp/silero_fb 2>/dev/null rm -rf /opt/silero-venv /opt/silero-models /tmp/silero_fb /tmp/fbtest echo \"--- after:\"; ls -d /opt/silero* 2>&1 | head -2; df -h / | tail -1 \n--- reference outside repo:\n--- removing\n3.9G\t/opt/silero-venv\n39M\t/opt/silero-models\n4.0K\t/tmp/silero_fb\n--- after:\nls: cannot access '/opt/silero*': No such file or directory\n/dev/sda1        45G  8.3G   36G  19% /\n",
-  "stderr": "",
-  "completed_at_utc": "2026-10-20T09:12:02Z"
+  "task_id": "deploy-classic-1792518914",
+  "returncode": 2,
+  "stdout": "repo head: 05d8b10 vps: marine_history\n",
+  "stderr": "/bin/sh: 6: Syntax error: \"(\" unexpected\n",
+  "completed_at_utc": "2026-10-20T17:56:02Z"
 }
