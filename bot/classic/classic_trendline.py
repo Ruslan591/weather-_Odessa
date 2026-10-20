@@ -199,7 +199,7 @@ def _walk(hh, ll, c, atr, piv, M, warm=60, cfg=None):
         yield i, structure_at(hh, ll, c, atr, i - 1, lows[-8:], highs[-8:], cfg)
 
 
-def tl_signals(o, h, l, c, atr, piv, M, kind, p=0.0, warm=60):
+def tl_signals(o, h, l, c, atr, piv, M, kind, p=0.0, warm=60, info=None):
     """{индекс закрытой свечи: сторона} для kind = 'tl_bounce' | 'tl_breakout'. Опорные точки и pivot считаются по текущим параметрам CFG (в том числе обученным)."""
     hh, ll = anchor_series(o, h, l, c)
     piv = pivots(hh[:M], ll[:M])
@@ -226,6 +226,8 @@ def tl_signals(o, h, l, c, atr, piv, M, kind, p=0.0, warm=60):
         if side and i - last[side] >= 6:
             out[i] = side
             last[side] = i
+            if info is not None:  # линии канала на момент сигнала: функции номер свечи -> цена (для стопа/цели по каналу)
+                info[i] = ((lambda j, L=S: at(L, j)), (lambda j, L=R: at(L, j)))
     return out
 
 
