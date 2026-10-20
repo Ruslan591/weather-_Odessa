@@ -67,7 +67,7 @@ def line_at(L, t):
     return p1 + (p2 - p1) / (t2 - t1) * (t - t1) if t2 != t1 else p1
 
 
-def struct_signals(st, o, h, l, c, atr, t, M, forward=True, warm=60, p_b=0.0, p_k=0.0):
+def struct_signals(st, o, h, l, c, atr, t, M, forward=True, warm=60, p_b=0.0, p_k=0.0, info=None):
     """[(i, side, tag, id)] по одной структуре, tag: 'b' — отбой, 'k' — пробой."""
     A, B = st["A"], st["B"]
     t_start = max(A[0], A[2], B[0], B[2])
@@ -102,19 +102,25 @@ def struct_signals(st, o, h, l, c, atr, t, M, forward=True, warm=60, p_b=0.0, p_
         if side and i - last[side] >= 6:
             out.append((i, side, tag, st["id"]))
             last[side] = i
+            if info is not None:  # линии структуры: функции номер свечи -> цена
+                lo_l, up_l = (A, B) if a_i <= b_i else (B, A)
+                info[i] = ((lambda j, L=lo_l: line_at(L, t[j])), (lambda j, L=up_l: line_at(L, t[j])))
         if tag == "k" or c[i] > up + at or c[i] < lo - at:
             break  # структура закончилась: пробой или уход цены за границу больше чем на ATR
     return out
 
 
-def hand_signals(o, h, l, c, atr, t, M, structs, kind, p=0.0, forward=True):
+def hand_signals(o, h, l, c, atr, t, M, structs, kind, p=0.0, forward=True, info=None):
     """{индекс свечи: сторона} для kind 'hand_bounce' | 'hand_breakout' по всем структурам пары (при совпадении побеждает более ранняя структура)."""
     want = "b" if kind == "hand_bounce" else "k"
     out = {}
     for st in structs:
-        for i, side, tag, sid in struct_signals(st, o, h, l, c, atr, t, M, forward, p_b=p if want == "b" else 0.0, p_k=p if want == "k" else 0.0):
+        inf = {} if info is not None else None
+        for i, side, tag, sid in struct_signals(st, o, h, l, c, atr, t, M, forward, p_b=p if want == "b" else 0.0, p_k=p if want == "k" else 0.0, info=inf):
             if tag == want and i not in out:
                 out[i] = side
+                if info is not None and i in inf:
+                    info[i] = inf[i]
     return out
 
 
