@@ -406,8 +406,10 @@ def preprocess_tts(text):
 
 _selected_voice = VOICES[0]
 
-async def _tts_async(text, out_path, collect_boundaries=False):
-    communicate = edge_tts.Communicate(text, voice=_selected_voice, rate=RATE, pitch=PITCH)
+TTS_TIMEOUT = 90  # с на одну попытку: edge-tts иногда «зависает» без ответа
+
+async def _tts_async(text, out_path, collect_boundaries=False, voice=None):
+    communicate = edge_tts.Communicate(text, voice=voice or _selected_voice, rate=RATE, pitch=PITCH)
     boundaries = []
     with open(out_path, 'wb') as f:
         async for chunk in communicate.stream():
@@ -443,71 +445,10 @@ def strip_silence(path):
     elif os.path.exists(tmp):
         os.remove(tmp)
 
-# [ДОБАВЛЕНО 2026-10-08] Запасной голос: если edge-tts не отдал звук после всех ретраев,
-# блок озвучивается случайным голосом Silero (один голос на запуск). Модель .pt — pickle из
-# неофициального зеркала, поэтому воркер запускается в песочнице (nobody + без сети) и только от root.
-SILERO_PY     = "/opt/silero-venv/bin/python"
-SILERO_MODEL  = "/opt/silero-models/v4_ru.pt"
-SILERO_WORKER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "silero_worker.py")
-SILERO_VOICES = ["aidar", "baya", "kseniya", "xenia", "eugene"]
-SILERO_TEMPO  = 1.1
-SILERO_TMP    = "/tmp/silero_fb"
-_silero_voice = None
+# [ИЗМЕНЕНО 2026-10-20] Запасной TTS (прежний, не edge) удалён. Запасной путь: если edge-tts не отдал
+# звук основным голосом блока (_selected_voice) после всех ретраев, пробуем ДРУГОЙ голос edge-tts (из VOICES).
 _fallback_files = []
-
-def _silero_clean(s):
-    s = re.sub(r"[^А-Яа-яЁё0-9\s.,!?:;()«»\"%\-—]", " ", s)
-    return re.sub(r"\s+", " ", s).strip()
-
-def _silero_fallback(clean, part):
-    """Озвучивает уже подготовленный текст (preprocess_tts) Silero в песочнице.
-    Пишет mp3 в part. Возвращает список boundaries в формате edge-tts
-    ([{offset,duration,text}] по слову clean.split()) или None при неудаче."""
-    global _silero_voice
-    import tempfile, shutil
-    try:
-        if os.geteuid() != 0 or not all(os.path.exists(x) for x in (SILERO_PY, SILERO_MODEL, SILERO_WORKER)):
-            print("    [TTS-fallback] Silero недоступен (нужен root, venv, модель, воркер) — пропускаю")
-            return None
-        if _silero_voice is None:
-            _silero_voice = random.choice(SILERO_VOICES)
-        os.makedirs(SILERO_TMP, exist_ok=True); os.chmod(SILERO_TMP, 0o777)
-        wd = tempfile.mkdtemp(dir=SILERO_TMP); os.chmod(wd, 0o777)
-        try:
-            sents = [x.strip() for x in SENT_RE.findall(clean) if x.strip()]
-            if not sents:
-                return None
-            with open(os.path.join(wd, "in.json"), "w", encoding="utf-8") as f:
-                json.dump({"voice": _silero_voice, "tempo": SILERO_TEMPO,
-                           "sentences": [_silero_clean(x) for x in sents]}, f, ensure_ascii=False)
-            os.chmod(os.path.join(wd, "in.json"), 0o644)
-            cmd = ["unshare", "-n", "setpriv", "--reuid=65534", "--regid=65534", "--clear-groups",
-                   "env", f"HOME={wd}", f"TORCH_HOME={wd}", SILERO_PY, SILERO_WORKER, wd, SILERO_MODEL]
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
-            if r.returncode != 0:
-                print(f"    [TTS-fallback] воркер rc={r.returncode}: {(r.stderr or '')[-300:]}")
-                return None
-            out = json.load(open(os.path.join(wd, "out.json")))
-            mp3 = os.path.join(wd, "out.mp3")
-            if len(out["sentences"]) != len(sents) or not os.path.exists(mp3) or os.path.getsize(mp3) < 1000:
-                print("    [TTS-fallback] некорректный результат воркера")
-                return None
-            boundaries = []
-            for sent, span in zip(sents, out["sentences"]):
-                words = sent.split()
-                total = sum(len(w) for w in words) or 1
-                t = span["start"]; dur = max(span["end"] - span["start"], 0.01)
-                for w in words:
-                    d = dur * len(w) / total
-                    boundaries.append({"offset": round(t, 3), "duration": round(d, 3), "text": w})
-                    t += d
-            shutil.move(mp3, part)
-            return boundaries
-        finally:
-            shutil.rmtree(wd, ignore_errors=True)
-    except Exception as e:
-        print(f"    [TTS-fallback] ошибка: {e}")
-        return None
+_fallback_voices = {}
 
 def generate_block_tts(text, out_path, retries=3, delay=5, trim_silence=False, collect_boundaries=False):
     import time
@@ -518,44 +459,38 @@ def generate_block_tts(text, out_path, retries=3, delay=5, trim_silence=False, c
     # только при успехе: раньше при сбое TTS оставался 0-байтный файл
     # (block_5_trend_p1.mp3), который потом коммитился в git.
     part = out_path + ".part"
-    for attempt in range(1, retries + 1):
-        try:
-            boundaries = asyncio.run(_tts_async(clean, part, collect_boundaries))
-            if not os.path.exists(part) or os.path.getsize(part) < 1000:
-                raise RuntimeError("TTS вернул пустой/слишком маленький mp3")
-            if trim_silence:
-                strip_silence(part)
-            os.replace(part, out_path)
-            size_kb = os.path.getsize(out_path) // 1024
-            print(f"    \u2192 {os.path.basename(out_path)} ({size_kb} кб)")
-            return (size_kb, boundaries) if collect_boundaries else size_kb
-        except Exception as e:
-            print(f"    [TTS] Ошибка (попытка {attempt}/{retries}): {e}")
+    voices = [_selected_voice] + [v for v in VOICES if v != _selected_voice]
+    name = os.path.basename(out_path)
+    for vi, voice in enumerate(voices):
+        n_try = retries if vi == 0 else 2
+        if vi > 0:
+            print(f"    [TTS] {voices[0]} не сработал для {name} — пробую другой голос {voice}")
+        for attempt in range(1, n_try + 1):
             try:
-                if os.path.exists(part): os.remove(part)
-            except Exception:
-                pass
-            if attempt < retries:
-                time.sleep(delay)
-    print(f"    [TTS] edge-tts не сработал для {os.path.basename(out_path)} — пробую запасной голос Silero")
-    fb_boundaries = _silero_fallback(clean, part)
-    if fb_boundaries is not None:
-        try:
-            if os.path.exists(part) and os.path.getsize(part) >= 1000:
+                boundaries = asyncio.run(asyncio.wait_for(
+                    _tts_async(clean, part, collect_boundaries, voice), timeout=TTS_TIMEOUT))
+                if not os.path.exists(part) or os.path.getsize(part) < 1000:
+                    raise RuntimeError("TTS вернул пустой/слишком маленький mp3")
                 if trim_silence:
                     strip_silence(part)
                 os.replace(part, out_path)
                 size_kb = os.path.getsize(out_path) // 1024
-                _fallback_files.append(os.path.basename(out_path))
-                print(f"    \u2192 {os.path.basename(out_path)} ({size_kb} кб) [Silero:{_silero_voice}]")
-                return (size_kb, fb_boundaries) if collect_boundaries else size_kb
-        except Exception as e:
-            print(f"    [TTS-fallback] ошибка финализации: {e}")
-        try:
-            if os.path.exists(part): os.remove(part)
-        except Exception:
-            pass
-    print(f"    [TTS] Не удалось сгенерировать {os.path.basename(out_path)} — пропускаю")
+                if vi > 0:
+                    _fallback_files.append(name)
+                    _fallback_voices[name] = voice
+                    print(f"    \u2192 {name} ({size_kb} кб) [запасной голос {voice}]")
+                else:
+                    print(f"    \u2192 {name} ({size_kb} кб)")
+                return (size_kb, boundaries) if collect_boundaries else size_kb
+            except Exception as e:
+                print(f"    [TTS] Ошибка {voice} (попытка {attempt}/{n_try}): {type(e).__name__}: {e}")
+                try:
+                    if os.path.exists(part): os.remove(part)
+                except Exception:
+                    pass
+                if attempt < n_try:
+                    time.sleep(delay)
+    print(f"    [TTS] Не удалось сгенерировать {name} ни одним голосом — пропускаю")
     return (0, []) if collect_boundaries else 0
 
 def get_mp3_duration(path):
@@ -869,7 +804,7 @@ def main(force=False):
         "blocks":       blocks_meta,
     }
     if _fallback_files:
-        meta["tts_fallback"] = {"engine": "silero", "voice": _silero_voice, "files": sorted(set(_fallback_files))}
+        meta["tts_fallback"] = {"engine": "edge-tts", "voices": dict(_fallback_voices), "files": sorted(set(_fallback_files))}
     with open(META_FILE, 'w', encoding='utf-8') as f:
         json.dump(meta, f, ensure_ascii=False, indent=2)
 
