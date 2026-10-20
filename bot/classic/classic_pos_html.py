@@ -47,7 +47,7 @@ const p2=n=>String(n).padStart(2,'0');
 function ft(t){const d=new Date(t);return p2(d.getDate())+'.'+p2(d.getMonth()+1)+' '+p2(d.getHours())+':'+p2(d.getMinutes())}
 const sg=v=>(v>=0?'+':'')+v.toFixed(2);const cls=v=>v>0?'up':v<0?'dn':'fl';
 async function api(path,body){const r=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});const j=await r.json();if(j.error)throw new Error(j.error);return j}
-const ST_NAME={hand_bounce:'отбой от моего канала',hand_breakout:'пробой моей границы',tl_bounce:'отбой от линии тренда',tl_breakout:'пробой треугольника',pattern:'паттерн разворота',cross200:'пересечение EMA20×EMA200',cross20:'пересечение цены и EMA20',close_ema20:'закрытие за EMA20',break_trigger:'закрытие за экстремумом паттерна',ema20_slope:'разворот EMA20',rsi_level:'RSI вернулся',macd_turn:'MACD растёт',volume:'объём',strong_body:'сильное тело свечи',break_swing:'слом структуры',pullback_ema20:'возврат к EMA20',rsi_band:'RSI в нейтральной зоне',ext_dist:'откат от экстремума 12 ч',stoch_dir:'Stoch в сторону сделки',macd_sign:'MACD по знаку сделки и растёт',ema50_slope:'наклон EMA50 в сторону',ema50_trend:'тренд по EMA50',ema50_pullback:'откат к EMA50',stochrsi_cross:'пересечение Stoch RSI в зоне'};
+const ST_NAME={hand_bounce:'отбой от моего канала',hand_breakout:'пробой моей структуры',tl_bounce:'отбой от канала робота',tl_breakout:'пробой канала/треугольника робота',pattern:'свечной паттерн разворота',cross200:'пересечение EMA20×EMA200',cross20:'цена пересекла EMA20',cross50:'цена пересекла EMA50',close_ema20:'закрытие за EMA20',break_trigger:'закрытие за экстремумом паттерна',ema20_slope:'EMA20 развернулась',rsi_level:'RSI вернулся',macd_turn:'MACD растёт',volume:'объём выше среднего',strong_body:'сильное тело свечи',break_swing:'слом структуры',pullback_ema20:'возврат к EMA20',rsi_band:'RSI в нейтральной зоне',ext_dist:'откат от экстремума 12 ч',stoch_dir:'Stochastic в сторону сделки',macd_sign:'MACD по направлению сделки',ema50_slope:'наклон EMA50',ema50_trend:'тренд по EMA50',ema50_pullback:'возврат к EMA50',stochrsi_cross:'Stoch RSI в зоне 20/80',ema200_side:'цена по сторону EMA200'};
 function stDesc(st){return (st||[]).filter(x=>x.t).map((x,i)=>{let s=ST_NAME[x.t];if(x.t==='pattern'&&x.f&&x.f!=='none')s+=' ('+x.f+')';if(x.p&&['hand_bounce','hand_breakout','tl_bounce','tl_breakout','volume','strong_body','rsi_level','ema20_slope','pullback_ema20','rsi_band','ext_dist','stoch_dir','ema50_slope','ema50_pullback','stochrsi_cross'].includes(x.t))s+=' '+x.p;if(i>0)s+=' (≤'+x.w+' св.)';return s}).join(' → ')}
 function describe(c){
  const em={stages:'вход по уровням фильтра: '+(stDesc(c.stages)||'—')+(c.entry_trigger==='breakout'?'; вход по пробою экстремума сигнальной свечи (до 3 св.)':''),pattern20:'вход: после паттерна разворота — первое закрытие свечи за EMA20 (выше — лонг, ниже — шорт) в пределах '+c.arm_k+' свечей',cross200:'вход: пересечение EMA20 × EMA200',close20:'вход: закрытие свечи за EMA20 после пересечения (выше — лонг, ниже — шорт)',state20:'вход: любая свеча, закрывшаяся за EMA20, когда позиции нет'}[c.entry_mode];
@@ -63,13 +63,13 @@ const FIELDS=[
  {k:'entry_mode',l:'Правило входа',t:'sel',o:[['stages','уровни фильтра (редактор ниже)'],['pattern20','после паттерна разворота: первое закрытие за EMA20'],['cross200','пересечение EMA20 × EMA200'],['close20','закрытие свечи за EMA20 после пересечения'],['state20','любая свеча, закрывшаяся за EMA20, когда позиции нет']]},
  {stg:1},
  {k:'arm_k',l:'Сколько свечей ждать закрытия за EMA20 после паттерна (для входа «после паттерна»)',t:'num'},
- {k:'pat_filter',l:'Какие паттерны считать значимыми',t:'sel',o:[['none','все'],['level','только у уровня (pivot ±0.5 ATR)'],['volume','только с объёмом ≥1.5× среднего'],['extreme','только на новом экстремуме (12 ч на 15m)'],['stretch','только после растяжения ≥1.5 ATR от EMA20'],['level+volume','у уровня и с объёмом'],['extreme+volume','на экстремуме и с объёмом'],['sweep','только со съёмом экстремума 12 ч (ложный пробой и возврат)'],['sweep16','только со съёмом экстремума 4 ч'],['sweep+volume','со съёмом 12 ч и объёмом']]},
+ {k:'pat_filter',l:'Какие паттерны считать значимыми',t:'sel',o:[['none','все паттерны'],['volume','только с повышенным объёмом'],['level','только у уровня поддержки/сопротивления'],['extreme','только на новом экстремуме'],['sweep','только после ложного пробоя (съём экстремума)']]},
  {k:'rev_exit',l:'Обратный сигнал входа закрывает позицию (разворот)',t:'chk'},
  {k:'entry_trigger',l:'Как входить после сигнала',t:'sel',o:[['open','по открытию следующей свечи'],['breakout','по пробою экстремума сигнальной свечи (ждать до 3 свечей)']]},
  {sec:'Начальный стоп'},
- {k:'stop_mode',l:'Правило стопа',t:'sel',o:[['prev','за экстремумом предыдущей свечи'],['pct','фиксированный процент от входа'],['pivot','на последнем подтверждённом pivot'],['sig3','за экстремумом 3 свечей сигнала −0.2 ATR, не ближе 0.5 ATR']]},
+ {k:'stop_mode',l:'Правило стопа',t:'sel',o:[['prev','за экстремумом предыдущей свечи'],['pct','фиксированный процент от входа'],['pivot','на последнем подтверждённом pivot'],['sig3','за экстремумом 3 свечей сигнала с небольшим запасом (0.2 ATR), не ближе 0.5 ATR']]},
  {k:'min_stop_pct',l:'Не ближе, % от входа («предыдущая свеча») / размер стопа, % («фиксированный»)',t:'num'},
- {k:'min_stop_atr',l:'Не ближе, ATR (0 — не использовать)',t:'num'},
+ {k:'min_stop_atr',l:'Стоп не ближе, в ATR (ATR — средний размах свечи; 0 — не использовать)',t:'num'},
  {sec:'Цель'},
  {k:'tp_r',l:'Фиксированная цель, кратная риску R (0 — нет)',t:'num'},
  {k:'max_bars',l:'Выход по времени: закрыть по закрытию свечи через столько свечей после входа (0 — нет)',t:'num'},
@@ -77,7 +77,7 @@ const FIELDS=[
  {k:'be_trigger',l:'Точка перехода в безубыток: при какой прибыли, %',t:'num'},
  {k:'be_lock',l:'Размер безубытка: стоп переносится на вход ± %',t:'num'},
  {sec:'Трейлинг после безубытка'},
- {k:'trail_mode',l:'Правило трейлинга',t:'sel',o:[['none','нет'],['pct','на расстоянии, % от экстремума'],['atr','на расстоянии, ATR от экстремума'],['pivot','по pivot']]},
+ {k:'trail_mode',l:'Правило трейлинга',t:'sel',o:[['none','нет'],['pct','на расстоянии, % от экстремума'],['atr','на расстоянии в ATR (средний размах свечи) от экстремума'],['pivot','по pivot']]},
  {k:'trail_dist',l:'Расстояние трейлинга (% или ATR по выбранному правилу)',t:'num'},
  {sec:'Свечные паттерны разворота'},
  {k:'pat_mode',l:'Что делает паттерн (против позиции)',t:'sel',o:[['off','ничего'],['trail','включает трейлинг под минимумом/максимумом предыдущей свечи (не хуже безубытка)'],['exit','закрывает позицию, если плюс не меньше порога']]},
@@ -98,12 +98,36 @@ const FIELDS=[
  {k:'fee',l:'Комиссия за сторону, %',t:'num'},
  {k:'window_h',l:'Показывать сделки за последние, часов (если период задан — не используется, кроме «по» без «с»: тогда это длина периода)',t:'num'},
 ];
-const ST_OPT=[['','— пусто, уровень пропускается —'],['pattern','ТРИГГЕР: свечной паттерн разворота'],['hand_bounce','ТРИГГЕР: отбой от моего канала/флэта, нарисованного на 18093 (P — допуск касания в ATR, 0.3)'],['hand_breakout','ТРИГГЕР: пробой границы моей структуры (канал/флэт/треугольник; P — запас в ATR, 0.2)'],['tl_bounce','ТРИГГЕР: отбой от авто-линии тренда в канале или флэте (P — допуск касания в ATR, умолч. 0.3)'],['tl_breakout','ТРИГГЕР: пробой треугольника (P — запас за линией в ATR, умолч. 0.2)'],['cross200','ТРИГГЕР: пересечение EMA20 × EMA200'],['cross20','ТРИГГЕР: цена закрылась по другую сторону EMA20'],['close_ema20','закрытие свечи за EMA20 (выше — лонг, ниже — шорт)'],['break_trigger','закрытие за экстремумом свечи-триггера'],['ema20_slope','EMA20 развернулась (P — за сколько свечей, по умолч. 3)'],['rsi_level','RSI вернулся выше P (лонг) / ниже 100−P (шорт), по умолч. 45'],['macd_turn','гистограмма MACD растёт 2 свечи подряд (лонг) / падает (шорт)'],['volume','объём свечи ≥ P × среднего за 20 (по умолч. 1.2)'],['strong_body','тело свечи ≥ P ATR в сторону входа (по умолч. 0.8)'],['break_swing','закрытие за последним pivot-экстремумом (слом структуры)'],['pullback_ema20','возврат к EMA20: цена в пределах P ATR от неё (по умолч. 0.9)'],['rsi_band','RSI в нейтральной зоне 49±P (по умолч. 9, т.е. 40–58)'],['ext_dist','расстояние от экстремума 12 ч в сторону сделки от P до P+2.1 ATR (по умолч. 2.4–4.5)'],['stoch_dir','Stochastic(14) в сторону сделки: лонг выше P, шорт ниже 100−P (по умолч. 50)'],['macd_sign','гистограмма MACD по знаку сделки и растёт'],['ema50_slope','EMA50 наклонена в сторону сделки (P — за сколько свечей, по умолч. 5)'],['ema50_trend','тренд: цена по сторону EMA50 и EMA50 не направлена против сделки (5 св.)'],['ema50_pullback','откат: за 6 св. цена подходила к EMA50 ближе P ATR (по умолч. 0.8)'],['stochrsi_cross','Stoch RSI (3,3,14,14): K пересекла D в зоне <P / >100−P за 3 св. (по умолч. 20)']];
-const PF_OPT=[['none','все паттерны'],['level','только у уровня'],['volume','только с объёмом'],['extreme','только на новом экстремуме'],['stretch','только после растяжения от EMA20'],['level+volume','у уровня и с объёмом'],['extreme+volume','на экстремуме и с объёмом'],['sweep','со съёмом экстремума 12 ч'],['sweep16','со съёмом экстремума 4 ч'],['sweep+volume','со съёмом 12 ч и объёмом']];
-function stageForm(){let h='<div class=sec>Фильтр входа по уровням</div><div class=sm>Работает при правиле входа «уровни фильтра». Первый непустой уровень — триггер, остальные — подтверждения: каждое проверяется только после предыдущего, пустой пропускается. «Окно» — сколько свечей ждать этот уровень после предыдущего. P — параметр условия (0 — по умолчанию).</div>';
- for(let i=0;i<5;i++){h+='<div class=f><label>Уровень '+(i+1)+'</label><select id=s'+i+'_t>'+ST_OPT.map(o=>'<option value="'+o[0]+'">'+o[1]+'</option>').join('')+'</select>'+
+const TRIG_OPT=[['','— не выбрано —'],
+ ['pattern','Свечной паттерн разворота (молот, поглощение, звезда…)'],
+ ['cross200','Пересечение EMA20 и EMA200'],
+ ['cross20','Цена закрылась по другую сторону EMA20'],
+ ['cross50','Цена закрылась по другую сторону EMA50'],
+ ['tl_bounce','Отбой от границы канала или флэта, построенного роботом (P — допуск касания, в долях ATR, по умолч. 0.3)'],
+ ['tl_breakout','Пробой канала, флэта или треугольника, построенного роботом (P — запас за линией, в долях ATR, по умолч. 0.2)'],
+ ['hand_bounce','Отбой от моего канала или флэта, нарисованного на 18093 (P — допуск касания, в долях ATR, 0.3)'],
+ ['hand_breakout','Пробой моего канала, флэта или треугольника, нарисованного на 18093 (P — запас, в долях ATR, 0.2)']];
+const CONF_OPT=[['','— пусто, уровень пропускается —'],
+ ['close_ema20','EMA20: свеча закрылась за линией (выше — лонг, ниже — шорт)'],
+ ['pullback_ema20','EMA20: цена вернулась к линии, откат (P — как близко, в долях ATR, по умолч. 0.9)'],
+ ['ema20_slope','EMA20: линия развернулась в сторону сделки (P — за сколько свечей, по умолч. 3)'],
+ ['ema50_trend','EMA50: тренд — цена по сторону EMA50, и EMA50 не направлена против сделки'],
+ ['ema50_pullback','EMA50: цена вернулась к линии, откат (P — как близко, в долях ATR, по умолч. 0.8)'],
+ ['ema50_slope','EMA50: линия наклонена в сторону сделки (P — за сколько свечей, по умолч. 5)'],
+ ['ema200_side','EMA200: цена по сторону EMA200 (лонг — выше, шорт — ниже)'],
+ ['rsi_level','RSI: вернулся выше P для лонга (ниже 100−P для шорта), по умолч. 45'],
+ ['macd_turn','MACD: гистограмма растёт 2 свечи подряд (лонг) / падает (шорт)'],
+ ['macd_sign','MACD: гистограмма по направлению сделки и растёт'],
+ ['stoch_dir','Stochastic: в сторону сделки (лонг выше P, шорт ниже 100−P, по умолч. 50)'],
+ ['stochrsi_cross','Stoch RSI: K пересекла D в зоне перепроданности 20 (лонг) / перекупленности 80 (шорт)'],
+ ['volume','Объём: у свечи объём выше среднего (P — во сколько раз, по умолч. 1.2)']];
+const ST_OPT=TRIG_OPT.concat(CONF_OPT.slice(1));
+const PF_OPT=[['none','все паттерны'],['volume','только с повышенным объёмом'],['level','только у уровня поддержки/сопротивления'],['extreme','только на новом экстремуме'],['sweep','только после ложного пробоя (съём экстремума)']];
+const PF_NAME={none:'все',level:'у уровня',volume:'с объёмом',extreme:'на экстремуме',stretch:'после растяжения от EMA20','level+volume':'у уровня и с объёмом','extreme+volume':'на экстремуме и с объёмом',sweep:'после ложного пробоя',sweep16:'после ложного пробоя (4 ч)','sweep+volume':'после ложного пробоя с объёмом'};
+function stageForm(){let h='<div class=sec>Фильтр входа по уровням</div><div class=sm>Работает при правиле входа «уровни фильтра». Уровень 1 — триггер (что запускает поиск входа), уровни 2–5 — подтверждения: каждое проверяется только после предыдущего, пустой пропускается. «Окно» — сколько свечей ждать этот уровень после предыдущего. P — число для условия (0 — значение по умолчанию). ATR — средний размах свечи за последние 14 свечей: «0.3 ATR» — это треть обычной свечи, так расстояния не зависят от цены монеты.</div>';
+ for(let i=0;i<5;i++){h+='<div class=f><label>Уровень '+(i+1)+'</label><select id=s'+i+'_t>'+(i===0?TRIG_OPT:CONF_OPT).map(o=>'<option value="'+o[0]+'">'+o[1]+'</option>').join('')+'</select>'+
   '<div class=t style="padding:2px 0"><span class=sm>P</span><input id=s'+i+'_p type=number step=any inputmode=decimal style="width:70px;background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:5px;padding:6px"> <span class=sm>окно, св.</span><input id=s'+i+'_w type=number inputmode=numeric style="width:70px;background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:5px;padding:6px"></div>'+
-  '<select id=s'+i+'_f>'+PF_OPT.map(o=>'<option value="'+o[0]+'">'+o[1]+' (для триггера-паттерна)</option>').join('')+'</select></div>'}
+  '<select id=s'+i+'_f'+(i?' style="display:none"':'')+'>'+PF_OPT.map(o=>'<option value="'+o[0]+'">'+o[1]+(i?'':' (если триггер — свечной паттерн)')+'</option>').join('')+'</select></div>'}
  return h}
 function buildForm(){
  let h='';FIELDS.forEach(f=>{
@@ -117,7 +141,8 @@ function buildForm(){
   h+='</div>'});
  $('cfgForm').innerHTML=h;
 }
-function setForm(c){const st=(c.stages||[]).slice(0,5);while(st.length<5)st.push({t:'',p:0,w:12,f:'none'});st.forEach((x,i)=>{$('s'+i+'_t').value=x.t||'';$('s'+i+'_p').value=x.p||0;$('s'+i+'_w').value=x.w||12;$('s'+i+'_f').value=x.f||'none'});FIELDS.forEach(f=>{if(f.sec||f.stg)return;const e=$('f_'+f.k);if(f.t==='chk')e.checked=!!c[f.k];else e.value=c[f.k]})}
+function ensureOpt(id,v,names){const s=$(id);if(!s||v==null||v==='')return;if(!Array.from(s.options).some(o=>o.value===String(v))){const o=document.createElement('option');o.value=String(v);o.textContent=((names&&names[v])||String(v))+' (устаревший пункт)';s.appendChild(o)}}
+function setForm(c){const st=(c.stages||[]).slice(0,5);while(st.length<5)st.push({t:'',p:0,w:12,f:'none'});st.forEach((x,i)=>{ensureOpt('s'+i+'_t',x.t,ST_NAME);ensureOpt('s'+i+'_f',x.f,PF_NAME);$('s'+i+'_t').value=x.t||'';$('s'+i+'_p').value=x.p||0;$('s'+i+'_w').value=x.w||12;$('s'+i+'_f').value=x.f||'none'});FIELDS.forEach(f=>{if(f.sec||f.stg)return;const e=$('f_'+f.k);if(f.t==='chk')e.checked=!!c[f.k];else{if(f.t==='sel')ensureOpt('f_'+f.k,c[f.k],f.k==='pat_filter'?PF_NAME:null);e.value=c[f.k]}})}
 function readForm(){const c={};c.stages=[0,1,2,3,4].map(i=>({t:$('s'+i+'_t').value,p:parseFloat($('s'+i+'_p').value)||0,w:parseInt($('s'+i+'_w').value)||12,f:$('s'+i+'_f').value}));FIELDS.forEach(f=>{if(f.sec||f.stg)return;const e=$('f_'+f.k);c[f.k]=f.t==='chk'?e.checked:f.t==='num'?parseFloat(e.value):e.value});return c}
 function mkTabs(){$('tabs').innerHTML='';[['hist','История / текущие правила'],['live','Живая бумага']].forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l;if(S.tab===k)b.className='on';b.onclick=()=>setTab(k);$('tabs').appendChild(b)})}
 function setTab(k){S.tab=k;$('vHist').style.display=k==='hist'?'block':'none';$('vLive').style.display=k==='live'?'block':'none';mkTabs();if(k==='live')loadRuns();else load()}
