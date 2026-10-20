@@ -55,11 +55,11 @@
   "cloud_mass_compass": "С",
   "cloud_mass_area_km2": 89184,
   "target_confirmation": {
-    "confirmed": true,
-    "target_id": 2,
-    "target_area_km2": 64.0,
-    "roi_cloud_fraction": 0.522,
-    "verdict": "GeoColour подтверждает: в ROI CLM-цели преобладает облачность"
+    "confirmed": false,
+    "target_id": 1,
+    "target_area_km2": 149.4,
+    "roi_cloud_fraction": 0.365,
+    "verdict": "GeoColour НЕ подтверждает: в ROI CLM-цели облачность не преобладает — возможно расхождение слоёв"
   },
   "system_analysis_all": [
     {
@@ -67,32 +67,38 @@
       "available": true,
       "roi_cloud_fraction": 0.533,
       "confirmed": true
-    },
+    }
+  ],
+  "local_analysis_all": [
     {
       "target_id": 1,
       "available": true,
-      "roi_cloud_fraction": 0.156,
+      "roi_cloud_fraction": 0.365,
+      "confirmed": false
+    },
+    {
+      "target_id": 2,
+      "available": true,
+      "roi_cloud_fraction": 0.366,
       "confirmed": false
     },
     {
       "target_id": 3,
       "available": true,
-      "roi_cloud_fraction": 0.912,
-      "confirmed": true
-    }
-  ],
-  "local_analysis_all": [
-    {
-      "target_id": 2,
-      "available": true,
-      "roi_cloud_fraction": 0.522,
+      "roi_cloud_fraction": 0.729,
       "confirmed": true
     },
     {
       "target_id": 4,
       "available": true,
-      "roi_cloud_fraction": 0.043,
-      "confirmed": false
+      "roi_cloud_fraction": 0.631,
+      "confirmed": true
+    },
+    {
+      "target_id": 5,
+      "available": true,
+      "roi_cloud_fraction": 0.955,
+      "confirmed": true
     }
   ],
   "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
