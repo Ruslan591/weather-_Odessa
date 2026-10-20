@@ -1,1 +1,1 @@
-{"task_id": "deploy-classic-1792518979", "cmd": "cd /opt/weather-pipeline/repo && git pull -q 2>&1 | tail -2; bash /opt/weather-pipeline/repo/scripts/deploy_classic_channel.sh", "timeout": 120}
+{"task_id": "deploy-classic-1792519039", "cmd": "cd /opt/weather-pipeline/repo; for n in 1 2 3; do git pull -q --ff-only 2>&1 | tail -2 && [ -f scripts/deploy_classic_channel.sh ] && break; sleep 5; done; git log -1 --format='head: %h' ; ls scripts/deploy_classic_channel.sh && bash scripts/deploy_classic_channel.sh", "timeout": 150}
