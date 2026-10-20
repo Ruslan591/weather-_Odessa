@@ -37,10 +37,10 @@ PARAMS = dict(tf="15m", be_trigger=1.5, fee=0.05, window_h=240, notional=100.0, 
 PANEL = dict(PARAMS, be_trigger=1.5, be_lock=0.4, entry_mode="cross200", rev_exit=True, pat_mode="off", pat_min=0.0)  # «рекомендованные» правила конструктора (лучшие по проверке на ZEC 15m; пользователь может менять)
 
 
-TRIGGERS = ("pattern", "cross200", "cross20", "tl_bounce", "tl_breakout", "hand_bounce", "hand_breakout")
+TRIGGERS = ("pattern", "cross200", "cross20", "cross50", "tl_bounce", "tl_breakout", "hand_bounce", "hand_breakout")
 CONFIRMS = ("close_ema20", "break_trigger", "ema20_slope", "rsi_level", "macd_turn", "volume", "strong_body", "break_swing",
-            "pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sign", "ema50_slope", "ema50_trend", "ema50_pullback", "stochrsi_cross")
-STATE_STAGES = ("pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sign", "ema50_slope", "ema50_trend", "ema50_pullback", "stochrsi_cross")
+            "pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sign", "ema50_slope", "ema50_trend", "ema50_pullback", "stochrsi_cross", "ema200_side")
+STATE_STAGES = ("pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sign", "ema50_slope", "ema50_trend", "ema50_pullback", "stochrsi_cross", "ema200_side")
 TF_MIN = {"1m": 1, "3m": 3, "5m": 5, "15m": 15, "30m": 30, "1h": 60, "2h": 120, "4h": 240, "6h": 360, "8h": 480, "12h": 720, "1d": 1440}
 
 
@@ -127,6 +127,8 @@ def stage_signals(pre, P, warmup=None):
             thr = p if p > 0 else 50.0
             return (st14[i] > thr) if side == "L" else (st14[i] < 100.0 - thr)
         if t == "macd_sign": return sd * hist[i] > 0 and sd * (hist[i] - hist[i - 1]) > 0  # гистограмма MACD по знаку сделки и растёт
+        if t == "ema200_side":  # цена по сторону EMA200 (тренд старшего уровня): лонг — выше, шорт — ниже
+            return c[i] > e200[i] if side == "L" else c[i] < e200[i]
         if t == "ema50_trend":  # цена по сторону EMA50 и EMA50 не направлена против сделки (5 св.)
             return (c[i] > e50[i] and e50[i] >= e50[i - 5]) if side == "L" else (c[i] < e50[i] and e50[i] <= e50[i - 5])
         if t == "ema50_pullback":  # откат: за 6 св. экстремум подходил к EMA50 ближе P ATR (по умолч. 0.8)
@@ -165,6 +167,9 @@ def stage_signals(pre, P, warmup=None):
             ns = "L" if (i in bull and i not in bear) else "S" if (i in bear and i not in bull) else None
         elif trig["t"] == "cross200":
             pr, cu = e20[i - 1] - e200[i - 1], e20[i] - e200[i]
+            ns = "L" if pr <= 0 < cu else "S" if pr >= 0 > cu else None
+        elif trig["t"] == "cross50":
+            pr, cu = c[i - 1] - e50[i - 1], c[i] - e50[i]
             ns = "L" if pr <= 0 < cu else "S" if pr >= 0 > cu else None
         elif trig["t"] in ("tl_bounce", "tl_breakout", "hand_bounce", "hand_breakout"):
             ns = tlsig.get(i)
