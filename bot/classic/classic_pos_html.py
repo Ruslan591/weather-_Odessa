@@ -31,7 +31,7 @@ input.nm{background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius
 </details>
 <div id=vHist>
  <div class=card><div class=grid id=sum></div></div>
- <div class=card id=cch><h4 id=chT></h4><div class=t id=rng></div>
+ <div class=card id=cch><h4 id=chT></h4><div class=t id=rng></div><div class=t id=vbar2></div>
   <div id=chinfo style="font:11.5px ui-monospace,monospace;color:#8b949e;min-height:30px;white-space:pre-line"></div><canvas id=c></canvas>
   <div class=sm>жёлтая EMA20, фиолетовая EMA200; ▲ лонг / ▼ шорт — вход, ■ — выход, красный пунктир — начальный стоп, линия вход→выход зелёная при плюсе. Время локальное. Перетаскивание — прокрутка, щипок или колесо — масштаб, тап — перекрестие. Страницу прокручивай, касаясь вне графика.</div></div>
  <div class=card><h4>Сделки</h4><div class=sc id=tbl>загрузка…</div></div>
@@ -40,7 +40,8 @@ input.nm{background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius
 <script>
 const $=id=>document.getElementById(id);
 const S={sym:null,pairs:[],cfg:null,tab:'hist',D:null,runs:null};
-const V={n:480,off:0},Gc={start:0,end:0,bw:5,L:4,hover:-1};
+const V={n:480,off:0,vz:1,vo:0},Gc={start:0,end:0,bw:5,L:4,hover:-1};
+const TFMS={'1m':60000,'3m':180000,'5m':300000,'15m':900000,'30m':1800000,'1h':3600000,'2h':7200000,'4h':14400000,'6h':21600000,'8h':28800000,'12h':43200000,'1d':86400000};
 function fmt(p){if(p==null)return'—';const a=Math.abs(p);const d=a>=1000?2:a>=100?3:a>=10?4:a>=1?5:7;return p.toFixed(d)}
 const p2=n=>String(n).padStart(2,'0');
 function ft(t){const d=new Date(t);return p2(d.getDate())+'.'+p2(d.getMonth()+1)+' '+p2(d.getHours())+':'+p2(d.getMinutes())}
@@ -120,8 +121,8 @@ function setForm(c){const st=(c.stages||[]).slice(0,5);while(st.length<5)st.push
 function readForm(){const c={};c.stages=[0,1,2,3,4].map(i=>({t:$('s'+i+'_t').value,p:parseFloat($('s'+i+'_p').value)||0,w:parseInt($('s'+i+'_w').value)||12,f:$('s'+i+'_f').value}));FIELDS.forEach(f=>{if(f.sec||f.stg)return;const e=$('f_'+f.k);c[f.k]=f.t==='chk'?e.checked:f.t==='num'?parseFloat(e.value):e.value});return c}
 function mkTabs(){$('tabs').innerHTML='';[['hist','История / текущие правила'],['live','Живая бумага']].forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l;if(S.tab===k)b.className='on';b.onclick=()=>setTab(k);$('tabs').appendChild(b)})}
 function setTab(k){S.tab=k;$('vHist').style.display=k==='hist'?'block':'none';$('vLive').style.display=k==='live'?'block':'none';mkTabs();if(k==='live')loadRuns();else load()}
-function mkPairs(){$('pairs').innerHTML='';S.pairs.forEach(p=>{const b=document.createElement('button');b.textContent=p.replace('USDT','');if(p===S.sym)b.className='on';b.onclick=()=>{S.sym=p;V.off=0;Gc.hover=-1;mkPairs();load()};$('pairs').appendChild(b)})}
-function mkr(){$('rng').innerHTML='';[[192,'192 св.'],[480,'480 св.'],[960,'все 960']].forEach(([n,l])=>{const b=document.createElement('button');b.textContent=l;if(V.n===n)b.className='on';b.onclick=()=>{V.n=n;V.off=0;Gc.hover=-1;mkr();chart()};$('rng').appendChild(b)})}
+function mkPairs(){$('pairs').innerHTML='';S.pairs.forEach(p=>{const b=document.createElement('button');b.textContent=p.replace('USDT','');if(p===S.sym)b.className='on';b.onclick=()=>{S.sym=p;V.off=0;V.vz=1;V.vo=0;Gc.hover=-1;mkPairs();load()};$('pairs').appendChild(b)})}
+function mkr(){$('rng').innerHTML='';[[192,'192 св.'],[480,'480 св.'],[960,'все 960']].forEach(([n,l])=>{const b=document.createElement('button');b.textContent=l;if(V.n===n)b.className='on';b.onclick=()=>{V.n=n;V.off=0;V.vz=1;V.vo=0;Gc.hover=-1;mkr();chart()};$('rng').appendChild(b)})}
 async function load(){
  try{const j=await api('/api/trades?sym='+S.sym+'&bars=960');if(j.sym!==S.sym)return;S.D=j;S.cfg=j.cfg;renderHist()}catch(e){$('tbl').textContent='Ошибка: '+e.message}
 }
@@ -162,20 +163,23 @@ function chart(){
  const C=S.D&&S.D.chart;if(!C)return;const cv=$('c'),dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=420;
  cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);const g=cv.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);g.fillStyle='#0d1117';g.fillRect(0,0,W,H);
  const N=C.t.length,L=4,R=58,B=16,pw=W-L-R;
- V.n=Math.max(20,Math.min(V.n,N));V.off=Math.max(0,Math.min(V.off,N-20));
- const end=N-V.off,start=Math.max(0,end-V.n),cnt=end-start,bw=pw/(cnt+(V.off===0?2:0));
- Gc.start=start;Gc.end=end;Gc.bw=bw;Gc.L=L;
- const X=i=>L+(i-start+0.5)*bw;
+ V.n=Math.max(10,Math.min(1000,Math.round(V.n)));V.off=Math.max(-(V.n-5),Math.min(Math.round(V.off),N-10));V.vz=Math.max(0.15,Math.min(12,V.vz));
+ const end=N-V.off,startRaw=end-V.n,start=Math.max(0,startRaw),endV=Math.min(end,N),bw=pw/(V.n+(V.off===0?2:0));
+ const stepMs=TFMS[(S.D.cfg&&S.D.cfg.tf)||'1h']||3600000,tAt=i=>i<N?C.t[Math.max(0,i)]:C.t[N-1]+(i-N+1)*stepMs;
+ Gc.start=start;Gc.end=end;Gc.bw=bw;Gc.L=L;Gc.raw=startRaw;Gc.total=N;Gc.pw=pw;Gc.H=H;Gc.B=B;
+ const X=i=>L+(i-startRaw+0.5)*bw;
  const ix=t=>{let b=-1;for(let i=0;i<N;i++){if(C.t[i]<=t)b=i}return b};
  const TR=S.D.trades.map(x=>Object.assign({},x,{a:ix(x.t_in),b:ix(x.t_out)}));
- let hi=-1e99,lo=1e99;for(let i=start;i<end;i++){hi=Math.max(hi,C.h[i]);lo=Math.min(lo,C.l[i])}
+ let hi=-1e99,lo=1e99;for(let i=start;i<endV;i++){hi=Math.max(hi,C.h[i]);lo=Math.min(lo,C.l[i])}
+ if(hi<lo){hi=C.c[N-1]*1.01;lo=C.c[N-1]*0.99}
  const rg=hi-lo;TR.forEach(x=>{if(x.a>=start&&x.a<end&&x.stop0>lo-rg*0.15&&x.stop0<hi+rg*0.15){hi=Math.max(hi,x.stop0);lo=Math.min(lo,x.stop0)}});
- const pad=(hi-lo)*0.05||hi*0.01;hi+=pad;lo-=pad;const Y=p=>6+(hi-p)/(hi-lo)*(H-B-12);
+ const rng0=(hi-lo)||hi*0.01,cen=(hi+lo)/2+V.vo*rng0,half=rng0*0.525/V.vz;hi=cen+half;lo=cen-half;Gc.pxVo=1.05/V.vz/(H-B-12);const Y=p=>6+(hi-p)/(hi-lo)*(H-B-12);
  g.font='10px system-ui';g.textBaseline='middle';g.fillStyle='#6e7681';g.strokeStyle='#1b222c';g.textAlign='left';
  for(let k=0;k<=5;k++){const p=lo+(hi-lo)*k/5;g.beginPath();g.moveTo(L,Y(p));g.lineTo(L+pw,Y(p));g.stroke();g.fillText(fmt(p),L+pw+4,Y(p))}
- const step=Math.max(1,Math.ceil(90/bw));g.textAlign='center';for(let i=start;i<end;i+=step){g.fillText(ft(C.t[i]),Math.min(X(i),W-R-30),H-7)}g.textAlign='left';
- for(let i=start;i<end;i++){const up=C.c[i]>=C.o[i],col=up?'#26a69a':'#ef5350',x=X(i),w=Math.max(1,bw*0.7);g.strokeStyle=g.fillStyle=col;g.beginPath();g.moveTo(x,Y(C.h[i]));g.lineTo(x,Y(C.l[i]));g.stroke();if(bw>=1.6)g.fillRect(x-w/2,Y(Math.max(C.o[i],C.c[i])),w,Math.max(1,Y(Math.min(C.o[i],C.c[i]))-Y(Math.max(C.o[i],C.c[i]))))}
- [['ema20','#e3b341'],['ema200','#bc8cff']].forEach(([k,c])=>{g.strokeStyle=c;g.lineWidth=1.4;g.beginPath();let on=false;for(let i=start;i<end;i++){const v=C[k][i];if(v==null){on=false;continue}if(!on){g.moveTo(X(i),Y(v));on=true}else g.lineTo(X(i),Y(v))}g.stroke();g.lineWidth=1});
+ const step=Math.max(1,Math.ceil(90/bw));g.textAlign='center';for(let i=start;i<end;i+=step){g.fillText(ft(tAt(i)),Math.min(X(i),W-R-30),H-7)}g.textAlign='left';
+ for(let i=start;i<endV;i++){const up=C.c[i]>=C.o[i],col=up?'#26a69a':'#ef5350',x=X(i),w=Math.max(1,bw*0.7);g.strokeStyle=g.fillStyle=col;g.beginPath();g.moveTo(x,Y(C.h[i]));g.lineTo(x,Y(C.l[i]));g.stroke();if(bw>=1.6)g.fillRect(x-w/2,Y(Math.max(C.o[i],C.c[i])),w,Math.max(1,Y(Math.min(C.o[i],C.c[i]))-Y(Math.max(C.o[i],C.c[i]))))}
+ [['ema20','#e3b341'],['ema200','#bc8cff']].forEach(([k,c])=>{g.strokeStyle=c;g.lineWidth=1.4;g.beginPath();let on=false;for(let i=start;i<endV;i++){const v=C[k][i];if(v==null){on=false;continue}if(!on){g.moveTo(X(i),Y(v));on=true}else g.lineTo(X(i),Y(v))}g.stroke();g.lineWidth=1});
+ if(end>N){const xn=X(N-0.5);g.strokeStyle='#30363d';g.setLineDash([4,4]);g.beginPath();g.moveTo(xn,0);g.lineTo(xn,H-B);g.stroke();g.setLineDash([]);g.fillStyle='#6e7681';g.textAlign='left';g.fillText('будущее →',xn+4,H-B-8)}
  const sz=Math.max(3,Math.min(6,bw*1.2));
  TR.forEach(x=>{if(x.a<0&&x.b<0)return;const col=x.net>0?'#3fb950':'#f85149',a=Math.max(x.a,0),b=Math.max(x.b,0);
   if(Math.max(a,b)<start||Math.min(a,b)>=end)return;const xa=X(a),xb=X(b);
@@ -189,18 +193,31 @@ function chart(){
  TR.forEach(x=>{if(x.a===i)s+='\n▸ вход '+(x.side==='L'?'ЛОНГ':'ШОРТ')+' '+fmt(x.p_in)+', стоп '+fmt(x.stop0)+' (риск '+x.risk.toFixed(2)+'%)';if(x.b===i&&!x.open)s+='\n■ выход '+fmt(x.p_out)+' · '+x.reason+' · Net '+sg(x.net)+'%'});
  $('chinfo').textContent=s;
 }
-const cvv=document.getElementById('c'),ptrs=new Map();let sx=0,so=0,moved=false,p0=0,pn=0;
-const idxAt=x=>{const r=cvv.getBoundingClientRect();return Math.max(Gc.start,Math.min(Gc.end-1,Gc.start+Math.floor((x-r.left-Gc.L)/Gc.bw)))};
-cvv.addEventListener('pointerdown',e=>{cvv.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
- if(ptrs.size===1){sx=e.clientX;so=V.off;moved=false}else if(ptrs.size===2){const a=[...ptrs.values()];p0=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);pn=V.n;moved=true}});
-cvv.addEventListener('pointermove',e=>{
- if(!ptrs.has(e.pointerId)){if(e.pointerType==='mouse'&&S.D&&S.D.chart){Gc.hover=idxAt(e.clientX);chart()}return}
- ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
- if(ptrs.size===2){const a=[...ptrs.values()],d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);V.n=Math.max(20,Math.min(960,Math.round(pn*p0/Math.max(d,1))));chart();return}
- const dx=e.clientX-sx;if(Math.abs(dx)>4)moved=true;if(moved){V.off=Math.round(so+dx/Gc.bw);chart()}});
-cvv.addEventListener('pointerup',e=>{if(ptrs.size===1&&!moved&&S.D&&S.D.chart){Gc.hover=idxAt(e.clientX);chart()}ptrs.delete(e.pointerId)});
-cvv.addEventListener('pointercancel',e=>ptrs.delete(e.pointerId));
-cvv.addEventListener('wheel',e=>{e.preventDefault();V.n=Math.max(20,Math.min(960,Math.round(V.n*(e.deltaY>0?1.15:0.87))));chart()},{passive:false});
+const cvv=document.getElementById('c'),ptrs=new Map();let g0=null;
+const pxy=e=>{const r=cvv.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}};
+const zoneAt=(x,y)=>x>Gc.L+Gc.pw?'price':(y>Gc.H-Gc.B-2&&y<=Gc.H)?'time':'plot';
+const idxAt=x=>Math.max(0,Math.min(Gc.total-1,Math.floor(Gc.raw+(x-Gc.L)/Gc.bw)));
+cvv.addEventListener('pointerdown',e=>{cvv.setPointerCapture(e.pointerId);const q=pxy(e);ptrs.set(e.pointerId,q);
+ if(ptrs.size===1){g0={x:q.x,y:q.y,off:V.off,vo:V.vo,vz:V.vz,n:V.n,zone:zoneAt(q.x,q.y),moved:false}}
+ else if(ptrs.size===2&&g0){const a=[...ptrs.values()];g0.pinch={dx:Math.abs(a[0].x-a[1].x),dy:Math.abs(a[0].y-a[1].y),n:V.n,vz:V.vz};g0.moved=true}});
+cvv.addEventListener('pointermove',e=>{const q=pxy(e);
+ if(!ptrs.has(e.pointerId)){if(e.pointerType==='mouse'&&S.D&&S.D.chart){Gc.hover=idxAt(q.x);chart()}return}
+ ptrs.set(e.pointerId,q);if(!g0||!S.D||!S.D.chart)return;
+ if(ptrs.size===2&&g0.pinch){const a=[...ptrs.values()],dx=Math.abs(a[0].x-a[1].x),dy=Math.abs(a[0].y-a[1].y);
+  if(g0.pinch.dy>g0.pinch.dx*1.2){V.vz=g0.pinch.vz*Math.max(dy,10)/Math.max(g0.pinch.dy,10)}else{V.n=Math.round(g0.pinch.n*Math.max(g0.pinch.dx,10)/Math.max(dx,10))}chart();return}
+ const dx=q.x-g0.x,dy=q.y-g0.y;if(Math.abs(dx)>5||Math.abs(dy)>5)g0.moved=true;if(!g0.moved)return;
+ if(g0.zone==='price')V.vz=g0.vz*Math.exp(-dy/120);
+ else if(g0.zone==='time')V.n=Math.round(g0.n*Math.exp(-dx/120));
+ else{V.off=Math.round(g0.off+dx/Gc.bw);V.vo=g0.vo+dy*Gc.pxVo}
+ chart()});
+cvv.addEventListener('pointerup',e=>{const q=ptrs.get(e.pointerId)||pxy(e);if(ptrs.size===1&&g0&&!g0.moved&&S.D&&S.D.chart){Gc.hover=idxAt(q.x);chart()}ptrs.delete(e.pointerId);if(!ptrs.size)g0=null});
+cvv.addEventListener('pointercancel',e=>{ptrs.delete(e.pointerId);if(!ptrs.size)g0=null});
+cvv.addEventListener('wheel',e=>{e.preventDefault();const f=e.deltaY>0?1.15:0.87;if(e.shiftKey)V.vz=V.vz/f;else if(e.altKey)V.off+=(e.deltaY>0?1:-1)*Math.max(1,Math.round(V.n*0.1));else V.n=Math.round(V.n*f);chart()},{passive:false});
+function mkView2(){const b=$('vbar2');b.innerHTML='';
+ [['↔+',()=>{V.n=Math.max(10,Math.round(V.n*0.8))}],['↔−',()=>{V.n=Math.min(1000,Math.round(V.n*1.25))}],['↕+',()=>{V.vz=Math.min(12,V.vz*1.25)}],['↕−',()=>{V.vz=Math.max(0.15,V.vz/1.25)}],
+  ['◀',()=>{V.off+=Math.max(1,Math.round(V.n*0.25))}],['▶',()=>{V.off-=Math.max(1,Math.round(V.n*0.25))}],['⟲',()=>{V.n=480;V.off=0;V.vz=1;V.vo=0}]].forEach(([l,f])=>{const x=document.createElement('button');x.textContent=l;x.onclick=()=>{f();chart()};b.appendChild(x)});
+ const h=document.createElement('span');h.style.cssText='font-size:11px;color:#8b949e';h.textContent='тяни график — сдвиг (вправо за последнюю свечу — будущее); щипок по горизонтали/вертикали — масштаб; ось цены справа / ось времени снизу — тяни для масштаба; ⟲ — сброс';b.appendChild(h)}
+mkView2();
 window.addEventListener('resize',()=>{if(S.D&&S.tab==='hist')chart()});
 $('bApply').onclick=async()=>{try{const j=await api('/api/config',{config:readForm()});S.cfg=j.config;setForm(j.config);$('cfgMsg').textContent='Применено, история пересчитана';load()}catch(e){$('cfgMsg').textContent='Ошибка: '+e.message}};
 $('bReset').onclick=async()=>{try{const j=await api('/api/config',{reset:true});S.cfg=j.config;setForm(j.config);$('cfgMsg').textContent='Сброшено к рекомендованным';load()}catch(e){$('cfgMsg').textContent='Ошибка: '+e.message}};
