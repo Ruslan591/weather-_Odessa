@@ -17,7 +17,7 @@ import json, os, time
 import numpy as np
 import classic_trendline as tl
 
-HAND_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hand.json")
+HAND_FILE = os.environ.get("CLASSIC_HAND_FILE") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "hand.json")  # CLASSIC_HAND_FILE — для тестов на отдельном файле
 _cache = {"mtime": None, "data": []}
 
 
@@ -37,6 +37,20 @@ def load():
 
 
 def save(items):
+    """Запись с защитой: перед перезаписью предыдущая версия сохраняется (hand.json.bak — последняя, hand_backups/ — не чаще раза в 10 минут, последние 200)."""
+    import shutil
+    if os.path.exists(HAND_FILE):
+        try:
+            shutil.copy2(HAND_FILE, HAND_FILE + ".bak")
+            bd = os.path.join(os.path.dirname(HAND_FILE), "hand_backups")
+            os.makedirs(bd, exist_ok=True)
+            snaps = sorted(os.listdir(bd))
+            if not snaps or time.time() - os.path.getmtime(os.path.join(bd, snaps[-1])) > 600:
+                shutil.copy2(HAND_FILE, os.path.join(bd, "hand_%s.json" % time.strftime("%Y%m%d_%H%M%S")))
+                for old in sorted(os.listdir(bd))[:-200]:
+                    os.remove(os.path.join(bd, old))
+        except OSError:
+            pass
     tmp = HAND_FILE + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(items, f, ensure_ascii=False)
