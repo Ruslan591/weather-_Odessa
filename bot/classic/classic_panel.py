@@ -595,7 +595,7 @@ async def hand_learn():
         df = await get_df(*key)
         closed, _ = split_closed(df)
         ind = an.indicators(closed)
-        data[key] = dict(t=closed.t.values, c=closed.c.values, h=closed.h.values, l=closed.l.values, atr=ind["atr"].values)
+        data[key] = dict(t=closed.t.values, o=closed.o.values, c=closed.c.values, h=closed.h.values, l=closed.l.values, atr=ind["atr"].values)
     loop = asyncio.get_running_loop()
     best, rep = await loop.run_in_executor(None, hd.calibrate, data, items)
     if best is None:
