@@ -57,45 +57,57 @@
   "target_confirmation": {
     "confirmed": true,
     "target_id": 1,
-    "target_area_km2": 80.1,
-    "roi_cloud_fraction": 0.558,
+    "target_area_km2": 97.4,
+    "roi_cloud_fraction": 1.0,
     "verdict": "GeoColour подтверждает: в ROI CLM-цели преобладает облачность"
   },
   "system_analysis_all": [
     {
       "target_id": 0,
       "available": true,
-      "roi_cloud_fraction": 0.645,
+      "roi_cloud_fraction": 0.565,
       "confirmed": true
     },
     {
       "target_id": 5,
       "available": true,
-      "roi_cloud_fraction": 0.252,
+      "roi_cloud_fraction": 0.312,
       "confirmed": false
     },
     {
       "target_id": 6,
       "available": true,
-      "roi_cloud_fraction": 0.99,
+      "roi_cloud_fraction": 0.992,
       "confirmed": true
     },
     {
       "target_id": 7,
       "available": true,
-      "roi_cloud_fraction": 0.993,
+      "roi_cloud_fraction": 0.99,
       "confirmed": true
     },
     {
       "target_id": 8,
       "available": true,
-      "roi_cloud_fraction": 0.539,
+      "roi_cloud_fraction": 0.531,
       "confirmed": true
     },
     {
-      "target_id": 16,
+      "target_id": 10,
       "available": true,
-      "roi_cloud_fraction": 0.461,
+      "roi_cloud_fraction": 0.984,
+      "confirmed": true
+    },
+    {
+      "target_id": 15,
+      "available": true,
+      "roi_cloud_fraction": 0.991,
+      "confirmed": true
+    },
+    {
+      "target_id": 17,
+      "available": true,
+      "roi_cloud_fraction": 0.397,
       "confirmed": false
     }
   ],
@@ -103,26 +115,26 @@
     {
       "target_id": 1,
       "available": true,
-      "roi_cloud_fraction": 0.558,
+      "roi_cloud_fraction": 1.0,
       "confirmed": true
     },
     {
       "target_id": 2,
       "available": true,
-      "roi_cloud_fraction": 0.136,
-      "confirmed": false
+      "roi_cloud_fraction": 0.627,
+      "confirmed": true
     },
     {
       "target_id": 3,
       "available": true,
-      "roi_cloud_fraction": 1.0,
-      "confirmed": true
+      "roi_cloud_fraction": 0.45,
+      "confirmed": false
     },
     {
       "target_id": 4,
       "available": true,
-      "roi_cloud_fraction": 0.262,
-      "confirmed": false
+      "roi_cloud_fraction": 1.0,
+      "confirmed": true
     },
     {
       "target_id": 9,
@@ -131,16 +143,10 @@
       "confirmed": true
     },
     {
-      "target_id": 10,
-      "available": true,
-      "roi_cloud_fraction": 1.0,
-      "confirmed": true
-    },
-    {
       "target_id": 11,
       "available": true,
-      "roi_cloud_fraction": 0.588,
-      "confirmed": true
+      "roi_cloud_fraction": 0.417,
+      "confirmed": false
     },
     {
       "target_id": 12,
@@ -151,20 +157,20 @@
     {
       "target_id": 13,
       "available": true,
-      "roi_cloud_fraction": 0.0,
-      "confirmed": false
-    },
-    {
-      "target_id": 14,
-      "available": true,
       "roi_cloud_fraction": 0.992,
       "confirmed": true
     },
     {
-      "target_id": 15,
+      "target_id": 14,
       "available": true,
-      "roi_cloud_fraction": 0.131,
-      "confirmed": false
+      "roi_cloud_fraction": 1.0,
+      "confirmed": true
+    },
+    {
+      "target_id": 16,
+      "available": true,
+      "roi_cloud_fraction": 1.0,
+      "confirmed": true
     }
   ],
   "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
