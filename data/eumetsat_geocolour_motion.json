@@ -1,6 +1,6 @@
 {
   "timestamp": "2026-10-21T09:20:00.000Z",
-  "buffer_size": 5,
+  "buffer_size": 6,
   "buffer_span_minutes": 50,
   "observed_area": {
     "center_lat": 46.4406,
@@ -13,28 +13,28 @@
     "state_radius_km": 12
   },
   "valid": true,
-  "speed_kmh": 11.9,
+  "speed_kmh": 12.5,
   "direction_compass": "СЗ",
-  "bearing_deg": 328.6,
-  "frame_pairs_used": 4,
-  "acceleration_kmh": 0.9,
-  "turning_deg": -3.4,
+  "bearing_deg": 335.9,
+  "frame_pairs_used": 5,
+  "acceleration_kmh": -0.4,
+  "turning_deg": -13.7,
   "acceleration_verdict": "скорость стабильна",
   "turning_verdict": "направление стабильно",
   "forecast_displacement": {
     "30min": {
-      "distance_km": 6.4,
-      "bearing_deg": 325.0,
+      "distance_km": 6.2,
+      "bearing_deg": 319.0,
       "compass": "СЗ"
     },
     "60min": {
-      "distance_km": 13.4,
-      "bearing_deg": 324.0,
+      "distance_km": 12.8,
+      "bearing_deg": 311.0,
       "compass": "СЗ"
     },
     "120min": {
-      "distance_km": 29.0,
-      "bearing_deg": 321.0,
+      "distance_km": 28.4,
+      "bearing_deg": 297.0,
       "compass": "СЗ"
     }
   },
@@ -42,6 +42,7 @@
     0.698,
     0.659,
     0.646,
+    0.655,
     0.663,
     0.692
   ],
@@ -54,24 +55,24 @@
   "cloud_mass_compass": "СЗ",
   "cloud_mass_area_km2": 173717,
   "target_confirmation": {
-    "confirmed": true,
+    "confirmed": false,
     "target_id": 1,
-    "target_area_km2": 226.8,
-    "roi_cloud_fraction": 1.0,
-    "verdict": "GeoColour подтверждает: в ROI CLM-цели преобладает облачность"
+    "target_area_km2": 112.1,
+    "roi_cloud_fraction": 0.331,
+    "verdict": "GeoColour НЕ подтверждает: в ROI CLM-цели облачность не преобладает — возможно расхождение слоёв"
   },
   "system_analysis_all": [
     {
       "target_id": 0,
       "available": true,
-      "roi_cloud_fraction": 0.571,
+      "roi_cloud_fraction": 0.609,
       "confirmed": true
     },
     {
-      "target_id": 2,
+      "target_id": 4,
       "available": true,
-      "roi_cloud_fraction": 0.197,
-      "confirmed": false
+      "roi_cloud_fraction": 0.518,
+      "confirmed": true
     },
     {
       "target_id": 6,
@@ -80,13 +81,25 @@
       "confirmed": true
     },
     {
-      "target_id": 7,
+      "target_id": 9,
       "available": true,
-      "roi_cloud_fraction": 0.73,
+      "roi_cloud_fraction": 1.0,
       "confirmed": true
     },
     {
-      "target_id": 13,
+      "target_id": 10,
+      "available": true,
+      "roi_cloud_fraction": 0.507,
+      "confirmed": true
+    },
+    {
+      "target_id": 11,
+      "available": true,
+      "roi_cloud_fraction": 0.991,
+      "confirmed": true
+    },
+    {
+      "target_id": 19,
       "available": true,
       "roi_cloud_fraction": 0.571,
       "confirmed": true
@@ -96,20 +109,20 @@
     {
       "target_id": 1,
       "available": true,
+      "roi_cloud_fraction": 0.331,
+      "confirmed": false
+    },
+    {
+      "target_id": 2,
+      "available": true,
       "roi_cloud_fraction": 1.0,
       "confirmed": true
     },
     {
       "target_id": 3,
       "available": true,
-      "roi_cloud_fraction": 0.317,
-      "confirmed": false
-    },
-    {
-      "target_id": 4,
-      "available": true,
-      "roi_cloud_fraction": 0.252,
-      "confirmed": false
+      "roi_cloud_fraction": 1.0,
+      "confirmed": true
     },
     {
       "target_id": 5,
@@ -118,35 +131,59 @@
       "confirmed": true
     },
     {
-      "target_id": 8,
+      "target_id": 7,
       "available": true,
-      "roi_cloud_fraction": 1.0,
-      "confirmed": true
-    },
-    {
-      "target_id": 9,
-      "available": true,
-      "roi_cloud_fraction": 0.036,
+      "roi_cloud_fraction": 0.363,
       "confirmed": false
     },
     {
-      "target_id": 10,
+      "target_id": 8,
       "available": true,
-      "roi_cloud_fraction": 1.0,
-      "confirmed": true
-    },
-    {
-      "target_id": 11,
-      "available": true,
-      "roi_cloud_fraction": 1.0,
-      "confirmed": true
+      "roi_cloud_fraction": 0.071,
+      "confirmed": false
     },
     {
       "target_id": 12,
       "available": true,
-      "roi_cloud_fraction": 0.104,
+      "roi_cloud_fraction": 0.7,
+      "confirmed": true
+    },
+    {
+      "target_id": 13,
+      "available": true,
+      "roi_cloud_fraction": 1.0,
+      "confirmed": true
+    },
+    {
+      "target_id": 14,
+      "available": true,
+      "roi_cloud_fraction": 1.0,
+      "confirmed": true
+    },
+    {
+      "target_id": 15,
+      "available": true,
+      "roi_cloud_fraction": 1.0,
+      "confirmed": true
+    },
+    {
+      "target_id": 16,
+      "available": true,
+      "roi_cloud_fraction": 1.0,
+      "confirmed": true
+    },
+    {
+      "target_id": 17,
+      "available": true,
+      "roi_cloud_fraction": 0.0,
       "confirmed": false
+    },
+    {
+      "target_id": 18,
+      "available": true,
+      "roi_cloud_fraction": 1.0,
+      "confirmed": true
     }
   ],
-  "method_note": "Буфер 5/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
+  "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
 }
