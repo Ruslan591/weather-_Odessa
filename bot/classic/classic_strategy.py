@@ -30,7 +30,7 @@ import classic_hand as hand
 
 PARAMS = dict(tf="15m", be_trigger=1.5, fee=0.05, window_h=240, notional=100.0, warmup=200,
               stop_mode="prev", min_stop_pct=1.5, min_stop_atr=0.0, trail_mode="none", trail_dist=0.0, be_atr=0.0, be_lock=0.3,
-              entry_mode="cross200", rev_exit=True, pat_mode="off", arm_k=12, pat_filter="none", entry_trigger="open", bo_wait=3, tp_r=0.0, max_bars=0, tp_mode="r", tl_min_w=1.5, tl_max_w=14.0, ch_stop_pct=0.3, ch_stop_atr=0.0, ch_min_stop_pct=0.0, ch_tp_gap_pct=0.2, ch_tp_gap_atr=0.0, ch_min_rr=0.0, ch_follow=False, period_from="", period_to="", sym="", hand_forward=True,
+              entry_mode="cross200", rev_exit=True, pat_mode="off", arm_k=12, pat_filter="none", entry_trigger="open", bo_wait=3, tp_r=0.0, max_bars=0, tp_mode="r", be_intrabar=False, tl_min_w=1.5, tl_max_w=14.0, ch_stop_pct=0.3, ch_stop_atr=0.0, ch_min_stop_pct=0.0, ch_tp_gap_pct=0.2, ch_tp_gap_atr=0.0, ch_min_rr=0.0, ch_follow=False, period_from="", period_to="", sym="", hand_forward=True,
               stake_mode="fixed", stake_base=100.0, stake_min=6.0, martingale="off", mart_pct=50.0, mart_max=0,
               stages=[{"t": "pattern", "p": 0, "w": 0, "f": "none"}, {"t": "close_ema20", "p": 0, "w": 12, "f": "none"}])
 
@@ -438,45 +438,49 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                 pos["ext"] = max(pos["ext"], h[i]) if L_ else min(pos["ext"], l[i])
                 if (not pos["be"]) and fav >= pos["be_thr"]:
                     pos["be"], pos["stop"], pos["stage"] = True, e * (1 + (1 if L_ else -1) * P.get("be_lock", 0) / 100), "be"
-                if pos["be"] and i < M and tm != "none":
-                    if tm == "pivot":
-                        if L_:
-                            q = _last_piv(piv, "L", i, lambda p: p > pos["stop"] and p < c[i])
+                    if P.get("be_intrabar") and ((L_ and c[i] <= pos["stop"]) or ((not L_) and c[i] >= pos["stop"])):
+                        # свеча взвела БУ и закрылась по ту сторону БУ-стопа: цена пересекла стоп уже после экстремума, значит выход по цене стопа в этой же свече
+                        finish(i, pos["stop"], "безубыток")
+                if pos is not None:
+                    if pos["be"] and i < M and tm != "none":
+                        if tm == "pivot":
+                            if L_:
+                                q = _last_piv(piv, "L", i, lambda p: p > pos["stop"] and p < c[i])
+                            else:
+                                q = _last_piv(piv, "H", i, lambda p: p < pos["stop"] and p > c[i])
                         else:
-                            q = _last_piv(piv, "H", i, lambda p: p < pos["stop"] and p > c[i])
-                    else:
-                        d = pos["ext"] * td / 100 if tm == "pct" else td * atr[i]
-                        q = pos["ext"] - d if L_ else pos["ext"] + d
-                        if (L_ and not q > pos["stop"]) or ((not L_) and not q < pos["stop"]):
-                            q = None
-                    if q is not None:
-                        pos["stop"], pos["stage"] = float(q), "trail"
-                if pos_ch is not None and P.get("ch_follow") and i + 1 < T:  # стоп/цель следуют за наклонными линиями канала (стоп только подтягивается)
-                    j_ = i + 1
-                    lo_, up_ = pos_ch
-                    if pos["stage"] == "init":
-                        q_ = (lo_(j_) - pos["ch_gap_s"]) if L_ else (up_(j_) + pos["ch_gap_s"])
-                        if (L_ and q_ > pos["stop"] and q_ < c[i]) or ((not L_) and q_ < pos["stop"] and q_ > c[i]):
-                            pos["stop"] = float(q_)
-                    if ch_tp_on:
-                        tq_ = (up_(j_) - pos["ch_gap_t"]) if L_ else (lo_(j_) + pos["ch_gap_t"])
-                        if (L_ and tq_ > c[i]) or ((not L_) and tq_ < c[i]):
-                            pos["tp"] = float(tq_)
-                if pm == "trail" and exits is not None and i < M:
-                    if exits.get(i) and exits[i] != pos["side"]:
-                        pos["ptrail"] = True
-                    if pos["ptrail"]:
-                        lk = P.get("be_lock", 0) / 100
-                        if L_:
-                            cand = l[i]; bep = e * (1 + lk)
-                            if c[i] > bep: cand = max(cand, bep)
-                            if cand > pos["stop"] and cand < c[i]:
-                                pos["stop"], pos["stage"] = float(cand), "ptrail"
-                        else:
-                            cand = h[i]; bep = e * (1 - lk)
-                            if c[i] < bep: cand = min(cand, bep)
-                            if cand < pos["stop"] and cand > c[i]:
-                                pos["stop"], pos["stage"] = float(cand), "ptrail"
+                            d = pos["ext"] * td / 100 if tm == "pct" else td * atr[i]
+                            q = pos["ext"] - d if L_ else pos["ext"] + d
+                            if (L_ and not q > pos["stop"]) or ((not L_) and not q < pos["stop"]):
+                                q = None
+                        if q is not None:
+                            pos["stop"], pos["stage"] = float(q), "trail"
+                    if pos_ch is not None and P.get("ch_follow") and i + 1 < T:  # стоп/цель следуют за наклонными линиями канала (стоп только подтягивается)
+                        j_ = i + 1
+                        lo_, up_ = pos_ch
+                        if pos["stage"] == "init":
+                            q_ = (lo_(j_) - pos["ch_gap_s"]) if L_ else (up_(j_) + pos["ch_gap_s"])
+                            if (L_ and q_ > pos["stop"] and q_ < c[i]) or ((not L_) and q_ < pos["stop"] and q_ > c[i]):
+                                pos["stop"] = float(q_)
+                        if ch_tp_on:
+                            tq_ = (up_(j_) - pos["ch_gap_t"]) if L_ else (lo_(j_) + pos["ch_gap_t"])
+                            if (L_ and tq_ > c[i]) or ((not L_) and tq_ < c[i]):
+                                pos["tp"] = float(tq_)
+                    if pm == "trail" and exits is not None and i < M:
+                        if exits.get(i) and exits[i] != pos["side"]:
+                            pos["ptrail"] = True
+                        if pos["ptrail"]:
+                            lk = P.get("be_lock", 0) / 100
+                            if L_:
+                                cand = l[i]; bep = e * (1 + lk)
+                                if c[i] > bep: cand = max(cand, bep)
+                                if cand > pos["stop"] and cand < c[i]:
+                                    pos["stop"], pos["stage"] = float(cand), "ptrail"
+                            else:
+                                cand = h[i]; bep = e * (1 - lk)
+                                if c[i] < bep: cand = min(cand, bep)
+                                if cand < pos["stop"] and cand > c[i]:
+                                    pos["stop"], pos["stage"] = float(cand), "ptrail"
         if pm == "exit" and exits is not None and i < M and pos and exits.get(i) and exits[i] != pos["side"]:
             sg_ = 1 if pos["side"] == "L" else -1
             if sg_ * (c[i] / pos["p_in"] - 1) * 100 >= P.get("pat_min", 0):
