@@ -302,7 +302,7 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
     tm, td = P["trail_mode"], P["trail_dist"]
     trades, pos, pend, pexit, arm, parm, bo = [], None, None, False, None, None, None
     chan = pre.get("_chan") or {}  # линии канала на сигнале (для stop_mode=channel / tp_mode=channel)
-    pend_ch = bo_ch = pos_ch = None
+    pend_ch = bo_ch = pos_ch = pos_vis = None
     ch_stop_on = P.get("stop_mode") == "channel"
     ch_tp_on = P.get("tp_mode", "r") == "channel"
 
@@ -338,8 +338,11 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
     chan = pre.get("_chan") or {}  # линии считаются в stage_signals — читаем после него
 
     def finish(i, price, reason):
-        nonlocal pos, pos_ch
+        nonlocal pos, pos_ch, pos_vis
         pos_ch = None
+        if pos_vis is not None:
+            pos["chl"] = _chl(pos_vis, pos["i_in"], min(i, T - 1))
+            pos_vis = None
         s = 1 if pos["side"] == "L" else -1
         gross = s * (price / pos["p_in"] - 1) * 100
         pos.update(i_out=i, t_out=int(t[i]), p_out=float(price), reason=reason, gross=gross, net=gross - fee2, open=False)
@@ -384,6 +387,7 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                         st = max(h[i - 1], entry + mind); clamped = bool(st != h[i - 1])
                 if st is not None:
                     pos = mkpos(side, i, entry, st, clamped, i - 1)
+                    pos_vis = ch_
                     if lv:
                         pos_ch = ch_; pos["ch_gap_s"], pos["ch_gap_t"] = lv[2], lv[3]
                         if ch_tp_on: pos["tp"] = lv[1]
@@ -406,6 +410,7 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                         else:
                             pos = mkpos(bside, i, entry, lv[0] if lv else sig3(bside, si, entry), False, si)
                             pos["bo"] = True
+                            pos_vis = bo_ch
                             if lv:
                                 pos_ch = bo_ch; pos["ch_gap_s"], pos["ch_gap_t"] = lv[2], lv[3]
                                 if ch_tp_on: pos["tp"] = lv[1]
@@ -532,11 +537,22 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                 if rx or en:
                     pend = (rx, en, (filt is None) or (en is None) or bool(filt(en, i)))
     if pos:
+        if pos_vis is not None:
+            pos["chl"] = _chl(pos_vis, pos["i_in"], T - 1)
         s = 1 if pos["side"] == "L" else -1
         gross = s * (c[T - 1] / pos["p_in"] - 1) * 100
         pos.update(i_out=T - 1, t_out=int(t[T - 1]), p_out=float(c[T - 1]), reason="открыта", gross=gross, net=gross - fee2, open=True)
         trades.append(pos)
     return trades
+
+
+def _chl(ch, a, b):
+    """Линии канала сделки: [нижняя при входе, верхняя при входе, нижняя при выходе, верхняя при выходе] — для короткого фрагмента на графике."""
+    try:
+        lo, up = ch
+        return [float(lo(a)), float(up(a)), float(lo(b)), float(up(b))]
+    except Exception:
+        return None
 
 
 def pack(trades):
@@ -549,5 +565,7 @@ def pack(trades):
             d[k] = an._r(float(x[k]))
         for k in ("risk", "gross", "net", "mfe", "mae"):
             d[k] = round(float(x[k]), 3)
+        if x.get("chl"):
+            d["chl"] = [an._r(v) for v in x["chl"]]
         out.append(d)
     return out
