@@ -33,14 +33,15 @@ input.nm{background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius
  <div class=card><div class=grid id=sum></div></div>
  <div class=card id=cch><h4 id=chT></h4><div class=t id=rng></div><div class=t id=vbar2></div>
   <div id=chinfo style="font:11.5px ui-monospace,monospace;color:#8b949e;min-height:30px;white-space:pre-line"></div><canvas id=c></canvas>
-  <div class=sm>жёлтая EMA20, фиолетовая EMA200; ▲ лонг / ▼ шорт — вход, ■ — выход, красный пунктир — начальный стоп, линия вход→выход зелёная при плюсе. Время локальное. Перетаскивание — прокрутка, щипок или колесо — масштаб, тап — перекрестие. Страницу прокручивай, касаясь вне графика.</div></div>
+  <div class=sm>голубые линии — канал сделки (короткий фрагмент от входа до выхода, верхняя и нижняя границы; кнопка «Каналы»); жёлтая EMA20 и фиолетовая EMA200 — по кнопке «EMA»; ▲ лонг / ▼ шорт — вход, ■ — выход, красный пунктир — начальный стоп, линия вход→выход зелёная при плюсе. Время локальное. Перетаскивание — прокрутка, щипок или колесо — масштаб, тап — перекрестие. Страницу прокручивай, касаясь вне графика.</div></div>
  <div class=card><h4>Сделки</h4><div class=sc id=tbl>загрузка…</div></div>
 </div>
 <div id=vLive style="display:none"><div id=runs>загрузка…</div></div>
 <script>
 const $=id=>document.getElementById(id);
 const S={sym:null,pairs:[],cfg:null,tab:'hist',D:null,runs:null};
-const V={n:480,off:0,vz:1,vo:0},Gc={start:0,end:0,bw:5,L:4,hover:-1};
+const LS=(k,d)=>{try{const v=localStorage.getItem(k);return v===null?d:v==='1'}catch(e){return d}},LSset=(k,v)=>{try{localStorage.setItem(k,v?'1':'0')}catch(e){}};
+const V={n:480,off:0,vz:1,vo:0,ch:LS('cl_ch',true),ema:LS('cl_ema',false)},Gc={start:0,end:0,bw:5,L:4,hover:-1};
 const TFMS={'1m':60000,'3m':180000,'5m':300000,'15m':900000,'30m':1800000,'1h':3600000,'2h':7200000,'4h':14400000,'6h':21600000,'8h':28800000,'12h':43200000,'1d':86400000};
 function fmt(p){if(p==null)return'—';const a=Math.abs(p);const d=a>=1000?2:a>=100?3:a>=10?4:a>=1?5:7;return p.toFixed(d)}
 const p2=n=>String(n).padStart(2,'0');
@@ -155,7 +156,7 @@ function readForm(){const c={};c.stages=[0,1,2,3,4].map(i=>({t:$('s'+i+'_t').val
 function mkTabs(){$('tabs').innerHTML='';[['hist','История / текущие правила'],['live','Живая бумага']].forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l;if(S.tab===k)b.className='on';b.onclick=()=>setTab(k);$('tabs').appendChild(b)})}
 function setTab(k){S.tab=k;$('vHist').style.display=k==='hist'?'block':'none';$('vLive').style.display=k==='live'?'block':'none';mkTabs();if(k==='live')loadRuns();else load()}
 function mkPairs(){$('pairs').innerHTML='';S.pairs.forEach(p=>{const b=document.createElement('button');b.textContent=p.replace('USDT','');if(p===S.sym)b.className='on';b.onclick=()=>{S.sym=p;V.off=0;V.vz=1;V.vo=0;Gc.hover=-1;mkPairs();load()};$('pairs').appendChild(b)})}
-function mkr(){$('rng').innerHTML='';[[192,'192 св.'],[480,'480 св.'],[960,'все 960']].forEach(([n,l])=>{const b=document.createElement('button');b.textContent=l;if(V.n===n)b.className='on';b.onclick=()=>{V.n=n;V.off=0;V.vz=1;V.vo=0;Gc.hover=-1;mkr();chart()};$('rng').appendChild(b)})}
+function mkr(){$('rng').innerHTML='';[[192,'192 св.'],[480,'480 св.'],[960,'все 960']].forEach(([n,l])=>{const b=document.createElement('button');b.textContent=l;if(V.n===n)b.className='on';b.onclick=()=>{V.n=n;V.off=0;V.vz=1;V.vo=0;Gc.hover=-1;mkr();chart()};$('rng').appendChild(b)});[['ch','Каналы'],['ema','EMA']].forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l+': '+(V[k]?'ВКЛ':'выкл');if(V[k])b.className='on';b.onclick=()=>{V[k]=!V[k];LSset('cl_'+k,V[k]);mkr();chart()};$('rng').appendChild(b)})}
 async function load(){
  try{const j=await api('/api/trades?sym='+S.sym+'&bars=960');if(j.sym!==S.sym)return;S.D=j;S.cfg=j.cfg;renderHist()}catch(e){$('tbl').textContent='Ошибка: '+e.message}
 }
@@ -211,8 +212,12 @@ function chart(){
  for(let k=0;k<=5;k++){const p=lo+(hi-lo)*k/5;g.beginPath();g.moveTo(L,Y(p));g.lineTo(L+pw,Y(p));g.stroke();g.fillText(fmt(p),L+pw+4,Y(p))}
  const step=Math.max(1,Math.ceil(90/bw));g.textAlign='center';for(let i=start;i<end;i+=step){g.fillText(ft(tAt(i)),Math.min(X(i),W-R-30),H-7)}g.textAlign='left';
  for(let i=start;i<endV;i++){const up=C.c[i]>=C.o[i],col=up?'#26a69a':'#ef5350',x=X(i),w=Math.max(1,bw*0.7);g.strokeStyle=g.fillStyle=col;g.beginPath();g.moveTo(x,Y(C.h[i]));g.lineTo(x,Y(C.l[i]));g.stroke();if(bw>=1.6)g.fillRect(x-w/2,Y(Math.max(C.o[i],C.c[i])),w,Math.max(1,Y(Math.min(C.o[i],C.c[i]))-Y(Math.max(C.o[i],C.c[i]))))}
- [['ema20','#e3b341'],['ema200','#bc8cff']].forEach(([k,c])=>{g.strokeStyle=c;g.lineWidth=1.4;g.beginPath();let on=false;for(let i=start;i<endV;i++){const v=C[k][i];if(v==null){on=false;continue}if(!on){g.moveTo(X(i),Y(v));on=true}else g.lineTo(X(i),Y(v))}g.stroke();g.lineWidth=1});
+ if(V.ema)[['ema20','#e3b341'],['ema200','#bc8cff']].forEach(([k,c])=>{g.strokeStyle=c;g.lineWidth=1.4;g.beginPath();let on=false;for(let i=start;i<endV;i++){const v=C[k][i];if(v==null){on=false;continue}if(!on){g.moveTo(X(i),Y(v));on=true}else g.lineTo(X(i),Y(v))}g.stroke();g.lineWidth=1});
  if(end>N){const xn=X(N-0.5);g.strokeStyle='#30363d';g.setLineDash([4,4]);g.beginPath();g.moveTo(xn,0);g.lineTo(xn,H-B);g.stroke();g.setLineDash([]);g.fillStyle='#6e7681';g.textAlign='left';g.fillText('будущее →',xn+4,H-B-8)}
+ if(V.ch)TR.forEach(x=>{if(!x.chl||x.a<0)return;const a=x.a,b=Math.max(x.b,x.a),pre=3,post=1,i0=Math.max(a-pre,start),i1=Math.min(b+post,end-1);if(i1<i0||b<start||a-pre>=end)return;
+   const f=(k,i)=>{const v0=x.chl[k],v1=x.chl[k+2];return b===a?v0:v0+(v1-v0)*(i-a)/(b-a)};
+   [1,0].forEach(k=>{g.strokeStyle='#79c0ff';g.lineWidth=1.8;g.beginPath();g.moveTo(X(i0),Y(f(k,i0)));g.lineTo(X(i1),Y(f(k,i1)));g.stroke();g.lineWidth=1});
+   g.strokeStyle='rgba(121,192,255,.35)';g.setLineDash([2,3]);[a,b].forEach(i=>{if(i<start||i>=end)return;g.beginPath();g.moveTo(X(i),Y(f(1,i)));g.lineTo(X(i),Y(f(0,i)));g.stroke()});g.setLineDash([])});
  const sz=Math.max(3,Math.min(6,bw*1.2));
  TR.forEach(x=>{if(x.a<0&&x.b<0)return;const col=x.net>0?'#3fb950':'#f85149',a=Math.max(x.a,0),b=Math.max(x.b,0);
   if(Math.max(a,b)<start||Math.min(a,b)>=end)return;const xa=X(a),xb=X(b);
@@ -222,8 +227,8 @@ function chart(){
   if(x.b>=start&&x.b<end&&!x.open){g.fillStyle=col;g.fillRect(xb-sz/2,Y(x.p_out)-sz/2,sz,sz)}});
  const lp=C.c[N-1];if(lp>lo&&lp<hi&&V.off===0){g.strokeStyle='#8b949e';g.setLineDash([2,3]);g.beginPath();g.moveTo(L,Y(lp));g.lineTo(L+pw,Y(lp));g.stroke();g.setLineDash([]);g.fillStyle='#30363d';g.fillRect(L+pw+1,Y(lp)-7,R-2,14);g.fillStyle='#fff';g.fillText(fmt(lp),L+pw+4,Y(lp))}
  let hv=Gc.hover;if(hv>=start&&hv<end){const x=X(hv);g.strokeStyle='rgba(201,209,217,.4)';g.setLineDash([3,3]);g.beginPath();g.moveTo(x,0);g.lineTo(x,H-B);g.stroke();g.setLineDash([])}else hv=-1;
- const i=hv>=0?hv:N-1;let s=ft(C.t[i])+'  O '+fmt(C.o[i])+' H '+fmt(C.h[i])+' L '+fmt(C.l[i])+' C '+fmt(C.c[i])+'  EMA20 '+fmt(C.ema20[i])+' EMA200 '+fmt(C.ema200[i]);
- TR.forEach(x=>{if(x.a===i)s+='\n▸ вход '+(x.side==='L'?'ЛОНГ':'ШОРТ')+' '+fmt(x.p_in)+', стоп '+fmt(x.stop0)+' (риск '+x.risk.toFixed(2)+'%)';if(x.b===i&&!x.open)s+='\n■ выход '+fmt(x.p_out)+' · '+x.reason+' · Net '+sg(x.net)+'%'});
+ const i=hv>=0?hv:N-1;let s=ft(C.t[i])+'  O '+fmt(C.o[i])+' H '+fmt(C.h[i])+' L '+fmt(C.l[i])+' C '+fmt(C.c[i])+(V.ema?'  EMA20 '+fmt(C.ema20[i])+' EMA200 '+fmt(C.ema200[i]):'');
+ TR.forEach(x=>{if(x.a===i)s+='\n▸ вход '+(x.side==='L'?'ЛОНГ':'ШОРТ')+' '+fmt(x.p_in)+', стоп '+fmt(x.stop0)+' (риск '+x.risk.toFixed(2)+'%)'+(x.chl?', канал '+fmt(x.chl[0])+' … '+fmt(x.chl[1]):'');if(x.b===i&&!x.open)s+='\n■ выход '+fmt(x.p_out)+' · '+x.reason+' · Net '+sg(x.net)+'%'});
  $('chinfo').textContent=s;
 }
 const cvv=document.getElementById('c'),ptrs=new Map();let g0=null;
