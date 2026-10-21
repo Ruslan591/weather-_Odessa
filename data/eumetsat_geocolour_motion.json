@@ -1,6 +1,6 @@
 {
   "timestamp": "2026-10-21T09:30:00.000Z",
-  "buffer_size": 3,
+  "buffer_size": 6,
   "buffer_span_minutes": 50,
   "observed_area": {
     "center_lat": 46.4406,
@@ -13,13 +13,37 @@
     "state_radius_km": 12
   },
   "valid": true,
-  "speed_kmh": 13.1,
-  "direction_compass": "С",
-  "bearing_deg": 338.9,
-  "frame_pairs_used": 2,
+  "speed_kmh": 12.1,
+  "direction_compass": "СЗ",
+  "bearing_deg": 336.8,
+  "frame_pairs_used": 5,
+  "acceleration_kmh": -0.5,
+  "turning_deg": -8.4,
+  "acceleration_verdict": "скорость стабильна",
+  "turning_verdict": "направление стабильно",
+  "forecast_displacement": {
+    "30min": {
+      "distance_km": 5.8,
+      "bearing_deg": 326.0,
+      "compass": "СЗ"
+    },
+    "60min": {
+      "distance_km": 11.5,
+      "bearing_deg": 321.0,
+      "compass": "СЗ"
+    },
+    "120min": {
+      "distance_km": 23.3,
+      "bearing_deg": 310.0,
+      "compass": "СЗ"
+    }
+  },
   "area_fraction_over_time": [
     0.659,
+    0.646,
+    0.655,
     0.663,
+    0.692,
     0.728
   ],
   "area_trend_delta": 0.069,
@@ -161,5 +185,5 @@
       "confirmed": true
     }
   ],
-  "method_note": "Буфер 3/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
+  "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
 }
