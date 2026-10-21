@@ -254,6 +254,9 @@ async def api_pairs(req):
     return web.json_response({"pairs": p})
 
 
+VTFS = {"5m": 300000, "15m": 900000, "30m": 1800000, "1h": 3600000, "2h": 7200000, "4h": 14400000, "6h": 21600000, "12h": 43200000, "1d": 86400000}
+
+
 async def api_trades(req):
     sym = req.query.get("sym", "").upper() or load_pairs()[0]
     if not ok_sym(sym):
@@ -283,15 +286,32 @@ async def api_trades(req):
             if x["open"] or x["t_in"] >= cutoff or x["t_out"] >= cutoff:
                 out.append(cs.pack([x])[0])
     money = apply_stakes(out, P)
-    closed, live = split_closed(df)
+    vtf = req.query.get("vtf", "")
+    dfc = df  # свечи для рисования; по умолчанию — ТФ правил, кнопки графика могут показать любой другой ТФ (сделки остаются от ТФ правил)
+    if vtf and vtf != cfg["tf"] and vtf in VTFS:
+        try:
+            if per:
+                dfv = await get_df_range(sym, vtf, max(per[0], per[1] - 1100 * VTFS[vtf]))
+                dfv = dfv[dfv.t <= per[1]].reset_index(drop=True)
+            else:
+                dfv = await get_df_long(sym, vtf)
+            if len(dfv) > 50:
+                dfc = dfv
+            else:
+                vtf = ""
+        except Exception:
+            vtf = ""
+    else:
+        vtf = ""
+    closed, live = split_closed(dfc)
     ind = an.indicators(closed)
     k = max(48, min(960, int(req.query.get("bars", 960))))
 
     def sl(v):
         return [None if z is None else an._r(float(z)) for z in v]
-    chart = {"t": [int(z) for z in df.t.values[-k:]]}
+    chart = {"t": [int(z) for z in dfc.t.values[-k:]], "tf": vtf or cfg["tf"]}
     for c_ in "ohlc":
-        chart[c_] = sl(df[c_].values[-k:])
+        chart[c_] = sl(dfc[c_].values[-k:])
     e20, e200 = list(ind["ema20"].values), list(ind["ema200"].values)
     if live is not None:
         e20.append(None); e200.append(None)
@@ -313,7 +333,7 @@ SPEC = {
     "entry_trigger": ("sel", ["open", "breakout"]), "tp_r": ("num", 0, 20), "max_bars": ("num", 0, 2000),
     "rev_exit": ("bool",),
     "stop_mode": ("sel", ["prev", "pct", "pivot", "sig3", "channel"]),
-    "tp_mode": ("sel", ["r", "channel"]), "ch_stop_pct": ("num", 0, 10), "ch_stop_atr": ("num", 0, 10), "ch_min_stop_pct": ("num", 0, 15),
+    "tp_mode": ("sel", ["r", "channel"]), "tl_min_w": ("num", 0.5, 10), "tl_max_w": ("num", 2, 40), "ch_stop_pct": ("num", 0, 10), "ch_stop_atr": ("num", 0, 10), "ch_min_stop_pct": ("num", 0, 15),
     "ch_tp_gap_pct": ("num", 0, 10), "ch_tp_gap_atr": ("num", 0, 10), "ch_min_rr": ("num", 0, 20), "ch_follow": ("bool",),
     "min_stop_pct": ("num", 0.05, 15), "min_stop_atr": ("num", 0, 10),
     "be_trigger": ("num", 0.1, 30), "be_lock": ("num", 0, 10),
