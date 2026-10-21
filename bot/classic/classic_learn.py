@@ -260,7 +260,8 @@ def scan(sym, days, n, tfs):
 
 
 def main():
-    a = [x for x in sys.argv[1:] if not x.startswith("--")]
+    av = sys.argv[1:]
+    a = [x for i, x in enumerate(av) if not x.startswith("--") and not (i > 0 and av[i - 1] in ("--days", "--n"))]
     sym = a[0].upper() if a else "NEARUSDT"
     days = int(sys.argv[sys.argv.index("--days") + 1]) if "--days" in sys.argv else 365
     n = int(sys.argv[sys.argv.index("--n") + 1]) if "--n" in sys.argv else 500
