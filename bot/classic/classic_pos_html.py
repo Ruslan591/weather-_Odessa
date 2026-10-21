@@ -176,6 +176,30 @@ const dd=ms=>{const d=new Date(ms).toISOString();return d.slice(8,10)+'.'+d.slic
 const ddRows=[['Макс. просадка (по закрытым сделкам)',n?'<span class="'+cls(-mdd)+'" style="display:inline;font-size:16px">'+(mdd>0?'-'+mdd.toFixed(2)+'%</span> ('+dd(ddFrom)+' → '+dd(ddTo)+')':'0%</span>'):'—'],['Худшая серия убытков',n?worstS+' подряд / '+sg(worstSnet)+'%':'—'],['Net / макс. просадка',mdd>0?(s/mdd).toFixed(2):'—']];
 const M=D.money||{profit:0,max_stake:0,max_dd:0,avg_stake:0};const moneyRows=[['Профит, $ (по ставкам)','<span class="'+cls(M.profit)+'" style="display:inline;font-size:16px">'+sg(M.profit)+' $</span>'],['Ставка: макс. / средняя, $',M.max_stake.toFixed(2)+' / '+M.avg_stake.toFixed(2)],['Макс. просадка, $','-'+M.max_dd.toFixed(2)]];
 $('sum').innerHTML=moneyRows.concat([['Сделок',n],['Прибыльных',n?w+' ('+Math.round(w/n*100)+'%)':'—'],['Сумма Net %','<span class="'+cls(s)+'" style="display:inline;font-size:16px">'+sg(s)+'%</span>'],['Net, USDT (на '+N+')','<span class="'+cls(sp)+'" style="display:inline;font-size:16px">'+sg(sp)+'</span>'],['До комиссий %',sg(gs)+'%'],['Дошли до БУ',be+' из '+n],['Лучшая / худшая',sg(best)+' / '+sg(worst)],['Открытых',op]]).concat(ddRows).concat(D.period?(()=>{const sp0=D.period.from_ms+0.6*(D.period.to_ms-D.period.from_ms),A=T.filter(x=>x.t_in<sp0),B=T.filter(x=>x.t_in>=sp0),sa=A.reduce((a,x)=>a+x.net,0),sb=B.reduce((a,x)=>a+x.net,0);return [['Подбор (первые 60%): сделок / Net %',A.length+' / '+sg(sa)+'%'],['Проверка (последние 40%): сделок / Net %',B.length+' / '+sg(sb)+'%']]})():[]).map(x=>'<div><span>'+x[0]+'</span><b>'+x[1]+'</b></div>').join('');
+{let e=$('sumLS');if(!e){e=document.createElement('div');e.id='sumLS';e.className='card';$('sum').parentNode.insertAdjacentElement('afterend',e)}
+const sp6=D.period?D.period.from_ms+0.6*(D.period.to_ms-D.period.from_ms):null;
+const sd=k=>{const A=T.filter(x=>x.side===k),m=A.length,wn=A.filter(x=>x.net>0).length,sn=A.reduce((a,x)=>a+x.net,0),gg=A.reduce((a,x)=>a+x.gross,0),us=A.reduce((a,x)=>a+(x.usd||0),0),bb=A.filter(x=>x.be).length,oo=A.filter(x=>x.open).length;
+ const Bs=A.slice().sort((a,b)=>a.t_out-b.t_out);let cu=0,pe=0,md=0;Bs.forEach(x=>{cu+=x.net;if(cu>pe)pe=cu;if(pe-cu>md)md=pe-cu});
+ const bt=m?Math.max(...A.map(x=>x.net)):0,wt=m?Math.min(...A.map(x=>x.net)):0;
+ let pa='—',pb='—';if(sp6!==null){const A1=A.filter(x=>x.t_in<sp6),B1=A.filter(x=>x.t_in>=sp6);pa=A1.length+' / '+sg(A1.reduce((a,x)=>a+x.net,0))+'%';pb=B1.length+' / '+sg(B1.reduce((a,x)=>a+x.net,0))+'%'}
+ return {m,wn,sn,gg,us,bb,oo,md,bt,wt,pa,pb}};
+const L=sd('L'),S=sd('S');
+const cl=v=>'<b class=\"'+cls(v)+'\">'+sg(v)+'%</b>';
+const rw=(n,f)=>'<tr><td>'+n+'</td><td>'+f(L)+'</td><td>'+f(S)+'</td></tr>';
+e.innerHTML='<div style=\"font-weight:600;margin-bottom:4px\">Лонги и шорты отдельно</div><table><tr><th></th><th class=up>ЛОНГ</th><th class=dn>ШОРТ</th></tr>'
++rw('Сделок',x=>x.m+(x.oo?' (откр. '+x.oo+')':''))
++rw('Прибыльных',x=>x.m?x.wn+' ('+Math.round(x.wn/x.m*100)+'%)':'—')
++rw('Сумма Net %',x=>cl(x.sn))
++rw('Net, USDT (на '+N+')',x=>'<b class=\"'+cls(x.sn)+'\">'+sg(x.sn*N/100)+'</b>')
++rw('Профит, $ (по ставкам)',x=>'<b class=\"'+cls(x.us)+'\">'+sg(x.us)+' $</b>')
++rw('До комиссий %',x=>sg(x.gg)+'%')
++rw('Средний Net %',x=>x.m?sg(x.sn/x.m)+'%':'—')
++rw('Лучшая / худшая',x=>x.m?sg(x.bt)+' / '+sg(x.wt):'—')
++rw('Дошли до БУ',x=>x.bb+' из '+x.m)
++rw('Макс. просадка %',x=>x.md>0?'-'+x.md.toFixed(2)+'%':'0%')
++rw('Подбор 60%: сд. / Net',x=>x.pa)
++rw('Проверка 40%: сд. / Net',x=>x.pb)
++'</table>'}
  let h='<table><tr><th>Сторона</th><th>Вход</th><th>Цена</th><th>Стоп0</th><th>Риск%</th><th>Выход</th><th>Цена</th><th>Причина</th><th>Net%</th><th>MFE</th><th>MAE</th><th>Ставка $</th><th>$</th></tr>';
  T.slice().sort((a,b)=>b.t_in-a.t_in).forEach(x=>{h+='<tr><td class="'+(x.side==='L'?'up':'dn')+'">'+(x.side==='L'?'ЛОНГ':'ШОРТ')+'</td><td>'+ft(x.t_in)+'</td><td>'+fmt(x.p_in)+'</td><td>'+fmt(x.stop0)+'</td><td>'+x.risk.toFixed(2)+'</td><td>'+(x.open?'—':ft(x.t_out))+'</td><td>'+(x.open?fmt(x.p_out)+' (тек.)':fmt(x.p_out))+'</td><td>'+x.reason+(x.be&&x.reason!=='безубыток'?' ✓БУ':'')+'</td><td class="'+cls(x.net)+'"><b>'+sg(x.net)+'</b></td><td>'+x.mfe.toFixed(2)+'</td><td>'+x.mae.toFixed(2)+'</td><td>'+(x.stake!=null?x.stake.toFixed(2):'—')+'</td><td class="'+cls(x.usd||0)+'"><b>'+(x.usd!=null?sg(x.usd):'—')+'</b></td></tr>'});
  $('tbl').innerHTML=n?h+'</table>':'За выбранный период сигналов не было';
