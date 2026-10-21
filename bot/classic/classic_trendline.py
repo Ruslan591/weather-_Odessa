@@ -140,11 +140,13 @@ def auto_channel(hh, ll, c, atr, i, lows, highs, cfg=None):
                     continue
                 idx = np.arange(i1, i + 1)
                 main = a1["p"] + s * (idx - i1)
+                # третья точка — строго МЕЖДУ двумя опорными (волна завершилась — канал определён); раньше искалась до текущей свечи
+                i2c = a2["i"] if cfg.get("clone_between", True) else i
                 if side == "R":
-                    dist = main - ll[i1:i + 1]
+                    dist = main[:i2c - i1 + 1] - ll[i1:i2c + 1]
                     k = int(np.argmax(dist)); off = -float(dist[k])
                 else:
-                    dist = hh[i1:i + 1] - main
+                    dist = hh[i1:i2c + 1] - main[:i2c - i1 + 1]
                     k = int(np.argmax(dist)); off = float(dist[k])
                 width = abs(off)
                 a_i = atr[i]
