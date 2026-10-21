@@ -41,7 +41,7 @@ input.nm{background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius
 const $=id=>document.getElementById(id);
 const S={sym:null,pairs:[],cfg:null,tab:'hist',D:null,runs:null};
 const LS=(k,d)=>{try{const v=localStorage.getItem(k);return v===null?d:v==='1'}catch(e){return d}},LSset=(k,v)=>{try{localStorage.setItem(k,v?'1':'0')}catch(e){}};
-const V={n:480,off:0,vz:1,vo:0,ch:LS('cl_ch',true),ema:LS('cl_ema',false)},Gc={start:0,end:0,bw:5,L:4,hover:-1};
+const V={n:480,off:0,vz:1,vo:0,vtf:'',ch:LS('cl_ch',true),ema:LS('cl_ema',false)},Gc={start:0,end:0,bw:5,L:4,hover:-1};
 const TFMS={'1m':60000,'3m':180000,'5m':300000,'15m':900000,'30m':1800000,'1h':3600000,'2h':7200000,'4h':14400000,'6h':21600000,'8h':28800000,'12h':43200000,'1d':86400000};
 function fmt(p){if(p==null)return'—';const a=Math.abs(p);const d=a>=1000?2:a>=100?3:a>=10?4:a>=1?5:7;return p.toFixed(d)}
 const p2=n=>String(n).padStart(2,'0');
@@ -63,6 +63,8 @@ const FIELDS=[
  {sec:'Вход'},
  {k:'entry_mode',l:'Правило входа',t:'sel',o:[['stages','уровни фильтра (редактор ниже)'],['pattern20','после паттерна разворота: первое закрытие за EMA20'],['cross200','пересечение EMA20 × EMA200'],['close20','закрытие свечи за EMA20 после пересечения'],['state20','любая свеча, закрывшаяся за EMA20, когда позиции нет']]},
  {stg:1},
+ {k:'tl_min_w',l:'Канал робота: ширина не меньше, в ATR (по умолч. 1.5)',t:'num'},
+ {k:'tl_max_w',l:'Канал робота: ширина не больше, в ATR (по умолч. 14 — это до ~20% цены; уже — ближе стоп и цель)',t:'num'},
  {k:'arm_k',l:'Сколько свечей ждать закрытия за EMA20 после паттерна (для входа «после паттерна»)',t:'num'},
  {k:'pat_filter',l:'Какие паттерны считать значимыми',t:'sel',o:[['none','все паттерны'],['volume','только с повышенным объёмом'],['level','только у уровня поддержки/сопротивления'],['extreme','только на новом экстремуме'],['sweep','только после ложного пробоя (съём экстремума)']]},
  {k:'rev_exit',l:'Обратный сигнал входа закрывает позицию (разворот)',t:'chk'},
@@ -156,9 +158,9 @@ function readForm(){const c={};c.stages=[0,1,2,3,4].map(i=>({t:$('s'+i+'_t').val
 function mkTabs(){$('tabs').innerHTML='';[['hist','История / текущие правила'],['live','Живая бумага']].forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l;if(S.tab===k)b.className='on';b.onclick=()=>setTab(k);$('tabs').appendChild(b)})}
 function setTab(k){S.tab=k;$('vHist').style.display=k==='hist'?'block':'none';$('vLive').style.display=k==='live'?'block':'none';mkTabs();if(k==='live')loadRuns();else load()}
 function mkPairs(){$('pairs').innerHTML='';S.pairs.forEach(p=>{const b=document.createElement('button');b.textContent=p.replace('USDT','');if(p===S.sym)b.className='on';b.onclick=()=>{S.sym=p;V.off=0;V.vz=1;V.vo=0;Gc.hover=-1;mkPairs();load()};$('pairs').appendChild(b)})}
-function mkr(){$('rng').innerHTML='';[[192,'192 св.'],[480,'480 св.'],[960,'все 960']].forEach(([n,l])=>{const b=document.createElement('button');b.textContent=l;if(V.n===n)b.className='on';b.onclick=()=>{V.n=n;V.off=0;V.vz=1;V.vo=0;Gc.hover=-1;mkr();chart()};$('rng').appendChild(b)});[['ch','Каналы'],['ema','EMA']].forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l+': '+(V[k]?'ВКЛ':'выкл');if(V[k])b.className='on';b.onclick=()=>{V[k]=!V[k];LSset('cl_'+k,V[k]);mkr();chart()};$('rng').appendChild(b)})}
+function mkr(){$('rng').innerHTML='';[[192,'192 св.'],[480,'480 св.'],[960,'все 960']].forEach(([n,l])=>{const b=document.createElement('button');b.textContent=l;if(V.n===n)b.className='on';b.onclick=()=>{V.n=n;V.off=0;V.vz=1;V.vo=0;Gc.hover=-1;mkr();chart()};$('rng').appendChild(b)});(S.D&&S.D.cfg?['5m','15m','30m','1h','2h','4h','6h','12h','1d']:[]).forEach(tf=>{const cur=V.vtf||S.D.cfg.tf,b=document.createElement('button');b.textContent=tf+(tf===S.D.cfg.tf?' •':'');if(cur===tf)b.className='on';b.title=tf===S.D.cfg.tf?'ТФ правил (по нему считаются сделки)':'показать график на этом ТФ; сделки остаются от ТФ правил';b.onclick=()=>{V.vtf=tf===S.D.cfg.tf?'':tf;V.off=0;V.vz=1;V.vo=0;Gc.hover=-1;load()};$('rng').appendChild(b)});[['ch','Каналы'],['ema','EMA']].forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l+': '+(V[k]?'ВКЛ':'выкл');if(V[k])b.className='on';b.onclick=()=>{V[k]=!V[k];LSset('cl_'+k,V[k]);mkr();chart()};$('rng').appendChild(b)})}
 async function load(){
- try{const j=await api('/api/trades?sym='+S.sym+'&bars=960');if(j.sym!==S.sym)return;S.D=j;S.cfg=j.cfg;renderHist()}catch(e){$('tbl').textContent='Ошибка: '+e.message}
+ try{const j=await api('/api/trades?sym='+S.sym+'&bars=960'+(V.vtf?'&vtf='+V.vtf:''));if(j.sym!==S.sym)return;S.D=j;S.cfg=j.cfg;renderHist()}catch(e){$('tbl').textContent='Ошибка: '+e.message}
 }
 function renderHist(){
  const D=S.D,c=D.cfg,T=D.trades,n=T.length,N=D.notional;
@@ -176,7 +178,7 @@ $('sum').innerHTML=moneyRows.concat([['Сделок',n],['Прибыльных',
  let h='<table><tr><th>Сторона</th><th>Вход</th><th>Цена</th><th>Стоп0</th><th>Риск%</th><th>Выход</th><th>Цена</th><th>Причина</th><th>Net%</th><th>MFE</th><th>MAE</th><th>Ставка $</th><th>$</th></tr>';
  T.slice().sort((a,b)=>b.t_in-a.t_in).forEach(x=>{h+='<tr><td class="'+(x.side==='L'?'up':'dn')+'">'+(x.side==='L'?'ЛОНГ':'ШОРТ')+'</td><td>'+ft(x.t_in)+'</td><td>'+fmt(x.p_in)+'</td><td>'+fmt(x.stop0)+'</td><td>'+x.risk.toFixed(2)+'</td><td>'+(x.open?'—':ft(x.t_out))+'</td><td>'+(x.open?fmt(x.p_out)+' (тек.)':fmt(x.p_out))+'</td><td>'+x.reason+(x.be&&x.reason!=='безубыток'?' ✓БУ':'')+'</td><td class="'+cls(x.net)+'"><b>'+sg(x.net)+'</b></td><td>'+x.mfe.toFixed(2)+'</td><td>'+x.mae.toFixed(2)+'</td><td>'+(x.stake!=null?x.stake.toFixed(2):'—')+'</td><td class="'+cls(x.usd||0)+'"><b>'+(x.usd!=null?sg(x.usd):'—')+'</b></td></tr>'});
  $('tbl').innerHTML=n?h+'</table>':'За выбранный период сигналов не было';
- $('chT').textContent=D.sym+' · '+c.tf;chart();
+ $('chT').textContent=D.sym+' · правила '+c.tf+(V.vtf?' · график '+V.vtf:'');mkr();chart();
 }
 function runCard(r){
  const st=r.stats,N=S.runs?S.notional:100,act=r.stop_ms==null;
@@ -199,7 +201,7 @@ function chart(){
  const N=C.t.length,L=4,R=58,B=16,pw=W-L-R;
  V.n=Math.max(10,Math.min(1000,Math.round(V.n)));V.off=Math.max(-(V.n-5),Math.min(Math.round(V.off),N-10));V.vz=Math.max(0.15,Math.min(12,V.vz));
  const end=N-V.off,startRaw=end-V.n,start=Math.max(0,startRaw),endV=Math.min(end,N),bw=pw/(V.n+(V.off===0?2:0));
- const stepMs=TFMS[(S.D.cfg&&S.D.cfg.tf)||'1h']||3600000,tAt=i=>i<N?C.t[Math.max(0,i)]:C.t[N-1]+(i-N+1)*stepMs;
+ const stepMs=TFMS[(C.tf)||(S.D.cfg&&S.D.cfg.tf)||'1h']||3600000,tAt=i=>i<N?C.t[Math.max(0,i)]:C.t[N-1]+(i-N+1)*stepMs;
  Gc.start=start;Gc.end=end;Gc.bw=bw;Gc.L=L;Gc.raw=startRaw;Gc.total=N;Gc.pw=pw;Gc.H=H;Gc.B=B;
  const X=i=>L+(i-startRaw+0.5)*bw;
  const ix=t=>{let b=-1;for(let i=0;i<N;i++){if(C.t[i]<=t)b=i}return b};
