@@ -148,7 +148,7 @@ def auto_channel(hh, ll, c, atr, i, lows, highs, cfg=None):
                     k = int(np.argmax(dist)); off = float(dist[k])
                 width = abs(off)
                 a_i = atr[i]
-                if width < 1.5 * a_i or width > 14 * a_i:
+                if width < cfg.get("minw", 1.5) * a_i or width > cfg.get("maxw", 14) * a_i:
                     continue
                 clone = main + off
                 tol = 0.35 * atr[i1:i + 1]
@@ -199,19 +199,21 @@ def _walk(hh, ll, c, atr, piv, M, warm=60, cfg=None):
         yield i, structure_at(hh, ll, c, atr, i - 1, lows[-8:], highs[-8:], cfg)
 
 
-def tl_signals(o, h, l, c, atr, piv, M, kind, p=0.0, warm=60, info=None):
+def tl_signals(o, h, l, c, atr, piv, M, kind, p=0.0, warm=60, info=None, wlim=None):
     """{индекс закрытой свечи: сторона} для kind = 'tl_bounce' | 'tl_breakout'. Опорные точки и pivot считаются по текущим параметрам CFG (в том числе обученным)."""
     hh, ll = anchor_series(o, h, l, c)
     piv = pivots(hh[:M], ll[:M])
     out, last = {}, {"L": -99, "S": -99}
-    for i, st in _walk(hh, ll, c, atr, piv, M, warm):
+    cfgx = dict(CFG, minw=float(wlim[0]), maxw=float(wlim[1])) if wlim else None  # пределы ширины канала (в ATR) из конструктора
+    minw = cfgx["minw"] if cfgx else 1.5
+    for i, st in _walk(hh, ll, c, atr, piv, M, warm, cfg=cfgx):
         if not st or not st.get("lower") or not st.get("upper"):
             continue
         S, R, typ = st["lower"], st["upper"], st["type"]
         a = atr[i]
         Si, Ri = at(S, i), at(R, i)
         side = None
-        if kind == "tl_bounce" and typ in ("range", "channel_up", "channel_down") and (Ri - Si) >= 1.5 * a:
+        if kind == "tl_bounce" and typ in ("range", "channel_up", "channel_down") and (Ri - Si) >= minw * a:
             tol = (p if p > 0 else 0.3) * a
             if l[i] <= Si + tol and l[i] >= Si - a and c[i] > Si and c[i] > o[i]:
                 side = "L"
