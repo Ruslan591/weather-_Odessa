@@ -161,14 +161,9 @@ def fmt_c(c):
         c["ch_stop_atr"], c["ch_min_stop_pct"], ("канал" if c["tp"][0] == "channel" else "%sR" % c["tp"][1]), c["ch_tp_gap_pct"], c["be_trigger"], c["be_lock"])
 
 
-def main():
-    a = [x for x in sys.argv[1:] if not x.startswith("--")]
-    sym = a[0].upper() if a else "NEARUSDT"
-    tf = a[1] if len(a) > 1 else "2h"
-    days = int(sys.argv[sys.argv.index("--days") + 1]) if "--days" in sys.argv else 365
-    n = int(sys.argv[sys.argv.index("--n") + 1]) if "--n" in sys.argv else 500
+def run_one(sym, tf, days, n, no_download=False):
     d = pair_dir(sym)
-    if "--no-download" in sys.argv:
+    if no_download:
         df = pd.read_csv(os.path.join(d, "klines_%s.csv" % tf))
     else:
         log(d, "скачиваю %s %s за %d дн." % (sym, tf, days))
@@ -230,6 +225,50 @@ def main():
     pos_te = sum(1 for r in res if r["te"]["net"] > 0)
     log(d, "вариантов с плюсом на проверке: %d из %d; средний Net на проверке: %+.2f%%; база: %+.2f%%" % (pos_te, len(res), float(te.mean()), base["te"]["net"]))
     log(d, "готово за %.0f c" % (time.time() - t_start))
+    return dict(tf=tf, candles=len(df), base=base, best=best, rho=rho, pos_te=pos_te, n=len(res), mean_te=float(te.mean()), sec=time.time() - t_start)
+
+
+SCAN_TFS = ["5m", "15m", "30m", "1h", "2h", "4h", "6h", "12h", "1d"]
+
+
+def stable(r, min_te=12):
+    """Устойчиво: плюс на подборе и на проверке, плюс минимум в 3 из 4 кварталов, на проверке не меньше min_te сделок."""
+    return bool(r) and r["tr"]["net"] > 0 and r["te"]["net"] > 0 and sum(1 for q in r["quarters"] if q > 0) >= 3 and r["te"]["n"] >= min_te
+
+
+def scan(sym, days, n, tfs):
+    d = pair_dir(sym)
+    rows = []
+    for tf in tfs:
+        try:
+            r = run_one(sym, tf, days, n if TFMS[tf] >= 1800000 else min(n, 300))
+            rows.append(r)
+        except Exception as e:  # noqa: BLE001
+            log(d, "ТФ %s: ошибка %s" % (tf, str(e)[:200]))
+    log(d, "=== СКАН ПО ТАЙМФРЕЙМАМ %s (подбор — первые 70%%, проверка — последние 30%%; ✔ = плюс на подборе и проверке, плюс в ≥3 из 4 кварталов, ≥12 сделок на проверке) ===" % sym)
+    for r in rows:
+        b, bs = r["base"], r["best"]
+        def f(x):
+            return "%3d сд %+7.1f%% DD %5.1f%% | пров. %3d сд %+7.1f%% DD %5.1f%% | кв %s" % (x["tr"]["n"], x["tr"]["net"], x["tr"]["dd"], x["te"]["n"], x["te"]["net"], x["te"]["dd"], "/".join("%+.0f" % q for q in x["quarters"]))
+        log(d, "%-4s свечей %6d | БАЗА %s %s" % (r["tf"], r["candles"], f(b), "✔" if stable(b) else ""))
+        if bs:
+            log(d, "     %-11s | ЛУЧШИЙ %s %s  [%s]" % ("", f(bs), "✔" if stable(bs) else "", fmt_c(bs["c"])))
+        log(d, "     корр. подбор→проверка %+.2f; плюс на проверке у %d из %d, среднее %+.1f%%" % (r["rho"], r["pos_te"], r["n"], r["mean_te"]))
+    json.dump([dict(tf=r["tf"], candles=r["candles"], base=r["base"], best=r["best"], rho=r["rho"], pos_te=r["pos_te"], n=r["n"], mean_te=r["mean_te"]) for r in rows],
+              open(os.path.join(d, "scan.json"), "w", encoding="utf-8"), ensure_ascii=False, default=list)
+    return rows
+
+
+def main():
+    a = [x for x in sys.argv[1:] if not x.startswith("--")]
+    sym = a[0].upper() if a else "NEARUSDT"
+    days = int(sys.argv[sys.argv.index("--days") + 1]) if "--days" in sys.argv else 365
+    n = int(sys.argv[sys.argv.index("--n") + 1]) if "--n" in sys.argv else 500
+    if "--scan" in sys.argv:
+        tfs = a[1].split(",") if len(a) > 1 else SCAN_TFS
+        scan(sym, days, n, tfs)
+    else:
+        run_one(sym, a[1] if len(a) > 1 else "2h", days, n, "--no-download" in sys.argv)
 
 
 if __name__ == "__main__":
