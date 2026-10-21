@@ -1,52 +1,82 @@
 {
-  "timestamp": "2026-10-21T15:03:14Z",
-  "current_state": "no_precip",
-  "target_type": "precip_mass",
-  "distance_km_now": 11.9,
-  "bearing_deg": 230.0,
-  "compass": "ЮЗ",
-  "speed_kmh": 42.6,
-  "direction_compass": "СЗ",
-  "cpa_km": 11.9,
-  "eta_min": 0.0,
-  "blob_area_km2": 50124.0,
+  "timestamp": "2026-10-21T15:38:29Z",
+  "current_state": "precip",
+  "target_type": "clearing",
+  "distance_km_now": 3.8,
+  "bearing_deg": 22.0,
+  "compass": "С",
+  "speed_kmh": 25.3,
+  "direction_compass": "ЮВ",
+  "cpa_km": 3.7,
+  "eta_min": 1.0,
+  "blob_area_km2": 125596.0,
   "verdict": "уже у города",
-  "approaching": false,
+  "approaching": true,
   "frame_pairs_used": 3,
-  "probability_percent": 86,
-  "probability_note": "эвристика (близость точки сближения + размер поля + уверенность в скорости), не физическая модель осадков",
   "method_note": "Скорость усреднена по 4 кадрам msg_fes:h60b (шаг 15 мин, phase correlation). Presence = непрозрачный пиксель. Край ищется только среди связных областей >= 40px (~53км²). Линейная экстраполяция, годится на ~1 час.",
   "target_confirmation": {
     "confirmed": false,
-    "target_id": 3,
-    "target_area_km2": 230.8,
+    "target_id": 2,
+    "target_area_km2": 198.8,
     "roi_precip_fraction": 0.0,
     "verdict": "Осадков из этой конкретной массы не наблюдается (сухое облако либо осадки не достигают земли)"
   },
   "system_analysis": {
     "available": true,
     "target_id": 0,
-    "area_km2": 1449.0,
-    "roi_precip_fraction": 0.305,
-    "has_precip": true
+    "area_km2": 13831.3,
+    "roi_precip_fraction": 0.04,
+    "has_precip": false
   },
   "system_analysis_all": [
     {
       "target_id": 0,
       "available": true,
-      "roi_precip_fraction": 0.305,
-      "has_precip": true
+      "roi_precip_fraction": 0.04,
+      "has_precip": false
     },
     {
       "target_id": 1,
       "available": true,
-      "roi_precip_fraction": 0.177,
-      "has_precip": true
+      "roi_precip_fraction": 0.0,
+      "has_precip": false
     },
+    {
+      "target_id": 4,
+      "available": true,
+      "roi_precip_fraction": 0.009,
+      "has_precip": false
+    },
+    {
+      "target_id": 9,
+      "available": true,
+      "roi_precip_fraction": 0.013,
+      "has_precip": false
+    },
+    {
+      "target_id": 10,
+      "available": true,
+      "roi_precip_fraction": 0.0,
+      "has_precip": false
+    },
+    {
+      "target_id": 17,
+      "available": true,
+      "roi_precip_fraction": 0.0,
+      "has_precip": false
+    }
+  ],
+  "local_analysis_all": [
     {
       "target_id": 2,
       "available": true,
-      "roi_precip_fraction": 0.045,
+      "roi_precip_fraction": 0.0,
+      "has_precip": false
+    },
+    {
+      "target_id": 3,
+      "available": true,
+      "roi_precip_fraction": 0.0,
       "has_precip": false
     },
     {
@@ -56,57 +86,25 @@
       "has_precip": false
     },
     {
-      "target_id": 7,
-      "available": true,
-      "roi_precip_fraction": 0.035,
-      "has_precip": false
-    },
-    {
-      "target_id": 8,
-      "available": true,
-      "roi_precip_fraction": 0.11,
-      "has_precip": true
-    },
-    {
-      "target_id": 11,
-      "available": true,
-      "roi_precip_fraction": 0.0,
-      "has_precip": false
-    },
-    {
-      "target_id": 23,
-      "available": true,
-      "roi_precip_fraction": 0.0,
-      "has_precip": false
-    }
-  ],
-  "local_analysis_all": [
-    {
-      "target_id": 3,
-      "available": true,
-      "roi_precip_fraction": 0.0,
-      "has_precip": false
-    },
-    {
-      "target_id": 4,
-      "available": true,
-      "roi_precip_fraction": 0.471,
-      "has_precip": true
-    },
-    {
       "target_id": 6,
       "available": true,
       "roi_precip_fraction": 0.0,
       "has_precip": false
     },
     {
-      "target_id": 9,
+      "target_id": 7,
       "available": true,
       "roi_precip_fraction": 0.0,
       "has_precip": false
     },
     {
-      "target_id": 10,
+      "target_id": 8,
+      "available": true,
+      "roi_precip_fraction": 0.0,
+      "has_precip": false
+    },
+    {
+      "target_id": 11,
       "available": true,
       "roi_precip_fraction": 0.0,
       "has_precip": false
@@ -142,12 +140,6 @@
       "has_precip": false
     },
     {
-      "target_id": 17,
-      "available": true,
-      "roi_precip_fraction": 0.0,
-      "has_precip": false
-    },
-    {
       "target_id": 18,
       "available": true,
       "roi_precip_fraction": 0.0,
@@ -161,18 +153,6 @@
     },
     {
       "target_id": 20,
-      "available": true,
-      "roi_precip_fraction": 0.0,
-      "has_precip": false
-    },
-    {
-      "target_id": 21,
-      "available": true,
-      "roi_precip_fraction": 0.0,
-      "has_precip": false
-    },
-    {
-      "target_id": 22,
       "available": true,
       "roi_precip_fraction": 0.0,
       "has_precip": false
