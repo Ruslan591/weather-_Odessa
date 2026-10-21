@@ -30,7 +30,7 @@ import classic_hand as hand
 
 PARAMS = dict(tf="15m", be_trigger=1.5, fee=0.05, window_h=240, notional=100.0, warmup=200,
               stop_mode="prev", min_stop_pct=1.5, min_stop_atr=0.0, trail_mode="none", trail_dist=0.0, be_atr=0.0, be_lock=0.3,
-              entry_mode="cross200", rev_exit=True, pat_mode="off", arm_k=12, pat_filter="none", entry_trigger="open", bo_wait=3, tp_r=0.0, max_bars=0, tp_mode="r", ch_stop_pct=0.3, ch_stop_atr=0.0, ch_min_stop_pct=0.0, ch_tp_gap_pct=0.2, ch_tp_gap_atr=0.0, ch_min_rr=0.0, ch_follow=False, period_from="", period_to="", sym="", hand_forward=True,
+              entry_mode="cross200", rev_exit=True, pat_mode="off", arm_k=12, pat_filter="none", entry_trigger="open", bo_wait=3, tp_r=0.0, max_bars=0, tp_mode="r", tl_min_w=1.5, tl_max_w=14.0, ch_stop_pct=0.3, ch_stop_atr=0.0, ch_min_stop_pct=0.0, ch_tp_gap_pct=0.2, ch_tp_gap_atr=0.0, ch_min_rr=0.0, ch_follow=False, period_from="", period_to="", sym="", hand_forward=True,
               stake_mode="fixed", stake_base=100.0, stake_min=6.0, martingale="off", mart_pct=50.0, mart_max=0,
               stages=[{"t": "pattern", "p": 0, "w": 0, "f": "none"}, {"t": "close_ema20", "p": 0, "w": 12, "f": "none"}])
 
@@ -71,11 +71,12 @@ def stage_signals(pre, P, warmup=None):
     elif trig["t"] in ("tl_bounce", "tl_breakout"):  # линии тренда: отбой в канале/флэте или пробой треугольника
         tlp = float(trig.get("p") or 0)
         cache = pre.setdefault("_tl", {})
-        key_ = (trig["t"], tlp, tl.cfg_key())
+        wl_ = (float(P.get("tl_min_w", 1.5)), float(P.get("tl_max_w", 14.0)))
+        key_ = (trig["t"], tlp, tl.cfg_key(), wl_)
         if key_ not in cache:
             pv_ = None  # опорные точки и pivot модуль считает сам по текущим (в т.ч. обученным по рисункам пользователя) параметрам
             inf_ = {}
-            cache[key_] = (tl.tl_signals(o, h, l, c, atr, pv_, M, trig["t"], tlp, info=inf_), inf_)
+            cache[key_] = (tl.tl_signals(o, h, l, c, atr, pv_, M, trig["t"], tlp, info=inf_, wlim=None if wl_ == (1.5, 14.0) else wl_), inf_)
         tlsig, chan = cache[key_]
     elif trig["t"] in ("hand_bounce", "hand_breakout"):  # линии, нарисованные пользователем (hand.json)
         hp = float(trig.get("p") or 0)
