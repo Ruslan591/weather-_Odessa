@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-21T19:27:18Z",
+  "timestamp": "2026-10-21T19:32:20Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-10-21T19:00:00.000Z",
   "target_id": 1,
@@ -31,23 +31,6 @@
       "elongation_aspect_ratio": 2.21,
       "elongation_axis_deg": 133.0,
       "elongation_axis_compass": "ЮВ-СЗ",
-      "frontlike": false,
-      "phase_label": "безоблачно",
-      "type_label": "безоблачно",
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": false,
-      "geocolour_confirmed": true
-    },
-    {
-      "target_id": 6,
-      "area_km2": 225.5,
-      "distance_km": 160.2,
-      "bearing_deg": 258.0,
-      "compass": "З",
-      "elongation_aspect_ratio": 1.82,
-      "elongation_axis_deg": 11.0,
-      "elongation_axis_compass": "С-Ю",
       "frontlike": false,
       "phase_label": "безоблачно",
       "type_label": "безоблачно",
@@ -91,7 +74,7 @@
       "geocolour_confirmed": true
     }
   ],
-  "local_suppressed_count": 7,
+  "local_suppressed_count": 8,
   "system_candidates": [
     {
       "target_id": 0,
@@ -255,20 +238,20 @@
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-10-21T19:00:00.000Z"
+        "timestamp": "2026-10-21T19:10:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-10-21T19:00:00.000Z"
+        "confirmed": true,
+        "timestamp": "2026-10-21T19:10:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": false,
         "timestamp": "2026-10-21T16:47:24Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -277,8 +260,8 @@
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-10-21T19:22:20Z"
+      "timestamp": "2026-10-21T19:32:04Z"
     }
   },
-  "verdict": "CLM отметил цель в 122км ЮЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (16664км²) в 118км ЮЗ."
+  "verdict": "Цель в 122км ЮЗ, безоблачно — каналы расходятся: geocolour_motion подтверждают, ir_motion/cloud_phase_type нет. Отдельно: система синоптического масштаба (16664км²) в 118км ЮЗ."
 }
