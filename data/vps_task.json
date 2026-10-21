@@ -1,1 +1,1 @@
-{"task_id": "scan-poll2-1792559573", "cmd": "tail -6 /opt/trading-bot/classic/pairs/NEARUSDT/learn.log | cut -c1-210; echo; uptime | sed 's/.*load/load/'", "timeout": 40}
+{"task_id": "scan-read-1792559589", "cmd": "grep -a -A60 'СКАН ПО ТАЙМФРЕЙМАМ' /opt/trading-bot/classic/pairs/NEARUSDT/learn.log | cut -c1-260; grep -a 'готово за' /opt/trading-bot/classic/pairs/NEARUSDT/learn.log | tr '\\n' ' '", "timeout": 40}
