@@ -11,7 +11,7 @@
 """
 import numpy as np
 
-FC = {"L": 2, "R": 1, "k": 2.0, "m": 1.0, "minw": 0.8, "maxw": 8.0, "tol": 0.15, "anomaly": 1, "after": 1, "dev": 0.0}  # anomaly=0 — всегда хвосты, 2 — всегда тела
+FC = {"L": 2, "R": 1, "k": 2.0, "m": 1.0, "minw": 0.8, "maxw": 8.0, "tol": 0.15, "anomaly": 1, "after": 1, "dev": 0.5, "redraw": 1}  # anomaly=0 — всегда хвосты, 2 — всегда тела
 
 
 def at(line, j):
@@ -107,9 +107,11 @@ def walk(o, h, l, c, atr, cfg=None, start=30):
     piv = find_pivots(o, h, l, c, cfg)
     ptr, zz, floor, st = 0, [], 0, None
     for i in range(start, len(c)):
+        sig = (len(zz), zz[-1]["i"] if zz else -1, zz[-1]["k"] if zz else "")
         while ptr < len(piv) and piv[ptr]["conf"] <= i:
             _add_zz(zz, piv[ptr], h, l, atr, cfg["dev"])
             ptr += 1
+        changed = sig != (len(zz), zz[-1]["i"] if zz else -1, zz[-1]["k"] if zz else "")  # появился новый пивот
         ev = None
         if st is not None:
             tol = cfg["tol"] * atr[i]
@@ -119,8 +121,10 @@ def walk(o, h, l, c, atr, cfg=None, start=30):
                 ev = {"i": i, "dir": "down"}
             if ev:
                 floor, st = i, None
-        if st is None and ev is None:
-            st = _build(o, h, l, c, atr, i, zz, floor, cfg, anH, anL)
+        if ev is None and (st is None or (changed and cfg["redraw"])):
+            nw = _build(o, h, l, c, atr, i, zz, floor, cfg, anH, anL)  # новый пивот: если по трём последним строится канал — перерисовываем, иначе остаётся прежний
+            if nw is not None:
+                st = nw
         yield i, st, ev
 
 
