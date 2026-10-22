@@ -1,1 +1,1 @@
-{"task_id": "t1792667888", "cmd": "cd /opt/trading-bot/classic && sleep 45; cat fcf_1h_near.log | tail -20", "timeout": 90}
+{"task_id": "t1792667995", "cmd": "cd /opt/trading-bot/classic && nohup sh -c 'for tf in 1h 2h 4h 15m; do /opt/trading-bot/venv/bin/python -W ignore classic_fc_filters.py $tf NEARUSDT,SOLUSDT,BTCUSDT,ZECUSDT > fcf_$tf.log 2>&1; done' > /dev/null 2>&1 & sleep 100; tail -n 16 fcf_1h.log", "timeout": 130}
