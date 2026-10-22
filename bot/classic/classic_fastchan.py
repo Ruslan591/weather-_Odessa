@@ -11,7 +11,7 @@
 """
 import numpy as np
 
-FC = {"L": 2, "R": 1, "k": 2.0, "m": 1.0, "minw": 0.8, "maxw": 8.0, "tol": 0.15, "anomaly": 1, "after": 1}  # anomaly=0 — всегда хвосты, 2 — всегда тела
+FC = {"L": 2, "R": 1, "k": 2.0, "m": 1.0, "minw": 0.8, "maxw": 8.0, "tol": 0.15, "anomaly": 1, "after": 1, "dev": 0.0}  # anomaly=0 — всегда хвосты, 2 — всегда тела
 
 
 def at(line, j):
@@ -43,12 +43,16 @@ def find_pivots(o, h, l, c, cfg):
     return out
 
 
-def _add_zz(zz, p, h, l):
+def _add_zz(zz, p, h, l, atr, dev):
+    """Зигзаг: пивот противоположного типа принимается, только если ход от предыдущего пивота >= dev*ATR (мелкие колебания игнорируются, одноимённые пивоты сливаются в более экстремальный)."""
+    pr = lambda q: h[q["i"]] if q["k"] == "H" else l[q["i"]]
     if zz and zz[-1]["k"] == p["k"]:
         a = zz[-1]
         better = h[p["i"]] > h[a["i"]] if p["k"] == "H" else l[p["i"]] < l[a["i"]]
         if better:
             zz[-1] = p
+        return
+    if zz and abs(pr(p) - pr(zz[-1])) < dev * atr[p["i"]]:
         return
     zz.append(p)
 
@@ -104,7 +108,7 @@ def walk(o, h, l, c, atr, cfg=None, start=30):
     ptr, zz, floor, st = 0, [], 0, None
     for i in range(start, len(c)):
         while ptr < len(piv) and piv[ptr]["conf"] <= i:
-            _add_zz(zz, piv[ptr], h, l)
+            _add_zz(zz, piv[ptr], h, l, atr, cfg["dev"])
             ptr += 1
         ev = None
         if st is not None:
