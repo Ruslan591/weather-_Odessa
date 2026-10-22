@@ -1,1 +1,1 @@
-{"task_id": "t1792670136", "cmd": "cd /opt/trading-bot/classic && ls fch_*; for f in fch_15m_1h.log fch_1h_4h.log fch_1h_1d.log fch_2h_1d.log fch_4h_1d.log; do [ -f $f ] && { echo == $f; tail -n 7 $f | cut -c1-170; }; done", "timeout": 120}
+{"task_id": "t1792670328", "cmd": "cd /opt/trading-bot/classic && for f in fch_1h_1d.log fch_2h_1d.log fch_4h_1d.log; do echo == $f; tail -n 7 $f | cut -c1-170; done", "timeout": 120}
