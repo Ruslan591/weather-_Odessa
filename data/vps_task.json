@@ -1,1 +1,1 @@
-{"task_id": "t1792673209", "cmd": "cd /opt/trading-bot/classic && ls pairs; for p in pairs/*/; do echo $p; ls $p | grep klines | tr '\\n' ' '; echo; done; wc -l pairs/*/klines_1d.csv 2>/dev/null; cat pairs.json 2>/dev/null | head -c 400", "timeout": 60}
+{"task_id": "t1792673236", "cmd": "cd /opt/trading-bot/classic && ps aux | grep -i '[c]lassic' | cut -c1-150; ls -la pairs.json; tail -n 5 pairs/NEARUSDT/learn.log | cut -c1-160; systemctl list-units --all | grep -i classic | cut -c1-120", "timeout": 60}
