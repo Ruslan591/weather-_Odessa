@@ -1,7 +1,9 @@
 """classic_fastchan_diag.py SYMBOL TF [UTC_END 'YYYY-MM-DD HH:MM'] [HOURS] — какие каналы строит быстрый канал на свежих свечах Binance (время вывода UTC+3)."""
 import sys, json, urllib.request, datetime as dt
 import numpy as np
+import os
 import classic_fastchan as F
+CFG = json.loads(os.environ.get('FC_CFG', '{}'))
 
 sym, tf = sys.argv[1], sys.argv[2]
 end = sys.argv[3] if len(sys.argv) > 3 else None
@@ -23,7 +25,7 @@ n = len(c)
 print("candles", n, "last", tm(n - 1), "close", c[-1])
 t0 = t[-1] - hours * 3600
 prev = None
-for i, st, ev in F.walk(o, h, l, c, atr):
+for i, st, ev in F.walk(o, h, l, c, atr, CFG):
     if t[i] < t0:
         continue
     if ev:
