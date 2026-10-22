@@ -6,6 +6,7 @@ from aiohttp import web
 import pandas as pd
 import classic_analysis as an
 import classic_trendline as tl
+import classic_fastchan as fc
 import classic_hand as hd
 import classic_strategy as cs
 from classic_pos_html import HTML as POS_HTML
@@ -197,6 +198,20 @@ def ok_sym(s):
     return bool(s) and re.fullmatch(r"[A-Z0-9]{5,15}", s) is not None
 
 
+def fast_chart(closed, atr, shift, keep=6):
+    """Быстрый канал (classic_fastchan) для графика: последние каналы с линиями в индексах окна; end — свеча пробоя телом (None — канал действует)."""
+    o, h, l, c = closed.o.values, closed.h.values, closed.l.values, closed.c.values
+    items, cur = [], None
+    for i, st, ev in fc.walk(o, h, l, c, atr):
+        if st is not None and (cur is None or st["born"] != cur["born"]):
+            cur = {"born": int(st["born"]), "mode": st["mode"], "kind": st["kind"], "lo": st["lower"], "up": st["upper"], "end": None}
+            items.append(cur)
+        if ev and cur is not None and cur["end"] is None:
+            cur["end"] = int(ev["i"])
+    ln = lambda x: {"i1": int(x[0]) - shift, "p1": float(x[1]), "i2": int(x[2]) - shift, "p2": float(x[3]), "s": float(x[4])}
+    return {"items": [{"born": it["born"] - shift, "end": None if it["end"] is None else it["end"] - shift, "mode": it["mode"], "kind": it["kind"], "lo": ln(it["lo"]), "up": ln(it["up"])} for it in items[-keep:]]}
+
+
 async def api_chart(req):
     sym, tf = req.query.get("sym", "BTCUSDT").upper(), req.query.get("tf", "15m")
     if not ok_sym(sym) or tf not in ALLTF:
@@ -211,6 +226,10 @@ async def api_chart(req):
                                       None, len(closed), shift=max(0, len(closed) - 1000))
         except Exception as e_:
             res["tl"] = {"lines": {}, "struct": None, "label": "ошибка линий: " + str(e_)[:80], "sigs": []}
+        try:
+            res["fc"] = fast_chart(closed, an.indicators(closed)["atr"].values, max(0, len(closed) - 1000))
+        except Exception as e_:
+            res["fc"] = {"items": [], "err": str(e_)[:80]}
         res["live"] = None if live is None else {k: float(live[k]) for k in "ohlcv"} | {"t": int(live.t)}
         res["sym"], res["tf"] = sym, tf
         return web.json_response(res)
@@ -721,9 +740,9 @@ ul{margin:4px 0 0;padding-left:18px}
 <script>
 const TFS=['1m','3m','5m','15m','30m','1h','2h','4h','6h','8h','12h','1d'];
 const TFMS={'1m':60000,'3m':180000,'5m':300000,'15m':900000,'30m':1800000,'1h':3600000,'2h':7200000,'4h':14400000,'6h':21600000,'8h':28800000,'12h':43200000,'1d':86400000};
-const OPTN={ema:'EMA',bb:'Bollinger',lv:'Уровни',pv:'Pivot',pt:'Паттерны',tl:'Линии тренда',vol:'Объём',rsi:'RSI',macd:'MACD'};
+const OPTN={ema:'EMA',bb:'Bollinger',lv:'Уровни',pv:'Pivot',pt:'Паттерны',tl:'Линии тренда',fc:'Быстрый канал',vol:'Объём',rsi:'RSI',macd:'MACD'};
 const S={sym:localStorage.csym||'BTCUSDT',tf:localStorage.ctf||'15m',n:120,off:0,vz:1,vo:0,hover:-1,D:null,pairs:[],lab:{on:0,items:[]},hand:{on:0,tool:null,pts:[],items:[],sigs:[],learned:null},
- opt:Object.assign({ema:1,bb:0,lv:1,pv:1,pt:1,tl:1,vol:1,rsi:1,macd:0},JSON.parse(localStorage.copt||'{}'))};
+ opt:Object.assign({ema:1,bb:0,lv:1,pv:1,pt:1,tl:1,fc:1,vol:1,rsi:1,macd:0},JSON.parse(localStorage.copt||'{}'))};
 const G={start:0,end:0,bw:5,L:4};
 const $=id=>document.getElementById(id);
 const cl=(x,a,b)=>Math.max(a,Math.min(b,x));
@@ -878,6 +897,12 @@ function draw(){
   g.font='bold 11px system-ui';g.textAlign='center';TL.sigs.forEach(s=>{if(s.i<start||s.i>=end)return;const x=X(s.i),t=(s.kind==='b'?'отбой':'пробой');
    if(s.side==='L'){g.fillStyle='#00e676';g.fillText('⬆'+t,x,py(D.l[s.i])+(S.opt.pv?52:42))}else{g.fillStyle='#ff1744';g.fillText('⬇'+t,x,py(D.h[s.i])-(S.opt.pv?52:42))}});
   g.restore();g.font='11px system-ui';g.textAlign='left';g.fillStyle='#c9d1d9';g.fillText('Линии тренда: '+TL.label,L+6,m.y0+12);g.font='10px system-ui'}
+ // быстрый канал бота (жёлтый; пунктир — канал уже пробит телом, линия обрывается на свече пробоя)
+ if(S.opt.fc&&D.fc&&D.fc.items){g.save();g.beginPath();g.rect(L,m.y0,plotW,m.y1-m.y0);g.clip();
+  D.fc.items.forEach(it=>{const live=it.end===null;const a=Math.max(start,it.lo.i1),b=live?end-1+(S.off===0?2:0):Math.min(end-1,it.end);if(b<a)return;
+   [it.lo,it.up].forEach(ln=>{g.strokeStyle=live?'#ffd33d':'#a08a2e';g.lineWidth=live?2:1.2;g.setLineDash(live?[]:[5,4]);g.beginPath();g.moveTo(X(a),py(ln.p1+ln.s*(a-ln.i1)));g.lineTo(X(b),py(ln.p1+ln.s*(b-ln.i1)));g.stroke();g.setLineDash([]);g.lineWidth=1;g.fillStyle='#ffd33d';[[ln.i1,ln.p1],[ln.i2,ln.p2]].forEach(([ii,pp])=>{if(ii<start||ii>=end)return;g.beginPath();g.arc(X(ii),py(pp),2.6,0,6.3);g.fill()})});
+   g.fillStyle='#ffd33d';g.font='bold 10px system-ui';g.textAlign='left';g.fillText('быстр.'+(it.mode==='body'?' (тела)':''),X(a),py(it.up.p1+it.up.s*(a-it.up.i1))-6)});
+  g.restore();g.font='10px system-ui'}
  // нарисованные мной структуры (синий — канал, оранжевый — флэт, фиолетовый — треугольник; пунктир — вторая линия) и сигналы бота по ним
  if(S.hand.items.length||S.hand.pts.length){g.save();g.beginPath();g.rect(L,m.y0,plotW,m.y1-m.y0);g.clip();
   const ixf=t=>N-1+(t-D.t[N-1])/stepMs,xr=end+(S.off===0?3:1);
