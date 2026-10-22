@@ -167,3 +167,36 @@ def channel_now(o, h, l, c, atr, cfg=None, start=30):
         if ev:
             evs.append(ev)
     return st, evs
+
+
+def fc_signals(o, h, l, c, atr, M, kind, p=0.0, minw=1.5, maxw=8.0, info=None, cfg=None, start=60):
+    """Сигналы стратегии по быстрому каналу, формат как у classic_trendline.tl_signals: {индекс закрытой свечи: 'L'|'S'}.
+    Канал берётся по состоянию на предыдущей свече (свеча i в построении не участвует — без заглядывания вперёд).
+    tl_bounce: свеча коснулась нижней (лонг) / верхней (шорт) границы в пределах p*ATR (0.3), закрылась по эту сторону и в сторону отбоя; ширина >= minw ATR.
+    tl_breakout: свеча закрылась за границей (лонг — вверх, шорт — вниз; допуск p*ATR, по умолчанию 0) — канал снимается.
+    info[i] = (нижняя(j), верхняя(j)) — линии канала для стопа/цели по каналу."""
+    cf = dict(cfg or {})
+    cf["minw"], cf["maxw"] = float(minw), float(maxw)
+    if kind == "tl_breakout" and p and p > 0:
+        cf["btol"] = float(p)
+    out, last, prev = {}, {"L": -99, "S": -99}, None
+    for i, st, ev in walk(o[:M], h[:M], l[:M], c[:M], atr[:M], cf, start=start):
+        if prev is not None:
+            S, R = prev["lower"], prev["upper"]
+            Si, Ri, a = at(S, i), at(R, i), atr[i]
+            side = None
+            if kind == "tl_bounce" and (Ri - Si) >= cf["minw"] * a:
+                tol = (p if p and p > 0 else 0.3) * a
+                if l[i] <= Si + tol and l[i] >= Si - a and c[i] > Si and c[i] > o[i]:
+                    side = "L"
+                elif h[i] >= Ri - tol and h[i] <= Ri + a and c[i] < Ri and c[i] < o[i]:
+                    side = "S"
+            elif kind == "tl_breakout" and ev:
+                side = "L" if ev["dir"] == "up" else "S"
+            if side and i - last[side] >= 6:
+                out[i] = side
+                last[side] = i
+                if info is not None:
+                    info[i] = ((lambda j, L_=S: at(L_, j)), (lambda j, R_=R: at(R_, j)))
+        prev = st
+    return out
