@@ -11,7 +11,7 @@
 """
 import numpy as np
 
-FC = {"L": 2, "R": 1, "k": 2.0, "m": 1.0, "minw": 0.8, "maxw": 8.0, "tol": 0.15, "anomaly": 1, "after": 1, "dev": 0.5, "redraw": 1}  # anomaly=0 — всегда хвосты, 2 — всегда тела
+FC = {"L": 2, "R": 1, "k": 2.0, "m": 1.0, "minw": 0.8, "maxw": 8.0, "tol": 0.15, "anomaly": 1, "after": 1, "dev": 0.5, "redraw": 1, "btol": 0.0}  # anomaly=0 — всегда хвосты, 2 — всегда тела
 
 
 def at(line, j):
@@ -114,7 +114,7 @@ def walk(o, h, l, c, atr, cfg=None, start=30):
         changed = sig != (len(zz), zz[-1]["i"] if zz else -1, zz[-1]["k"] if zz else "")  # появился новый пивот
         ev = None
         if st is not None:
-            tol = cfg["tol"] * atr[i]
+            tol = cfg["btol"] * atr[i]  # пробой — закрытие за линией (по правилу пользователя без допуска)
             if c[i] > at(st["upper"], i) + tol:
                 ev = {"i": i, "dir": "up"}
             elif c[i] < at(st["lower"], i) - tol:
