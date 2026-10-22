@@ -204,6 +204,8 @@ def fast_chart(closed, atr, shift, keep=6):
     items, cur = [], None
     for i, st, ev in fc.walk(o, h, l, c, atr):
         if st is not None and (cur is None or st["born"] != cur["born"]):
+            if cur is not None and cur["end"] is None:
+                cur["end"] = int(i)  # заменён новым каналом (перерисовка на новом пивоте)
             cur = {"born": int(st["born"]), "mode": st["mode"], "kind": st["kind"], "lo": st["lower"], "up": st["upper"], "end": None}
             items.append(cur)
         if ev and cur is not None and cur["end"] is None:
