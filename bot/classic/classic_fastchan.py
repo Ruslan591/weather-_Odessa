@@ -22,8 +22,8 @@ def _anom(o, h, l, c, atr, cfg):
     bh, bl = np.maximum(o, c), np.minimum(o, c)
     body = bh - bl
 
-    def f(w):
-        return ((w > cfg["k"] * body) & (w >= 0.3 * atr)) | (w > cfg["m"] * atr)
+    def f(w):  # тень аномальна: длиннее m*ATR, либо длиннее k тел (только если тело заметное: >= 0.2 ATR — у дожи отношение к телу бессмысленно) и не короче 0.4 ATR
+        return ((w > cfg["k"] * body) & (body >= 0.2 * atr) & (w >= 0.4 * atr)) | (w > cfg["m"] * atr)
     return f(h - bh), f(bl - l)
 
 
@@ -57,21 +57,30 @@ def _add_zz(zz, p, h, l, atr, dev):
     zz.append(p)
 
 
+def _bodymode(pa, pb, cfg, anH, anL):
+    if cfg["anomaly"] == 2:
+        return True
+    if cfg["anomaly"] == 0:
+        return False
+    return any((anH if p["k"] == "H" else anL)[p["i"]] for p in (pa, pb))
+
+
+def _price(o, h, l, c, p, body):
+    j = p["i"]
+    if p["k"] == "H":
+        return float(max(o[j], c[j]) if body else h[j])
+    return float(min(o[j], c[j]) if body else l[j])
+
+
+def _own(o, h, l, c, p, cfg, anH, anL):
+    """Опорная цена пивота по его собственной тени (хвост, а при аномальной тени — тело)."""
+    return _price(o, h, l, c, p, _bodymode(p, p, cfg, anH, anL))
+
+
 def _try(o, h, l, c, atr, i, p1, p2, p3, cfg, anH, anL):
     pts = (p1, p2, p3)
-    if cfg["anomaly"] == 2:
-        body = True
-    elif cfg["anomaly"] == 0:
-        body = False
-    else:
-        body = any((anH if p["k"] == "H" else anL)[p["i"]] for p in pts)
-
-    def price(p):
-        j = p["i"]
-        if p["k"] == "H":
-            return float(max(o[j], c[j]) if body else h[j])
-        return float(min(o[j], c[j]) if body else l[j])
-    a1, a2, a3 = price(p1), price(p2), price(p3)
+    body = _bodymode(p1, p3, cfg, anH, anL)  # главная линия: обе точки по хвостам или обе по телам
+    a1, a2, a3 = _price(o, h, l, c, p1, body), _own(o, h, l, c, p2, cfg, anH, anL), _price(o, h, l, c, p3, body)
     if p3["i"] == p1["i"]:
         return None
     s = (a3 - a1) / (p3["i"] - p1["i"])
@@ -108,14 +117,14 @@ def _build(o, h, l, c, atr, i, zz, floor, cfg, anH, anL):
     p3 = pool[-1]
     if p3["conf"] > i or p3["i"] < floor:
         return None
-    pr = lambda p: h[p["i"]] if p["k"] == "H" else l[p["i"]]
     best = None
     same = [q for q in pool[:-1] if q["k"] == p3["k"]][-int(cfg["deep"]):]
     for p1 in reversed(same):
         mid = [q for q in pool if p1["i"] < q["i"] < p3["i"] and q["k"] != p3["k"]]
         if not mid:
             continue
-        p2 = max(mid, key=pr) if p3["k"] == "L" else min(mid, key=pr)
+        ka = lambda q: _own(o, h, l, c, q, cfg, anH, anL)
+        p2 = max(mid, key=ka) if p3["k"] == "L" else min(mid, key=ka)
         ch = _try(o, h, l, c, atr, i, p1, p2, p3, cfg, anH, anL)
         if ch and (best is None or ch["span"] > best["span"]):
             best = ch
