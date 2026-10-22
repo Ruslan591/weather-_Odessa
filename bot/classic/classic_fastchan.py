@@ -11,7 +11,7 @@
 """
 import numpy as np
 
-FC = {"L": 2, "R": 1, "k": 2.0, "m": 1.0, "minw": 0.8, "maxw": 8.0, "tol": 0.15, "anomaly": 1, "after": 1, "dev": 0.5, "redraw": 1, "btol": 0.0}  # anomaly=0 — всегда хвосты, 2 — всегда тела
+FC = {"L": 2, "R": 1, "k": 2.0, "m": 1.0, "minw": 0.8, "maxw": 8.0, "tol": 0.15, "anomaly": 1, "after": 1, "dev": 0.5, "redraw": 1, "btol": 0.0, "deep": 6}  # anomaly=0 — всегда хвосты, 2 — всегда тела
 
 
 def at(line, j):
@@ -57,12 +57,8 @@ def _add_zz(zz, p, h, l, atr, dev):
     zz.append(p)
 
 
-def _build(o, h, l, c, atr, i, zz, floor, cfg, anH, anL):
-    # after=1: после пробоя нужна только ТРЕТЬЯ точка (1-я и 2-я могут быть до пробоя — как у пользователя); after=0: все три на/после свечи пробоя
-    pts = zz[-3:] if cfg["after"] else [p for p in zz if p["i"] >= floor][-3:]
-    if len(pts) < 3 or pts[2]["conf"] > i or pts[2]["i"] < floor:
-        return None
-    p1, p2, p3 = pts
+def _try(o, h, l, c, atr, i, p1, p2, p3, cfg, anH, anL):
+    pts = (p1, p2, p3)
     if cfg["anomaly"] == 2:
         body = True
     elif cfg["anomaly"] == 0:
@@ -97,7 +93,33 @@ def _build(o, h, l, c, atr, i, zz, floor, cfg, anH, anL):
         return None
     mv = s * (i - p1["i"]) / atr[i]
     kind = "flat" if abs(mv) < 1.0 else ("up" if mv > 0 else "down")
-    return {"upper": upper, "lower": lower, "kind": kind, "mode": "body" if body else "wick", "born": i, "pivots": [(p["i"], p["k"]) for p in pts], "width_atr": width / atr[i]}
+    return {"upper": upper, "lower": lower, "kind": kind, "mode": "body" if body else "wick", "born": i, "pivots": [(p["i"], p["k"]) for p in pts], "width_atr": width / atr[i], "span": p3["i"] - p1["i"]}
+
+
+def _build(o, h, l, c, atr, i, zz, floor, cfg, anH, anL):
+    """Последний пивот P3 (подтверждён, не раньше свечи пробоя) + 1-я точка P1 того же типа из предыдущих deep пивотов + 2-я точка P2 = самый далёкий пивот
+    противоположного типа между ними (так трейдер пропускает мелкие колебания). Из подходящих (линии не режут тела) берётся самый длинный канал."""
+    if cfg["after"]:
+        pool = zz
+    else:
+        pool = [p for p in zz if p["i"] >= floor]
+    if len(pool) < 3:
+        return None
+    p3 = pool[-1]
+    if p3["conf"] > i or p3["i"] < floor:
+        return None
+    pr = lambda p: h[p["i"]] if p["k"] == "H" else l[p["i"]]
+    best = None
+    same = [q for q in pool[:-1] if q["k"] == p3["k"]][-int(cfg["deep"]):]
+    for p1 in reversed(same):
+        mid = [q for q in pool if p1["i"] < q["i"] < p3["i"] and q["k"] != p3["k"]]
+        if not mid:
+            continue
+        p2 = max(mid, key=pr) if p3["k"] == "L" else min(mid, key=pr)
+        ch = _try(o, h, l, c, atr, i, p1, p2, p3, cfg, anH, anL)
+        if ch and (best is None or ch["span"] > best["span"]):
+            best = ch
+    return best
 
 
 def walk(o, h, l, c, atr, cfg=None, start=30):
