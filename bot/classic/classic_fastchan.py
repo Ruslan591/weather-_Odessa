@@ -11,7 +11,7 @@
 """
 import numpy as np
 
-FC = {"L": 2, "R": 1, "k": 2.0, "m": 1.0, "minw": 0.8, "maxw": 8.0, "tol": 0.15, "anomaly": 1}  # anomaly=0 — всегда хвосты, 2 — всегда тела
+FC = {"L": 2, "R": 1, "k": 2.0, "m": 1.0, "minw": 0.8, "maxw": 8.0, "tol": 0.15, "anomaly": 1, "after": 1}  # anomaly=0 — всегда хвосты, 2 — всегда тела
 
 
 def at(line, j):
@@ -54,8 +54,9 @@ def _add_zz(zz, p, h, l):
 
 
 def _build(o, h, l, c, atr, i, zz, floor, cfg, anH, anL):
-    pts = [p for p in zz if p["i"] >= floor][-3:]
-    if len(pts) < 3 or pts[2]["conf"] > i:
+    # after=1: после пробоя нужна только ТРЕТЬЯ точка (1-я и 2-я могут быть до пробоя — как у пользователя); after=0: все три на/после свечи пробоя
+    pts = zz[-3:] if cfg["after"] else [p for p in zz if p["i"] >= floor][-3:]
+    if len(pts) < 3 or pts[2]["conf"] > i or pts[2]["i"] < floor:
         return None
     p1, p2, p3 = pts
     if cfg["anomaly"] == 2:
