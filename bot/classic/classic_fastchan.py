@@ -11,7 +11,7 @@
 """
 import numpy as np
 
-FC = {"L": 2, "R": 1, "k": 2.0, "m": 1.0, "minw": 0.8, "maxw": 8.0, "tol": 0.15, "anomaly": 1, "after": 1, "dev": 0.5, "redraw": 1, "btol": 0.0, "deep": 6}  # anomaly=0 — всегда хвосты, 2 — всегда тела
+FC = {"L": 2, "R": 1, "k": 2.0, "m": 1.0, "minw": 0.8, "maxw": 8.0, "tol": 0.15, "anomaly": 1, "after": 1, "dev": 0.5, "redraw": 1, "btol": 0.0, "deep": 3}  # anomaly=0 — всегда хвосты, 2 — всегда тела
 
 
 def at(line, j):
