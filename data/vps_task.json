@@ -1,1 +1,1 @@
-{"task_id": "t1792668112", "cmd": "cd /opt/trading-bot/classic && ls -la fcf_* 2>&1 | head; ps aux | grep -c '[c]lassic_fc_filters'; ps aux | grep '[c]lassic_fc_filters' | head -3", "timeout": 60}
+{"task_id": "t1792668129", "cmd": "cd /opt/trading-bot/classic && for tf in 1h 2h 4h 15m; do echo ==== $tf; cat fcf_$tf.log | cut -c1-120; done", "timeout": 60}
