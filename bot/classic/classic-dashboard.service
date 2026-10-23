@@ -1,0 +1,14 @@
+[Unit]
+Description=Classic Bot Runs Dashboard
+After=network.target classicbot.service
+
+[Service]
+Type=simple
+User=tbot
+WorkingDirectory=/opt/trading-bot/classic
+ExecStart=/usr/bin/python3 /opt/trading-bot/classic/classic_runs_dashboard.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
