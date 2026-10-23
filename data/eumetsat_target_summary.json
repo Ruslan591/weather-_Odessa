@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-23T18:07:25Z",
+  "timestamp": "2026-10-23T18:12:21Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-10-23T17:45:00.000Z",
   "target_id": 0,
@@ -25,23 +25,6 @@
   },
   "local_candidates": [
     {
-      "target_id": 0,
-      "area_km2": 162.8,
-      "distance_km": 63.7,
-      "bearing_deg": 48.0,
-      "compass": "СВ",
-      "elongation_aspect_ratio": 1.49,
-      "elongation_axis_deg": 87.0,
-      "elongation_axis_compass": "В-З",
-      "frontlike": false,
-      "phase_label": "безоблачно",
-      "type_label": "безоблачно",
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": false,
-      "geocolour_confirmed": true
-    },
-    {
       "target_id": 4,
       "area_km2": 130.8,
       "distance_km": 150.1,
@@ -59,7 +42,7 @@
       "geocolour_confirmed": true
     }
   ],
-  "local_suppressed_count": 2,
+  "local_suppressed_count": 3,
   "system_candidates": [
     {
       "target_id": 3,
@@ -207,20 +190,20 @@
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-10-23T17:40:00.000Z"
+        "timestamp": "2026-10-23T17:50:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": true,
-        "timestamp": "2026-10-23T17:40:00.000Z"
+        "confirmed": false,
+        "timestamp": "2026-10-23T17:50:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": false,
         "timestamp": "2026-10-23T16:52:17Z"
       }
     },
-    "votes_confirmed": 1,
-    "votes_not_confirmed": 2,
-    "consensus": "disputed"
+    "votes_confirmed": 0,
+    "votes_not_confirmed": 3,
+    "consensus": "not_confirmed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -229,8 +212,8 @@
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-10-23T18:07:06Z"
+      "timestamp": "2026-10-23T18:12:08Z"
     }
   },
-  "verdict": "Цель в 64км СВ, безоблачно — каналы расходятся: geocolour_motion подтверждают, ir_motion/cloud_phase_type нет. Удаляется (~38 км/ч). Отдельно: система синоптического масштаба (548км²) в 101км В."
+  "verdict": "CLM отметил цель в 64км СВ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (548км²) в 101км В."
 }
