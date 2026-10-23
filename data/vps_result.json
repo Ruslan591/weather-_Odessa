@@ -1,7 +1,7 @@
 {
-  "task_id": "t1792744938",
+  "task_id": "t1792744988",
   "returncode": 0,
-  "stdout": "217:async def api_chart(req):\n242:async def api_mtf(req):\n256:async def api_pairs(req):\n281:async def api_trades(req):\n463:async def api_config(req):\n529:async def api_runs(req):\n584:async def api_labels(req):\n652:async def api_hand(req):\n",
+  "stdout": "\n\nasync def api_runs(req):\n    now = int(time.time() * 1000)\n    runs = jload(RUNS_FILE, [])\n    try:\n        if req.method == \"POST\":\n            j = await req.json()\n            act = j.get(\"action\")\n            if act == \"start\":\n                sym = str(j.get(\"sym\", \"\")).upper()\n                if not ok_sym(sym):\n                    raise ValueError(\"плохая пара\")\n                cfg = clean_cfg(j.get(\"config\") or {}, base=load_cfg())\n",
   "stderr": "",
-  "completed_at_utc": "2026-10-23T08:43:02Z"
+  "completed_at_utc": "2026-10-23T08:44:01Z"
 }
