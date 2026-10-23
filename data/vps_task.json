@@ -1,1 +1,1 @@
-{"task_id": "t1792740491", "cmd": "cd /opt/trading-bot/classic && sed -n '1,50p' classic_panel.py | grep -i 'async def\\|def\\|route\\|@app' && echo '=== UI generation ===' && grep -n 'def.*html\\|async.*html\\|<button\\|<div' classic_panel.py | head -15", "timeout": 60}
+{"task_id": "t1792744938", "cmd": "cd /opt/trading-bot/classic && grep -n '@app.route\\|async def api_\\|def api_' classic_panel.py | grep -v '^#' | head -20", "timeout": 60}
