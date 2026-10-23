@@ -1,7 +1,7 @@
 {
-  "task_id": "t1792744988",
+  "task_id": "t1792745051",
   "returncode": 0,
-  "stdout": "\n\nasync def api_runs(req):\n    now = int(time.time() * 1000)\n    runs = jload(RUNS_FILE, [])\n    try:\n        if req.method == \"POST\":\n            j = await req.json()\n            act = j.get(\"action\")\n            if act == \"start\":\n                sym = str(j.get(\"sym\", \"\")).upper()\n                if not ok_sym(sym):\n                    raise ValueError(\"плохая пара\")\n                cfg = clean_cfg(j.get(\"config\") or {}, base=load_cfg())\n",
+  "stdout": "1008:    app1.router.add_get(\"/\", index)\n1009:    app1.router.add_get(\"/api/chart\", api_chart)\n1010:    app1.router.add_get(\"/api/mtf\", api_mtf)\n1011:    app1.router.add_route(\"*\", \"/api/pairs\", api_pairs)\n1012:    app1.router.add_route(\"*\", \"/api/labels\", api_labels)\n1013:    app1.router.add_route(\"*\", \"/api/hand\", api_hand)\n1015:    app2.router.add_get(\"/\", pos_index)\n1016:    app2.router.add_get(\"/api/trades\", api_trades)\n1017:    app2.router.add_route(\"*\", \"/api/pairs\", api_pairs)\n1018:    app2.router.add_route(\"*\", \"/api/config\", api_config)\n1019:    app2.router.add_route(\"*\", \"/api/runs\", api_runs)\n",
   "stderr": "",
-  "completed_at_utc": "2026-10-23T08:44:01Z"
+  "completed_at_utc": "2026-10-23T08:45:02Z"
 }
