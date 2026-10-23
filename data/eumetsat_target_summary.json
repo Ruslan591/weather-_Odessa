@@ -1,35 +1,58 @@
 {
-  "timestamp": "2026-10-23T07:02:27Z",
-  "status": "system_only",
-  "reason": "локальных компактных масс нет, есть только система(ы) синоптического масштаба",
-  "cloud_forecast_timestamp": "2026-10-23T06:30:00.000Z",
+  "timestamp": "2026-10-23T07:07:43Z",
+  "status": "ok",
+  "cloud_forecast_timestamp": "2026-10-23T06:45:00.000Z",
+  "target_id": 0,
+  "target_area_km2": 105.4,
+  "target_distance_km": 105.5,
+  "target_bearing_deg": 69.0,
+  "target_compass": "В",
   "system": {
-    "target_id": 0,
-    "area_km2": 792.6,
-    "distance_km": 114.8,
-    "bearing_deg": 93.0,
+    "target_id": 1,
+    "area_km2": 1112.8,
+    "distance_km": 106.0,
+    "bearing_deg": 98.0,
     "compass": "В",
-    "elongation_aspect_ratio": 2.67,
-    "elongation_axis_deg": 167.0,
+    "elongation_aspect_ratio": 2.19,
+    "elongation_axis_deg": 163.0,
     "elongation_axis_compass": "Ю-С",
-    "frontlike": true,
+    "frontlike": false,
     "window_spanning": false,
     "phase_label": "безоблачно",
-    "cloud_fraction": 0.355,
-    "has_precip": false,
+    "cloud_fraction": 0.499,
     "has_lightning": false
   },
-  "system_candidates": [
+  "local_candidates": [
     {
       "target_id": 0,
-      "area_km2": 792.6,
-      "distance_km": 114.8,
-      "bearing_deg": 93.0,
+      "area_km2": 105.4,
+      "distance_km": 105.5,
+      "bearing_deg": 69.0,
       "compass": "В",
-      "elongation_aspect_ratio": 2.67,
-      "elongation_axis_deg": 167.0,
+      "elongation_aspect_ratio": 1.38,
+      "elongation_axis_deg": 25.0,
+      "elongation_axis_compass": "СВ-ЮЗ",
+      "frontlike": false,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
+      "has_precip": null,
+      "has_lightning": false,
+      "ir_confirmed": false,
+      "geocolour_confirmed": true
+    }
+  ],
+  "local_suppressed_count": 1,
+  "system_candidates": [
+    {
+      "target_id": 1,
+      "area_km2": 1112.8,
+      "distance_km": 106.0,
+      "bearing_deg": 98.0,
+      "compass": "В",
+      "elongation_aspect_ratio": 2.19,
+      "elongation_axis_deg": 163.0,
       "elongation_axis_compass": "Ю-С",
-      "frontlike": true,
+      "frontlike": false,
       "window_spanning": false,
       "phase_label": "безоблачно",
       "type_label": "плотная/высокая",
@@ -40,5 +63,137 @@
     }
   ],
   "system_suppressed_count": 1,
-  "verdict": "Локальных облачных масс нет. Система синоптического масштаба (793км²) в 115км В (вытянута Ю-С (167°), похоже на фронт)."
+  "frontal_tracks": [
+    {
+      "track_id": 1939,
+      "first_seen": "2026-10-23T05:30:00.000Z",
+      "last_seen": "2026-10-23T06:45:00.000Z",
+      "points_count": 5,
+      "age_minutes": 75.0,
+      "distance_from_odessa_km": 151.1,
+      "dx_km": 133.77,
+      "dy_km": -70.27,
+      "area_km2": 5069.0,
+      "axis_deg": 0.0,
+      "aspect_ratio": 4.02,
+      "velocity_kmh": 45.6,
+      "movement_bearing_deg": 347.4,
+      "movement_bearing_compass": "С",
+      "axis_rotation_deg": 9.0,
+      "tile": "near",
+      "ahead_station": {
+        "name": "KHERSON",
+        "ctry": "UP",
+        "lat": 46.633,
+        "lon": 32.567,
+        "elev_m": "+0054.0",
+        "dist_km_from_odessa": 139.1,
+        "wmo_synop_id": "33902",
+        "icao": null,
+        "usaf_raw": "339020",
+        "source": "synop",
+        "along_km": 88.6,
+        "perp_km": -24.0,
+        "dist_km": 91.8
+      },
+      "behind_station": {
+        "name": "CHORNOMORS'KE",
+        "ctry": "UP",
+        "lat": 45.517,
+        "lon": 32.7,
+        "elev_m": "+0010.0",
+        "dist_km_from_odessa": 181.0,
+        "wmo_synop_id": "33924",
+        "icao": null,
+        "usaf_raw": "339240",
+        "source": "synop",
+        "along_km": -34.9,
+        "perp_km": -6.8,
+        "dist_km": 35.5
+      },
+      "direction_compass": "ЮВ",
+      "current_target_id": 2,
+      "has_precip": null,
+      "has_lightning": null,
+      "ahead_obs": {
+        "obs_time": "2026-10-23T06:00:00Z",
+        "raw": "33902,2026,10,23,06,00,AAXX 23061 33902 11520 81202 10151 20148 30157 40215 57003 60002 71084 883// 333 20135==",
+        "temp": 15.1,
+        "station_pressure": 1015.7,
+        "sea_pressure": 1021.5,
+        "pressure_tendency_code": "7",
+        "pressure_tendency_value": -0.3,
+        "total_cloud_okta": 8,
+        "wind_dir_deg": 120,
+        "wind_speed_ms": 2,
+        "precip_mm": 0.0,
+        "precip_period_hours": 18,
+        "present_weather_code": 10,
+        "present_weather_label": "явление ww=10",
+        "is_extreme_weather": false,
+        "obs_source": "SYNOP"
+      },
+      "behind_obs": {
+        "obs_time": "2026-10-23T06:00:00Z",
+        "raw": "33924,2026,10,23,06,00,AAXX 23061 33924 11596 70701 10143 20134 30192 40204 52003 69952 71084 86909 333 20124=",
+        "temp": 14.3,
+        "station_pressure": 1019.2,
+        "sea_pressure": 1020.4,
+        "pressure_tendency_code": "2",
+        "pressure_tendency_value": 0.3,
+        "total_cloud_okta": 7,
+        "wind_dir_deg": 70,
+        "wind_speed_ms": 1,
+        "precip_mm": 0.5,
+        "precip_period_hours": 18,
+        "present_weather_code": 10,
+        "present_weather_label": "явление ww=10",
+        "is_extreme_weather": false,
+        "obs_source": "SYNOP"
+      },
+      "front_type": "cold",
+      "front_type_confidence": "station"
+    }
+  ],
+  "target_movement": {
+    "speed_kmh": 168.8,
+    "direction_compass": "СЗ",
+    "cpa_km": 85.6,
+    "eta_min": null,
+    "verdict": "пройдёт мимо, город, скорее всего, не заденет"
+  },
+  "target_phase": {
+    "label": "безоблачно",
+    "cloud_fraction": 0.402
+  },
+  "existence": {
+    "modules": {
+      "ir_motion": {
+        "confirmed": false,
+        "timestamp": "2026-10-23T06:40:00.000Z"
+      },
+      "geocolour_motion": {
+        "confirmed": true,
+        "timestamp": "2026-10-23T06:40:00.000Z"
+      },
+      "cloud_phase_type": {
+        "confirmed": false,
+        "timestamp": "2026-10-23T07:07:14Z"
+      }
+    },
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
+  },
+  "phenomena": {
+    "precip_forecast": {
+      "confirmed": null,
+      "timestamp": "2026-10-23T07:02:05Z"
+    },
+    "lightning_forecast": {
+      "confirmed": false,
+      "timestamp": "2026-10-23T07:07:28Z"
+    }
+  },
+  "verdict": "Цель в 106км В, безоблачно — каналы расходятся: geocolour_motion подтверждают, ir_motion/cloud_phase_type нет. Идёт на СЗ со скоростью ~169 км/ч, пройдёт мимо на ≈86км, город, скорее всего, не заденет. Отдельно: система синоптического масштаба (1113км²) в 106км В."
 }
