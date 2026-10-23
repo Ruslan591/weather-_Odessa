@@ -1,12 +1,17 @@
 {
-  "timestamp": "2026-10-23T02:03:11Z",
-  "status": "ok",
+  "timestamp": "2026-10-23T02:07:12Z",
+  "status": "suppressed_known_false_positive",
   "cloud_forecast_timestamp": "2026-10-23T01:45:00.000Z",
-  "target_id": 1,
-  "target_area_km2": 92.1,
-  "target_distance_km": 120.5,
-  "target_bearing_deg": 177.0,
-  "target_compass": "Ю",
+  "suppressed_target": {
+    "signature": "5_-120",
+    "area_km2": 92.1,
+    "distance_km": 120.5,
+    "bearing_deg": 177.0,
+    "compass": "Ю",
+    "not_confirmed_streak": 4,
+    "total_not_confirmed": 4,
+    "excluded_since": "2026-10-23T02:03:11Z"
+  },
   "system": {
     "target_id": 0,
     "area_km2": 205697.9,
@@ -46,39 +51,6 @@
     }
   ],
   "system_suppressed_count": 0,
-  "frontal_tracks": [],
-  "target_phase": {
-    "label": "безоблачно",
-    "cloud_fraction": 0.0
-  },
-  "existence": {
-    "modules": {
-      "ir_motion": {
-        "confirmed": false,
-        "timestamp": "2026-10-23T01:40:00.000Z"
-      },
-      "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-10-23T01:40:00.000Z"
-      },
-      "cloud_phase_type": {
-        "confirmed": false,
-        "timestamp": "2026-10-23T02:02:10Z"
-      }
-    },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
-  },
-  "phenomena": {
-    "precip_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-10-23T02:02:40Z"
-    },
-    "lightning_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-10-23T02:02:44Z"
-    }
-  },
-  "verdict": "CLM отметил цель в 120км Ю, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (205698км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора)."
+  "verdict": "Известный шумовой объект в 120км Ю (~92км²) — подавлено (не подтверждался 4 раз подряд). Отдельно: система синоптического масштаба (205698км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора).",
+  "frontal_tracks": []
 }
