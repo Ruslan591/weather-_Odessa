@@ -59,8 +59,20 @@ def save(items):
     _cache["mtime"] = None
 
 
-def for_sym(sym):
-    return [x for x in load() if x.get("sym") == sym]
+_TFM = {"1m": 1, "3m": 3, "5m": 5, "15m": 15, "30m": 30, "1h": 60, "2h": 120, "4h": 240, "6h": 360, "8h": 480, "12h": 720, "1d": 1440, "3d": 4320, "1w": 10080}
+
+
+def for_sym(sym, tf=None, mode="any"):
+    """Структуры пары. mode: any — все; junior — только нарисованные на этом ТФ или на более старшем (рисунок торгуется на своём ТФ и на младших); own — только на этом ТФ."""
+    L = [x for x in load() if x.get("sym") == sym]
+    if tf in _TFM and mode in ("junior", "own"):
+        def ok(x):
+            s = x.get("tf")
+            if s not in _TFM:
+                return True
+            return _TFM[tf] <= _TFM[s] if mode == "junior" else tf == s
+        L = [x for x in L if ok(x)]
+    return L
 
 
 def line_at(L, t):
