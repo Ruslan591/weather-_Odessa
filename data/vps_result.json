@@ -1,7 +1,7 @@
 {
-  "task_id": "t1792831385",
+  "task_id": "t1792831565",
   "returncode": 0,
-  "stdout": "3525ca425eb5ab79c3d0082486493021  classic_strategy.py\ne5142aba161a130b08d3ce2db648d26d  classic_hand.py\nc41126026b48a2b7c34f0ea31e4088ae  classic_panel.py\n1962f4610be96b5d5a1382a89cb8e8ff  classic_pos_html.py\n196dac77a6def9eb44be8f721c6b5f07  runs.json\n-rw-r--r-- 1 tbot tbot 48466 Oct 22 11:12 classic_pos_html.py\n-rw-r--r-- 1 tbot tbot 39086 Oct 22 11:12 classic_strategy.py\n[Unit]\nDescription=Classic bot panel (charts)\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nUser=tbot\nWorkingDirectory=/opt/trading-bot/classic\nExecStart=/opt/trading-bot/venv/bin/python /opt/trading-bot/classic/classic_panel.py\nRestart=always\nRestartSec=5\n\n[Install]\nWantedBy=multi-user.target\n__pycache__\nafter_wall.py\nagecheck.py\nbacktest.py\ncascade.log\ncascade.py\nclassic\ndata\ndl3.log\ndl3.sh\n",
+  "stdout": "runs_replaced\nactive\nruns 25 trig {'hand_both'}\n3\n",
   "stderr": "",
-  "completed_at_utc": "2026-10-24T08:44:02Z"
+  "completed_at_utc": "2026-10-24T08:47:27Z"
 }
