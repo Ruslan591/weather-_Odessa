@@ -521,7 +521,7 @@ def run_stats(tr):
 
 async def run_trades(run, now):
     df = await get_df_long(run["sym"], run["cfg"]["tf"])
-    P = dict(cs.PARAMS, **run["cfg"], sym=run["sym"])
+    P = dict(cs.PARAMS, **dict(run["cfg"], sym=run["sym"]))  # sym может уже лежать в cfg (прогоны, созданные скриптом) — раньше это давало TypeError и пустой список сделок
     P["sim_from_ms"] = run["start_ms"]
     return cs.simulate(df, now, P)
 
@@ -566,6 +566,7 @@ async def api_runs(req):
                 try:
                     tr = cs.pack(await run_trades(r, now))
                 except Exception as e:
+                    import traceback; print("run %s error: %r" % (r.get("id"), e)); traceback.print_exc()  # не глотаем молча
                     tr = []
             else:
                 tr = r["trades"] or []
