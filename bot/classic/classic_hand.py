@@ -123,7 +123,7 @@ def struct_signals(st, o, h, l, c, atr, t, M, forward=True, warm=60, p_b=0.0, p_
     return out
 
 
-def hand_signals(o, h, l, c, atr, t, M, structs, kind, p=0.0, forward=True, info=None, tags=None):
+def hand_signals(o, h, l, c, atr, t, M, structs, kind, p=0.0, forward=True, info=None, tags=None, sids=None):
     """{индекс свечи: сторона} для kind 'hand_bounce' | 'hand_breakout' | 'hand_both' (отбой И пробой) по всем структурам пары (при совпадении побеждает более ранняя структура).
     tags (dict, необязательно) заполняется {индекс свечи: 'b' | 'k'} — какой это сигнал (нужно для hand_both: у отбоя и пробоя разные цели)."""
     both = kind == "hand_both"
@@ -138,6 +138,8 @@ def hand_signals(o, h, l, c, atr, t, M, structs, kind, p=0.0, forward=True, info
                 out[i] = side
                 if tags is not None:
                     tags[i] = tag
+                if sids is not None:
+                    sids[i] = sid
                 if info is not None and i in inf:
                     info[i] = inf[i]
     return out
