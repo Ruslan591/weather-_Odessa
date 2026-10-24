@@ -574,7 +574,8 @@ async def api_runs(req):
             st["money"] = apply_stakes(tr, dict(cs.PARAMS, **r["cfg"]))
             out.append({"id": r["id"], "name": r["name"], "sym": r["sym"], "cfg": dict(cs.PARAMS, **r["cfg"]), "start_ms": r["start_ms"],
                         "stop_ms": r["stop_ms"], "stats": st, "trades": tr[-300:]})
-        return web.json_response({"runs": out, "now": now, "notional": cs.PARAMS["notional"]})
+        hand_meta = {str(x["id"]): {"kind": x.get("kind"), "tf": x.get("tf"), "created": x.get("created"), "deleted": x.get("deleted")} for x in hd.load()}
+        return web.json_response({"runs": out, "now": now, "notional": cs.PARAMS["notional"], "hand": hand_meta})
     except ValueError as e:
         return web.json_response({"error": str(e)}, status=400)
 
