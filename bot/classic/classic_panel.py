@@ -520,7 +520,7 @@ def run_stats(tr):
             "gross": round(sum(x["gross"] for x in tr), 3), "win": sum(1 for x in tr if x["net"] > 0)}
 
 
-_RT = {}  # кэш расчёта живых прогонов: {id: (время, hand.json mtime, результат)} — 50 прогонов пересчитывать каждые 15 с тяжело
+_RT = {}  # кэш расчёта живых прогонов: {id: (ключ, время расчёта, сделки)}
 
 
 def _hand_mtime():
@@ -531,15 +531,18 @@ def _hand_mtime():
 
 
 async def run_trades(run, now):
+    """Сделки прогона. Расчёт тяжёлый (50 прогонов), поэтому: считаем в отдельном потоке, а результат кэшируем по ключу
+    (рисунки, начало прогона, время последней свечи) — без открытой позиции он не меняется до новой свечи; с открытой обновляем раз в 40 с."""
     hm = _hand_mtime()
-    c = _RT.get(run["id"])
-    if c and time.time() - c[0] < 45 and c[1] == hm and c[3] == run["start_ms"]:
-        return [dict(x) for x in c[2]]
     df = await get_df_long(run["sym"], run["cfg"]["tf"])
+    key = (hm, run["start_ms"], int(df["t"].iloc[-1]) if len(df) else 0)
+    c = _RT.get(run["id"])
+    if c and c[0] == key and (time.time() - c[1] < 40 or not any(x["open"] for x in c[2])):
+        return [dict(x) for x in c[2]]
     P = dict(cs.PARAMS, **dict(run["cfg"], sym=run["sym"]))  # sym может уже лежать в cfg (прогоны, созданные скриптом) — раньше это давало TypeError и пустой список сделок
     P["sim_from_ms"] = run["start_ms"]
-    res = cs.simulate(df, now, P)
-    _RT[run["id"]] = (time.time(), hm, [dict(x) for x in res], run["start_ms"])
+    res = await asyncio.to_thread(cs.simulate, df, now, P)
+    _RT[run["id"]] = (key, time.time(), [dict(x) for x in res])
     return res
 
 
@@ -550,66 +553,99 @@ def track_of(cfg):
     return "me" if t.startswith("hand_") else "bot" if t.startswith("tl_") else "other"
 
 
+_SNAP = {"payload": None, "ts": 0.0}
+_LOCK = []
+
+
+def _build_lock():
+    if not _LOCK:
+        _LOCK.append(asyncio.Lock())
+    return _LOCK[0]
+
+
+async def build_payload(runs, now):
+    out = []
+    by_track = {"me": [], "bot": []}
+    for r in runs:
+        if r["stop_ms"] is None:
+            try:
+                tr = cs.pack(await run_trades(r, now))
+            except Exception as e:
+                import traceback; print("run %s error: %r" % (r.get("id"), e)); traceback.print_exc()  # не глотаем молча
+                tr = []
+        else:
+            tr = r["trades"] or []
+        st = run_stats(tr)
+        st["money"] = apply_stakes(tr, dict(cs.PARAMS, **r["cfg"]))
+        tk = track_of(r["cfg"])
+        if tk in by_track:
+            by_track[tk] += [dict(x, sym=r["sym"], tf=r["cfg"]["tf"], run=r["id"]) for x in tr]
+        out.append({"id": r["id"], "name": r["name"], "sym": r["sym"], "track": tk, "cfg": dict(cs.PARAMS, **r["cfg"]), "start_ms": r["start_ms"],
+                    "stop_ms": r["stop_ms"], "stats": st, "trades": tr[-300:]})
+    both = ac.joint_trades(by_track["me"], by_track["bot"], cs.TF_MIN)
+    accounts = {}
+    for k, L in (("me", by_track["me"]), ("bot", by_track["bot"]), ("both", both)):
+        accounts[k] = {"account": ac.sim_account(L), "signals": ac.sim_signals(L, now),
+                       "trades": [{"sym": x.get("sym"), "tf": x.get("tf"), "side": x["side"], "sig": x.get("sig"), "t_in": x["t_in"], "net": x["net"], "open": x["open"], "reason": x["reason"], "be": x["be"], "run": x.get("run")}
+                                  for x in sorted(L, key=lambda t: -t["t_in"])[:60]]}
+    hand_meta = {str(x["id"]): {"kind": x.get("kind"), "tf": x.get("tf"), "created": x.get("created"), "deleted": x.get("deleted")} for x in hd.load()}
+    return {"runs": out, "now": now, "notional": cs.PARAMS["notional"], "hand": hand_meta, "accounts": accounts}
+
+
+async def refresher():
+    """Фоновый пересчёт всех прогонов: страница получает готовый снимок сразу, а не ждёт минуту."""
+    while True:
+        try:
+            async with _build_lock():
+                now = int(time.time() * 1000)
+                _SNAP["payload"] = await build_payload(jload(RUNS_FILE, []), now)
+                _SNAP["ts"] = time.time()
+        except Exception as e:
+            import traceback; print("refresher error: %r" % (e,)); traceback.print_exc()
+        await asyncio.sleep(15)
+
+
 async def api_runs(req):
     now = int(time.time() * 1000)
-    runs = jload(RUNS_FILE, [])
     try:
         if req.method == "POST":
             j = await req.json()
             act = j.get("action")
-            if act == "start":
-                sym = str(j.get("sym", "")).upper()
-                if not ok_sym(sym):
-                    raise ValueError("плохая пара")
-                cfg = clean_cfg(j.get("config") or {}, base=load_cfg())
-                cfg["period_from"] = cfg["period_to"] = ""  # живой прогон идёт вперёд от текущего момента
-                await get_df_long(sym, cfg["tf"])
-                rid = max([r["id"] for r in runs] + [0]) + 1
-                runs.append({"id": rid, "name": (str(j.get("name") or "Прогон")[:60]), "sym": sym, "cfg": cfg,
-                             "start_ms": now, "stop_ms": None, "trades": None})
-            elif act in ("stop", "delete"):
-                r = next((x for x in runs if x["id"] == j.get("id")), None)
-                if r is None:
-                    raise ValueError("прогон не найден")
-                if act == "delete":
-                    runs.remove(r)
-                elif r["stop_ms"] is None:
-                    tr = await run_trades(r, now)
-                    for x in tr:
-                        if x["open"]:
-                            x["open"] = False
-                            x["reason"] = "остановлен"
-                    r["trades"] = cs.pack(tr)
-                    r["stop_ms"] = now
-            else:
-                raise ValueError("неизвестное действие")
-            jsave(RUNS_FILE, runs)
-        out = []
-        by_track = {"me": [], "bot": []}
-        for r in runs:
-            if r["stop_ms"] is None:
-                try:
-                    tr = cs.pack(await run_trades(r, now))
-                except Exception as e:
-                    import traceback; print("run %s error: %r" % (r.get("id"), e)); traceback.print_exc()  # не глотаем молча
-                    tr = []
-            else:
-                tr = r["trades"] or []
-            st = run_stats(tr)
-            st["money"] = apply_stakes(tr, dict(cs.PARAMS, **r["cfg"]))
-            tk = track_of(r["cfg"])
-            if tk in by_track:
-                by_track[tk] += [dict(x, sym=r["sym"], tf=r["cfg"]["tf"], run=r["id"]) for x in tr]
-            out.append({"id": r["id"], "name": r["name"], "sym": r["sym"], "track": tk, "cfg": dict(cs.PARAMS, **r["cfg"]), "start_ms": r["start_ms"],
-                        "stop_ms": r["stop_ms"], "stats": st, "trades": tr[-300:]})
-        both = ac.joint_trades(by_track["me"], by_track["bot"], cs.TF_MIN)
-        accounts = {}
-        for k, L in (("me", by_track["me"]), ("bot", by_track["bot"]), ("both", both)):
-            accounts[k] = {"account": ac.sim_account(L), "signals": ac.sim_signals(L, now),
-                           "trades": [{"sym": x.get("sym"), "tf": x.get("tf"), "side": x["side"], "sig": x.get("sig"), "t_in": x["t_in"], "net": x["net"], "open": x["open"], "reason": x["reason"], "be": x["be"], "run": x.get("run")}
-                                      for x in sorted(L, key=lambda t: -t["t_in"])[:60]]}
-        hand_meta = {str(x["id"]): {"kind": x.get("kind"), "tf": x.get("tf"), "created": x.get("created"), "deleted": x.get("deleted")} for x in hd.load()}
-        return web.json_response({"runs": out, "now": now, "notional": cs.PARAMS["notional"], "hand": hand_meta, "accounts": accounts})
+            async with _build_lock():
+                runs = jload(RUNS_FILE, [])
+                if act == "start":
+                    sym = str(j.get("sym", "")).upper()
+                    if not ok_sym(sym):
+                        raise ValueError("плохая пара")
+                    cfg = clean_cfg(j.get("config") or {}, base=load_cfg())
+                    cfg["period_from"] = cfg["period_to"] = ""  # живой прогон идёт вперёд от текущего момента
+                    await get_df_long(sym, cfg["tf"])
+                    rid = max([r["id"] for r in runs] + [0]) + 1
+                    runs.append({"id": rid, "name": (str(j.get("name") or "Прогон")[:60]), "sym": sym, "cfg": cfg,
+                                 "start_ms": now, "stop_ms": None, "trades": None})
+                elif act in ("stop", "delete"):
+                    r = next((x for x in runs if x["id"] == j.get("id")), None)
+                    if r is None:
+                        raise ValueError("прогон не найден")
+                    if act == "delete":
+                        runs.remove(r)
+                    elif r["stop_ms"] is None:
+                        tr = await run_trades(r, now)
+                        for x in tr:
+                            if x["open"]:
+                                x["open"] = False
+                                x["reason"] = "остановлен"
+                        r["trades"] = cs.pack(tr)
+                        r["stop_ms"] = now
+                else:
+                    raise ValueError("неизвестное действие")
+                jsave(RUNS_FILE, runs)
+                _SNAP["payload"] = await build_payload(runs, now)
+                _SNAP["ts"] = time.time()
+        p = _SNAP["payload"]
+        if p is None:  # после перезапуска первый расчёт ещё идёт
+            return web.json_response({"loading": True, "runs": [], "now": now, "notional": cs.PARAMS["notional"], "hand": {}, "accounts": {}})
+        return web.json_response(p)
     except ValueError as e:
         return web.json_response({"error": str(e)}, status=400)
 
@@ -1040,6 +1076,7 @@ window.addEventListener('resize',draw);
 async def serve():
     global SES
     SES = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15))
+    asyncio.create_task(refresher())
     app1 = web.Application()
     app1.router.add_get("/", index)
     app1.router.add_get("/api/chart", api_chart)
