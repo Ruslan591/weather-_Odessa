@@ -9,6 +9,7 @@ import classic_trendline as tl
 import classic_fastchan as fc
 import classic_hand as hd
 import classic_strategy as cs
+import classic_acct as ac
 from classic_pos_html import HTML as POS_HTML
 
 PORT = 18093
@@ -367,7 +368,7 @@ SPEC = {
 }
 DEFAULT_CFG = {k: cs.PANEL[k] for k in SPEC}
 DEFAULT_CFG["stages"] = cs.PANEL["stages"]
-STAGE_TYPES = ["", "pattern", "cross200", "cross20", "cross50", "tl_bounce", "tl_breakout", "hand_bounce", "hand_breakout", "hand_both", "close_ema20", "break_trigger", "ema20_slope", "rsi_level", "macd_turn", "volume", "strong_body", "break_swing", "pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sign", "ema50_slope", "ema50_trend", "ema50_pullback", "stochrsi_cross", "ema200_side"]
+STAGE_TYPES = ["", "pattern", "cross200", "cross20", "cross50", "tl_bounce", "tl_breakout", "tl_both", "hand_bounce", "hand_breakout", "hand_both", "close_ema20", "break_trigger", "ema20_slope", "rsi_level", "macd_turn", "volume", "strong_body", "break_swing", "pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sign", "ema50_slope", "ema50_trend", "ema50_pullback", "stochrsi_cross", "ema200_side"]
 
 
 def clean_stages(v):
@@ -519,11 +520,34 @@ def run_stats(tr):
             "gross": round(sum(x["gross"] for x in tr), 3), "win": sum(1 for x in tr if x["net"] > 0)}
 
 
+_RT = {}  # кэш расчёта живых прогонов: {id: (время, hand.json mtime, результат)} — 50 прогонов пересчитывать каждые 15 с тяжело
+
+
+def _hand_mtime():
+    try:
+        return os.path.getmtime(hd.HAND_FILE)
+    except OSError:
+        return 0
+
+
 async def run_trades(run, now):
+    hm = _hand_mtime()
+    c = _RT.get(run["id"])
+    if c and time.time() - c[0] < 45 and c[1] == hm and c[3] == run["start_ms"]:
+        return [dict(x) for x in c[2]]
     df = await get_df_long(run["sym"], run["cfg"]["tf"])
     P = dict(cs.PARAMS, **dict(run["cfg"], sym=run["sym"]))  # sym может уже лежать в cfg (прогоны, созданные скриптом) — раньше это давало TypeError и пустой список сделок
     P["sim_from_ms"] = run["start_ms"]
-    return cs.simulate(df, now, P)
+    res = cs.simulate(df, now, P)
+    _RT[run["id"]] = (time.time(), hm, [dict(x) for x in res], run["start_ms"])
+    return res
+
+
+def track_of(cfg):
+    """Сторона сравнения по первому уровню входа: рисунки пользователя — «me», авто-детектор — «bot», остальное — «other»."""
+    st = [x for x in (cfg.get("stages") or []) if x and x.get("t")]
+    t = st[0]["t"] if st else ""
+    return "me" if t.startswith("hand_") else "bot" if t.startswith("tl_") else "other"
 
 
 async def api_runs(req):
@@ -561,6 +585,7 @@ async def api_runs(req):
                 raise ValueError("неизвестное действие")
             jsave(RUNS_FILE, runs)
         out = []
+        by_track = {"me": [], "bot": []}
         for r in runs:
             if r["stop_ms"] is None:
                 try:
@@ -572,10 +597,19 @@ async def api_runs(req):
                 tr = r["trades"] or []
             st = run_stats(tr)
             st["money"] = apply_stakes(tr, dict(cs.PARAMS, **r["cfg"]))
-            out.append({"id": r["id"], "name": r["name"], "sym": r["sym"], "cfg": dict(cs.PARAMS, **r["cfg"]), "start_ms": r["start_ms"],
+            tk = track_of(r["cfg"])
+            if tk in by_track:
+                by_track[tk] += [dict(x, sym=r["sym"], tf=r["cfg"]["tf"], run=r["id"]) for x in tr]
+            out.append({"id": r["id"], "name": r["name"], "sym": r["sym"], "track": tk, "cfg": dict(cs.PARAMS, **r["cfg"]), "start_ms": r["start_ms"],
                         "stop_ms": r["stop_ms"], "stats": st, "trades": tr[-300:]})
+        both = ac.joint_trades(by_track["me"], by_track["bot"], cs.TF_MIN)
+        accounts = {}
+        for k, L in (("me", by_track["me"]), ("bot", by_track["bot"]), ("both", both)):
+            accounts[k] = {"account": ac.sim_account(L), "signals": ac.sim_signals(L, now),
+                           "trades": [{"sym": x.get("sym"), "tf": x.get("tf"), "side": x["side"], "sig": x.get("sig"), "t_in": x["t_in"], "net": x["net"], "open": x["open"], "reason": x["reason"], "be": x["be"], "run": x.get("run")}
+                                      for x in sorted(L, key=lambda t: -t["t_in"])[:60]]}
         hand_meta = {str(x["id"]): {"kind": x.get("kind"), "tf": x.get("tf"), "created": x.get("created"), "deleted": x.get("deleted")} for x in hd.load()}
-        return web.json_response({"runs": out, "now": now, "notional": cs.PARAMS["notional"], "hand": hand_meta})
+        return web.json_response({"runs": out, "now": now, "notional": cs.PARAMS["notional"], "hand": hand_meta, "accounts": accounts})
     except ValueError as e:
         return web.json_response({"error": str(e)}, status=400)
 
