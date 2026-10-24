@@ -361,7 +361,7 @@ SPEC = {
     "trail_mode": ("sel", ["none", "pct", "atr", "pivot"]), "trail_dist": ("num", 0, 20),
     "pat_mode": ("sel", ["off", "trail", "exit"]), "pat_min": ("num", 0, 50),
     "fee": ("num", 0, 0.5), "window_h": ("num", 6, 2000),
-    "period_from": ("date",), "period_to": ("date",), "hand_forward": ("bool",),
+    "period_from": ("date",), "period_to": ("date",), "hand_forward": ("bool",), "hand_tf_mode": ("sel", ["junior", "own", "any"]),
     "stake_mode": ("sel", ["fixed", "fixed_profit"]), "stake_base": ("num", 6, 1000000), "stake_min": ("num", 1, 1000),
     "martingale": ("sel", ["off", "double", "double_plus"]), "mart_pct": ("num", 0, 500), "mart_max": ("num", 0, 20),
 }
