@@ -9,6 +9,7 @@
 Сигналы (по закрытым свечам; геометрия линий задана заранее, ожидание будущего не используется):
   hand_bounce   — канал/флэт: свеча коснулась нижней границы (лонг) или верхней (шорт) в пределах P×ATR (умолч. 0.3), закрылась по эту сторону и в сторону отбоя;
                   ширина не меньше 1.5 ATR.
+  hand_both     — оба сигнала сразу (отбой и пробой по одним и тем же рисункам; в сделке видно, какой был сигнал).
   hand_breakout — любая структура: первое закрытие за верхней границей (лонг) или нижней (шорт) с запасом P×ATR (умолч. 0.2).
 Структура «закрывается» после первого пробоя границы закрытием (или когда линии пересеклись): дальше сигналов по ней нет.
 forward=True — сигналы только с момента создания структуры (честный режим); False — по всей истории после последней опорной точки (с подглядыванием).
@@ -110,15 +111,21 @@ def struct_signals(st, o, h, l, c, atr, t, M, forward=True, warm=60, p_b=0.0, p_
     return out
 
 
-def hand_signals(o, h, l, c, atr, t, M, structs, kind, p=0.0, forward=True, info=None):
-    """{индекс свечи: сторона} для kind 'hand_bounce' | 'hand_breakout' по всем структурам пары (при совпадении побеждает более ранняя структура)."""
+def hand_signals(o, h, l, c, atr, t, M, structs, kind, p=0.0, forward=True, info=None, tags=None):
+    """{индекс свечи: сторона} для kind 'hand_bounce' | 'hand_breakout' | 'hand_both' (отбой И пробой) по всем структурам пары (при совпадении побеждает более ранняя структура).
+    tags (dict, необязательно) заполняется {индекс свечи: 'b' | 'k'} — какой это сигнал (нужно для hand_both: у отбоя и пробоя разные цели)."""
+    both = kind == "hand_both"
     want = "b" if kind == "hand_bounce" else "k"
     out = {}
     for st in structs:
         inf = {} if info is not None else None
-        for i, side, tag, sid in struct_signals(st, o, h, l, c, atr, t, M, forward, p_b=p if want == "b" else 0.0, p_k=p if want == "k" else 0.0, info=inf):
-            if tag == want and i not in out:
+        pb = p if (both or want == "b") else 0.0
+        pk = 0.0 if both else (p if want == "k" else 0.0)
+        for i, side, tag, sid in struct_signals(st, o, h, l, c, atr, t, M, forward, p_b=pb, p_k=pk, info=inf):
+            if (both or tag == want) and i not in out:
                 out[i] = side
+                if tags is not None:
+                    tags[i] = tag
                 if info is not None and i in inf:
                     info[i] = inf[i]
     return out
