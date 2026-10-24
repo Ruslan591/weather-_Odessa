@@ -572,7 +572,7 @@ async def api_runs(req):
                 tr = r["trades"] or []
             st = run_stats(tr)
             st["money"] = apply_stakes(tr, dict(cs.PARAMS, **r["cfg"]))
-            out.append({"id": r["id"], "name": r["name"], "sym": r["sym"], "cfg": r["cfg"], "start_ms": r["start_ms"],
+            out.append({"id": r["id"], "name": r["name"], "sym": r["sym"], "cfg": dict(cs.PARAMS, **r["cfg"]), "start_ms": r["start_ms"],
                         "stop_ms": r["stop_ms"], "stats": st, "trades": tr[-300:]})
         return web.json_response({"runs": out, "now": now, "notional": cs.PARAMS["notional"]})
     except ValueError as e:
