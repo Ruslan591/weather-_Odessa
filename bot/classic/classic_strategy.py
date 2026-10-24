@@ -38,7 +38,7 @@ PARAMS = dict(tf="15m", be_trigger=1.5, fee=0.05, window_h=240, notional=100.0, 
 PANEL = dict(PARAMS, be_trigger=1.5, be_lock=0.4, entry_mode="cross200", rev_exit=True, pat_mode="off", pat_min=0.0)  # «рекомендованные» правила конструктора (лучшие по проверке на ZEC 15m; пользователь может менять)
 
 
-TRIGGERS = ("pattern", "cross200", "cross20", "cross50", "tl_bounce", "tl_breakout", "hand_bounce", "hand_breakout")
+TRIGGERS = ("pattern", "cross200", "cross20", "cross50", "tl_bounce", "tl_breakout", "hand_bounce", "hand_breakout", "hand_both")
 CONFIRMS = ("close_ema20", "break_trigger", "ema20_slope", "rsi_level", "macd_turn", "volume", "strong_body", "break_swing",
             "pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sign", "ema50_slope", "ema50_trend", "ema50_pullback", "stochrsi_cross", "ema200_side")
 STATE_STAGES = ("pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sign", "ema50_slope", "ema50_trend", "ema50_pullback", "stochrsi_cross", "ema200_side")
@@ -67,6 +67,8 @@ def stage_signals(pre, P, warmup=None):
     bull = bear = set()
     tlsig = {}
     chan = {}
+    tags = {}  # {свеча: 'b' | 'k'} — отбой или пробой (только hand_both)
+    pre["_tag"] = tags
     if trig["t"] == "pattern":
         bull, bear = pat_sets(pre, trig.get("f", "none"))
     elif trig["t"] in ("tl_bounce", "tl_breakout"):  # линии тренда: отбой в канале/флэте или пробой треугольника
@@ -84,10 +86,10 @@ def stage_signals(pre, P, warmup=None):
             else:
               cache[key_] = (tl.tl_signals(o, h, l, c, atr, pv_, M, trig["t"], tlp, info=inf_, wlim=None if wl_ == (1.5, 14.0) else wl_), inf_)
         tlsig, chan = cache[key_]
-    elif trig["t"] in ("hand_bounce", "hand_breakout"):  # линии, нарисованные пользователем (hand.json)
+    elif trig["t"] in ("hand_bounce", "hand_breakout", "hand_both"):  # линии, нарисованные пользователем (hand.json)
         hp = float(trig.get("p") or 0)
         structs_ = hand.for_sym(P.get("sym")) if P.get("sym") else []
-        tlsig = hand.hand_signals(o, h, l, c, atr, pre["t"], M, structs_, trig["t"], hp, bool(P.get("hand_forward", True)), info=chan)
+        tlsig = hand.hand_signals(o, h, l, c, atr, pre["t"], M, structs_, trig["t"], hp, bool(P.get("hand_forward", True)), info=chan, tags=tags)
     conf = []
     for st_ in stages[1:]:  # подряд идущие «состояния» объединяются в одно подтверждение: все условия на одной свече
         if st_["t"] in STATE_STAGES:
@@ -181,7 +183,7 @@ def stage_signals(pre, P, warmup=None):
         elif trig["t"] == "cross50":
             pr, cu = c[i - 1] - e50[i - 1], c[i] - e50[i]
             ns = "L" if pr <= 0 < cu else "S" if pr >= 0 > cu else None
-        elif trig["t"] in ("tl_bounce", "tl_breakout", "hand_bounce", "hand_breakout"):
+        elif trig["t"] in ("tl_bounce", "tl_breakout", "hand_bounce", "hand_breakout", "hand_both"):
             ns = tlsig.get(i)
         else:
             pr, cu = c[i - 1] - e20[i - 1], c[i] - e20[i]
@@ -310,6 +312,8 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
     trades, pos, pend, pexit, arm, parm, bo = [], None, None, False, None, None, None
     chan = pre.get("_chan") or {}  # линии канала на сигнале (для stop_mode=channel / tp_mode=channel)
     pend_ch = bo_ch = pos_ch = pos_vis = None
+    tg_ = None
+    pend_tag = None  # 'b' | 'k' сигнала, ожидающего входа (hand_both)
     ch_stop_on = P.get("stop_mode") == "channel"
     ch_tp_on = P.get("tp_mode", "r") == "channel"
 
@@ -328,6 +332,19 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
         if ch_tp_on and P.get("ch_min_rr", 0.0) and abs(tp - entry) < P["ch_min_rr"] * abs(entry - st): return None
         return float(st), float(tp), float(gs), float(gt)
 
+    def chan_tp(side, ch, j, entry, tag):
+        """Цель по рисунку, когда стоп не по каналу. Отбой ('b'/нет метки): противоположная граница. Пробой ('k'): граница + k_tp_mult x ширина канала (замер движения; 0 = без цели, ведёт трейлинг). None, если цель позади цены."""
+        lo, up = ch
+        if tag == "k":
+            m = float(P.get("k_tp_mult", 1.0))
+            if m <= 0: return None
+            w = up(j) - lo(j)
+            tp = up(j) + m * w if side == "L" else lo(j) - m * w
+        else:
+            tp = up(j) if side == "L" else lo(j)
+        if (side == "L" and not tp > entry) or (side == "S" and not tp < entry): return None
+        return float(tp)
+
     def sig3(side, si, entry):  # стоп за экстремумом 3 свечей до сигнальной включительно −0.2 ATR, не ближе 0.5 ATR
         a = atr[si]
         if side == "L":
@@ -343,6 +360,7 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
         return p_
     st_sigs = stage_signals(pre, P) if P.get("entry_mode") == "stages" else None
     chan = pre.get("_chan") or {}  # линии считаются в stage_signals — читаем после него
+    tags_ = pre.get("_tag") or {}  # {свеча: 'b'|'k'} для hand_both
 
     def finish(i, price, reason):
         nonlocal pos, pos_ch, pos_vis
@@ -370,15 +388,17 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
         if pend:
             (xc, side, allow), pend = pend, None
             ch_ = pend_ch; pend_ch = None
+            tg_ = pend_tag; pend_tag = None
             if xc and pos and pos["side"] != xc:
                 finish(i, o[i], "разворот")
             if pos is None and side and allow:
                 entry = float(o[i])
                 clamped = False
                 lv = None
-                if ch_stop_on and ch_ is not None:
+                use_ch = ch_stop_on and ch_ is not None and tg_ != "k"  # у пробоя стоп по линии канала не годится (линия позади цены) — берём обычный стоп
+                if use_ch:
                     lv = ch_levels(side, ch_, i, entry, atr[i - 1])
-                if ch_stop_on and ch_ is not None:
+                if use_ch:
                     st = lv[0] if lv else None
                 elif P["stop_mode"] == "pivot":
                     st = _last_piv(piv, "L", i - 1, lambda p: p < entry) if side == "L" else _last_piv(piv, "H", i - 1, lambda p: p > entry)
@@ -395,6 +415,10 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                 if st is not None:
                     pos = mkpos(side, i, entry, st, clamped, i - 1)
                     pos_vis = ch_
+                    if tg_: pos["sig"] = tg_
+                    if not lv and ch_tp_on and ch_ is not None:  # стоп не по каналу (prev/sig3/...), а цель по каналу — раньше цель в этом случае не ставилась вообще
+                        tpx_ = chan_tp(side, ch_, i, entry, tg_)
+                        if tpx_ is not None: pos["tp"] = tpx_
                     if lv:
                         pos_ch = ch_; pos["ch_gap_s"], pos["ch_gap_t"] = lv[2], lv[3]
                         if ch_tp_on: pos["tp"] = lv[1]
@@ -513,6 +537,7 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                         else:
                             pend = (xc, en, allow_)
                             pend_ch = chan.get(g[1])
+                            pend_tag = tags_.get(g[1])
             elif em == "pattern20":
                 xc = en = None
                 na = "L" if (i in bull and i not in bear) else "S" if (i in bear and i not in bull) else None
@@ -578,5 +603,9 @@ def pack(trades):
             d[k] = round(float(x[k]), 3)
         if x.get("chl"):
             d["chl"] = [an._r(v) for v in x["chl"]]
+        if x.get("sig"):
+            d["sig"] = x["sig"]  # 'b' — отбой, 'k' — пробой (hand_both)
+        if x.get("tp"):
+            d["tp"] = an._r(float(x["tp"]))
         out.append(d)
     return out
