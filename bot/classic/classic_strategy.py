@@ -69,6 +69,8 @@ def stage_signals(pre, P, warmup=None):
     chan = {}
     tags = {}  # {свеча: 'b' | 'k'} — отбой или пробой (только hand_both)
     pre["_tag"] = tags
+    sids = {}  # {свеча: id нарисованной структуры, давшей сигнал}
+    pre["_sid"] = sids
     if trig["t"] == "pattern":
         bull, bear = pat_sets(pre, trig.get("f", "none"))
     elif trig["t"] in ("tl_bounce", "tl_breakout"):  # линии тренда: отбой в канале/флэте или пробой треугольника
@@ -89,7 +91,7 @@ def stage_signals(pre, P, warmup=None):
     elif trig["t"] in ("hand_bounce", "hand_breakout", "hand_both"):  # линии, нарисованные пользователем (hand.json)
         hp = float(trig.get("p") or 0)
         structs_ = hand.for_sym(P.get("sym"), P.get("tf"), P.get("hand_tf_mode", "junior")) if P.get("sym") else []
-        tlsig = hand.hand_signals(o, h, l, c, atr, pre["t"], M, structs_, trig["t"], hp, bool(P.get("hand_forward", True)), info=chan, tags=tags)
+        tlsig = hand.hand_signals(o, h, l, c, atr, pre["t"], M, structs_, trig["t"], hp, bool(P.get("hand_forward", True)), info=chan, tags=tags, sids=sids)
     conf = []
     for st_ in stages[1:]:  # подряд идущие «состояния» объединяются в одно подтверждение: все условия на одной свече
         if st_["t"] in STATE_STAGES:
@@ -312,7 +314,8 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
     trades, pos, pend, pexit, arm, parm, bo = [], None, None, False, None, None, None
     chan = pre.get("_chan") or {}  # линии канала на сигнале (для stop_mode=channel / tp_mode=channel)
     pend_ch = bo_ch = pos_ch = pos_vis = None
-    tg_ = None
+    tg_ = sd_ = None
+    pend_sid = None
     pend_tag = None  # 'b' | 'k' сигнала, ожидающего входа (hand_both)
     ch_stop_on = P.get("stop_mode") == "channel"
     ch_tp_on = P.get("tp_mode", "r") == "channel"
@@ -360,6 +363,7 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
         return p_
     st_sigs = stage_signals(pre, P) if P.get("entry_mode") == "stages" else None
     chan = pre.get("_chan") or {}  # линии считаются в stage_signals — читаем после него
+    sids_ = pre.get("_sid") or {}
     tags_ = pre.get("_tag") or {}  # {свеча: 'b'|'k'} для hand_both
 
     def finish(i, price, reason):
@@ -389,6 +393,7 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
             (xc, side, allow), pend = pend, None
             ch_ = pend_ch; pend_ch = None
             tg_ = pend_tag; pend_tag = None
+            sd_ = pend_sid; pend_sid = None
             if xc and pos and pos["side"] != xc:
                 finish(i, o[i], "разворот")
             if pos is None and side and allow:
@@ -416,6 +421,7 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                     pos = mkpos(side, i, entry, st, clamped, i - 1)
                     pos_vis = ch_
                     if tg_: pos["sig"] = tg_
+                    if sd_: pos["sid"] = sd_
                     if not lv and ch_tp_on and ch_ is not None:  # стоп не по каналу (prev/sig3/...), а цель по каналу — раньше цель в этом случае не ставилась вообще
                         tpx_ = chan_tp(side, ch_, i, entry, tg_)
                         if tpx_ is not None: pos["tp"] = tpx_
@@ -538,6 +544,7 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                             pend = (xc, en, allow_)
                             pend_ch = chan.get(g[1])
                             pend_tag = tags_.get(g[1])
+                            pend_sid = sids_.get(g[1])
             elif em == "pattern20":
                 xc = en = None
                 na = "L" if (i in bull and i not in bear) else "S" if (i in bear and i not in bull) else None
@@ -605,6 +612,8 @@ def pack(trades):
             d["chl"] = [an._r(v) for v in x["chl"]]
         if x.get("sig"):
             d["sig"] = x["sig"]  # 'b' — отбой, 'k' — пробой (hand_both)
+        if x.get("sid"):
+            d["sid"] = x["sid"]  # id нарисованной пользователем структуры (hand.json)
         if x.get("tp"):
             d["tp"] = an._r(float(x["tp"]))
         out.append(d)
