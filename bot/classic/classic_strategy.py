@@ -31,7 +31,7 @@ import classic_hand as hand
 
 PARAMS = dict(tf="15m", be_trigger=1.5, fee=0.05, window_h=240, notional=100.0, warmup=200,
               stop_mode="prev", min_stop_pct=1.5, min_stop_atr=0.0, trail_mode="none", trail_dist=0.0, be_atr=0.0, be_lock=0.3,
-              entry_mode="cross200", rev_exit=True, pat_mode="off", arm_k=12, pat_filter="none", entry_trigger="open", bo_wait=3, tp_r=0.0, max_bars=0, tp_mode="r", be_intrabar=False, tl_min_w=1.5, tl_max_w=14.0, tl_src="old", fc_minw=1.5, fc_maxw=8.0, ch_stop_pct=0.3, ch_stop_atr=0.0, ch_min_stop_pct=0.0, ch_tp_gap_pct=0.2, ch_tp_gap_atr=0.0, ch_min_rr=0.0, ch_follow=False, period_from="", period_to="", sym="", hand_forward=True,
+              entry_mode="cross200", rev_exit=True, pat_mode="off", arm_k=12, pat_filter="none", entry_trigger="open", bo_wait=3, tp_r=0.0, max_bars=0, tp_mode="r", be_intrabar=False, tl_min_w=1.5, tl_max_w=14.0, tl_src="old", fc_minw=1.5, fc_maxw=8.0, ch_stop_pct=0.3, ch_stop_atr=0.0, ch_min_stop_pct=0.0, ch_tp_gap_pct=0.2, ch_tp_gap_atr=0.0, ch_min_rr=0.0, ch_follow=False, period_from="", period_to="", sym="", hand_forward=True, hand_tf_mode="junior",
               stake_mode="fixed", stake_base=100.0, stake_min=6.0, martingale="off", mart_pct=50.0, mart_max=0,
               stages=[{"t": "pattern", "p": 0, "w": 0, "f": "none"}, {"t": "close_ema20", "p": 0, "w": 12, "f": "none"}])
 
@@ -88,7 +88,7 @@ def stage_signals(pre, P, warmup=None):
         tlsig, chan = cache[key_]
     elif trig["t"] in ("hand_bounce", "hand_breakout", "hand_both"):  # линии, нарисованные пользователем (hand.json)
         hp = float(trig.get("p") or 0)
-        structs_ = hand.for_sym(P.get("sym")) if P.get("sym") else []
+        structs_ = hand.for_sym(P.get("sym"), P.get("tf"), P.get("hand_tf_mode", "junior")) if P.get("sym") else []
         tlsig = hand.hand_signals(o, h, l, c, atr, pre["t"], M, structs_, trig["t"], hp, bool(P.get("hand_forward", True)), info=chan, tags=tags)
     conf = []
     for st_ in stages[1:]:  # подряд идущие «состояния» объединяются в одно подтверждение: все условия на одной свече
