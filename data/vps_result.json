@@ -1,7 +1,7 @@
 {
-  "task_id": "t1792831666",
+  "task_id": "t1792831693",
   "returncode": 0,
-  "stdout": "Traceback (most recent call last):\n  File \"<stdin>\", line 13, in <module>\n  File \"/usr/lib/python3.12/asyncio/runners.py\", line 194, in run\n    return runner.run(main)\n           ^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/asyncio/base_events.py\", line 687, in run_until_complete\n    return future.result()\n           ^^^^^^^^^^^^^^^\n  File \"<stdin>\", line 8, in go\n  File \"/opt/trading-bot/classic/classic_panel.py\", line 178, in get_df_long\n    raise RuntimeError(str(err))\nRuntimeError: 'NoneType' object has no attribute 'get'\n",
+  "stdout": "Traceback (most recent call last):\n  File \"<stdin>\", line 15, in <module>\n  File \"/usr/lib/python3.12/asyncio/runners.py\", line 194, in run\n    return runner.run(main)\n           ^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/asyncio/base_events.py\", line 687, in run_until_complete\n    return future.result()\n           ^^^^^^^^^^^^^^^\n  File \"<stdin>\", line 12, in go\nTypeError: dict() got multiple values for keyword argument 'sym'\nUnclosed client session\nclient_session: <aiohttp.client.ClientSession object at 0xe079fd1e1640>\nUnclosed connector\nconnections: ['deque([(<aiohttp.client_proto.ResponseHandler object at 0xe079fc4bb850>, 5116615.187043863)])']\nconnector: <aiohttp.connector.TCPConnector object at 0xe079fe06cb90>\n",
   "stderr": "",
-  "completed_at_utc": "2026-10-24T08:48:02Z"
+  "completed_at_utc": "2026-10-24T08:49:02Z"
 }
