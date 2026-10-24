@@ -38,7 +38,7 @@ PARAMS = dict(tf="15m", be_trigger=1.5, fee=0.05, window_h=240, notional=100.0, 
 PANEL = dict(PARAMS, be_trigger=1.5, be_lock=0.4, entry_mode="cross200", rev_exit=True, pat_mode="off", pat_min=0.0)  # «рекомендованные» правила конструктора (лучшие по проверке на ZEC 15m; пользователь может менять)
 
 
-TRIGGERS = ("pattern", "cross200", "cross20", "cross50", "tl_bounce", "tl_breakout", "hand_bounce", "hand_breakout", "hand_both")
+TRIGGERS = ("pattern", "cross200", "cross20", "cross50", "tl_bounce", "tl_breakout", "tl_both", "hand_bounce", "hand_breakout", "hand_both")
 CONFIRMS = ("close_ema20", "break_trigger", "ema20_slope", "rsi_level", "macd_turn", "volume", "strong_body", "break_swing",
             "pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sign", "ema50_slope", "ema50_trend", "ema50_pullback", "stochrsi_cross", "ema200_side")
 STATE_STAGES = ("pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sign", "ema50_slope", "ema50_trend", "ema50_pullback", "stochrsi_cross", "ema200_side")
@@ -73,21 +73,32 @@ def stage_signals(pre, P, warmup=None):
     pre["_sid"] = sids
     if trig["t"] == "pattern":
         bull, bear = pat_sets(pre, trig.get("f", "none"))
-    elif trig["t"] in ("tl_bounce", "tl_breakout"):  # линии тренда: отбой в канале/флэте или пробой треугольника
-        tlp = float(trig.get("p") or 0)
+    elif trig["t"] in ("tl_bounce", "tl_breakout", "tl_both"):  # линии тренда: отбой в канале/флэте и/или пробой канала/треугольника (tl_both — оба сразу)
+        kinds_ = ("tl_bounce", "tl_breakout") if trig["t"] == "tl_both" else (trig["t"],)
         cache = pre.setdefault("_tl", {})
         wl_ = (float(P.get("tl_min_w", 1.5)), float(P.get("tl_max_w", 14.0)))
         src_ = str(P.get("tl_src", "old"))
         fw_ = (float(P.get("fc_minw", 1.5)), float(P.get("fc_maxw", 8.0)))
-        key_ = (trig["t"], tlp, tl.cfg_key(), wl_) if src_ != "fast" else (trig["t"], tlp, "fast", fw_, tuple(sorted(fchan.FC.items())))
-        if key_ not in cache:
-            pv_ = None  # опорные точки и pivot модуль считает сам по текущим (в т.ч. обученным по рисункам пользователя) параметрам
-            inf_ = {}
-            if src_ == "fast":  # быстрый канал по правилу пользователя (classic_fastchan): 3 точки, пробой по закрытию
-                cache[key_] = (fchan.fc_signals(o, h, l, c, atr, M, trig["t"], tlp, fw_[0], fw_[1], info=inf_), inf_)
-            else:
-              cache[key_] = (tl.tl_signals(o, h, l, c, atr, pv_, M, trig["t"], tlp, info=inf_, wlim=None if wl_ == (1.5, 14.0) else wl_), inf_)
-        tlsig, chan = cache[key_]
+        tlsig, chan = {}, {}
+        for kd_ in kinds_:
+            tlp = (0.2 if kd_ == "tl_breakout" else float(trig.get("p") or 0)) if trig["t"] == "tl_both" else float(trig.get("p") or 0)
+            key_ = (kd_, tlp, tl.cfg_key(), wl_) if src_ != "fast" else (kd_, tlp, "fast", fw_, tuple(sorted(fchan.FC.items())))
+            if key_ not in cache:
+                pv_ = None  # опорные точки и pivot модуль считает сам по текущим (в т.ч. обученным по рисункам пользователя) параметрам
+                inf_ = {}
+                if src_ == "fast":  # быстрый канал по правилу пользователя (classic_fastchan): 3 точки, пробой по закрытию
+                    cache[key_] = (fchan.fc_signals(o, h, l, c, atr, M, kd_, tlp, fw_[0], fw_[1], info=inf_), inf_)
+                else:
+                    cache[key_] = (tl.tl_signals(o, h, l, c, atr, pv_, M, kd_, tlp, info=inf_, wlim=None if wl_ == (1.5, 14.0) else wl_), inf_)
+            sg_, inf2_ = cache[key_]
+            for i_, sd2_ in sg_.items():
+                if i_ in tlsig:
+                    continue
+                tlsig[i_] = sd2_
+                if i_ in inf2_:
+                    chan[i_] = inf2_[i_]
+                if trig["t"] == "tl_both":
+                    tags[i_] = "b" if kd_ == "tl_bounce" else "k"
     elif trig["t"] in ("hand_bounce", "hand_breakout", "hand_both"):  # линии, нарисованные пользователем (hand.json)
         hp = float(trig.get("p") or 0)
         structs_ = hand.for_sym(P.get("sym"), P.get("tf"), P.get("hand_tf_mode", "junior")) if P.get("sym") else []
@@ -185,7 +196,7 @@ def stage_signals(pre, P, warmup=None):
         elif trig["t"] == "cross50":
             pr, cu = c[i - 1] - e50[i - 1], c[i] - e50[i]
             ns = "L" if pr <= 0 < cu else "S" if pr >= 0 > cu else None
-        elif trig["t"] in ("tl_bounce", "tl_breakout", "hand_bounce", "hand_breakout", "hand_both"):
+        elif trig["t"] in ("tl_bounce", "tl_breakout", "tl_both", "hand_bounce", "hand_breakout", "hand_both"):
             ns = tlsig.get(i)
         else:
             pr, cu = c[i - 1] - e20[i - 1], c[i] - e20[i]
