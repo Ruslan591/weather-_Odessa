@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-24T13:08:34Z",
+  "timestamp": "2026-10-24T13:13:29Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-10-24T12:45:00.000Z",
   "target_id": 0,
@@ -18,6 +18,8 @@
     "elongation_axis_compass": "ЮВ-СЗ",
     "frontlike": false,
     "window_spanning": false,
+    "phase_label": "безоблачно",
+    "cloud_fraction": 0.06,
     "has_lightning": false
   },
   "local_candidates": [
@@ -31,8 +33,8 @@
       "elongation_axis_deg": 55.0,
       "elongation_axis_compass": "СВ-ЮЗ",
       "frontlike": false,
-      "phase_label": null,
-      "type_label": null,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
@@ -120,8 +122,8 @@
       "elongation_axis_compass": "ЮВ-СЗ",
       "frontlike": true,
       "window_spanning": false,
-      "phase_label": null,
-      "type_label": null,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
       "has_precip": null,
       "has_lightning": false,
       "ir_confirmed": false,
@@ -301,22 +303,26 @@
     "eta_min": null,
     "verdict": "почти стоит на месте"
   },
+  "target_phase": {
+    "label": "безоблачно",
+    "cloud_fraction": 0.923
+  },
   "existence": {
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-10-24T12:40:00.000Z"
+        "timestamp": "2026-10-24T12:50:00.000Z"
       },
       "geocolour_motion": {
         "confirmed": true,
-        "timestamp": "2026-10-24T12:40:00.000Z"
+        "timestamp": "2026-10-24T12:50:00.000Z"
       },
       "cloud_phase_type": {
-        "confirmed": null,
-        "timestamp": "2026-10-24T13:02:13Z"
+        "confirmed": true,
+        "timestamp": "2026-10-24T13:12:17Z"
       }
     },
-    "votes_confirmed": 1,
+    "votes_confirmed": 2,
     "votes_not_confirmed": 1,
     "consensus": "disputed"
   },
@@ -330,5 +336,5 @@
       "timestamp": "2026-10-24T13:08:21Z"
     }
   },
-  "verdict": "Цель в 38км С — каналы расходятся: geocolour_motion подтверждают, ir_motion нет. Почти не движется. Отдельно: система синоптического масштаба (355км²) в 57км ЮВ."
+  "verdict": "Цель в 38км С, безоблачно — каналы расходятся: geocolour_motion/cloud_phase_type подтверждают, ir_motion нет. Почти не движется. Отдельно: система синоптического масштаба (355км²) в 57км ЮВ."
 }
