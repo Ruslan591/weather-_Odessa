@@ -212,24 +212,24 @@ e.innerHTML='<div style=\"font-weight:600;margin-bottom:4px\">Лонги и шо
 function runCard(r){
  const st=r.stats,N=S.runs?S.notional:100,act=r.stop_ms==null;
  let h='<div class=card><h4>#'+r.id+' · '+r.name+' · '+r.sym+' · '+(act?'<span class=up>идёт</span>':'<span class=fl>остановлен '+ft(r.stop_ms)+'</span>')+'</h4>';
- h+='<div class=sm>с '+ft(r.start_ms)+' · '+describe(r.cfg)+'</div>';
+ h+='<div class=sm>'+(r.start_ms>0?'с '+ft(r.start_ms):'торгует по свечам после рисования канала')+' · '+describe(r.cfg)+'</div>';
  const wr=st.n?Math.round(st.win/st.n*100)+'%':'—',sp=st.net*N/100;
  h+='<div class=grid style="margin-top:6px">'+[['Сделок',st.n+(st.open?' (открыта '+st.open+')':'')],['Прибыльных',wr],['Net %','<span class="'+cls(st.net)+'" style="display:inline;font-size:16px">'+sg(st.net)+'%</span>'],['Net, USDT (на '+N+')',sg(sp)],['До комиссий %',sg(st.gross)+'%']].concat(st.money?[['Профит, $ (по ставкам)','<span class="'+cls(st.money.profit)+'" style="display:inline;font-size:16px">'+sg(st.money.profit)+' $</span>'],['Макс. ставка, $',st.money.max_stake.toFixed(2)],['Макс. просадка, $','-'+st.money.max_dd.toFixed(2)]]:[]).map(x=>'<div><span>'+x[0]+'</span><b>'+x[1]+'</b></div>').join('')+'</div>';
- h+='<details style="margin-top:6px"><summary class=sm>Сделки ('+r.trades.length+')</summary><div class=sc>';
+ h+='<details data-k=t'+r.id+' style="margin-top:6px"><summary class=sm>Сделки ('+r.trades.length+')</summary><div class=sc>';
  if(r.trades.length){h+='<table><tr><th>Сторона</th><th>Вход</th><th>Цена</th><th>Стоп0 / цель</th><th>Выход</th><th>Цена</th><th>Причина</th><th>Net%</th><th>Ставка $</th><th>$</th></tr>';
   r.trades.slice().sort((a,b)=>b.t_in-a.t_in).forEach(x=>{h+='<tr><td class="'+(x.side==='L'?'up':'dn')+'">'+(x.side==='L'?'ЛОНГ':'ШОРТ')+(x.sig==='k'?' · пробой':x.sig==='b'?' · отбой':'')+'</td><td>'+ft(x.t_in)+'</td><td>'+fmt(x.p_in)+'</td><td>'+fmt(x.stop0)+(x.tp?' / цель '+fmt(x.tp):'')+'</td><td>'+(x.open?'—':ft(x.t_out))+'</td><td>'+(x.open?fmt(x.p_out)+' (тек.)':fmt(x.p_out))+'</td><td>'+x.reason+'</td><td class="'+cls(x.net)+'"><b>'+sg(x.net)+'</b></td><td>'+(x.stake!=null?x.stake.toFixed(2):'—')+'</td><td class="'+cls(x.usd||0)+'"><b>'+(x.usd!=null?sg(x.usd):'—')+'</b></td></tr>'});h+='</table>'}else h+='<div class=sm>пока сделок нет</div>';
  h+='</div></details><div class=t>'+(act?'<button class=bad onclick="runAct(\'stop\','+r.id+')">■ Остановить</button>':'')+'<button onclick="runAct(\'delete\','+r.id+')">Удалить</button></div></div>';
  return h;
 }
-function renderRuns(){const R=S.runs||[];if(!R.length){$('runs').innerHTML='<div class=card>Прогонов пока нет. Задай правила в конструкторе и нажми «Запустить живой прогон».</div>';return}
+function renderRuns(){const OPEN=new Set(Array.from(document.querySelectorAll('#runs details[open]')).map(e=>e.dataset.k));const R=S.runs||[];if(!R.length){$('runs').innerHTML='<div class=card>Прогонов пока нет. Задай правила в конструкторе и нажми «Запустить живой прогон».</div>';return}
  const last=r=>r.trades.length?Math.max.apply(null,r.trades.map(x=>x.t_in)):0;
  const has=R.filter(r=>r.stats.n>0).sort((a,b)=>(b.stats.open-a.stats.open)||(last(b)-last(a))),emp=R.filter(r=>r.stats.n===0);
  let h='<div class=card><h4>Сводка по прогонам</h4><div class=sm>Прогонов '+R.length+' · со сделками '+has.length+' · открытых позиций '+R.reduce((s,r)=>s+r.stats.open,0)+'</div>';
  if(has.length){h+='<div class=sc><table><tr><th>#</th><th>Пара · ТФ</th><th>Сделок</th><th>Откр.</th><th>Net%</th></tr>'+has.map(r=>'<tr><td>'+r.id+'</td><td>'+r.sym+' · '+r.cfg.tf+'</td><td>'+r.stats.n+'</td><td>'+(r.stats.open||'—')+'</td><td class="'+cls(r.stats.net)+'"><b>'+sg(r.stats.net)+'</b></td></tr>').join('')+'</table></div>'}
  else h+='<div class=sm>Сделок пока нет: вход только когда свеча коснулась границы активного (не удалённого) канала — отбой, или закрылась за ней — пробой. Сигналы считаются только по свечам после момента, когда канал нарисован.</div>';
  h+='</div>'+has.map(runCard).join('');
- if(emp.length)h+='<details class=card><summary class=sm>Прогоны без сделок ('+emp.length+')</summary>'+emp.map(runCard).join('')+'</details>';
- $('runs').innerHTML=h}
+ if(emp.length)h+='<details class=card data-k=emp><summary class=sm>Прогоны без сделок ('+emp.length+')</summary>'+emp.map(runCard).join('')+'</details>';
+ $('runs').innerHTML=h;document.querySelectorAll('#runs details').forEach(e=>{if(OPEN.has(e.dataset.k))e.open=true})}
 async function loadRuns(){try{const j=await api('/api/runs');S.runs=j.runs;S.notional=j.notional;renderRuns()}catch(e){$('runs').textContent='Ошибка: '+e.message}}
 async function runAct(a,id){if(a==='delete'&&!confirm('Удалить прогон #'+id+'?'))return;if(a==='stop'&&!confirm('Остановить прогон #'+id+'? Открытая позиция будет закрыта по текущей цене.'))return;try{const j=await api('/api/runs',{action:a,id:id});S.runs=j.runs;S.notional=j.notional;renderRuns()}catch(e){alert(e.message)}}
 function chart(){
