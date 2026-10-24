@@ -221,7 +221,7 @@ function runCard(r){
  h+='</div></details><div class=t>'+(act?'<button class=bad onclick="runAct(\'stop\','+r.id+')">■ Остановить</button>':'')+'<button onclick="runAct(\'delete\','+r.id+')">Удалить</button></div></div>';
  return h;
 }
-function renderRuns(){const OPEN=new Set(Array.from(document.querySelectorAll('#runs details[open]')).map(e=>e.dataset.k));const R=S.runs||[];if(!R.length){$('runs').innerHTML='<div class=card>Прогонов пока нет. Задай правила в конструкторе и нажми «Запустить живой прогон».</div>';return}
+function renderRuns(){const SK=e=>{const d=e.closest('details');return d?d.dataset.k:'sum'},SC={};document.querySelectorAll('#runs .sc').forEach(e=>{SC[SK(e)]=[e.scrollLeft,e.scrollTop]});const WX=window.scrollX,WY=window.scrollY;const OPEN=new Set(Array.from(document.querySelectorAll('#runs details[open]')).map(e=>e.dataset.k));const R=S.runs||[];if(!R.length){$('runs').innerHTML='<div class=card>Прогонов пока нет. Задай правила в конструкторе и нажми «Запустить живой прогон».</div>';return}
  const last=r=>r.trades.length?Math.max.apply(null,r.trades.map(x=>x.t_in)):0;
  const has=R.filter(r=>r.stats.n>0).sort((a,b)=>(b.stats.open-a.stats.open)||(last(b)-last(a))),emp=R.filter(r=>r.stats.n===0);
  let h='<div class=card><h4>Сводка по прогонам</h4><div class=sm>Прогонов '+R.length+' · со сделками '+has.length+' · открытых позиций '+R.reduce((s,r)=>s+r.stats.open,0)+'</div>';
@@ -229,7 +229,7 @@ function renderRuns(){const OPEN=new Set(Array.from(document.querySelectorAll('#
  else h+='<div class=sm>Сделок пока нет: вход только когда свеча коснулась границы активного (не удалённого) канала — отбой, или закрылась за ней — пробой. Сигналы считаются только по свечам после момента, когда канал нарисован.</div>';
  h+='</div>'+has.map(runCard).join('');
  if(emp.length)h+='<details class=card data-k=emp><summary class=sm>Прогоны без сделок ('+emp.length+')</summary>'+emp.map(runCard).join('')+'</details>';
- $('runs').innerHTML=h;document.querySelectorAll('#runs details').forEach(e=>{if(OPEN.has(e.dataset.k))e.open=true})}
+ $('runs').innerHTML=h;document.querySelectorAll('#runs details').forEach(e=>{if(OPEN.has(e.dataset.k))e.open=true});document.querySelectorAll('#runs .sc').forEach(e=>{const s=SC[SK(e)];if(s){e.scrollLeft=s[0];e.scrollTop=s[1]}});window.scrollTo(WX,WY)}
 async function loadRuns(){try{const j=await api('/api/runs');S.runs=j.runs;S.notional=j.notional;renderRuns()}catch(e){$('runs').textContent='Ошибка: '+e.message}}
 async function runAct(a,id){if(a==='delete'&&!confirm('Удалить прогон #'+id+'?'))return;if(a==='stop'&&!confirm('Остановить прогон #'+id+'? Открытая позиция будет закрыта по текущей цене.'))return;try{const j=await api('/api/runs',{action:a,id:id});S.runs=j.runs;S.notional=j.notional;renderRuns()}catch(e){alert(e.message)}}
 function chart(){
