@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-25T21:17:36Z",
+  "timestamp": "2026-10-25T21:24:13Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-10-25T20:45:00.000Z",
   "target_id": 0,
@@ -22,23 +22,6 @@
     "has_lightning": false
   },
   "local_candidates": [
-    {
-      "target_id": 0,
-      "area_km2": 84.1,
-      "distance_km": 12.2,
-      "bearing_deg": 31.0,
-      "compass": "СВ",
-      "elongation_aspect_ratio": 2.52,
-      "elongation_axis_deg": 20.0,
-      "elongation_axis_compass": "С-Ю",
-      "frontlike": false,
-      "phase_label": null,
-      "type_label": null,
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": false,
-      "geocolour_confirmed": true
-    },
     {
       "target_id": 1,
       "area_km2": 146.8,
@@ -91,7 +74,7 @@
       "geocolour_confirmed": true
     }
   ],
-  "local_suppressed_count": 7,
+  "local_suppressed_count": 8,
   "system_candidates": [
     {
       "target_id": 3,
@@ -480,17 +463,17 @@
         "timestamp": "2026-10-25T20:50:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": true,
-        "timestamp": "2026-10-25T20:50:00.000Z"
+        "confirmed": false,
+        "timestamp": "2026-10-25T21:00:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": false,
         "timestamp": "2026-10-25T16:47:17Z"
       }
     },
-    "votes_confirmed": 1,
-    "votes_not_confirmed": 2,
-    "consensus": "disputed"
+    "votes_confirmed": 0,
+    "votes_not_confirmed": 3,
+    "consensus": "not_confirmed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -502,5 +485,5 @@
       "timestamp": "2026-10-25T21:17:07Z"
     }
   },
-  "verdict": "Цель в 12км СВ, безоблачно — каналы расходятся: geocolour_motion подтверждают, ir_motion/cloud_phase_type нет. Почти не движется. Отдельно: система синоптического масштаба (11092км²) в 58км В."
+  "verdict": "CLM отметил цель в 12км СВ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (11092км²) в 58км В."
 }
