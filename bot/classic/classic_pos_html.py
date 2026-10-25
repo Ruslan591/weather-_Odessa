@@ -234,7 +234,7 @@ let h='<details class=card data-k=rot><summary style="font-size:15px;font-weight
 if(!d)return h+'<div class=sm style="margin-top:8px">'+(sc&&sc.err?'Не удалось построить список: '+sc.err:'Список строится, это занимает несколько минут после запуска…')+'</div></details>';
 const cands=d.cands.filter(c=>!act.has(c.sym)),rep=d.replace.filter(c=>act.has(c.sym));
 h+='<div class=sm style="margin-top:8px">Обновлён '+ft(d.ts*1000)+'. Критерий: размах дневной свечи за 14 дней в % от цены (волатильность), оборот за сутки от '+(d.min_vol/1e6).toFixed(1)+' млн $, минимальный ордер биржи не больше 6 $, история не короче '+d.min_days+' дней. Бот ничего не добавляет и не убирает сам: решение за вами.</div>';
-h+='<div class=sm style="margin-top:8px"><b>Сейчас в работе</b> (размах дня): '+d.cur.filter(x=>act.has(x.sym)).map(x=>x.sym.replace('USDT','')+' '+(x.rng14==null?'—':x.rng14+'%')).join(' · ')+' · у лучших кандидатов ≈ '+d.median+'%</div>';
+h+='<div class=sm style="margin-top:8px"><b>Сейчас в работе</b> (размах дня): '+d.cur.filter(x=>act.has(x.sym)).map(x=>x.sym.replace('USDT','')+' '+(x.rng14==null?'—':x.rng14+'%')).join(' · ')+' · типичная пара биржи ≈ '+d.typical+'% · лучшие кандидаты ≈ '+d.median+'%</div>';
 h+='<div class=sm style="margin-top:10px"><b>Предложения заменить</b></div>';
 if(rep.length)h+='<div class=sc><table><tr><th>Пара</th><th>Почему</th><th></th></tr>'+rep.map(c=>'<tr><td>'+c.sym+'</td><td style="white-space:normal;text-align:left">'+c.why.join('; ')+'</td><td><button data-drop='+c.sym+'>Убрать</button></td></tr>').join('')+'</table></div>';
 else h+='<div class=sm>Пока нет: по текущим парам не выполнено ни одно условие замены.</div>';
