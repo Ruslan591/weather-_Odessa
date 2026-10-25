@@ -6,7 +6,7 @@
   - оборот за 24 ч не ниже MIN_VOL (ликвидность не главное, но стопы не должны проскакивать);
   - история не короче MIN_DAYS (детектору каналов нужна история);
   - ранжирование по среднему размаху дневной свечи за 14 закрытых дней в % от цены (волатильность в процентах, а не цена монеты).
-Замена: у текущей пары размах заметно ниже, чем у лучших кандидатов; или нет сделок за неделю и больше; или сделок >= 10 и итог в минусе.
+Замена: у текущей пары размах заметно ниже типичной пары биржи (медиана суточного размаха по всем подходящим парам); или нет сделок за неделю и больше; или сделок >= 30 и итог в минусе.
 """
 import asyncio
 import statistics
@@ -49,13 +49,16 @@ async def build(getter, cur_pairs, pair_stats, now_ms):
             continue
         meta[s["symbol"]] = _min_notional(s.get("filters", []))
     tick = {t["symbol"]: t for t in await getter("/api/v3/ticker/24hr", {}) if t["symbol"] in meta}
-    pool = []
+    pool, alls = [], []
     for sym, t in tick.items():
         try:
             price, hi, lo, vol = float(t["lastPrice"]), float(t["highPrice"]), float(t["lowPrice"]), float(t["quoteVolume"])
         except (KeyError, ValueError):
             continue
-        if price <= 0 or vol < MIN_VOL or meta[sym] > STAKE or sym in cur_pairs:
+        if price <= 0 or vol < MIN_VOL or meta[sym] > STAKE:
+            continue
+        alls.append((hi - lo) / price * 100.0)
+        if sym in cur_pairs:
             continue
         pool.append((sym, (hi - lo) / price * 100.0, vol, price))
     pool.sort(key=lambda x: -x[1])
@@ -78,19 +81,20 @@ async def build(getter, cur_pairs, pair_stats, now_ms):
     cands.sort(key=lambda c: -c["rng14"])
     cands = cands[:15]
     med = statistics.median([c["rng14"] for c in cands]) if cands else 0.0
+    typical = statistics.median(alls) if alls else 0.0
     cur, rep = [], []
     for sym in cur_pairs:
         r, days = det.get(sym, (None, 0))
         ps = pair_stats.get(sym, {"n": 0, "net": 0.0, "start": now_ms})
         cur.append({"sym": sym, "rng14": round(r, 2) if r is not None else None, "n": ps["n"], "net": round(ps["net"], 2)})
         why = []
-        if r is not None and med and r < 0.6 * med:
-            why.append("размах дня %.1f%% против ≈%.1f%% у лучших кандидатов" % (r, med))
+        if r is not None and typical and r < 0.75 * typical:
+            why.append("размах дня %.1f%% — ниже типичной пары биржи (≈%.1f%%)" % (r, typical))
         run_days = (now_ms - ps["start"]) / 86400000.0
         if run_days >= 7 and ps["n"] == 0:
             why.append("нет ни одной сделки за %d дн." % int(run_days))
-        if ps["n"] >= 10 and ps["net"] < 0:
+        if ps["n"] >= 30 and ps["net"] < 0:
             why.append("сделок %d, итог %.2f%%" % (ps["n"], ps["net"]))
         if why:
             rep.append({"sym": sym, "rng14": round(r, 2) if r is not None else None, "n": ps["n"], "net": round(ps["net"], 2), "why": why})
-    return {"cands": cands, "replace": rep, "cur": cur, "median": round(med, 2), "min_vol": MIN_VOL, "min_days": MIN_DAYS, "checked": len(det)}
+    return {"cands": cands, "replace": rep, "cur": cur, "median": round(med, 2), "typical": round(typical, 2), "min_vol": MIN_VOL, "min_days": MIN_DAYS, "checked": len(det)}
