@@ -1,1 +1,1 @@
-{"task_id": "t1792971302", "cmd": "for i in $(seq 1 24); do\n  if grep -q \"====\" /tmp/robot_bt.log 2>/dev/null; then break; fi\n  sleep 5\ndone\ntail -n 3 /tmp/robot_bt.log\npgrep -f robot_backtest.py >/dev/null && echo RUNNING || echo FINISHED\n", "timeout": 160}
+{"task_id": "t1792971492", "cmd": "for i in $(seq 1 24); do\n  if grep -q \"====\" /tmp/robot_bt.log 2>/dev/null; then break; fi\n  sleep 5\ndone\nhead -n 2 /tmp/robot_bt.log\npgrep -f robot_backtest.py >/dev/null && echo RUNNING || echo FINISHED\nsed -n '/====/,$p' /tmp/robot_bt.log\n", "timeout": 160}
