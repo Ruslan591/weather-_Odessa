@@ -1182,10 +1182,11 @@ const idxAt=x=>cl(Math.floor(G.raw+(x-G.L)/G.bw),0,G.total-1);
 function ptAt(x,y){const D=S.D,N=D.t.length;let kind='free';let i=Math.round(G.raw+(x-G.L)/G.bw-0.5),p=G.hi-(y-G.my0-6)/(G.my1-G.my0-12)*(G.hi-G.lo);
  if(i>=0&&i<G.total){const A=k=>i<N?D[k][i]:D.live[k];let best=14;['h','l','o','c'].forEach(k=>{const v=A(k),yy=G.my0+6+(G.hi-v)/(G.hi-G.lo)*(G.my1-G.my0-12);if(Math.abs(yy-y)<best){best=Math.abs(yy-y);p=v;kind=k}})}
  return{t:i<N?D.t[Math.max(0,i)]:D.t[N-1]+(i-N+1)*G.stepMs,p:p,i:i,k:kind}}
+function chanB(A,tb,p){const sl=(A[3]-A[1])/(A[2]-A[0]),ln=t=>A[1]+sl*(t-A[0]),off=p-ln(tb),ta=tb===A[0]?A[2]:A[0];return[ta,ln(ta)+off,tb,p]}
 function applyHandle(dr,x,y){const it=S.hand.items.find(z=>z.id===dr.sid);if(!it)return;const o=dr.orig,pt=ptAt(x,y);
- if(o.kind==='channel'){const off=o.B[1]-o.A[1];
-  if(dr.key==='A1'||dr.key==='A2'){const A=o.A.slice();if(dr.key==='A1'){A[0]=pt.t;A[1]=pt.p}else{A[2]=pt.t;A[3]=pt.p}if(A[0]===A[2])return;it.A=A;it.B=[A[0],A[1]+off,A[2],A[3]+off]}
-  else{const sl=(o.A[3]-o.A[1])/(o.A[2]-o.A[0]),off2=pt.p-(o.A[1]+sl*(pt.t-o.A[0]));it.B=[o.A[0],o.A[1]+off2,o.A[2],o.A[3]+off2]}}
+ if(o.kind==='channel'){
+  if(dr.key==='A1'||dr.key==='A2'){const A=o.A.slice(),slo=(o.A[3]-o.A[1])/(o.A[2]-o.A[0]),off=o.B[3]-(o.A[1]+slo*(o.B[2]-o.A[0]));if(dr.key==='A1'){A[0]=pt.t;A[1]=pt.p}else{A[2]=pt.t;A[3]=pt.p}if(A[0]===A[2])return;const sln=(A[3]-A[1])/(A[2]-A[0]);it.A=A;it.B=chanB(A,o.B[2],A[1]+sln*(o.B[2]-A[0])+off)}
+  else{it.B=chanB(o.A,pt.t,pt.p)}}
  else if(o.kind==='triangle'){const A=o.A.slice(),B=o.B.slice();if(dr.key==='A1'){A[0]=pt.t;A[1]=pt.p}else if(dr.key==='A2'){A[2]=pt.t;A[3]=pt.p}else if(dr.key==='B1'){B[0]=pt.t;B[1]=pt.p}else{B[2]=pt.t;B[3]=pt.p}if(A[0]===A[2]||B[0]===B[2])return;it.A=A;it.B=B}
  else{let t1=o.A[0],t2=o.A[2],up=o.A[1],lo=o.B[1];if(dr.key==='A1'){t1=pt.t;up=pt.p}else{t2=pt.t;lo=pt.p}if(t1===t2)return;if(up<lo){const q=up;up=lo;lo=q}it.A=[t1,up,t2,up];it.B=[t1,lo,t2,lo]}}
 cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);const q=pxy(e);ptrs.set(e.pointerId,q);
