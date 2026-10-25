@@ -1055,6 +1055,8 @@ function handCommit(){const H=S.hand,P=H.pts;let A,B;
  else if(H.tool==='triangle'){if(P[0].t===P[1].t||P[2].t===P[3].t){alert('Точки линии на одной свече — поставь их на разных');H.pts=[];hintHand();draw();return}A=[P[0].t,P[0].p,P[1].t,P[1].p];B=[P[2].t,P[2].p,P[3].t,P[3].p]}
  else{let t1=Math.min(P[0].t,P[1].t),t2=Math.max(P[0].t,P[1].t);if(t2===t1)t2=t1+5*G.stepMs;const up=Math.max(P[0].p,P[1].p),lo=Math.min(P[0].p,P[1].p);A=[t1,up,t2,up];B=[t1,lo,t2,lo]}
  const kind=H.tool,anc=P.map(q=>q.k);H.pts=[];hintHand();handPost({action:'add',sym:S.sym,tf:S.tf,kind:kind,A:A,B:B,anc:anc})}
+function tmTxt(ms){const s=Math.max(0,Math.floor(ms/1000)),d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60),c=s%60,p=n=>(n<10?'0':'')+n;return d?d+'д '+p(h)+':'+p(m)+':'+p(c):h?h+':'+p(m)+':'+p(c):p(m)+':'+p(c)}
+function paintTm(g){const q=G.tm;if(!q)return;g.save();g.setTransform(window.devicePixelRatio||1,0,0,window.devicePixelRatio||1,0,0);g.fillStyle=q.col;g.fillRect(q.x,q.y,q.w,14);g.fillStyle='#fff';g.font='10px system-ui';g.textAlign='left';g.textBaseline='middle';g.fillText(tmTxt(q.close-Date.now()),q.x+3,q.y+7);g.restore()}
 function draw(){
  const D=S.D;if(!D)return;
  const cv=$('c'),dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=Math.round(cl(window.innerHeight*0.62,380,660));
@@ -1141,9 +1143,9 @@ function draw(){
    else if(b.kind==='S'){g.fillStyle='#ff1744';g.fillText('ШОРТ▼',x,py(D.h[i])-(S.opt.pv?40:30))}
    else{g.fillStyle='#ffd600';g.fillText('■ВЫХОД',x,py(D.c[i]))}});g.font='10px system-ui'}
  // last price
- const lp=live?live.c:D.c[N-1],lc=lp>=(live?live.o:D.o[N-1])?'#26a69a':'#ef5350';
+ G.tm=null;const lp=live?live.c:D.c[N-1],lc=lp>=(live?live.o:D.o[N-1])?'#26a69a':'#ef5350';
  if(lp>=lo&&lp<=hi){g.strokeStyle=lc;g.setLineDash([2,3]);g.beginPath();g.moveTo(L,py(lp));g.lineTo(L+plotW,py(lp));g.stroke();g.setLineDash([]);
-  g.fillStyle=lc;g.fillRect(L+plotW+1,py(lp)-7,R-2,14);g.fillStyle='#fff';g.textAlign='left';g.fillText(fmt(lp),L+plotW+4,py(lp))}
+  g.fillStyle=lc;g.fillRect(L+plotW+1,py(lp)-7,R-2,14);g.fillStyle='#fff';g.textAlign='left';g.fillText(fmt(lp),L+plotW+4,py(lp));G.tm={x:L+plotW+1,y:py(lp)+8,w:R-2,col:lc,close:live?live.t+stepMs:D.t[N-1]+2*stepMs};paintTm(g)}
  // ---- volume
  if(P.vol){const p=P.vol;let mv=1e-9;for(let i=start;i<endV;i++)mv=Math.max(mv,A('v',i));
   for(let i=start;i<endV;i++){const up=A('c',i)>=A('o',i),h=(A('v',i)/mv)*(p.y1-p.y0-8);g.fillStyle=up?'rgba(38,166,154,.55)':'rgba(239,83,80,.55)';g.fillRect(X(i)-Math.max(1,bw*0.7)/2,p.y1-h,Math.max(1,bw*0.7),h)}
@@ -1212,7 +1214,7 @@ cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',e=>{ptrs
 cv.addEventListener('wheel',e=>{e.preventDefault();const f=e.deltaY>0?1.15:0.87;if(e.shiftKey)S.vz=S.vz/f;else if(e.altKey)S.off+=(e.deltaY>0?1:-1)*Math.max(1,Math.round(S.n*0.1));else S.n=Math.round(S.n*f);draw()},{passive:false});
 window.addEventListener('resize',draw);
 (async()=>{try{const r=await fetch('/api/pairs');S.pairs=(await r.json()).pairs;if(!S.pairs.includes(S.sym))S.sym=S.pairs[0]}catch(e){S.pairs=[S.sym]}
- mk();load();loadMtf();setInterval(load,10000);setInterval(loadMtf,60000)})();
+ mk();load();loadMtf();setInterval(load,10000);setInterval(loadMtf,60000);setInterval(()=>{if(S.D&&G.tm)paintTm($('c').getContext('2d'))},1000)})();
 </script></body></html>'''
 
 
