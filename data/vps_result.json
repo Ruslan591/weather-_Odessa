@@ -1,7 +1,7 @@
 {
-  "task_id": "t1792905644",
+  "task_id": "t1792906308",
   "returncode": 0,
-  "stdout": "cores=2\n               total        used        free      shared  buff/cache   available\nMem:           11927         774        7702           5        3678       11153\n 05:21:02 up 60 days,  1:48,  1 user,  load average: 0.41, 0.39, 0.37\n--- TTL/загрузка свечей\n18:TTL = {\"1m\": 5, \"3m\": 8, \"5m\": 10, \"15m\": 15, \"30m\": 20, \"1h\": 30, \"2h\": 40, \"4h\": 60, \"6h\": 80, \"8h\": 90, \"12h\": 100, \"1d\": 120}\n49:        if c and time.time() - c[0] < TTL.get(tf, 30):\n80:async def fetch_back(sym, tf, need_ms, max_pages=120):\n147:async def get_df_long(sym, tf, pages=2):\n153:        if c and time.time() - c[0] < TTL.get(tf, 30):\n--- нагрузка процесса\n1134854 tbot      20   0  371496  98436  29316 S   0.0   0.8   4:59.65 python\n1134854 tbot      20   0  371496  98436  29316 S   0.0   0.8   4:59.65 python\n1134854 tbot      20   0  371496  98436  29316 S   0.0   0.8   4:59.65 python\n",
+  "stdout": "--- эндпоинты и размер страницы в панели\n17:BASES = [\"https://api.binance.com\", \"https://data-api.binance.vision\"]\n54:                async with SES.get(base + \"/api/v3/klines\", params={\"symbol\": sym, \"interval\": tf, \"limit\": 1000}) as r:\n87:                prm = {\"symbol\": sym, \"interval\": tf, \"limit\": 1000}\n160:                    prm = {\"symbol\": sym, \"interval\": tf, \"limit\": 1000}\n--- израсходовано веса за минуту (лимит Binance 2400/мин на IP), 4 замера\nfapi.binance.com/fapi/v1/time: \napi.binance.com/api/v3/time: x-mbx-used-weight-1m: 15\nfapi.binance.com/fapi/v1/time: \napi.binance.com/api/v3/time: x-mbx-used-weight-1m: 44\nfapi.binance.com/fapi/v1/time: \napi.binance.com/api/v3/time: x-mbx-used-weight-1m: 65\nfapi.binance.com/fapi/v1/time: \napi.binance.com/api/v3/time: x-mbx-used-weight-1m: 90\n--- другие сервисы, которые могут ходить на Binance с этого IP\n  classicbot.service                                         loaded active running Classic bot panel (charts)\n",
   "stderr": "",
-  "completed_at_utc": "2026-10-25T05:21:14Z"
+  "completed_at_utc": "2026-10-25T05:33:03Z"
 }
