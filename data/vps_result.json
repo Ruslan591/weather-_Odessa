@@ -1,7 +1,7 @@
 {
-  "task_id": "t1792906308",
+  "task_id": "t1792906415",
   "returncode": 0,
-  "stdout": "--- эндпоинты и размер страницы в панели\n17:BASES = [\"https://api.binance.com\", \"https://data-api.binance.vision\"]\n54:                async with SES.get(base + \"/api/v3/klines\", params={\"symbol\": sym, \"interval\": tf, \"limit\": 1000}) as r:\n87:                prm = {\"symbol\": sym, \"interval\": tf, \"limit\": 1000}\n160:                    prm = {\"symbol\": sym, \"interval\": tf, \"limit\": 1000}\n--- израсходовано веса за минуту (лимит Binance 2400/мин на IP), 4 замера\nfapi.binance.com/fapi/v1/time: \napi.binance.com/api/v3/time: x-mbx-used-weight-1m: 15\nfapi.binance.com/fapi/v1/time: \napi.binance.com/api/v3/time: x-mbx-used-weight-1m: 44\nfapi.binance.com/fapi/v1/time: \napi.binance.com/api/v3/time: x-mbx-used-weight-1m: 65\nfapi.binance.com/fapi/v1/time: \napi.binance.com/api/v3/time: x-mbx-used-weight-1m: 90\n--- другие сервисы, которые могут ходить на Binance с этого IP\n  classicbot.service                                         loaded active running Classic bot panel (charts)\n",
+  "stdout": "[('REQUEST_WEIGHT', 'MINUTE', 1, 6000), ('ORDERS', 'SECOND', 10, 100), ('ORDERS', 'DAY', 1, 200000), ('RAW_REQUESTS', 'MINUTE', 5, 300000)]\n--- замеры подряд (вес за минуту)\nx-mbx-used-weight-1m: 25\nx-mbx-used-weight-1m: 50\nx-mbx-used-weight-1m: 131\n",
   "stderr": "",
-  "completed_at_utc": "2026-10-25T05:33:03Z"
+  "completed_at_utc": "2026-10-25T05:35:03Z"
 }
