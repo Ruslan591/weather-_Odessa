@@ -76,7 +76,7 @@ def sim_account(trades, start=START, lev=LEV, stake=MIN_NOTIONAL, use=MAX_USE):
     return {"start": start, "lev": lev, "stake": _r(stake), "margin_each": _r(margin), "use": use, "max_pos": can, "balance": _r(bal), "unreal": _r(unreal), "equity": _r(equity),
             "margin": _r(margin_used), "available": _r(max(bal - margin_used, 0.0)), "ret_pct": _r((equity - start) / start * 100.0), "pnl": _r(equity - start),
             "taken": len(taken), "closed": len(closed), "wins": st["wins"], "win_pct": _r(st["wins"] / len(closed) * 100.0, 0) if closed else None,
-            "skipped": st["skipped"], "maxc": st["maxc"], "liqs": st["liqs"], "status": status, "positions": cur, "log": taken[-40:][::-1]}
+            "skipped": st["skipped"], "maxc": st["maxc"], "liqs": st["liqs"], "status": status, "positions": cur, "log": taken[-200:][::-1]}
 
 
 def sim_signals(trades, now_ms, stake=MIN_NOTIONAL, lev=LEV, use=MAX_USE):
