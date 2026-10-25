@@ -10,6 +10,7 @@ import classic_fastchan as fc
 import classic_hand as hd
 import classic_strategy as cs
 import classic_acct as ac
+import classic_screen as scr
 from classic_pos_html import HTML as POS_HTML
 
 PORT = 18093
@@ -23,6 +24,30 @@ PAIRS_FILE = os.path.join(HERE, "pairs.json")
 DEFAULT_PAIRS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT", "ADAUSDT", "NEARUSDT", "AVAXUSDT", "ZECUSDT"]
 CACHE, LOCKS = {}, {}
 SES = None
+CAP_PAIRS = 30  # ориентир по нагрузке на расчёт (2 ядра); биржевой лимит намного выше
+TFS_RUN = ["5m", "15m", "1h", "4h", "1d"]
+_BAN = {}  # base -> до какого момента Binance просит паузу (ответ 418/429)
+_USED = {"w": 0, "ts": 0.0}  # израсходованный вес за минуту (лимит спота — 6000 на IP)
+
+
+async def b_get(base, path, params):
+    """Единая точка запросов к Binance: учитывает израсходованный вес и просьбу биржи о паузе."""
+    now = time.time()
+    if now < _BAN.get(base, 0):
+        raise RuntimeError("%s: Binance просит паузу ещё %d с" % (base, _BAN[base] - now))
+    if base == BASES[0] and _USED["w"] >= 3000 and now - _USED["ts"] < 60:
+        await asyncio.sleep(2)  # половина лимита израсходована — притормаживаем
+    async with SES.get(base + path, params=params) as r:
+        w = r.headers.get("x-mbx-used-weight-1m")
+        if w and base == BASES[0]:
+            _USED["w"], _USED["ts"] = int(w), time.time()
+        if r.status in (418, 429):
+            ra = int(r.headers.get("Retry-After") or 60)
+            _BAN[base] = time.time() + ra
+            raise RuntimeError("%s %s: лимит Binance, пауза %d с" % (base, r.status, ra))
+        if r.status != 200:
+            raise RuntimeError("%s %s %s" % (base, r.status, (await r.text())[:120]))
+        return await r.json()
 
 
 def load_pairs():
@@ -51,10 +76,7 @@ async def get_df(sym, tf):
         data, err = None, None
         for base in BASES:
             try:
-                async with SES.get(base + "/api/v3/klines", params={"symbol": sym, "interval": tf, "limit": 1000}) as r:
-                    if r.status != 200:
-                        raise RuntimeError("%s %s %s" % (base, r.status, (await r.text())[:120]))
-                    data = await r.json()
+                data = await b_get(base, "/api/v3/klines", {"symbol": sym, "interval": tf, "limit": 1000})
                 break
             except Exception as e:
                 err = e
@@ -87,10 +109,7 @@ async def fetch_back(sym, tf, need_ms, max_pages=120):
                 prm = {"symbol": sym, "interval": tf, "limit": 1000}
                 if end is not None:
                     prm["endTime"] = end
-                async with SES.get(base + "/api/v3/klines", params=prm) as r:
-                    if r.status != 200:
-                        raise RuntimeError("%s %s %s" % (base, r.status, (await r.text())[:120]))
-                    data = await r.json()
+                data = await b_get(base, "/api/v3/klines", prm)
                 break
             except Exception as e:
                 err = e
@@ -160,10 +179,7 @@ async def get_df_long(sym, tf, pages=2):
                     prm = {"symbol": sym, "interval": tf, "limit": 1000}
                     if end is not None:
                         prm["endTime"] = end
-                    async with SES.get(base + "/api/v3/klines", params=prm) as r:
-                        if r.status != 200:
-                            raise RuntimeError("%s %s %s" % (base, r.status, (await r.text())[:120]))
-                        data = await r.json()
+                    data = await b_get(base, "/api/v3/klines", prm)
                     break
                 except Exception as e:
                     err = e
@@ -521,6 +537,28 @@ def run_stats(tr):
 
 
 _RT = {}  # кэш расчёта живых прогонов: {id: (ключ, время расчёта, сделки)}
+RT_FILE = os.path.join(HERE, "rt_cache.json")
+_RT_DIRTY = [False]
+
+
+def _rt_load():
+    """Кэш расчётов переживает перезапуск: без него каждый старт — минуты пересчёта всех прогонов."""
+    try:
+        with open(RT_FILE) as f:
+            for k, v in json.load(f).items():
+                _RT[int(k)] = (tuple(v[0]), v[1], v[2])
+    except Exception:
+        pass
+
+
+def _rt_save(alive):
+    for k in [k for k in _RT if k not in alive]:
+        del _RT[k]
+    tmp = RT_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump({str(k): [list(v[0]), v[1], v[2]] for k, v in _RT.items()}, f, default=lambda o: o.item() if hasattr(o, "item") else str(o))
+    os.replace(tmp, RT_FILE)
+    _RT_DIRTY[0] = False
 
 
 def _hand_mtime():
@@ -543,6 +581,7 @@ async def run_trades(run, now):
     P["sim_from_ms"] = run["start_ms"]
     res = await asyncio.to_thread(cs.simulate, df, now, P)
     _RT[run["id"]] = (key, time.time(), [dict(x) for x in res])
+    _RT_DIRTY[0] = True
     return res
 
 
@@ -553,7 +592,18 @@ def track_of(cfg):
     return "me" if t.startswith("hand_") else "bot" if t.startswith("tl_") else "other"
 
 
-_SNAP = {"payload": None, "ts": 0.0}
+_SNAP = {"payload": None, "ts": 0.0, "calc_s": None}
+
+
+async def _stop_run(r, now):
+    if r["stop_ms"] is None:
+        tr = await run_trades(r, now)
+        for x in tr:
+            if x["open"]:
+                x["open"] = False
+                x["reason"] = "остановлен"
+        r["trades"] = cs.pack(tr)
+        r["stop_ms"] = now
 _LOCK = []
 
 
@@ -589,7 +639,64 @@ async def build_payload(runs, now):
                        "trades": [{"sym": x.get("sym"), "tf": x.get("tf"), "side": x["side"], "sig": x.get("sig"), "t_in": x["t_in"], "net": x["net"], "open": x["open"], "reason": x["reason"], "be": x["be"], "run": x.get("run")}
                                   for x in sorted(L, key=lambda t: -t["t_in"])[:60]]}
     hand_meta = {str(x["id"]): {"kind": x.get("kind"), "tf": x.get("tf"), "created": x.get("created"), "deleted": x.get("deleted")} for x in hd.load()}
-    return {"runs": out, "now": now, "notional": cs.PARAMS["notional"], "hand": hand_meta, "accounts": accounts}
+    act = [r for r in runs if r["stop_ms"] is None]
+    load = {"pairs": len({r["sym"] for r in act}), "runs": len(act), "cap": CAP_PAIRS, "weight": _USED["w"] if time.time() - _USED["ts"] < 120 else 0,
+            "limit": 6000, "ban": max(0, int(_BAN.get(BASES[0], 0) - time.time())), "calc_s": _SNAP.get("calc_s")}
+    return {"runs": out, "now": now, "notional": cs.PARAMS["notional"], "hand": hand_meta, "accounts": accounts, "load": load}
+
+
+_SCREEN = {"data": None, "ts": 0.0, "busy": False, "err": None}
+
+
+async def _screen_getter(path, params):
+    last = None
+    for base in BASES:
+        try:
+            return await b_get(base, path, params)
+        except Exception as e:
+            last = e
+    raise RuntimeError(str(last))
+
+
+def _pair_stats():
+    st = {}
+    p = _SNAP["payload"]
+    for r in (p["runs"] if p else []):
+        if r["stop_ms"] is None:
+            s = st.setdefault(r["sym"], {"n": 0, "net": 0.0, "start": r["start_ms"]})
+            s["n"] += r["stats"]["n"]
+            s["net"] += r["stats"]["net"]
+            s["start"] = min(s["start"], r["start_ms"])
+    return st
+
+
+async def screen_refresh():
+    if _SCREEN["busy"]:
+        return
+    _SCREEN["busy"] = True
+    try:
+        cur = sorted({r["sym"] for r in jload(RUNS_FILE, []) if r["stop_ms"] is None})
+        d = await scr.build(_screen_getter, cur, _pair_stats(), int(time.time() * 1000))
+        d["ts"] = time.time()
+        _SCREEN["data"], _SCREEN["err"] = d, None
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        _SCREEN["err"] = str(e)
+    finally:
+        _SCREEN["busy"] = False
+
+
+async def screen_loop():
+    await asyncio.sleep(90)  # сначала даём панели посчитать прогоны
+    while True:
+        await screen_refresh()
+        await asyncio.sleep(1800)
+
+
+async def api_screen(req):
+    if req.method == "POST":
+        asyncio.create_task(screen_refresh())
+    return web.json_response({"data": _SCREEN["data"], "busy": _SCREEN["busy"], "err": _SCREEN["err"], "now": int(time.time() * 1000)})
 
 
 async def refresher():
@@ -597,9 +704,14 @@ async def refresher():
     while True:
         try:
             async with _build_lock():
-                now = int(time.time() * 1000)
-                _SNAP["payload"] = await build_payload(jload(RUNS_FILE, []), now)
+                t0 = time.time()
+                now = int(t0 * 1000)
+                runs = jload(RUNS_FILE, [])
+                _SNAP["payload"] = await build_payload(runs, now)
                 _SNAP["ts"] = time.time()
+                _SNAP["calc_s"] = round(time.time() - t0, 1)
+                if _RT_DIRTY[0]:
+                    _rt_save({r["id"] for r in runs})
         except Exception as e:
             import traceback; print("refresher error: %r" % (e,)); traceback.print_exc()
         await asyncio.sleep(15)
@@ -629,14 +741,44 @@ async def api_runs(req):
                         raise ValueError("прогон не найден")
                     if act == "delete":
                         runs.remove(r)
-                    elif r["stop_ms"] is None:
-                        tr = await run_trades(r, now)
-                        for x in tr:
-                            if x["open"]:
-                                x["open"] = False
-                                x["reason"] = "остановлен"
-                        r["trades"] = cs.pack(tr)
-                        r["stop_ms"] = now
+                    else:
+                        await _stop_run(r, now)
+                elif act == "add_pair":
+                    sym = str(j.get("sym", "")).upper()
+                    if not ok_sym(sym):
+                        raise ValueError("плохая пара")
+                    cur = {r["sym"] for r in runs if r["stop_ms"] is None}
+                    if sym in cur:
+                        raise ValueError("пара уже торгуется")
+                    if len(cur) >= CAP_PAIRS:
+                        raise ValueError("достигнут ориентир нагрузки: %d пар. Сначала уберите одну" % CAP_PAIRS)
+                    tpl = {}
+                    for r in runs:
+                        tpl.setdefault(track_of(r["cfg"]), r)
+                    if "me" not in tpl or "bot" not in tpl:
+                        raise ValueError("нет шаблона прогонов «Вы»/«Бот»")
+                    try:
+                        for tf in TFS_RUN:
+                            await get_df_long(sym, tf)  # заодно проверка, что данные по паре есть
+                    except RuntimeError as e:
+                        raise ValueError("нет данных по паре %s: %s" % (sym, e))
+                    rid = max([r["id"] for r in runs] + [0])
+                    for tk, nm in (("me", "Мой канал"), ("bot", "Канал бота")):
+                        for tf in TFS_RUN:
+                            rid += 1
+                            cfg = json.loads(json.dumps(tpl[tk]["cfg"]))
+                            cfg["tf"] = tf
+                            runs.append({"id": rid, "name": "%s %s %s" % (nm, sym, tf), "sym": sym, "cfg": cfg, "start_ms": now, "stop_ms": None, "trades": None})
+                    pl = load_pairs()
+                    if sym not in pl:
+                        save_pairs(pl + [sym])
+                elif act == "drop_pair":
+                    sym = str(j.get("sym", "")).upper()
+                    rs = [r for r in runs if r["sym"] == sym and r["stop_ms"] is None]
+                    if not rs:
+                        raise ValueError("по этой паре нет активных прогонов")
+                    for r in rs:
+                        await _stop_run(r, now)
                 else:
                     raise ValueError("неизвестное действие")
                 jsave(RUNS_FILE, runs)
@@ -1076,7 +1218,9 @@ window.addEventListener('resize',draw);
 async def serve():
     global SES
     SES = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15))
+    _rt_load()
     asyncio.create_task(refresher())
+    asyncio.create_task(screen_loop())
     app1 = web.Application()
     app1.router.add_get("/", index)
     app1.router.add_get("/api/chart", api_chart)
@@ -1090,6 +1234,7 @@ async def serve():
     app2.router.add_route("*", "/api/pairs", api_pairs)
     app2.router.add_route("*", "/api/config", api_config)
     app2.router.add_route("*", "/api/runs", api_runs)
+    app2.router.add_route("*", "/api/screen", api_screen)
     for app, port in ((app1, PORT), (app2, PORT2)):
         r = web.AppRunner(app)
         await r.setup()
