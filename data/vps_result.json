@@ -1,7 +1,7 @@
 {
-  "task_id": "t_prop_chk2",
+  "task_id": "t_prop_chk3",
   "returncode": 0,
-  "stdout": "0dceb08 da2a3061 2026-10-26 21:31\n36932df 9525bd04 2026-10-26 18:35\nvps 68446e2a\n",
+  "stdout": "48,68d47\n< def chan_dir(ch, i, k=20, thr=0.15):\n<     \"\"\"Направление канала на сигнальной свече i по линиям ch=(нижняя(j), верхняя(j)): +1 восходящий, -1 нисходящий, 0 боковик/неясно.\n<     Наклон средней линии за k свечей в долях ширины канала; меньше thr — боковик (ограничений нет).\"\"\"\n<     try:\n<         lo_f, up_f = ch\n<         w = up_f(i) - lo_f(i)\n<         if w <= 0 or i < k:\n<             return 0\n<         sl = ((lo_f(i) + up_f(i)) - (lo_f(i - k) + up_f(i - k))) / 2.0 / w\n<         return 1 if sl > thr else -1 if sl < -thr else 0\n<     except Exception:\n<         return 0\n< \n< \n< def chan_rule_ok(d, tag, side):\n<     \"\"\"Правило канала: восходящий (d=+1): отбой — только лонг, пробой — только шорт; нисходящий (d=-1): отбой — только шорт, пробой — только лонг.\"\"\"\n<     if d == 0 or tag not in (\"b\", \"k\"):\n<         return True\n<     return side == (\"L\" if (d > 0) == (tag == \"b\") else \"S\")\n< \n< \n127,136d105\n<     if trig[\"t\"] in (\"tl_bounce\", \"tl_breakout\", \"tl_both\", \"hand_bounce\", \"hand_breakout\", \"hand_both\") and P.get(\"chan_dir\", True):\n<         # правило канала: направление канала задаёт, какая сторона разрешена на отбой и на пробой (треугольники и боковики не фильтруются)\n<         tri_ = {x.get(\"id\") for x in structs_ if x.get(\"kind\") == \"triangle\"} if trig[\"t\"].startswith(\"hand_\") else set()\n<         dflt_ = {\"tl_bounce\": \"b\", \"tl_breakout\": \"k\", \"hand_bounce\": \"b\", \"hand_breakout\": \"k\"}.get(trig[\"t\"])\n<         for i_ in list(tlsig):\n<             if sids.get(i_) in tri_:\n<                 continue\n33\nbackup_tfmode\nbackup_tm\nhand_backups\n",
   "stderr": "",
-  "completed_at_utc": "2026-10-26T19:42:01Z"
+  "completed_at_utc": "2026-10-26T19:43:02Z"
 }
