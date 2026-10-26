@@ -1,12 +1,17 @@
 {
-  "timestamp": "2026-10-26T16:28:18Z",
-  "status": "ok",
+  "timestamp": "2026-10-26T16:32:38Z",
+  "status": "suppressed_known_false_positive",
   "cloud_forecast_timestamp": "2026-10-26T15:45:00.000Z",
-  "target_id": 2,
-  "target_area_km2": 230.8,
-  "target_distance_km": 142.8,
-  "target_bearing_deg": 247.0,
-  "target_compass": "ЮЗ",
+  "suppressed_target": {
+    "signature": "-105_-25",
+    "area_km2": 105.4,
+    "distance_km": 105.6,
+    "bearing_deg": 257.0,
+    "compass": "З",
+    "not_confirmed_streak": 6,
+    "total_not_confirmed": 6,
+    "excluded_since": "2026-10-26T16:08:37Z"
+  },
   "system": {
     "target_id": 3,
     "area_km2": 1139.5,
@@ -27,43 +32,6 @@
   "local_suppressed_count": 3,
   "system_candidates": [],
   "system_suppressed_count": 1,
-  "frontal_tracks": [],
-  "also_suppressed_nearby": {
-    "signature": "-105_-25",
-    "area_km2": 105.4
-  },
-  "target_phase": {
-    "label": "безоблачно",
-    "cloud_fraction": 0.0
-  },
-  "existence": {
-    "modules": {
-      "ir_motion": {
-        "confirmed": false,
-        "timestamp": "2026-10-26T16:00:00.000Z"
-      },
-      "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-10-26T16:00:00.000Z"
-      },
-      "cloud_phase_type": {
-        "confirmed": false,
-        "timestamp": "2026-10-26T16:27:16Z"
-      }
-    },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
-  },
-  "phenomena": {
-    "precip_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-10-26T16:17:05Z"
-    },
-    "lightning_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-10-26T16:27:52Z"
-    }
-  },
-  "verdict": "CLM отметил цель в 143км ЮЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (1140км²) в 180км ЮЗ."
+  "verdict": "Известный шумовой объект в 106км З (~105км²) — подавлено (не подтверждался 6 раз подряд). Отдельно: система синоптического масштаба (1140км²) в 180км ЮЗ.",
+  "frontal_tracks": []
 }
