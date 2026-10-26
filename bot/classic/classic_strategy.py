@@ -124,6 +124,12 @@ def stage_signals(pre, P, warmup=None):
         hp = float(trig.get("p") or 0)
         structs_ = hand.for_sym(P.get("sym"), P.get("tf"), P.get("hand_tf_mode", "junior")) if P.get("sym") else []
         tlsig = hand.hand_signals(o, h, l, c, atr, pre["t"], M, structs_, trig["t"], hp, bool(P.get("hand_forward", True)), info=chan, tags=tags, sids=sids)
+    if trig["t"] in ("hand_bounce", "hand_both"):
+        # треугольник торгуется только на пробой (в любую сторону); отбой от его линий не берём
+        tri0_ = {x.get("id") for x in structs_ if x.get("kind") == "triangle"}
+        for i_ in list(tlsig):
+            if sids.get(i_) in tri0_ and (tags.get(i_) or ("b" if trig["t"] == "hand_bounce" else None)) != "k":
+                del tlsig[i_]
     if trig["t"] in ("tl_bounce", "tl_breakout", "tl_both", "hand_bounce", "hand_breakout", "hand_both") and P.get("chan_dir", True):
         # правило канала: направление канала задаёт, какая сторона разрешена на отбой и на пробой (треугольники и боковики не фильтруются)
         tri_ = {x.get("id") for x in structs_ if x.get("kind") == "triangle"} if trig["t"].startswith("hand_") else set()
@@ -413,6 +419,7 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
         pos_ch = None
         if pos_vis is not None:
             pos["chl"] = _chl(pos_vis, pos["i_in"], min(i, T - 1))
+            pos["chlw"] = _chlw(pos_vis, pos["i_in"])
             pos_vis = None
         s = 1 if pos["side"] == "L" else -1
         gross = s * (price / pos["p_in"] - 1) * 100
@@ -624,11 +631,19 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
     if pos:
         if pos_vis is not None:
             pos["chl"] = _chl(pos_vis, pos["i_in"], T - 1)
+            pos["chlw"] = _chlw(pos_vis, pos["i_in"])
         s = 1 if pos["side"] == "L" else -1
         gross = s * (c[T - 1] / pos["p_in"] - 1) * 100
         pos.update(i_out=T - 1, t_out=int(t[T - 1]), p_out=float(c[T - 1]), reason="открыта", gross=gross, net=gross - fee2, open=True)
         trades.append(pos)
     return trades
+
+
+def _chlw(ch, a):
+    """Канал на 80 свечей назад от входа: [нижняя, верхняя в начале, нижняя, верхняя при входе, индекс начала] — для рисунка предложения."""
+    a0 = max(0, a - 80)
+    w = _chl(ch, a0, a)
+    return (w + [a0]) if w else None
 
 
 def _chl(ch, a, b):
