@@ -1,1 +1,1 @@
-{"task_id": "t_prop_dep1", "cmd": "cd /opt/weather-pipeline/repo && git show origin/main:scripts/deploy_classic_files.sh | bash -s classic_strategy.py:ff90b6b 2>&1 | tail -12", "timeout": 150}
+{"task_id": "t_prop_chk2", "cmd": "cd /opt/weather-pipeline/repo && for c in $(git log --format=%h -12 origin/main -- bot/classic/classic_strategy.py); do echo $c $(git show $c:bot/classic/classic_strategy.py | md5sum | cut -c1-8) $(git log -1 --format=%ci $c | cut -c1-16); done; echo vps 68446e2a", "timeout": 100}
