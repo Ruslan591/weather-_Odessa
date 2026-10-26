@@ -1,1 +1,1 @@
-{"task_id": "t1792988355", "cmd": "for i in $(seq 1 26); do\n  if grep -q \"==== B\" /tmp/research.log 2>/dev/null; then break; fi\n  if ! pgrep -f robot_research.py >/dev/null; then break; fi\n  sleep 5\ndone\nsed -n '/==== A/,/^$/p' /tmp/research.log\necho ----\ntail -n 3 /tmp/research.log\npgrep -f robot_research.py >/dev/null && echo RUNNING || echo FINISHED\n", "timeout": 160}
+{"task_id": "t1792988520", "cmd": "grep -n \"^B \" /tmp/research.log | head -12\nsed -n '/==== B/,$p' /tmp/research.log | head -20\n", "timeout": 60}
