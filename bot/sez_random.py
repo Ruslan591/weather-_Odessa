@@ -8,7 +8,9 @@ import pandas as pd
 C, START, TOPN = 0.0015, 210, 15
 NSEED = int(sys.argv[1]) if len(sys.argv) > 1 else 1000
 O, CL, V = {}, {}, {}
-for f in sorted(glob.glob("data/*_USDT_1d.csv")):
+EXTRA = os.environ.get("EXTRA_DIR")
+FILES = sorted(glob.glob("data/*_USDT_1d.csv")) + (sorted(glob.glob(EXTRA + "/*_USDT_1d.csv")) if EXTRA else [])
+for f in FILES:
     s = os.path.basename(f).split("_")[0]
     d = pd.read_csv(f, parse_dates=["time"]).set_index("time")
     d = d[~d.index.duplicated()].sort_index()
