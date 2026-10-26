@@ -45,6 +45,27 @@ STATE_STAGES = ("pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sig
 TF_MIN = {"1m": 1, "3m": 3, "5m": 5, "15m": 15, "30m": 30, "1h": 60, "2h": 120, "4h": 240, "6h": 360, "8h": 480, "12h": 720, "1d": 1440}
 
 
+def chan_dir(ch, i, k=20, thr=0.15):
+    """Направление канала на сигнальной свече i по линиям ch=(нижняя(j), верхняя(j)): +1 восходящий, -1 нисходящий, 0 боковик/неясно.
+    Наклон средней линии за k свечей в долях ширины канала; меньше thr — боковик (ограничений нет)."""
+    try:
+        lo_f, up_f = ch
+        w = up_f(i) - lo_f(i)
+        if w <= 0 or i < k:
+            return 0
+        sl = ((lo_f(i) + up_f(i)) - (lo_f(i - k) + up_f(i - k))) / 2.0 / w
+        return 1 if sl > thr else -1 if sl < -thr else 0
+    except Exception:
+        return 0
+
+
+def chan_rule_ok(d, tag, side):
+    """Правило канала: восходящий (d=+1): отбой — только лонг, пробой — только шорт; нисходящий (d=-1): отбой — только шорт, пробой — только лонг."""
+    if d == 0 or tag not in ("b", "k"):
+        return True
+    return side == ("L" if (d > 0) == (tag == "b") else "S")
+
+
 def stage_signals(pre, P, warmup=None):
     """Уровни фильтра входа. Возвращает {индекс закрытой свечи: (сторона, индекс свечи-триггера)}: на этой свече выполнены все уровни.
     Уровни идут по очереди: триггер (первый непустой уровень), затем подтверждения; каждое подтверждение должно выполниться
@@ -103,6 +124,16 @@ def stage_signals(pre, P, warmup=None):
         hp = float(trig.get("p") or 0)
         structs_ = hand.for_sym(P.get("sym"), P.get("tf"), P.get("hand_tf_mode", "junior")) if P.get("sym") else []
         tlsig = hand.hand_signals(o, h, l, c, atr, pre["t"], M, structs_, trig["t"], hp, bool(P.get("hand_forward", True)), info=chan, tags=tags, sids=sids)
+    if trig["t"] in ("tl_bounce", "tl_breakout", "tl_both", "hand_bounce", "hand_breakout", "hand_both") and P.get("chan_dir", True):
+        # правило канала: направление канала задаёт, какая сторона разрешена на отбой и на пробой (треугольники и боковики не фильтруются)
+        tri_ = {x.get("id") for x in structs_ if x.get("kind") == "triangle"} if trig["t"].startswith("hand_") else set()
+        dflt_ = {"tl_bounce": "b", "tl_breakout": "k", "hand_bounce": "b", "hand_breakout": "k"}.get(trig["t"])
+        for i_ in list(tlsig):
+            if sids.get(i_) in tri_:
+                continue
+            tg_ = tags.get(i_) or dflt_
+            if i_ in chan and not chan_rule_ok(chan_dir(chan[i_], i_), tg_, tlsig[i_]):
+                del tlsig[i_]
     conf = []
     for st_ in stages[1:]:  # подряд идущие «состояния» объединяются в одно подтверждение: все условия на одной свече
         if st_["t"] in STATE_STAGES:
