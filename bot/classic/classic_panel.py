@@ -10,6 +10,7 @@ import classic_fastchan as fc
 import classic_hand as hd
 import classic_strategy as cs
 import classic_acct as ac
+import classic_prop as pr
 import classic_screen as scr
 from classic_pos_html import HTML as POS_HTML
 
@@ -21,6 +22,7 @@ ALLTF = ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1
 MTF = ["1d", "4h", "1h", "15m", "5m"]
 HERE = os.path.dirname(os.path.abspath(__file__))
 PAIRS_FILE = os.path.join(HERE, "pairs.json")
+PROP_FILE = os.path.join(HERE, "proposals.json")  # решения «Открыть/Отклонить» по предложениям бота
 DEFAULT_PAIRS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT", "ADAUSDT", "NEARUSDT", "AVAXUSDT", "ZECUSDT"]
 CACHE, LOCKS = {}, {}
 SES = None
@@ -616,6 +618,7 @@ def _build_lock():
 async def build_payload(runs, now):
     out = []
     by_track = {"me": [], "bot": []}
+    prop_tr = []  # сделки прогонов бота в режиме «только предлагает» — это предложения для вкладки «Вместе»
     for r in runs:
         if r["stop_ms"] is None:
             try:
@@ -628,21 +631,32 @@ async def build_payload(runs, now):
         st = run_stats(tr)
         st["money"] = apply_stakes(tr, dict(cs.PARAMS, **r["cfg"]))
         tk = track_of(r["cfg"])
-        if tk in by_track:
+        md = r.get("mode") or "auto"
+        if tk == "bot" and md == "propose":
+            prop_tr += [dict(x, sym=r["sym"], tf=r["cfg"]["tf"], run=r["id"]) for x in tr]
+        elif tk in by_track:
             by_track[tk] += [dict(x, sym=r["sym"], tf=r["cfg"]["tf"], run=r["id"]) for x in tr]
-        out.append({"id": r["id"], "name": r["name"], "sym": r["sym"], "track": tk, "cfg": dict(cs.PARAMS, **r["cfg"]), "start_ms": r["start_ms"],
+        out.append({"id": r["id"], "name": r["name"], "sym": r["sym"], "track": tk, "mode": md, "cfg": dict(cs.PARAMS, **r["cfg"]), "start_ms": r["start_ms"],
                     "stop_ms": r["stop_ms"], "stats": st, "trades": tr[-300:]})
-    both = ac.joint_trades(by_track["me"], by_track["bot"], cs.TF_MIN)
+    pd_ = pr.build(prop_tr, jload(PROP_FILE, []), now, ac.MIN_NOTIONAL)
     accounts = {}
-    for k, L in (("me", by_track["me"]), ("bot", by_track["bot"]), ("both", both)):
+    for k, L in (("me", by_track["me"]), ("bot", by_track["bot"])):
         accounts[k] = {"account": ac.sim_account(L), "signals": ac.sim_signals(L, now),
                        "trades": [{"sym": x.get("sym"), "tf": x.get("tf"), "side": x["side"], "sig": x.get("sig"), "t_in": x["t_in"], "net": x["net"], "open": x["open"], "reason": x["reason"], "be": x["be"], "run": x.get("run")}
                                   for x in sorted(L, key=lambda t: -t["t_in"])[:60]]}
+    accounts["both"] = {"account": ac.sim_account(pd_["accepted"]), "signals": ac.sim_signals(pd_["allsig"], now), "trades": []}  # «Вместе» = открытые вами предложения; «Все сигналы» = если брать каждое
+    bot_modes = {}
+    for r in runs:
+        if r["stop_ms"] is None and track_of(r["cfg"]) == "bot":
+            bot_modes.setdefault(r["sym"], set()).add(r.get("mode") or "auto")
+    pairs_all = sorted(set(load_pairs()) | {r["sym"] for r in runs if r["stop_ms"] is None})
     hand_meta = {str(x["id"]): {"kind": x.get("kind"), "tf": x.get("tf"), "created": x.get("created"), "deleted": x.get("deleted")} for x in hd.load()}
     act = [r for r in runs if r["stop_ms"] is None]
     load = {"pairs": len({r["sym"] for r in act}), "runs": len(act), "cap": CAP_PAIRS, "weight": _USED["w"] if time.time() - _USED["ts"] < 120 else 0,
             "limit": 6000, "ban": max(0, int(_BAN.get(BASES[0], 0) - time.time())), "calc_s": _SNAP.get("calc_s")}
-    return {"runs": out, "now": now, "notional": cs.PARAMS["notional"], "hand": hand_meta, "accounts": accounts, "load": load}
+    return {"runs": out, "now": now, "notional": cs.PARAMS["notional"], "hand": hand_meta, "accounts": accounts, "load": load,
+            "proposals": {"pending": pd_["pending"], "rows": pd_["rows"], "stats": pd_["stats"]}, "pairs_all": pairs_all,
+            "bot_modes": {s: (next(iter(m)) if len(m) == 1 else "mixed") for s, m in bot_modes.items()}}
 
 
 _SCREEN = {"data": None, "ts": 0.0, "busy": False, "err": None}
@@ -772,6 +786,71 @@ async def api_runs(req):
                     pl = load_pairs()
                     if sym not in pl:
                         save_pairs(pl + [sym])
+                elif act == "bot_pair":
+                    # управление парами бота отдельно от «Вы»: auto — бот сам открывает и закрывает; propose — только предлагает (вкладка «Вместе»); off — не работает
+                    sym = str(j.get("sym", "")).upper()
+                    mode = j.get("mode")
+                    if mode not in ("auto", "propose", "off"):
+                        raise ValueError("неизвестный режим")
+                    if not ok_sym(sym):
+                        raise ValueError("плохая пара")
+                    cur_b = [r for r in runs if r["sym"] == sym and r["stop_ms"] is None and track_of(r["cfg"]) == "bot"]
+                    if mode == "off":
+                        if not cur_b:
+                            raise ValueError("бот по этой паре и так не работает")
+                        for r in cur_b:
+                            await _stop_run(r, now)
+                    else:
+                        if cur_b and all((r.get("mode") or "auto") == mode for r in cur_b):
+                            raise ValueError("пара уже в этом режиме")
+                        if not cur_b:
+                            act_syms = {r["sym"] for r in runs if r["stop_ms"] is None}
+                            if sym not in act_syms and len(act_syms) >= CAP_PAIRS:
+                                raise ValueError("достигнут ориентир нагрузки: %d пар. Сначала уберите одну" % CAP_PAIRS)
+                        ref = {}
+                        for r in runs:  # шаблон правил для каждого ТФ: сначала прогоны этой же пары, потом любые активные прогоны бота
+                            if r["stop_ms"] is None and track_of(r["cfg"]) == "bot":
+                                ref.setdefault(r["cfg"]["tf"], r)
+                        for r in cur_b:
+                            ref[r["cfg"]["tf"]] = r
+                        anyb = next((r for r in reversed(runs) if track_of(r["cfg"]) == "bot"), None)
+                        if anyb is None:
+                            raise ValueError("нет шаблона прогонов «Бот»")
+                        try:
+                            for tf in TFS_RUN:
+                                await get_df_long(sym, tf)
+                        except RuntimeError as e:
+                            raise ValueError("нет данных по паре %s: %s" % (sym, e))
+                        for r in cur_b:
+                            await _stop_run(r, now)  # история прежних прогонов сохраняется
+                        rid = max([r["id"] for r in runs] + [0])
+                        nm = "Канал бота" if mode == "auto" else "Предложение бота"
+                        for tf in TFS_RUN:
+                            rid += 1
+                            cfg = json.loads(json.dumps(ref.get(tf, anyb)["cfg"]))
+                            cfg["tf"] = tf
+                            runs.append({"id": rid, "name": "%s %s %s" % (nm, sym, tf), "sym": sym, "cfg": cfg, "mode": mode, "start_ms": now, "stop_ms": None, "trades": None})
+                        pl = load_pairs()
+                        if sym not in pl:
+                            save_pairs(pl + [sym])
+                elif act == "decide":
+                    dec = j.get("dec")
+                    if dec not in ("open", "reject"):
+                        raise ValueError("неизвестное решение")
+                    r = next((x for x in runs if x["id"] == j.get("run")), None)
+                    if r is None or r["stop_ms"] is not None or (r.get("mode") or "auto") != "propose":
+                        raise ValueError("предложение недоступно (пара переведена в другой режим или прогон остановлен)")
+                    t_in, side = int(j.get("t_in")), str(j.get("side"))
+                    x = next((x for x in cs.pack(await run_trades(r, now)) if x["t_in"] == t_in and x["side"] == side), None)
+                    if x is None or not x["open"]:
+                        raise ValueError("предложение уже закрылось (сработал стоп или цель) — обновите страницу")
+                    decs = jload(PROP_FILE, [])
+                    k = pr.dkey(r["id"], t_in, side)
+                    if any(d["k"] == k for d in decs):
+                        raise ValueError("по этому предложению решение уже есть")
+                    decs.append({"k": k, "run": r["id"], "sym": r["sym"], "tf": r["cfg"]["tf"], "side": side, "t_in": t_in, "dec": dec,
+                                 "t_dec": now, "p_dec": x["p_out"], "p_sig": x["p_in"]})
+                    jsave(PROP_FILE, decs)
                 elif act == "drop_pair":
                     sym = str(j.get("sym", "")).upper()
                     rs = [r for r in runs if r["sym"] == sym and r["stop_ms"] is None]
