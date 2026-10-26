@@ -615,6 +615,64 @@ def _build_lock():
     return _LOCK[0]
 
 
+async def api_prop_chart(req):
+    """Данные для графика предложения (вкладка «Вместе»): свечи ТФ прогона, канал/структура, вход, стоп, безубыток, цель."""
+    try:
+        rid, t_in, side = int(req.query["run"]), int(req.query["t_in"]), req.query["side"]
+    except Exception:
+        return web.json_response({"error": "bad params"}, status=400)
+    run = next((r for r in jload(RUNS_FILE, []) if r["id"] == rid), None)
+    if run is None:
+        return web.json_response({"error": "прогон не найден"}, status=404)
+    now = int(time.time() * 1000)
+    tr = await run_trades(run, now)
+    x = next((z for z in tr if int(z["t_in"]) == t_in and z["side"] == side), None)
+    if x is None:
+        return web.json_response({"error": "сделка не найдена"}, status=404)
+    sym, tf = run["sym"], run["cfg"]["tf"]
+    df = await get_df_long(sym, tf)
+    closed, live = split_closed(df)
+    ind = an.indicators(closed)
+    k = 260
+    def sl(v):
+        return [None if z is None else an._r(float(z)) for z in v]
+    chart = {"t": [int(z) for z in df.t.values[-k:]], "tf": tf}
+    for c_ in "ohlc":
+        chart[c_] = sl(df[c_].values[-k:])
+    e20 = list(ind["ema20"].values)
+    if live is not None:
+        e20.append(None)
+    chart["ema20"] = sl(e20[-k:])
+    P = dict(cs.PARAMS, **dict(run["cfg"], sym=sym))
+    s = 1 if side == "L" else -1
+    pin = float(x["p_in"])
+    thr = float(P.get("be_trigger") or 0)
+    if P.get("be_atr"):
+        try:
+            hh, ll, cc = df.h.values.astype(float), df.l.values.astype(float), df.c.values.astype(float)
+            i0 = int(x.get("i_in") or 0)
+            tr_ = [max(hh[j] - ll[j], abs(hh[j] - cc[j - 1]), abs(ll[j] - cc[j - 1])) for j in range(max(1, i0 - 13), i0 + 1)]
+            thr = float(P["be_atr"]) * (sum(tr_) / len(tr_)) / pin * 100.0
+        except Exception:
+            pass
+    lines = {"entry": an._r(pin), "stop0": an._r(float(x["stop0"])), "stop": an._r(float(x["stop"])),
+             "tp": an._r(float(x["tp"])) if x.get("tp") else None,
+             "be_trigger": an._r(pin * (1 + s * thr / 100.0)) if thr else None,
+             "be": an._r(pin * (1 + s * float(P.get("be_lock", 0.3)) / 100.0)), "be_hit": bool(x["be"])}
+    struct = None
+    sid = x.get("sid")
+    if sid:
+        st = next((z for z in hd.load() if z.get("id") == sid), None)
+        if st:
+            struct = {"id": sid, "kind": st.get("kind"), "tf": st.get("tf"), "A": st.get("A"), "B": st.get("B")}
+    ch = None
+    if x.get("chlw"):
+        w = x["chlw"]  # [нижняя в начале, верхняя в начале, нижняя при входе, верхняя при входе, индекс начала]
+        ch = {"lo": [an._r(w[0]), an._r(w[2])], "up": [an._r(w[1]), an._r(w[3])], "i0": int(w[4]), "i1": int(x["i_in"])}
+    return web.json_response({"sym": sym, "tf": tf, "side": side, "sig": x.get("sig"), "t_in": t_in, "open": bool(x["open"]), "reason": x["reason"],
+                              "off": int(len(df) - len(chart["t"])), "chart": chart, "lines": lines, "ch": ch, "struct": struct})
+
+
 async def build_payload(runs, now):
     out = []
     by_track = {"me": [], "bot": []}
@@ -1316,6 +1374,7 @@ async def serve():
     app2.router.add_route("*", "/api/pairs", api_pairs)
     app2.router.add_route("*", "/api/config", api_config)
     app2.router.add_route("*", "/api/runs", api_runs)
+    app2.router.add_get("/api/prop_chart", api_prop_chart)
     app2.router.add_route("*", "/api/screen", api_screen)
     for app, port in ((app1, PORT), (app2, PORT2)):
         r = web.AppRunner(app)
