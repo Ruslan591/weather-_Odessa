@@ -1,16 +1,16 @@
 {
-  "timestamp": "2026-10-26T01:15:00.000Z",
+  "timestamp": "2026-10-26T01:30:00.000Z",
   "current_state": "clear",
-  "station_area_fraction": 0.012,
+  "station_area_fraction": 0.045,
   "target_type": "cloud_mass",
   "distance_km_now": 0.8,
   "bearing_deg": 326.0,
   "compass": "СЗ",
-  "speed_kmh": 0.0,
+  "speed_kmh": 0.1,
   "direction_compass": "СВ",
   "cpa_km": 0.8,
   "eta_min": null,
-  "blob_area_km2": 191398.0,
+  "blob_area_km2": 189814.0,
   "target_id": 0,
   "class": "system",
   "verdict": "почти стоит на месте",
@@ -21,7 +21,7 @@
     "density_fraction_now": 1.0,
     "density_delta": 0.0,
     "density_verdict": "без существенных изменений",
-    "height_ordinal_delta": 0.02,
+    "height_ordinal_delta": -0.42,
     "height_verdict": "без существенных изменений",
     "shape_aspect_ratio_now": 1.44,
     "shape_aspect_delta": 0.0,
@@ -39,7 +39,7 @@
     {
       "centroid_dx_km": -0.48,
       "centroid_dy_km": 0.7,
-      "area_km2": 191398.3,
+      "area_km2": 189814.5,
       "class": "system",
       "bbox_km": {
         "dx_min": -191.3,
@@ -47,48 +47,66 @@
         "dy_min": -277.6,
         "dy_max": 277.6
       },
-      "elongation_aspect_ratio": 1.62,
-      "elongation_axis_deg": 9.0,
+      "elongation_aspect_ratio": 1.63,
+      "elongation_axis_deg": 10.0,
       "elongation_axis_compass": "С-Ю",
       "frontlike": false,
       "window_spanning": true,
       "target_id": 0
     },
     {
-      "centroid_dx_km": -166.37,
-      "centroid_dy_km": 38.27,
-      "area_km2": 56.0,
+      "centroid_dx_km": -163.49,
+      "centroid_dy_km": 42.44,
+      "area_km2": 262.9,
       "class": "local",
       "bbox_km": {
-        "dx_min": -175.0,
-        "dx_max": -166.37,
-        "dy_min": 38.27,
-        "dy_max": 46.62
+        "dx_min": -181.71,
+        "dx_max": -163.49,
+        "dy_min": 28.53,
+        "dy_max": 50.79
       },
-      "elongation_aspect_ratio": 1.11,
-      "elongation_axis_deg": 155.0,
-      "elongation_axis_compass": "ЮВ-СЗ",
+      "elongation_aspect_ratio": 2.25,
+      "elongation_axis_deg": 28.0,
+      "elongation_axis_compass": "СВ-ЮЗ",
       "frontlike": false,
       "window_spanning": false,
       "target_id": 1
     },
     {
-      "centroid_dx_km": -173.08,
-      "centroid_dy_km": 6.26,
-      "area_km2": 56.0,
+      "centroid_dx_km": -128.97,
+      "centroid_dy_km": 130.11,
+      "area_km2": 121.4,
       "class": "local",
       "bbox_km": {
-        "dx_min": -178.83,
-        "dx_max": -173.08,
-        "dy_min": 6.26,
-        "dy_max": 13.22
+        "dx_min": -137.6,
+        "dx_max": -128.97,
+        "dy_min": 125.93,
+        "dy_max": 142.63
       },
-      "elongation_aspect_ratio": 1.24,
-      "elongation_axis_deg": 0.0,
+      "elongation_aspect_ratio": 1.89,
+      "elongation_axis_deg": 4.0,
       "elongation_axis_compass": "С-Ю",
       "frontlike": false,
       "window_spanning": false,
       "target_id": 2
+    },
+    {
+      "centroid_dx_km": 180.75,
+      "centroid_dy_km": -92.53,
+      "area_km2": 60.0,
+      "class": "local",
+      "bbox_km": {
+        "dx_min": 180.75,
+        "dx_max": 191.3,
+        "dy_min": -95.32,
+        "dy_max": -88.36
+      },
+      "elongation_aspect_ratio": 2.2,
+      "elongation_axis_deg": 55.0,
+      "elongation_axis_compass": "СВ-ЮЗ",
+      "frontlike": false,
+      "window_spanning": false,
+      "target_id": 3
     }
   ],
   "method_note": "Персистентный буфер до 9 кадров Cloud Mask + CTH (шаг 15 мин, до 2 часов истории), хранится между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр вместо всех заново. Скорость усреднена по всем парам кадров буфера с реальным dt (phase correlation всего поля). Край облака/просвета ищется только среди связных областей >= 40px (~53км²) с учётом прозрачных no-data пикселей. Тренды плотности/высоты/формы — сравнение первого и последнего кадра БУФЕРА в радиусе 50км (окно растёт по мере наполнения буфера, см. buffer_status). Высота — ординальный индекс по цвету (не метры, официальной таблицы нет). Вероятность (только когда сейчас ясно/переменная облачность и есть значимое приближающееся поле) — эвристическая оценка по близости/размеру/уверенности в скорости, не физическая модель осадков. Линейная экстраполяция, годится на ~1 час."
