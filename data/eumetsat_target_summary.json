@@ -1,38 +1,73 @@
 {
-  "timestamp": "2026-10-26T23:32:33Z",
+  "timestamp": "2026-10-26T23:37:51Z",
   "status": "ok",
-  "cloud_forecast_timestamp": "2026-10-26T23:00:00.000Z",
+  "cloud_forecast_timestamp": "2026-10-26T23:15:00.000Z",
   "target_id": 0,
-  "target_area_km2": 77.4,
-  "target_distance_km": 127.1,
-  "target_bearing_deg": 90.0,
+  "target_area_km2": 180.1,
+  "target_distance_km": 130.8,
+  "target_bearing_deg": 108.0,
   "target_compass": "В",
   "system": {
     "target_id": 1,
     "area_km2": 627.1,
-    "distance_km": 139.1,
-    "bearing_deg": 106.0,
+    "distance_km": 153.9,
+    "bearing_deg": 104.0,
     "compass": "В",
-    "elongation_aspect_ratio": 1.4,
-    "elongation_axis_deg": 100.0,
-    "elongation_axis_compass": "В-З",
+    "elongation_aspect_ratio": 1.48,
+    "elongation_axis_deg": 167.0,
+    "elongation_axis_compass": "Ю-С",
     "frontlike": false,
     "window_spanning": false,
     "has_precip": false,
     "has_lightning": false
   },
-  "local_candidates": [],
-  "local_suppressed_count": 1,
+  "local_candidates": [
+    {
+      "target_id": 0,
+      "area_km2": 180.1,
+      "distance_km": 130.8,
+      "bearing_deg": 108.0,
+      "compass": "В",
+      "elongation_aspect_ratio": 1.09,
+      "elongation_axis_deg": 15.0,
+      "elongation_axis_compass": "С-Ю",
+      "frontlike": false,
+      "phase_label": null,
+      "type_label": null,
+      "has_precip": false,
+      "has_lightning": false,
+      "ir_confirmed": false,
+      "geocolour_confirmed": true
+    },
+    {
+      "target_id": 3,
+      "area_km2": 80.1,
+      "distance_km": 179.9,
+      "bearing_deg": 132.0,
+      "compass": "ЮВ",
+      "elongation_aspect_ratio": 1.72,
+      "elongation_axis_deg": 111.0,
+      "elongation_axis_compass": "В-З",
+      "frontlike": false,
+      "phase_label": null,
+      "type_label": null,
+      "has_precip": null,
+      "has_lightning": false,
+      "ir_confirmed": false,
+      "geocolour_confirmed": true
+    }
+  ],
+  "local_suppressed_count": 0,
   "system_candidates": [
     {
       "target_id": 1,
       "area_km2": 627.1,
-      "distance_km": 139.1,
-      "bearing_deg": 106.0,
+      "distance_km": 153.9,
+      "bearing_deg": 104.0,
       "compass": "В",
-      "elongation_aspect_ratio": 1.4,
-      "elongation_axis_deg": 100.0,
-      "elongation_axis_compass": "В-З",
+      "elongation_aspect_ratio": 1.48,
+      "elongation_axis_deg": 167.0,
+      "elongation_axis_compass": "Ю-С",
       "frontlike": false,
       "window_spanning": false,
       "phase_label": "безоблачно",
@@ -44,12 +79,12 @@
     },
     {
       "target_id": 2,
-      "area_km2": 2062.8,
-      "distance_km": 174.1,
-      "bearing_deg": 128.0,
+      "area_km2": 1601.2,
+      "distance_km": 178.5,
+      "bearing_deg": 123.0,
       "compass": "ЮВ",
-      "elongation_aspect_ratio": 1.25,
-      "elongation_axis_deg": 171.0,
+      "elongation_aspect_ratio": 1.68,
+      "elongation_axis_deg": 167.0,
       "elongation_axis_compass": "Ю-С",
       "frontlike": false,
       "window_spanning": false,
@@ -67,10 +102,10 @@
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-10-26T23:10:00.000Z"
+        "timestamp": "2026-10-26T23:20:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": false,
+        "confirmed": true,
         "timestamp": "2026-10-26T23:10:00.000Z"
       },
       "cloud_phase_type": {
@@ -78,9 +113,9 @@
         "timestamp": "2026-10-26T16:57:05Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 2,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 1,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -89,8 +124,8 @@
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-10-26T23:32:05Z"
+      "timestamp": "2026-10-26T23:37:22Z"
     }
   },
-  "verdict": "CLM отметил цель в 127км В, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (627км²) в 139км В."
+  "verdict": "Цель в 131км В — каналы расходятся: geocolour_motion подтверждают, ir_motion нет. Отдельно: система синоптического масштаба (627км²) в 154км В."
 }
