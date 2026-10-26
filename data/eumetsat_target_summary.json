@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-26T22:52:37Z",
+  "timestamp": "2026-10-26T22:57:33Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-10-26T22:30:00.000Z",
   "target_id": 0,
@@ -35,25 +35,8 @@
       "type_label": null,
       "has_precip": null,
       "has_lightning": false,
-      "ir_confirmed": null,
+      "ir_confirmed": false,
       "geocolour_confirmed": true
-    },
-    {
-      "target_id": 1,
-      "area_km2": 149.4,
-      "distance_km": 128.4,
-      "bearing_deg": 98.0,
-      "compass": "В",
-      "elongation_aspect_ratio": 2.87,
-      "elongation_axis_deg": 179.0,
-      "elongation_axis_compass": "Ю-С",
-      "frontlike": false,
-      "phase_label": null,
-      "type_label": null,
-      "has_precip": null,
-      "has_lightning": false,
-      "ir_confirmed": null,
-      "geocolour_confirmed": false
     },
     {
       "target_id": 2,
@@ -69,11 +52,11 @@
       "type_label": "безоблачно",
       "has_precip": null,
       "has_lightning": false,
-      "ir_confirmed": null,
+      "ir_confirmed": false,
       "geocolour_confirmed": true
     }
   ],
-  "local_suppressed_count": 0,
+  "local_suppressed_count": 1,
   "system_candidates": [
     {
       "target_id": 3,
@@ -90,7 +73,7 @@
       "type_label": null,
       "has_precip": null,
       "has_lightning": false,
-      "ir_confirmed": null,
+      "ir_confirmed": false,
       "geocolour_confirmed": true
     }
   ],
@@ -99,7 +82,7 @@
   "existence": {
     "modules": {
       "ir_motion": {
-        "confirmed": null,
+        "confirmed": false,
         "timestamp": "2026-10-26T22:30:00.000Z"
       },
       "geocolour_motion": {
@@ -112,8 +95,8 @@
       }
     },
     "votes_confirmed": 1,
-    "votes_not_confirmed": 0,
-    "consensus": "confirmed"
+    "votes_not_confirmed": 1,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -125,5 +108,5 @@
       "timestamp": "2026-10-26T22:52:25Z"
     }
   },
-  "verdict": "Облачная масса (123км²) в 72км СВ подтверждена всеми доступными каналами. Отдельно: система синоптического масштаба (1797км²) в 174км ЮВ."
+  "verdict": "Цель в 72км СВ — каналы расходятся: geocolour_motion подтверждают, ir_motion нет. Отдельно: система синоптического масштаба (1797км²) в 174км ЮВ."
 }
