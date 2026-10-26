@@ -1,1 +1,1 @@
-{"task_id": "t_chandir_5", "cmd": "sleep 150; grep -A8 SUMMARY /tmp/cdtest/out.txt; wc -l /tmp/cdtest/out.txt", "timeout": 200}
+{"task_id": "t_prop_chk1", "cmd": "cd /opt/weather-pipeline/repo && git fetch -q origin 2>&1 | tail -2; for c in ff90b6b 0dceb08 b8c832a f75f457; do git cat-file -e $c && echo have_$c; done; for f in classic_strategy classic_panel classic_pos_html; do git log -1 --format=%h origin/main -- bot/classic/$f.py; done; cd /opt/trading-bot/classic && md5sum classic_strategy.py classic_panel.py classic_pos_html.py", "timeout": 100}
