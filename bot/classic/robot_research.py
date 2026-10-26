@@ -143,8 +143,8 @@ def mode_a():
 
 
 def sigs_all(pre):
-    c, h, l, o, v = (np.asarray(pre[k], float) for k in ("c", "h", "l", "o", "v"))
-    n = len(c)
+    n = min(len(pre[k]) for k in ("c", "h", "l", "o", "v"))
+    c, h, l, o, v = (np.asarray(pre[k], float)[:n] for k in ("c", "h", "l", "o", "v"))
     S = pd.Series
     out = {}
 
@@ -159,12 +159,15 @@ def sigs_all(pre):
     up55, dn55 = ev(c > hh55), ev(c < ll55)
     ma, sd = S(c).rolling(20).mean().values, S(c).rolling(20).std().values
     bup, bdn = ev(c > ma + 2 * sd), ev(c < ma - 2 * sd)
-    rsi = np.asarray(pre["rsi"], float)
+    dl = S(c).diff()
+    gu = dl.clip(lower=0).ewm(alpha=1 / 14, adjust=False).mean()
+    gd = (-dl.clip(upper=0)).ewm(alpha=1 / 14, adjust=False).mean()
+    rsi = (100 - 100 / (1 + gu / gd.replace(0, np.nan))).fillna(50).values
     rlo, rhi = ev(rsi < 25), ev(rsi > 75)
-    e20, e50 = np.asarray(pre["e20"], float), np.asarray(pre["e50"], float)
+    e20, e50 = S(c).ewm(span=20, adjust=False).mean().values, S(c).ewm(span=50, adjust=False).mean().values
     cu, cd = ev(e20 > e50), ev(e20 < e50)
-    vavg = np.asarray(pre["vavg"], float)
-    spk = (v > 3 * vavg) & (vavg > 0)
+    vavg = S(v).rolling(20).mean().shift(1).values
+    spk = np.nan_to_num(v > 3 * vavg) .astype(bool) & (np.nan_to_num(vavg) > 0)
     vup, vdn = ev(spk & (c > o)), ev(spk & (c < o))
 
     def mk(longs, shorts):
