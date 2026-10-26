@@ -1,22 +1,81 @@
 {
-  "timestamp": "2026-10-26T21:17:46Z",
-  "status": "suppressed_known_false_positive",
-  "cloud_forecast_timestamp": "2026-10-26T20:45:00.000Z",
-  "suppressed_target": {
-    "signature": "180_-95",
-    "area_km2": 94.7,
-    "distance_km": 205.0,
-    "bearing_deg": 118.0,
-    "compass": "ЮВ",
-    "not_confirmed_streak": 4,
-    "total_not_confirmed": 21,
-    "excluded_since": "2026-10-26T21:08:01Z"
-  },
+  "timestamp": "2026-10-26T21:22:57Z",
+  "status": "ok",
+  "cloud_forecast_timestamp": "2026-10-26T21:00:00.000Z",
+  "target_id": 0,
+  "target_area_km2": 220.2,
+  "target_distance_km": 280.8,
+  "target_bearing_deg": 215.0,
+  "target_compass": "ЮЗ",
   "system": null,
-  "local_candidates": [],
-  "local_suppressed_count": 1,
+  "local_candidates": [
+    {
+      "target_id": 0,
+      "area_km2": 220.2,
+      "distance_km": 280.8,
+      "bearing_deg": 215.0,
+      "compass": "ЮЗ",
+      "elongation_aspect_ratio": 2.62,
+      "elongation_axis_deg": 31.0,
+      "elongation_axis_compass": "СВ-ЮЗ",
+      "frontlike": false,
+      "phase_label": null,
+      "type_label": null,
+      "has_precip": false,
+      "has_lightning": false,
+      "ir_confirmed": false,
+      "geocolour_confirmed": true
+    },
+    {
+      "target_id": 1,
+      "area_km2": 54.7,
+      "distance_km": 281.3,
+      "bearing_deg": 139.0,
+      "compass": "ЮВ",
+      "elongation_aspect_ratio": 1.77,
+      "elongation_axis_deg": 161.0,
+      "elongation_axis_compass": "Ю-С",
+      "frontlike": false,
+      "phase_label": null,
+      "type_label": null,
+      "has_precip": null,
+      "has_lightning": false,
+      "ir_confirmed": false,
+      "geocolour_confirmed": true
+    }
+  ],
+  "local_suppressed_count": 0,
   "system_candidates": [],
   "system_suppressed_count": 0,
-  "verdict": "Известный шумовой объект в 205км ЮВ (~95км²) — подавлено (не подтверждался 4 раз подряд).",
-  "frontal_tracks": []
+  "frontal_tracks": [],
+  "existence": {
+    "modules": {
+      "ir_motion": {
+        "confirmed": false,
+        "timestamp": "2026-10-26T21:00:00.000Z"
+      },
+      "geocolour_motion": {
+        "confirmed": true,
+        "timestamp": "2026-10-26T21:00:00.000Z"
+      },
+      "cloud_phase_type": {
+        "confirmed": null,
+        "timestamp": "2026-10-26T16:57:05Z"
+      }
+    },
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 1,
+    "consensus": "disputed"
+  },
+  "phenomena": {
+    "precip_forecast": {
+      "confirmed": null,
+      "timestamp": "2026-10-26T21:12:08Z"
+    },
+    "lightning_forecast": {
+      "confirmed": false,
+      "timestamp": "2026-10-26T21:22:24Z"
+    }
+  },
+  "verdict": "Цель в 281км ЮЗ — каналы расходятся: geocolour_motion подтверждают, ir_motion нет."
 }
