@@ -272,7 +272,7 @@ if(m)h+='<div class=sm style="margin-top:4px;color:#d29922">'+(m.mode==='trail'?
 if(S.mp===k)h+='<div class=sm style="margin-top:4px">Стоп — фиксированный уровень на этом расстоянии от цены сейчас. Трейлинг — уровень идёт за лучшей ценой на этом расстоянии, только в сторону прибыли. Работает вместе со стопом стратегии: сработает то, что ближе. Кнопки — в строке этой позиции в журнале «Сделки счёта» (последний столбец). Цена проверяется каждые ~5 с, закрытие по цене в момент срабатывания.</div>';
 return h}
 function rowCtl(t){if(t.run==null)return '';const k=t.run+'|'+t.kt+'|'+t.side,m=(S.man||{})[k];
-let h='<button data-pc="'+k+'" data-sym="'+t.sym+' '+t.tf+' '+(t.side==='L'?'LONG':'SHORT')+'">Закрыть</button> <button data-ps="'+k+'">Стоп / трейлинг</button>';
+let h='<button data-pg=1 data-run="'+t.run+'" data-t="'+t.kt+'" data-side="'+t.side+'">📈 График</button> <button data-pc="'+k+'" data-sym="'+t.sym+' '+t.tf+' '+(t.side==='L'?'LONG':'SHORT')+'">Закрыть</button> <button data-ps="'+k+'">Стоп / трейлинг</button>';
 if(S.mp===k)h+=' <input id=mpv type=number step=0.1 min=0.05 max=50 value="'+(S.mpv||1)+'" oninput="S.mpv=this.value" style="width:64px;background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:5px;padding:5px"> % <button data-pm=stop data-k="'+k+'">Стоп</button><button data-pm=trail data-k="'+k+'">Трейлинг</button>'+(m?'<button data-pm=clear data-k="'+k+'">Снять</button>':'');
 return h}
 async function posAct(k,body){if(S.pbusy)return;const a=k.split('|');S.pbusy=1;try{ap(await api('/api/runs',Object.assign({run:+a[0],kt:+a[1],side:a[2]},body)));S.mp=null}catch(e){alert(e.message)}S.pbusy=0;renderRuns()}
