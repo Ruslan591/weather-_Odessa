@@ -1,1 +1,1 @@
-{"task_id": "pos-chartbtn-2258de5", "cmd": "cd /opt/weather-pipeline/repo && git fetch -q origin; git show origin/main:scripts/deploy_classic_files.sh | bash -s classic_pos_html.py:2258de578ab0731a2340d949a03fb2b89fecf438", "timeout": 180}
+{"task_id": "t1027a", "cmd": "curl -s localhost:8091/api/runs -o /tmp/runs.json; ls -la /tmp/runs.json; python3 -c \"import json;d=json.load(open('/tmp/runs.json'));print(list(d.keys()));p=d.get('proposals',{});print(list(p.keys()));print(json.dumps(p.get('rows',[])[:2])[:3000]);print(len(p.get('rows',[])))\"", "timeout": 90}
