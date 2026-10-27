@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-10-27T01:00:00.000Z",
+  "timestamp": "2026-10-27T01:15:00.000Z",
   "current_state": "clear",
-  "station_area_fraction": 0.021,
+  "station_area_fraction": 0.0,
   "target_type": "cloud_mass",
   "distance_km_now": 0.8,
   "bearing_deg": 326.0,
   "compass": "СЗ",
-  "blob_area_km2": 210170.0,
+  "blob_area_km2": 211083.0,
   "target_id": 0,
   "class": "system",
   "verdict": "скорость посчитать не удалось (поле слишком однородно во всех кадрах)",
@@ -16,7 +16,7 @@
     "density_fraction_now": 1.0,
     "density_delta": 0.0,
     "density_verdict": "без существенных изменений",
-    "height_ordinal_delta": 1.01,
+    "height_ordinal_delta": 0.88,
     "height_verdict": "вершины растут (возможно усиление)",
     "shape_aspect_ratio_now": 1.44,
     "shape_aspect_delta": 0.0,
@@ -34,7 +34,7 @@
     {
       "centroid_dx_km": -0.48,
       "centroid_dy_km": 0.7,
-      "area_km2": 210170.5,
+      "area_km2": 211083.2,
       "class": "system",
       "bbox_km": {
         "dx_min": -191.3,
@@ -48,24 +48,6 @@
       "frontlike": false,
       "window_spanning": true,
       "target_id": 0
-    },
-    {
-      "centroid_dx_km": 187.46,
-      "centroid_dy_km": 112.02,
-      "area_km2": 54.7,
-      "class": "local",
-      "bbox_km": {
-        "dx_min": 187.46,
-        "dx_max": 191.3,
-        "dy_min": 112.02,
-        "dy_max": 124.54
-      },
-      "elongation_aspect_ratio": 2.75,
-      "elongation_axis_deg": 6.0,
-      "elongation_axis_compass": "С-Ю",
-      "frontlike": false,
-      "window_spanning": false,
-      "target_id": 1
     }
   ],
   "method_note": "Персистентный буфер до 9 кадров Cloud Mask + CTH (шаг 15 мин, до 2 часов истории), хранится между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр вместо всех заново. Скорость усреднена по всем парам кадров буфера с реальным dt (phase correlation всего поля). Край облака/просвета ищется только среди связных областей >= 40px (~53км²) с учётом прозрачных no-data пикселей. Тренды плотности/высоты/формы — сравнение первого и последнего кадра БУФЕРА в радиусе 50км (окно растёт по мере наполнения буфера, см. buffer_status). Высота — ординальный индекс по цвету (не метры, официальной таблицы нет). Вероятность (только когда сейчас ясно/переменная облачность и есть значимое приближающееся поле) — эвристическая оценка по близости/размеру/уверенности в скорости, не физическая модель осадков. Линейная экстраполяция, годится на ~1 час."
