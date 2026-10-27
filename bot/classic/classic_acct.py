@@ -66,7 +66,8 @@ def sim_account(trades, start=START, lev=LEV, stake=MIN_NOTIONAL, use=MAX_USE):
         x = p["x"]
         cur.append({"sym": x.get("sym"), "tf": x.get("tf"), "side": x["side"], "p_in": x["p_in"], "mark": x["p_out"], "liq_price": float("%.6g" % _liq_price(x["side"], x["p_in"])),
                     "stop": x["stop"], "tp": x.get("tp"), "notional": _r(stake), "margin": _r(margin), "upnl": _r(p["pnl"]),
-                    "roe": _r(p["pnl"] / margin * 100.0), "be": bool(x["be"]), "t_in": x["t_in"], "sig": x.get("sig")})
+                    "roe": _r(p["pnl"] / margin * 100.0), "be": bool(x["be"]), "t_in": x["t_in"], "sig": x.get("sig"),
+                    "run": x.get("run"), "kt": x.get("t_sig", x["t_in"])})  # run+kt+side — адрес позиции для кнопок «Закрыть» / «Стоп»
     unreal = sum(p["pnl"] for p in openp)
     margin_used = len(openp) * margin
     equity = bal + unreal
