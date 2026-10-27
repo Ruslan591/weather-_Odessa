@@ -51,7 +51,7 @@ def _grp(L, key="net", stake=6.0):
             "net": round(s, 2), "pnl": round(stake * s / 100.0, 2)}
 
 
-CAND_DEFAULT = {"max_tp_atr": 1.5, "max_stop_atr": 0.0, "min_rr": 0.0, "sides": "LS"}  # 0 — условие выключено
+CAND_DEFAULT = {"min_stop_atr": 0.9, "max_stop_atr": 0.0, "max_tp_atr": 2.0, "min_rr": 0.0, "sides": "LS"}  # 0 — условие выключено
 
 
 def dist(x):
@@ -74,6 +74,8 @@ def cand_pass(x, f):
     d = dist(x)
     if d["tp_atr"] is None:
         return False, "нет цели или ATR"
+    if f["min_stop_atr"] and (d["stop_atr"] is None or d["stop_atr"] < f["min_stop_atr"]):
+        return False, "стоп ближе %.1f ATR" % f["min_stop_atr"]
     if f["max_tp_atr"] and d["tp_atr"] > f["max_tp_atr"]:
         return False, "цель дальше %.1f ATR" % f["max_tp_atr"]
     if f["max_stop_atr"] and d["stop_atr"] and d["stop_atr"] > f["max_stop_atr"]:
