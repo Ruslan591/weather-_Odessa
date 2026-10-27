@@ -828,7 +828,7 @@ async def build_payload(runs, now):
     cand_raw = jload(CAND_FILE, {}) or {}
     if not cand_raw.get("history"):  # история версий фильтра: у каждой свой период, смена фильтра ничего не стирает
         since0 = int(cand_raw.get("since") or time.time() * 1000)
-        cand_raw = dict(pr.CAND_DEFAULT, **cand_raw, since=since0)
+        cand_raw = {**pr.CAND_DEFAULT, **cand_raw, "since": since0}
         cand_raw["history"] = [{"since": since0, "until": None, "f": {k: cand_raw[k] for k in pr.CAND_DEFAULT}}]
         jsave(CAND_FILE, cand_raw)
     cand_f = dict(pr.CAND_DEFAULT, **{k: v for k, v in cand_raw.items() if k != "history"})
