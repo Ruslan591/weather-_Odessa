@@ -54,7 +54,7 @@ import field_motion_common as fc  # noqa: E402
 GIT_LOCK_FILE = "/tmp/vps_git.lock"
 OWN_LOCK_FILE = "/tmp/icon_front_very_far.lock"
 
-KEEP_LAST = 5
+KEEP_LAST = 24  # было 5; 24 кадра ≈ сутки анимации (кадры сжаты: geocolour JPEG, остальное палитровый PNG)
 FORCE_REGEN = os.environ.get("ICON_FRONT_FORCE") == "1"  # пересобрать текущий valid_time, не трогая историю
 PAD_DEG = 1.5  # запас за пределами видимого bbox для сглаживания без edge-артефактов
 DWD_BASE = "https://opendata.dwd.de/weather/nwp/icon-eu/grib"
@@ -96,6 +96,17 @@ def log(msg):
     line = f"[{datetime.now(timezone.utc).isoformat()}] {msg}"
     LOG_LINES.append(line)
     print(line, flush=True)
+
+
+def shrink_png(path, colors=64):
+    """Палитровый RGBA PNG без дизеринга: оверлеи (изобары/фронты/P_front) становятся в 4-8 раз меньше,
+    визуально неотличимо (проверено 27.10 на кадре very_far). Ошибка НЕ роняет пайплайн — файл остаётся как был."""
+    try:
+        im = Image.open(path).convert("RGBA")
+        q = im.quantize(colors=colors, method=Image.FASTOCTREE, dither=Image.NONE)
+        q.save(path, "PNG", optimize=True)
+    except Exception as e:
+        log(f"shrink_png({os.path.basename(path)}) не удалось: {e}")
 
 
 def build_url(run_dt, lead_hours, param_dir, level_type, level, param_upper):
@@ -995,7 +1006,7 @@ def process_tier(tier_key, tier_cfg, fields, lats, lons, run_dt, lead, valid_dt)
     p_front, p_lats, p_lons = compute_pfront(fields, lats, lons, bbox)
 
     ts_label = valid_dt.strftime("%Y%m%dT%H%M%SZ")
-    geocolour_path = os.path.join(out_dir, f"{ts_label}_geocolour.png")
+    geocolour_path = os.path.join(out_dir, f"{ts_label}_geocolour.jpg")
     isobars_path = os.path.join(out_dir, f"{ts_label}_isobars.png")
     pfront_path = os.path.join(out_dir, f"{ts_label}_pfront.png")
 
@@ -1021,18 +1032,21 @@ def process_tier(tier_key, tier_cfg, fields, lats, lons, run_dt, lead, valid_dt)
         with open(log_path, "w") as f:
             f.write("\n".join(LOG_LINES[-300:]))
         return False
-    Image.fromarray(arr).save(geocolour_path)
+    Image.fromarray(arr).convert("RGB").save(geocolour_path, "JPEG", quality=80, optimize=True)  # alpha у GeoColour на проверенном кадре = 255, при convert("RGB") он отбрасывается; PNG был ~1.2 МБ, JPEG ~130 КБ
 
     log(f"[{tier_key}] рендерю изобары и P_front...")
     render_transparent_isobars(fields["pmsl"], fields.get("hsurf"), lats, lons, isobars_path, bbox, px,
                                centers=fields.get("_centers"))
     render_transparent_pfront(p_front, p_lats, p_lons, pfront_path, bbox, px)
+    shrink_png(isobars_path)
+    shrink_png(pfront_path)
     fronts_name = None
     if fields.get("_fronts") is not None:
         try:
             fronts_name = f"{ts_label}_fronts.png"
             n_fr = render_transparent_fronts(fields["_fronts"], fields.get("_centers"),
                                              os.path.join(out_dir, fronts_name), bbox, px)
+            shrink_png(os.path.join(out_dir, fronts_name))
             log(f"[{tier_key}] фронты: {n_fr} линий в кадре")
         except Exception as e:
             log(f"[{tier_key}] фронты не отрисованы: {e}")
