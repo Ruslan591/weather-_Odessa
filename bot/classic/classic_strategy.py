@@ -506,6 +506,8 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                             bo = None
         elif bo is not None:
             bo = None
+        if pos is not None and "tp0" not in pos:
+            pos["tp0"] = pos.get("tp")  # цель в момент входа (дальше она может ползти за каналом) — для честного анализа расстояния до цели
         if pos and mcl:
             mc_ = mcl.get("%d|%s" % (pos["t_in"], pos["side"]))
             if mc_ and (i == T - 1 or int(t[i]) + tfms_ > mc_[0]):  # свеча, в которой нажали «Закрыть» (или позже): выход по цене момента нажатия
@@ -680,6 +682,8 @@ def pack(trades):
             d["sid"] = x["sid"]  # id нарисованной пользователем структуры (hand.json)
         if x.get("tp"):
             d["tp"] = an._r(float(x["tp"]))
+        if x.get("tp0"):
+            d["tp0"] = an._r(float(x["tp0"]))
         if x.get("atr") and x["atr"] == x["atr"] and x["atr"] > 0:
             d["atr"] = round(float(x["atr"]) / float(x["p_in"]) * 100, 4)  # ATR в % от цены входа
         out.append(d)
