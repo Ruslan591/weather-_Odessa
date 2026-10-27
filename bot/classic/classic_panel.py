@@ -515,6 +515,7 @@ async def api_cand(req):
                     if f["sides"] not in ("LS", "L", "S"):
                         raise ValueError("sides: LS, L или S")
                     cur["sides"] = f["sides"]
+            cur["since"] = int(time.time() * 1000)  # смена фильтра перезапускает честную проверку
             jsave(CAND_FILE, cur)
         return web.json_response({"filter": cur, "default": pr.CAND_DEFAULT})
     except (ValueError, TypeError) as e:
@@ -817,7 +818,11 @@ async def build_payload(runs, now):
             by_track[tk] += [dict(x, sym=r["sym"], tf=r["cfg"]["tf"], run=r["id"]) for x in tr]
         out.append({"id": r["id"], "name": r["name"], "sym": r["sym"], "track": tk, "mode": md, "cfg": dict(cs.PARAMS, **r["cfg"]), "start_ms": r["start_ms"],
                     "stop_ms": r["stop_ms"], "stats": st, "trades": tr[-300:]})
-    cand_f = dict(pr.CAND_DEFAULT, **(jload(CAND_FILE, {}) or {}))
+    cand_raw = jload(CAND_FILE, {}) or {}
+    if not cand_raw.get("since"):  # момент старта честной проверки: сделки с t_in после него фильтр не подбирался задним числом
+        cand_raw = dict(pr.CAND_DEFAULT, **cand_raw, since=int(time.time() * 1000))
+        jsave(CAND_FILE, cand_raw)
+    cand_f = dict(pr.CAND_DEFAULT, **cand_raw)
     pd_ = pr.build(prop_tr, jload(PROP_FILE, []), now, ac.MIN_NOTIONAL, man_states(), cand_f)
     accounts = {}
     for k, L in (("me", by_track["me"]), ("bot", by_track["bot"])):
