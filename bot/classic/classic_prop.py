@@ -51,7 +51,39 @@ def _grp(L, key="net", stake=6.0):
             "net": round(s, 2), "pnl": round(stake * s / 100.0, 2)}
 
 
-def build(pt, decs, now_ms, stake=6.0, man=None):
+CAND_DEFAULT = {"max_tp_atr": 1.5, "max_stop_atr": 0.0, "min_rr": 0.0, "sides": "LS"}  # 0 — условие выключено
+
+
+def dist(x):
+    """Расстояния от входа бота: до начального стопа и до цели — в % и в ATR входного ТФ (ATR есть у сделок, посчитанных новой версией)."""
+    p = float(x["p_in"])
+    st0 = x.get("stop0", x.get("stop"))
+    r = {"stop_pct": round(abs(p - float(st0)) / p * 100.0, 3) if st0 else None,
+         "tp_pct": round(abs(float(x["tp"]) - p) / p * 100.0, 3) if x.get("tp") else None, "atr": x.get("atr")}
+    a = x.get("atr")
+    r["stop_atr"] = round(r["stop_pct"] / a, 2) if a and r["stop_pct"] else None
+    r["tp_atr"] = round(r["tp_pct"] / a, 2) if a and r["tp_pct"] else None
+    return r
+
+
+def cand_pass(x, f):
+    """Фильтр счёта «Кандидат»: (прошло, причина отказа). Нужны цель и ATR — без них сигнал не берётся."""
+    f = dict(CAND_DEFAULT, **(f or {}))
+    if x["side"] not in f["sides"]:
+        return False, "сторона"
+    d = dist(x)
+    if d["tp_atr"] is None:
+        return False, "нет цели или ATR"
+    if f["max_tp_atr"] and d["tp_atr"] > f["max_tp_atr"]:
+        return False, "цель дальше %.1f ATR" % f["max_tp_atr"]
+    if f["max_stop_atr"] and d["stop_atr"] and d["stop_atr"] > f["max_stop_atr"]:
+        return False, "стоп дальше %.1f ATR" % f["max_stop_atr"]
+    if f["min_rr"] and d["tp_pct"] and d["stop_pct"] and d["tp_pct"] / d["stop_pct"] < f["min_rr"]:
+        return False, "выгода/риск < %.1f" % f["min_rr"]
+    return True, ""
+
+
+def build(pt, decs, now_ms, stake=6.0, man=None, cand=None):
     """pt — сделки прогонов «Бот / только предлагает» (с полями sym, tf, run). decs — решения из proposals.json."""
     dm = {d["k"]: d for d in decs}
     pending, rows, accepted, allsig = [], [], [], []
@@ -70,6 +102,8 @@ def build(pt, decs, now_ms, stake=6.0, man=None):
         row = {"sym": x["sym"], "tf": x["tf"], "side": x["side"], "sig": x.get("sig"), "run": x["run"], "t_in": x["t_in"], "p_in": x["p_in"],
                "stop": x["stop"], "tp": x.get("tp"), "be": bool(x["be"]), "open": bool(y["open"]), "reason": y["reason"], "status": st,
                "net": y["net"], "net_bot": x["net"], "t_out": y["t_out"], "t_dec": d["t_dec"] if d else None, "p_dec": d["p_dec"] if d else None}
+        row.update(dist(x))
+        row["cand_ok"], row["cand_why"] = cand_pass(x, cand)
         if st == "pending":
             s = 1 if x["side"] == "L" else -1
             cur = float(x["p_out"])
@@ -78,6 +112,9 @@ def build(pt, decs, now_ms, stake=6.0, man=None):
             row["to_stop"] = round(abs(cur - float(x["stop"])) / cur * 100.0, 3)
             row["to_tp"] = round(abs(float(x["tp"]) - cur) / cur * 100.0, 3) if x.get("tp") else None
             row["rr"] = round(row["to_tp"] / row["to_stop"], 2) if row["to_tp"] and row["to_stop"] else None
+            pa = row.get("atr")  # ATR в % от цены входа; от текущей цены расстояния чуть другие — считаем их тоже
+            row["to_stop_atr"] = round(row["to_stop"] / pa, 2) if pa else None
+            row["to_tp_atr"] = round(row["to_tp"] / pa, 2) if pa and row["to_tp"] else None
             pending.append(row)
         else:
             rows.append(row)
@@ -90,4 +127,5 @@ def build(pt, decs, now_ms, stake=6.0, man=None):
              "missed": _grp(by("missed"), "net_bot", stake), "pending": len(pending),
              "all": _grp(rows + pending, "net_bot", stake),
              "right": right, "decided_closed": len(dec_closed), "right_pct": round(right * 100.0 / len(dec_closed)) if dec_closed else None}
-    return {"pending": pending, "rows": rows[:150], "stats": stats, "accepted": accepted, "allsig": allsig}
+    candsig = [x for x in allsig if cand_pass(x, cand)[0]]
+    return {"pending": pending, "rows": rows[:150], "stats": stats, "accepted": accepted, "allsig": allsig, "candsig": candsig}
