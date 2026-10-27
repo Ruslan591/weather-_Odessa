@@ -22,6 +22,7 @@ ALLTF = ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1
 MTF = ["1d", "4h", "1h", "15m", "5m"]
 HERE = os.path.dirname(os.path.abspath(__file__))
 PAIRS_FILE = os.path.join(HERE, "pairs.json")
+CAND_FILE = os.path.join(HERE, "cand.json")  # фильтр счёта «Кандидат» (по умолчанию pr.CAND_DEFAULT)
 PROP_FILE = os.path.join(HERE, "proposals.json")  # решения «Открыть/Отклонить» по предложениям бота
 MAN_FILE = os.path.join(HERE, "manual.json")  # ручное управление открытыми позициями: закрытие, стоп, трейлинг (ключ run|t_in|сторона)
 DEFAULT_PAIRS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT", "ADAUSDT", "NEARUSDT", "AVAXUSDT", "ZECUSDT"]
@@ -790,13 +791,16 @@ async def build_payload(runs, now):
             by_track[tk] += [dict(x, sym=r["sym"], tf=r["cfg"]["tf"], run=r["id"]) for x in tr]
         out.append({"id": r["id"], "name": r["name"], "sym": r["sym"], "track": tk, "mode": md, "cfg": dict(cs.PARAMS, **r["cfg"]), "start_ms": r["start_ms"],
                     "stop_ms": r["stop_ms"], "stats": st, "trades": tr[-300:]})
-    pd_ = pr.build(prop_tr, jload(PROP_FILE, []), now, ac.MIN_NOTIONAL, man_states())
+    cand_f = dict(pr.CAND_DEFAULT, **(jload(CAND_FILE, {}) or {}))
+    pd_ = pr.build(prop_tr, jload(PROP_FILE, []), now, ac.MIN_NOTIONAL, man_states(), cand_f)
     accounts = {}
     for k, L in (("me", by_track["me"]), ("bot", by_track["bot"])):
         accounts[k] = {"account": ac.sim_account(L), "signals": ac.sim_signals(L, now),
                        "trades": [{"sym": x.get("sym"), "tf": x.get("tf"), "side": x["side"], "sig": x.get("sig"), "t_in": x["t_in"], "net": x["net"], "open": x["open"], "reason": x["reason"], "be": x["be"], "run": x.get("run")}
                                   for x in sorted(L, key=lambda t: -t["t_in"])[:60]]}
     accounts["both"] = {"account": ac.sim_account(pd_["accepted"]), "signals": ac.sim_signals(pd_["allsig"], now), "trades": []}  # «Вместе» = открытые вами предложения; «Все сигналы» = если брать каждое
+    accounts["cand"] = {"account": ac.sim_account(pd_["candsig"]), "signals": ac.sim_signals(pd_["candsig"], now), "trades": [],  # «Кандидат» = сигналы бота, прошедшие фильтр; открываются сами, без вашего решения
+                        "filter": dict(cand_f, passed=len(pd_["candsig"]), total=len(pd_["allsig"]))}
     bot_modes = {}
     for r in runs:
         if r["stop_ms"] is None and track_of(r["cfg"]) == "bot":
