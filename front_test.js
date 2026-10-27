@@ -90,7 +90,7 @@ function ifvfBuildTierTabs() {
     Object.keys(IFVF_TIERS).forEach((key) => {
         const btn = document.createElement("button");
         btn.textContent = IFVF_TIERS[key].label;
-        btn.style.cssText = "width:auto;margin:2px;padding:8px 12px;border-radius:6px;border:1px solid #444;color:#eee;font-size:13px;";
+        btn.style.cssText = "margin:2px;padding:8px 12px;border-radius:6px;border:1px solid #444;color:#eee;font-size:13px;";
         btn.style.background = (key === ifvfTier) ? "#2a5d8f" : "#222";
         btn.onclick = () => {
             ifvfStop();
