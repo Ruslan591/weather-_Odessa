@@ -1,17 +1,33 @@
 {
-  "timestamp": "2026-10-27T14:12:55Z",
+  "timestamp": "2026-10-27T14:23:15Z",
   "current_state": "no_storm",
   "target_type": "storm_mass",
-  "verdict": "гроз в радиусе ~192км не обнаружено",
+  "distance_km_now": 249.3,
+  "bearing_deg": 209.0,
+  "compass": "ЮЗ",
+  "blob_area_km2": 1508.0,
+  "verdict": "скорость посчитать не удалось (ячейка слишком мала/разрежена для оценки)",
+  "probability_percent": 36,
+  "probability_note": "эвристика (близость + размер очага), скорость не посчиталась",
   "method_note": "Скорость усреднена по 4 кадрам mtg_fd:li_afa (шаг 5 мин). Presence = непрозрачный пиксель (накопленная площадь вспышек за 5 мин). Порог значимости снижен до 8px — грозовые ячейки компактнее осадков/облаков. Скорость часто не считается (поле слишком разреженное) — это ограничение метода, не ошибка.",
   "target_confirmation": {
     "confirmed": null,
-    "reason": "candidates пуст или отсутствует (снапшот от старой версии cloud_forecast.py?)"
+    "reason": "среди кандидатов нет локальных масс (только системы синоптического масштаба)"
   },
   "system_analysis": {
-    "available": false,
-    "reason": "candidates пуст или отсутствует"
+    "available": true,
+    "target_id": 0,
+    "area_km2": 352.3,
+    "roi_lightning_fraction": 0.0,
+    "has_lightning": false
   },
-  "system_analysis_all": [],
+  "system_analysis_all": [
+    {
+      "target_id": 0,
+      "available": true,
+      "roi_lightning_fraction": 0.0,
+      "has_lightning": false
+    }
+  ],
   "local_analysis_all": []
 }
