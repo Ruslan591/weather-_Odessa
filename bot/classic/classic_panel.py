@@ -832,6 +832,9 @@ async def build_payload(runs, now):
     accounts["both"] = {"account": ac.sim_account(pd_["accepted"]), "signals": ac.sim_signals(pd_["allsig"], now), "trades": []}  # «Вместе» = открытые вами предложения; «Все сигналы» = если брать каждое
     accounts["cand"] = {"account": ac.sim_account(pd_["candsig"]), "signals": ac.sim_signals(pd_["candsig"], now), "trades": [],  # «Кандидат» = сигналы бота, прошедшие фильтр; открываются сами, без вашего решения
                         "filter": dict(cand_f, passed=len(pd_["candsig"]), total=len(pd_["allsig"]))}
+    since_ = int(cand_f.get("since") or 0)  # сигналы после старта честной проверки: без фильтра и с фильтром
+    accounts["cand"]["fw"] = {"all": ac.sim_signals([x for x in pd_["allsig"] if x["t_in"] >= since_], now),
+                              "cand": ac.sim_signals([x for x in pd_["candsig"] if x["t_in"] >= since_], now)}
     bot_modes = {}
     for r in runs:
         if r["stop_ms"] is None and track_of(r["cfg"]) == "bot":
