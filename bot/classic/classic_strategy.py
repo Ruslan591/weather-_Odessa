@@ -358,6 +358,8 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
     e20, e200, atr, e50 = pre["e20"], pre["e200"], pre["atr"], pre["e50"]
     o, h, l, c, t = pre["o"], pre["h"], pre["l"], pre["c"], pre["t"]
     fee2 = 2 * P["fee"]
+    mcl = P.get("manual_close") or {}  # ручное закрытие позиций: {"t_in|сторона": (время_мс, цена, причина)} — кнопки «Закрыть» и срабатывание ручного стопа/трейлинга
+    tfms_ = TF_MIN.get(P.get("tf"), 15) * 60000
     tm, td = P["trail_mode"], P["trail_dist"]
     trades, pos, pend, pexit, arm, parm, bo = [], None, None, False, None, None, None
     chan = pre.get("_chan") or {}  # линии канала на сигнале (для stop_mode=channel / tp_mode=channel)
@@ -503,6 +505,10 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                             bo = None
         elif bo is not None:
             bo = None
+        if pos and mcl:
+            mc_ = mcl.get("%d|%s" % (pos["t_in"], pos["side"]))
+            if mc_ and (i == T - 1 or int(t[i]) + tfms_ > mc_[0]):  # свеча, в которой нажали «Закрыть» (или позже): выход по цене момента нажатия
+                finish(i, mc_[1], mc_[2])
         if pos:
             L_ = pos["side"] == "L"
             e = pos["p_in"]
