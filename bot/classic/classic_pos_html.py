@@ -336,7 +336,15 @@ const sd=F.sides==='LS'?'лонг и шорт':F.sides==='L'?'только ло�
 const rule=[F.max_tp_atr?'цель не дальше '+F.max_tp_atr+' ATR':'',F.max_stop_atr?'стоп не дальше '+F.max_stop_atr+' ATR':'',F.min_rr?'выгода/риск не меньше '+F.min_rr:''].filter(x=>x).join(' · ')||'без ограничений';
 let h='<div class=card><h4>Фильтр счёта «Кандидат»</h4><div class=sm>Берёт сигналы бота, прошедшие фильтр, и открывает их сам, без вашего решения (вход по цене бота). Фильтр: '+rule+' · '+sd+'. Прошло '+F.passed+' из '+F.total+' сигналов. Условие взято из разбора 148 закрытых предложений: там сделки с близкой целью давали примерно ноль после комиссии — это гипотеза, её проверяют новые сделки.</div>';
 if(B&&K)h+='<div class=sm style="margin-top:6px">Без фильтра (все предложения): '+B.n+' сигн., плюс '+(B.win_pct==null?'—':B.win_pct+'%')+', итог '+smoney(B.total)+'<br>С фильтром: '+K.n+' сигн., плюс '+(K.win_pct==null?'—':K.win_pct+'%')+', итог '+smoney(K.total)+'</div>';
+const V=S.cf||{},g=(k)=>V[k]!==undefined?V[k]:F[k];
+h+='<div class=sm style="margin-top:8px"><b>Править фильтр</b> (0 — условие выключено). Расстояния считаются от входа бота, ATR — размах свечи входного ТФ, так пары сравнимы между собой.</div>'
++'<div class=sm style="margin-top:4px">Цель не дальше, ATR: <input type=number step=0.1 min=0 style="width:64px" value="'+g('max_tp_atr')+'" oninput="S.cf=S.cf||{};S.cf.max_tp_atr=this.value"></div>'
++'<div class=sm style="margin-top:4px">Стоп не дальше, ATR: <input type=number step=0.1 min=0 style="width:64px" value="'+g('max_stop_atr')+'" oninput="S.cf=S.cf||{};S.cf.max_stop_atr=this.value"></div>'
++'<div class=sm style="margin-top:4px">Выгода/риск не меньше: <input type=number step=0.1 min=0 style="width:64px" value="'+g('min_rr')+'" oninput="S.cf=S.cf||{};S.cf.min_rr=this.value"></div>'
++'<div class=sm style="margin-top:4px">Стороны: <select onchange="S.cf=S.cf||{};S.cf.sides=this.value"><option value=LS'+(g('sides')==='LS'?' selected':'')+'>лонг и шорт</option><option value=L'+(g('sides')==='L'?' selected':'')+'>только лонг</option><option value=S'+(g('sides')==='S'?' selected':'')+'>только шорт</option></select></div>'
++'<div style="margin-top:8px"><button onclick="saveCand(false)">Сохранить</button> <button onclick="saveCand(true)">По умолчанию</button></div>';
 return h+'</div>'}
+async function saveCand(rs){try{await api('/api/cand',rs?{reset:true}:{filter:S.cf||{}});S.cf=null;await loadRuns()}catch(e){alert(e.message)}}
 function propCard(){const P=S.prop||{pending:[],rows:[],stats:null},st=P.stats,np=botPairs().filter(x=>x.mode==='propose').length;
 let h='<div class=card><h4>Предложения бота · сейчас</h4><div class=sm>Бот ищет сигналы по парам в режиме «Только предлагает» и сам их не открывает. «Открыть» — позиция попадёт в счёт «Вместе» по текущей цене и дальше пойдёт по тем же правилам (стоп, безубыток, цель), что и у бота. «Отклонить» — предложение уйдёт, а мы запомним, чем бы оно кончилось.</div>';
 if(!np)h+='<div class=sm style="margin-top:8px;color:#d29922">Нет пар в режиме «Только предлагает». Откройте блок «Пары бота» выше и переведите нужные пары в этот режим — бот начнёт присылать предложения.</div>';
