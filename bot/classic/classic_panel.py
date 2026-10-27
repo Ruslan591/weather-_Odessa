@@ -23,6 +23,7 @@ MTF = ["1d", "4h", "1h", "15m", "5m"]
 HERE = os.path.dirname(os.path.abspath(__file__))
 PAIRS_FILE = os.path.join(HERE, "pairs.json")
 PROP_FILE = os.path.join(HERE, "proposals.json")  # решения «Открыть/Отклонить» по предложениям бота
+MAN_FILE = os.path.join(HERE, "manual.json")  # ручное управление открытыми позициями: закрытие, стоп, трейлинг (ключ run|t_in|сторона)
 DEFAULT_PAIRS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT", "ADAUSDT", "NEARUSDT", "AVAXUSDT", "ZECUSDT"]
 CACHE, LOCKS = {}, {}
 SES = None
@@ -570,17 +571,110 @@ def _hand_mtime():
         return 0
 
 
+def mkey(run, t_in, side):
+    return "%s|%s|%s" % (run, int(t_in), side)
+
+
+_MAN_C = {"mt": None, "d": {}}
+
+
+def man_states():
+    """Ручное управление позициями (manual.json); перечитывается только при изменении файла."""
+    try:
+        mt = os.path.getmtime(MAN_FILE)
+    except OSError:
+        return {}
+    if _MAN_C["mt"] != mt:
+        _MAN_C["d"], _MAN_C["mt"] = jload(MAN_FILE, {}), mt
+    return _MAN_C["d"]
+
+
+async def ticker_prices(syms):
+    """Свежие цены монет (спот Binance одним запросом)."""
+    syms = sorted(set(syms))
+    if not syms:
+        return {}
+    err = None
+    for base in BASES:
+        try:
+            data = await b_get(base, "/api/v3/ticker/price", {"symbols": json.dumps(syms, separators=(",", ":"))})
+            return {d["symbol"]: float(d["price"]) for d in data}
+        except Exception as e:
+            err = e
+    raise RuntimeError(str(err))
+
+
+async def manual_tick():
+    """Ручной стоп/трейлинг: раз в несколько секунд сверяем цену с уровнем; при пересечении позиция закрывается по текущей цене (close в manual.json),
+    дальше сделку закрывает расчёт прогона (ручное закрытие) или слой «Вместе». Трейлинг тянет уровень за лучшей ценой после установки (только в сторону цены)."""
+    act = {k: v for k, v in jload(MAN_FILE, {}).items() if v.get("mode") and not v.get("close") and not v.get("done")}
+    p = _SNAP["payload"]
+    if not act or not p:
+        return
+    try:
+        px = await ticker_prices([v["sym"] for v in act.values()])
+    except Exception:
+        return
+    opn = {}
+    for r in p["runs"]:
+        if r["stop_ms"] is None:
+            for x in r["trades"]:
+                if x["open"]:
+                    opn[mkey(r["id"], x["t_in"], x["side"])] = True
+    ms, now, ch = jload(MAN_FILE, {}), int(time.time() * 1000), False  # перечитываем: за время запроса цен кнопка могла что-то изменить
+    for k, v in ms.items():
+        if not v.get("mode") or v.get("close") or v.get("done"):
+            continue
+        if k not in opn:
+            if _SNAP["ts"] * 1000 > v.get("set_ms", 0):  # снимок свежее установки: позиция закрылась сама (стоп/цель/разворот)
+                v["done"], ch = True, True
+            continue
+        cur = px.get(v["sym"])
+        if cur is None:
+            continue
+        L = v["side"] == "L"
+        if v["mode"] == "trail":
+            v["mext"] = max(v["mext"], cur) if L else min(v["mext"], cur)
+            q = v["mext"] * (1 - v["pct"] / 100.0) if L else v["mext"] * (1 + v["pct"] / 100.0)
+            if (L and q > v["lvl"]) or ((not L) and q < v["lvl"]):
+                v["lvl"] = q
+            ch = True
+        if (L and cur <= v["lvl"]) or ((not L) and cur >= v["lvl"]):
+            v["close"], ch = {"ms": now, "px": cur, "reason": "ручной трейлинг" if v["mode"] == "trail" else "ручной стоп"}, True
+            _RT.pop(v["run"], None)
+    if ch:
+        jsave(MAN_FILE, ms)
+
+
+async def manual_loop():
+    while True:
+        try:
+            await manual_tick()
+        except Exception as e:
+            import traceback; print("manual_tick error: %r" % (e,)); traceback.print_exc()
+        await asyncio.sleep(5)
+
+
 async def run_trades(run, now):
     """Сделки прогона. Расчёт тяжёлый (50 прогонов), поэтому: считаем в отдельном потоке, а результат кэшируем по ключу
     (рисунки, начало прогона, время последней свечи) — без открытой позиции он не меняется до новой свечи; с открытой обновляем раз в 40 с."""
     hm = _hand_mtime()
     df = await get_df_long(run["sym"], run["cfg"]["tf"])
     key = (hm, run["start_ms"], int(df["t"].iloc[-1]) if len(df) else 0)
+    mcl = {}  # ручные закрытия позиций этого прогона (у прогонов «только предлагает» они действуют на позицию пользователя, а не на сделку бота)
+    if (run.get("mode") or "auto") != "propose":
+        for v in man_states().values():
+            if v.get("run") == run["id"] and v.get("close"):
+                c_ = v["close"]
+                mcl["%d|%s" % (v["t_in"], v["side"])] = (int(c_["ms"]), float(c_["px"]), c_["reason"])
+        if mcl:
+            key = key + (",".join("%s@%d" % (k_, mcl[k_][0]) for k_ in sorted(mcl)),)
     c = _RT.get(run["id"])
     if c and c[0] == key and (time.time() - c[1] < 40 or not any(x["open"] for x in c[2])):
         return [dict(x) for x in c[2]]
     P = dict(cs.PARAMS, **dict(run["cfg"], sym=run["sym"]))  # sym может уже лежать в cfg (прогоны, созданные скриптом) — раньше это давало TypeError и пустой список сделок
     P["sim_from_ms"] = run["start_ms"]
+    P["manual_close"] = mcl
     res = await asyncio.to_thread(cs.simulate, df, now, P)
     _RT[run["id"]] = (key, time.time(), [dict(x) for x in res])
     _RT_DIRTY[0] = True
@@ -696,7 +790,7 @@ async def build_payload(runs, now):
             by_track[tk] += [dict(x, sym=r["sym"], tf=r["cfg"]["tf"], run=r["id"]) for x in tr]
         out.append({"id": r["id"], "name": r["name"], "sym": r["sym"], "track": tk, "mode": md, "cfg": dict(cs.PARAMS, **r["cfg"]), "start_ms": r["start_ms"],
                     "stop_ms": r["stop_ms"], "stats": st, "trades": tr[-300:]})
-    pd_ = pr.build(prop_tr, jload(PROP_FILE, []), now, ac.MIN_NOTIONAL)
+    pd_ = pr.build(prop_tr, jload(PROP_FILE, []), now, ac.MIN_NOTIONAL, man_states())
     accounts = {}
     for k, L in (("me", by_track["me"]), ("bot", by_track["bot"])):
         accounts[k] = {"account": ac.sim_account(L), "signals": ac.sim_signals(L, now),
@@ -714,6 +808,7 @@ async def build_payload(runs, now):
             "limit": 6000, "ban": max(0, int(_BAN.get(BASES[0], 0) - time.time())), "calc_s": _SNAP.get("calc_s")}
     return {"runs": out, "now": now, "notional": cs.PARAMS["notional"], "hand": hand_meta, "accounts": accounts, "load": load,
             "proposals": {"pending": pd_["pending"], "rows": pd_["rows"], "stats": pd_["stats"]}, "pairs_all": pairs_all,
+            "manual": {k: {"mode": v["mode"], "pct": v.get("pct"), "lvl": v.get("lvl")} for k, v in man_states().items() if v.get("mode") and not v.get("close") and not v.get("done")},
             "bot_modes": {s: (next(iter(m)) if len(m) == 1 else "mixed") for s, m in bot_modes.items()}}
 
 
@@ -891,6 +986,52 @@ async def api_runs(req):
                         pl = load_pairs()
                         if sym not in pl:
                             save_pairs(pl + [sym])
+                elif act in ("pos_close", "pos_stop"):
+                    # ручное управление открытой позицией на любой вкладке (Вы / Бот / Вместе): закрыть по текущей цене, поставить стоп или трейлинг на расстоянии в %
+                    r = next((x for x in runs if x["id"] == j.get("run")), None)
+                    if r is None or r["stop_ms"] is not None:
+                        raise ValueError("прогон не найден или остановлен")
+                    t_in, side = int(j.get("kt")), str(j.get("side"))
+                    x = next((x for x in cs.pack(await run_trades(r, now)) if x["t_in"] == t_in and x["side"] == side), None)
+                    if x is None or not x["open"]:
+                        raise ValueError("позиция уже закрыта — обновите страницу")
+                    if (r.get("mode") or "auto") == "propose":
+                        dd = next((d for d in jload(PROP_FILE, []) if d["k"] == pr.dkey(r["id"], t_in, side)), None)
+                        if dd is None or dd["dec"] != "open":
+                            raise ValueError("эта позиция не открыта вами")
+                    try:
+                        cur = (await ticker_prices([r["sym"]]))[r["sym"]]
+                    except Exception:
+                        cur = float(x["p_out"])
+                    msd = jload(MAN_FILE, {})
+                    k = mkey(r["id"], t_in, side)
+                    st = msd.get(k) or {}
+                    st.update(run=r["id"], t_in=t_in, side=side, sym=r["sym"], set_ms=now, done=False)
+                    if act == "pos_close":
+                        st["close"] = {"ms": now, "px": cur, "reason": "ручное закрытие"}
+                    else:
+                        mode = j.get("mode")
+                        if mode == "clear":
+                            if not st.get("mode"):
+                                raise ValueError("ручного стопа нет")
+                            st.update(mode=None, pct=None, lvl=None, mext=None)
+                        else:
+                            if mode not in ("stop", "trail"):
+                                raise ValueError("неизвестный режим")
+                            try:
+                                pct = float(j.get("pct"))
+                            except (TypeError, ValueError):
+                                raise ValueError("укажите расстояние в %")
+                            if not 0.05 <= pct <= 50:
+                                raise ValueError("расстояние должно быть от 0.05 до 50 %")
+                            L = side == "L"
+                            lvl = cur * (1 - pct / 100.0) if L else cur * (1 + pct / 100.0)
+                            if (L and not lvl > float(x["stop"])) or ((not L) and not lvl < float(x["stop"])):
+                                raise ValueError("стоп стратегии уже ближе к цене (%s): ручной стоп на %s%% (%s) его не улучшит. Уменьшите расстояние" % (x["stop"], pct, round(lvl, 8)))
+                            st.update(mode=mode, pct=pct, lvl=lvl, mext=cur)
+                    msd[k] = st
+                    jsave(MAN_FILE, msd)
+                    _RT.pop(r["id"], None)
                 elif act == "decide":
                     dec = j.get("dec")
                     if dec not in ("open", "reject"):
@@ -1360,6 +1501,7 @@ async def serve():
     SES = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15))
     _rt_load()
     asyncio.create_task(refresher())
+    asyncio.create_task(manual_loop())
     asyncio.create_task(screen_loop())
     app1 = web.Application()
     app1.router.add_get("/", index)
