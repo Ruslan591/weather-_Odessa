@@ -496,13 +496,15 @@ async def api_config(req):
 
 
 async def api_cand(req):
-    """Фильтр счёта «Кандидат»: GET — текущие значения, POST {filter:{...}} или {reset:true}."""
+    """Фильтр счёта «Кандидат»: GET — текущие значения, POST {filter:{...}} или {reset:true}. Каждое изменение параметров добавляет версию в history."""
     try:
-        cur = dict(pr.CAND_DEFAULT, **(jload(CAND_FILE, {}) or {}))
+        raw = jload(CAND_FILE, {}) or {}
+        cur = {k: raw.get(k, v) for k, v in pr.CAND_DEFAULT.items()}
         if req.method == "POST":
             j = await req.json()
+            new = dict(cur)
             if j.get("reset"):
-                cur = dict(pr.CAND_DEFAULT)
+                new = dict(pr.CAND_DEFAULT)
             else:
                 f = j.get("filter") or {}
                 for k in ("min_stop_atr", "max_stop_atr", "max_tp_atr", "min_rr"):
@@ -510,13 +512,18 @@ async def api_cand(req):
                         v = float(f[k])
                         if not (0.0 <= v <= 50.0):
                             raise ValueError("%s: нужно число от 0 до 50 (0 — условие выключено)" % k)
-                        cur[k] = round(v, 2)
+                        new[k] = round(v, 2)
                 if "sides" in f:
                     if f["sides"] not in ("LS", "L", "S"):
                         raise ValueError("sides: LS, L или S")
-                    cur["sides"] = f["sides"]
-            cur["since"] = int(time.time() * 1000)  # смена фильтра перезапускает честную проверку
-            jsave(CAND_FILE, cur)
+                    new["sides"] = f["sides"]
+            if new != cur:  # параметры изменились — закрываем текущую версию и открываем новую; без изменений ничего не пишем
+                now_ms = int(time.time() * 1000)
+                hist = list(raw.get("history") or [{"since": int(raw.get("since") or now_ms), "until": None, "f": dict(cur)}])
+                hist[-1]["until"] = now_ms
+                hist.append({"since": now_ms, "until": None, "f": dict(new)})
+                jsave(CAND_FILE, dict(new, since=now_ms, history=hist))
+                cur = new
         return web.json_response({"filter": cur, "default": pr.CAND_DEFAULT})
     except (ValueError, TypeError) as e:
         return web.json_response({"error": str(e)}, status=400)
@@ -819,10 +826,12 @@ async def build_payload(runs, now):
         out.append({"id": r["id"], "name": r["name"], "sym": r["sym"], "track": tk, "mode": md, "cfg": dict(cs.PARAMS, **r["cfg"]), "start_ms": r["start_ms"],
                     "stop_ms": r["stop_ms"], "stats": st, "trades": tr[-300:]})
     cand_raw = jload(CAND_FILE, {}) or {}
-    if not cand_raw.get("since"):  # момент старта честной проверки: сделки с t_in после него фильтр не подбирался задним числом
-        cand_raw = dict(pr.CAND_DEFAULT, **cand_raw, since=int(time.time() * 1000))
+    if not cand_raw.get("history"):  # история версий фильтра: у каждой свой период, смена фильтра ничего не стирает
+        since0 = int(cand_raw.get("since") or time.time() * 1000)
+        cand_raw = dict(pr.CAND_DEFAULT, **cand_raw, since=since0)
+        cand_raw["history"] = [{"since": since0, "until": None, "f": {k: cand_raw[k] for k in pr.CAND_DEFAULT}}]
         jsave(CAND_FILE, cand_raw)
-    cand_f = dict(pr.CAND_DEFAULT, **cand_raw)
+    cand_f = dict(pr.CAND_DEFAULT, **{k: v for k, v in cand_raw.items() if k != "history"})
     pd_ = pr.build(prop_tr, jload(PROP_FILE, []), now, ac.MIN_NOTIONAL, man_states(), cand_f)
     accounts = {}
     for k, L in (("me", by_track["me"]), ("bot", by_track["bot"])):
@@ -832,9 +841,18 @@ async def build_payload(runs, now):
     accounts["both"] = {"account": ac.sim_account(pd_["accepted"]), "signals": ac.sim_signals(pd_["allsig"], now), "trades": []}  # «Вместе» = открытые вами предложения; «Все сигналы» = если брать каждое
     accounts["cand"] = {"account": ac.sim_account(pd_["candsig"]), "signals": ac.sim_signals(pd_["candsig"], now), "trades": [],  # «Кандидат» = сигналы бота, прошедшие фильтр; открываются сами, без вашего решения
                         "filter": dict(cand_f, passed=len(pd_["candsig"]), total=len(pd_["allsig"]))}
-    since_ = int(cand_f.get("since") or 0)  # сигналы после старта честной проверки: без фильтра и с фильтром
-    accounts["cand"]["fw"] = {"all": ac.sim_signals([x for x in pd_["allsig"] if x["t_in"] >= since_], now),
-                              "cand": ac.sim_signals([x for x in pd_["candsig"] if x["t_in"] >= since_], now)}
+    def vstat(trs):
+        st_ = ac.sim_signals(trs, now)
+        cl_ = [x for x in trs if not x["open"]]
+        return {"n": st_["n"], "wins": st_["wins"], "win_pct": st_["win_pct"], "open": st_["open"], "total": st_["total"],
+                "avg_net": round(sum(x["net"] for x in cl_) / len(cl_), 3) if cl_ else None}
+    versions = []
+    for hh in reversed(cand_raw["history"]):  # новые сверху
+        s0, u0 = int(hh["since"]), (int(hh["until"]) if hh.get("until") else None)
+        sub = [x for x in pd_["allsig"] if x["t_in"] >= s0 and (u0 is None or x["t_in"] < u0)]
+        sc = [x for x in sub if pr.cand_pass(x, hh["f"])[0]]
+        versions.append({"since": s0, "until": u0, "f": hh["f"], "all": vstat(sub), "cand": vstat(sc)})
+    accounts["cand"]["versions"] = versions
     bot_modes = {}
     for r in runs:
         if r["stop_ms"] is None and track_of(r["cfg"]) == "bot":
