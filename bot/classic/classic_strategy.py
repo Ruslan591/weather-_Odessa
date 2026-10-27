@@ -407,7 +407,8 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
     def mkpos(side, i, entry, st, clamped, ai):
         p_ = dict(side=side, i_in=i, t_in=int(t[i]), p_in=entry, stop0=float(st), stop=float(st), stage="init",
                   risk=abs(entry - st) / entry * 100, mfe=0.0, mae=0.0, be=False, clamped=clamped, ext=entry, ptrail=False,
-                  be_thr=(P.get("be_atr", 0) * atr[ai] / entry * 100) if P.get("be_atr", 0) else P["be_trigger"])
+                  be_thr=(P.get("be_atr", 0) * atr[ai] / entry * 100) if P.get("be_atr", 0) else P["be_trigger"],
+                  atr=float(atr[ai]))  # ATR входного ТФ на сигнальной свече — для расстояний стоп/цель в ATR
         if P.get("tp_r") and not ch_tp_on:
             p_["tp"] = entry + (1 if side == "L" else -1) * P["tp_r"] * abs(entry - st)
         return p_
@@ -679,5 +680,7 @@ def pack(trades):
             d["sid"] = x["sid"]  # id нарисованной пользователем структуры (hand.json)
         if x.get("tp"):
             d["tp"] = an._r(float(x["tp"]))
+        if x.get("atr") and x["atr"] == x["atr"] and x["atr"] > 0:
+            d["atr"] = round(float(x["atr"]) / float(x["p_in"]) * 100, 4)  # ATR в % от цены входа
         out.append(d)
     return out
