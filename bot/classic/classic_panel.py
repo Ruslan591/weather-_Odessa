@@ -505,7 +505,7 @@ async def api_cand(req):
                 cur = dict(pr.CAND_DEFAULT)
             else:
                 f = j.get("filter") or {}
-                for k in ("max_tp_atr", "max_stop_atr", "min_rr"):
+                for k in ("min_stop_atr", "max_stop_atr", "max_tp_atr", "min_rr"):
                     if k in f:
                         v = float(f[k])
                         if not (0.0 <= v <= 50.0):
