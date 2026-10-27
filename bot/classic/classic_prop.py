@@ -59,7 +59,7 @@ def dist(x):
     p = float(x["p_in"])
     st0 = x.get("stop0", x.get("stop"))
     r = {"stop_pct": round(abs(p - float(st0)) / p * 100.0, 3) if st0 else None,
-         "tp_pct": round(abs(float(x["tp"]) - p) / p * 100.0, 3) if x.get("tp") else None, "atr": x.get("atr")}
+         "tp_pct": round(abs(float(x.get("tp0") or x["tp"]) - p) / p * 100.0, 3) if (x.get("tp0") or x.get("tp")) else None, "atr": x.get("atr")}  # цель — на момент входа
     a = x.get("atr")
     r["stop_atr"] = round(r["stop_pct"] / a, 2) if a and r["stop_pct"] else None
     r["tp_atr"] = round(r["tp_pct"] / a, 2) if a and r["tp_pct"] else None
