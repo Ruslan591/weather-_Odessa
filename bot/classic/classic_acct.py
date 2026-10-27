@@ -56,7 +56,8 @@ def sim_account(trades, start=START, lev=LEV, stake=MIN_NOTIONAL, use=MAX_USE):
         liq = (x.get("mae") or 0.0) <= -LIQ_PCT
         pnl = _pnl(x, stake, margin)
         rec = {"sym": x.get("sym"), "tf": x.get("tf"), "side": x["side"], "sig": x.get("sig"), "t_in": x["t_in"], "t_out": x["t_out"], "p_in": x["p_in"],
-               "net": x["net"], "open": bool(x["open"]), "notional": _r(stake), "margin": _r(margin), "pnl": _r(pnl), "liq": liq, "be": bool(x.get("be")), "bal_after": None}
+               "net": x["net"], "open": bool(x["open"]), "notional": _r(stake), "margin": _r(margin), "pnl": _r(pnl), "liq": liq, "be": bool(x.get("be")), "bal_after": None,
+               "run": x.get("run"), "kt": x.get("t_sig", x["t_in"])}
         openp.append({"x": x, "pnl": pnl, "liq": liq, "rec": rec})
         taken.append(rec)
         st["maxc"] = max(st["maxc"], len(openp))
