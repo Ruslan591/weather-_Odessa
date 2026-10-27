@@ -1,38 +1,42 @@
 {
-  "timestamp": "2026-10-27T07:12:09Z",
-  "current_state": "no_precip",
-  "target_type": "precip_mass",
-  "distance_km_now": 2.1,
-  "bearing_deg": 193.0,
-  "compass": "Ю",
+  "timestamp": "2026-10-27T07:28:22Z",
+  "current_state": "precip",
+  "target_type": "clearing",
+  "distance_km_now": 8.0,
+  "bearing_deg": 343.0,
+  "compass": "С",
   "speed_kmh": 37.0,
   "direction_compass": "С",
-  "cpa_km": 0.5,
-  "eta_min": 3.0,
-  "blob_area_km2": 65796.0,
+  "cpa_km": 8.0,
+  "eta_min": 0.0,
+  "blob_area_km2": 134833.0,
   "verdict": "уже у города",
-  "approaching": true,
+  "approaching": false,
   "frame_pairs_used": 3,
-  "probability_percent": 95,
-  "probability_note": "эвристика (близость точки сближения + размер поля + уверенность в скорости), не физическая модель осадков",
   "method_note": "Скорость усреднена по 4 кадрам msg_fes:h60b (шаг 15 мин, phase correlation). Presence = непрозрачный пиксель. Край ищется только среди связных областей >= 40px (~53км²). Линейная экстраполяция, годится на ~1 час.",
   "target_confirmation": {
     "confirmed": false,
-    "target_id": 0,
-    "target_area_km2": 98.7,
+    "target_id": 1,
+    "target_area_km2": 112.1,
     "roi_precip_fraction": 0.0,
     "verdict": "Осадков из этой конкретной массы не наблюдается (сухое облако либо осадки не достигают земли)"
   },
   "system_analysis": {
     "available": true,
-    "target_id": 1,
-    "area_km2": 4000.2,
+    "target_id": 0,
+    "area_km2": 1713.2,
     "roi_precip_fraction": 0.0,
     "has_precip": false
   },
   "system_analysis_all": [
     {
-      "target_id": 1,
+      "target_id": 0,
+      "available": true,
+      "roi_precip_fraction": 0.0,
+      "has_precip": false
+    },
+    {
+      "target_id": 2,
       "available": true,
       "roi_precip_fraction": 0.0,
       "has_precip": false
@@ -40,7 +44,7 @@
   ],
   "local_analysis_all": [
     {
-      "target_id": 0,
+      "target_id": 1,
       "available": true,
       "roi_precip_fraction": 0.0,
       "has_precip": false
