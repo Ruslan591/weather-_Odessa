@@ -495,6 +495,32 @@ async def api_config(req):
         return web.json_response({"error": str(e)}, status=400)
 
 
+async def api_cand(req):
+    """Фильтр счёта «Кандидат»: GET — текущие значения, POST {filter:{...}} или {reset:true}."""
+    try:
+        cur = dict(pr.CAND_DEFAULT, **(jload(CAND_FILE, {}) or {}))
+        if req.method == "POST":
+            j = await req.json()
+            if j.get("reset"):
+                cur = dict(pr.CAND_DEFAULT)
+            else:
+                f = j.get("filter") or {}
+                for k in ("max_tp_atr", "max_stop_atr", "min_rr"):
+                    if k in f:
+                        v = float(f[k])
+                        if not (0.0 <= v <= 50.0):
+                            raise ValueError("%s: нужно число от 0 до 50 (0 — условие выключено)" % k)
+                        cur[k] = round(v, 2)
+                if "sides" in f:
+                    if f["sides"] not in ("LS", "L", "S"):
+                        raise ValueError("sides: LS, L или S")
+                    cur["sides"] = f["sides"]
+            jsave(CAND_FILE, cur)
+        return web.json_response({"filter": cur, "default": pr.CAND_DEFAULT})
+    except (ValueError, TypeError) as e:
+        return web.json_response({"error": str(e)}, status=400)
+
+
 def apply_stakes(trs, cfg):
     """Размер ставки и профит в USDT по сделкам (в порядке входа). Ставка: фиксированная (stake_base) или фиксированная + накопленный
     положительный профит; минимум stake_min. Мартингейл после убыточной сделки (net <= 0): double — вдвое больше предыдущей ставки;
@@ -1520,6 +1546,7 @@ async def serve():
     app2.router.add_route("*", "/api/pairs", api_pairs)
     app2.router.add_route("*", "/api/config", api_config)
     app2.router.add_route("*", "/api/runs", api_runs)
+    app2.router.add_route("*", "/api/cand", api_cand)
     app2.router.add_get("/api/prop_chart", api_prop_chart)
     app2.router.add_route("*", "/api/screen", api_screen)
     for app, port in ((app1, PORT), (app2, PORT2)):
