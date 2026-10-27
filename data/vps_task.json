@@ -1,1 +1,1 @@
-{"task_id": "t1027c", "cmd": "curl -s -H 'Accept: application/vnd.github.raw' -H \"Authorization: token $(cat /etc/vps-github-bridge/token)\" https://api.github.com/repos/ruslan591/weather-_Odessa/contents/scripts/classic_win_diag.py -o /tmp/cwd.py && cd /tmp && /opt/trading-bot/venv/bin/python cwd.py 2>&1 | tail -60", "timeout": 200}
+{"task_id": "t1027d", "cmd": "ls -la /tmp/cwd.py /tmp/diag.json; head -c 300 /tmp/cwd.py", "timeout": 60}
