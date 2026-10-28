@@ -756,7 +756,7 @@ def exp_summary(out):
         else:
             x["lad"] = lad; x["pairs"] = len(diffs); x["diff"] = round(sum(diffs), 2)
             x["better"] = sum(1 for d in diffs if d > 0.001); x["worse"] = sum(1 for d in diffs if d < -0.001)
-            x["progress"] = len(diffs)
+            x["progress"] = x["better"] + x["worse"]  # только сделки, где лесенка реально изменила результат
         res[tag] = x
     return res
 
