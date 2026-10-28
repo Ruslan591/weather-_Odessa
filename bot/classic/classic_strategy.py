@@ -30,7 +30,7 @@ import classic_fastchan as fchan
 import classic_hand as hand
 
 PARAMS = dict(tf="15m", be_trigger=1.5, fee=0.05, window_h=240, notional=100.0, warmup=200,
-              stop_mode="prev", min_stop_pct=1.5, min_stop_atr=0.0, trail_mode="none", trail_dist=0.0, be_atr=0.0, be_lock=0.3,
+              stop_mode="prev", min_stop_pct=1.5, min_stop_atr=0.0, trail_mode="none", trail_dist=0.0, be_atr=0.0, be_lock=0.3, be_tp_frac=0.0,
               entry_mode="cross200", rev_exit=True, pat_mode="off", arm_k=12, pat_filter="none", entry_trigger="open", bo_wait=3, tp_r=0.0, max_bars=0, tp_mode="r", be_intrabar=False, tl_min_w=1.5, tl_max_w=14.0, tl_src="old", fc_minw=1.5, fc_maxw=8.0, ch_stop_pct=0.3, ch_stop_atr=0.0, ch_min_stop_pct=0.0, ch_tp_gap_pct=0.2, ch_tp_gap_atr=0.0, ch_min_rr=0.0, ch_follow=False, period_from="", period_to="", sym="", hand_forward=True, hand_tf_mode="junior",
               stake_mode="fixed", stake_base=100.0, stake_min=6.0, martingale="off", mart_pct=50.0, mart_max=0,
               stages=[{"t": "pattern", "p": 0, "w": 0, "f": "none"}, {"t": "close_ema20", "p": 0, "w": 12, "f": "none"}])
@@ -508,6 +508,9 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
             bo = None
         if pos is not None and "tp0" not in pos:
             pos["tp0"] = pos.get("tp")  # цель в момент входа (дальше она может ползти за каналом) — для честного анализа расстояния до цели
+            if pos.get("tp0") and P.get("be_tp_frac"):  # точка БУ не дальше be_tp_frac от пути до цели (иначе при цели ближе be_trigger БУ не взводится никогда)
+                d_ = abs(pos["tp0"] - pos["p_in"]) / pos["p_in"] * 100
+                pos["be_thr"] = min(pos["be_thr"], float(P["be_tp_frac"]) * d_)
         if pos and mcl:
             mc_ = mcl.get("%d|%s" % (pos["t_in"], pos["side"]))
             if mc_ and (i == T - 1 or int(t[i]) + tfms_ > mc_[0]):  # свеча, в которой нажали «Закрыть» (или позже): выход по цене момента нажатия
