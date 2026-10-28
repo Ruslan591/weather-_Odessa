@@ -716,6 +716,46 @@ async def run_trades(run, now):
     return res
 
 
+def exp_summary(out):
+    """Сводка экспериментальных прогонов (cfg.exp = 'A'/'B') против обычных прогонов бота той же пары и ТФ; только сделки после exp_since (проверка вперёд)."""
+    def key(t): return (t["t_in"], t["side"])
+    def st(L):
+        C = [t for t in L if not t["open"]]
+        n = len(C)
+        return {"n": n, "w": sum(1 for t in C if t["net"] > 0), "open": len(L) - n,
+                "avg": round(sum(t["net"] for t in C) / n, 3) if n else 0.0, "sum": round(sum(t["net"] for t in C), 2)}
+    bot = {(r["sym"], r["cfg"]["tf"]): r for r in out if r["track"] == "bot" and r.get("mode") == "propose"}
+    res = {}
+    for tag in ("A", "B"):
+        ea, ba, extra, per, diffs, lad, since, nr = [], [], [], {}, [], 0, None, 0
+        for r in out:
+            c = r["cfg"]
+            if c.get("exp") != tag or r["stop_ms"] is not None: continue
+            nr += 1
+            s0 = int(c.get("exp_since") or r["start_ms"]); since = s0 if since is None else min(since, s0)
+            b = bot.get((r["sym"], c["tf"]))
+            et = [t for t in (r.get("trades") or []) if t["t_in"] >= s0]
+            bt = [t for t in ((b or {}).get("trades") or []) if t["t_in"] >= s0]
+            ea += et; ba += bt
+            pe = per.setdefault(c["tf"], ([], [])); pe[0].extend(et); pe[1].extend(bt)
+            bm = {key(t): t for t in bt}
+            for t in et:
+                o = bm.get(key(t))
+                if tag == "B" and t["reason"] == "лесенка": lad += 1
+                if o is None: extra.append(t)
+                elif tag == "B" and not t["open"] and not o["open"]: diffs.append(t["net"] - o["net"])
+        x = {"runs": nr, "since": since, "exp": st(ea), "base": st(ba), "per_tf": {tf: {"exp": st(a), "base": st(b)} for tf, (a, b) in sorted(per.items())}}
+        if tag == "A":
+            x["extra"] = st(extra)
+            x["progress"] = x["extra"]["n"]
+        else:
+            x["lad"] = lad; x["pairs"] = len(diffs); x["diff"] = round(sum(diffs), 2)
+            x["better"] = sum(1 for d in diffs if d > 0.001); x["worse"] = sum(1 for d in diffs if d < -0.001)
+            x["progress"] = len(diffs)
+        res[tag] = x
+    return res
+
+
 def track_of(cfg):
     """Сторона сравнения по первому уровню входа: рисунки пользователя — «me», авто-детектор — «bot», остальное — «other»."""
     if cfg.get("exp"):
@@ -857,6 +897,7 @@ async def build_payload(runs, now):
         sc = [x for x in sub if pr.cand_pass(x, hh["f"])[0]]
         versions.append({"since": s0, "until": u0, "f": hh["f"], "all": vstat(sub), "cand": vstat(sc)})
     accounts["cand"]["versions"] = versions
+    accounts["exp"] = exp_summary(out)  # вкладка «Эксп.»: параллельные проверки идей (не счёт)
     bot_modes = {}
     for r in runs:
         if r["stop_ms"] is None and track_of(r["cfg"]) == "bot":
