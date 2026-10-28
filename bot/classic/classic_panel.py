@@ -375,7 +375,7 @@ SPEC = {
     "entry_trigger": ("sel", ["open", "breakout"]), "tp_r": ("num", 0, 20), "max_bars": ("num", 0, 2000),
     "rev_exit": ("bool",),
     "stop_mode": ("sel", ["prev", "pct", "pivot", "sig3", "channel"]),
-    "tp_mode": ("sel", ["r", "channel"]), "be_intrabar": ("bool",), "tl_src": ("sel", ["old", "fast"]), "fc_minw": ("num", 0.3, 10), "fc_maxw": ("num", 1, 40), "tl_min_w": ("num", 0.5, 10), "tl_max_w": ("num", 2, 40), "ch_stop_pct": ("num", 0, 10), "ch_stop_atr": ("num", 0, 10), "ch_min_stop_pct": ("num", 0, 15),
+    "tp_mode": ("sel", ["r", "channel"]), "be_intrabar": ("bool",), "be_tp_frac": ("num", 0, 1), "tl_src": ("sel", ["old", "fast"]), "fc_minw": ("num", 0.3, 10), "fc_maxw": ("num", 1, 40), "tl_min_w": ("num", 0.5, 10), "tl_max_w": ("num", 2, 40), "ch_stop_pct": ("num", 0, 10), "ch_stop_atr": ("num", 0, 10), "ch_min_stop_pct": ("num", 0, 15),
     "ch_tp_gap_pct": ("num", 0, 10), "ch_tp_gap_atr": ("num", 0, 10), "ch_min_rr": ("num", 0, 20), "ch_follow": ("bool",),
     "min_stop_pct": ("num", 0.05, 15), "min_stop_atr": ("num", 0, 10),
     "be_trigger": ("num", 0.1, 30), "be_lock": ("num", 0, 10),
@@ -784,6 +784,8 @@ async def api_prop_chart(req):
             thr = float(P["be_atr"]) * (sum(tr_) / len(tr_)) / pin * 100.0
         except Exception:
             pass
+    if x.get("be_thr") and not P.get("be_atr"):
+        thr = float(x["be_thr"])  # точка БУ из самой сделки (учтена be_tp_frac)
     lines = {"entry": an._r(pin), "stop0": an._r(float(x["stop0"])), "stop": an._r(float(x["stop"])),
              "tp": an._r(float(x["tp"])) if x.get("tp") else None,
              "be_trigger": an._r(pin * (1 + s * thr / 100.0)) if thr else None,
