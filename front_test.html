@@ -45,7 +45,7 @@
             <span style="color:#ff4545">тёплый</span>,
             <span style="color:#3d8bff">стацио</span><span style="color:#ff4545">нарный</span>) поверх EUMETSAT GeoColour.
             P_front — прежняя карта вероятности, оставлена для сравнения. Три масштаба:
-            центральный тайл, дальний контроль (~1000км) и very far. Кадры можно проиграть анимацией (▶), слои включаются отдельно; «Контуры» — береговая линия, границы и города поверх облаков. Генерируется cron-процессом
+            центральный тайл, дальний контроль (~1000км) и very far. Кадры можно проиграть анимацией (▶), слои включаются отдельно; «ИК» — инфракрасный канал 10.5 мкм (серая шкала, холодные вершины светлее) вместо GeoColour, когда тот плохо читается при слабой освещённости; «Контуры» — береговая линия, границы и города поверх облаков. Генерируется cron-процессом
             на VPS раз в час (в :06). Подробности:<br>
             <code style="word-break: break-all;">docs/ai/ICON_EU_FRONT_DETECTOR_V1_OFFLINE_EXPERIMENT.md</code>
         </p>
@@ -56,7 +56,9 @@
 
         <div class="ifvfControls">
             <label><input type="checkbox" id="ifvfChkGeocolour" checked
-                   onchange="ifvfToggleLayer('ifvfGeocolour','ifvfChkGeocolour')"> GeoColour</label>
+                   onchange="ifvfToggleSat('geocolour')"> GeoColour</label>
+            <label><input type="checkbox" id="ifvfChkIr"
+                   onchange="ifvfToggleSat('ir')"> ИК</label>
             <label><input type="checkbox" id="ifvfChkBase" checked
                    onchange="ifvfToggleBase()"> Контуры</label>
             <label><input type="checkbox" id="ifvfChkCities" checked
@@ -71,6 +73,7 @@
 
         <div class="ifvfWrap" id="ifvfWrap">
             <img id="ifvfGeocolour" alt="GeoColour">
+            <img id="ifvfIr" alt="ИК" style="display:none">
             <canvas id="ifvfBasemap"></canvas>
             <img id="ifvfIsobars" alt="Изобары">
             <img id="ifvfPfront" alt="P_front" style="display:none">
