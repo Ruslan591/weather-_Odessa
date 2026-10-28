@@ -1,15 +1,15 @@
 {
-  "timestamp": "2026-10-28T20:17:29Z",
+  "timestamp": "2026-10-28T20:23:22Z",
   "status": "ok",
-  "cloud_forecast_timestamp": "2026-10-28T19:45:00.000Z",
+  "cloud_forecast_timestamp": "2026-10-28T20:00:00.000Z",
   "target_id": 1,
-  "target_area_km2": 77.4,
-  "target_distance_km": 315.6,
-  "target_bearing_deg": 324.0,
+  "target_area_km2": 93.4,
+  "target_distance_km": 234.1,
+  "target_bearing_deg": 331.0,
   "target_compass": "СЗ",
   "system": {
     "target_id": 0,
-    "area_km2": 204657.2,
+    "area_km2": 204409.0,
     "distance_km": 0.8,
     "bearing_deg": 326.0,
     "compass": "СЗ",
@@ -23,30 +23,12 @@
     "has_precip": true,
     "has_lightning": false
   },
-  "local_candidates": [
-    {
-      "target_id": 1,
-      "area_km2": 77.4,
-      "distance_km": 315.6,
-      "bearing_deg": 324.0,
-      "compass": "СЗ",
-      "elongation_aspect_ratio": 1.99,
-      "elongation_axis_deg": 10.0,
-      "elongation_axis_compass": "С-Ю",
-      "frontlike": false,
-      "phase_label": "безоблачно",
-      "type_label": "безоблачно",
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": false,
-      "geocolour_confirmed": true
-    }
-  ],
-  "local_suppressed_count": 0,
+  "local_candidates": [],
+  "local_suppressed_count": 2,
   "system_candidates": [
     {
       "target_id": 0,
-      "area_km2": 204657.2,
+      "area_km2": 204409.0,
       "distance_km": 0.8,
       "bearing_deg": 326.0,
       "compass": "СЗ",
@@ -73,10 +55,10 @@
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-10-28T19:50:00.000Z"
+        "timestamp": "2026-10-28T20:00:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": true,
+        "confirmed": false,
         "timestamp": "2026-10-28T19:50:00.000Z"
       },
       "cloud_phase_type": {
@@ -84,9 +66,9 @@
         "timestamp": "2026-10-28T16:47:14Z"
       }
     },
-    "votes_confirmed": 1,
-    "votes_not_confirmed": 2,
-    "consensus": "disputed"
+    "votes_confirmed": 0,
+    "votes_not_confirmed": 3,
+    "consensus": "not_confirmed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -95,8 +77,8 @@
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-10-28T20:17:06Z"
+      "timestamp": "2026-10-28T20:22:36Z"
     }
   },
-  "verdict": "Цель в 316км СЗ, безоблачно — каналы расходятся: geocolour_motion подтверждают, ir_motion/cloud_phase_type нет. Отдельно: система синоптического масштаба (204657км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора, осадки)."
+  "verdict": "CLM отметил цель в 234км СЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (204409км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора, осадки)."
 }
