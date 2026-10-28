@@ -375,7 +375,7 @@ SPEC = {
     "entry_trigger": ("sel", ["open", "breakout"]), "tp_r": ("num", 0, 20), "max_bars": ("num", 0, 2000),
     "rev_exit": ("bool",),
     "stop_mode": ("sel", ["prev", "pct", "pivot", "sig3", "channel"]),
-    "tp_mode": ("sel", ["r", "channel"]), "be_intrabar": ("bool",), "be_tp_frac": ("num", 0, 1), "tl_src": ("sel", ["old", "fast"]), "fc_minw": ("num", 0.3, 10), "fc_maxw": ("num", 1, 40), "tl_min_w": ("num", 0.5, 10), "tl_max_w": ("num", 2, 40), "ch_stop_pct": ("num", 0, 10), "ch_stop_atr": ("num", 0, 10), "ch_min_stop_pct": ("num", 0, 15),
+    "tp_mode": ("sel", ["r", "channel"]), "be_intrabar": ("bool",), "be_tp_frac": ("num", 0, 1), "be_l_at": ("num", 0, 1), "be_l_lock": ("num", 0, 1), "tl_src": ("sel", ["old", "fast"]), "fc_minw": ("num", 0.3, 10), "fc_maxw": ("num", 1, 40), "tl_min_w": ("num", 0.5, 10), "tl_max_w": ("num", 2, 40), "ch_stop_pct": ("num", 0, 10), "ch_stop_atr": ("num", 0, 10), "ch_min_stop_pct": ("num", 0, 15),
     "ch_tp_gap_pct": ("num", 0, 10), "ch_tp_gap_atr": ("num", 0, 10), "ch_min_rr": ("num", 0, 20), "ch_follow": ("bool",),
     "min_stop_pct": ("num", 0.05, 15), "min_stop_atr": ("num", 0, 10),
     "be_trigger": ("num", 0.1, 30), "be_lock": ("num", 0, 10),
@@ -718,6 +718,8 @@ async def run_trades(run, now):
 
 def track_of(cfg):
     """Сторона сравнения по первому уровню входа: рисунки пользователя — «me», авто-детектор — «bot», остальное — «other»."""
+    if cfg.get("exp"):
+        return "exp"  # экспериментальные прогоны (параллельные проверки идей): не входят ни в один счёт и не рисуются во вкладках, анализ — скриптом
     st = [x for x in (cfg.get("stages") or []) if x and x.get("t")]
     t = st[0]["t"] if st else ""
     return "me" if t.startswith("hand_") else "bot" if t.startswith("tl_") else "other"
