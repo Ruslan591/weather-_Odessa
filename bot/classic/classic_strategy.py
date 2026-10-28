@@ -30,7 +30,7 @@ import classic_fastchan as fchan
 import classic_hand as hand
 
 PARAMS = dict(tf="15m", be_trigger=1.5, fee=0.05, window_h=240, notional=100.0, warmup=200,
-              stop_mode="prev", min_stop_pct=1.5, min_stop_atr=0.0, trail_mode="none", trail_dist=0.0, be_atr=0.0, be_lock=0.3, be_tp_frac=0.0,
+              stop_mode="prev", min_stop_pct=1.5, min_stop_atr=0.0, trail_mode="none", trail_dist=0.0, be_atr=0.0, be_lock=0.3, be_tp_frac=0.0, be_l_at=0.0, be_l_lock=0.35,
               entry_mode="cross200", rev_exit=True, pat_mode="off", arm_k=12, pat_filter="none", entry_trigger="open", bo_wait=3, tp_r=0.0, max_bars=0, tp_mode="r", be_intrabar=False, tl_min_w=1.5, tl_max_w=14.0, tl_src="old", fc_minw=1.5, fc_maxw=8.0, ch_stop_pct=0.3, ch_stop_atr=0.0, ch_min_stop_pct=0.0, ch_tp_gap_pct=0.2, ch_tp_gap_atr=0.0, ch_min_rr=0.0, ch_follow=False, period_from="", period_to="", sym="", hand_forward=True, hand_tf_mode="junior",
               stake_mode="fixed", stake_base=100.0, stake_min=6.0, martingale="off", mart_pct=50.0, mart_max=0,
               stages=[{"t": "pattern", "p": 0, "w": 0, "f": "none"}, {"t": "close_ema20", "p": 0, "w": 12, "f": "none"}])
@@ -541,7 +541,7 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                     px = o[i] if o[i] <= pos["stop"] else pos["stop"]
                 else:
                     px = o[i] if o[i] >= pos["stop"] else pos["stop"]
-                finish(i, px, {"init": "стоп", "be": "безубыток", "trail": "трейлинг", "ptrail": "трейлинг по паттерну"}[pos["stage"]])
+                finish(i, px, {"init": "стоп", "be": "безубыток", "trail": "трейлинг", "ptrail": "трейлинг по паттерну", "lad": "лесенка"}[pos["stage"]])
             elif pos.get("tp") and not (pos.get("bo") and pos["i_in"] == i) and ((L_ and h[i] >= pos["tp"]) or ((not L_) and l[i] <= pos["tp"])):
                 finish(i, pos["tp"], "цель")
             else:
@@ -552,6 +552,15 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                     if P.get("be_intrabar") and ((L_ and c[i] <= pos["stop"]) or ((not L_) and c[i] >= pos["stop"])):
                         # свеча взвела БУ и закрылась по ту сторону БУ-стопа: цена пересекла стоп уже после экстремума, значит выход по цене стопа в этой же свече
                         finish(i, pos["stop"], "безубыток")
+                if pos is not None and P.get("be_l_at") and pos.get("tp0") and not pos.get("lad"):
+                    # «лесенка» БУ: когда цена прошла be_l_at пути до цели, стоп переносится на be_l_lock пути (доли расстояния вход->цель), только в сторону прибыли
+                    d_l = abs(pos["tp0"] - e) / e * 100
+                    if d_l > 0 and fav >= float(P["be_l_at"]) * d_l:
+                        q_l = e * (1 + (1 if L_ else -1) * float(P.get("be_l_lock", 0.35)) * d_l / 100)
+                        if (q_l > pos["stop"]) if L_ else (q_l < pos["stop"]):
+                            pos["lad"], pos["stop"], pos["stage"] = True, float(q_l), "lad"
+                            if P.get("be_intrabar") and ((L_ and c[i] <= q_l) or ((not L_) and c[i] >= q_l)):
+                                finish(i, float(q_l), "лесенка")
                 if pos is not None:
                     if pos["be"] and i < M and tm != "none":
                         if tm == "pivot":
