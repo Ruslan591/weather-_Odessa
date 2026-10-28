@@ -231,7 +231,10 @@ def tl_signals(o, h, l, c, atr, piv, M, kind, p=0.0, warm=60, info=None, wlim=No
             out[i] = side
             last[side] = i
             if info is not None:  # линии канала на момент сигнала: функции номер свечи -> цена (для стопа/цели по каналу)
-                info[i] = ((lambda j, L=S: at(L, j)), (lambda j, L=R: at(L, j)))
+                fS_, fR_ = (lambda j, L=S: at(L, j)), (lambda j, L=R: at(L, j))
+                fS_.typ = fR_.typ = typ  # тип формации и индекс самой ранней опорной точки — для цели по высоте основания треугольника
+                fS_.i0 = fR_.i0 = min(int(S[0]), int(R[0]))
+                info[i] = (fS_, fR_)
     return out
 
 
