@@ -511,6 +511,20 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
             if pos.get("tp0") and P.get("be_tp_frac"):  # точка БУ не дальше be_tp_frac от пути до цели (иначе при цели ближе be_trigger БУ не взводится никогда)
                 d_ = abs(pos["tp0"] - pos["p_in"]) / pos["p_in"] * 100
                 pos["be_thr"] = min(pos["be_thr"], float(P["be_tp_frac"]) * d_)
+            if pos_vis is not None:  # только для журнала (на сделки не влияет): удаление входа от линии, ширина канала в ATR, ближайший пивот по ходу сделки
+                try:
+                    lo_x, up_x = pos_vis
+                    wx = float(up_x(i) - lo_x(i)); e_ = pos["p_in"]; S_ = pos["side"] == "S"
+                    bx = float(up_x(i) if (S_ == (pos.get("sig") == "b")) else lo_x(i))  # пробой шорта — нижняя линия, отбой шорта — верхняя (лонг наоборот)
+                    if wx > 0:
+                        pos["x_ext"] = abs(e_ - bx) / wx
+                        if pos.get("atr"): pos["x_wat"] = wx / pos["atr"]
+                    pv_ = _last_piv(piv, "L" if S_ else "H", i, lambda p: (p < e_) if S_ else (p > e_))
+                    if pv_ is not None:
+                        pos["x_pv"] = abs(e_ - pv_) / e_ * 100
+                        if pos.get("atr"): pos["x_pvat"] = abs(e_ - pv_) / pos["atr"]
+                except Exception:
+                    pass
         if pos and mcl:
             mc_ = mcl.get("%d|%s" % (pos["t_in"], pos["side"]))
             if mc_ and (i == T - 1 or int(t[i]) + tfms_ > mc_[0]):  # свеча, в которой нажали «Закрыть» (или позже): выход по цене момента нажатия
@@ -687,6 +701,9 @@ def pack(trades):
             d["tp"] = an._r(float(x["tp"]))
         if x.get("tp0"):
             d["tp0"] = an._r(float(x["tp0"]))
+        xx = {k: round(float(x[k]), 3) for k in ("x_ext", "x_wat", "x_pv", "x_pvat") if x.get(k) is not None and x[k] == x[k]}
+        if xx:
+            d["x"] = xx  # журнал для анализа: x_ext (вход от линии, в ширинах канала), x_wat (ширина канала, ATR), x_pv (до ближайшего пивота, %), x_pvat (то же в ATR)
         if x.get("atr") and x["atr"] == x["atr"] and x["atr"] > 0:
             d["atr"] = round(float(x["atr"]) / float(x["p_in"]) * 100, 4)  # ATR в % от цены входа
         out.append(d)
