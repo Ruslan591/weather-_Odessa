@@ -30,7 +30,7 @@ import classic_fastchan as fchan
 import classic_hand as hand
 
 PARAMS = dict(tf="15m", be_trigger=1.5, fee=0.05, window_h=240, notional=100.0, warmup=200,
-              stop_mode="prev", min_stop_pct=1.5, min_stop_atr=0.0, trail_mode="none", trail_dist=0.0, be_atr=0.0, be_lock=0.3, be_tp_frac=0.0, be_l_at=0.0, be_l_lock=0.35,
+              stop_mode="prev", min_stop_pct=1.5, min_stop_atr=0.0, trail_mode="none", trail_dist=0.0, be_atr=0.0, be_lock=0.3, be_tp_frac=0.0, be_l_at=0.0, k_tp_src="width", be_l_lock=0.35,
               entry_mode="cross200", rev_exit=True, pat_mode="off", arm_k=12, pat_filter="none", entry_trigger="open", bo_wait=3, tp_r=0.0, max_bars=0, tp_mode="r", be_intrabar=False, tl_min_w=1.5, tl_max_w=14.0, tl_src="old", fc_minw=1.5, fc_maxw=8.0, ch_stop_pct=0.3, ch_stop_atr=0.0, ch_min_stop_pct=0.0, ch_tp_gap_pct=0.2, ch_tp_gap_atr=0.0, ch_min_rr=0.0, ch_follow=False, period_from="", period_to="", sym="", hand_forward=True, hand_tf_mode="junior",
               stake_mode="fixed", stake_base=100.0, stake_min=6.0, martingale="off", mart_pct=50.0, mart_max=0,
               stages=[{"t": "pattern", "p": 0, "w": 0, "f": "none"}, {"t": "close_ema20", "p": 0, "w": 12, "f": "none"}])
@@ -386,12 +386,26 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
         return float(st), float(tp), float(gs), float(gt)
 
     def chan_tp(side, ch, j, entry, tag):
-        """Цель по рисунку, когда стоп не по каналу. Отбой ('b'/нет метки): противоположная граница. Пробой ('k'): граница + k_tp_mult x ширина канала (замер движения; 0 = без цели, ведёт трейлинг). None, если цель позади цены."""
+        """Цель по рисунку, когда стоп не по каналу. Отбой ('b'/нет метки): противоположная граница. Пробой ('k'): граница + k_tp_mult x ширина канала (замер движения; 0 = без цели, ведёт трейлинг). None, если цель позади цены.
+        k_tp_src (только пробой): 'width' (по умолчанию, как выше) | 'tri_base' (у треугольника — высота основания, отложенная от пробитой границы; остальные формации как 'width') | 'level' (ближайший подтверждённый пивот по ходу сделки не ближе 0.5 ATR от входа, за последние 300 свечей; нет уровня — нет цели)."""
         lo, up = ch
         if tag == "k":
+            src = str(P.get("k_tp_src", "width"))
+            if src == "level":
+                kd_ = "H" if side == "L" else "L"
+                best_ = None
+                for q_ in piv:
+                    if q_["k"] != kd_ or q_["conf"] > j or q_["i"] < j - 300: continue
+                    if abs(q_["p"] - entry) < 0.5 * atr[j]: continue
+                    if (side == "L" and q_["p"] > entry and (best_ is None or q_["p"] < best_)) or (side == "S" and q_["p"] < entry and (best_ is None or q_["p"] > best_)):
+                        best_ = q_["p"]
+                return float(best_) if best_ is not None else None
             m = float(P.get("k_tp_mult", 1.0))
             if m <= 0: return None
             w = up(j) - lo(j)
+            if src == "tri_base" and getattr(lo, "typ", None) in ("sym_tri", "asc_tri", "desc_tri") and getattr(lo, "i0", None) is not None:
+                hb_ = up(lo.i0) - lo(lo.i0)  # высота основания треугольника в начале формации
+                if hb_ > 0: w, m = hb_, 1.0
             tp = up(j) + m * w if side == "L" else lo(j) - m * w
         else:
             tp = up(j) if side == "L" else lo(j)
