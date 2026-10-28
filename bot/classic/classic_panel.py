@@ -716,6 +716,26 @@ async def run_trades(run, now):
     return res
 
 
+BOOK_FILE = os.path.join(HERE, "book.db")  # запись стакана (classic_book.py)
+
+
+def book_walls(sym, ts_ms=None):
+    """Стенки стакана для графика позиции: последний снимок (ts_ms=None, позиция открыта) или снимок на момент входа (ближайший, не дальше 3 мин). -> (список стенок, время снимка) или ([], None)."""
+    try:
+        import sqlite3
+        c = sqlite3.connect("file:%s?mode=ro" % BOOK_FILE, uri=True, timeout=5)
+        try:
+            if ts_ms is None:
+                r = c.execute("SELECT ts, walls FROM snap WHERE sym=? ORDER BY ts DESC LIMIT 1", (sym,)).fetchone()
+            else:
+                r = c.execute("SELECT ts, walls FROM snap WHERE sym=? AND ts BETWEEN ? AND ? ORDER BY ABS(ts-?) LIMIT 1", (sym, ts_ms - 180000, ts_ms + 180000, ts_ms)).fetchone()
+        finally:
+            c.close()
+        return (json.loads(r[1]), int(r[0])) if r else ([], None)
+    except Exception:
+        return [], None
+
+
 def exp_summary(out):
     """Сводка экспериментальных прогонов (cfg.exp = 'A'/'B') против обычных прогонов бота той же пары и ТФ; только сделки после exp_since (проверка вперёд)."""
     def key(t): return (t["t_in"], t["side"])
@@ -847,8 +867,9 @@ async def api_prop_chart(req):
     if x.get("chlw"):
         w = x["chlw"]  # [нижняя в начале, верхняя в начале, нижняя при входе, верхняя при входе, индекс начала]
         ch = {"lo": [an._r(w[0]), an._r(w[2])], "up": [an._r(w[1]), an._r(w[3])], "i0": int(w[4]), "i1": int(x["i_in"])}
+    walls, walls_t = book_walls(sym, None if x["open"] else int(t_in))  # стенки: у открытой — текущие, у закрытой — на момент входа (если запись уже шла)
     return web.json_response({"sym": sym, "tf": tf, "side": side, "sig": x.get("sig"), "t_in": t_in, "open": bool(x["open"]), "reason": x["reason"],
-                              "off": int(len(df) - len(chart["t"])), "chart": chart, "lines": lines, "ch": ch, "struct": struct})
+                              "off": int(len(df) - len(chart["t"])), "chart": chart, "lines": lines, "ch": ch, "struct": struct, "walls": walls, "walls_t": walls_t})
 
 
 async def build_payload(runs, now):
