@@ -15,6 +15,7 @@ const IFVF_TIERS = {
 // слои-картинки; контуры (canvas) обрабатываются отдельно
 const IFVF_LAYERS = [
     { key: "geocolour", img: "ifvfGeocolour", chk: "ifvfChkGeocolour" },
+    { key: "ir",        img: "ifvfIr",        chk: "ifvfChkIr" },
     { key: "pfront",    img: "ifvfPfront",    chk: "ifvfChkPfront" },
     { key: "isobars",   img: "ifvfIsobars",   chk: "ifvfChkIsobars" },
     { key: "fronts",    img: "ifvfFronts",    chk: "ifvfChkFronts" },
@@ -200,6 +201,9 @@ function ifvfMetaHtml(snap) {
         eumetsatNote = `<br><span style="color:#f0ad4e;">⚠ EUMETSAT: точного кадра на ${ifvfFormatTime(snap.valid_time)} не было, показан ближайший (${ifvfFormatTime(snap.eumetsat_actual_time)})</span>`;
     }
     const dl = (snap.downloaded_mb !== undefined) ? ` &nbsp; <b>Скачано:</b> ${snap.downloaded_mb} МБ` : "";
+    if (ifvfChecked("ifvfChkIr") && !(snap.files && snap.files.ir)) {
+        eumetsatNote += `<br><span style="color:#f0ad4e;">⚠ ИК для этого кадра нет (слой добавлен 28.10, старые кадры без него)</span>`;
+    }
     return `<b>${IFVF_TIERS[ifvfTier].label}</b><br>` +
         `<b>Valid time:</b> ${ifvfFormatTime(snap.valid_time)} &nbsp;` +
         `<b>Сгенерировано:</b> ${ifvfFormatTime(snap.generated_at_utc)} (${ifvfAgoMinutes(snap.generated_at_utc)} мин назад)<br>` +
@@ -274,6 +278,14 @@ function ifvfToggleLayer(layerId, checkboxId) {
     if (ifvfManifest && ifvfSelectedIdx >= 0) ifvfRenderSnapshot(ifvfSelectedIdx);
     else ifvfEl(layerId).style.display = ifvfChecked(checkboxId) ? "block" : "none";
     if (ifvfPlaying && ifvfChecked(checkboxId)) ifvfPreloadAll(true);
+}
+
+// GeoColour и ИК — взаимоисключающие подложки (обе непрозрачные): включили одну — другая гасится
+function ifvfToggleSat(which) {
+    const me = which === "ir" ? "ifvfChkIr" : "ifvfChkGeocolour";
+    const other = which === "ir" ? "ifvfChkGeocolour" : "ifvfChkIr";
+    if (ifvfChecked(me)) ifvfEl(other).checked = false;
+    ifvfToggleLayer(which === "ir" ? "ifvfIr" : "ifvfGeocolour", me);
 }
 
 function ifvfToggleBase() {
