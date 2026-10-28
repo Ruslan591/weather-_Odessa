@@ -1034,6 +1034,37 @@ def process_tier(tier_key, tier_cfg, fields, lats, lons, run_dt, lead, valid_dt)
         return False
     Image.fromarray(arr).convert("RGB").save(geocolour_path, "JPEG", quality=80, optimize=True)  # alpha у GeoColour на проверенном кадре = 255, при convert("RGB") он отбрасывается; PNG был ~1.2 МБ, JPEG ~130 КБ
 
+    # ИК 10.5 мкм (серая шкала) — для ночи/сумерек, когда GeoColour неудобен. Слой необязательный:
+    # если запрос не удался, кадр сохраняется без "ir", тир не пропускаем. Сжатие: 8-бит grayscale JPEG q80.
+    ir_path = os.path.join(out_dir, f"{ts_label}_ir.jpg")
+    ir_ok = False
+    try:
+        ir_times = [eumetsat_actual_iso]
+        for back_min in (10, 15, 5, 20, 0):
+            t_iso = (valid_dt - timedelta(minutes=back_min)).strftime("%Y-%m-%dT%H:%M:00Z")
+            if t_iso not in ir_times:
+                ir_times.append(t_iso)
+        ir_arr = None
+        for t_iso in ir_times:
+            try:
+                ir_arr = fc.fetch_map_custom("mtg_fd:ir105_hrfi", bbox, px[0], px[1], time_iso=t_iso, retries=1, delay=3,
+                                              style="mtg_fd:mtg_fd_ir105_hrfi_grayscale", crs="CRS:84")
+                break
+            except Exception as e:
+                log(f"[{tier_key}]  ИК {t_iso} недоступен ({e}); пробую раньше")
+        if ir_arr is not None:
+            ir_rgba = Image.fromarray(ir_arr).convert("RGBA")
+            ir_bg = Image.new("RGBA", ir_rgba.size, (0, 0, 0, 255))   # вне диска спутника alpha=0 -> чёрный
+            ir_bg.alpha_composite(ir_rgba)
+            ir_bg.convert("L").save(ir_path, "JPEG", quality=80, optimize=True)
+            ir_ok = True
+            log(f"[{tier_key}] ИК сохранён ({os.path.getsize(ir_path) // 1024} КБ)")
+        else:
+            log(f"[{tier_key}] ИК недоступен — кадр без ИК-слоя")
+    except Exception as e:
+        log(f"[{tier_key}] ИК не получился: {e}")
+        ir_ok = False
+
     log(f"[{tier_key}] рендерю изобары и P_front...")
     render_transparent_isobars(fields["pmsl"], fields.get("hsurf"), lats, lons, isobars_path, bbox, px,
                                centers=fields.get("_centers"))
@@ -1071,6 +1102,8 @@ def process_tier(tier_key, tier_cfg, fields, lats, lons, run_dt, lead, valid_dt)
     }
     if fronts_name:
         snapshot["files"]["fronts"] = fronts_name
+    if ir_ok:
+        snapshot["files"]["ir"] = os.path.basename(ir_path)
     manifest["snapshots"].append(snapshot)
 
     while len(manifest["snapshots"]) > KEEP_LAST:
