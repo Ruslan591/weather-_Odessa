@@ -375,7 +375,7 @@ SPEC = {
     "entry_trigger": ("sel", ["open", "breakout"]), "tp_r": ("num", 0, 20), "max_bars": ("num", 0, 2000),
     "rev_exit": ("bool",),
     "stop_mode": ("sel", ["prev", "pct", "pivot", "sig3", "channel"]),
-    "tp_mode": ("sel", ["r", "channel"]), "be_intrabar": ("bool",), "be_tp_frac": ("num", 0, 1), "be_l_at": ("num", 0, 1), "be_l_lock": ("num", 0, 1), "tl_src": ("sel", ["old", "fast"]), "fc_minw": ("num", 0.3, 10), "fc_maxw": ("num", 1, 40), "tl_min_w": ("num", 0.5, 10), "tl_max_w": ("num", 2, 40), "ch_stop_pct": ("num", 0, 10), "ch_stop_atr": ("num", 0, 10), "ch_min_stop_pct": ("num", 0, 15),
+    "tp_mode": ("sel", ["r", "channel"]), "be_intrabar": ("bool",), "be_tp_frac": ("num", 0, 1), "be_l_at": ("num", 0, 1), "k_tp_src": ("sel", ["width", "tri_base", "level"]), "be_l_lock": ("num", 0, 1), "tl_src": ("sel", ["old", "fast"]), "fc_minw": ("num", 0.3, 10), "fc_maxw": ("num", 1, 40), "tl_min_w": ("num", 0.5, 10), "tl_max_w": ("num", 2, 40), "ch_stop_pct": ("num", 0, 10), "ch_stop_atr": ("num", 0, 10), "ch_min_stop_pct": ("num", 0, 15),
     "ch_tp_gap_pct": ("num", 0, 10), "ch_tp_gap_atr": ("num", 0, 10), "ch_min_rr": ("num", 0, 20), "ch_follow": ("bool",),
     "min_stop_pct": ("num", 0.05, 15), "min_stop_atr": ("num", 0, 10),
     "be_trigger": ("num", 0.1, 30), "be_lock": ("num", 0, 10),
@@ -726,8 +726,9 @@ def exp_summary(out):
                 "avg": round(sum(t["net"] for t in C) / n, 3) if n else 0.0, "sum": round(sum(t["net"] for t in C), 2)}
     bot = {(r["sym"], r["cfg"]["tf"]): r for r in out if r["track"] == "bot" and r.get("mode") == "propose"}
     res = {}
-    for tag in ("A", "B"):
+    for tag in ("A", "B", "C", "D"):
         ea, ba, extra, per, diffs, lad, since, nr = [], [], [], {}, [], 0, None, 0
+        ch_e, ch_b = [], []
         for r in out:
             c = r["cfg"]
             if c.get("exp") != tag or r["stop_ms"] is not None: continue
@@ -744,10 +745,14 @@ def exp_summary(out):
                 if tag == "B" and t["reason"] == "лесенка": lad += 1
                 if o is None: extra.append(t)
                 elif tag == "B" and not t["open"] and not o["open"]: diffs.append(t["net"] - o["net"])
+                elif tag in ("C", "D") and not t["open"] and not o["open"] and abs((t.get("tp") or 0) - (o.get("tp") or 0)) > 1e-12:
+                    ch_e.append(t); ch_b.append(o)  # сделки, где цель эксперимента отличается от обычной
         x = {"runs": nr, "since": since, "exp": st(ea), "base": st(ba), "per_tf": {tf: {"exp": st(a), "base": st(b)} for tf, (a, b) in sorted(per.items())}}
         if tag == "A":
             x["extra"] = st(extra)
             x["progress"] = x["extra"]["n"]
+        elif tag in ("C", "D"):
+            x["changed"] = st(ch_e); x["changed_base"] = st(ch_b); x["progress"] = len(ch_e)
         else:
             x["lad"] = lad; x["pairs"] = len(diffs); x["diff"] = round(sum(diffs), 2)
             x["better"] = sum(1 for d in diffs if d > 0.001); x["worse"] = sum(1 for d in diffs if d < -0.001)
