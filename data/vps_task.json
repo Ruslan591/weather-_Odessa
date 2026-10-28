@@ -1,1 +1,1 @@
-{"task_id": "dep21793169476", "cmd": "cd /opt/weather-pipeline/repo && git fetch -q origin 2>&1 | tail -2; git show origin/main:scripts/deploy_classic_files.sh | bash -s classic_strategy.py:f884bb5 2>&1 | tail -8", "timeout": 60}
+{"task_id": "v1793169555", "cmd": "python3 -c \"import json;r=json.load(open('/opt/trading-bot/classic/runs.json'));n=m=0\\nfor x in r:\\n  for t in (x.get('trades') or []):\\n    n+=1; m+= 1 if t.get('x') else 0\\nprint(n,m)\" ; curl -s localhost:8091/api/runs | head -c 200", "timeout": 60}
