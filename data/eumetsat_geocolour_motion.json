@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-29T22:50:00.000Z",
+  "timestamp": "2026-10-29T23:00:00.000Z",
   "buffer_size": 6,
   "buffer_span_minutes": 50,
   "observed_area": {
@@ -15,33 +15,33 @@
   "valid": false,
   "verdict": "нет значимой облачности для оценки движения",
   "area_fraction_over_time": [
-    0.089,
     0.042,
     0.018,
     0.01,
     0.003,
-    0.005
+    0.005,
+    0.007
   ],
-  "area_trend_delta": -0.083,
+  "area_trend_delta": -0.035,
   "area_trend_verdict": "без существенных изменений",
   "station_state": "clear",
   "station_area_fraction": 0.0,
-  "cloud_mass_distance_km": 57.6,
-  "cloud_mass_bearing_deg": 25.0,
-  "cloud_mass_compass": "СВ",
-  "cloud_mass_area_km2": 319,
+  "cloud_mass_distance_km": 52.0,
+  "cloud_mass_bearing_deg": 12.0,
+  "cloud_mass_compass": "С",
+  "cloud_mass_area_km2": 304,
   "target_confirmation": {
     "confirmed": true,
     "target_id": 0,
     "target_area_km2": 65.4,
-    "roi_cloud_fraction": 0.99,
+    "roi_cloud_fraction": 0.97,
     "verdict": "GeoColour подтверждает: в ROI CLM-цели преобладает облачность"
   },
   "system_analysis_all": [
     {
-      "target_id": 2,
+      "target_id": 3,
       "available": true,
-      "roi_cloud_fraction": 0.808,
+      "roi_cloud_fraction": 0.872,
       "confirmed": true
     }
   ],
@@ -49,14 +49,20 @@
     {
       "target_id": 0,
       "available": true,
-      "roi_cloud_fraction": 0.99,
+      "roi_cloud_fraction": 0.97,
       "confirmed": true
     },
     {
       "target_id": 1,
       "available": true,
-      "roi_cloud_fraction": 0.083,
+      "roi_cloud_fraction": 0.271,
       "confirmed": false
+    },
+    {
+      "target_id": 2,
+      "available": true,
+      "roi_cloud_fraction": 0.679,
+      "confirmed": true
     }
   ],
   "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
