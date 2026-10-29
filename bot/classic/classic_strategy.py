@@ -28,6 +28,7 @@ import classic_analysis as an
 import classic_trendline as tl
 import classic_fastchan as fchan
 import classic_hand as hand
+import classic_vp as vpm
 
 PARAMS = dict(tf="15m", be_trigger=1.5, fee=0.05, window_h=240, notional=100.0, warmup=200,
               stop_mode="prev", min_stop_pct=1.5, min_stop_atr=0.0, trail_mode="none", trail_dist=0.0, be_atr=0.0, be_lock=0.3, be_tp_frac=0.0, be_l_at=0.0, k_tp_src="width", be_l_lock=0.35,
@@ -38,7 +39,7 @@ PARAMS = dict(tf="15m", be_trigger=1.5, fee=0.05, window_h=240, notional=100.0, 
 PANEL = dict(PARAMS, be_trigger=1.5, be_lock=0.4, entry_mode="cross200", rev_exit=True, pat_mode="off", pat_min=0.0, be_intrabar=True)  # «рекомендованные» правила конструктора (лучшие по проверке на ZEC 15m; пользователь может менять)
 
 
-TRIGGERS = ("pattern", "cross200", "cross20", "cross50", "tl_bounce", "tl_breakout", "tl_both", "hand_bounce", "hand_breakout", "hand_both")
+TRIGGERS = ("pattern", "cross200", "cross20", "cross50", "tl_bounce", "tl_breakout", "tl_both", "hand_bounce", "hand_breakout", "hand_both", "vp")
 CONFIRMS = ("close_ema20", "break_trigger", "ema20_slope", "rsi_level", "macd_turn", "volume", "strong_body", "break_swing",
             "pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sign", "ema50_slope", "ema50_trend", "ema50_pullback", "stochrsi_cross", "ema200_side")
 STATE_STAGES = ("pullback_ema20", "rsi_band", "ext_dist", "stoch_dir", "macd_sign", "ema50_slope", "ema50_trend", "ema50_pullback", "stochrsi_cross", "ema200_side")
@@ -120,6 +121,10 @@ def stage_signals(pre, P, warmup=None):
                     chan[i_] = inf2_[i_]
                 if trig["t"] == "tl_both":
                     tags[i_] = "b" if kd_ == "tl_bounce" else "k"
+    elif trig["t"] == "vp":  # профиль объёма: отбой / пробой / возврат после ложного пробоя (classic_vp.py)
+        tlsig, chan, tags_vp, over_vp = vpm.vp_signals(pre, P)
+        tags.update(tags_vp)
+        pre["_vp"] = over_vp
     elif trig["t"] in ("hand_bounce", "hand_breakout", "hand_both"):  # линии, нарисованные пользователем (hand.json)
         hp = float(trig.get("p") or 0)
         structs_ = hand.for_sym(P.get("sym"), P.get("tf"), P.get("hand_tf_mode", "junior")) if P.get("sym") else []
@@ -233,7 +238,7 @@ def stage_signals(pre, P, warmup=None):
         elif trig["t"] == "cross50":
             pr, cu = c[i - 1] - e50[i - 1], c[i] - e50[i]
             ns = "L" if pr <= 0 < cu else "S" if pr >= 0 > cu else None
-        elif trig["t"] in ("tl_bounce", "tl_breakout", "tl_both", "hand_bounce", "hand_breakout", "hand_both"):
+        elif trig["t"] in ("tl_bounce", "tl_breakout", "tl_both", "hand_bounce", "hand_breakout", "hand_both", "vp"):
             ns = tlsig.get(i)
         else:
             pr, cu = c[i - 1] - e20[i - 1], c[i] - e20[i]
@@ -367,6 +372,7 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
     tg_ = sd_ = None
     pend_sid = None
     pend_tag = None  # 'b' | 'k' сигнала, ожидающего входа (hand_both)
+    pend_vp = None  # стоп/цель/БУ сигнала профиля объёма (pre["_vp"]), ожидающего входа
     ch_stop_on = P.get("stop_mode") == "channel"
     ch_tp_on = P.get("tp_mode", "r") == "channel"
 
@@ -430,6 +436,7 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
     chan = pre.get("_chan") or {}  # линии считаются в stage_signals — читаем после него
     sids_ = pre.get("_sid") or {}
     tags_ = pre.get("_tag") or {}  # {свеча: 'b'|'k'} для hand_both
+    vp_ = pre.get("_vp") or {}
 
     def finish(i, price, reason):
         nonlocal pos, pos_ch, pos_vis
@@ -459,6 +466,7 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
             (xc, side, allow), pend = pend, None
             ch_ = pend_ch; pend_ch = None
             tg_ = pend_tag; pend_tag = None
+            vo_ = pend_vp; pend_vp = None
             sd_ = pend_sid; pend_sid = None
             if xc and pos and pos["side"] != xc:
                 finish(i, o[i], "разворот")
@@ -483,8 +491,13 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                         st = min(l[i - 1], entry - mind); clamped = bool(st != l[i - 1])
                     else:
                         st = max(h[i - 1], entry + mind); clamped = bool(st != h[i - 1])
+                if vo_:  # профиль объёма: стоп за узлом/границей и цель считает classic_vp; стоп с неверной стороны от входа — сигнал пропускаем
+                    st = vo_["stop"]; clamped = False; lv = None
+                    if (side == "L" and not st < entry) or (side == "S" and not st > entry): st = None
                 if st is not None:
                     pos = mkpos(side, i, entry, st, clamped, i - 1)
+                    if vo_:
+                        pos["tp"], pos["be_thr"], pos["vpx"], pos["be_lock"] = vo_["tp"], vo_["be_thr"], vo_["vpx"], vo_["be_lock"]
                     pos_vis = ch_
                     if tg_: pos["sig"] = tg_
                     if sd_: pos["sid"] = sd_
@@ -562,7 +575,7 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                 pos["mfe"] = max(pos["mfe"], fav)
                 pos["ext"] = max(pos["ext"], h[i]) if L_ else min(pos["ext"], l[i])
                 if (not pos["be"]) and fav >= pos["be_thr"]:
-                    pos["be"], pos["stop"], pos["stage"] = True, e * (1 + (1 if L_ else -1) * P.get("be_lock", 0) / 100), "be"
+                    pos["be"], pos["stop"], pos["stage"] = True, e * (1 + (1 if L_ else -1) * pos.get("be_lock", P.get("be_lock", 0)) / 100), "be"
                     if P.get("be_intrabar") and ((L_ and c[i] <= pos["stop"]) or ((not L_) and c[i] >= pos["stop"])):
                         # свеча взвела БУ и закрылась по ту сторону БУ-стопа: цена пересекла стоп уже после экстремума, значит выход по цене стопа в этой же свече
                         finish(i, pos["stop"], "безубыток")
@@ -642,6 +655,7 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                             pend = (xc, en, allow_)
                             pend_ch = chan.get(g[1])
                             pend_tag = tags_.get(g[1])
+                            pend_vp = vp_.get(g[1])
                             pend_sid = sids_.get(g[1])
             elif em == "pattern20":
                 xc = en = None
@@ -724,6 +738,8 @@ def pack(trades):
             d["tp"] = an._r(float(x["tp"]))
         if x.get("tp0"):
             d["tp0"] = an._r(float(x["tp0"]))
+        if x.get("vpx"):
+            d["vpx"] = x["vpx"]  # слепок профиля объёма на момент сигнала (classic_vp) — для рисунка сделки
         xx = {k: round(float(x[k]), 3) for k in ("x_ext", "x_wat", "x_pv", "x_pvat") if x.get(k) is not None and x[k] == x[k]}
         if xx:
             d["x"] = xx  # журнал для анализа: x_ext (вход от линии, в ширинах канала), x_wat (ширина канала, ATR), x_pv (до ближайшего пивота, %), x_pvat (то же в ATR)
