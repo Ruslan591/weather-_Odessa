@@ -1,7 +1,7 @@
 {
-  "task_id": "chk3",
+  "task_id": "chk4",
   "returncode": 0,
-  "stdout": "ExecStart=/opt/trading-bot/venv/bin/python /opt/trading-bot/classic/classic_panel.py\n__pycache__\nafter_wall.py\nagecheck.py\nbacktest.py\ncascade.log\ncascade.py\nclassic\ndata\ndata_ext\ndl3.log\n",
+  "stdout": "Traceback (most recent call last):\n  File \"/tmp/diag_win.py\", line 20, in <module>\n    asyncio.run(main())\n  File \"/usr/lib/python3.12/asyncio/runners.py\", line 194, in run\n    return runner.run(main)\n           ^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/asyncio/base_events.py\", line 687, in run_until_complete\n    return future.result()\n           ^^^^^^^^^^^^^^^\n  File \"/tmp/diag_win.py\", line 10, in main\n    df = await pn.get_df_long(r[\"sym\"], r[\"cfg\"][\"tf\"])\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/trading-bot/classic/classic_panel.py\", line 199, in get_df_long\n    raise RuntimeError(str(err))\nRuntimeError: 'NoneType' object has no attribute 'get'\n",
   "stderr": "",
-  "completed_at_utc": "2026-10-29T09:30:02Z"
+  "completed_at_utc": "2026-10-29T09:31:02Z"
 }
