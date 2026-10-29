@@ -1,1 +1,1 @@
-{"task_id": "t1793256622", "cmd": "curl -s localhost:8091/api/runs -o /tmp/r.json; ls -la /tmp/r.json; python3 -c 'import json;d=json.load(open(\"/tmp/r.json\"));print(type(d).__name__, list(d)[:30] if isinstance(d,dict) else len(d))'", "timeout": 120}
+{"task_id": "t1793256670", "cmd": "python3 -c 'import json;d=json.load(open(\"/tmp/r.json\"));a=d[\"accounts\"];print(type(a).__name__);print(json.dumps(a)[:3500]);r=d[\"runs\"];print(len(r));print(json.dumps(r[0] if isinstance(r,list) else list(r.items())[0])[:1200])'", "timeout": 120}
