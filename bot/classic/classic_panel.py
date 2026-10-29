@@ -30,6 +30,11 @@ CACHE, LOCKS = {}, {}
 SES = None
 CAP_PAIRS = 30  # ориентир по нагрузке на расчёт (2 ядра); биржевой лимит намного выше
 TFS_RUN = ["5m", "15m", "1h", "4h", "1d"]
+VP_TFS_ALL = ["5m", "15m", "30m", "1h"]  # таймфреймы, доступные счёту «Профиль» (для них заданы настройки ZigZag по умолчанию в classic_vp.ZZ_DEF)
+VP_TFS_DEF = ["5m", "15m"]
+VP_CAP_PAIRS = 30  # максимум пар в Профиле (совпадает с общим ориентиром CAP_PAIRS: пара из других вкладок тоже считается один раз)
+VP_CAP_RUNS = 120  # максимум прогонов Профиля = пары x таймфреймы (замер: прогон Профиля считается ~0.15 с)
+VP_TFS_FILE = os.path.join(HERE, "vp_tfs.json")  # выбранные таймфреймы Профиля (если активных прогонов нет)
 _BAN = {}  # base -> до какого момента Binance просит паузу (ответ 418/429)
 _USED = {"w": 0, "ts": 0.0}  # израсходованный вес за минуту (лимит спота — 6000 на IP)
 
@@ -843,6 +848,32 @@ async def _stop_run(r, now):
                 x["reason"] = "остановлен"
         r["trades"] = cs.pack(tr)
         r["stop_ms"] = now
+def vp_active(runs):
+    return [r for r in runs if r["stop_ms"] is None and track_of(r["cfg"]) == "vp"]
+
+
+def vp_tfs_cur(runs):
+    a = {r["cfg"]["tf"] for r in vp_active(runs)}
+    if a:
+        return [t for t in VP_TFS_ALL if t in a]
+    s = jload(VP_TFS_FILE, None)
+    s = [t for t in VP_TFS_ALL if isinstance(s, list) and t in s]
+    return s or list(VP_TFS_DEF)
+
+
+async def vp_make(runs, sym, tfs, now, tpl_cfg):
+    """Новые прогоны Профиля по паре: те же настройки, что у действующих, старт с текущего момента."""
+    for tf in tfs:
+        await get_df_long(sym, tf)  # заодно проверка, что данные по паре и ТФ есть
+    rid = max([r["id"] for r in runs] + [0])
+    for tf in tfs:
+        rid += 1
+        cfg = json.loads(json.dumps(tpl_cfg))
+        cfg["tf"] = tf
+        cfg["vp_since"] = now
+        runs.append({"id": rid, "name": "Профиль %s %s" % (sym, tf), "sym": sym, "cfg": cfg, "start_ms": now, "stop_ms": None, "trades": None})
+
+
 _LOCK = []
 
 
@@ -974,6 +1005,8 @@ async def build_payload(runs, now):
     act = [r for r in runs if r["stop_ms"] is None]
     load = {"pairs": len({r["sym"] for r in act}), "runs": len(act), "cap": CAP_PAIRS, "weight": _USED["w"] if time.time() - _USED["ts"] < 120 else 0,
             "limit": 6000, "ban": max(0, int(_BAN.get(BASES[0], 0) - time.time())), "calc_s": _SNAP.get("calc_s")}
+    vpa = [r for r in act if track_of(r["cfg"]) == "vp"]
+    load["vp"] = {"pairs": len({r["sym"] for r in vpa}), "runs": len(vpa), "cap_pairs": VP_CAP_PAIRS, "cap_runs": VP_CAP_RUNS, "tfs": vp_tfs_cur(runs), "tf_all": VP_TFS_ALL}
     return {"runs": out, "now": now, "notional": cs.PARAMS["notional"], "hand": hand_meta, "accounts": accounts, "load": load,
             "proposals": {"pending": pd_["pending"], "rows": pd_["rows"], "stats": pd_["stats"]}, "pairs_all": pairs_all,
             "manual": {k: {"mode": v["mode"], "pct": v.get("pct"), "lvl": v.get("lvl")} for k, v in man_states().items() if v.get("mode") and not v.get("close") and not v.get("done")},
@@ -993,11 +1026,11 @@ async def _screen_getter(path, params):
     raise RuntimeError(str(last))
 
 
-def _pair_stats():
+def _pair_stats(track=None):
     st = {}
     p = _SNAP["payload"]
     for r in (p["runs"] if p else []):
-        if r["stop_ms"] is None:
+        if r["stop_ms"] is None and (track is None or r.get("track") == track):
             s = st.setdefault(r["sym"], {"n": 0, "net": 0.0, "start": r["start_ms"]})
             s["n"] += r["stats"]["n"]
             s["net"] += r["stats"]["net"]
@@ -1010,8 +1043,10 @@ async def screen_refresh():
         return
     _SCREEN["busy"] = True
     try:
-        cur = sorted({r["sym"] for r in jload(RUNS_FILE, []) if r["stop_ms"] is None})
-        d = await scr.build(_screen_getter, cur, _pair_stats(), int(time.time() * 1000))
+        rr = jload(RUNS_FILE, [])
+        cur = sorted({r["sym"] for r in rr if r["stop_ms"] is None})
+        vpp = sorted({r["sym"] for r in vp_active(rr)})
+        d = await scr.build(_screen_getter, cur, _pair_stats(), int(time.time() * 1000), vpp, _pair_stats("vp"))
         d["ts"] = time.time()
         _SCREEN["data"], _SCREEN["err"] = d, None
     except Exception as e:
@@ -1244,6 +1279,58 @@ async def api_runs(req):
                             r["start_ms"] = ms_; r["cfg"]["vp_since"] = ms_; _RT.pop(r["id"], None); n_ += 1
                     if not n_:
                         raise ValueError("нет активных прогонов профиля")
+                elif act == "vp_add_pair":  # ротация пар счёта «Профиль»: пара добавляется только в Профиль, на все выбранные таймфреймы
+                    sym = str(j.get("sym", "")).upper()
+                    if not ok_sym(sym):
+                        raise ValueError("плохая пара")
+                    va = vp_active(runs)
+                    vsyms = {r["sym"] for r in va}
+                    if sym in vsyms:
+                        raise ValueError("пара уже в Профиле")
+                    if not va:
+                        raise ValueError("нет шаблона прогонов Профиля")
+                    tfs = vp_tfs_cur(runs)
+                    if len(vsyms) >= VP_CAP_PAIRS:
+                        raise ValueError("достигнут максимум пар Профиля: %d. Сначала уберите одну" % VP_CAP_PAIRS)
+                    if len(va) + len(tfs) > VP_CAP_RUNS:
+                        raise ValueError("лимит прогонов Профиля: %d (сейчас %d, пара добавит %d)" % (VP_CAP_RUNS, len(va), len(tfs)))
+                    act_syms = {r["sym"] for r in runs if r["stop_ms"] is None}
+                    if sym not in act_syms and len(act_syms) >= CAP_PAIRS:
+                        raise ValueError("достигнут ориентир нагрузки: %d пар. Сначала уберите одну" % CAP_PAIRS)
+                    try:
+                        await vp_make(runs, sym, tfs, now, va[0]["cfg"])
+                    except RuntimeError as e:
+                        raise ValueError("нет данных по паре %s: %s" % (sym, e))
+                elif act == "vp_drop_pair":  # убрать пару только из Профиля (прогоны других вкладок не трогаем)
+                    sym = str(j.get("sym", "")).upper()
+                    rs = [r for r in vp_active(runs) if r["sym"] == sym]
+                    if not rs:
+                        raise ValueError("по этой паре нет активных прогонов Профиля")
+                    for r in rs:
+                        await _stop_run(r, now)
+                elif act == "vp_tfs":  # набор таймфреймов Профиля: новые стартуют с текущего момента, снятые останавливаются (история остаётся)
+                    tfs = [t for t in VP_TFS_ALL if t in (j.get("tfs") or [])]
+                    if not tfs:
+                        raise ValueError("выберите хотя бы один таймфрейм")
+                    va = vp_active(runs)
+                    if not va:
+                        raise ValueError("нет активных прогонов профиля")
+                    syms = sorted({r["sym"] for r in va})
+                    if len(syms) * len(tfs) > VP_CAP_RUNS:
+                        raise ValueError("%d пар x %d ТФ = %d прогонов, лимит %d. Уберите пары или таймфреймы" % (len(syms), len(tfs), len(syms) * len(tfs), VP_CAP_RUNS))
+                    have = {(r["sym"], r["cfg"]["tf"]) for r in va}
+                    tpl = va[0]["cfg"]
+                    try:
+                        for s_ in syms:  # сначала создаём недостающие (если данных нет — ничего не меняется), потом останавливаем снятые
+                            miss = [tf for tf in tfs if (s_, tf) not in have]
+                            if miss:
+                                await vp_make(runs, s_, miss, now, tpl)
+                    except RuntimeError as e:
+                        raise ValueError("нет данных по паре %s: %s" % (s_, e))
+                    for r in va:
+                        if r["cfg"]["tf"] not in tfs:
+                            await _stop_run(r, now)
+                    jsave(VP_TFS_FILE, tfs)
                 elif act == "drop_pair":
                     sym = str(j.get("sym", "")).upper()
                     rs = [r for r in runs if r["sym"] == sym and r["stop_ms"] is None]
