@@ -736,6 +736,35 @@ def book_walls(sym, ts_ms=None):
         return [], None
 
 
+VP_NUM = {"vp_rows": (10, 200), "vp_va": (30, 95), "zz_depth": (0, 200), "zz_dev": (0, 20), "zz_back": (0, 50), "vp_flat_delta": (0.01, 2), "vp_par": (0.05, 2), "vp_hvn": (1.0, 10),
+          "vp_lvn": (0.05, 1.0), "vp_tol_atr": (0.05, 2), "vp_buf_atr": (0, 2), "vp_hist_bars": (100, 3000), "vp_ahead_atr": (0.3, 6), "vp_imp_atr": (0, 5), "vp_retest_bars": (1, 60),
+          "vp_ret_bars": (1, 60), "vp_sl_atr": (0.1, 5), "vp_rr": (0.5, 10), "vp_min_rr": (0, 10), "vp_be_frac": (0.1, 1)}
+VP_SEL = {"vp_mode": ("auto", "flat", "trend"), "vp_bo_entry": ("close", "retest"), "vp_neutral": ("skip", "true")}
+VP_BOOL = ("vp_be_poc", "vp_bounce", "vp_breakout", "vp_return")
+
+
+def vp_clean(upd):
+    """Проверка настроек профиля объёма из интерфейса -> словарь для cfg прогонов."""
+    out = {}
+    for k, (a, b) in VP_NUM.items():
+        if upd.get(k) is None: continue
+        try: x = float(upd[k])
+        except (TypeError, ValueError): raise ValueError("%s: нужно число" % k)
+        if not a <= x <= b: raise ValueError("%s: допустимо от %s до %s" % (k, a, b))
+        out[k] = int(x) if k in ("vp_rows", "zz_depth", "zz_back", "vp_hist_bars", "vp_retest_bars", "vp_ret_bars") else x
+    for k, ch in VP_SEL.items():
+        if k in upd:
+            if upd[k] not in ch: raise ValueError("%s: допустимо %s" % (k, ", ".join(ch)))
+            out[k] = upd[k]
+    for k in VP_BOOL:
+        if k in upd: out[k] = bool(upd[k])
+    if "vp_start" in upd:
+        s = str(upd["vp_start"] or "auto").strip()
+        if s != "auto" and not re.match(r"^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}$", s): raise ValueError("vp_start: «auto» или ГГГГ-ММ-ДД ЧЧ:ММ (UTC)")
+        out["vp_start"] = s
+    return out
+
+
 def exp_summary(out):
     """Сводка экспериментальных прогонов (cfg.exp = 'A'/'B') против обычных прогонов бота той же пары и ТФ; только сделки после exp_since (проверка вперёд)."""
     def key(t): return (t["t_in"], t["side"])
@@ -787,7 +816,7 @@ def track_of(cfg):
         return "exp"  # экспериментальные прогоны (параллельные проверки идей): не входят ни в один счёт и не рисуются во вкладках, анализ — скриптом
     st = [x for x in (cfg.get("stages") or []) if x and x.get("t")]
     t = st[0]["t"] if st else ""
-    return "me" if t.startswith("hand_") else "bot" if t.startswith("tl_") else "other"
+    return "me" if t.startswith("hand_") else "bot" if t.startswith("tl_") else "vp" if t == "vp" else "other"
 
 
 _SNAP = {"payload": None, "ts": 0.0, "calc_s": None}
@@ -869,12 +898,12 @@ async def api_prop_chart(req):
         ch = {"lo": [an._r(w[0]), an._r(w[2])], "up": [an._r(w[1]), an._r(w[3])], "i0": int(w[4]), "i1": int(x["i_in"])}
     walls, walls_t = book_walls(sym, None if x["open"] else int(t_in))  # стенки: у открытой — текущие, у закрытой — на момент входа (если запись уже шла)
     return web.json_response({"sym": sym, "tf": tf, "side": side, "sig": x.get("sig"), "t_in": t_in, "open": bool(x["open"]), "reason": x["reason"],
-                              "off": int(len(df) - len(chart["t"])), "chart": chart, "lines": lines, "ch": ch, "struct": struct, "walls": walls, "walls_t": walls_t})
+                              "off": int(len(df) - len(chart["t"])), "chart": chart, "lines": lines, "ch": ch, "struct": struct, "walls": walls, "walls_t": walls_t, "vp": x.get("vpx")})
 
 
 async def build_payload(runs, now):
     out = []
-    by_track = {"me": [], "bot": []}
+    by_track = {"me": [], "bot": [], "vp": []}
     prop_tr = []  # сделки прогонов бота в режиме «только предлагает» — это предложения для вкладки «Вместе»
     for r in runs:
         if r["stop_ms"] is None:
@@ -904,7 +933,7 @@ async def build_payload(runs, now):
     cand_f = dict(pr.CAND_DEFAULT, **{k: v for k, v in cand_raw.items() if k != "history"})
     pd_ = pr.build(prop_tr, jload(PROP_FILE, []), now, ac.MIN_NOTIONAL, man_states(), cand_f)
     accounts = {}
-    for k, L in (("me", by_track["me"]), ("bot", by_track["bot"])):
+    for k, L in (("me", by_track["me"]), ("bot", by_track["bot"]), ("vp", by_track["vp"])):
         accounts[k] = {"account": ac.sim_account(L), "signals": ac.sim_signals(L, now),
                        "trades": [{"sym": x.get("sym"), "tf": x.get("tf"), "side": x["side"], "sig": x.get("sig"), "t_in": x["t_in"], "net": x["net"], "open": x["open"], "reason": x["reason"], "be": x["be"], "run": x.get("run")}
                                   for x in sorted(L, key=lambda t: -t["t_in"])[:60]]}
@@ -1177,6 +1206,14 @@ async def api_runs(req):
                     decs.append({"k": k, "run": r["id"], "sym": r["sym"], "tf": r["cfg"]["tf"], "side": side, "t_in": t_in, "dec": dec,
                                  "t_dec": now, "p_dec": x["p_out"], "p_sig": x["p_in"]})
                     jsave(PROP_FILE, decs)
+                elif act == "vp_cfg":  # настройки стратегии «Профиль» — всем активным прогонам профиля; история пересчитается по новым настройкам
+                    clean = vp_clean(j.get("cfg") or {})
+                    n_ = 0
+                    for r in runs:
+                        if r["stop_ms"] is None and track_of(r["cfg"]) == "vp":
+                            r["cfg"].update(clean); _RT.pop(r["id"], None); n_ += 1
+                    if not n_:
+                        raise ValueError("нет активных прогонов профиля")
                 elif act == "drop_pair":
                     sym = str(j.get("sym", "")).upper()
                     rs = [r for r in runs if r["sym"] == sym and r["stop_ms"] is None]
