@@ -690,11 +690,23 @@ async def manual_loop():
         await asyncio.sleep(5)
 
 
+WARM_BARS = 1300  # свечей истории до старта прогона: прогрев EMA200/ATR + окно vp_hist_bars=1000 профиля объёма
+
+
 async def run_trades(run, now):
     """Сделки прогона. Расчёт тяжёлый (50 прогонов), поэтому: считаем в отдельном потоке, а результат кэшируем по ключу
     (рисунки, начало прогона, время последней свечи) — без открытой позиции он не меняется до новой свечи; с открытой обновляем раз в 40 с."""
     hm = _hand_mtime()
     df = await get_df_long(run["sym"], run["cfg"]["tf"])
+    # Стабильность расчёта: get_df_long отдаёт только последние ~2000 свечей, на 5m это ~7 суток. Если окно начинается позже старта прогона
+    # (или меньше чем за WARM_BARS свечей до него), симуляция стартует с «холодными» индикаторами и ZigZag, а окно сдвигается каждую свечу —
+    # сделки (и баланс счёта) меняются от обновления к обновлению. Поэтому докачиваем историю так, чтобы до старта было WARM_BARS свечей.
+    tfms_ = TFMS.get(run["cfg"]["tf"])
+    if tfms_ and len(df) and int(df["t"].iloc[0]) > run["start_ms"] - WARM_BARS * tfms_:
+        try:
+            df = await get_df_range(run["sym"], run["cfg"]["tf"], run["start_ms"] - (WARM_BARS - 260) * tfms_)  # get_df_range сама отступает ещё на 260 свечей
+        except Exception as e:
+            print("run_trades: history extend failed %s %s: %r" % (run["sym"], run["cfg"]["tf"], e))
     key = (hm, run["start_ms"], int(df["t"].iloc[-1]) if len(df) else 0)
     mcl = {}  # ручные закрытия позиций этого прогона (у прогонов «только предлагает» они действуют на позицию пользователя, а не на сделку бота)
     if (run.get("mode") or "auto") != "propose":
@@ -1212,6 +1224,24 @@ async def api_runs(req):
                     for r in runs:
                         if r["stop_ms"] is None and track_of(r["cfg"]) == "vp":
                             r["cfg"].update(clean); _RT.pop(r["id"], None); n_ += 1
+                    if not n_:
+                        raise ValueError("нет активных прогонов профиля")
+                elif act == "vp_start":  # дата начала счёта «Профиль» (UTC «ГГГГ-ММ-ДД ЧЧ:ММ» или «now» = только вперёд): сделки раньше неё в счёт не входят
+                    s_ = str(j.get("start") or "").strip()
+                    if s_ == "now":
+                        ms_ = now
+                    elif re.match(r"^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}$", s_):
+                        ms_ = int(datetime.datetime.strptime(s_.replace("T", " "), "%Y-%m-%d %H:%M").replace(tzinfo=datetime.timezone.utc).timestamp() * 1000)
+                    else:
+                        raise ValueError("дата начала: «ГГГГ-ММ-ДД ЧЧ:ММ» (UTC) или «now»")
+                    if ms_ > now:
+                        raise ValueError("дата начала в будущем")
+                    if ms_ < now - 30 * 86400000:
+                        raise ValueError("дата начала раньше чем 30 суток назад — истории не хватит")
+                    n_ = 0
+                    for r in runs:
+                        if r["stop_ms"] is None and track_of(r["cfg"]) == "vp":
+                            r["start_ms"] = ms_; r["cfg"]["vp_since"] = ms_; _RT.pop(r["id"], None); n_ += 1
                     if not n_:
                         raise ValueError("нет активных прогонов профиля")
                 elif act == "drop_pair":
