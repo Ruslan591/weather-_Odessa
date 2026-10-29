@@ -402,7 +402,7 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                 best_ = None
                 for q_ in piv:
                     if q_["k"] != kd_ or q_["conf"] > j or q_["i"] < j - 300: continue
-                    if abs(q_["p"] - entry) < 0.5 * atr[j]: continue
+                    if abs(q_["p"] - entry) < 0.5 * atr[min(j, len(atr) - 1)]: continue  # j может быть индексом ещё не закрытой свечи (вход на текущем открытии)
                     if (side == "L" and q_["p"] > entry and (best_ is None or q_["p"] < best_)) or (side == "S" and q_["p"] < entry and (best_ is None or q_["p"] > best_)):
                         best_ = q_["p"]
                 return float(best_) if best_ is not None else None
