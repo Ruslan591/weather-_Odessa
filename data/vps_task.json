@@ -1,1 +1,1 @@
-{"task_id": "exp2-1793400417", "cmd": "for i in $(seq 1 24); do grep -q '^DONE' /tmp/exp.txt && break; sleep 10; done; grep -v '^done' /tmp/exp.txt | head -70; tail -2 /tmp/exp.log", "timeout": 300}
+{"task_id": "deploy3-1793400468", "cmd": "cd /opt/weather-pipeline/repo && git fetch -q origin 2>&1 | tail -1; git show origin/main:scripts/deploy_classic_files.sh | bash -s classic_vp.py:573878f74c888e049113724de0c0cf0869db00aa classic_strategy.py:da4e0e899571fb872ae383c4c19cb1654f2ab546 2>&1 | tail -10", "timeout": 420}
