@@ -868,7 +868,12 @@ async def vp_make(runs, sym, tfs, now, tpl_cfg):
     rid = max([r["id"] for r in runs] + [0])
     for tf in tfs:
         rid += 1
-        cfg = json.loads(json.dumps(tpl_cfg))
+        own = [r for r in runs if track_of(r["cfg"]) == "vp" and r["cfg"]["tf"] == tf]  # настройки у каждого таймфрейма свои: берём у прогона того же ТФ
+        if own:
+            cfg = json.loads(json.dumps(max(own, key=lambda r: r["id"])["cfg"]))
+        else:  # у ТФ ещё не было своих настроек: копия общих, но ZigZag «по таймфрейму» (0), чтобы не тащить настройки чужого ТФ
+            cfg = json.loads(json.dumps(tpl_cfg))
+            cfg["zz_depth"] = cfg["zz_dev"] = cfg["zz_back"] = 0
         cfg["tf"] = tf
         cfg["vp_since"] = now
         runs.append({"id": rid, "name": "Профиль %s %s" % (sym, tf), "sym": sym, "cfg": cfg, "start_ms": now, "stop_ms": None, "trades": None})
@@ -1255,9 +1260,14 @@ async def api_runs(req):
                     jsave(PROP_FILE, decs)
                 elif act == "vp_cfg":  # настройки стратегии «Профиль» — всем активным прогонам профиля; история пересчитается по новым настройкам
                     clean = vp_clean(j.get("cfg") or {})
+                    tf_ = j.get("tf")  # настройки отдельного таймфрейма: только прогоны этого ТФ; дата старта профиля общая и тут не меняется
+                    if tf_:
+                        if tf_ not in VP_TFS_ALL:
+                            raise ValueError("плохой таймфрейм")
+                        clean.pop("vp_start", None)
                     n_ = 0
                     for r in runs:
-                        if r["stop_ms"] is None and track_of(r["cfg"]) == "vp":
+                        if r["stop_ms"] is None and track_of(r["cfg"]) == "vp" and (not tf_ or r["cfg"]["tf"] == tf_):
                             r["cfg"].update(clean); _RT.pop(r["id"], None); n_ += 1
                     if not n_:
                         raise ValueError("нет активных прогонов профиля")
