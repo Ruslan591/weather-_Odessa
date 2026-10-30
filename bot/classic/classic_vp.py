@@ -13,7 +13,7 @@ VPD = dict(vp_mode="auto", vp_rows=48, vp_va=70.0, zz_depth=0, zz_dev=0.0, zz_ba
            vp_tol_atr=0.3, vp_buf_atr=0.1, vp_hist_bars=1000, vp_ahead_atr=1.5, vp_imp_atr=1.0, vp_bo_entry="close", vp_retest_bars=10, vp_ret_bars=5,
            vp_sl_atr=0.5, vp_rr=2.0, vp_min_rr=1.0, vp_be_poc=True, vp_be_frac=0.65, vp_start="auto", vp_starts={}, vp_neutral="skip",
            vp_bounce=True, vp_breakout=True, vp_return=True,
-           vp_wick_void=True, vp_room_r=1.5, vp_wall_stop=True, vp_ws_buf_atr=0.15, vp_ws_min_atr=0.5)
+           vp_wick_void=True, vp_wick_bars=60, vp_room_r=0, vp_wall_stop=True, vp_ws_buf_atr=0.15, vp_ws_min_atr=0.5)
 
 
 # ---- стакан (book.db, пишет classic_book.py): стенки на момент свечи ----
@@ -292,7 +292,9 @@ def vp_signals(pre, P):
                     if pr["vp_return"]: pend_ret = dict(side=("S" if side == "L" else "L"), bi=i, exp=i + int(pr["vp_ret_bars"]), ext=(h[i] if side == "L" else l[i]), br=side)
                 elif dens <= lv or str(pr["vp_neutral"]) == "true":  # истинный пробой: за границей зона пустоты (LVN)
                     if not pr["vp_breakout"]: continue
-                    if pr["vp_wick_void"] and bool(((l[hb:i] <= z1) & (h[hb:i] >= z0)).any()): continue  # цена в этой зоне уже бывала (прокол тенью) - это не пустота, пробой пропускаем
+                    if pr["vp_wick_void"]:  # зона уже пройдена насквозь недавно (прокол тенью за дальний край зоны за последние vp_wick_bars свечей) - это не пустота, пробой пропускаем; неглубокие касания у самой границы и старая история не в счёт
+                        a0_ = max(hb, i - int(pr["vp_wick_bars"]))
+                        if a0_ < i and ((float(np.min(l[a0_:i])) <= z0) if side == "S" else (float(np.max(h[a0_:i])) >= z1)): continue
                     if str(pr["vp_bo_entry"]) == "retest":
                         pend_rt = dict(side=side, bi=i, exp=i + int(pr["vp_retest_bars"]))
                     else:
