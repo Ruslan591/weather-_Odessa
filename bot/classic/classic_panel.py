@@ -898,8 +898,11 @@ async def api_prop_chart(req):
     if run is None:
         return web.json_response({"error": "прогон не найден"}, status=404)
     now = int(time.time() * 1000)
-    tr = await run_trades(run, now)
-    x = next((z for z in tr if (int(z["t_in"]) == t_in or int(z.get("t_sig", z["t_in"])) == t_in) and z["side"] == side), None)
+    x = None
+    if run["stop_ms"] is not None:  # остановленный прогон: берём сделку, сохранённую при остановке (пересчёт её может не воспроизвести)
+        x = next((z for z in (run.get("trades") or []) if int(z["t_in"]) == t_in and z["side"] == side), None)
+    tr = [] if x is not None else await run_trades(run, now)
+    x = x or next((z for z in tr if (int(z["t_in"]) == t_in or int(z.get("t_sig", z["t_in"])) == t_in) and z["side"] == side), None)
     if x is None:
         return web.json_response({"error": "сделка не найдена"}, status=404)
     if run["stop_ms"] is not None:  # остановленный прогон: исход сделки берём из сохранённого при остановке (пересчёт «как будто идёт» может отличаться)
