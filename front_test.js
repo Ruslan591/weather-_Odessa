@@ -208,7 +208,7 @@ function ifvfMetaHtml(snap) {
         `<b>Valid time:</b> ${ifvfFormatTime(snap.valid_time)} &nbsp;` +
         `<b>Сгенерировано:</b> ${ifvfFormatTime(snap.generated_at_utc)} (${ifvfAgoMinutes(snap.generated_at_utc)} мин назад)<br>` +
         `<b>Run:</b> ICON-EU ${snap.run}, lead +${snap.lead_hours}ч` + dl + ` &nbsp; ` +
-        `<b>P_front mean/max:</b> ${snap.pfront_mean.toFixed(3)} / ${snap.pfront_max.toFixed(3)}` +
+        `<b>P_front mean/max:</b> ${(typeof snap.pfront_mean === "number") ? snap.pfront_mean.toFixed(3) : "—"} / ${(typeof snap.pfront_max === "number") ? snap.pfront_max.toFixed(3) : "—"}` +
         eumetsatNote;
 }
 
