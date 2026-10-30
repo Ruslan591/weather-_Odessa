@@ -712,6 +712,10 @@ async def run_trades(run, now):
             df = await get_df_range(run["sym"], run["cfg"]["tf"], run["start_ms"] - (WARM_BARS - 260) * tfms_)  # get_df_range сама отступает ещё на 260 свечей
         except Exception as e:
             print("run_trades: history extend failed %s %s: %r" % (run["sym"], run["cfg"]["tf"], e))
+    if tfms_ and len(df):  # фиксированное начало окна: старт прогона минус WARM_BARS свечей. Иначе начало скользит на свечу каждые N минут,
+        anc_ = run["start_ms"] - WARM_BARS * tfms_  # а ZigZag/профиль зависят от начала истории — сделки появлялись и пропадали задним числом
+        if int(df["t"].iloc[0]) < anc_:
+            df = df[df["t"] >= anc_].reset_index(drop=True)
     key = (hm, run["start_ms"], int(df["t"].iloc[-1]) if len(df) else 0)
     mcl = {}  # ручные закрытия позиций этого прогона (у прогонов «только предлагает» они действуют на позицию пользователя, а не на сделку бота)
     if (run.get("mode") or "auto") != "propose":
