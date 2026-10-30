@@ -568,17 +568,23 @@ def simulate(df, now_ms, P=PARAMS, pre=None, filt=None, sigs=None, exits=None):
                     px = o[i] if o[i] <= pos["stop"] else pos["stop"]
                 else:
                     px = o[i] if o[i] >= pos["stop"] else pos["stop"]
-                finish(i, px, {"init": "стоп", "be": "безубыток", "trail": "трейлинг", "ptrail": "трейлинг по паттерну", "lad": "лесенка"}[pos["stage"]])
+                finish(i, px, {"init": "стоп", "be": "безубыток", "trail": "трейлинг", "ptrail": "трейлинг по паттерну", "lad": "лесенка", "wall": "под стенкой"}[pos["stage"]])
             elif pos.get("tp") and not (pos.get("bo") and pos["i_in"] == i) and ((L_ and h[i] >= pos["tp"]) or ((not L_) and l[i] <= pos["tp"])):
                 finish(i, pos["tp"], "цель")
             else:
                 pos["mfe"] = max(pos["mfe"], fav)
                 pos["ext"] = max(pos["ext"], h[i]) if L_ else min(pos["ext"], l[i])
                 if (not pos["be"]) and fav >= pos["be_thr"]:
-                    pos["be"], pos["stop"], pos["stage"] = True, e * (1 + (1 if L_ else -1) * pos.get("be_lock", P.get("be_lock", 0)) / 100), "be"
+                    q_be = e * (1 + (1 if L_ else -1) * pos.get("be_lock", P.get("be_lock", 0)) / 100)
+                    pos["be"] = True
+                    if (q_be > pos["stop"]) if L_ else (q_be < pos["stop"]): pos["stop"], pos["stage"] = q_be, "be"  # БУ не должен ослаблять уже подтянутый стоп (под стенкой)
                     if P.get("be_intrabar") and ((L_ and c[i] <= pos["stop"]) or ((not L_) and c[i] >= pos["stop"])):
                         # свеча взвела БУ и закрылась по ту сторону БУ-стопа: цена пересекла стоп уже после экстремума, значит выход по цене стопа в этой же свече
                         finish(i, pos["stop"], "безубыток")
+                if pos is not None and pos.get("vpx") and P.get("vp_wall_stop", True) and P.get("sym") and i + 1 < T:
+                    # стоп под стенкой поддержки (лонг) / над стенкой сопротивления (шорт) из записи стакана; только подтягивание
+                    q_w = vpm.wall_stop_level(P.get("sym"), pos["side"], int(t[i]) + tfms_, float(c[i]), e, pos["stop"], float(atr[i]), P)
+                    if q_w is not None: pos["stop"], pos["stage"] = float(q_w), "wall"
                 if pos is not None and P.get("be_l_at") and pos.get("tp0") and not pos.get("lad"):
                     # «лесенка» БУ: когда цена прошла be_l_at пути до цели, стоп переносится на be_l_lock пути (доли расстояния вход->цель), только в сторону прибыли
                     d_l = abs(pos["tp0"] - e) / e * 100
