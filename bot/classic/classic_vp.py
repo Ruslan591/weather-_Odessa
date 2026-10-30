@@ -6,12 +6,68 @@
 Вход всегда на открытии свечи, следующей за сигнальной (как у остальных прогонов); стоп, цель и безубыток для каждой сделки считает этот модуль и передаёт в classic_strategy.simulate (pre['_vp']).
 ZigZag здесь — по порогу отклонения в % (не пиксель-в-пиксель порт индикатора MT4): depth — минимум свечей между соседними пивотами, deviation — минимальный откат в %, backstep — сколько свечей экстремум должен «отстояться»."""
 import numpy as np
+import os, json, time, sqlite3, bisect
 
 ZZ_DEF = {"5m": (12, 0.6, 3), "15m": (12, 1.0, 3), "30m": (10, 1.2, 3), "1h": (8, 1.5, 2)}  # depth, deviation %, backstep по таймфреймам (если в настройках 0)
 VPD = dict(vp_mode="auto", vp_rows=48, vp_va=70.0, zz_depth=0, zz_dev=0.0, zz_back=0, vp_flat_delta=0.1, vp_par=0.6, vp_hvn=1.5, vp_lvn=0.5,
            vp_tol_atr=0.3, vp_buf_atr=0.1, vp_hist_bars=1000, vp_ahead_atr=1.5, vp_imp_atr=1.0, vp_bo_entry="close", vp_retest_bars=10, vp_ret_bars=5,
            vp_sl_atr=0.5, vp_rr=2.0, vp_min_rr=1.0, vp_be_poc=True, vp_be_frac=0.65, vp_start="auto", vp_starts={}, vp_neutral="skip",
-           vp_bounce=True, vp_breakout=True, vp_return=True)
+           vp_bounce=True, vp_breakout=True, vp_return=True,
+           vp_wick_void=True, vp_room_r=1.5, vp_wall_stop=True, vp_ws_buf_atr=0.15, vp_ws_min_atr=0.5)
+
+
+# ---- стакан (book.db, пишет classic_book.py): стенки на момент свечи ----
+BOOK_DB = os.path.join(os.environ.get("CLASSIC_DIR", "/opt/trading-bot/classic"), "book.db")
+_BOOK = {}
+
+
+def book_series(sym, ms_from):
+    """-> (ts[], walls[]) снимки стакана пары начиная с ms_from (кэш 60 с); пусто, если записи нет."""
+    if not sym: return [], []
+    now = time.time(); k = _BOOK.get(sym)
+    if k and now - k[0] < 60 and k[1] <= ms_from: return k[2], k[3]
+    ts, ws = [], []
+    try:
+        c = sqlite3.connect("file:%s?mode=ro" % BOOK_DB, uri=True, timeout=10)
+        for a, b in c.execute("SELECT ts, walls FROM snap WHERE sym=? AND ts>=? ORDER BY ts", (sym, int(ms_from) - 600000)):
+            ts.append(a); ws.append(json.loads(b) if b else [])
+        c.close()
+    except Exception:
+        ts, ws = [], []
+    _BOOK[sym] = (now, int(ms_from), ts, ws)
+    return ts, ws
+
+
+def walls_at(ser, ms, persist=True):
+    """Стенки в снимке не позже ms (не старше 3 мин). persist: стенка должна быть и в снимке ~2.5 мин раньше (на той же цене +-0.15%), иначе это мелькание. -> список {s,p,v,m} или None, если снимка нет."""
+    ts, ws = ser
+    if not ts: return None
+    j = bisect.bisect_right(ts, ms) - 1
+    if j < 0 or ms - ts[j] > 180000: return None
+    cur = ws[j]
+    if not persist: return cur
+    j2 = bisect.bisect_right(ts, ms - 150000) - 1
+    if j2 < 0 or (ms - 150000) - ts[j2] > 180000: return cur
+    old = ws[j2]
+    return [w for w in cur if any(o_["s"] == w["s"] and abs(o_["p"] - w["p"]) / w["p"] <= 0.0015 for o_ in old)]
+
+
+def wall_stop_level(sym, side, close_ms, price, entry, cur_stop, atr_i, P, ser=None):
+    """Стоп под стенкой поддержки (лонг) / над стенкой сопротивления (шорт): среди стенок между входом и ценой (не ближе vp_ws_min_atr ATR к цене)
+    берётся самая дальняя от цены, т.е. нижняя у лонга; стоп = цена стенки -/+ vp_ws_buf_atr ATR. Только подтягивание, и стоп должен быть в плюсе (за входом). -> цена или None."""
+    ser = ser if ser is not None else book_series(sym, close_ms - 3 * 3600000)
+    W = walls_at(ser, close_ms)
+    if not W: return None
+    buf = float(P.get("vp_ws_buf_atr", 0.15)) * atr_i; mn = float(P.get("vp_ws_min_atr", 0.5)) * atr_i
+    if side == "L":
+        cand = [w["p"] for w in W if w["s"] == "b" and entry < w["p"] <= price - mn]
+        if not cand: return None
+        q = min(cand) - buf
+        return q if (q > cur_stop and q > entry and q < price) else None
+    cand = [w["p"] for w in W if w["s"] == "a" and price + mn <= w["p"] < entry]
+    if not cand: return None
+    q = max(cand) + buf
+    return q if (q < cur_stop and q < entry and q > price) else None
 
 
 def zigzag(h, l, depth, dev, back):
@@ -133,6 +189,7 @@ def vp_signals(pre, P):
         except Exception:
             start_ov = None
     day_cache = {}
+    tfms = (float(t[1]) - float(t[0])) if len(t) > 1 else 300000.0
 
     def ypoc_at(i):
         d = int(t[i] // 86400000) - 1
@@ -189,6 +246,14 @@ def vp_signals(pre, P):
             if risk <= 0 or tp is None: return False
             rew = (tp - ent) if side == "L" else (ent - tp)
             if rew <= 0 or rew / risk < float(pr["vp_min_rr"]): return False
+            if kind in ("break", "retest") and float(pr["vp_room_r"]) > 0:  # запас хода: до ближайшего подтверждённого лоя (шорт) / хая (лонг) и до стенки стакана не меньше vp_room_r x риск
+                rm = []
+                if side == "S": rm += [ent - q["p"] for q in LP[-30:] if q["p"] < ent]
+                else: rm += [q["p"] - ent for q in HP[-30:] if q["p"] > ent]
+                bw = walls_at(book_series(sym, t[W] if len(t) > W else t[0]), int(t[i]) + tfms) if sym else None
+                if bw:
+                    rm += [ent - w_["p"] for w_ in bw if w_["s"] == "b" and w_["p"] < ent] if side == "S" else [w_["p"] - ent for w_ in bw if w_["s"] == "a" and w_["p"] > ent]
+                if rm and min(rm) < float(pr["vp_room_r"]) * risk: return False
             thr = float(pr["vp_be_frac"]) * rew / ent * 100
             if pr["vp_be_poc"] and poc_be is not None:
                 dpoc = (poc_be - ent) if side == "L" else (ent - poc_be)
@@ -227,6 +292,7 @@ def vp_signals(pre, P):
                     if pr["vp_return"]: pend_ret = dict(side=("S" if side == "L" else "L"), bi=i, exp=i + int(pr["vp_ret_bars"]), ext=(h[i] if side == "L" else l[i]), br=side)
                 elif dens <= lv or str(pr["vp_neutral"]) == "true":  # истинный пробой: за границей зона пустоты (LVN)
                     if not pr["vp_breakout"]: continue
+                    if pr["vp_wick_void"] and bool(((l[hb:i] <= z1) & (h[hb:i] >= z0)).any()): continue  # цена в этой зоне уже бывала (прокол тенью) - это не пустота, пробой пропускаем
                     if str(pr["vp_bo_entry"]) == "retest":
                         pend_rt = dict(side=side, bi=i, exp=i + int(pr["vp_retest_bars"]))
                     else:
