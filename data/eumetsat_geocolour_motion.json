@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-30T06:50:00.000Z",
+  "timestamp": "2026-10-30T07:00:00.000Z",
   "buffer_size": 6,
   "buffer_span_minutes": 50,
   "observed_area": {
@@ -15,26 +15,26 @@
   "valid": true,
   "speed_kmh": 14.6,
   "direction_compass": "З",
-  "bearing_deg": 276.8,
+  "bearing_deg": 276.6,
   "frame_pairs_used": 5,
-  "acceleration_kmh": 0.5,
-  "turning_deg": -3.4,
+  "acceleration_kmh": -0.8,
+  "turning_deg": -1.2,
   "acceleration_verdict": "скорость стабильна",
   "turning_verdict": "направление стабильно",
   "forecast_displacement": {
     "30min": {
-      "distance_km": 7.6,
-      "bearing_deg": 273.0,
+      "distance_km": 6.9,
+      "bearing_deg": 275.0,
       "compass": "З"
     },
     "60min": {
-      "distance_km": 15.5,
-      "bearing_deg": 271.0,
+      "distance_km": 13.3,
+      "bearing_deg": 274.0,
       "compass": "З"
     },
     "120min": {
-      "distance_km": 32.5,
-      "bearing_deg": 267.0,
+      "distance_km": 24.8,
+      "bearing_deg": 272.0,
       "compass": "З"
     }
   },
@@ -53,12 +53,22 @@
   "cloud_mass_distance_km": 0.8,
   "cloud_mass_bearing_deg": 325.0,
   "cloud_mass_compass": "СЗ",
-  "cloud_mass_area_km2": 213485,
+  "cloud_mass_area_km2": 213488,
   "target_confirmation": {
-    "confirmed": null,
-    "reason": "candidates пуст или отсутствует (снапшот от старой версии cloud_forecast.py?)"
+    "confirmed": true,
+    "target_id": 0,
+    "target_area_km2": 77.4,
+    "roi_cloud_fraction": 1.0,
+    "verdict": "GeoColour подтверждает: в ROI CLM-цели преобладает облачность"
   },
   "system_analysis_all": [],
-  "local_analysis_all": [],
+  "local_analysis_all": [
+    {
+      "target_id": 0,
+      "available": true,
+      "roi_cloud_fraction": 1.0,
+      "confirmed": true
+    }
+  ],
   "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
 }
