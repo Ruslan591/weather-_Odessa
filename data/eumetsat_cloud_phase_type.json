@@ -1,17 +1,21 @@
 {
-  "timestamp": "2026-10-30T08:37:31Z",
+  "timestamp": "2026-10-30T08:52:21Z",
   "mode": "day",
-  "unclassified_fraction_now": 0.792,
-  "phase_ordinal_now": 5.48,
-  "phase_ordinal_delta": 1.43,
+  "unclassified_fraction_now": 0.8,
+  "phase_ordinal_now": 5.6,
+  "phase_ordinal_delta": 1.1,
   "phase_verdict": "смещается к льду/мощной конвекции",
   "type_group_now": 1.0,
-  "type_group_delta": 0.03,
+  "type_group_delta": 0.02,
   "type_verdict": "без существенных изменений",
   "target_confirmation": {
-    "confirmed": null,
-    "reason": "мало классифицированных пикселей в ROI цели CLM (облачно, но цвет неуверенный, либо вне окна)",
-    "target_id": 0
+    "confirmed": true,
+    "target_id": 0,
+    "target_area_km2": 190.8,
+    "roi_cloud_fraction": 0.649,
+    "roi_dominant_phase_ordinal": 0.0,
+    "roi_dominant_phase_label": "безоблачно",
+    "verdict": "Phase/Type подтверждает: в ROI CLM-цели преобладает облачность"
   },
   "system_analysis": {
     "available": false,
@@ -21,8 +25,19 @@
   "local_analysis_all": [
     {
       "target_id": 0,
-      "available": false,
-      "reason": "мало классифицированных пикселей в ROI (облачно, но цвет неуверенный, либо вне окна)"
+      "available": true,
+      "roi_cloud_fraction": 0.649,
+      "confirmed": true,
+      "roi_dominant_phase_label": "безоблачно",
+      "roi_dominant_type_label": "плотная/высокая"
+    },
+    {
+      "target_id": 1,
+      "available": true,
+      "roi_cloud_fraction": 0.617,
+      "confirmed": true,
+      "roi_dominant_phase_label": "безоблачно",
+      "roi_dominant_type_label": "плотная/высокая"
     }
   ],
   "buffer_status": {
