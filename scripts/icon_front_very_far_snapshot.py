@@ -31,8 +31,10 @@ import fcntl
 import json
 import math
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import traceback
 from datetime import datetime, timedelta, timezone
@@ -53,6 +55,10 @@ import field_motion_common as fc  # noqa: E402
 
 GIT_LOCK_FILE = "/tmp/vps_git.lock"
 OWN_LOCK_FILE = "/tmp/icon_front_very_far.lock"
+# Кадры рендерятся во временный каталог ВНЕ репозитория; в дерево репо они попадают только под GIT_LOCK_FILE
+# (publish_tier + commit + push, секунды) — иначе reset --hard чужого пайплайна откатывает manifest.json (см. docs/topics/icon_eu_fronts.md, 29.10)
+STAGE_ROOT = os.path.join(tempfile.gettempdir(), "icon_front_stage")
+GIT_LOCK_WAIT_SEC = 300
 
 KEEP_LAST = 24  # было 5; 24 кадра ≈ сутки анимации (кадры сжаты: geocolour JPEG, остальное палитровый PNG)
 FORCE_REGEN = os.environ.get("ICON_FRONT_FORCE") == "1"  # пересобрать текущий valid_time, не трогая историю
@@ -464,9 +470,37 @@ def git_sync():
         fcntl.flock(lock, fcntl.LOCK_UN)
 
 
-def git_commit_push(paths, message):
+def acquire_git_lock_wait(max_wait=GIT_LOCK_WAIT_SEC):
+    """Ждёт GIT_LOCK_FILE до max_wait секунд (другие пайплайны держат его секунды). None — не получили."""
     lock = open(GIT_LOCK_FILE, "w")
-    fcntl.flock(lock, fcntl.LOCK_EX)
+    waited = 0
+    while True:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return lock
+        except OSError:
+            if waited >= max_wait:
+                lock.close()
+                return None
+            time.sleep(1)
+            waited += 1
+
+
+def git_sync_locked():
+    """fetch + checkout -B main origin/main; вызывать ТОЛЬКО под GIT_LOCK_FILE. Сначала сбрасываем наши tracked-файлы
+    (manifest/latest_log тиров), иначе checkout может отказаться из-за локальных правок."""
+    dirs = [os.path.relpath(c["out_dir"], REPO_DIR) for c in TIERS.values()]
+    subprocess.run(["git", "-C", REPO_DIR, "checkout", "--"] + dirs, capture_output=True)
+    subprocess.run(["git", "-C", REPO_DIR, "fetch", "--depth", "20", "origin", "main", "--update-shallow"], check=True)
+    subprocess.run(["git", "-C", REPO_DIR, "checkout", "-B", "main", "origin/main"], check=True)
+
+
+def git_commit_push(paths, message, locked=False):
+    """locked=True — вызывающий уже держит GIT_LOCK_FILE (flock на другом дескрипторе того же файла заблокировал бы нас самих)."""
+    lock = None
+    if not locked:
+        lock = open(GIT_LOCK_FILE, "w")
+        fcntl.flock(lock, fcntl.LOCK_EX)
     try:
         subprocess.run(["git", "-C", REPO_DIR, "add"] + paths, check=True)
         r = subprocess.run(["git", "-C", REPO_DIR, "commit", "-m", message])
@@ -485,7 +519,8 @@ def git_commit_push(paths, message):
                 return False
         return False
     finally:
-        fcntl.flock(lock, fcntl.LOCK_UN)
+        if lock is not None:
+            fcntl.flock(lock, fcntl.LOCK_UN)
 
 
 
@@ -989,14 +1024,8 @@ def process_tier(tier_key, tier_cfg, fields, lats, lons, run_dt, lead, valid_dt)
             log(f"[{tier_key}] manifest.json повреждён, начинаем заново")
 
     valid_iso = valid_dt.isoformat()
-    if FORCE_REGEN and manifest["snapshots"] and manifest["snapshots"][-1]["valid_time"] == valid_iso:
-        stale = manifest["snapshots"].pop()
-        for fn in stale["files"].values():
-            p = os.path.join(out_dir, fn)
-            if os.path.exists(p):
-                os.remove(p)
-        log(f"[{tier_key}] FORCE: пересобираю снимок {valid_iso}, история остальных сохранена")
-    if manifest["snapshots"] and manifest["snapshots"][-1]["valid_time"] == valid_iso:
+    # FORCE_REGEN: замена существующего снимка делается в publish_tier под локом (здесь репо-дерево не трогаем)
+    if not FORCE_REGEN and manifest["snapshots"] and manifest["snapshots"][-1]["valid_time"] == valid_iso:
         log(f"[{tier_key}] уже есть снимок на {valid_iso} — пропускаю")
         with open(log_path, "w") as f:
             f.write("\n".join(LOG_LINES[-300:]))
@@ -1006,9 +1035,12 @@ def process_tier(tier_key, tier_cfg, fields, lats, lons, run_dt, lead, valid_dt)
     p_front, p_lats, p_lons = compute_pfront(fields, lats, lons, bbox)
 
     ts_label = valid_dt.strftime("%Y%m%dT%H%M%SZ")
-    geocolour_path = os.path.join(out_dir, f"{ts_label}_geocolour.jpg")
-    isobars_path = os.path.join(out_dir, f"{ts_label}_isobars.png")
-    pfront_path = os.path.join(out_dir, f"{ts_label}_pfront.png")
+    stage_dir = os.path.join(STAGE_ROOT, tier_key)   # рендер вне репо, см. STAGE_ROOT
+    shutil.rmtree(stage_dir, ignore_errors=True)
+    os.makedirs(stage_dir, exist_ok=True)
+    geocolour_path = os.path.join(stage_dir, f"{ts_label}_geocolour.jpg")
+    isobars_path = os.path.join(stage_dir, f"{ts_label}_isobars.png")
+    pfront_path = os.path.join(stage_dir, f"{ts_label}_pfront.png")
 
     log(f"[{tier_key}] запрашиваю EUMETSAT GeoColour...")
     arr = None
@@ -1036,7 +1068,7 @@ def process_tier(tier_key, tier_cfg, fields, lats, lons, run_dt, lead, valid_dt)
 
     # ИК 10.5 мкм (серая шкала) — для ночи/сумерек, когда GeoColour неудобен. Слой необязательный:
     # если запрос не удался, кадр сохраняется без "ir", тир не пропускаем. Сжатие: 8-бит grayscale JPEG q80.
-    ir_path = os.path.join(out_dir, f"{ts_label}_ir.jpg")
+    ir_path = os.path.join(stage_dir, f"{ts_label}_ir.jpg")
     ir_ok = False
     try:
         ir_times = [eumetsat_actual_iso]
@@ -1076,8 +1108,8 @@ def process_tier(tier_key, tier_cfg, fields, lats, lons, run_dt, lead, valid_dt)
         try:
             fronts_name = f"{ts_label}_fronts.png"
             n_fr = render_transparent_fronts(fields["_fronts"], fields.get("_centers"),
-                                             os.path.join(out_dir, fronts_name), bbox, px)
-            shrink_png(os.path.join(out_dir, fronts_name))
+                                             os.path.join(stage_dir, fronts_name), bbox, px)
+            shrink_png(os.path.join(stage_dir, fronts_name))
             log(f"[{tier_key}] фронты: {n_fr} линий в кадре")
         except Exception as e:
             log(f"[{tier_key}] фронты не отрисованы: {e}")
@@ -1104,16 +1136,48 @@ def process_tier(tier_key, tier_cfg, fields, lats, lons, run_dt, lead, valid_dt)
         snapshot["files"]["fronts"] = fronts_name
     if ir_ok:
         snapshot["files"]["ir"] = os.path.basename(ir_path)
-    manifest["snapshots"].append(snapshot)
+    return {"snapshot": snapshot, "stage_dir": stage_dir}
 
-    while len(manifest["snapshots"]) > KEEP_LAST:
-        old = manifest["snapshots"].pop(0)
+
+def publish_tier(tier_key, tier_cfg, staged):
+    """Переносит готовый кадр из stage в репо-дерево, обновляет manifest.json (читаем СВЕЖИЙ, после git_sync), ротирует
+    до KEEP_LAST. Вызывать ТОЛЬКО под GIT_LOCK_FILE, сразу перед commit+push. True — тир изменён."""
+    out_dir = tier_cfg["out_dir"]
+    os.makedirs(out_dir, exist_ok=True)
+    manifest_path = os.path.join(out_dir, "manifest.json")
+    log_path = os.path.join(out_dir, "latest_log.txt")
+    snapshot, stage_dir = staged["snapshot"], staged["stage_dir"]
+
+    manifest = {"snapshots": []}
+    if os.path.exists(manifest_path):
+        try:
+            manifest = json.load(open(manifest_path))
+        except Exception:
+            log(f"[{tier_key}] manifest.json повреждён, начинаем заново")
+    snaps = manifest.get("snapshots", [])
+    same = [s for s in snaps if s["valid_time"] == snapshot["valid_time"]]
+    if same and not FORCE_REGEN:
+        log(f"[{tier_key}] снимок {snapshot['valid_time']} уже в манифесте на main — пропускаю")
+        return False
+    for s in same:   # FORCE_REGEN: заменяем, историю остальных не трогаем
+        snaps.remove(s)
+        for fn in s["files"].values():
+            p = os.path.join(out_dir, fn)
+            if os.path.exists(p):
+                os.remove(p)
+        log(f"[{tier_key}] FORCE: пересобираю снимок {snapshot['valid_time']}")
+    for fn in snapshot["files"].values():
+        shutil.move(os.path.join(stage_dir, fn), os.path.join(out_dir, fn))
+    snaps.append(snapshot)
+    snaps.sort(key=lambda s: s["valid_time"])
+    while len(snaps) > KEEP_LAST:
+        old = snaps.pop(0)
         for fn in old["files"].values():
             p = os.path.join(out_dir, fn)
             if os.path.exists(p):
                 os.remove(p)
         log(f"[{tier_key}] удалён старый снимок {old['valid_time']}")
-
+    manifest["snapshots"] = snaps
     with open(manifest_path, "w") as f:
         json.dump(manifest, f, indent=2, ensure_ascii=False)
     with open(log_path, "w") as f:
@@ -1286,28 +1350,53 @@ def main():
         else:
             log("нет T850/RH/U/V — фронты пропущены")
 
-        touched_dirs = []
+        shutil.rmtree(STAGE_ROOT, ignore_errors=True)
+        staged = {}
         for tier_key, tier_cfg in TIERS.items():
             if not needs_update[tier_key]:
                 log(f"[{tier_key}] уже свежий — пропускаю")
                 continue
             try:
-                if process_tier(tier_key, tier_cfg, fields, lats, lons, run_dt, lead, valid_dt):
-                    touched_dirs.append(f"data/{os.path.basename(tier_cfg['out_dir'])}/")
+                res = process_tier(tier_key, tier_cfg, fields, lats, lons, run_dt, lead, valid_dt)
+                if res:
+                    staged[tier_key] = res
             except Exception as e:
                 log(f"[{tier_key}] ОШИБКА: {e}")
                 log(traceback.format_exc())
 
-        arch_dir = save_front_archive(fields, run_dt, lead, valid_dt)
-        if arch_dir:
-            touched_dirs.append(arch_dir)
+        # Публикация (секунды) целиком под GIT_LOCK_FILE: sync -> перенос кадров -> manifest -> commit -> push.
+        git_lock = acquire_git_lock_wait()
+        if git_lock is None:
+            log(f"GIT_LOCK не получен за {GIT_LOCK_WAIT_SEC}с — кадры {valid_dt.isoformat()} в этом цикле НЕ опубликованы")
+            return
+        try:
+            try:
+                git_sync_locked()
+            except Exception as e:
+                log(f"git_sync под локом не удался: {e} — публикую в текущее дерево как есть")
+            touched_dirs = []
+            for tier_key, st in staged.items():
+                try:
+                    if publish_tier(tier_key, TIERS[tier_key], st):
+                        touched_dirs.append(f"data/{os.path.basename(TIERS[tier_key]['out_dir'])}/")
+                except Exception as e:
+                    log(f"[{tier_key}] ОШИБКА публикации: {e}")
+                    log(traceback.format_exc())
 
-        if touched_dirs:
-            log(f"Коммичу и пушу: {touched_dirs}")
-            ok = git_commit_push(touched_dirs, f"icon_front: snapshot {valid_dt.isoformat()} ({', '.join(touched_dirs)})")
-            log(f"git push: {'OK' if ok else 'нечего коммитить/не удалось'}")
-        else:
-            log("Ни один тир не обновился — коммитить нечего")
+            arch_dir = save_front_archive(fields, run_dt, lead, valid_dt)
+            if arch_dir:
+                touched_dirs.append(arch_dir)
+
+            if touched_dirs:
+                log(f"Коммичу и пушу: {touched_dirs}")
+                ok = git_commit_push(touched_dirs, f"icon_front: snapshot {valid_dt.isoformat()} ({', '.join(touched_dirs)})", locked=True)
+                log(f"git push: {'OK' if ok else 'нечего коммитить/не удалось'}")
+            else:
+                log("Ни один тир не обновился — коммитить нечего")
+        finally:
+            fcntl.flock(git_lock, fcntl.LOCK_UN)
+            git_lock.close()
+        shutil.rmtree(STAGE_ROOT, ignore_errors=True)
 
     except Exception as e:
         log(f"ОШИБКА (main): {e}")
