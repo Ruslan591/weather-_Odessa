@@ -1,33 +1,40 @@
 {
-  "timestamp": "2026-10-30T17:52:22Z",
+  "timestamp": "2026-10-30T18:07:30Z",
   "current_state": "no_precip",
   "target_type": "precip_mass",
-  "distance_km_now": 230.6,
-  "bearing_deg": 3.0,
+  "distance_km_now": 234.5,
+  "bearing_deg": 1.0,
   "compass": "С",
-  "blob_area_km2": 515.0,
+  "blob_area_km2": 574.0,
   "verdict": "скорость посчитать не удалось (поле слишком однородно во всех кадрах)",
-  "probability_percent": 21,
+  "probability_percent": 22,
   "probability_note": "эвристика (близость + размер поля), скорость не посчиталась",
   "method_note": "Скорость усреднена по 4 кадрам msg_fes:h60b (шаг 15 мин, phase correlation). Presence = непрозрачный пиксель. Край ищется только среди связных областей >= 40px (~53км²). Линейная экстраполяция, годится на ~1 час.",
   "target_confirmation": {
     "confirmed": null,
-    "reason": "среди кандидатов нет локальных масс (только системы синоптического масштаба)"
+    "reason": "известный шумовой объект в этой точке подавлен (сигнатура -165_-200), других локальных целей нет"
   },
   "system_analysis": {
     "available": true,
-    "target_id": 0,
-    "area_km2": 868.6,
+    "target_id": 1,
+    "area_km2": 1083.4,
     "roi_precip_fraction": 0.0,
     "has_precip": false
   },
   "system_analysis_all": [
+    {
+      "target_id": 1,
+      "available": true,
+      "roi_precip_fraction": 0.0,
+      "has_precip": false
+    }
+  ],
+  "local_analysis_all": [
     {
       "target_id": 0,
       "available": true,
       "roi_precip_fraction": 0.0,
       "has_precip": false
     }
-  ],
-  "local_analysis_all": []
+  ]
 }
