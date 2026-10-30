@@ -1,23 +1,39 @@
 {
-  "timestamp": "2026-10-30T14:27:04Z",
+  "timestamp": "2026-10-30T14:42:55Z",
   "current_state": "no_precip",
   "target_type": "precip_mass",
-  "distance_km_now": 81.4,
-  "bearing_deg": 1.0,
+  "distance_km_now": 91.1,
+  "bearing_deg": 360.0,
   "compass": "С",
-  "blob_area_km2": 408.0,
-  "verdict": "скорость посчитать не удалось (поле слишком однородно во всех кадрах)",
-  "probability_percent": 19,
-  "probability_note": "эвристика (близость + размер поля), скорость не посчиталась",
+  "speed_kmh": 0.0,
+  "direction_compass": "СВ",
+  "cpa_km": 91.1,
+  "eta_min": null,
+  "blob_area_km2": 336.0,
+  "verdict": "почти стоит на месте",
+  "approaching": false,
+  "frame_pairs_used": 2,
+  "probability_percent": 25,
+  "probability_note": "эвристика (близость точки сближения + размер поля + уверенность в скорости), не физическая модель осадков",
   "method_note": "Скорость усреднена по 4 кадрам msg_fes:h60b (шаг 15 мин, phase correlation). Presence = непрозрачный пиксель. Край ищется только среди связных областей >= 40px (~53км²). Линейная экстраполяция, годится на ~1 час.",
   "target_confirmation": {
     "confirmed": null,
-    "reason": "candidates пуст или отсутствует (снапшот от старой версии cloud_forecast.py?)"
+    "reason": "среди кандидатов нет локальных масс (только системы синоптического масштаба)"
   },
   "system_analysis": {
-    "available": false,
-    "reason": "candidates пуст или отсутствует"
+    "available": true,
+    "target_id": 0,
+    "area_km2": 213427.5,
+    "roi_precip_fraction": 0.021,
+    "has_precip": false
   },
-  "system_analysis_all": [],
+  "system_analysis_all": [
+    {
+      "target_id": 0,
+      "available": true,
+      "roi_precip_fraction": 0.021,
+      "has_precip": false
+    }
+  ],
   "local_analysis_all": []
 }
