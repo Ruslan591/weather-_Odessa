@@ -953,6 +953,9 @@ async def build_payload(runs, now):
     out = []
     by_track = {"me": [], "bot": [], "vp": []}
     prop_tr = []  # сделки прогонов бота в режиме «только предлагает» — это предложения для вкладки «Вместе»
+    va_ = vp_active(runs)
+    vp_since = min((r["start_ms"] for r in va_), default=0)  # счёт «Профиль» идёт с самого раннего старта активных прогонов
+    vp_tf_on = {r["cfg"]["tf"] for r in va_}  # остановленные прогоны снятых таймфреймов в счёт не входят
     for r in runs:
         if r["stop_ms"] is None:
             try:
@@ -968,6 +971,9 @@ async def build_payload(runs, now):
         md = r.get("mode") or "auto"
         if tk == "bot" and md == "propose":
             prop_tr += [dict(x, sym=r["sym"], tf=r["cfg"]["tf"], run=r["id"]) for x in tr]
+        elif tk == "vp":  # журнал и баланс Профиля: только сделки с даты начала счёта и только текущие таймфреймы (остановленные прогоны старых ТФ/дат раньше попадали в журнал)
+            if r["stop_ms"] is None or r["cfg"]["tf"] in vp_tf_on:
+                by_track[tk] += [dict(x, sym=r["sym"], tf=r["cfg"]["tf"], run=r["id"]) for x in tr if x["t_in"] >= vp_since]
         elif tk in by_track:
             by_track[tk] += [dict(x, sym=r["sym"], tf=r["cfg"]["tf"], run=r["id"]) for x in tr]
         out.append({"id": r["id"], "name": r["name"], "sym": r["sym"], "track": tk, "mode": md, "cfg": dict(cs.PARAMS, **r["cfg"]), "start_ms": r["start_ms"],
