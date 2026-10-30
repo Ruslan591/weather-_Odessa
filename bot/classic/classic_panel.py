@@ -899,23 +899,43 @@ async def api_prop_chart(req):
         return web.json_response({"error": "прогон не найден"}, status=404)
     now = int(time.time() * 1000)
     tr = await run_trades(run, now)
-    x = next((z for z in tr if int(z["t_in"]) == t_in and z["side"] == side), None)
+    x = next((z for z in tr if (int(z["t_in"]) == t_in or int(z.get("t_sig", z["t_in"])) == t_in) and z["side"] == side), None)
     if x is None:
         return web.json_response({"error": "сделка не найдена"}, status=404)
+    if run["stop_ms"] is not None:  # остановленный прогон: исход сделки берём из сохранённого при остановке (пересчёт «как будто идёт» может отличаться)
+        sv = next((z for z in (run.get("trades") or []) if int(z["t_in"]) == int(x["t_in"]) and z["side"] == side), None)
+        if sv:
+            x = dict(x, **{k_: sv[k_] for k_ in ("t_out", "p_out", "reason", "open", "net", "be", "stop") if k_ in sv})
+    t_in = int(x["t_in"])
     sym, tf = run["sym"], run["cfg"]["tf"]
+    tfms_ = TFMS[tf]
     df = await get_df_long(sym, tf)
+    if len(df) and int(df.t.iloc[0]) > t_in - 150 * tfms_:  # старая сделка за пределами последних ~2000 свечей: докачиваем историю
+        try:
+            df = await get_df_range(sym, tf, t_in - 150 * tfms_)
+        except Exception as e:
+            print("prop_chart: history extend failed %s %s: %r" % (sym, tf, e))
     closed, live = split_closed(df)
     ind = an.indicators(closed)
-    k = 260
+    tv = df.t.values
+    i_ent = int(max(0, min(len(tv) - 1, int((tv < t_in).sum()))))  # индекс свечи входа в этом df (первая свеча с t >= t_in)
+    if x["open"]:
+        i1_ = len(df)
+    else:
+        i1_ = min(len(df), int((tv <= int(x["t_out"])).sum()) + 60)  # закрытая: до выхода и ещё 60 свечей после
+    i0_ = max(0, i_ent - 150)
+    i1_ = min(i1_, i0_ + 600)
+    if x["open"] and i1_ - i0_ < len(df) - i0_:
+        i0_ = max(0, len(df) - 600)
     def sl(v):
         return [None if z is None else an._r(float(z)) for z in v]
-    chart = {"t": [int(z) for z in df.t.values[-k:]], "tf": tf}
+    chart = {"t": [int(z) for z in tv[i0_:i1_]], "tf": tf}
     for c_ in "ohlc":
-        chart[c_] = sl(df[c_].values[-k:])
+        chart[c_] = sl(df[c_].values[i0_:i1_])
     e20 = list(ind["ema20"].values)
     if live is not None:
         e20.append(None)
-    chart["ema20"] = sl(e20[-k:])
+    chart["ema20"] = sl(e20[i0_:i1_])
     P = dict(cs.PARAMS, **dict(run["cfg"], sym=sym))
     s = 1 if side == "L" else -1
     pin = float(x["p_in"])
@@ -923,7 +943,7 @@ async def api_prop_chart(req):
     if P.get("be_atr"):
         try:
             hh, ll, cc = df.h.values.astype(float), df.l.values.astype(float), df.c.values.astype(float)
-            i0 = int(x.get("i_in") or 0)
+            i0 = i_ent
             tr_ = [max(hh[j] - ll[j], abs(hh[j] - cc[j - 1]), abs(ll[j] - cc[j - 1])) for j in range(max(1, i0 - 13), i0 + 1)]
             thr = float(P["be_atr"]) * (sum(tr_) / len(tr_)) / pin * 100.0
         except Exception:
@@ -943,10 +963,11 @@ async def api_prop_chart(req):
     ch = None
     if x.get("chlw"):
         w = x["chlw"]  # [нижняя в начале, верхняя в начале, нижняя при входе, верхняя при входе, индекс начала]
-        ch = {"lo": [an._r(w[0]), an._r(w[2])], "up": [an._r(w[1]), an._r(w[3])], "i0": int(w[4]), "i1": int(x["i_in"])}
+        sh_ = i_ent - int(x["i_in"])  # индексы канала посчитаны в df прогона; переводим в индексы df графика
+        ch = {"lo": [an._r(w[0]), an._r(w[2])], "up": [an._r(w[1]), an._r(w[3])], "i0": int(w[4]) + sh_, "i1": i_ent}
     walls, walls_t = book_walls(sym, None if x["open"] else int(t_in))  # стенки: у открытой — текущие, у закрытой — на момент входа (если запись уже шла)
-    return web.json_response({"sym": sym, "tf": tf, "side": side, "sig": x.get("sig"), "t_in": t_in, "open": bool(x["open"]), "reason": x["reason"],
-                              "off": int(len(df) - len(chart["t"])), "chart": chart, "lines": lines, "ch": ch, "struct": struct, "walls": walls, "walls_t": walls_t, "vp": x.get("vpx")})
+    return web.json_response({"sym": sym, "tf": tf, "side": side, "sig": x.get("sig"), "t_in": t_in, "open": bool(x["open"]), "reason": x["reason"], "t_out": int(x["t_out"]), "p_out": an._r(float(x["p_out"])), "net": x.get("net"),
+                              "off": int(i0_), "chart": chart, "lines": lines, "ch": ch, "struct": struct, "walls": walls, "walls_t": walls_t, "vp": x.get("vpx")})
 
 
 async def build_payload(runs, now):
