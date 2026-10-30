@@ -1,7 +1,7 @@
 {
-  "task_id": "vt2",
+  "task_id": "vt3",
   "returncode": 0,
-  "stdout": "User=tbot\nWorkingDirectory=/opt/trading-bot/classic\nExecStart=/opt/trading-bot/venv/bin/python /opt/trading-bot/classic/classic_panel.py\nWantedBy=multi-user.target\n",
+  "stdout": "Traceback (most recent call last):\n  File \"/tmp/vt.py\", line 20, in <module>\n    asyncio.run(main())\n  File \"/usr/lib/python3.12/asyncio/runners.py\", line 194, in run\n    return runner.run(main)\n           ^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/asyncio/base_events.py\", line 687, in run_until_complete\n    return future.result()\n           ^^^^^^^^^^^^^^^\n  File \"/tmp/vt.py\", line 11, in main\n    df = await P.get_df_long(r['sym'], r['cfg']['tf'])\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/trading-bot/classic/classic_panel.py\", line 204, in get_df_long\n    raise RuntimeError(str(err))\nRuntimeError: 'NoneType' object has no attribute 'get'\n",
   "stderr": "",
-  "completed_at_utc": "2026-10-30T06:44:02Z"
+  "completed_at_utc": "2026-10-30T06:45:02Z"
 }
