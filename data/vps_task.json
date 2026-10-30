@@ -1,1 +1,1 @@
-{"task_id": "diff3-1793379527", "cmd": "systemctl cat classicbot | grep -i 'ExecStart\\|WorkingDir'; ls /opt/trading-bot | head -20", "timeout": 100}
+{"task_id": "diff4-1793379551", "cmd": "cd /opt/trading-bot/classic; nohup /opt/trading-bot/venv/bin/python /tmp/diff.py > /tmp/diff.log 2>&1 & sleep 150; tail -3 /tmp/diff.log; echo ---; tail -40 /tmp/diff.txt", "timeout": 250}
