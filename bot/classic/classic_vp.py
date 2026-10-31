@@ -71,7 +71,9 @@ def wall_stop_level(sym, side, close_ms, price, entry, cur_stop, atr_i, P, ser=N
 
 
 def zigzag(h, l, depth, dev, back):
-    """Подтверждённые пивоты: [{i, p, k:'H'|'L', conf}] — conf = свеча, на которой пивот подтверждён (раньше неё о нём знать нельзя)."""
+    """Подтверждённые пивоты: [{i, p, k:'H'|'L', conf}] — conf = свеча, на которой пивот подтверждён (раньше неё о нём знать нельзя).
+    Исправление 2026-10-31: если экстремум-кандидат оказался ближе depth свечей к прошлому пивоту, прежний код ждал его вечно (при уходе цены
+    от кандидата пивоты пропадали на недели). Теперь кандидат переносится на экстремум среди свечей не ближе depth от прошлого пивота."""
     n, dv = len(h), dev / 100.0
     piv, d, ei, ep, last_i = [], 0, 0, 0.0, -10 ** 9
     hi_i = lo_i = 0
@@ -89,15 +91,25 @@ def zigzag(h, l, depth, dev, back):
         if d == 1:
             if h[i] > ep:
                 ei, ep = i, h[i]
-            elif ep - l[i] >= ep * dv and i - ei >= back and ei - last_i >= depth:
-                piv.append(dict(i=ei, p=float(ep), k="H", conf=i)); last_i = ei; d = -1
-                j = ei + 1 + int(np.argmin(l[ei + 1:i + 1])); ei, ep = j, l[j]
+            elif ep - l[i] >= ep * dv and i - ei >= back:
+                if ei - last_i >= depth:
+                    piv.append(dict(i=ei, p=float(ep), k="H", conf=i)); last_i = ei; d = -1
+                    j = ei + 1 + int(np.argmin(l[ei + 1:i + 1])); ei, ep = j, l[j]
+                else:
+                    s0 = last_i + depth
+                    if s0 <= i:
+                        j = s0 + int(np.argmax(h[s0:i + 1])); ei, ep = j, h[j]
         else:
             if l[i] < ep:
                 ei, ep = i, l[i]
-            elif h[i] - ep >= ep * dv and i - ei >= back and ei - last_i >= depth:
-                piv.append(dict(i=ei, p=float(ep), k="L", conf=i)); last_i = ei; d = 1
-                j = ei + 1 + int(np.argmax(h[ei + 1:i + 1])); ei, ep = j, h[j]
+            elif h[i] - ep >= ep * dv and i - ei >= back:
+                if ei - last_i >= depth:
+                    piv.append(dict(i=ei, p=float(ep), k="L", conf=i)); last_i = ei; d = 1
+                    j = ei + 1 + int(np.argmax(h[ei + 1:i + 1])); ei, ep = j, h[j]
+                else:
+                    s0 = last_i + depth
+                    if s0 <= i:
+                        j = s0 + int(np.argmin(l[s0:i + 1])); ei, ep = j, l[j]
     return piv
 
 
