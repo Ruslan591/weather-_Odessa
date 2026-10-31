@@ -1,12 +1,17 @@
 {
-  "timestamp": "2026-10-31T16:58:09Z",
-  "status": "ok",
+  "timestamp": "2026-10-31T17:04:40Z",
+  "status": "suppressed_known_false_positive",
   "cloud_forecast_timestamp": "2026-10-31T13:45:00.000Z",
-  "target_id": 13,
-  "target_area_km2": 298.9,
-  "target_distance_km": 317.9,
-  "target_bearing_deg": 147.0,
-  "target_compass": "ЮВ",
+  "suppressed_target": {
+    "signature": "-135_-70",
+    "area_km2": 173.5,
+    "distance_km": 151.3,
+    "bearing_deg": 243.0,
+    "compass": "ЮЗ",
+    "not_confirmed_streak": 3,
+    "total_not_confirmed": 5,
+    "excluded_since": "2026-10-31T14:33:38Z"
+  },
   "system": {
     "target_id": 2,
     "area_km2": 3263.7,
@@ -44,43 +49,6 @@
   "local_suppressed_count": 8,
   "system_candidates": [],
   "system_suppressed_count": 5,
-  "frontal_tracks": [],
-  "also_suppressed_nearby": {
-    "signature": "-135_-70",
-    "area_km2": 173.5
-  },
-  "target_phase": {
-    "label": "безоблачно",
-    "cloud_fraction": 0.0
-  },
-  "existence": {
-    "modules": {
-      "ir_motion": {
-        "confirmed": false,
-        "timestamp": "2026-10-31T16:30:00.000Z"
-      },
-      "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-10-31T16:30:00.000Z"
-      },
-      "cloud_phase_type": {
-        "confirmed": false,
-        "timestamp": "2026-10-31T16:57:10Z"
-      }
-    },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
-  },
-  "phenomena": {
-    "precip_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-10-31T16:54:20Z"
-    },
-    "lightning_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-10-30T23:17:07Z"
-    }
-  },
-  "verdict": "CLM отметил цель в 318км ЮВ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (3264км²) в 193км Ю."
+  "verdict": "Известный шумовой объект в 151км ЮЗ (~174км²) — подавлено (не подтверждался 3 раз подряд). Отдельно: система синоптического масштаба (3264км²) в 193км Ю.",
+  "frontal_tracks": []
 }
