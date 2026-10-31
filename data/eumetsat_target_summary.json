@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-31T18:42:45Z",
+  "timestamp": "2026-10-31T18:47:30Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-10-31T18:15:00.000Z",
   "target_id": 1,
@@ -22,23 +22,6 @@
   },
   "local_candidates": [
     {
-      "target_id": 1,
-      "area_km2": 56.0,
-      "distance_km": 35.6,
-      "bearing_deg": 238.0,
-      "compass": "ЮЗ",
-      "elongation_aspect_ratio": 1.63,
-      "elongation_axis_deg": 59.0,
-      "elongation_axis_compass": "СВ-ЮЗ",
-      "frontlike": false,
-      "phase_label": "безоблачно",
-      "type_label": "безоблачно",
-      "has_precip": false,
-      "has_lightning": null,
-      "ir_confirmed": false,
-      "geocolour_confirmed": true
-    },
-    {
       "target_id": 2,
       "area_km2": 246.8,
       "distance_km": 49.5,
@@ -56,7 +39,7 @@
       "geocolour_confirmed": true
     }
   ],
-  "local_suppressed_count": 2,
+  "local_suppressed_count": 3,
   "system_candidates": [
     {
       "target_id": 0,
@@ -90,17 +73,17 @@
         "timestamp": "2026-10-31T18:20:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": true,
-        "timestamp": "2026-10-31T18:10:00.000Z"
+        "confirmed": false,
+        "timestamp": "2026-10-31T18:20:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": false,
         "timestamp": "2026-10-31T16:57:10Z"
       }
     },
-    "votes_confirmed": 1,
-    "votes_not_confirmed": 2,
-    "consensus": "disputed"
+    "votes_confirmed": 0,
+    "votes_not_confirmed": 3,
+    "consensus": "not_confirmed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -112,5 +95,5 @@
       "timestamp": "2026-10-30T23:17:07Z"
     }
   },
-  "verdict": "Цель в 36км ЮЗ, безоблачно — каналы расходятся: geocolour_motion подтверждают, ir_motion/cloud_phase_type нет. Отдельно: система синоптического масштаба (185824км²) в 3км В (площадь/форма ненадёжны — объект упирается в границы окна обзора)."
+  "verdict": "CLM отметил цель в 36км ЮЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (185824км²) в 3км В (площадь/форма ненадёжны — объект упирается в границы окна обзора)."
 }
