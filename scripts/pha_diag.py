@@ -23,7 +23,18 @@ run = [r for r in d["runs"] if r.get("sym") == SYM and r.get("track") == "vp" an
 cfg_now = {k: v for k, v in run["cfg"].items() if k.startswith(("vp_", "zz_"))}
 print("run", run["id"], "cfg:", {k: cfg_now[k] for k in sorted(cfg_now) if k not in ("vp_starts",)})
 
-df, _ = asyncio.run(cp.fetch_back(SYM, TF, now - DAYS * 86400000))
+import aiohttp
+
+
+async def _go():
+    cp.SES = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20))
+    try:
+        return await cp.fetch_back(SYM, TF, now - DAYS * 86400000)
+    finally:
+        await cp.SES.close()
+
+
+df, _ = asyncio.run(_go())
 df = df[df["t"] >= now - DAYS * 86400000].reset_index(drop=True)
 print("bars", len(df), ts(int(df["t"].iloc[0])), "->", ts(int(df["t"].iloc[-1])))
 pre = cs.prepare(df, now)
