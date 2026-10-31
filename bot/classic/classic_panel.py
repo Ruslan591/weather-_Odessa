@@ -873,8 +873,11 @@ async def vp_make(runs, sym, tfs, now, tpl_cfg):
     for tf in tfs:
         rid += 1
         own = [r for r in runs if track_of(r["cfg"]) == "vp" and r["cfg"]["tf"] == tf]  # настройки у каждого таймфрейма свои: берём у прогона того же ТФ
-        if own:
-            cfg = json.loads(json.dumps(max(own, key=lambda r: r["id"])["cfg"]))
+        if own:  # у пар теперь могут быть свои настройки: новая пара берёт самые частые на этом ТФ (при равенстве - у более нового прогона)
+            def _k(r): return json.dumps({k: v for k, v in r["cfg"].items() if k.startswith(("vp_", "zz_")) and k != "vp_since"}, sort_keys=True)
+            cnt = {}
+            for r in own: cnt[_k(r)] = cnt.get(_k(r), 0) + 1
+            cfg = json.loads(json.dumps(max(own, key=lambda r: (cnt[_k(r)], r["id"]))["cfg"]))
         else:  # у ТФ ещё не было своих настроек: копия общих, но ZigZag «по таймфрейму» (0), чтобы не тащить настройки чужого ТФ
             cfg = json.loads(json.dumps(tpl_cfg))
             cfg["zz_depth"] = cfg["zz_dev"] = cfg["zz_back"] = 0
@@ -1299,9 +1302,12 @@ async def api_runs(req):
                         if tf_ not in VP_TFS_ALL:
                             raise ValueError("плохой таймфрейм")
                         clean.pop("vp_start", None)
+                    sym_ = str(j.get("sym") or "").upper()  # настройки отдельной пары: только её прогоны (на выбранном ТФ)
+                    if sym_ and not ok_sym(sym_):
+                        raise ValueError("плохая пара")
                     n_ = 0
                     for r in runs:
-                        if r["stop_ms"] is None and track_of(r["cfg"]) == "vp" and (not tf_ or r["cfg"]["tf"] == tf_):
+                        if r["stop_ms"] is None and track_of(r["cfg"]) == "vp" and (not tf_ or r["cfg"]["tf"] == tf_) and (not sym_ or r["sym"] == sym_):
                             r["cfg"].update(clean); _RT.pop(r["id"], None); n_ += 1
                     if not n_:
                         raise ValueError("нет активных прогонов профиля")
