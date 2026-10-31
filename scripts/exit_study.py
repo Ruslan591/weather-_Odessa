@@ -107,4 +107,4 @@ def main():
             gp=v[v>0].sum();gl=-v[v<0].sum()
             cap=np.nanmean(np.where(m>1.0,v/m,np.nan)) if (m>1.0).any() else float('nan')
             print(f'{r:10s} {len(v):4d} {v.mean():7.3f} {np.median(v):7.3f} {100*(v>0).mean():5.1f} {gp/gl if gl>0 else 9:5.2f} {v[t<mid].mean():7.3f} {v[t>=mid].mean():7.3f} {100*cap:6.1f}')
-main()
+if __name__=="__main__": main()
