@@ -1,1 +1,1 @@
-{"task_id": "t1031b", "cmd": "cd /opt/weather-pipeline/repo && git fetch origin main -q; git show FETCH_HEAD:scripts/tmp_q1.py | python3 -", "timeout": 100}
+{"task_id": "t1031c", "cmd": "cd /opt/weather-pipeline/repo && git fetch origin main -q; git show FETCH_HEAD:scripts/pha_diag.py > /tmp/pha_diag.py; nohup python3 /tmp/pha_diag.py PHAUSDT 120 > /tmp/pha_diag.out 2>&1 &", "timeout": 60}
