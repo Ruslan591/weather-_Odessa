@@ -22,3 +22,9 @@
 
 ## Пример (python, с локальной стороны Claude)
 Функция run(task_id, cmd, timeout): PUT vps_task.json, затем опрос vps_result.json. Файл-помощник Claude создаёт заново каждую сессию (около 20 строк на urllib).
+
+## Токен моста на VPS (заметка 2026-10-31)
+- Файл /etc/vps-github-bridge/token читается построчно, нужна строка вида GITHUB_TOKEN=ghp_... (с префиксом). Голый токен без префикса мост не находит: в /var/log/vps-github-bridge.log RuntimeError «GITHUB_TOKEN не найден». Права файла 600, владелец root.
+- Когда токен GitHub истекает, мост молча перестаёт отвечать (последний результат остаётся старым). Обновление делает пользователь из Termux на VPS: printf 'GITHUB_TOKEN=%s\n' 'НОВЫЙ' | sudo tee /etc/vps-github-bridge/token; проверка: ручной запуск sudo /opt/vps-github-bridge/venv/bin/python3 /opt/vps-github-bridge/vps_github_bridge.py (exit=0), затем свежий результат в data/vps_result.json. Запрос к публичному репозиторию без токена тоже даёт 200, для проверки токена брать api.github.com/user.
+- Подключение: из Termux ssh -i ~/.ssh/oracle.key ubuntu@130.61.25.212 (на самом VPS этот ключ отсутствует, ssh на сервере с сервера не нужен).
+- Долгие скрипты запускать в фоне (nohup ... &) и опрашивать файл результата; команда дольше ~300 секунд обрывается.
