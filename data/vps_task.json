@@ -1,1 +1,1 @@
-{"task_id": "zzw-poll2-1", "cmd": "tail -c 6000 /tmp/zzw.out; echo; ps aux | grep zzw.py | grep -v grep | wc -l", "timeout": 30}
+{"task_id": "zzw2-start", "cmd": "cd /opt/weather-pipeline/repo && git fetch -q origin && git show origin/main:scripts/zz_window_test2.py > /tmp/zzw2.py && (nohup /opt/trading-bot/venv/bin/python /tmp/zzw2.py > /tmp/zzw2.out 2>&1 &) ; sleep 3; echo started", "timeout": 60}
