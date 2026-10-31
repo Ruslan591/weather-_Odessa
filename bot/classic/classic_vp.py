@@ -13,7 +13,7 @@ VPD = dict(vp_mode="auto", vp_rows=48, vp_va=70.0, zz_depth=0, zz_dev=0.0, zz_ba
            vp_tol_atr=0.3, vp_buf_atr=0.1, vp_hist_bars=1000, vp_ahead_atr=1.5, vp_imp_atr=1.0, vp_bo_entry="close", vp_retest_bars=10, vp_ret_bars=5,
            vp_sl_atr=0.5, vp_rr=2.0, vp_min_rr=1.0, vp_be_poc=True, vp_be_frac=0.65, vp_start="auto", vp_starts={}, vp_neutral="skip",
            vp_bounce=True, vp_breakout=True, vp_return=True,
-           vp_wick_void=True, vp_wick_bars=60, vp_room_r=0, vp_be_r=0, vp_wall_stop=False, vp_ws_buf_atr=0.15, vp_ws_min_atr=0.5)
+           vp_wick_void=True, vp_wick_bars=60, vp_room_r=0, vp_be_r=1.5, vp_wall_stop=False, vp_ws_buf_atr=0.15, vp_ws_min_atr=0.5)
 
 
 # ---- стакан (book.db, пишет classic_book.py): стенки на момент свечи ----
