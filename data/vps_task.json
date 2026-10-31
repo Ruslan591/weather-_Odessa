@@ -1,1 +1,1 @@
-{"task_id": "t1031r", "cmd": "cd /opt/weather-pipeline/repo && git fetch origin main -q; git show FETCH_HEAD:scripts/live_cmp.py > /tmp/live_cmp.py; nohup /opt/trading-bot/venv/bin/python /tmp/live_cmp.py > /tmp/live_cmp.out 2>&1 &", "timeout": 60}
+{"task_id": "t1031s", "cmd": "tail -c 6000 /tmp/live_cmp.out; ps aux | grep live_cmp | grep -v grep | wc -l", "timeout": 60}
