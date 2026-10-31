@@ -1,1 +1,1 @@
-{"task_id": "zzt-q1", "cmd": "cat /tmp/zzt.out; ps aux | grep zzt.py | grep -v grep | wc -l", "timeout": 30}
+{"task_id": "zzt-s2", "cmd": "ls -la /tmp/zzt.py; cd /opt/weather-pipeline/repo && git fetch -q origin && git show origin/main:scripts/zz_time.py > /tmp/zzt.py && (nohup /opt/trading-bot/venv/bin/python /tmp/zzt.py > /tmp/zzt.out 2>&1 &) ; sleep 2; echo started", "timeout": 60}
