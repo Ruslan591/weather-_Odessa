@@ -1,10 +1,10 @@
 
 import json,urllib.request
 d=json.load(urllib.request.urlopen("http://localhost:8091/api/runs",timeout=120))
-a=d["accounts"]["vp"]
-print("acct keys", list(a.keys())[:25])
-for k in ("balance","equity","n","taken","closed","start"):
-    if k in a: print(k, a[k])
+print("accounts keys", list(d["accounts"].keys()), "load", str(d.get("load"))[:200])
+a=d["accounts"].get("vp") or {}
+for k,v in a.items():
+    if not isinstance(v,(list,dict)): print(k, v)
 vp=[r for r in d["runs"] if r.get("track")=="vp" and r.get("stop_ms") is None]
 print("vp runs", len(vp))
 for r in vp:
