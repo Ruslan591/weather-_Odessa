@@ -1,1 +1,1 @@
-{"task_id": "t1031i", "cmd": "tail -c 7000 /tmp/pha_diag.out; echo; ps aux | grep pha_diag | grep -v grep | wc -l", "timeout": 60}
+{"task_id": "t1031k", "cmd": "cd /opt/weather-pipeline/repo && git fetch origin main -q; git show FETCH_HEAD:scripts/zz_dbg.py > /tmp/zz_dbg.py; /opt/trading-bot/venv/bin/python /tmp/zz_dbg.py PHAUSDT", "timeout": 150}
