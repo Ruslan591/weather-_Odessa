@@ -1,7 +1,7 @@
 {
-  "task_id": "wfs-smoke5",
+  "task_id": "wfs-launch",
   "returncode": 0,
-  "stdout": "05:51:03 novyj progon 1793512263\n05:51:03 zadach vsego 3, ostalos 3, setka 4, MINN 6\n05:51:06 PHAUSDT 1d -> NODATA (в одном из окон подбора меньше 6 сделок: выбирать не из чего) 4s\n05:51:23 PHAUSDT 4h -> FAIL (сумма тестов не больше 0; плюс меньше чем в 2 из 3 тестов; при удвоенных издержках тесты не больше 0; отложенный отрезок не больше 0; отложенный при удвоенных издержках не больше 0; не лучше средней конфигурации сетки) 17s\n05:53:24 PHAUSDT 1m -> FAIL (сумма тестов не больше 0; плюс меньше чем в 2 из 3 тестов; при удвоенных издержках тесты не больше 0; отложенный отрезок не больше 0; отложенный при удвоенных издержках не больше 0) 121s\n05:53:24 GOTOVO\n0\n",
-  "stderr": "",
-  "completed_at_utc": "2026-11-01T05:54:02Z"
+  "stdout": "('PHAUSDT', '1d', 'NODATA', None, None, None, None, 1000.0, 1604, 3.6, 1382)\n('PHAUSDT', '4h', 'FAIL', -19.55, 31, -10.52, 8, 900.0, 6004, 16.8, 1899)\n('PHAUSDT', '1m', 'FAIL', -11.05, 389, -5.33, 124, 30.0, 43804, 121.3, 1951)\n1m folds: [('zzA sl2.0 rr3.0 lvn0.35 hvn1.5', [-8.96, 182], [-0.0, 73]), ('zzA sl2.0 rr3.0 lvn0.35 hvn1.5', [-6.33, 165], [-2.56, 95]), ('zzA sl2.0 rr3.0 lvn0.35 hvn1.5', [-2.56, 168], [-8.49, 97])]\nfinal: {'chosen': 'zzC sl1.0 rr3.0 lvn0.35 hvn1.5', 'tr': [-4.13, 177], 'ho': [-5.33, 124], 'ho2': -17.73} neigh 0\nactive\nNov 01 05:55:01 weather-odessa-vps systemd[1]: Started wfscan.service - WF scan: walk-forward podbor nastroek Profilya (nizkij prioritet).\nNov 01 05:55:02 weather-odessa-vps python[1775095]: 05:55:02 novyj progon 1793512502\nNov 01 05:55:02 weather-odessa-vps python[1775095]: 05:55:02 zadach vsego 240, ostalos 240, setka 48, MINN 6\n1774404  10  0.0 37392 /opt/trading-bot/venv/bin/python /opt/trading-bot/wfscan/wfscan_panel.py\n1775095  19  2.4 99000 /opt/trading-bot/venv/bin/python /opt/trading-bot/wfscan/wfscan.py\n 05:55:26 up 67 days,  2:23,  1 user,  load average: 0.92, 0.99, 0.81\n",
+  "stderr": "Created symlink /etc/systemd/system/multi-user.target.wants/wfscan.service → /etc/systemd/system/wfscan.service.\n",
+  "completed_at_utc": "2026-11-01T05:55:26Z"
 }
