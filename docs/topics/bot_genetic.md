@@ -14,14 +14,13 @@
 - Данные: свечи спот Binance в /opt/trading-bot/wfscan/cache/<runid>_<SYM>_<tf>.pkl (pandas DataFrame t,o,h,l,c,v,ct), 20 пар x 12 ТФ; для свежих данных API Binance спот (data-api.binance.vision).
 - Код: bot/wfscan/wfscan.py (WF-сканер, панель 18094), bot/macdtest/macdtest.py и index.html (тест MACD по глубине, панель 18095, служба macdtest-panel), bot/classic/ (классический бот, панели 8091 и 18093), мост GitHub-VPS описан в docs/topics/vps_bridge.md.
 - Результаты и находки: docs/topics/bot_classic.md (WF-сканер, тест MACD по глубине пересечения, сверка с TradingView).
-- Тестер подтверждён: независимый расчёт MACD Strategy на ZEC 1h совпал с TradingView по сделкам, доле прибыльных, профит-фактору и разбивке лонг/шорт (открыт только вопрос комиссии в отчёте TV).
+- Тестер подтверждён: независимый расчёт MACD Strategy на ZEC 1h совпал с TradingView по сделкам, доле прибыльных, профит-фактору и разбивке лонг/шорт и с комиссией 0.05% (TV: 543 сделки, 34.62%, профит-фактор 1.231, +9.45 USDT; наш расчёт: 545, 34.86%, 1.24).
 
 ## Туннель на телефоне (Termux), одной строкой
 AUTOSSH_GATETIME=0 autossh -M 0 -N -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -L 18091:localhost:8091 -L 18093:localhost:18093 -L 18094:localhost:18094 -L 18095:localhost:18095 -i ~/.ssh/oracle.key ubuntu@130.61.25.212
 
 ## Открытые пункты
 - [ ] Прототип генетического поиска (1h/4h): геном, фитнес, отложенная проверка, тест на шуме, страница с результатами (следующий порт 18096).
-- [ ] Свести проверку комиссии в TV (см. bot_classic.md), при компьютере выгрузить список сделок.
 
 ## Технические детали
 - Страницы результатов: статический index.html + results.json, раздаёт python http.server на 127.0.0.1 (systemd-служба), расчёт запускается nohup nice -n 19 от пользователя tbot через мост; перебор по 12 ТФ x 20 пар для MACD занял около 40 секунд.
