@@ -1,7 +1,7 @@
 {
-  "task_id": "w1",
-  "returncode": 0,
-  "stdout": "base_cfg.json\ncache\nwfscan.db\nwfscan.db-shm\nwfscan.db-wal\nwfscan.py\nwfscan_panel.py\ninactive\nactive\n<!doctype html><html lang=\"ru\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>WF-сканер</title>\n<style>\n:root{color-scheme:dark light;--bg:#14161a;--fg:#e6e6e6;--mut:#8b93a1;--card:#1d2026;--bd:#2c313a;--ok:#1f9d55;--bad:#c0392b;--nd:#5961",
-  "stderr": "/bin/sh: 1: sqlite3: not found\n",
-  "completed_at_utc": "2026-11-01T19:16:02Z"
+  "task_id": "w2",
+  "returncode": 1,
+  "stdout": "CREATE TABLE runs(run_id INTEGER PRIMARY KEY, started_ms INTEGER, now_ms INTEGER, status TEXT, pairs TEXT, tfs TEXT, days TEXT)\nCREATE TABLE jobs(run_id INTEGER, sym TEXT, tf TEXT, status TEXT, verdict TEXT, reason TEXT, oos_sum REAL, oos_fee2 REAL, oos_n INTEGER, ho_net REAL, ho_n INTEGER, ho_fee2 REAL,\n      grid_oos_mean REAL, grid_ho_mean REAL, ho_pos_share REAL, corr_mean REAL, price_ho REAL, t_days REAL, rows INTEGER, elapsed REAL, finished_ms INTEGER, data TEXT, PRIMARY KEY(run_id, sym, tf))\n",
+  "stderr": "Traceback (most recent call last):\n  File \"/tmp/q1.py\", line 3, in <module>\n    for r in c.execute(\"select name,sql from sqlite_master\"): print(r[1][:600])\n                                                                    ~~~~^^^^^^\nTypeError: 'NoneType' object is not subscriptable\n",
+  "completed_at_utc": "2026-11-01T19:17:01Z"
 }
