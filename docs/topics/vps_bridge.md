@@ -14,7 +14,7 @@
 - Токен GitHub на VPS лежит в /etc/vps-github-bridge/token; git-клон мост не использует.
 
 ## Классический бот на VPS
-- Код: /opt/trading-bot/classic/, сервис classicbot (systemctl restart classicbot). Панели на сервере: 8091 (позиции, пользователю доступна как localhost:18091 через туннель), 8093 (графики, туннель 18093). С самого VPS проверять через localhost:8091 / :8093.
+- Код: /opt/trading-bot/classic/, сервис classicbot (systemctl restart classicbot). Панели на сервере: 8091 (позиции классики, туннель -L 18091:localhost:8091), 18093 (графики с каналами классики, туннель -L 18093:localhost:18093; НЕ 8093: на 8093 другая, старая панель с самообновлением 30 с), 18094 (WF-сканер), 18095 (тест MACD). С самого VPS проверять через localhost:8091 / :8093.
 - Клон репозитория на VPS: /opt/weather-pipeline/repo (git fetch работает, pull часто нет — «cannot lock ref»).
 - Выкладка файлов: `cd /opt/weather-pipeline/repo && git show origin/main:scripts/deploy_classic_files.sh | bash -s classic_panel.py:<коммит_нового_файла> ...`. Скрипт берёт файл из объектов git, сверяет VPS с родительским коммитом (при расхождении пишет DIVERGED и файл не трогает), делает бэкап в /opt/trading-bot/classic/backup_*, компилирует, перезапускает classicbot и откатывается, если сервис не поднялся.
 - Если DIVERGED: сравнить файл на VPS с версиями в git (diff), убедиться, что разница — только ещё не выложенные правки, затем вручную: бэкап, `git show <коммит>:bot/classic/<файл> > файл`, py_compile, затем запуск скрипта для остальных файлов (он перезапустит сервис).
