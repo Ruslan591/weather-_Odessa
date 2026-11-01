@@ -1,7 +1,7 @@
 {
-  "task_id": "wf-infra-2",
+  "task_id": "wf-infra-3",
   "returncode": 0,
-  "stdout": "tbot     1722274    13:22:59\ndrwxr-xr-x  7 tbot tbot  4096 Oct 26 05:28 /opt/trading-bot\ndrwxr-xr-x 70 tbot tbot 12288 Nov  1 05:39 /opt/trading-bot/classic\ndrwxrwxr-x  5 tbot tbot  4096 Oct  8 09:28 /opt/trading-bot/venv\n# /etc/systemd/system/classicbot.service\n[Unit]\nDescription=Classic bot panel (charts)\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nUser=tbot\nWorkingDirectory=/opt/trading-bot/classic\nExecStart=/opt/trading-bot/venv/bin/python /opt/trading-bot/classic/classic_panel.py\nRestart=always\nRestartSec=5\n\n[Install]\nWantedBy=multi-user.target\nuid=1002(tbot) gid=1002(tbot) groups=1002(tbot),100(users)\n/opt/trading-bot/classic/backup_runs_before_restart.json\n/opt/trading-bot/classic/cand.json\n/opt/trading-bot/classic/config.json\n3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]\nLISTEN 0      128        127.0.0.1:8091       0.0.0.0:*          \nLISTEN 0      128        127.0.0.1:18093      0.0.0.0:*          \n",
+  "stdout": "runs total 236\n[(('exp', '1h', True), 18), (('exp', '15m', True), 13), (('exp', '4h', True), 13), (('bot', '5m', False), 11), (('bot', '15m', False), 11), (('bot', '1h', False), 11), (('bot', '4h', False), 11), (('bot', '1d', False), 11), (('vp', '5m', True), 11), (('vp', '15m', False), 8), (('vp', '1h', False), 8), (('vp', '4h', False), 8)]\n['ANIMEUSDT', 'BMTUSDT', 'CHIPUSDT', 'ERAUSDT', 'HAEDALUSDT', 'IOSTUSDT', 'KORUBUSDT', 'NILUSDT', 'PHAUSDT', 'REZUSDT', 'SOXLBUSDT', 'TREEUSDT']\n['ANIMEUSDT', 'BMTUSDT', 'BNBUSDT', 'BTCUSDT', 'CHIPUSDT', 'ERAUSDT', 'HAEDALUSDT', 'IOSTUSDT', 'KORUBUSDT', 'NEARUSDT', 'NILUSDT', 'PHAUSDT', 'REZUSDT', 'SOLUSDT', 'SOXLBUSDT', 'TREEUSDT', 'ZECUSDT']\n",
   "stderr": "",
-  "completed_at_utc": "2026-11-01T05:40:02Z"
+  "completed_at_utc": "2026-11-01T05:41:01Z"
 }
