@@ -1,7 +1,7 @@
 {
-  "task_id": "wfs-smoke2",
+  "task_id": "wfs-smoke3",
   "returncode": 0,
-  "stdout": "05:47:02 novyj progon 1793512022\n05:47:02 zadach vsego 3, ostalos 3, setka 4, MINN 6\n05:47:06 PHAUSDT 1d -> NODATA (в одном из окон подбора меньше 6 сделок: выбирать не из чего) 4s\nTraceback (most recent call last):\n  File \"/opt/trading-bot/wfscan/wfscan.py\", line 200, in main\n    r = run_job(c, run_id, sym, tf, df, now_ms, idx)\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/trading-bot/wfscan/wfscan.py\", line 157, in run_job\n    nb = list(best); nb[ai] = v; nb = tuple(nb); neigh.append([cname(nb), win(RES[nb], *LT)[0], win(RES[nb], HO, now_ms + DAY)[0]])\n                                                                              ~~~^^^^\nKeyError: ('B', 1.0, 2.0, 0.35, 1.5)\n05:47:26 PHAUSDT 4h -> ERR (KeyError: ('B', 1.0, 2.0, 0.35, 1.5)) 20s\n",
+  "stdout": "  File \"/opt/trading-bot/wfscan/wfscan.py\", line 157, in run_job\n    nb = list(best); nb[ai] = v; nb = tuple(nb); neigh.append([cname(nb), win(RES[nb], *LT)[0], win(RES[nb], HO, now_ms + DAY)[0]])\n                                                                              ~~~^^^^\nKeyError: ('A', 1.0, 3.0, 0.35, 1.5)\n05:49:19 PHAUSDT 1m -> ERR (KeyError: ('A', 1.0, 3.0, 0.35, 1.5)) 113s\n05:49:19 GOTOVO\n0\n",
   "stderr": "",
-  "completed_at_utc": "2026-11-01T05:49:01Z"
+  "completed_at_utc": "2026-11-01T05:50:01Z"
 }
