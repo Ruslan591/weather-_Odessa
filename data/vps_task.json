@@ -1,1 +1,1 @@
-{"task_id": "lst2-start2", "cmd": "cd /opt/weather-pipeline/repo && sleep 3; git fetch -q origin; git show origin/main:scripts/listing_study.py > /tmp/lstudy.py && wc -c /tmp/lstudy.py && (nohup nice -n 15 /opt/trading-bot/venv/bin/python /tmp/lstudy.py > /tmp/lstudy.out 2>&1 &) ; sleep 25; cat /tmp/lstudy.out", "timeout": 50}
+{"task_id": "lst2-p1", "cmd": "cat /tmp/lstudy.out | cut -c1-700", "timeout": 30}
