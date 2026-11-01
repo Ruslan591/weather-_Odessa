@@ -1,0 +1,43 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MACD: глубина пересечения</title>
+<style>
+:root{color-scheme:dark light;--bg:#14161a;--fg:#e6e6e6;--mut:#8b93a1;--card:#1d2026;--bd:#2c313a;--ok:#1f9d55;--bad:#c0392b;--acc:#3b82f6}
+@media(prefers-color-scheme:light){:root{--bg:#f6f7f9;--fg:#1b1f24;--mut:#667085;--card:#fff;--bd:#d8dce3}}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.4 system-ui,sans-serif;padding:10px}
+h1{font-size:17px;margin:4px 0}.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:10px;margin:8px 0}
+.mut{color:var(--mut);font-size:12px}.row{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+button{background:var(--card);color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:6px 10px;font-size:13px}
+button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.sc{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:12.5px;white-space:nowrap}
+th,td{border-bottom:1px solid var(--bd);padding:5px 6px;text-align:right}th:first-child,td:first-child{text-align:left}
+th{color:var(--mut);font-weight:500;position:sticky;top:0;background:var(--card)}
+.p{color:var(--ok)}.n{color:var(--bad)}.cand{background:rgba(31,157,85,.18)}
+</style></head><body>
+<h1>MACD(12,26,9): результат по глубине пересечения</h1>
+<div class="mut" id="st">загрузка…</div>
+<div class="card" id="sum"></div>
+<div class="row" id="ftf"></div><div class="row" id="fside"></div><div class="row" id="fkind"></div>
+<div class="card sc"><table id="t"></table></div>
+<div class="card mut" id="how"></div>
+<script>
+let D=null,S={tf:null,side:'L',kind:'atr'};
+const f=(x,d=2)=>x==null?'–':(+x).toFixed(d);
+const cl=x=>x==null?'':(x>0?'p':'n');
+function btn(id,items,key){const e=document.getElementById(id);e.innerHTML='';items.forEach(([v,l])=>{const b=document.createElement('button');b.textContent=l;b.className=S[key]===v?'on':'';b.onclick=()=>{S[key]=v;draw()};e.appendChild(b)})}
+function draw(){
+ if(!D)return;const m=D.meta;
+ const tfs=m.tfs_done.map(x=>x.tf);if(!S.tf||!tfs.includes(S.tf))S.tf=tfs[0];
+ document.getElementById('st').textContent=(m.status==='done'?'Готово. ':'Идёт расчёт… ')+'ТФ посчитано: '+tfs.length+'/12 · пар: '+m.pairs.length+' · обновлено '+new Date().toLocaleTimeString();
+ const cells=D.cells.filter(c=>c.bi>=0&&c.side!=='LS'&&c.n>=100);
+ const c05=cells.filter(c=>c.p48<0.05&&c.x48>0).length,cand=cells.filter(c=>c.cand).length;
+ document.getElementById('sum').innerHTML='Ячеек (ТФ × сторона × глубина × 2 способа) с n≥100: <b>'+cells.length+'</b>. С избытком &gt;0 и p&lt;0.05 на 48 свечах: <b>'+c05+'</b> (ожидаемо от шума ≈ '+(cells.length*0.025).toFixed(0)+'). Прошли все условия кандидата: <b class="p">'+cand+'</b>.<br><span class="mut">Кандидат: n≥150, p48&lt;0.01, избыток&gt;0 в обеих половинах времени, плюс у ≥60% пар. Ячейки не независимы, это ориентир.</span>';
+ btn('ftf',tfs.map(x=>[x,x]),'tf');btn('fside',[['L','Лонг'],['S','Шорт'],['LS','Оба']],'side');btn('fkind',[['atr','Глубина в ATR'],['rel','Глубина от макс. за 200 св.']],'kind');
+ const rows=D.cells.filter(c=>c.tf===S.tf&&c.side===S.side&&c.kind===S.kind).sort((a,b)=>a.bi-b.bi);
+ const info=m.tfs_done.find(x=>x.tf===S.tf);
+ let h='<tr><th>Глубина</th><th>n</th><th>пар</th><th>средн. 12</th><th>избыток 12</th><th>средн. 48</th><th>избыток 48</th><th>p48</th><th>1-я пол.</th><th>2-я пол.</th><th>пар +</th><th>до обратного, net %</th><th>плюс %</th><th></th></tr>';
+ rows.forEach(c=>{h+='<tr class="'+(c.cand?'cand':'')+'"><td>'+c.bin+'</td><td>'+c.n+'</td><td>'+c.pairs+'</td><td class="'+cl(c.m12)+'">'+f(c.m12)+'</td><td class="'+cl(c.x12)+'">'+f(c.x12)+'</td><td class="'+cl(c.m48)+'">'+f(c.m48)+'</td><td class="'+cl(c.x48)+'">'+f(c.x48)+'</td><td>'+f(c.p48,3)+'</td><td class="'+cl(c.h1)+'">'+f(c.h1)+'</td><td class="'+cl(c.h2)+'">'+f(c.h2)+'</td><td>'+(c.pp==null?'–':Math.round(c.pp*100)+'%')+'</td><td class="'+cl(c.hold_net)+'">'+f(c.hold_net)+' ('+c.hold_n+')</td><td>'+(c.hold_win==null?'–':Math.round(c.hold_win*100))+'</td><td>'+(c.cand?'КАНДИДАТ':'')+'</td></tr>'});
+ document.getElementById('t').innerHTML=h;
+ document.getElementById('how').innerHTML='ТФ '+S.tf+': сигналов '+(info?info.signals:'–')+', глубина истории (медиана) '+(info?info.days_median:'–')+' сут.<br>Доходности в % цены, до комиссий, от открытия следующей свечи до закрытия через 12/48 свечей, шорт со знаком «+ = прибыль». «Избыток» = средний результат минус средний результат входа на случайной свече той же пары в ту же сторону (учтён общий дрейф цены). p48 = доля случайных наборов из тех же пар и того же числа входов, у которых среднее не меньше (перестановка, '+m.nperm+' раз). Половины = первая и вторая половины истории. «До обратного» = держим до обратного пересечения MACD, вход/выход по открытию следующей свечи, комиссия '+m.fee_round_pct+'% за круг уже вычтена. «Над нулём» = пересечение на стороне, где MACD уже в сторону сделки.<br>'+m.rules;
+}
+async function load(){try{D=await (await fetch('results.json?t='+Date.now())).json();draw()}catch(e){document.getElementById('st').textContent='ещё нет результатов…'}}
+load();setInterval(()=>{if(!D||D.meta.status!=='done')load()},20000);
+</script></body></html>
