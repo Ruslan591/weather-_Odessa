@@ -154,7 +154,9 @@ def run_job(c_db, run_id, sym, tf, df, now_ms, idx_info):
         for ai in range(5):
             for v in (AX["zz"], AX["sl"], AX["rr"], AX["lvn"], AX["hvn"])[ai]:
                 if v == best[ai]: continue
-                nb = list(best); nb[ai] = v; nb = tuple(nb); neigh.append([cname(nb), win(RES[nb], *LT)[0], win(RES[nb], HO, now_ms + DAY)[0]])
+                nb = list(best); nb[ai] = v; nb = tuple(nb)
+                if nb not in RES: continue  # (v smoke-rezhime setka urezana)
+                neigh.append([cname(nb), win(RES[nb], *LT)[0], win(RES[nb], HO, now_ms + DAY)[0]])
         fin.update(chosen=cname(best), tr=list(tr[best]), ho=[ho_net, ho_n], ho2=ho2, neigh=neigh)
     grid_tab = [dict(c=cname(c), w=[list(win(RES[c], a, b)) for (a, b, e) in folds for (a, b) in ((a, b), (b, e))] + [list(win(RES[c], *LT)), list(win(RES[c], HO, now_ms + DAY))]) for c in GRID]
     data = dict(S=int(S), T_days=round(T / DAY, 1), u_days=round(u / DAY, 1), zz={k: list(v) for k, v in zz.items()}, folds=fold_out, final=fin, grid=grid_tab,
