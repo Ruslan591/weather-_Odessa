@@ -1,1 +1,1 @@
-{"task_id": "lst-p3", "cmd": "tail -c 4500 /tmp/lscan.out", "timeout": 30}
+{"task_id": "lst2-start", "cmd": "cd /opt/weather-pipeline/repo && git fetch -q origin && git show origin/main:scripts/listing_study.py > /tmp/lstudy.py && (nohup nice -n 15 /opt/trading-bot/venv/bin/python /tmp/lstudy.py > /tmp/lstudy.out 2>&1 &) ; sleep 20; cat /tmp/lstudy.out", "timeout": 40}
