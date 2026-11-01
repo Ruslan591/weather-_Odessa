@@ -1,1 +1,1 @@
-{"task_id": "w4", "cmd": "id -u; cd /opt/trading-bot/wfscan && ls cache | head -8; ls cache | wc -l; du -sh cache; grep -n 'def \\|cache\\|pickle\\|read_csv\\|to_pickle' wfscan.py | head -60; free -m | head -2; nproc; uptime", "timeout": 120}
+{"task_id": "w5", "cmd": "cd /opt/trading-bot/wfscan && /opt/trading-bot/venv/bin/python -c \"\nimport pickle,glob\nf=sorted(glob.glob('cache/*_PHAUSDT_15m.pkl'))[0]\nd=pickle.load(open(f,'rb'))\nprint(type(d)); print(d.dtypes); print(d.head(3)); print(d.tail(2)); print(len(d))\n\"", "timeout": 120}
