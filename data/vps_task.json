@@ -1,1 +1,1 @@
-{"task_id": "wfs-install", "cmd": "cd /opt/weather-pipeline/repo && git fetch -q origin && git show origin/main:scripts/install_wfscan.sh | bash 2>&1 | tail -15", "timeout": 120}
+{"task_id": "wfs-smoke1", "cmd": "cd /opt/trading-bot/wfscan && rm -f smoke.db* && (sudo -u tbot env WF_SMOKE=1 WF_DB=/opt/trading-bot/wfscan/smoke.db nice -n 19 /opt/trading-bot/venv/bin/python wfscan.py > /tmp/wfsmoke.out 2>&1 &) ; sleep 3; echo started; cat /tmp/wfsmoke.out", "timeout": 30}
