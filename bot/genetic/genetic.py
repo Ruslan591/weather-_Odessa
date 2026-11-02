@@ -20,13 +20,14 @@ TOPN = 30; MIN_HO_N = 40; MIN_UN_N = 40
 
 GRID = {
     "tf": TFS, "side": ["L", "S", "B"],
-    "trig": ["ema", "macd", "rsi", "donch", "bb"], "tm": [0, 1],
+    "trig": ["ema", "macd", "rsi", "donch", "bb", "volb"], "tm": [0, 1],
     "ef": [5, 8, 10, 13, 20, 30], "es": [20, 30, 50, 80, 120, 200],
     "mf": [8, 12, 16], "ms": [21, 26, 35], "msg": [7, 9],
     "rn": [7, 14, 21], "rl": [20, 25, 30, 35],
     "dn": [10, 20, 40, 80, 120],
     "bn": [14, 20, 40], "bk": [1.5, 2.0, 2.5, 3.0],
-    "reg": ["none", "sma", "atrp"], "rd": [0, 1], "rs": [50, 100, 200],
+    "reg": ["none", "sma", "atrp", "btc", "rel"], "rd": [0, 1], "rs": [50, 100, 200], "bs": [50, 100, 200], "rb": [6, 24, 72],
+    "vk": [1.5, 2.0, 3.0], "vb": [0.5, 1.0, 1.5],
     "ra": [[0.0, 0.8], [0.5, 1.0], [0.8, 1.5], [1.0, 3.0]],
     "conf": ["none", "vol", "candle", "rsi50"], "cv": [1.0, 1.5, 2.0],
     "hold": [6, 12, 24, 48], "sl": [0, 1.0, 1.5, 2.0, 3.0], "tp": [0, 1.5, 2.0, 3.0, 5.0], "tr": [0, 1.5, 2.0, 3.0, 4.0],
@@ -74,6 +75,10 @@ def build_data(noise_seed=None):
             if d is None: continue
             if noise_seed is not None: d = shuffled(d, noise_seed * 1000 + i)
             data[tf]["unseen" if sym in UNSEEN else "search"].append(Ser(sym, tf, d))
+    for tf in TFS:
+        btc = next((x for x in data[tf]["search"] if x.sym == "BTCUSDT"), None)
+        for x in data[tf]["search"] + data[tf]["unseen"]:
+            x.btcc = pd.Series(btc.c, index=btc.t).reindex(x.t).values if btc is not None else np.full(x.n, np.nan)
     return data, syms
 
 def zone(data):
@@ -115,8 +120,11 @@ def active(g):
     elif t == "rsi": a.update(rn=g["rn"], rl=g["rl"])
     elif t == "donch": a.update(dn=g["dn"])
     elif t == "bb": a.update(bn=g["bn"], bk=g["bk"])
+    elif t == "volb": a.update(vk=g["vk"], vb=g["vb"])
     if g["reg"] == "sma": a.update(rd=g["rd"], rs=g["rs"])
     elif g["reg"] == "atrp": a.update(ra=tuple(g["ra"]))
+    elif g["reg"] == "btc": a.update(rd=g["rd"], bs=g["bs"])
+    elif g["reg"] == "rel": a.update(rd=g["rd"], rb=g["rb"])
     if g["conf"] == "vol": a.update(cv=g["cv"])
     return a
 def gkey(g): return json.dumps(active(g), sort_keys=True)
@@ -145,6 +153,10 @@ def signals(s, g):
         up = c > hh; dn = c < ll
         L[1:] = up[1:] & ~up[:-1]; S[1:] = dn[1:] & ~dn[:-1]
         if g["tm"]: L, S = S, L
+    elif t == "volb":
+        vm = ind(s, ("vm",), lambda: sma(s.v, 20)); sp = s.v > g["vk"] * vm; body = (s.c - s.o) / np.maximum(s.atr, 1e-12)
+        L = sp & (body > g["vb"]); S = sp & (-body > g["vb"])
+        if g["tm"]: L, S = S, L
     else:  # bb
         mu = ind(s, ("bm", g["bn"]), lambda: sma(s.c, g["bn"])); sd = ind(s, ("bs", g["bn"]), lambda: pd.Series(s.c).rolling(g["bn"]).std().values)
         lw, up_ = mu - g["bk"] * sd, mu + g["bk"] * sd
@@ -158,6 +170,18 @@ def signals(s, g):
         above = c > m; below = c < m
         if g["rd"]: L &= above; S &= below
         else: L &= below; S &= above
+    elif g["reg"] == "btc":
+        m = ind(s, ("bsma", g["bs"]), lambda: sma(s.btcc, g["bs"])); above = s.btcc > m; below = s.btcc < m
+        if g["rd"]: L &= above; S &= below
+        else: L &= below; S &= above
+    elif g["reg"] == "rel":
+        N = g["rb"]
+        def mk():
+            r1 = np.full(s.n, np.nan); r2 = np.full(s.n, np.nan)
+            r1[N:] = s.c[N:] / s.c[:-N] - 1; r2[N:] = s.btcc[N:] / s.btcc[:-N] - 1; return r1 - r2
+        ex = ind(s, ("rel", N), mk)
+        if g["rd"]: L &= ex > 0; S &= ex < 0
+        else: L &= ex < 0; S &= ex > 0
     elif g["reg"] == "atrp":
         ra = tuple(g["ra"]); rr = ind(s, ("atrr",), lambda: s.atr / np.maximum(sma(s.atr, 100), 1e-12))
         mk = (rr >= ra[0]) & (rr <= ra[1]); L &= mk; S &= mk
@@ -258,9 +282,12 @@ def text(g):
           "macd": "MACD %s/%s/%s%s" % (a.get("mf"), a.get("ms"), a.get("msg"), " (против)" if tm else ""),
           "rsi": "RSI%s %s, ур.%s" % (a.get("rn"), "импульс" if tm else "возврат", a.get("rl")),
           "donch": "Дончиан %s%s" % (a.get("dn"), " (против)" if tm else ""),
+          "volb": "всплеск объёма x%s, тело>%sATR%s" % (a.get("vk"), a.get("vb"), " (против)" if tm else ""),
           "bb": "Боллинджер %s/%s %s" % (a.get("bn"), a.get("bk"), "пробой" if tm else "возврат")}[t]
     reg = {"none": "", "sma": "; режим: цена %s SMA%s" % ("по тренду от" if a.get("rd") else "против тренда от", a.get("rs")),
-           "atrp": "; режим: ATR/SMA(ATR,100) в %s" % (a.get("ra"),)}[a["reg"]]
+           "atrp": "; режим: ATR/SMA(ATR,100) в %s" % (a.get("ra"),),
+           "btc": "; режим: BTC %s SMA%s" % ("выше/ниже по тренду от" if a.get("rd") else "против тренда от", a.get("bs")),
+           "rel": "; режим: сила к BTC за %s св. (%s)" % (a.get("rb"), "лидер-лонг/аутсайдер-шорт" if a.get("rd") else "наоборот")}[a["reg"]]
     cf = {"none": "", "vol": "; объём>%sx" % a.get("cv"), "candle": "; свеча по направлению", "rsi50": "; RSI14 по стороне 50"}[a["conf"]]
     ex = "; выход: %d св." % a["hold"] + (", SL %sATR" % a["sl"] if a["sl"] else "") + (", TP %sATR" % a["tp"] if a["tp"] else "") + (", трейлинг %sATR" % a["tr"] if a["tr"] else "")
     return "%s | %s | %s%s%s%s" % (a["tf"], side, tr, reg, cf, ex)
