@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-11-02T12:40:00.000Z",
-  "buffer_size": 6,
+  "timestamp": "2026-11-02T12:50:00.000Z",
+  "buffer_size": 5,
   "buffer_span_minutes": 50,
   "observed_area": {
     "center_lat": 46.4406,
@@ -12,63 +12,61 @@
     "local_trend_radius_km": 50
   },
   "valid": true,
-  "speed_kmh": 44.3,
+  "speed_kmh": 42.2,
   "direction_compass": "СВ",
-  "bearing_deg": 33.8,
-  "frame_pairs_used": 5,
-  "acceleration_kmh": 1.0,
-  "turning_deg": 1.8,
+  "bearing_deg": 33.2,
+  "frame_pairs_used": 4,
+  "acceleration_kmh": -3.9,
+  "turning_deg": -4.7,
   "acceleration_verdict": "скорость стабильна",
   "turning_verdict": "направление стабильно",
   "forecast_displacement": {
     "30min": {
-      "distance_km": 22.7,
-      "bearing_deg": 36.0,
+      "distance_km": 19.0,
+      "bearing_deg": 27.0,
       "compass": "СВ"
     },
     "60min": {
-      "distance_km": 46.1,
-      "bearing_deg": 37.0,
+      "distance_km": 35.7,
+      "bearing_deg": 23.0,
       "compass": "СВ"
     },
     "120min": {
-      "distance_km": 94.8,
-      "bearing_deg": 39.0,
-      "compass": "СВ"
+      "distance_km": 64.0,
+      "bearing_deg": 14.0,
+      "compass": "С"
     }
   },
   "area_fraction_over_time": [
-    0.388,
-    0.416,
-    0.438,
-    0.436,
-    0.408,
-    0.378
+    0.391,
+    0.407,
+    0.381,
+    0.349,
+    0.315
   ],
-  "area_trend_delta": -0.01,
+  "area_trend_delta": -0.077,
   "area_trend_verdict": "без существенных изменений",
   "mean_brightness_over_time": [
-    136.0,
-    136.8,
     136.8,
     136.8,
     136.4,
-    135.9
+    135.9,
+    135.6
   ],
-  "brightness_trend_delta": -0.1,
+  "brightness_trend_delta": -1.2,
   "station_state": "variable",
-  "station_area_fraction": 0.557,
-  "cloud_mass_distance_km": 35.5,
+  "station_area_fraction": 0.357,
+  "cloud_mass_distance_km": 30.9,
   "cloud_mass_bearing_deg": 203.0,
   "cloud_mass_compass": "ЮЗ",
-  "cloud_mass_area_km2": 203,
-  "cloud_mass_contrast_sigma": 1.48,
+  "cloud_mass_area_km2": 139,
+  "cloud_mass_contrast_sigma": 1.49,
   "temperature_trend_verdict": "без существенных изменений",
   "target_confirmation": {
     "confirmed": false,
-    "target_id": 0,
-    "target_area_km2": 117.4,
-    "roi_contrast_sigma": -1.62,
+    "target_id": 1,
+    "target_area_km2": 218.8,
+    "roi_contrast_sigma": -1.64,
     "verdict": "ИК НЕ подтверждает: в ROI CLM-цели нет значимого контраста — возможна тонкая/низкая облачность, невидимая на ИК, либо расхождение слоёв"
   },
   "system_analysis_all": [],
@@ -76,7 +74,7 @@
     {
       "target_id": 0,
       "available": true,
-      "roi_contrast_sigma": -1.62,
+      "roi_contrast_sigma": -1.69,
       "confirmed": false
     },
     {
@@ -86,5 +84,5 @@
       "confirmed": false
     }
   ],
-  "method_note": "Буфер 6/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин, crs=EPSG:4326, всегда явный TIME — не 'latest'), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. cloud_mass_* — положение (не движение) ближайшей значимой облачной массы относительно станции. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
+  "method_note": "Буфер 5/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин, crs=EPSG:4326, всегда явный TIME — не 'latest'), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. cloud_mass_* — положение (не движение) ближайшей значимой облачной массы относительно станции. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
 }
