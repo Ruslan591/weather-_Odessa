@@ -29,7 +29,7 @@ GRID = {
     "reg": ["none", "sma", "atrp"], "rd": [0, 1], "rs": [50, 100, 200],
     "ra": [[0.0, 0.8], [0.5, 1.0], [0.8, 1.5], [1.0, 3.0]],
     "conf": ["none", "vol", "candle", "rsi50"], "cv": [1.0, 1.5, 2.0],
-    "hold": [6, 12, 24, 48], "sl": [0, 1.0, 1.5, 2.0, 3.0], "tp": [0, 1.5, 2.0, 3.0, 5.0],
+    "hold": [6, 12, 24, 48], "sl": [0, 1.0, 1.5, 2.0, 3.0], "tp": [0, 1.5, 2.0, 3.0, 5.0], "tr": [0, 1.5, 2.0, 3.0, 4.0],
 }
 KEYS = list(GRID)
 
@@ -108,7 +108,7 @@ def fix(g):
 
 def active(g):
     """Только действующие гены (для ключа кэша и счёта проверенных вариантов)."""
-    a = {"tf": g["tf"], "side": g["side"], "trig": g["trig"], "tm": g["tm"], "hold": g["hold"], "sl": g["sl"], "tp": g["tp"], "reg": g["reg"], "conf": g["conf"]}
+    a = {"tf": g["tf"], "side": g["side"], "trig": g["trig"], "tm": g["tm"], "hold": g["hold"], "sl": g["sl"], "tp": g["tp"], "tr": g["tr"], "reg": g["reg"], "conf": g["conf"]}
     t = g["trig"]
     if t == "ema": a.update(ef=g["ef"], es=g["es"])
     elif t == "macd": a.update(mf=g["mf"], ms=g["ms"], msg=g["msg"])
@@ -120,7 +120,7 @@ def active(g):
     if g["conf"] == "vol": a.update(cv=g["cv"])
     return a
 def gkey(g): return json.dumps(active(g), sort_keys=True)
-def ncomp(g): return (g["reg"] != "none") + (g["conf"] != "none") + (g["sl"] > 0) + (g["tp"] > 0)
+def ncomp(g): return (g["reg"] != "none") + (g["conf"] != "none") + (g["sl"] > 0) + (g["tp"] > 0) + (g["tr"] > 0)
 
 def signals(s, g):
     c, n, t = s.c, s.n, g["trig"]
@@ -186,17 +186,24 @@ def run(s, g):
     ep = s.o[e]; a = s.atr[idx]; act = np.ones(len(e), bool); xp = np.empty(len(e))
     slp = ep - sg * g["sl"] * a if g["sl"] > 0 else None
     tpp = ep + sg * g["tp"] * a if g["tp"] > 0 else None
+    trd = g["tr"] * a if g["tr"] > 0 else None
+    ext = ep.copy()                      # экстремум цены в сторону сделки с момента входа (для трейлинга)
     for k in range(H):
-        b = e + k; hb = s.h[b]; lb = s.l[b]
-        if slp is not None:
-            hit = act & np.where(sg > 0, lb <= slp, hb >= slp)
+        b = e + k; hb = s.h[b]; lb = s.l[b]; ob = s.o[b]
+        stop = slp
+        if trd is not None:               # трейлинг считается по экстремуму до этой свечи (без заглядывания)
+            tl = ext - sg * trd
+            stop = tl if stop is None else np.where(sg > 0, np.maximum(stop, tl), np.minimum(stop, tl))
+        if stop is not None:
+            hit = act & np.where(sg > 0, lb <= stop, hb >= stop)
             if hit.any():
-                ob = s.o[b]; xp[hit] = np.where(sg > 0, np.minimum(slp, ob), np.maximum(slp, ob))[hit]; act &= ~hit
+                xp[hit] = np.where(sg > 0, np.minimum(stop, ob), np.maximum(stop, ob))[hit]; act &= ~hit
         if tpp is not None:
             hit = act & np.where(sg > 0, hb >= tpp, lb <= tpp)
             if hit.any(): xp[hit] = tpp[hit]; act &= ~hit
         if k == H - 1: xp[act] = s.c[b][act]
         elif not act.any(): break
+        if trd is not None: ext = np.where(sg > 0, np.maximum(ext, hb), np.minimum(ext, lb))
     return sg * (xp / ep - 1) * 100 - FEE, s.t[e]
 
 def tstats(x):
@@ -255,7 +262,7 @@ def text(g):
     reg = {"none": "", "sma": "; режим: цена %s SMA%s" % ("по тренду от" if a.get("rd") else "против тренда от", a.get("rs")),
            "atrp": "; режим: ATR/SMA(ATR,100) в %s" % (a.get("ra"),)}[a["reg"]]
     cf = {"none": "", "vol": "; объём>%sx" % a.get("cv"), "candle": "; свеча по направлению", "rsi50": "; RSI14 по стороне 50"}[a["conf"]]
-    ex = "; выход: %d св." % a["hold"] + (", SL %sATR" % a["sl"] if a["sl"] else "") + (", TP %sATR" % a["tp"] if a["tp"] else "")
+    ex = "; выход: %d св." % a["hold"] + (", SL %sATR" % a["sl"] if a["sl"] else "") + (", TP %sATR" % a["tp"] if a["tp"] else "") + (", трейлинг %sATR" % a["tr"] if a["tr"] else "")
     return "%s | %s | %s%s%s%s" % (a["tf"], side, tr, reg, cf, ex)
 
 # ---------- генетика ----------
