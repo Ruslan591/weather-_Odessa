@@ -31,7 +31,7 @@ def gross(g, rnd=None):
 def full(a):
     g = {k: G.GRID[k][0] for k in G.KEYS}; g.update({k: (list(v) if isinstance(v, tuple) else v) for k, v in a.items()}); return G.fix(g)
 rows = []
-for d in ("feat", "feat_short"):
+for d in os.environ.get("DIAG_DIRS", "feat,feat_short").split(","):
     r = json.load(open(os.path.join(OUT, d, "results.json")))
     for t in r["runs"]["real"]["top"][:10]:
         g = full(t["genome"]); g2 = dict(g, sl=0, tp=0, tr=0)
@@ -43,5 +43,5 @@ for d in ("feat", "feat_short"):
 def m(k): return float(np.nanmean([r[k] for r in rows]))
 summ = {k: round(m(k), 4) for k in ("A", "B", "C", "D", "entry_fixed", "entry_with_exit", "exit_on_entries")}
 summ["fee_doubled"] = G.FEE; summ["fee_real"] = G.FEE_RT; summ["genomes"] = len(rows)
-json.dump({"summary": summ, "rows": rows}, open(os.path.join(OUT, "diag.json"), "w"), ensure_ascii=False)
+json.dump({"summary": summ, "rows": rows}, open(os.path.join(OUT, os.environ.get("DIAG_OUTNAME", "diag.json")), "w"), ensure_ascii=False)
 print("SUMMARY", json.dumps(summ))
