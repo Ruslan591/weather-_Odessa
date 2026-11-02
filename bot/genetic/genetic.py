@@ -12,7 +12,7 @@ OUT = os.environ.get("GEN_OUT", "/opt/trading-bot/genetic")
 POP = int(os.environ.get("GEN_POP", "150")); GENS = int(os.environ.get("GEN_GENS", "30"))
 NOISE_N = int(os.environ.get("GEN_NOISE", "3")); WORKERS = int(os.environ.get("GEN_WORKERS", "2"))
 UNSEEN = os.environ.get("GEN_UNSEEN", "XRPUSDT,DOGEUSDT,ZECUSDT,TREEUSDT,KORUBUSDT,NILUSDT").split(",")
-TFS = ["1h", "4h"]
+TFS = os.environ.get("GEN_TFS", "1h,4h").split(",")
 FEE_RT = 0.10; FEE_MULT = 2.0; FEE = FEE_RT * FEE_MULT       # % за круг; в фитнесе издержки удвоены (комиссия + проскальзывание)
 K_BLOCKS = 4; TRAIN_FRAC = 0.7; WARM = 300; TRIM_TOP = 0.05
 MIN_BLOCK_N = 20; MIN_VALID_BLOCKS = 3; MIN_TOTAL = 80; PEN = 0.01
