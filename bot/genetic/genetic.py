@@ -4,7 +4,7 @@
 (без верхних 5% сделок), штраф за сложность. Отложено: последние 30% времени и пары, которых поиск не видел.
 Тест поисковика: тот же поиск на данных с перемешанными барами (случайное блуждание) - он не должен находить 'стратегии'.
 Запуск: python genetic.py   (env: GEN_CACHE, GEN_OUT, GEN_POP, GEN_GENS, GEN_NOISE, GEN_WORKERS, GEN_UNSEEN)"""
-import os, sys, re, json, time, glob, pickle, math, random
+import os, sys, re, json, time, glob, pickle, math, random, zlib
 import numpy as np, pandas as pd
 
 CACHE = os.environ.get("GEN_CACHE", "/opt/trading-bot/wfscan/cache")
@@ -28,6 +28,7 @@ GRID = {
     "bn": [14, 20, 40], "bk": [1.5, 2.0, 2.5, 3.0],
     "reg": ["none", "sma", "atrp", "btc", "rel"], "rd": [0, 1], "rs": [50, 100, 200], "bs": [50, 100, 200], "rb": [6, 24, 72],
     "vk": [1.5, 2.0, 3.0], "vb": [0.5, 1.0, 1.5],
+    "hl": [0, 1, 2], "ht": [2, 3, 4], "mdr": [[-99, 99], [0, 99], [0, 0.5], [0.5, 1.0], [1.0, 2.0], [2.0, 99]],
     "ra": [[0.0, 0.8], [0.5, 1.0], [0.8, 1.5], [1.0, 3.0]],
     "conf": ["none", "vol", "candle", "rsi50"], "cv": [1.0, 1.5, 2.0],
     "hold": [6, 12, 24, 48], "sl": [0, 1.0, 1.5, 2.0, 3.0], "tp": [0, 1.5, 2.0, 3.0, 5.0], "tr": [0, 1.5, 2.0, 3.0, 4.0],
@@ -66,6 +67,25 @@ def shuffled(d, seed):
     e.loc[0, ["o", "h", "l"]] = [c[0], c[0], c[0]]
     return e
 
+HTF = {"15m": ["1h", "4h"], "30m": ["1h", "4h"], "1h": ["4h", "1d"], "4h": ["1d", None]}
+def trend_score(d):
+    """Счёт тренда старшего ТФ как в панели классики (-4..+4): цена к EMA50, EMA20 к EMA50, наклон EMA50, EMA50 к EMA200. Первые 200 свечей - NaN (разогрев)."""
+    c = d.c.values.astype(float); e20, e50, e200 = ema(c, 20), ema(c, 50), ema(c, 200)
+    sl = np.r_[np.full(3, np.nan), e50[3:] - e50[:-3]]
+    sc = np.sign(c - e50) + np.sign(e20 - e50) + np.sign(sl) + np.sign(e50 - e200)
+    sc[:200] = np.nan; sc[np.isnan(sl)] = np.nan
+    return sc, d.t.values.astype("int64"), int(np.median(np.diff(d.t.values)))
+def align_htf(s, sym, name, noise_seed):
+    """Счёт старшего ТФ на каждую свечу s без заглядывания: берётся последняя СТАРШАЯ свеча, закрывшаяся не позже закрытия текущей."""
+    if name is None: return None
+    d = load_df(sym, name)
+    if d is None: return None
+    if noise_seed is not None: d = shuffled(d, noise_seed * 1000 + zlib.crc32((sym + name).encode()) % 997 + 500)
+    sc, t, tfms = trend_score(d)
+    k = np.searchsorted(t + tfms, s.t + s.tfms, side="right") - 1
+    out = np.full(s.n, np.nan); ok = k >= 0; out[ok] = sc[k[ok]]
+    return out
+
 def build_data(noise_seed=None):
     syms = sorted(set(re.findall(r"_([A-Z0-9]+USDT)_", " ".join(os.listdir(CACHE)))))
     data = {tf: {"search": [], "unseen": []} for tf in TFS}
@@ -75,6 +95,10 @@ def build_data(noise_seed=None):
             if d is None: continue
             if noise_seed is not None: d = shuffled(d, noise_seed * 1000 + i)
             data[tf]["unseen" if sym in UNSEEN else "search"].append(Ser(sym, tf, d))
+    for tf in TFS:
+        for x in data[tf]["search"] + data[tf]["unseen"]:
+            h = HTF.get(tf, [None, None])
+            x.h1 = align_htf(x, x.sym, h[0], noise_seed); x.h2 = align_htf(x, x.sym, h[1], noise_seed)
     for tf in TFS:
         btc = next((x for x in data[tf]["search"] if x.sym == "BTCUSDT"), None)
         for x in data[tf]["search"] + data[tf]["unseen"]:
@@ -126,9 +150,12 @@ def active(g):
     elif g["reg"] == "btc": a.update(rd=g["rd"], bs=g["bs"])
     elif g["reg"] == "rel": a.update(rd=g["rd"], rb=g["rb"])
     if g["conf"] == "vol": a.update(cv=g["cv"])
+    a["hl"] = g["hl"]
+    if g["hl"] > 0: a["ht"] = g["ht"]
+    if g["trig"] == "macd": a["mdr"] = tuple(g["mdr"])
     return a
 def gkey(g): return json.dumps(active(g), sort_keys=True)
-def ncomp(g): return (g["reg"] != "none") + (g["conf"] != "none") + (g["sl"] > 0) + (g["tp"] > 0) + (g["tr"] > 0)
+def ncomp(g): return (g["reg"] != "none") + (g["hl"] > 0) + (g["conf"] != "none") + (g["sl"] > 0) + (g["tp"] > 0) + (g["tr"] > 0)
 
 def signals(s, g):
     c, n, t = s.c, s.n, g["trig"]
@@ -141,6 +168,11 @@ def signals(s, g):
         def mk():
             m = ema(s.c, g["mf"]) - ema(s.c, g["ms"]); return m - ema(m, g["msg"])
         d = ind(s, k, mk); L, S = cross_up(d, 0.0), cross_dn(d, 0.0)
+        lo, hi = g["mdr"]
+        if (lo, hi) != (-99, 99):    # глубина пересечения: положение линии MACD относительно нуля в ATR (лонг - ниже нуля, шорт - выше)
+            ml = ind(s, ("macdl", g["mf"], g["ms"]), lambda: ema(s.c, g["mf"]) - ema(s.c, g["ms"]))
+            dep = ml / np.maximum(s.atr, 1e-12)
+            L &= (-dep >= lo) & (-dep < hi); S &= (dep >= lo) & (dep < hi)
         if g["tm"]: L, S = S, L
     elif t == "rsi":
         r = ind(s, ("rsi", g["rn"]), lambda: rsi(s.c, g["rn"])); lo, hi = g["rl"], 100 - g["rl"]
@@ -190,6 +222,12 @@ def signals(s, g):
     elif g["conf"] == "candle": L &= s.c > s.o; S &= s.c < s.o
     elif g["conf"] == "rsi50":
         r = ind(s, ("rsi", 14), lambda: rsi(s.c, 14)); L &= r > 50; S &= r < 50
+    if g["hl"] > 0:
+        if s.h1 is None or (g["hl"] == 2 and HTF.get(g["tf"], [None, None])[1] is not None and s.h2 is None):
+            L = np.zeros(n, bool); S = np.zeros(n, bool)
+        else:
+            arrs = [s.h1] + ([s.h2] if g["hl"] == 2 and s.h2 is not None else [])
+            for a_ in arrs: L = L & (a_ >= g["ht"]); S = S & (a_ <= -g["ht"])
     L[:WARM] = False; S[:WARM] = False; L[-2:] = False; S[-2:] = False
     return L, S
 
@@ -289,8 +327,10 @@ def text(g):
            "btc": "; режим: BTC %s SMA%s" % ("выше/ниже по тренду от" if a.get("rd") else "против тренда от", a.get("bs")),
            "rel": "; режим: сила к BTC за %s св. (%s)" % (a.get("rb"), "лидер-лонг/аутсайдер-шорт" if a.get("rd") else "наоборот")}[a["reg"]]
     cf = {"none": "", "vol": "; объём>%sx" % a.get("cv"), "candle": "; свеча по направлению", "rsi50": "; RSI14 по стороне 50"}[a["conf"]]
+    ht = "" if not a.get("hl") else "; старшие ТФ по тренду (%s ур., счёт>=%s)" % (a["hl"], a["ht"])
+    md = "" if t != "macd" or tuple(a.get("mdr", (-99, 99))) == (-99, 99) else "; глубина %s ATR" % (a["mdr"],)
     ex = "; выход: %d св." % a["hold"] + (", SL %sATR" % a["sl"] if a["sl"] else "") + (", TP %sATR" % a["tp"] if a["tp"] else "") + (", трейлинг %sATR" % a["tr"] if a["tr"] else "")
-    return "%s | %s | %s%s%s%s" % (a["tf"], side, tr, reg, cf, ex)
+    return "%s | %s | %s%s%s%s%s%s" % (a["tf"], side, tr, md, ht, reg, cf, ex)
 
 # ---------- генетика ----------
 def rand_genome(rng):
