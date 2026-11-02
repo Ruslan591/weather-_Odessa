@@ -3,10 +3,19 @@
 Правила выхода (как в записи позиции): стоп, цель, безубыток с замком после +be_r R, трейлинг trail_atr x ATR1h от экстремума после БУ, выход по времени.
 Внутри свечи порядок событий неизвестен: сначала проверяется стоп, потом цель; БУ и трейлинг применяются после свечи (консервативно).
 Команды: open | update | status | loop. Данные: /opt/trading-bot/positions/positions.json. Реальных ордеров НЕ ставит."""
-import argparse, json, os, sys, time, urllib.request
+import argparse, contextlib, fcntl, json, os, sys, time, urllib.request
 D = os.environ.get("POS_DIR", "/opt/trading-bot/positions"); F = os.path.join(D, "positions.json")
 FEE = 0.05; SLIP = 0.02          # % за сторону (комиссия) и проскальзывание на входе и на рыночных/стоповых выходах
 BASE = "https://data-api.binance.vision/api/v3/klines"
+START = 7.0; LEV = 5; STAKE = 6.0; LIQ = 19.6      # счёт как на вкладках 18091: старт 7 $, плечо 5x, изолированная маржа, позиция 6 $ (маржа 1.20 $), ликвидация около -19.6% против входа
+
+@contextlib.contextmanager
+def lock():
+    os.makedirs(D, exist_ok=True)
+    with open(os.path.join(D, "positions.lock"), "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try: yield
+        finally: fcntl.flock(f, fcntl.LOCK_UN)
 
 def kl(sym, tf, limit=1000, start=None):
     u = "%s?symbol=%s&interval=%s&limit=%d" % (BASE, sym, tf, limit) + ("&startTime=%d" % start if start else "")
@@ -33,9 +42,10 @@ def cmd_open(a):
     p = {"id": max([x["id"] for x in load()] + [0]) + 1, "sym": a.sym, "side": a.side, "t_in": now, "entry": entry, "px_signal": px,
          "stop0": a.stop, "stop": a.stop, "tp": a.tp, "R": R, "R_pct": R / entry * 100, "be_r": a.be_r, "lock_pct": a.lock,
          "be_px": entry + side * R * a.be_r, "lock_px": entry * (1 + side * a.lock / 100), "armed": False,
-         "trail_dist": a.trail * at, "atr1h": at, "max_h": a.maxh, "stake": a.stake, "thesis": a.thesis,
+         "trail_dist": a.trail * at, "atr1h": at, "max_h": a.maxh, "stake": a.stake, "lev": LEV, "thesis": a.thesis,
          "last_t": (now // 60000) * 60000, "hi": entry, "lo": entry, "status": "open"}
-    ps = load(); ps.append(p); save(ps)
+    with lock():
+        ps = load(); ps.append(p); save(ps)
     print("OPENED #%d %s %s entry %.6f (signal px %.6f) stop %.6f (R %.2f%%) tp %.6f be at %.6f lock %.6f trail %.6f" % (
         p["id"], a.sym, a.side, entry, px, a.stop, p["R_pct"], a.tp, p["be_px"], p["lock_px"], p["trail_dist"]))
     return 0
@@ -52,6 +62,9 @@ def close(p, px, t, reason, market):
 def step(p, k):
     t, o, h, l, c = int(k[0]), float(k[1]), float(k[2]), float(k[3]), float(k[4])
     side = 1 if p["side"] == "long" else -1; stop = p["stop"]
+    liq = p["entry"] * (1 - side * LIQ / 100)
+    if (h >= liq) if side < 0 else (l <= liq):
+        close(p, liq, t + 60000, "liquidation", False); p["net_pct"] = -100.0 / LEV; p["pnl_usd"] = round(-p["stake"] / LEV, 3); return
     hit = (h >= stop) if side < 0 else (l <= stop)
     if hit:
         gap = max(stop, o) if side < 0 else min(stop, o)
@@ -67,6 +80,9 @@ def step(p, k):
     if p["max_h"] and (t + 60000 - p["t_in"]) / 3600000 >= p["max_h"]: close(p, c, t + 60000, "time", True)
 
 def cmd_update():
+    with lock(): return _update()
+
+def _update():
     ps = load(); changed = False; now = int(time.time() * 1000)
     for p in ps:
         if p["status"] != "open": continue
@@ -80,6 +96,48 @@ def cmd_update():
             if len(d) < 1000: break
     if changed: save(ps)
     return ps
+
+def price(sym): return float(kl(sym, "1m", 1)[-1][4])
+
+def snapshot():
+    ps = cmd_update(); opn = []; closed = []; realized = 0.0; unreal = 0.0; margin = 0.0
+    for p in ps:
+        side = 1 if p["side"] == "long" else -1
+        if p["status"] == "open":
+            px = price(p["sym"]); u = side * (px / p["entry"] - 1) * 100 - 2 * FEE; ud = p["stake"] * u / 100; m = p["stake"] / p.get("lev", LEV)
+            unreal += ud; margin += m
+            q = dict(p); q.update(px=px, unreal_pct=round(u, 3), unreal_usd=round(ud, 3), r_now=round(u / p["R_pct"], 2), margin=m,
+                                 liq_px=p["entry"] * (1 - side * LIQ / 100), trail_pct=round(p["trail_dist"] / px * 100, 3), cand=[[int(k[0]), float(k[1]), float(k[2]), float(k[3]), float(k[4])] for k in kl(p["sym"], "15m", 120)])
+            opn.append(q)
+        else:
+            realized += p.get("pnl_usd", 0.0); closed.append(p)
+    closed.sort(key=lambda p: -p["t_out"])
+    return {"account": {"start": START, "lev": LEV, "stake": STAKE, "margin": STAKE / LEV, "realized": round(realized, 3), "unreal": round(unreal, 3),
+                        "equity": round(START + realized + unreal, 3), "free": round(START + realized - margin, 3), "open_margin": round(margin, 3), "closed": len(closed)},
+            "open": opn, "closed": closed, "ts": int(time.time() * 1000)}
+
+def api_action(o):
+    act = o.get("action"); pid = int(o.get("id", 0)); pct = float(o.get("pct", 0) or 0)
+    with lock():
+        ps = load(); p = next((x for x in ps if x["id"] == pid and x["status"] == "open"), None)
+        if not p: return {"error": "позиция не найдена или уже закрыта"}
+        side = 1 if p["side"] == "long" else -1; px = price(p["sym"]); now = int(time.time() * 1000)
+        if act == "close":
+            close(p, px, now, "manual", True)
+        elif act in ("stop", "trail"):
+            if not (0.05 <= pct <= 20): return {"error": "расстояние от 0.05 до 20 %"}
+            dist = px * pct / 100
+            new_stop = px - side * dist                                   # лонг: ниже цены, шорт: выше цены
+            if act == "stop":
+                p["stop"] = new_stop; p["manual_stop"] = round(pct, 3)
+            else:
+                p["trail_dist"] = dist; p["armed"] = True; p["manual_trail"] = round(pct, 3)
+                p["hi"] = max(p["hi"], px); p["lo"] = min(p["lo"], px)
+                tr = p["lo"] + dist if side < 0 else p["hi"] - dist
+                p["stop"] = min(p["stop"], tr) if side < 0 else max(p["stop"], tr)
+        else: return {"error": "неизвестное действие"}
+        save(ps)
+    return snapshot()
 
 def cmd_status():
     ps = cmd_update()
@@ -97,7 +155,7 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(); ap.add_argument("cmd", choices=["open", "update", "status", "loop"])
     ap.add_argument("sym", nargs="?"); ap.add_argument("side", nargs="?", choices=["long", "short"]); ap.add_argument("stop", nargs="?", type=float); ap.add_argument("tp", nargs="?", type=float)
     ap.add_argument("--be-r", dest="be_r", type=float, default=1.0); ap.add_argument("--lock", type=float, default=0.2); ap.add_argument("--trail", type=float, default=1.5)
-    ap.add_argument("--maxh", type=float, default=72); ap.add_argument("--stake", type=float, default=100.0); ap.add_argument("--thesis", default=""); ap.add_argument("--zone", type=float, nargs=2)
+    ap.add_argument("--maxh", type=float, default=72); ap.add_argument("--stake", type=float, default=STAKE); ap.add_argument("--thesis", default=""); ap.add_argument("--zone", type=float, nargs=2)
     a = ap.parse_args()
     if a.cmd == "open": sys.exit(cmd_open(a))
     elif a.cmd == "update": cmd_update()
