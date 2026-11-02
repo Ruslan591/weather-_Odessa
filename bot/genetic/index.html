@@ -1,0 +1,56 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Генетический поиск стратегий</title>
+<style>
+:root{color-scheme:dark light;--bg:#14161a;--fg:#e6e6e6;--mut:#8b93a1;--card:#1d2026;--bd:#2c313a;--ok:#1f9d55;--bad:#c0392b;--acc:#3b82f6;--warn:#d89614}
+@media(prefers-color-scheme:light){:root{--bg:#f6f7f9;--fg:#1b1f24;--mut:#667085;--card:#fff;--bd:#d8dce3}}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.4 system-ui,sans-serif;padding:10px}
+h1{font-size:17px;margin:4px 0}h2{font-size:14px;margin:0 0 6px}.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:10px;margin:8px 0}
+.mut{color:var(--mut);font-size:12px}.row{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+button{background:var(--card);color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:6px 10px;font-size:13px}button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.sc{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:12.5px;white-space:nowrap}
+th,td{border-bottom:1px solid var(--bd);padding:5px 6px;text-align:right}th:first-child,td:first-child,td.tx,th.tx{text-align:left}
+th{color:var(--mut);font-weight:500}.p{color:var(--ok)}.n{color:var(--bad)}.w{color:var(--warn)}.pass{background:rgba(31,157,85,.18)}
+.big{font-size:15px;font-weight:600}svg{width:100%;height:170px;display:block}
+</style></head><body>
+<h1>Генетический поиск стратегий (1h/4h)</h1>
+<div class="mut" id="st">загрузка…</div>
+<div class="card" id="ver"></div>
+<div class="card sc"><h2>Реальные данные против шума</h2><table id="cmp"></table></div>
+<div class="card"><h2>Лучший фитнес по поколениям</h2><svg id="ch" viewBox="0 0 600 170" preserveAspectRatio="none"></svg><div class="row mut" id="lg"></div></div>
+<div class="row" id="sel"></div>
+<div class="card sc"><h2 id="tt">Лучшие геномы</h2><table id="top"></table></div>
+<div class="card mut" id="how"></div>
+<script>
+let D=null,SEL='real';
+const f=(x,d=3)=>x==null?'–':(+x).toFixed(d);const cl=x=>x==null?'':(x>0?'p':'n');
+const COL={real:'#3b82f6',noise1:'#c0392b',noise2:'#d89614',noise3:'#8b93a1',noise4:'#a855f7',noise5:'#14b8a6'};
+function chart(){
+ const svg=document.getElementById('ch'),R=D.runs,names=Object.keys(R);let all=[];names.forEach(n=>R[n].hist.forEach(h=>all.push(h.best)));
+ if(!all.length){svg.innerHTML='';return}
+ const mn=Math.min(...all,0),mx=Math.max(...all,0),pad=(mx-mn)*.1||.1,lo=mn-pad,hi=mx+pad,G=D.meta.gens;
+ const X=g=>10+g/(Math.max(G-1,1))*580,Y=v=>160-(v-lo)/(hi-lo)*150;let s='<line x1="10" x2="590" y1="'+Y(0)+'" y2="'+Y(0)+'" stroke="#8b93a1" stroke-dasharray="4"/>';
+ names.forEach(n=>{s+='<polyline fill="none" stroke-width="2" stroke="'+(COL[n]||'#888')+'" points="'+R[n].hist.map(h=>X(h.g)+','+Y(h.best)).join(' ')+'"/>'});
+ svg.innerHTML=s;document.getElementById('lg').innerHTML=names.map(n=>'<span style="color:'+(COL[n]||'#888')+'">■ '+n+'</span>').join(' ')+' <span>пунктир — ноль (безубыток после удвоенных издержек)</span>';
+}
+function draw(){
+ if(!D)return;const m=D.meta,R=D.runs,V=D.verdict;
+ const lastRun=Object.keys(R).slice(-1)[0],lr=R[lastRun];
+ document.getElementById('st').textContent=(m.status==='done'?'Готово. ':'Идёт расчёт… ('+lastRun+(lr&&lr.hist.length?', поколение '+lr.hist.length+'/'+m.gens:'')+') ')+'Пары: поиск '+m.series['1h'].search+' + невиданные '+m.series['1h'].unseen+' · популяция '+m.pop+' · обновлено '+new Date().toLocaleTimeString();
+ const ver=document.getElementById('ver');
+ if(V){const cls=V.signal?'p':'w';
+  ver.innerHTML='<div class="big '+cls+'">'+(V.signal?'Поисковик нашёл структуру, которой нет в шуме: проверяйте кандидатов на бумаге.':'Отличить найденное от шума не удалось: кандидатов на бумагу нет.')+'</div>'
+  +'<div class="mut">Лучший фитнес: реальные '+f(V.real_best_fit)+' против шума '+V.noise_best_fit.map(x=>f(x)).join(' / ')+'. Прошли отложенные данные и невиданные пары (из топ-30): реальные '+V.real_npass+', шум '+V.noise_npass.join(' / ')+'. Из реальных прошли и по медиане сделки: '+V.real_npass_med+'. Проверено вариантов: реальные '+V.evals_real+', шум '+V.evals_noise.join(' / ')+'.</div>';
+ }else ver.innerHTML='<div class="mut">Вердикт появится после завершения реального прогона и прогонов на шуме.</div>';
+ let h='<tr><th>прогон</th><th>варианты</th><th>лучший фитнес</th><th>прошли (из топ-30)</th><th>+ по медиане</th><th>лучший отложенный</th><th>лучший на невиданных</th></tr>';
+ Object.keys(R).forEach(n=>{const r=R[n];const t=r.top||[];const bh=t.length?Math.max(...t.map(x=>x.ho.tm)):null,bu=t.length?Math.max(...t.map(x=>x.un.tm)):null;
+  h+='<tr><td>'+n+(r.status!=='done'?' <span class="mut">(идёт)</span>':'')+'</td><td>'+r.evals+'</td><td class="'+cl(r.best_fit)+'">'+f(r.best_fit)+'</td><td>'+(r.npass==null?'–':r.npass)+'</td><td>'+(r.npass_med==null?'–':r.npass_med)+'</td><td class="'+cl(bh)+'">'+f(bh)+'</td><td class="'+cl(bu)+'">'+f(bu)+'</td></tr>'});
+ document.getElementById('cmp').innerHTML=h;chart();
+ const sel=document.getElementById('sel');sel.innerHTML='';Object.keys(R).forEach(n=>{const b=document.createElement('button');b.textContent=n;b.className=SEL===n?'on':'';b.onclick=()=>{SEL=n;draw()};sel.appendChild(b)});
+ const r=R[SEL];document.getElementById('tt').textContent='Лучшие геномы: '+SEL;
+ let t='<tr><th class="tx">геном</th><th>фитнес</th><th>блоки: нижняя граница</th><th>отложенное: n</th><th>сред.*</th><th>медиана</th><th>невиданные: n</th><th>сред.*</th><th>медиана</th><th>пар +</th><th>итог</th></tr>';
+ ((r&&r.top)||[]).forEach(x=>{t+='<tr class="'+(x.pass?'pass':'')+'"><td class="tx">'+x.text+'</td><td class="'+cl(x.fit)+'">'+f(x.fit)+'</td><td>'+x.blocks.map(b=>b.n>=20?f(b.lcb,2):'·').join(' / ')+'</td><td>'+x.ho.n+'</td><td class="'+cl(x.ho.tm)+'">'+f(x.ho.tm)+'</td><td class="'+cl(x.ho.med)+'">'+f(x.ho.med)+'</td><td>'+x.un.n+'</td><td class="'+cl(x.un.tm)+'">'+f(x.un.tm)+'</td><td class="'+cl(x.un.med)+'">'+f(x.un.med)+'</td><td>'+(x.un.pos==null?'–':f(x.un.pos,2))+'</td><td>'+(x.med_ok?'ПРОШЁЛ+':x.pass?'прошёл':'нет')+'</td></tr>'});
+ document.getElementById('top').innerHTML=r&&r.top?t:'<tr><td class="mut">Топ появится после завершения поиска этого прогона.</td></tr>';
+ document.getElementById('how').innerHTML='<b>Как читать.</b> Все доходности в % на сделку после издержек x2 ('+m.fee_round_pct_used+'% за круг). * — среднее без верхних 5% сделок. Фитнес = худший из '+m.k_blocks+' последовательных блоков зоны поиска (нижняя граница среднего: среднее минус стандартная ошибка) минус штраф за сложность. Зона поиска — первые '+Math.round(m.train_frac*100)+'% времени; отложенное — последние '+Math.round((1-m.train_frac)*100)+'% на тех же парах; невиданные пары ('+m.unseen_pairs.join(', ')+') поиск не видел вообще. «Прошёл» = отложенное и невиданные > 0 при n≥40 и не менее половины невиданных пар в плюсе. Шум — те же данные с перемешанными барами (случайное блуждание): если поисковик находит на нём «стратегии», его результатам на реальных данных верить нельзя. Сделки разных пар перекрываются по времени, поэтому значимость завышена.';
+}
+async function load(){try{D=await (await fetch('results.json?'+Date.now())).json();draw()}catch(e){document.getElementById('st').textContent='results.json пока нет: '+e}}
+load();setInterval(()=>{if(!D||D.meta.status!=='done')load()},20000);
+</script></body></html>
