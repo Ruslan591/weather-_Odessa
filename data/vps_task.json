@@ -1,1 +1,1 @@
-{"task_id": "an_1793706175", "cmd": "cat /tmp/bt5_out.txt; pgrep -af 'python bt5' | head -3; uptime", "timeout": 40}
+{"task_id": "an_1793706200", "cmd": "ps -o pid,ppid,user,lstart,etime,cmd -p 1979562; echo; ps -o pid,ppid,user,lstart,cmd --ppid 1979562 | head -5; echo; ls -la /proc/1979562/cwd 2>/dev/null; ls -la /tmp/bt5.py /tmp/bt5_out*.txt; echo; last -n 5 2>/dev/null | head -6; echo; ls -la /tmp/bt5 | head -30", "timeout": 40}
