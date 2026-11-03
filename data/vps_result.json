@@ -1,7 +1,7 @@
 {
-  "task_id": "an_1793686874",
+  "task_id": "an_1793686938",
   "returncode": 0,
-  "stdout": "1932853 /opt/trading-bot/venv/bin/python pos_watch.py\nkilled\n",
+  "stdout": "1959355 /bin/sh -c cd /opt/trading-bot/positions && (setsid nohup /opt/trading-bot/venv/bin/python pos_watch.py >> watch.out 2>&1 < /dev/null &) ; sleep 4; pgrep -af 'python pos_watch'; tail -3 watch.log; date -u\n1959357 /opt/trading-bot/venv/bin/python pos_watch.py\n11-03 06:16:05 OPEN BNB short trigger=break px=693.61 stop=698.73068 risk=0.74% tp=678.24795 score4h=-4 1h=-4\n11-03 06:16:07 pos.py: OPENED #7 BNBUSDT short entry 694.051162 (signal px 694.190000) stop 698.730680 (R 0.67%) tp 678.247950 be at 689.371644 lock 692.663060 trail 4.992275\n11-03 06:23:01 watch start dry=False expire=11-04 22:00\nTue Nov  3 06:23:05 UTC 2026\n",
   "stderr": "",
-  "completed_at_utc": "2026-11-03T06:22:03Z"
+  "completed_at_utc": "2026-11-03T06:23:05Z"
 }
