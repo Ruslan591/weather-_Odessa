@@ -1,1 +1,1 @@
-{"task_id": "st_1793663509", "cmd": "cd /opt/trading-bot/positions && grep -v no-trigger watch.log | tail -12; /opt/trading-bot/venv/bin/python pos.py status; date -u; python3 -c \"import json;[print(json.dumps({k:v for k,v in p.items()},ensure_ascii=False)) for p in json.load(open('positions.json')) if p['status']=='open']\"", "timeout": 60}
+{"task_id": "an_1793686614", "cmd": "cd /opt/trading-bot/positions && date -u; grep -v no-trigger watch.log | grep -v 'watch start' | tail -40; /opt/trading-bot/venv/bin/python pos.py status", "timeout": 60}
