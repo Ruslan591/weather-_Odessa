@@ -1,0 +1,11 @@
+[Unit]
+Description=Claude paper limit orders (chan_orders)
+After=network.target
+[Service]
+User=tbot
+ExecStart=/opt/trading-bot/venv/bin/python /opt/trading-bot/positions/chan_orders.py loop
+Environment=POS_DIR=/opt/trading-bot/positions
+Restart=always
+Nice=10
+[Install]
+WantedBy=multi-user.target
