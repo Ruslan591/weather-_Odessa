@@ -50,10 +50,14 @@ def cmd_open(a):
         p["id"], a.sym, a.side, entry, px, a.stop, p["R_pct"], a.tp, p["be_px"], p["lock_px"], p["trail_dist"]))
     return 0
 
+def fees(p, reason=None):
+    """Комиссия круга, %: вход (fee_in, по умолчанию тейкер) + выход (цель лимитом fee_tp, иначе тейкер). Лимитные позиции chan_orders: 0.02 + 0.02 на цели, 0.02 + 0.05 на стопе."""
+    return p.get("fee_in", FEE) + (p.get("fee_tp", FEE) if reason == "target" else FEE)
+
 def close(p, px, t, reason, market):
     side = 1 if p["side"] == "long" else -1
     ex = px * (1 - side * SLIP / 100) if market else px
-    net = side * (ex / p["entry"] - 1) * 100 - 2 * FEE
+    net = side * (ex / p["entry"] - 1) * 100 - fees(p, reason)
     p.update(status="closed", t_out=t, exit=ex, reason=reason, net_pct=round(net, 3), r_mult=round(net / p["R_pct"], 3),
              pnl_usd=round(p["stake"] * net / 100, 3),
              mfe_pct=round((p["entry"] - p["lo"]) / p["entry"] * 100 if side < 0 else (p["hi"] - p["entry"]) / p["entry"] * 100, 3),
@@ -104,7 +108,7 @@ def snapshot():
     for p in ps:
         side = 1 if p["side"] == "long" else -1
         if p["status"] == "open":
-            px = price(p["sym"]); u = side * (px / p["entry"] - 1) * 100 - 2 * FEE; ud = p["stake"] * u / 100; m = p["stake"] / p.get("lev", LEV)
+            px = price(p["sym"]); u = side * (px / p["entry"] - 1) * 100 - fees(p); ud = p["stake"] * u / 100; m = p["stake"] / p.get("lev", LEV)
             unreal += ud; margin += m
             q = dict(p); q.update(px=px, unreal_pct=round(u, 3), unreal_usd=round(ud, 3), r_now=round(u / p["R_pct"], 2), margin=m,
                                  liq_px=p["entry"] * (1 - side * LIQ / 100), trail_pct=round(p["trail_dist"] / px * 100, 3), cand=[[int(k[0]), float(k[1]), float(k[2]), float(k[3]), float(k[4])] for k in kl(p["sym"], "15m", 120)])
@@ -114,9 +118,22 @@ def snapshot():
     closed.sort(key=lambda p: -p["t_out"])
     return {"account": {"start": START, "lev": LEV, "stake": STAKE, "margin": STAKE / LEV, "realized": round(realized, 3), "unreal": round(unreal, 3),
                         "equity": round(START + realized + unreal, 3), "free": round(START + realized - margin, 3), "open_margin": round(margin, 3), "closed": len(closed)},
-            "open": opn, "closed": closed, "ts": int(time.time() * 1000)}
+            "open": opn, "closed": closed, "orders": _orders(), "ts": int(time.time() * 1000)}
+
+def _orders():
+    try:
+        import chan_orders
+        return chan_orders.orders_view()
+    except Exception as e:
+        return {"pending": [], "recent": [], "error": str(e)}
 
 def api_action(o):
+    if o.get("action") == "chart":
+        try:
+            import chan_orders
+            return chan_orders.pair_view(o.get("sym"))
+        except Exception as e:
+            return {"error": str(e)}
     act = o.get("action"); pid = int(o.get("id", 0)); pct = float(o.get("pct", 0) or 0)
     with lock():
         ps = load(); p = next((x for x in ps if x["id"] == pid and x["status"] == "open"), None)
@@ -145,8 +162,8 @@ def cmd_status():
         if p["status"] == "open":
             px = float(kl(p["sym"], "1m", 1)[-1][4]); side = 1 if p["side"] == "long" else -1
             print("#%d OPEN %s %s since %s entry %.6f now %.6f unreal %.2f%% (%.2fR) stop %.6f%s tp %.6f" % (
-                p["id"], p["sym"], p["side"], tstr(p["t_in"]), p["entry"], px, side * (px / p["entry"] - 1) * 100 - 2 * FEE,
-                (side * (px / p["entry"] - 1) * 100 - 2 * FEE) / p["R_pct"], p["stop"], " (BE armed)" if p["armed"] else "", p["tp"]))
+                p["id"], p["sym"], p["side"], tstr(p["t_in"]), p["entry"], px, side * (px / p["entry"] - 1) * 100 - fees(p),
+                (side * (px / p["entry"] - 1) * 100 - fees(p)) / p["R_pct"], p["stop"], " (BE armed)" if p["armed"] else "", p["tp"]))
         else:
             print("#%d CLOSED %s %s %s -> %s exit %.6f %s net %.2f%% (%.2fR) MFE %.2f%% MAE %.2f%%" % (
                 p["id"], p["sym"], p["side"], tstr(p["t_in"]), tstr(p["t_out"]), p["exit"], p["reason"], p["net_pct"], p["r_mult"], p["mfe_pct"], p["mae_pct"]))
