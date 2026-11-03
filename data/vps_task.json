@@ -1,1 +1,1 @@
-{"task_id": "an_1793686874", "cmd": "pgrep -af '[p]os_watch'; pkill -f '[p]os_watch'; sleep 1; pgrep -af '[p]os_watch' || echo killed", "timeout": 40}
+{"task_id": "an_1793686938", "cmd": "cd /opt/trading-bot/positions && (setsid nohup /opt/trading-bot/venv/bin/python pos_watch.py >> watch.out 2>&1 < /dev/null &) ; sleep 4; pgrep -af 'python pos_watch'; tail -3 watch.log; date -u", "timeout": 40}
