@@ -1,7 +1,7 @@
 {
-  "task_id": "an_1793708641",
+  "task_id": "an_1793723742",
   "returncode": 0,
-  "stdout": "compiled\nPROPOSAL DOT chan_bottom long price 0.941067 stop 0.936361 tp 0.949884 dist_atr 2.19\nPROPOSAL ZEC chan_bottom long price 1182.46 stop 1175.01 tp 1193.45 dist_atr 2.38\nPROPOSAL TREE chan_top short price 0.033868 stop 0.0340373 tp 0.033528 dist_atr 0.85\nPROPOSAL NIL chan_top short price 0.0649227 stop 0.0652473 tp 0.0631868 dist_atr 2.12\nPROPOSAL HAEDAL chan_top short price 0.026602 stop 0.0267868 tp 0.0263284 dist_atr 1.31\npairs scanned 23, with proposals 5, pending 0\n",
+  "stdout": "        return web.json_response({\"error\": str(e)}, status=400)\n\n\nasync def api_claude(req):\n    \"\"\"Счёт «Claude»: GET — снимок (счёт 7 $, 5x, позиции, журнал), POST {action: close|stop|trail, id, pct}. Данные: /opt/trading-bot/positions/pos.py.\"\"\"\n    import sys as _s\n    if \"/opt/trading-bot/positions\" not in _s.path:\n        _s.path.insert(0, \"/opt/trading-bot/positions\")\n    try:\n        import pos as _pos\n        loop = asyncio.get_running_loop()\n        if req.method == \"POST\":\n            o = await req.json()\n            res = await loop.run_in_executor(None, _pos.api_action, o)\n        else:\n            res = await loop.run_in_executor(None, _pos.snapshot)\n    except Exception as e:\n        res = {\"error\": str(e)}\n    return web.json_response(res)\n\n\nasync def api_cand(req):\n    \"\"\"Фильтр счёта «Кандидат»: GET — текущие значения, POST {filter:{...}} или {reset:true}. Каждое изменение параметров добавл\n    try:\n        raw = jload(CAND_FILE, {}) or {}\n        cur = {k: raw.get(k, v) for k, v in pr.CAND_DEFAULT.items()}\n        if req.method == \"POST\":\n            j = await req.json()\n            new = dict(cur)\n            if j.get(\"reset\"):\n                new = dict(pr.CAND_DEFAULT)\n",
   "stderr": "",
-  "completed_at_utc": "2026-11-03T12:25:36Z"
+  "completed_at_utc": "2026-11-03T16:36:02Z"
 }
