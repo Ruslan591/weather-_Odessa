@@ -8,7 +8,7 @@ import pos
 SHORT = "XRP DOGE ADA DOT APT ATOM SOL LINK AVAX SUI LTC BNB ETH".split(); LONG = ["HAEDAL"]
 COUNTER = "BTC ETH SOL XRP DOGE ADA BNB LINK AVAX SUI LTC DOT".split()   # лонг против тренда: только пробой максимума 24 ч; не больше одной такой позиции
 EXPIRE = calendar.timegm((2026, 11, 4, 22, 0, 0)) * 1000
-MAXOPEN = 2; RISK_CAP = 1.5   # 2026-11-03: MAXOPEN 3 -> 2 (3 одновременных шорта = одна ставка на рынок, см. docs bot_positions); TP_R = 3.0; MAXH = 24
+MAXOPEN = 2; RISK_CAP = 1.5; TP_R = 3.0; MAXH = 24   # 2026-11-03: MAXOPEN 3 -> 2 (3 shorts at once = one market bet)
 ST = os.path.join(D, "watch_state.json"); LOG = os.path.join(D, "watch.log")
 DRY = "--dry" in sys.argv; ONCE = "--once" in sys.argv
 def log(m):
