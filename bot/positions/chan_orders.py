@@ -232,7 +232,7 @@ def pair_view(sym):
     if sym not in PAIRS: return {"error": "пара не из списка сканера"}
     now = int(time.time() * 1000); A = analyze(sym, now)
     if not A: return {"error": "мало данных по паре"}
-    i = A["M"] - 1; t = A["t"]; st = A["st_at"](i); lo = max(0, A["M"] - 150)
+    i = A["M"] - 1; t = A["t"]; st = A["st_at"](i); lo = max(0, A["M"] - 300)
     cand = [[t[j], float(A["o"][j]), float(A["h"][j]), float(A["l"][j]), float(A["c"][j])] for j in range(lo, A["M"])]
     chan = None; b = None; typ = st["type"] if st else "none"
     if st and st.get("upper") and st.get("lower"):
@@ -245,7 +245,7 @@ _cache = {}
 def _cand(sym):
     t = time.time(); c = _cache.get(sym)
     if c and t - c[0] < 20: return c[1]
-    d = [[int(k[0]), float(k[1]), float(k[2]), float(k[3]), float(k[4])] for k in pos.kl(sym + "USDT", "5m", 150)]; _cache[sym] = (t, d); return d
+    d = [[int(k[0]), float(k[1]), float(k[2]), float(k[3]), float(k[4])] for k in pos.kl(sym + "USDT", "5m", 300)]; _cache[sym] = (t, d); return d
 def orders_view():
     os_ = load_orders(); now = int(time.time() * 1000); pend = []; rec = []
     for o in os_:
