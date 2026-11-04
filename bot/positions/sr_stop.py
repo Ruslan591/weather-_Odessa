@@ -45,7 +45,7 @@ def levels(side, d, t0, atr):
 
 def apply(p, kl, now, log=None):
     """Вызывать для открытой позиции после БУ. Возвращает True, если p изменён (стоп или sr_t)."""
-    if not p.get("armed") or p["status"] != "open": return False
+    if not p.get("armed") or p["status"] != "open" or p.get("stop_manual"): return False   # ручной стоп (патч 7) не трогаем
     d = [[int(k[0]), float(k[1]), float(k[2]), float(k[3]), float(k[4])] for k in kl(p["sym"], "5m", 300)]
     d = [k for k in d if k[0] + TF5 <= now]
     if len(d) < 30: return False
