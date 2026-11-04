@@ -1,1 +1,1 @@
-{"task_id": "panel_dump_1", "cmd": "cd /opt/trading-bot/classic && md5sum classic_pos_html.py && xz -9e -c classic_pos_html.py | base64 -w0 | wc -c && xz -9e -c classic_pos_html.py | base64 -w0", "timeout": 90}
+{"task_id": "panel_sz_1", "cmd": "cd /opt/trading-bot/classic && xz -9e -c classic_pos_html.py > /tmp/pnl.xz && wc -c /tmp/pnl.xz && base64 -w0 /tmp/pnl.xz | wc -c && md5sum classic_pos_html.py", "timeout": 40}
