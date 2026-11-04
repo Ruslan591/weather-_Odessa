@@ -1,1 +1,1 @@
-{"task_id": "st9", "cmd": "cd /opt/trading-bot/positions && python3 -c \"\nimport json\no=json.load(open('orders.json'))\na=[x for x in o if x.get('rule','').startswith('retest')][-1]\nprint({k:(v if len(json.dumps(v))<300 else 'LEN') for k,v in a.items()})\nprint(json.dumps(a.get('basis'))[:300])\n\"", "timeout": 120}
+{"task_id": "dep5", "cmd": "cd /opt/weather-pipeline/repo && git fetch -q origin main && git show origin/main:scripts/deploy_claude_tab5.sh | bash", "timeout": 120}
