@@ -9,19 +9,26 @@
 Заявка живёт 12 свечей (пробой: 24); на каждой закрытой свече пересчитывается: цена изменилась больше чем на 0.15 ATR или условия исчезли -> отмена и новая заявка.
 Исполнение: сквозь уровень (low < цена для покупки, high > цена для продажи) по минутным свечам; мейкер 0.02% на входе и на цели, стоп - тейкер (как в pos.py).
 Слоты: пока открыто SLOTS позиций, новые заявки не ставятся, а когда исполнилась заявка и слоты заполнились - остальные отменяются.
-Команды: scan [--dry] | loop | list. Данные: orders.json (POS_DIR). Позиции создаются в positions.json через pos.py (поля src=chan, fee_in, fee_tp)."""
+ИЗМЕНЕНИЕ 2026-11-04 (docs/topics/chan_orders.md, «Первоочередные задачи»): chan_top/chan_bottom ВЫКЛЮЧЕНЫ флагом CHAN_EDGE (по умолчанию 0, env CHAN_EDGE=1 включает), код сохранён.
+Ретест теперь с подтверждением (путь Б): пробой границы канала -> только наблюдение (chan_events.json) -> возврат к пробитому уровню (касание) -> N=2 свечи подряд без закрытия за уровнем (допуск 0.2 ATR) -> лимит на уровне. Закрытие за уровнем = ложный пробой, сделки нет.
+Задача 1 «тень»: в каждую заявку пишется снимок тренда (trend_shadow.py), правила от него не зависят. Отчёт по группам: python chan_orders.py report.
+Команды: scan [--dry] | loop | list | report. Данные: orders.json (POS_DIR). Позиции создаются в positions.json через pos.py (поля src=chan, fee_in, fee_tp)."""
 import json, os, sys, time
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
-import pos
+import pos, trend_shadow
 D = pos.D; OF = os.path.join(D, "orders.json"); LOG = os.path.join(D, "chan.log"); STF = os.path.join(D, "chan_state.json")
+EVF = os.path.join(D, "chan_events.json")
 CLASSIC = os.environ.get("CLASSIC_DIR", "/opt/trading-bot/classic")
 PAIRS = "BTC ETH SOL XRP DOGE ADA BNB LINK AVAX SUI LTC DOT APT ATOM PHA ZEC NEAR TREE ANIME IOST REZ NIL HAEDAL".split()
 TFM = 300000; MAK = 0.02
 STOP_ATR = 1.2; MIN_RISK = 0.5; TPBUF = 0.1
 VALID_A = 12; VALID_B = 24; MAXPEND = 8; SLOTS = 3; MAXH = 24
 DIST_A = (0.0, 3.0); DIST_B = (0.3, 4.0); KEEP_ATR = 0.15
+# ретест с подтверждением (допущения на проверку пользователю, см. doc): N свечей, допуски в ATR на момент пробоя
+CHAN_EDGE = os.environ.get("CHAN_EDGE", "0") == "1"   # chan_top / chan_bottom (лимит у границы заранее): выключены
+CONFIRM_N = 2; TOUCH_ATR = 0.2; TOL_ATR = 0.2; AWAY_ATR = 0.5; ENTRY_OFF = 0.1; STOP_PAD = 0.5; VALID_C = 12
 RULE_RU = {"chan_top": "нисходящий канал: продажа на верхней границе", "chan_bottom": "восходящий канал: покупка на нижней границе",
-           "retest_up": "пробой нисходящего канала вверх: покупка на ретесте пробитого уровня", "retest_down": "пробой восходящего канала вниз: продажа на ретесте пробитого уровня"}
+           "retest_up": "пробой нисходящего канала вверх, возврат к уровню и подтверждение удержания: покупка у уровня", "retest_down": "пробой восходящего канала вниз, возврат к уровню и подтверждение удержания: продажа у уровня"}
 STATUS_RU = {"pending": "активна", "filled": "исполнена", "cancelled": "отменена", "expired": "истекла"}
 
 def log(m):
@@ -31,6 +38,12 @@ def load_orders():
     except Exception: return []
 def save_orders(o):
     tmp = OF + ".tmp"; json.dump(o, open(tmp, "w", encoding="utf-8"), ensure_ascii=False, indent=1); os.replace(tmp, OF)
+def load_events():
+    try: return json.load(open(EVF, encoding="utf-8"))
+    except Exception: return []
+def save_events(ev):
+    now = int(time.time() * 1000); ev = [e for e in ev if e["status"] == "watch" or now - e.get("t_end", e["created_t"]) < 3 * 86400000][-300:]
+    tmp = EVF + ".tmp"; json.dump(ev, open(tmp, "w", encoding="utf-8"), ensure_ascii=False, indent=1); os.replace(tmp, EVF)
 def load_state():
     try: return json.load(open(STF))
     except Exception: return {"last": {}}
@@ -82,12 +95,12 @@ def risk_text(a, price, risk, stop, side):
     by = "1.2 ATR(5m) = %s" % P(STOP_ATR * a) if STOP_ATR * a >= MIN_RISK / 100 * price else "0.5%% цены = %s" % P(MIN_RISK / 100 * price)
     return "Стоп %s уровня на max(1.2 ATR, 0.5%% цены): взято %s, стоп %s (риск %.2f%%)." % ("выше" if side == "short" else "ниже", by, P(stop), risk / price * 100)
 
-def propose(sym, A):
+def propose(sym, A, evs):
     out = []; M = A["M"]; i = M - 1; t = A["t"]; c = A["c"]; h = A["h"]; l = A["l"]; tl = A["tl"]; a = float(A["atr"][i])
     if a <= 0: return out
     tp_ = t[i] + TFM
     st = A["st_at"](i)
-    if st and st["type"] in ("channel_down", "channel_up") and st.get("lower") and st.get("upper"):
+    if CHAN_EDGE and st and st["type"] in ("channel_down", "channel_up") and st.get("lower") and st.get("upper"):
         S, R = st["lower"], st["upper"]; Sn = float(tl.at(S, i + 1)); Rn = float(tl.at(R, i + 1)); b = basis_of(A, st, i)
         if (Rn - Sn) >= 1.5 * a and b:
             ch = {"type": st["type"], "upper": ldict(R, t), "lower": ldict(S, t)}
@@ -119,30 +132,72 @@ def propose(sym, A):
                 if level < c[i] + 0.3 * a: level = Si; src = "сама линия канала (минимум окна слишком близко к цене)"
                 dist = (level - float(c[i])) / a; line = Si
             risk = max(STOP_ATR * a, MIN_RISK / 100 * level); width = Ri - Si
-            if DIST_B[0] <= dist <= DIST_B[1]:
-                side = "long" if up else "short"; stop = level - risk if up else level + risk; move = max(width, 2 * risk); tp = level + move if up else level - move
+            ev_key = "%s|%s|%d" % (sym, "up" if up else "down", t[i])
+            if DIST_B[0] <= dist <= DIST_B[1] and not any(e["key"] == ev_key for e in evs):
                 lv = {"p": level, "t_from": t[i - 24], "t_to": t[i - 1], "t_ext": t[ext], "src": src}
                 bo = {"t": t[i], "close": float(c[i]), "line": line, "dir": "up" if up else "down"}
-                why = [chan_text(b),
-                       "Пробой: свеча %s закрылась на %s %s границы канала (%s) больше чем на 0.2 ATR; предыдущая свеча была внутри канала." % (tok(t[i]), P(float(c[i])), "выше верхней" if up else "ниже нижней", P(line)),
-                       "Уровень: %s (окно %s - %s) = %s. %s." % (src, tok(t[i - 24]), tok(t[i - 1]), P(level), "Бывшее сопротивление становится поддержкой" if up else "Бывшая поддержка становится сопротивлением"),
-                       "Цена %s уровня на %.1f ATR; лимит %s ждёт возврата (ретеста) на уровень %s." % ("выше" if up else "ниже", dist, "покупки" if up else "продажи", P(level)),
-                       risk_text(a, level, risk, stop, side),
-                       "Цель = уровень %s max(высота канала %s, 2 риска %s) = %s." % ("плюс" if up else "минус", P(width), P(2 * risk), P(tp)),
-                       "Заявка живёт %d свечей (до %s). Отмена, если свеча закроется %s уровня на 0.7 ATR (пробой не удержался)." % (VALID_B, tok(tp_ + (VALID_B - 1) * TFM), "ниже" if up else "выше")]
-                out.append(mk(sym, "retest_up" if up else "retest_down", side, level, stop, tp, a, tp_, VALID_B, ch, lv, key="%s|%s|%d" % (sym, "retest_up" if up else "retest_down", t[i]),
-                              ctype=st1["type"], basis=b, why=why, breakout=bo))
+                evs.append(dict(key=ev_key, sym=sym, dir="up" if up else "down", level=level, t_break=int(t[i]), line=line, width=float(width), chan=ch, basis=b, lv=lv, bo=bo,
+                                src=src, atr_b=a, ctype=st1["type"], status="watch", created_t=int(t[i]) + TFM))
+                log("EVENT пробой %s %s уровень %.6g (линия %.6g) - наблюдаем, заявки нет" % (sym, "вверх" if up else "вниз", level, line))
+    return out
+
+def eval_events(sym, A, evs):
+    """Путь Б: наблюдаемый пробой -> касание пробитого уровня -> N свечей без закрытия за уровнем -> заявка (иначе ложный пробой)."""
+    out = []; t = A["t"]; c = A["c"]; h = A["h"]; l = A["l"]; M = A["M"]; i = M - 1; a = float(A["atr"][i])
+    for e in evs:
+        if e["sym"] != sym or e["status"] != "watch": continue
+        tend = int(t[i]) + TFM
+        try: jb = t.index(e["t_break"])
+        except ValueError: e.update(status="expired", reason="пробой вне окна истории", t_end=tend); continue
+        up = e["dir"] == "up"; lv = e["level"]; ab = e["atr_b"]
+        jt = None
+        for j in range(jb + 1, i + 1):
+            if (up and l[j] <= lv + TOUCH_ATR * ab) or ((not up) and h[j] >= lv - TOUCH_ATR * ab): jt = j; break
+        if jt is None:
+            if i - jb >= VALID_B: e.update(status="expired", reason="возврат к уровню не случился за %d свечей" % VALID_B, t_end=tend)
+            continue
+        bad = [k for k in range(jt, i + 1) if (up and c[k] < lv - TOL_ATR * ab) or ((not up) and c[k] > lv + TOL_ATR * ab)]
+        if bad:
+            e.update(status="false", reason="ложный пробой: свеча %s закрылась за уровнем" % pos.tstr(t[bad[0]]), t_end=tend, t_touch=int(t[jt])); continue
+        jc = jt + CONFIRM_N - 1
+        if jc > i: e["t_touch"] = int(t[jt]); continue   # окно подтверждения ещё не закрыто
+        ext = float(l[jt:jc + 1].min()) if up else float(h[jt:jc + 1].max())
+        entry = lv + ENTRY_OFF * ab if up else lv - ENTRY_OFF * ab
+        away = (float(c[i]) - entry) / a if up else (entry - float(c[i])) / a
+        if away > AWAY_ATR:
+            e.update(status="skipped", reason="после подтверждения цена ушла от уровня на %.1f ATR (не гонимся)" % away, t_end=tend, t_touch=int(t[jt]), t_conf=int(t[jc])); continue
+        stop = ext - STOP_PAD * ab if up else ext + STOP_PAD * ab; risk = abs(entry - stop); floor = MIN_RISK / 100 * entry
+        if risk < floor: stop = entry - floor if up else entry + floor; risk = floor
+        tp = entry + max(e["width"], 2 * risk) if up else entry - max(e["width"], 2 * risk)
+        side = "long" if up else "short"; rule = "retest_up" if up else "retest_down"; b = e["basis"]; tp_ = int(t[i]) + TFM
+        why = [chan_text(b),
+               "Пробой: свеча %s закрылась на %s %s границы канала (%s) больше чем на 0.2 ATR." % (tok(e["bo"]["t"]), P(e["bo"]["close"]), "выше верхней" if up else "ниже нижней", P(e["line"])),
+               "Уровень: %s (окно 24 свечи до пробоя) = %s. %s." % (e["src"], P(lv), "Бывшее сопротивление становится поддержкой" if up else "Бывшая поддержка становится сопротивлением"),
+               "Подтверждение (путь Б): цена вернулась к уровню (свеча %s, %s %s), затем %d свечи подряд ни одного закрытия %s уровня на 0.2 ATR (допуск по ATR на момент пробоя %s). Пробой удержался." % (
+                   tok(int(t[jt])), "минимум" if up else "максимум", P(ext), CONFIRM_N, "ниже" if up else "выше", P(ab)),
+               "Вход лимитом %s: уровень %s 0.1 ATR = %s; цена сейчас %s (%.1f ATR от входа, предел %.1f)." % ("покупки" if up else "продажи", "плюс" if up else "минус", P(entry), P(float(c[i])), away, AWAY_ATR),
+               "Стоп %s ретеста (%s) на 0.5 ATR = %s (риск %.2f%%, не меньше 0.5%% цены)." % ("ниже минимума" if up else "выше максимума", P(ext), P(stop), risk / entry * 100),
+               "Цель = вход %s max(высота канала %s, 2 риска %s) = %s." % ("плюс" if up else "минус", P(e["width"]), P(2 * risk), P(tp)),
+               "Заявка живёт %d свечей (до %s). Отмена: закрытие за уровнем на 0.7 ATR, либо цена ушла от входа больше чем на %.1f ATR." % (VALID_C, tok(tp_ + (VALID_C - 1) * TFM), AWAY_ATR)]
+        o = mk(sym, rule, side, entry, stop, tp, a, tp_, VALID_C, e["chan"], e["lv"], key=e["key"], ctype=e["ctype"], basis=b, why=why, breakout=e["bo"], rv=2,
+               confirm={"t_touch": int(t[jt]), "t_conf": int(t[jc]), "ext": ext, "n": CONFIRM_N})
+        out.append(o); e.update(status="confirmed", reason="подтверждено, заявка выставлена", t_end=tend, t_touch=int(t[jt]), t_conf=int(t[jc]))
+        log("CONFIRM %s %s уровень %.6g вход %.6g стоп %.6g" % (sym, rule, lv, entry, stop))
     return out
 
 def cycle(dry=False):
-    now = int(time.time() * 1000); stt = load_state(); props = {}; closes = {}
+    now = int(time.time() * 1000); stt = load_state(); props = {}; closes = {}; evs = load_events()
     for sym in PAIRS:
         try:
             A = analyze(sym, now)
             if not A: continue
             ti = A["t"][A["M"] - 1]; closes[sym] = (float(A["c"][A["M"] - 1]), float(A["atr"][A["M"] - 1]), ti)
             if stt["last"].get(sym) == ti: continue
-            props[sym] = (ti, propose(sym, A))
+            ps = propose(sym, A, evs) + eval_events(sym, A, evs)
+            for p in ps:
+                try: p["shadow"] = trend_shadow.shadow(sym, p["side"])
+                except Exception as e: log("shadow %s error: %s" % (sym, e))
+            props[sym] = (ti, ps)
         except Exception as e:
             log("scan %s error: %s" % (sym, e))
     # fills for pending orders (no lock while fetching)
@@ -169,11 +224,15 @@ def cycle(dry=False):
     if dry:
         for sym, (ti, ps) in props.items():
             for p in ps: print("PROPOSAL", sym, p["rule"], p["side"], "price %.6g stop %.6g tp %.6g dist_atr %.2f" % (p["price"], p["stop"], p["tp"], abs(p["price"] - closes[sym][0]) / closes[sym][1]))
+        print("events watching %d: %s" % (sum(1 for e in evs if e["status"] == "watch"), [(e["sym"], e["dir"], e["status"], e.get("reason", "")) for e in evs[-8:]]))
         print("pairs scanned %d, with proposals %d, pending %d" % (len(closes), sum(1 for v in props.values() if v[1]), len(pend))); return
     with pos.lock():
         orders = load_orders(); ps_ = pos.load(); by_id = {o["id"]: o for o in orders}
         def n_open(): return sum(1 for p in ps_ if p["status"] == "open")
         def cancel(o, why, t=None): o.update(status="cancelled", reason=why, t_end=t or now)
+        for x in orders:  # заменённые правила: заблаговременные у границы (флаг) и ретест без подтверждения
+            if x["status"] == "pending" and ((x["rule"] in ("chan_top", "chan_bottom") and not CHAN_EDGE) or (x["rule"] in ("retest_up", "retest_down") and not x.get("rv"))):
+                cancel(x, "правило заменено: ретест с подтверждением удержания")
         for o in pend:  # update checked_t
             cur = by_id.get(o["id"])
             if cur and cur["status"] == "pending" and "_last" in o: cur["checked_t"] = max(cur["checked_t"], o["_last"])
@@ -208,6 +267,7 @@ def cycle(dry=False):
                 if x["rule"] in ("retest_up", "retest_down"):
                     lv = x["level"]["p"]
                     if (x["side"] == "long" and c0 < lv - 0.7 * a0) or (x["side"] == "short" and c0 > lv + 0.7 * a0): cancel(x, "пробой не удержался (закрытие за уровнем)", ti + TFM)
+                    elif x.get("rv") == 2 and ((x["side"] == "long" and (c0 - x["price"]) / a0 > AWAY_ATR) or (x["side"] == "short" and (x["price"] - c0) / a0 > AWAY_ATR)): cancel(x, "цена ушла от входа больше чем на %.1f ATR (в погоне не входим)" % AWAY_ATR, ti + TFM)
             pend_sym = [x for x in orders if x["status"] == "pending" and x["sym"] == sym]
             for p in props_:
                 if p["key"] and any(x.get("key") == p["key"] for x in orders): continue  # событие пробоя уже обработано
@@ -218,13 +278,14 @@ def cycle(dry=False):
                 if any(pp["status"] == "open" and pp["sym"] == sym + "USDT" for pp in ps_): continue
                 p["id"] = max([x["id"] for x in orders] + [0]) + 1; orders.append(p); pend_sym.append(p)
                 log("PLACED order %d %s %s %s %.6g stop %.6g tp %.6g" % (p["id"], sym, p["rule"], p["side"], p["price"], p["stop"], p["tp"]))
+                log("SHADOW order %d agree=%s" % (p["id"], json.dumps((p.get("shadow") or {}).get("agree", {}))))
             for x in [x for x in pend_sym if x["status"] == "pending" and x["rule"] in ("chan_top", "chan_bottom") and not any(pp["rule"] == x["rule"] and pp["side"] == x["side"] for pp in props_)]:
                 cancel(x, "условия исчезли (канал, расстояние или цель)", ti + TFM)
         # слоты заполнены: лишние заявки не держим
         if n_open() >= SLOTS:
             for x in orders:
                 if x["status"] == "pending": cancel(x, "слоты заняты")
-        save_orders(orders); save_state(stt)
+        save_orders(orders); save_state(stt); save_events(evs)
 
 def pair_view(sym):
     """Разметка сканера по паре (без заявки): что бот видит на 5m - канал, опорные точки, линии."""
@@ -240,6 +301,22 @@ def pair_view(sym):
     txt = {"channel_down": "нисходящий канал", "channel_up": "восходящий канал", "range": "боковой диапазон", "none": "ничего не найдено", "other": "отдельные линии S/R без канала"}.get(typ, typ)
     why = [chan_text(b)] if b else ["Тип разметки: %s." % txt]
     return {"sym": sym, "type": typ, "type_ru": txt, "cand": cand, "chan": chan, "basis": b, "why": why, "px": float(A["c"][i]), "atr": float(A["atr"][i]), "ts": now, "rule_ru": "разметка сканера: " + txt}
+
+def shadow_report():
+    """Результаты ЗАКРЫТЫХ позиций заявок по группам согласия с трендом (тень). Правила не меняются; решение о фильтре: >=30 заявок в группе, разница >=0.3R."""
+    orders = {o["id"]: o for o in load_orders()}; rows = []
+    for p in pos.load():
+        o = orders.get(p.get("order_id"))
+        if p.get("src") == "chan" and p["status"] == "closed" and o and o.get("shadow"): rows.append((o, p["r_mult"]))
+    print("закрытых позиций заявок с тенью: %d" % len(rows))
+    for ver in ("v2", "все"):
+        sel = [(o, r) for o, r in rows if ver == "все" or o.get("rv") == 2]
+        print("== %s: %d сделок, сумма R %.2f" % ("ретест с подтверждением" if ver == "v2" else "все правила", len(sel), sum(r for _, r in sel)))
+        keys = sorted({k for o, _ in sel for k in o["shadow"]["agree"]})
+        for k in keys:
+            for g in ("yes", "neutral", "no"):
+                rs = [r for o, r in sel if o["shadow"]["agree"].get(k) == g]
+                if rs: print("  %-10s %-8s n=%-3d win=%3.0f%% avgR=%+.2f sumR=%+.2f" % (k, g, len(rs), 100.0 * sum(1 for r in rs if r > 0) / len(rs), sum(rs) / len(rs), sum(rs)))
 
 _cache = {}
 def _cand(sym):
@@ -260,6 +337,7 @@ def orders_view():
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "list"
     if cmd == "scan": cycle(dry="--dry" in sys.argv)
+    elif cmd == "report": shadow_report()
     elif cmd == "loop":
         while True:
             try: cycle()
