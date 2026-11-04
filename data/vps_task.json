@@ -1,1 +1,1 @@
-{"task_id": "chan_retest_check_1", "cmd": "cd /opt/trading-bot/positions && systemctl is-active chan-orders && tail -12 chan.log && echo ---ORDERS && python3 chan_orders.py list | tail -14 && echo ---EVENTS && head -c 800 chan_events.json 2>/dev/null; echo; ls -la chan_orders.py trend_shadow.py; journalctl -u chan-orders --since '-6min' --no-pager | tail -5", "timeout": 90}
+{"task_id": "pos_fetch_1", "cmd": "cd /opt/trading-bot/positions && md5sum pos.py && wc -l pos.py && ls && cat pos.py | base64 -w0", "timeout": 90}
