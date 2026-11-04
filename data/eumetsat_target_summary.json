@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-04T07:23:07Z",
+  "timestamp": "2026-11-04T07:28:13Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-11-04T07:00:00.000Z",
   "target_id": 2,
@@ -19,7 +19,7 @@
     "frontlike": true,
     "window_spanning": false,
     "phase_label": "безоблачно",
-    "cloud_fraction": 0.738,
+    "cloud_fraction": 0.812,
     "has_precip": false,
     "has_lightning": false
   },
@@ -34,11 +34,11 @@
       "elongation_axis_deg": 90.0,
       "elongation_axis_compass": "В-З",
       "frontlike": false,
-      "phase_label": null,
-      "type_label": null,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
       "has_precip": false,
       "has_lightning": false,
-      "ir_confirmed": null,
+      "ir_confirmed": false,
       "geocolour_confirmed": true
     }
   ],
@@ -73,34 +73,38 @@
       "elongation_axis_compass": "СВ-ЮЗ",
       "frontlike": false,
       "window_spanning": false,
-      "phase_label": null,
-      "type_label": null,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
       "has_precip": false,
       "has_lightning": false,
-      "ir_confirmed": null,
+      "ir_confirmed": false,
       "geocolour_confirmed": true
     }
   ],
   "system_suppressed_count": 0,
   "frontal_tracks": [],
+  "target_phase": {
+    "label": "безоблачно",
+    "cloud_fraction": 0.875
+  },
   "existence": {
     "modules": {
       "ir_motion": {
-        "confirmed": null,
-        "timestamp": "2026-11-04T06:50:00.000Z"
+        "confirmed": false,
+        "timestamp": "2026-11-04T07:00:00.000Z"
       },
       "geocolour_motion": {
         "confirmed": true,
-        "timestamp": "2026-11-04T06:50:00.000Z"
+        "timestamp": "2026-11-04T07:00:00.000Z"
       },
       "cloud_phase_type": {
-        "confirmed": null,
-        "timestamp": "2026-11-04T07:07:16Z"
+        "confirmed": true,
+        "timestamp": "2026-11-04T07:27:10Z"
       }
     },
-    "votes_confirmed": 1,
-    "votes_not_confirmed": 0,
-    "consensus": "confirmed"
+    "votes_confirmed": 2,
+    "votes_not_confirmed": 1,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -109,8 +113,8 @@
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-11-04T07:22:45Z"
+      "timestamp": "2026-11-04T07:27:55Z"
     }
   },
-  "verdict": "Облачная масса (53км²) в 213км ЮЗ подтверждена всеми доступными каналами. Отдельно: система синоптического масштаба (762км²) в 109км ЮЗ (вытянута В-З (68°), похоже на фронт)."
+  "verdict": "Цель в 213км ЮЗ, безоблачно — каналы расходятся: geocolour_motion/cloud_phase_type подтверждают, ir_motion нет. Отдельно: система синоптического масштаба (762км²) в 109км ЮЗ (вытянута В-З (68°), похоже на фронт)."
 }
