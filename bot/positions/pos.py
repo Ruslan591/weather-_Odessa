@@ -111,7 +111,7 @@ def snapshot():
             px = price(p["sym"]); u = side * (px / p["entry"] - 1) * 100 - fees(p); ud = p["stake"] * u / 100; m = p["stake"] / p.get("lev", LEV)
             unreal += ud; margin += m
             q = dict(p); q.update(px=px, unreal_pct=round(u, 3), unreal_usd=round(ud, 3), r_now=round(u / p["R_pct"], 2), margin=m,
-                                 liq_px=p["entry"] * (1 - side * LIQ / 100), trail_pct=round(p["trail_dist"] / px * 100, 3), cand=[[int(k[0]), float(k[1]), float(k[2]), float(k[3]), float(k[4])] for k in kl(p["sym"], "15m", 120)])
+                                 liq_px=p["entry"] * (1 - side * LIQ / 100), trail_pct=round(p["trail_dist"] / px * 100, 3), cand=[[int(k[0]), float(k[1]), float(k[2]), float(k[3]), float(k[4])] for k in kl(p["sym"], "15m", 300)])
             opn.append(q)
         else:
             realized += p.get("pnl_usd", 0.0); closed.append(p)
