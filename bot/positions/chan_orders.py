@@ -24,6 +24,21 @@ CLASSIC = os.environ.get("CLASSIC_DIR", "/opt/trading-bot/classic")
 PAIRS = "BTC ETH SOL XRP DOGE ADA BNB LINK AVAX SUI LTC DOT APT ATOM PHA ZEC NEAR TREE ANIME IOST REZ NIL HAEDAL".split()
 TFM = 300000; MAK = 0.02
 STOP_ATR = 1.2; MIN_RISK = 0.5; TPBUF = 0.1
+# Источник каналов счёта: classic (наш автоканал, по умолчанию) | afd | regr | combo (chan_src.py). Счёт определяется POS_DIR + CHAN_SRC (+ CHAN_EDGE).
+SRC = os.environ.get("CHAN_SRC", "classic")
+KLC = os.environ.get("KL_CACHE_DIR", "/tmp/klcache")
+def kl_shared(sym, now):
+    """5m свечи (1000) с общим файловым кэшем для всех счетов: кэш годен, пока последняя свеча в нём формируется (закрытые свечи в нём полные); новый запрос раз в 5 минут на пару."""
+    f = os.path.join(KLC, "%s_5m_1000.json" % sym)
+    try:
+        d = json.load(open(f))
+        if d and int(now) < int(d[-1][0]) + TFM: return d
+    except Exception: pass
+    d = pos.kl(sym + "USDT", "5m", 1000)
+    try:
+        os.makedirs(KLC, exist_ok=True); tmp = f + ".tmp%d" % os.getpid(); json.dump(d, open(tmp, "w")); os.replace(tmp, f)
+    except Exception: pass
+    return d
 VALID_A = 12; VALID_B = 24; MAXPEND = 8; SLOTS = 3; MAXH = 24
 DIST_A = (0.0, 3.0); DIST_B = (0.3, 4.0); KEEP_ATR = 0.15
 # ретест с подтверждением (допущения на проверку пользователю, см. doc): N свечей, допуски в ATR на момент пробоя
@@ -71,8 +86,10 @@ def analyze(sym, now):
     import numpy as np
     if CLASSIC not in sys.path: sys.path.insert(0, CLASSIC)
     import classic_trendline as tl
-    d = [k for k in pos.kl(sym + "USDT", "5m", 500) if int(k[0]) + TFM <= now]; M = len(d)
-    if M < 220: return None
+    raw = kl_shared(sym, now)
+    if SRC == "classic": raw = raw[-500:]
+    d = [k for k in raw if int(k[0]) + TFM <= now]; M = len(d)
+    if M < (220 if SRC == "classic" else 420): return None
     t = [int(k[0]) for k in d]; o = np.array([float(k[1]) for k in d]); h = np.array([float(k[2]) for k in d]); l = np.array([float(k[3]) for k in d]); c = np.array([float(k[4]) for k in d])
     atr = np.zeros(M); a = None
     for i in range(1, M):
@@ -80,6 +97,9 @@ def analyze(sym, now):
     hh, ll = tl.anchor_series(o, h, l, c); piv = tl.pivots(hh, ll)
     lows = [q for q in piv if q["k"] == "L"]; highs = [q for q in piv if q["k"] == "H"]
     def st_at(i): return tl.structure_at(hh, ll, c, atr, i, [q for q in lows if q["conf"] <= i][-8:], [q for q in highs if q["conf"] <= i][-8:])
+    if SRC != "classic":
+        import chan_src
+        st_at = chan_src.make_st_at(SRC, sym, t, h, l, c, atr)
     return dict(t=t, o=o, h=h, l=l, c=c, atr=atr, M=M, st_at=st_at, tl=tl)
 
 def ldict(ln, t):
@@ -100,14 +120,30 @@ def basis_of(A, st, i):
     idx = np.arange(i1, i2 + 1); mp = p1 + s_ * (idx - i1)
     if kind == "down": k = int(np.argmax(mp - l[i1:i2 + 1])); third = (t[i1 + k], float(l[i1 + k]), "L3"); names = ("H1", "H2")
     else: k = int(np.argmax(h[i1:i2 + 1] - mp)); third = (t[i1 + k], float(h[i1 + k]), "H3"); names = ("L1", "L2")
-    return {"kind": kind, "main": "upper" if kind == "down" else "lower",
+    b = {"kind": kind, "main": "upper" if kind == "down" else "lower",
             "anchors": [{"t": t[i1], "p": float(p1), "n": names[0]}, {"t": t[i2], "p": float(p2), "n": names[1]}], "third": {"t": third[0], "p": third[1], "n": third[2]},
             "touch_main": int(ch["t_main"]), "touch_clone": int(ch["t_clone"]), "width_atr": round(float(ch["width"]), 2), "score": round(float(ch["score"]), 1)}
-def chan_text(b):
+    sr = ch.get("src")
+    if sr:
+        b["src"] = sr
+        if ch.get("reg_win") is not None: b["reg"] = {"win": int(ch["reg_win"]), "r": round(float(ch["reg_r"]), 3), "slope_atr": round(float(ch["reg_slope_atr"]), 4)}
+        if sr == "regr":
+            b["anchors"] = [{"t": t[i1], "p": float(p1), "n": "начало окна"}, {"t": t[i2], "p": float(p2), "n": "конец окна"}]; b["third"]["n"] = "экстремум"
+    return b
+def _chan_text0(b):
     n1, n2 = b["anchors"]; th = b["third"]
     return "%s канал на 5m: главная линия (%s) по точкам %s %s (%s) и %s %s (%s), параллельная линия через %s %s (%s). Ширина %.1f ATR, касаний главной линии %d, параллельной %d." % (
         "Нисходящий" if b["kind"] == "down" else "Восходящий", "верхняя" if b["main"] == "upper" else "нижняя", n1["n"], tok(n1["t"]), P(n1["p"]), n2["n"], tok(n2["t"]), P(n2["p"]),
         th["n"], tok(th["t"]), P(th["p"]), b["width_atr"], b["touch_main"], b["touch_clone"])
+def chan_text(b):
+    sr = b.get("src"); rg = b.get("reg")
+    if sr == "regr" and rg:
+        return "%s регрессионный канал на 5m (Regression Channel Auto): линейная регрессия по закрытиям, окно %d свечей (выбрано по максимуму |R| = %.2f), границы +-2 sigma остатков. Ширина %.1f ATR, наклон %+.3f ATR за свечу, касаний верхней границы %d, нижней %d." % (
+            "Нисходящий" if b["kind"] == "down" else "Восходящий", rg["win"], rg["r"], b["width_atr"], rg["slope_atr"], b["touch_main"] if b["kind"] == "down" else b["touch_clone"], b["touch_clone"] if b["kind"] == "down" else b["touch_main"])
+    s = _chan_text0(b)
+    if sr in ("afd", "combo"): s = s.replace(" канал на 5m:", " канал AFD (Auto Trend Channels) на 5m:", 1)
+    if sr == "combo" and rg: s += " Направление подтверждено регрессией: окно %d свечей, |R| = %.2f, наклон %+.3f ATR за свечу." % (rg["win"], rg["r"], rg["slope_atr"])
+    return s
 def risk_text(a, price, risk, stop, side):
     by = "1.2 ATR(5m) = %s" % P(STOP_ATR * a) if STOP_ATR * a >= MIN_RISK / 100 * price else "0.5%% цены = %s" % P(MIN_RISK / 100 * price)
     return "Стоп %s уровня на max(1.2 ATR, 0.5%% цены): взято %s, стоп %s (риск %.2f%%)." % ("выше" if side == "short" else "ниже", by, P(stop), risk / price * 100)
