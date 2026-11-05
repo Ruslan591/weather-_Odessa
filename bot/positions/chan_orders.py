@@ -28,7 +28,11 @@ DIST_A = (0.0, 3.0); DIST_B = (0.3, 4.0); KEEP_ATR = 0.15
 # ретест с подтверждением (допущения на проверку пользователю, см. doc): N свечей, допуски в ATR на момент пробоя
 CHAN_EDGE = os.environ.get("CHAN_EDGE", "0") == "1"   # chan_top / chan_bottom (лимит у границы заранее): выключены
 # v3 (2026-11-05, решение пользователя "правки 1-3 да"): настоящий возврат, структурный уровень, предел тени. Серия rv=3 отдельно от rv=2.
-STRUCT_ONLY = os.environ.get("STRUCT_ONLY", "1") == "1"   # уровень только экстремум 24 свечей, наклонная линия канала - нет
+CFGF = os.path.join(pos.D, "chan_cfg.json")
+def struct_only():
+    """Переключатель правки 2 (уровень только экстремум 24 свечей, наклонная линия канала не считается). По умолчанию ВЫКЛ (решение пользователя 2026-11-05). Читается каждый цикл из chan_cfg.json; команда: chan_orders.py cfg struct_only 1|0"""
+    try: return bool(json.load(open(CFGF)).get("struct_only", 0))
+    except Exception: return False
 DEP_ATR = 1.0; MIN_GAP = 2; WICK_ATR = 1.0; RV = 3        # отход от уровня >= 1 ATR, касание не раньше чем через 2 свечи после пробоя, тень за уровнем <= 1 ATR
 CONFIRM_N = 2; TOUCH_ATR = 0.2; TOL_ATR = 0.2; AWAY_ATR = 0.5; ENTRY_OFF = 0.1; STOP_PAD = 0.5; VALID_C = 12
 RULE_RU = {"chan_top": "нисходящий канал: продажа на верхней границе", "chan_bottom": "восходящий канал: покупка на нижней границе",
@@ -138,9 +142,9 @@ def propose(sym, A, evs):
             risk = max(STOP_ATR * a, MIN_RISK / 100 * level); width = Ri - Si
             ev_key = "%s|%s|%d" % (sym, "up" if up else "down", t[i])
             struct = not src.startswith("сама линия")
-            if STRUCT_ONLY and not struct and DIST_B[0] <= dist <= DIST_B[1] and not any(e["key"] == ev_key for e in evs):
-                log("SKIP пробой %s %s: пробита только линия канала, экстремум 24 свечей не пробит (STRUCT_ONLY)" % (sym, "вверх" if up else "вниз"))
-            if DIST_B[0] <= dist <= DIST_B[1] and (struct or not STRUCT_ONLY) and not any(e["key"] == ev_key for e in evs):
+            if struct_only() and not struct and DIST_B[0] <= dist <= DIST_B[1] and not any(e["key"] == ev_key for e in evs):
+                log("SKIP пробой %s %s: пробита только линия канала, экстремум 24 свечей не пробит (struct_only)" % (sym, "вверх" if up else "вниз"))
+            if DIST_B[0] <= dist <= DIST_B[1] and (struct or not struct_only()) and not any(e["key"] == ev_key for e in evs):
                 lv = {"p": level, "t_from": t[i - 24], "t_to": t[i - 1], "t_ext": t[ext], "src": src}
                 bo = {"t": t[i], "close": float(c[i]), "line": line, "dir": "up" if up else "down"}
                 evs.append(dict(key=ev_key, sym=sym, dir="up" if up else "down", level=level, t_break=int(t[i]), line=line, width=float(width), chan=ch, basis=b, lv=lv, bo=bo,
@@ -157,7 +161,7 @@ def eval_events(sym, A, evs):
         try: jb = t.index(e["t_break"])
         except ValueError: e.update(status="expired", reason="пробой вне окна истории", t_end=tend); continue
         up = e["dir"] == "up"; lv = e["level"]; ab = e["atr_b"]
-        if STRUCT_ONLY and str(e.get("src", "")).startswith("сама линия"): e.update(status="expired", reason="v3: уровень - наклонная линия канала, не структура", t_end=tend); continue
+        if struct_only() and str(e.get("src", "")).startswith("сама линия"): e.update(status="expired", reason="v3: уровень - наклонная линия канала, не структура", t_end=tend); continue
         jt = None; dead = False
         for j in range(jb + 1, i + 1):
             if (up and c[j] < lv - TOL_ATR * ab) or ((not up) and c[j] > lv + TOL_ATR * ab):   # провал до возврата
@@ -356,10 +360,54 @@ def orders_view():
     rec.sort(key=lambda x: -(x.get("t_end") or 0)); pend.sort(key=lambda x: x["dist_pct"])
     return {"pending": pend, "recent": rec[:12], "pairs": PAIRS, "ts": now}
 
+
+SH_LAB = {"btc_5m": "BTC 5m", "btc_15m": "BTC 15m", "eth_5m": "ETH 5m", "eth_15m": "ETH 15m", "own_15m": "сама пара 15m", "own_1h": "сама пара 1h"}
+def shadow_summary():
+    """Сводка тени тренда по закрытым позициям заявок (для панели): группы v3 и все; в ячейке n, доля прибыльных, средний R, сумма R."""
+    orders = {o["id"]: o for o in load_orders()}; rows = []
+    for p in pos.load():
+        o = orders.get(p.get("order_id"))
+        if p.get("src") == "chan" and p["status"] == "closed" and o and o.get("shadow"): rows.append((o, p["r_mult"]))
+    def grp(sel):
+        out = []
+        for k, lab in SH_LAB.items():
+            r = {"k": k, "label": lab}
+            for g in ("yes", "neutral", "no"):
+                rs = [x for o, x in sel if (o["shadow"].get("agree") or {}).get(k) == g]
+                r[g] = {"n": len(rs), "win": round(100.0 * sum(1 for x in rs if x > 0) / len(rs)) if rs else None, "avg": round(sum(rs) / len(rs), 2) if rs else None, "sum": round(sum(rs), 2)}
+            out.append(r)
+        return {"n": len(sel), "sumR": round(sum(x for _, x in sel), 2), "rows": out}
+    return {"v3": grp([(o, r) for o, r in rows if o.get("rv") == 3]), "all": grp(rows)}
+
+def closed_view(pid):
+    """Закрытая позиция для графика на панели: свечи вокруг сделки (5m у заявок, 15m у позиций ожидателя), канал/уровень/пробой из заявки."""
+    p = next((x for x in pos.load() if x["id"] == pid and x["status"] != "open"), None)
+    if not p: return {"error": "закрытая позиция не найдена"}
+    q = dict(p); o = None
+    if p.get("src") == "chan": o = next((x for x in load_orders() if x["id"] == p.get("order_id")), None)
+    dt = TFM if o else 900000; tf = "5m" if o else "15m"
+    if o:
+        for k in ("chan", "basis", "level", "breakout", "placed_t", "expire_t", "ctype", "rule", "atr", "why", "confirm", "shadow"):
+            if o.get(k) is not None: q["o_" + k] = o[k]
+        ts = [ln["t1"] for ln in ((o.get("chan") or {}).get("upper"), (o.get("chan") or {}).get("lower")) if ln] + [p["t_in"]]
+        start = max(min(ts) - 12 * dt, p["t_in"] - 700 * dt)
+    else: start = p["t_in"] - 120 * dt
+    end = p["t_out"] + 30 * dt
+    d = pos.kl(p["sym"], tf, 1000, int(start))
+    q["cand"] = [[int(k[0]), float(k[1]), float(k[2]), float(k[3]), float(k[4])] for k in d if int(k[0]) <= end]
+    q["o_dt"] = dt; q["tf"] = tf
+    return q
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "list"
     if cmd == "scan": cycle(dry="--dry" in sys.argv)
     elif cmd == "report": shadow_report()
+    elif cmd == "cfg":
+        c = {}
+        try: c = json.load(open(CFGF))
+        except Exception: pass
+        if len(sys.argv) >= 4: c[sys.argv[2]] = int(sys.argv[3]); json.dump(c, open(CFGF, "w"), ensure_ascii=False)
+        print(c)
     elif cmd == "loop":
         while True:
             try: cycle()
