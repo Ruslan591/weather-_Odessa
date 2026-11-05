@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-11-05T15:40:00.000Z",
-  "buffer_size": 6,
+  "timestamp": "2026-11-05T15:50:00.000Z",
+  "buffer_size": 5,
   "buffer_span_minutes": 50,
   "observed_area": {
     "center_lat": 46.4406,
@@ -12,57 +12,55 @@
     "local_trend_radius_km": 50
   },
   "valid": true,
-  "speed_kmh": 0.2,
-  "direction_compass": "СЗ",
-  "bearing_deg": 318.1,
-  "frame_pairs_used": 5,
-  "acceleration_kmh": 0.1,
-  "turning_deg": 51.8,
+  "speed_kmh": 0.1,
+  "direction_compass": "З",
+  "bearing_deg": 257.4,
+  "frame_pairs_used": 4,
+  "acceleration_kmh": -0.1,
+  "turning_deg": 116.3,
   "acceleration_verdict": "скорость стабильна",
   "turning_verdict": "меняет направление (по часовой)",
   "forecast_displacement": {
     "30min": {
-      "distance_km": 0.2,
-      "bearing_deg": 347.0,
+      "distance_km": 0.1,
+      "bearing_deg": 2.0,
       "compass": "С"
     },
     "60min": {
-      "distance_km": 0.5,
-      "bearing_deg": 351.0,
+      "distance_km": 0.4,
+      "bearing_deg": 8.0,
       "compass": "С"
     },
     "120min": {
       "distance_km": 1.5,
-      "bearing_deg": 355.0,
+      "bearing_deg": 12.0,
       "compass": "С"
     }
   },
   "area_fraction_over_time": [
-    0.219,
     0.27,
     0.312,
     0.351,
     0.366,
-    0.383
+    0.417
   ],
-  "area_trend_delta": 0.164,
+  "area_trend_delta": 0.147,
   "area_trend_verdict": "растёт",
   "mean_brightness_over_time": [
-    62.0,
     62.1,
     61.9,
     62.0,
     62.4,
-    64.3
+    67.9
   ],
-  "brightness_trend_delta": 2.2,
+  "brightness_trend_delta": 5.8,
   "station_state": "clear",
-  "station_area_fraction": 0.098,
-  "cloud_mass_distance_km": 36.9,
+  "station_area_fraction": 0.113,
+  "cloud_mass_distance_km": 25.7,
   "cloud_mass_bearing_deg": 359.0,
   "cloud_mass_compass": "С",
-  "cloud_mass_area_km2": 1225,
-  "cloud_mass_contrast_sigma": 1.35,
+  "cloud_mass_area_km2": 1073,
+  "cloud_mass_contrast_sigma": 1.44,
   "temperature_trend_verdict": "без существенных изменений",
   "target_confirmation": {
     "confirmed": false,
@@ -75,31 +73,31 @@
     {
       "target_id": 0,
       "available": true,
-      "roi_contrast_sigma": -0.44,
+      "roi_contrast_sigma": -0.42,
       "confirmed": false
     },
     {
       "target_id": 1,
       "available": true,
-      "roi_contrast_sigma": 0.37,
+      "roi_contrast_sigma": 0.41,
       "confirmed": false
     },
     {
       "target_id": 7,
       "available": true,
-      "roi_contrast_sigma": 0.76,
+      "roi_contrast_sigma": 0.7,
       "confirmed": false
     },
     {
       "target_id": 10,
       "available": true,
-      "roi_contrast_sigma": -0.45,
+      "roi_contrast_sigma": -0.42,
       "confirmed": false
     },
     {
       "target_id": 11,
       "available": true,
-      "roi_contrast_sigma": -0.09,
+      "roi_contrast_sigma": -0.08,
       "confirmed": false
     },
     {
@@ -113,19 +111,19 @@
     {
       "target_id": 2,
       "available": true,
-      "roi_contrast_sigma": -0.65,
+      "roi_contrast_sigma": -0.63,
       "confirmed": false
     },
     {
       "target_id": 3,
       "available": true,
-      "roi_contrast_sigma": -0.73,
+      "roi_contrast_sigma": -0.72,
       "confirmed": false
     },
     {
       "target_id": 4,
       "available": true,
-      "roi_contrast_sigma": -1.0,
+      "roi_contrast_sigma": -0.8,
       "confirmed": false
     },
     {
@@ -137,45 +135,45 @@
     {
       "target_id": 6,
       "available": true,
-      "roi_contrast_sigma": -0.92,
+      "roi_contrast_sigma": -0.88,
       "confirmed": false
     },
     {
       "target_id": 8,
       "available": true,
-      "roi_contrast_sigma": -0.19,
+      "roi_contrast_sigma": -0.17,
       "confirmed": false
     },
     {
       "target_id": 9,
       "available": true,
-      "roi_contrast_sigma": -1.12,
+      "roi_contrast_sigma": -1.08,
       "confirmed": false
     },
     {
       "target_id": 12,
       "available": true,
-      "roi_contrast_sigma": -1.2,
+      "roi_contrast_sigma": -1.16,
       "confirmed": false
     },
     {
       "target_id": 13,
       "available": true,
-      "roi_contrast_sigma": 0.02,
+      "roi_contrast_sigma": -0.02,
       "confirmed": false
     },
     {
       "target_id": 14,
       "available": true,
-      "roi_contrast_sigma": -0.19,
+      "roi_contrast_sigma": -0.14,
       "confirmed": false
     },
     {
       "target_id": 16,
       "available": true,
-      "roi_contrast_sigma": -0.71,
+      "roi_contrast_sigma": -0.68,
       "confirmed": false
     }
   ],
-  "method_note": "Буфер 6/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин, crs=EPSG:4326, всегда явный TIME — не 'latest'), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. cloud_mass_* — положение (не движение) ближайшей значимой облачной массы относительно станции. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
+  "method_note": "Буфер 5/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин, crs=EPSG:4326, всегда явный TIME — не 'latest'), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. cloud_mass_* — положение (не движение) ближайшей значимой облачной массы относительно станции. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
 }
