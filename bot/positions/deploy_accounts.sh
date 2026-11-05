@@ -5,7 +5,7 @@
 set -u
 P=/opt/trading-bot/positions; RAW=https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/bot/positions
 TK=$(grep GITHUB_TOKEN= /etc/vps-github-bridge/token 2>/dev/null | cut -d= -f2); [ -z "$TK" ] && TK=$(cat /etc/vps-github-bridge/token 2>/dev/null)
-get() { curl -sf -H "Authorization: token $TK" "$RAW/$1" -o "$2"; }
+get() { curl -sf "$RAW/$1" -o "$2" || curl -sf -H "Authorization: token $TK" "$RAW/$1" -o "$2"; }
 ACCTS="afd:afd:18101 regr:regr:18102 combo:combo:18103"
 if [ "${1:-}" = "rollback" ]; then
   for a in $ACCTS; do n=${a%%:*}; for s in chan-orders-$n pos-tracker-$n acct-api-$n; do systemctl disable --now $s 2>/dev/null; rm -f /etc/systemd/system/$s.service; done; done
