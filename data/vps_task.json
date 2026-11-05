@@ -1,1 +1,1 @@
-{"task_id": "g1", "cmd": "cd /opt/trading-bot/classic && grep -n -E 'function clZChart|function clZOChart|function clZBox|function clZDraw|function clHm' classic_pos_html.py | cut -c1-80; awk '/function clZChart/{f=1} f{print; n++} n>=14{exit}' classic_pos_html.py | cut -c1-2600", "timeout": 60}
+{"task_id": "g2", "cmd": "cd /opt/trading-bot/classic && sed -n '406,446p' classic_pos_html.py | grep -n -E 'D.level|D.brk|level' | cut -c1-1500; echo ----; sed -n '447,449p' classic_pos_html.py | cut -c1-1800", "timeout": 60}
