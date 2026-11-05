@@ -1,7 +1,7 @@
 {
-  "task_id": "k2",
-  "returncode": 1,
-  "stdout": "",
-  "stderr": "Traceback (most recent call last):\n  File \"/tmp/an7.py\", line 15, in <module>\n    if s not in cache: cache[s]=pos.kl(s+'USDT','5m',700)\n                                ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/trading-bot/positions/pos.py\", line 22, in kl\n    return json.load(urllib.request.urlopen(u, timeout=20))\n                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 215, in urlopen\n    return opener.open(url, data, timeout)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 521, in open\n    response = meth(req, response)\n               ^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 630, in http_response\n    response = self.parent.error(\n               ^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 559, in error\n    return self._call_chain(*args)\n           ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 492, in _call_chain\n    result = func(*args)\n             ^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 639, in http_error_default\n    raise HTTPError(req.full_url, code, msg, hdrs, fp)\nurllib.error.HTTPError: HTTP Error 400: Bad Request\n",
-  "completed_at_utc": "2026-11-05T06:46:02Z"
+  "task_id": "k3",
+  "returncode": 0,
+  "stdout": "id sym dir rv conf_close_vs_touch_close(ATR,+=favourable) conf_open_vs_touch_close status R reason\n42 LINK up 2 0.27 0.0 closed -1.18 stop\n44 LTC down 2 0.07 -0.07 closed -1.19 stop\n45 AVAX up 2 -0.35 0.0 closed 0.25 trail/B\n46 SUI up 2 0.0 0.0 closed -1.18 stop\n47 BNB down 2 0.14 -0.0 closed 0.23 trail/B\n48 ANIME down 2 -0.0 -0.0 closed 0.22 trail/B\n49 ETH up 2 0.01 0.0 closed 2.39 target\n50 LINK down 2 -0.09 0.03 closed -1.19 stop\n51 IOST up 2 0.0 0.0 closed 0.11 trail/B\n52 NIL up 2 -0.28 -0.28 closed -1.18 stop\n53 PHA down 3 -0.0 0.57 open None \n54 IOST down 3 -0.0 -0.0 open None \n55 ANIME down 3 -0.0 -0.0 open None \nclose_delta >= -9: pass 10 sumR -2.72 | rejected 0 sumR 0.00\nclose_delta >= 0.0001: pass 4 sumR 0.25 | rejected 6 sumR -2.97\nclose_delta >= 0.2: pass 1 sumR -1.18 | rejected 9 sumR -1.54\nclose_delta >= 0.4: pass 0 sumR 0.00 | rejected 10 sumR -2.72\n",
+  "stderr": "",
+  "completed_at_utc": "2026-11-05T06:47:25Z"
 }
