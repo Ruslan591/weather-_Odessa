@@ -16,6 +16,7 @@ v3 (2026-11-05): уровень только структурный; отход 
 Команды: scan [--dry] | loop | list | report. Данные: orders.json (POS_DIR). Позиции создаются в positions.json через pos.py (поля src=chan, fee_in, fee_tp)."""
 import json, os, sys, time
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
+import datetime
 import pos, trend_shadow
 D = pos.D; OF = os.path.join(D, "orders.json"); LOG = os.path.join(D, "chan.log"); STF = os.path.join(D, "chan_state.json")
 EVF = os.path.join(D, "chan_events.json")
@@ -33,6 +34,14 @@ def struct_only():
     """Переключатель правки 2 (уровень только экстремум 24 свечей, наклонная линия канала не считается). По умолчанию ВЫКЛ (решение пользователя 2026-11-05). Читается каждый цикл из chan_cfg.json; команда: chan_orders.py cfg struct_only 1|0"""
     try: return bool(json.load(open(CFGF)).get("struct_only", 0))
     except Exception: return False
+def cfg_get(k, d):
+    try: return json.load(open(CFGF)).get(k, d)
+    except Exception: return d
+def conf_close_on():
+    """Правка 4 (2026-11-05, замечание пользователя: у трёх открытых шортов подтверждения не было): свеча после касания должна ОТКРЫТЬСЯ не хуже закрытия предыдущей и ЗАКРЫТЬСЯ дальше закрытия предыдущей не меньше чем на CONF_MOVE_ATR. chan_cfg.json: conf_close (по умолчанию 1)."""
+    return bool(cfg_get("conf_close", 1))
+CONF_MOVE_ATR = 0.2; CONF_WAIT = 3     # подтверждающая свеча должна появиться в течение 3 свечей после касания
+MISS_H = 6; MISS_TP_R = 2.0            # учёт пропущенных: окно 6 часов, виртуальная цель 2R
 DEP_ATR = 1.0; MIN_GAP = 2; WICK_ATR = 1.0; RV = 3        # отход от уровня >= 1 ATR, касание не раньше чем через 2 свечи после пробоя, тень за уровнем <= 1 ATR
 CONFIRM_N = 2; TOUCH_ATR = 0.2; TOL_ATR = 0.2; AWAY_ATR = 0.5; ENTRY_OFF = 0.1; STOP_PAD = 0.5; VALID_C = 12
 RULE_RU = {"chan_top": "нисходящий канал: продажа на верхней границе", "chan_bottom": "восходящий канал: покупка на нижней границе",
@@ -178,8 +187,18 @@ def eval_events(sym, A, evs):
         pierce = ((lv - float(l[jt:i + 1].min())) if up else (float(h[jt:i + 1].max()) - lv)) / ab
         if pierce > WICK_ATR:
             e.update(status="false", reason="ложный пробой: тень ушла за уровень на %.1f ATR (предел %.1f)" % (pierce, WICK_ATR), t_end=tend, t_touch=int(t[jt])); continue
-        jc = jt + CONFIRM_N - 1
-        if jc > i: e["t_touch"] = int(t[jt]); continue   # окно подтверждения ещё не закрыто
+        if conf_close_on():
+            jc = None; o_ = A["o"]
+            for k in range(jt + 1, min(i, jt + CONF_WAIT) + 1):
+                mv = ((c[k] - c[k - 1]) if up else (c[k - 1] - c[k])) / ab; op_ok = (o_[k] >= c[k - 1]) if up else (o_[k] <= c[k - 1])
+                if mv >= CONF_MOVE_ATR and op_ok: jc = k; break
+            if jc is None:
+                if i - jt >= CONF_WAIT: e.update(status="expired", reason="нет свечи подтверждения за %d св. после касания (нужно закрытие дальше закрытия предыдущей свечи не меньше чем на %.1f ATR)" % (CONF_WAIT, CONF_MOVE_ATR), t_end=tend, t_touch=int(t[jt]))
+                else: e["t_touch"] = int(t[jt])
+                continue
+        else:
+            jc = jt + CONFIRM_N - 1
+            if jc > i: e["t_touch"] = int(t[jt]); continue   # окно подтверждения ещё не закрыто
         ext = float(l[jt:jc + 1].min()) if up else float(h[jt:jc + 1].max())
         entry = lv + ENTRY_OFF * ab if up else lv - ENTRY_OFF * ab
         away = (float(c[i]) - entry) / a if up else (entry - float(c[i])) / a
@@ -198,11 +217,102 @@ def eval_events(sym, A, evs):
                "Стоп %s ретеста (%s) на 0.5 ATR = %s (риск %.2f%%, не меньше 0.5%% цены)." % ("ниже минимума" if up else "выше максимума", P(ext), P(stop), risk / entry * 100),
                "Цель = вход %s max(высота канала %s, 2 риска %s) = %s." % ("плюс" if up else "минус", P(e["width"]), P(2 * risk), P(tp)),
                "Заявка живёт %d свечей (до %s). Отмена: закрытие за уровнем на 0.7 ATR, либо цена ушла от входа больше чем на %.1f ATR." % (VALID_C, tok(tp_ + (VALID_C - 1) * TFM), AWAY_ATR)]
+        if conf_close_on():
+            mvc = ((c[jc] - c[jc - 1]) if up else (c[jc - 1] - c[jc])) / ab
+            why.insert(4, "Свеча подтверждения %s: открылась не %s закрытия предыдущей свечи (%s) и закрылась %s неё на %.2f ATR (нужно не меньше %.1f), прошло %d св. после касания." % (tok(int(t[jc])), "ниже" if up else "выше", P(float(c[jc - 1])), "выше" if up else "ниже", mvc, CONF_MOVE_ATR, jc - jt))
         o = mk(sym, rule, side, entry, stop, tp, a, tp_, VALID_C, e["chan"], e["lv"], key=e["key"], ctype=e["ctype"], basis=b, why=why, breakout=e["bo"], rv=RV,
                confirm={"t_touch": int(t[jt]), "t_conf": int(t[jc]), "ext": ext, "n": CONFIRM_N})
         out.append(o); e.update(status="confirmed", reason="подтверждено, заявка выставлена", t_end=tend, t_touch=int(t[jt]), t_conf=int(t[jc]))
         log("CONFIRM %s %s уровень %.6g вход %.6g стоп %.6g" % (sym, rule, lv, entry, stop))
     return out
+
+MISSF = os.path.join(pos.D, "chan_missed.json")
+def load_missed():
+    try: return json.load(open(MISSF, encoding="utf-8"))
+    except Exception: return []
+def save_missed(m):
+    tmp = MISSF + ".tmp"; json.dump(m[-600:], open(tmp, "w", encoding="utf-8"), ensure_ascii=False); os.replace(tmp, MISSF)
+def tick_of(d):
+    vals = sorted(set(float(x) for k in d[-300:] for x in k[1:5])); df = [b - a for a, b in zip(vals, vals[1:]) if b - a > 0]
+    return min(df) if df else 0.0
+def miss_sim(up, ref, stop, tp, risk, rows, win_end, now):
+    """rows: свечи 5m [(t,o,h,l,c)] после точки входа. Стоп раньше цели, если оба в одной свече. Возвращает res, r, exit_t, exit_px, mfe, mae (в R), done."""
+    mfe = 0.0; mae = 0.0; last = None
+    for (tt, op, hi, lo, cl) in rows:
+        if tt >= win_end: break
+        last = (tt, cl)
+        fav = ((hi - ref) if up else (ref - lo)) / risk; adv = ((ref - lo) if up else (hi - ref)) / risk
+        hs = (lo <= stop) if up else (hi >= stop); ht = (hi >= tp) if up else (lo <= tp)
+        if hs: return dict(res="stop", r=-1.0, exit_t=tt + TFM, exit_px=stop, mfe=round(max(mfe, 0), 2), mae=round(max(mae, adv), 2), done=True)
+        if ht: return dict(res="tp", r=MISS_TP_R, exit_t=tt + TFM, exit_px=tp, mfe=round(max(mfe, fav), 2), mae=round(max(mae, 0), 2), done=True)
+        mfe = max(mfe, fav); mae = max(mae, adv)
+    if last is None: return None
+    fin = now >= win_end
+    r = (((last[1] - ref) if up else (ref - last[1])) / risk)
+    return dict(res="time" if fin else "run", r=round(r, 2), exit_t=last[0] + TFM, exit_px=last[1], mfe=round(mfe, 2), mae=round(mae, 2), done=fin)
+def miss_update(now, limit=15):
+    """Пропущенные входы (виртуально): события skipped (цена ушла после подтверждения), expired (возврата не было / не было свечи подтверждения). Вход по рынку в момент решения, стоп за уровнем +0.5 ATR (не меньше 0.5% цены), цель 2R, окно 6 ч. Ничего не торгует."""
+    m = load_missed(); have = {x["key"]: x for x in m}; n = 0; ch = False
+    for e in load_events():
+        if e["status"] not in ("skipped", "expired"): continue
+        rs = e.get("reason") or ""
+        if rs.startswith("v3:") or "вне окна" in rs: continue
+        x = have.get(e["key"])
+        if x and x.get("done"): continue
+        if n >= limit: break
+        kind = "skipped" if e["status"] == "skipped" else ("no_conf" if rs.startswith("нет свечи") else "no_return")
+        ref_t = (e["t_break"] + TFM) if kind == "no_return" else int(e.get("t_end", e["created_t"]))
+        if now < ref_t + TFM: continue
+        try:
+            d = [k for k in pos.kl(e["sym"] + "USDT", "5m", 1000, int(e["t_break"] - 60 * TFM)) if int(k[0]) + TFM <= now]
+            t = [int(k[0]) for k in d]
+            if (ref_t - TFM) not in t: continue
+            jr = t.index(ref_t - TFM); jb = t.index(e["t_break"]) if e["t_break"] in t else None
+            up = e["dir"] == "up"; lv = e["level"]; ab = e["atr_b"]; ref = float(e["bo"]["close"]) if kind == "no_return" else float(d[jr][4])
+            risk = max(abs(ref - lv) + 0.5 * ab, MIN_RISK / 100.0 * ref); stop = ref - risk if up else ref + risk; tp = ref + MISS_TP_R * risk if up else ref - MISS_TP_R * risk
+            rows = [(int(k[0]), float(k[1]), float(k[2]), float(k[3]), float(k[4])) for k in d if int(k[0]) >= ref_t]
+            sim = miss_sim(up, ref, stop, tp, risk, rows, ref_t + int(MISS_H * 3600000), now)
+            if not sim: continue
+            hv = [float(k[2]) for k in d]; lw = [float(k[3]) for k in d]; vol = [float(k[5]) for k in d]
+            feat = {"atr_pct": round(ab / lv * 100, 3), "tick_atr": round(tick_of(d) / ab, 2) if ab else None, "brk_close_atr": round(abs(e["bo"]["close"] - lv) / ab, 2), "width_atr": round(e["width"] / ab, 1),
+                    "hour": datetime.datetime.fromtimestamp(e["t_break"] / 1000, datetime.timezone.utc).hour, "struct": 0 if str(e.get("src", "")).startswith("сама линия") else 1}
+            if jb is not None:
+                feat["brk_range_atr"] = round((hv[jb] - lw[jb]) / ab, 2); base = vol[max(0, jb - 24):jb]; feat["vol_ratio"] = round(vol[jb] / (sum(base) / len(base)), 2) if base and sum(base) > 0 else None
+                feat["dep_atr"] = round((((max(hv[jb:jr + 1]) - lv) if up else (lv - min(lw[jb:jr + 1]))) / ab), 2)
+            rec = dict(key=e["key"], id=(x or {}).get("id") or (max([y.get("id", 0) for y in m] + [0]) + 1), sym=e["sym"], dir=e["dir"], kind=kind, t_break=e["t_break"], ref_t=ref_t, ref_px=ref, risk=risk, stop=stop, tp=tp,
+                       level=lv, atr=ab, chan=e.get("chan"), lvd=e.get("lv"), basis=e.get("basis"), bo=e.get("bo"), src=e.get("src"), feat=feat, **sim)
+            if x: m[m.index(x)] = rec
+            else: m.append(rec)
+            ch = True; n += 1
+        except Exception as ex: log("miss %s error: %s" % (e.get("sym"), ex))
+    if ch: save_missed(m)
+    return n
+MISS_LAB = {"skipped": "цена ушла после подтверждения", "no_return": "возврата к уровню не было", "no_conf": "возврат был, свечи подтверждения не было"}
+def miss_summary():
+    m = load_missed(); dn = [x for x in m if x.get("done")]
+    def agg(sel):
+        if not sel: return {"n": 0}
+        w = [x for x in sel if x["r"] > 0]
+        return {"n": len(sel), "win": round(100.0 * len(w) / len(sel)), "sumR": round(sum(x["r"] for x in sel), 2), "avgR": round(sum(x["r"] for x in sel) / len(sel), 2), "ran": sum(1 for x in sel if x["mfe"] >= 2.0), "mfe": round(sum(x["mfe"] for x in sel) / len(sel), 2)}
+    kinds = [dict(k=k, label=MISS_LAB[k], **agg([x for x in dn if x["kind"] == k])) for k in MISS_LAB]
+    feats = {}
+    for f in ("atr_pct", "tick_atr", "brk_close_atr", "brk_range_atr", "vol_ratio", "width_atr", "dep_atr", "struct"):
+        a = [x["feat"][f] for x in dn if x["r"] > 0 and x["feat"].get(f) is not None]; b = [x["feat"][f] for x in dn if x["r"] <= 0 and x["feat"].get(f) is not None]
+        feats[f] = {"win": round(sum(a) / len(a), 2) if a else None, "lose": round(sum(b) / len(b), 2) if b else None}
+    rows = [dict(id=x["id"], sym=x["sym"][:-4] if x["sym"].endswith("USDT") else x["sym"], dir=x["dir"], kind=x["kind"], label=MISS_LAB[x["kind"]], t_break=x["t_break"], ref_t=x["ref_t"], res=x["res"], r=x["r"], mfe=x["mfe"], mae=x["mae"], done=x["done"]) for x in sorted(m, key=lambda y: -y["ref_t"])[:25]]
+    return {"all": agg(dn), "kinds": kinds, "feats": feats, "rows": rows, "pending": len(m) - len(dn), "labels": MISS_LAB}
+def miss_view(mid):
+    x = next((y for y in load_missed() if y["id"] == mid), None)
+    if not x: return {"error": "пропущенный вход не найден"}
+    up = x["dir"] == "up"; start = x["t_break"] - 90 * TFM
+    d = pos.kl(x["sym"] + "USDT", "5m", 1000, int(start)) if not x["sym"].endswith("USDT") else pos.kl(x["sym"], "5m", 1000, int(start))
+    end = x["exit_t"] + 30 * TFM; cand = [[int(k[0]), float(k[1]), float(k[2]), float(k[3]), float(k[4])] for k in d if int(k[0]) <= end]
+    rk = x["risk"]; ref = x["ref_px"]; ru = {"stop": "стоп (-1R)", "tp": "цель (+2R)", "time": "по окну 6 ч", "run": "ещё идёт"}
+    q = dict(id="M%d" % x["id"], sym=x["sym"] if x["sym"].endswith("USDT") else x["sym"] + "USDT", side="long" if up else "short", entry=ref, stop0=x["stop"], stop=x["stop"], tp=x["tp"], exit=x["exit_px"], t_in=x["ref_t"], t_out=x["exit_t"],
+             reason=x["res"], net_pct=x["r"] * rk / ref * 100, pnl_usd=0, r_mult=x["r"], mfe_pct=x["mfe"] * rk / ref * 100, mae_pct=x["mae"] * rk / ref * 100, cand=cand, o_dt=TFM, tf="5m", virt=True,
+             o_chan=x.get("chan"), o_basis=x.get("basis"), o_level=x.get("lvd"), o_breakout=x.get("bo"), thesis="Виртуальный вход по рынку: стоп за уровнем +0.5 ATR (не меньше 0.5%), цель 2R, окно 6 ч. В торговлю не идёт.")
+    q["vhead"] = "ПРОПУЩЕННЫЙ вход (виртуальный) %s %s · %s · итог: %s, %+.2fR · ход в плюс до %.2fR, в минус до %.2fR" % (q["sym"], "LONG" if up else "SHORT", MISS_LAB[x["kind"]], ru.get(x["res"], x["res"]), x["r"], x["mfe"], x["mae"])
+    return q
 
 def shadow_text(sh):
     ru = {"yes": "по направлению", "no": "ПРОТИВ", "neutral": "нейтрально", None: "нет данных"}; parts = []
@@ -211,6 +321,7 @@ def shadow_text(sh):
             ag = (sh.get("agree") or {}).get("%s_%s" % (nm, tf)); parts.append("%s %s: счёт %s, %s" % (lab, tf, ("%+d" % r["s"]) if r else "?", ru.get(ag, "нет данных")))
     return "Тренд (тень, на решение НЕ влияет; счёт -4..+4 по EMA; BTC/ETH и другой таймфрейм): " + "; ".join(parts) + "."
 
+_miss_t = 0
 def cycle(dry=False):
     now = int(time.time() * 1000); stt = load_state(); props = {}; closes = {}; evs = load_events()
     for sym in PAIRS:
@@ -252,6 +363,11 @@ def cycle(dry=False):
             for p in ps: print("PROPOSAL", sym, p["rule"], p["side"], "price %.6g stop %.6g tp %.6g dist_atr %.2f" % (p["price"], p["stop"], p["tp"], abs(p["price"] - closes[sym][0]) / closes[sym][1]))
         print("events watching %d: %s" % (sum(1 for e in evs if e["status"] == "watch"), [(e["sym"], e["dir"], e["status"], e.get("reason", "")) for e in evs[-8:]]))
         print("pairs scanned %d, with proposals %d, pending %d" % (len(closes), sum(1 for v in props.values() if v[1]), len(pend))); return
+    global _miss_t
+    if now - _miss_t > 300000:
+        _miss_t = now
+        try: miss_update(now)
+        except Exception as ex: log("miss_update error: %s" % ex)
     with pos.lock():
         orders = load_orders(); ps_ = pos.load(); by_id = {o["id"]: o for o in orders}
         def n_open(): return sum(1 for p in ps_ if p["status"] == "open")
@@ -402,6 +518,8 @@ if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "list"
     if cmd == "scan": cycle(dry="--dry" in sys.argv)
     elif cmd == "report": shadow_report()
+    elif cmd == "miss":
+        print("updated", miss_update(int(time.time() * 1000), 200)); sm = miss_summary(); print(json.dumps({k: sm[k] for k in ("all", "kinds", "feats", "pending")}, ensure_ascii=False, indent=1))
     elif cmd == "cfg":
         c = {}
         try: c = json.load(open(CFGF))
