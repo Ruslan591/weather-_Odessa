@@ -10,7 +10,7 @@ var PWS_SYNC_STATIONS = [
     { id: "IODESA138", name: "Центр",  pressureOffset: 10.2 },
     { id: "IODESA139", name: "Чудо Город",  pressureOffset: 0.2 },
     { id: "IODESS41", name: "Судостроительная",  pressureOffset: 10.9 },
-    { id: "IODESS44", name: "Аркадия",  pressureOffset: -1.5 },
+    { id: "IODESS44", name: "Аркадия",  pressureOffset: -2.6 },
     { id: "IODESS16", name: "Таирова",  pressureOffset: 0.8 },
     { id: "IODESS31", name: "Савиньон",  pressureOffset: 19.1 },
     { id: "IODESS37", name: "Застава",  pressureOffset: 7.0 },
