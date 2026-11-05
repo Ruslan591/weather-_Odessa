@@ -1,1 +1,1 @@
-{"task_id": "e1", "cmd": "cd /opt/trading-bot/positions && sed -n 100,200p pos.py", "timeout": 60}
+{"task_id": "e2", "cmd": "cd /opt/trading-bot/classic && wc -l classic_pos_html.py && grep -n -o -E 'function (cl[A-Za-z0-9]*)\\(' classic_pos_html.py | tr '\\n' ' '; echo; grep -n -E '\u0421\u0434\u0435\u043b\u043a\u0438 \u0441\u0447\u0451\u0442\u0430|\u0422\u0435\u0437\u0438\u0441|clJournal|S.cl=' classic_pos_html.py | cut -c1-300", "timeout": 60}
