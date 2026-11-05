@@ -10,6 +10,8 @@ TF = sys.argv[1] if len(sys.argv) > 1 else "15m"
 DAYS = int(sys.argv[2]) if len(sys.argv) > 2 else 90
 USE_CLASSIC = "classic" in sys.argv[3:]
 SYNTH = "synth" in sys.argv[3:]
+ONLY = [a[5:].split(",") for a in sys.argv[3:] if a.startswith("only=")]
+ONLY = ONLY[0] if ONLY else None
 SYMS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT", "ADAUSDT", "BNBUSDT", "LINKUSDT", "AVAXUSDT", "SUIUSDT", "LTCUSDT", "DOTUSDT"]
 if SYNTH:
     SYMS = SYMS[:2]
@@ -182,6 +184,100 @@ def ch_classic(o, h, l, c, atr):
     return up, lw, dr
 
 
+
+def ch_afd(h, l, c, atr, swing=8, pool=10, horizon=600, volw=14, cont=0.10, minw=0.5, maxw=8.0, allow=0.0, pend_wait=20):
+    """Auto Trend Channels [AFD] (layer 0 only): strict pivots (confirmed swing bars later), channel = line through two same-side pivots
+    + parallel through the farthest opposite pivot between them; width 0.5..8 avgTR, all bars between anchors contained (0.1 avgTR);
+    becomes ACTIVE at the first close inside; ends (watch) at a close beyond a boundary. One active channel at a time."""
+    n = len(c)
+    pc = np.r_[c[0], c[:-1]]
+    tr = np.maximum(h - l, np.maximum(abs(h - pc), abs(l - pc))); tr[0] = h[0] - l[0]
+    sma = np.full(n, np.nan)
+    cs = np.cumsum(tr)
+    for i in range(volw - 1, n):
+        sma[i] = (cs[i] - (cs[i - volw] if i >= volw else 0.0)) / volw
+    up = np.full(n, np.nan); lw = up.copy(); dr = np.zeros(n, int)
+    highs, lows, pending, used = [], [], [], {}
+    active = None
+
+    def lower_at(ch, x):
+        base = ch["ap"] + ch["slope"] * (x - ch["ai"])
+        return base if ch["dir"] == 1 else base - ch["w"]
+
+    def upper_at(ch, x):
+        base = ch["ap"] + ch["slope"] * (x - ch["ai"])
+        return base + ch["w"] if ch["dir"] == 1 else base
+
+    for i in range(n):
+        if active:
+            up[i] = upper_at(active, i); lw[i] = lower_at(active, i); dr[i] = active["dir"]
+        vol = sma[i]
+        for k in [k for k, v in used.items() if i - v > horizon]:
+            del used[k]
+        pending[:] = [p for p in pending if i - p["ai"] <= horizon and i - p["built"] <= pend_wait]
+        if active:
+            if i - active["ai"] > horizon:
+                active = None
+            elif i > active["avail"]:
+                if c[i] > upper_at(active, i) + allow * active["vol"] or c[i] < lower_at(active, i) - allow * active["vol"]:
+                    active = None
+        ctr = i - swing
+        newp = None
+        if ctr - swing >= 0:
+            sh = h[ctr - swing:i + 1]; sl = l[ctr - swing:i + 1]
+            hp = bool((sh < h[ctr]).sum() == len(sh) - 1)
+            lp = bool((sl > l[ctr]).sum() == len(sl) - 1)
+            if hp != lp:
+                newp = (ctr, h[ctr], "H") if hp else (ctr, l[ctr], "L")
+                (highs if hp else lows).append((ctr, h[ctr] if hp else l[ctr]))
+        for arr in (highs, lows):
+            while arr and (i - arr[0][0] > horizon or len(arr) > pool):
+                arr.pop(0)
+        if newp and not np.isnan(vol) and vol > 0:
+            same, opp = (highs, lows) if newp[2] == "H" else (lows, highs)
+            d = -1 if newp[2] == "H" else 1
+            ci, cp = newp[0], newp[1]
+            for (ai, ap) in same[:-1]:
+                if not (ci - ai >= 2 * swing and i - ai <= horizon and d * (cp - ap) > 0):
+                    continue
+                slope = (cp - ap) / (ci - ai)
+                w, bi = 0.0, None
+                for (pi_, pp) in opp:
+                    if ai < pi_ < ci:
+                        r = d * (pp - (ap + slope * (pi_ - ai)))
+                        if r > w:
+                            w, bi = r, pi_
+                if bi is None or w < minw * vol or w > maxw * vol:
+                    continue
+                ch = dict(ai=ai, ap=ap, ci=ci, bi=bi, dir=d, slope=slope, w=w, vol=vol, built=i, key=(d, ai, bi, ci))
+                xs = np.arange(ai, ci + 1)
+                base = ap + slope * (xs - ai)
+                upp = base + w if d == 1 else base
+                low = base if d == 1 else base - w
+                if (h[ai:ci + 1] > upp + cont * vol).any() or (l[ai:ci + 1] < low - cont * vol).any():
+                    continue
+                pending.append(ch)
+            while len(pending) > 32:
+                pending.pop(0)
+        if active is None and not np.isnan(vol):
+            best, bk = None, None
+            for p in pending:
+                if p["key"] in used:
+                    continue
+                lo_, hi_ = lower_at(p, i), upper_at(p, i)
+                if not (lo_ <= c[i] <= hi_):
+                    continue
+                dist = abs(c[i] - (lo_ + p["w"] * 0.5)) / p["w"]
+                k = (p["ci"], -dist, p["ci"] - p["ai"], -p["bi"], p["dir"])
+                if bk is None or k > bk:
+                    best, bk = p, k
+            if best is not None:
+                pending.remove(best)
+                best["avail"] = i
+                used[best["key"]] = best["ai"]
+                active = best
+    return up, lw, dr
+
 # ---------------- orders and simulation ----------------
 def gen_bounce(c, atr, up, lw, dr, tgt_mode):
     out = []
@@ -296,9 +392,14 @@ def main():
             print(sym, "short data", len(a), flush=True); continue
         t, o, h, l, c = a[:, 0], a[:, 1], a[:, 2], a[:, 3], a[:, 4]
         atr = atr14(h, l, c); n = len(c)
-        chans = {"regr": ch_regression(h, l, c, atr)}
-        wu, wd = ch_willy(h, l, c, atr)
-        chans["willy_up"] = wu; chans["willy_dn"] = wd
+        chans = {}
+        if ONLY is None or "regr" in ONLY:
+            chans["regr"] = ch_regression(h, l, c, atr)
+        if ONLY is None or "willy" in ONLY:
+            wu, wd = ch_willy(h, l, c, atr)
+            chans["willy_up"] = wu; chans["willy_dn"] = wd
+        if ONLY is None or "afd" in ONLY:
+            chans["afd"] = ch_afd(h, l, c, atr)
         if USE_CLASSIC and sym_i < 8:
             try:
                 chans["classic"] = ch_classic(o, h, l, c, atr)
