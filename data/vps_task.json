@@ -1,1 +1,1 @@
-{"task_id": "e2", "cmd": "cd /opt/trading-bot/classic && wc -l classic_pos_html.py && grep -n -o -E 'function cl[A-Za-z0-9]*\\(' classic_pos_html.py | tr '\\n' ' '; echo; grep -n -E 'api/claude|S.cl=|S.clp|clpv' classic_pos_html.py | cut -c1-220 | head -20", "timeout": 60}
+{"task_id": "e3", "cmd": "cd /opt/trading-bot/classic && sed -n '356,360p;401,405p;446,480p' classic_pos_html.py | cut -c1-3500", "timeout": 60}
