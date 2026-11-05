@@ -400,6 +400,11 @@ def main():
             chans["willy_up"] = wu; chans["willy_dn"] = wd
         if ONLY is None or "afd" in ONLY:
             chans["afd"] = ch_afd(h, l, c, atr)
+        if "afd" in chans and "regr" in chans:
+            ua, la, da = chans["afd"]; ur, lr, dg = chans["regr"]
+            agree = (da != 0) & (da == dg)
+            chans["combo_afd"] = (ua, la, np.where(agree, da, 0))
+            chans["combo_regr"] = (ur, lr, np.where(agree, dg, 0))
         if USE_CLASSIC and sym_i < 8:
             try:
                 chans["classic"] = ch_classic(o, h, l, c, atr)
