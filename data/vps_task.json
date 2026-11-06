@@ -1,1 +1,1 @@
-{"task_id": "c1793943197", "cmd": "date -u; ls -la /opt/trading-bot/positions /opt/trading-bot/classic | head -80; systemctl list-units --no-legend 'chan-orders*' 'pos-tracker*' 'acct-api*' classicbot | cut -c1-90 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 120}
+{"task_id": "c1793943250", "cmd": "gzip -9c /opt/trading-bot/positions/pos.py | base64 -w0; echo; wc -c /opt/trading-bot/positions/pos.py 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 60}
