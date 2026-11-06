@@ -1,1 +1,1 @@
-{"task_id": "c1794004397", "cmd": "cd /opt/trading-bot/positions && md5sum pos.py && grep -n '^def \\|^import\\|^from' pos.py | head -60 && sed -n '/def api_action/,/return snapshot/p' pos.py | head -80 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 120}
+{"task_id": "c1794004449", "cmd": "gzip -9c /opt/trading-bot/positions/pos.py | base64 -w0; echo; wc -c /opt/trading-bot/positions/pos.py 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 60}
