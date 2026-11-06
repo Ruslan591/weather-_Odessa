@@ -1,1 +1,1 @@
-{"task_id": "c1793943558", "cmd": "xz -9e -c /opt/trading-bot/classic/classic_pos_html.py | base64 -w0 > /tmp/dl.b64; wc -c < /tmp/dl.b64 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 60}
+{"task_id": "c1793943604", "cmd": "dd if=/tmp/dl.b64 bs=30000 skip=0 count=1 iflag=skip_bytes 2>/dev/null; echo 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 60}
