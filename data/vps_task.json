@@ -1,1 +1,1 @@
-{"task_id": "c1793965461", "cmd": "sed -n '/====/,$p' /tmp/qs/out.log | head -60 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 120}
+{"task_id": "c1793966564", "cmd": "curl -s -m 30 localhost:8091/ | grep -o 'data-tab=[^ >]*' | sort | uniq | head -20; ls /opt/trading-bot/classic | head -60 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 120}
