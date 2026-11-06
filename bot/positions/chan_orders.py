@@ -423,11 +423,14 @@ def cycle(dry=False):
             sym = o["sym"] + "USDT"
             if any(p["status"] == "open" and p["sym"] == sym for p in ps_): cancel(o, "по паре уже есть позиция", ft); continue
             if n_open() >= SLOTS: cancel(o, "слоты заняты", ft); continue
-            side = 1 if o["side"] == "long" else -1; R = abs(fp - o["stop"])
-            if R <= 0 or (side > 0 and o["stop"] >= fp) or (side < 0 and o["stop"] <= fp): cancel(o, "стоп по ту сторону входа", ft); continue
-            a1 = at1.get(oid, o["atr"] * 3.46)
+            side = 1 if o["side"] == "long" else -1; a1 = at1.get(oid, o["atr"] * 3.46)
+            try:
+                import exit_cfg; stp = exit_cfg.stop_at_fill(exit_cfg.load(), side, fp, a1, o["stop"])   # патч 10б: стоп по настройкам счёта
+            except Exception: stp = o["stop"]
+            R = abs(fp - stp)
+            if R <= 0 or (side > 0 and stp >= fp) or (side < 0 and stp <= fp): cancel(o, "стоп по ту сторону входа", ft); continue
             th = "Лимит %s %s по правилу «%s», выставлен %s UTC на %.6g, исполнен %s UTC (сквозь уровень)." % (o["side"], o["sym"], RULE_RU[o["rule"]], pos.tstr(o["placed_t"]), o["price"], pos.tstr(ft))
-            p = {"id": max([x["id"] for x in ps_] + [0]) + 1, "sym": sym, "side": o["side"], "t_in": ft, "entry": fp, "px_signal": o["price"], "stop0": o["stop"], "stop": o["stop"], "tp": o["tp"],
+            p = {"id": max([x["id"] for x in ps_] + [0]) + 1, "sym": sym, "side": o["side"], "t_in": ft, "entry": fp, "px_signal": o["price"], "stop0": stp, "stop": stp, "tp": o["tp"],
                  "R": R, "R_pct": R / fp * 100, "be_r": 1.0, "lock_pct": 0.2, "be_px": fp + side * R, "lock_px": fp * (1 + side * 0.2 / 100), "armed": False,
                  "trail_dist": 1.5 * a1, "atr1h": a1, "max_h": MAXH, "stake": pos.STAKE, "lev": pos.LEV, "thesis": th, "last_t": (ft // 60000) * 60000, "hi": fp, "lo": fp, "status": "open",
                  "src": "chan", "order_id": o["id"], "rule": o["rule"], "placed_t": o["placed_t"], "fee_in": MAK, "fee_tp": MAK}
