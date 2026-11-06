@@ -1,1 +1,1 @@
-{"task_id": "c1794001834", "cmd": "cd /opt/trading-bot/classic; grep -n '^def \\|\"action\"\\|action ==\\|== \"stop\"\\|tp_set\\|set_stop\\|set_tp' classic_hand.py | cut -c1-150 | head -50; python3 -c \"import json;d=json.load(open('hand.json'));print(type(d).__name__, list(d)[:8] if isinstance(d,dict) else len(d)); import itertools; print(str(d)[:700])\" 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 120}
+{"task_id": "c1794002668", "cmd": "md5sum /opt/trading-bot/classic/classic_pos_html.py 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 120}
