@@ -4,6 +4,7 @@
 Внутри свечи порядок событий неизвестен: сначала проверяется стоп, потом цель; БУ и трейлинг применяются после свечи (консервативно).
 Команды: open | update | status | loop. Данные: /opt/trading-bot/positions/positions.json. Реальных ордеров НЕ ставит."""
 import argparse, contextlib, fcntl, json, os, sys, time, urllib.request
+import exit_cfg   # патч 10: настройки выхода счёта (exit_cfg.json в каталоге счёта)
 D = os.environ.get("POS_DIR", "/opt/trading-bot/positions"); F = os.path.join(D, "positions.json")
 FEE = 0.05; SLIP = 0.02          # % за сторону (комиссия) и проскальзывание на входе и на рыночных/стоповых выходах
 BASE = "https://data-api.binance.vision/api/v3/klines"
@@ -55,33 +56,58 @@ def fees(p, reason=None):
     return p.get("fee_in", FEE) + (p.get("fee_tp", FEE) if reason == "target" else FEE)
 
 def close(p, px, t, reason, market):
+    """Итог сделки с учётом частичных закрытий (p['parts'], доля остатка p['rem']): net = сумма вкладов частей + остаток; комиссия входа распределена по долям."""
     side = 1 if p["side"] == "long" else -1
     ex = px * (1 - side * SLIP / 100) if market else px
-    net = side * (ex / p["entry"] - 1) * 100 - fees(p, reason)
+    rem = p.get("rem", 1.0); parts_c = sum(x["contrib_pct"] for x in p.get("parts", []))
+    net = parts_c + rem * (side * (ex / p["entry"] - 1) * 100 - fees(p, reason))
     p.update(status="closed", t_out=t, exit=ex, reason=reason, net_pct=round(net, 3), r_mult=round(net / p["R_pct"], 3),
              pnl_usd=round(p["stake"] * net / 100, 3),
              mfe_pct=round((p["entry"] - p["lo"]) / p["entry"] * 100 if side < 0 else (p["hi"] - p["entry"]) / p["entry"] * 100, 3),
              mae_pct=round((p["hi"] - p["entry"]) / p["entry"] * 100 if side < 0 else (p["entry"] - p["lo"]) / p["entry"] * 100, 3))
 
+def partial(p, px, t, frac, why):
+    """Закрыть долю frac ИСХОДНОЙ позиции лимитом по px (комиссия выхода как у цели). Вклад в итог хранится в p['parts']."""
+    side = 1 if p["side"] == "long" else -1; rem = p.get("rem", 1.0); frac = min(frac, rem)
+    gross = side * (px / p["entry"] - 1) * 100
+    contrib = frac * (gross - fees(p, "target"))
+    p.setdefault("parts", []).append({"t": t, "px": px, "frac": round(frac, 6), "why": why, "contrib_pct": round(contrib, 5), "usd": round(p["stake"] * contrib / 100, 4)})
+    p["rem"] = round(rem - frac, 6)
+
 def step(p, k):
     t, o, h, l, c = int(k[0]), float(k[1]), float(k[2]), float(k[3]), float(k[4])
     side = 1 if p["side"] == "long" else -1; stop = p["stop"]
+    cfg = exit_cfg.load(); L = exit_cfg.levels(p, cfg)
     liq = p["entry"] * (1 - side * LIQ / 100)
     if (h >= liq) if side < 0 else (l <= liq):
-        close(p, liq, t + 60000, "liquidation", False); p["net_pct"] = -100.0 / LEV; p["pnl_usd"] = round(-p["stake"] / LEV, 3); return
+        rem = p.get("rem", 1.0); parts_c = sum(x["contrib_pct"] for x in p.get("parts", []))
+        close(p, liq, t + 60000, "liquidation", False); p["net_pct"] = round(parts_c + rem * (-100.0 / LEV), 3); p["pnl_usd"] = round(p["stake"] * p["net_pct"] / 100, 3); return
     hit = (h >= stop) if side < 0 else (l <= stop)
     if hit:
         gap = max(stop, o) if side < 0 else min(stop, o)
-        close(p, gap, t + 60000, "stop" if not p["armed"] else "trail/BE", True); return
-    if (l <= p["tp"]) if side < 0 else (h >= p["tp"]):
-        close(p, p["tp"], t + 60000, "target", False); return
+        close(p, gap, t + 60000, "stop" if not (p["armed"] or p.get("trail_act")) else "trail/BE", True); return
+    reach = lambda px: (l <= px) if side < 0 else (h >= px)
+    tp1 = L["tp1"]
+    if tp1 is not None and not p.get("tp1_done") and reach(tp1):   # частичная цель: часть позиции лимитом, остаток дальше
+        frac = cfg["tp1"]["part"] / 100.0
+        partial(p, tp1, t + 60000, frac, "tp1"); p["tp1_done"] = True; p["tp1_t"] = t + 60000
+    if L["tp"] is not None and reach(L["tp"]):
+        close(p, L["tp"], t + 60000, "target", False); return
     p["hi"] = max(p["hi"], h); p["lo"] = min(p["lo"], l)
-    if not p["armed"] and ((l <= p["be_px"]) if side < 0 else (h >= p["be_px"])):
-        p["armed"] = True; p["stop"] = min(p["stop"], p["lock_px"]) if side < 0 else max(p["stop"], p["lock_px"]); p["armed_t"] = t + 60000
-    if p["armed"]:
-        tr = p["lo"] + p["trail_dist"] if side < 0 else p["hi"] - p["trail_dist"]
-        p["stop"] = min(p["stop"], tr) if side < 0 else max(p["stop"], tr)
-    if p["max_h"] and (t + 60000 - p["t_in"]) / 3600000 >= p["max_h"]: close(p, c, t + 60000, "time", True)
+    b = cfg["be"]
+    if not p["armed"] and b["on"] and ((L["be_px"] is not None and reach(L["be_px"])) or (b["trig"] == "tp1" and p.get("tp1_done"))):
+        p["armed"] = True; p["armed_t"] = t + 60000
+        if not p.get("stop_manual"): p["stop"] = min(p["stop"], L["lock_px"]) if side < 0 else max(p["stop"], L["lock_px"])
+    tr = cfg["trail"]
+    if not p.get("trail_act") and (tr["on"] or p.get("manual_trail")):
+        st = tr["start"]
+        if p.get("manual_trail") or (st == "be" and p["armed"]) or st == "now" or (st == "tp1" and p.get("tp1_done")) or (L["trail_px"] is not None and reach(L["trail_px"])):
+            p["trail_act"] = True; p["trail_t"] = t + 60000
+    if p.get("trail_act") and (tr["on"] or p.get("manual_trail")) and not p.get("stop_manual"):
+        tl = p["lo"] + L["trail_dist"] if side < 0 else p["hi"] - L["trail_dist"]
+        p["stop"] = min(p["stop"], tl) if side < 0 else max(p["stop"], tl)
+    mh = cfg["maxh"] if cfg["maxh"] is not None else p["max_h"]
+    if mh and (t + 60000 - p["t_in"]) / 3600000 >= mh: close(p, c, t + 60000, "time", True)
 
 def cmd_update():
     with lock(): return _update()
@@ -98,27 +124,51 @@ def _update():
                 step(p, k); p["last_t"] = int(k[0]); changed = True
                 if p["status"] != "open": break
             if len(d) < 1000: break
+    for p in ps:   # патч 6: после БУ стоп подтягивается на подтверждённую линию поддержки/сопротивления (sr_stop.py)
+        if p["status"] == "open" and p.get("armed") and exit_cfg.load()["sr"]["on"]:
+            try:
+                import sr_stop
+                if sr_stop.apply(p, kl, now, lambda m: print(m, flush=True)): changed = True
+            except Exception as e: print("sr_stop err", p.get("sym"), e, flush=True)
     if changed: save(ps)
     return ps
 
 def price(sym): return float(kl(sym, "1m", 1)[-1][4])
+
+def _attach_chan(q):
+    """Положить в открытую позицию из заявки: канал, опорные точки, уровень, пробой, время выставления; свечи 5m."""
+    try:
+        if q.get("src") != "chan": return
+        o = json.load(open(os.path.join(D, "orders.json")))
+        a = [x for x in o if x.get("id") == q.get("order_id")]
+        if not a: return
+        a = a[0]
+        for k in ("chan", "basis", "level", "breakout", "placed_t", "expire_t", "ctype", "rule", "atr", "why"):
+            if a.get(k) is not None: q["o_" + k] = a[k]
+        q["cand"] = [[int(k[0]), float(k[1]), float(k[2]), float(k[3]), float(k[4])] for k in kl(q["sym"], "5m", 300)]
+        q["o_dt"] = 300000
+    except Exception as e:
+        q["o_err"] = str(e)[:80]
+
+def _eff(p):
+    L = exit_cfg.levels(p); L["liq"] = p["entry"] * (1 - (1 if p["side"] == "long" else -1) * LIQ / 100); L["atr1h"] = p.get("atr1h"); L["R"] = p["R"]; return L
 
 def snapshot():
     ps = cmd_update(); opn = []; closed = []; realized = 0.0; unreal = 0.0; margin = 0.0
     for p in ps:
         side = 1 if p["side"] == "long" else -1
         if p["status"] == "open":
-            px = price(p["sym"]); u = side * (px / p["entry"] - 1) * 100 - fees(p); ud = p["stake"] * u / 100; m = p["stake"] / p.get("lev", LEV)
+            px = price(p["sym"]); rem = p.get("rem", 1.0); u = sum(x["contrib_pct"] for x in p.get("parts", [])) + rem * (side * (px / p["entry"] - 1) * 100 - fees(p)); ud = p["stake"] * u / 100; m = p["stake"] / p.get("lev", LEV) * rem
             unreal += ud; margin += m
             q = dict(p); q.update(px=px, unreal_pct=round(u, 3), unreal_usd=round(ud, 3), r_now=round(u / p["R_pct"], 2), margin=m,
-                                 liq_px=p["entry"] * (1 - side * LIQ / 100), trail_pct=round(p["trail_dist"] / px * 100, 3), cand=[[int(k[0]), float(k[1]), float(k[2]), float(k[3]), float(k[4])] for k in kl(p["sym"], "15m", 300)])
-            opn.append(q)
+                                 liq_px=p["entry"] * (1 - side * LIQ / 100), trail_pct=round(exit_cfg.levels(p)["trail_dist"] / px * 100, 3), rem=rem, eff=_eff(p), tp=_eff(p)["tp"] if _eff(p)["tp"] is not None else p["tp"], be_px=_eff(p)["be_px"] if _eff(p)["be_px"] is not None else p["be_px"], cand=[[int(k[0]), float(k[1]), float(k[2]), float(k[3]), float(k[4])] for k in kl(p["sym"], "15m", 300)])
+            _attach_chan(q); opn.append(q)
         else:
             realized += p.get("pnl_usd", 0.0); closed.append(p)
     closed.sort(key=lambda p: -p["t_out"])
     return {"account": {"start": START, "lev": LEV, "stake": STAKE, "margin": STAKE / LEV, "realized": round(realized, 3), "unreal": round(unreal, 3),
                         "equity": round(START + realized + unreal, 3), "free": round(START + realized - margin, 3), "open_margin": round(margin, 3), "closed": len(closed)},
-            "open": opn, "closed": closed, "orders": _orders(), "ts": int(time.time() * 1000)}
+            "open": opn, "closed": closed, "exit_cfg": exit_cfg.load(), "exit_default": exit_cfg.DEFAULT, "orders": _orders(), "shadow": _shadow(), "miss": _miss(), "ts": int(time.time() * 1000)}
 
 def _orders():
     try:
@@ -127,6 +177,35 @@ def _orders():
     except Exception as e:
         return {"pending": [], "recent": [], "error": str(e)}
 
+def _miss():   # патч 9
+    try:
+        import chan_orders
+        return chan_orders.miss_summary()
+    except Exception as e:
+        return None
+
+def _shadow():   # патч 8
+    try:
+        import chan_orders
+        return chan_orders.shadow_summary()
+    except Exception as e:
+        return None
+
+def _apply_stop():
+    """Применить режим стопа (pct|atr) к ОТКРЫТЫМ позициям, которые ещё не в БУ, без частичной цели и без ручного стопа: новый начальный стоп на расстоянии от входа, пересчёт R."""
+    c = exit_cfg.load()
+    if c["stop"]["mode"] == "rule": return {"error": "режим стопа «как в заявке»: менять нечего"}
+    ps = _update(); n = 0; now = int(time.time() * 1000)
+    for p in ps:
+        if p["status"] != "open" or p.get("armed") or p.get("tp1_done") or p.get("stop_manual"): continue
+        side = 1 if p["side"] == "long" else -1; ns = exit_cfg.stop_at_fill(c, side, p["entry"], p.get("atr1h") or 0.0, p["stop0"])
+        if not ns or (side > 0 and ns >= p["entry"]) or (side < 0 and ns <= p["entry"]): continue
+        px = price(p["sym"])
+        if (side > 0 and ns >= px) or (side < 0 and ns <= px): continue   # цена уже за новым стопом: не трогаем
+        old = p["stop"]; R = abs(p["entry"] - ns); p.update(stop=ns, stop0=ns, R=R, R_pct=R / p["entry"] * 100, be_px=p["entry"] + side * R * p.get("be_r", 1.0)); n += 1
+        p.setdefault("stop_hist", []).append({"t": now, "from": old, "to": ns, "by": "exit_cfg"})
+    save(ps); r = snapshot(); r["applied"] = n; return r
+
 def api_action(o):
     if o.get("action") == "chart":
         try:
@@ -134,20 +213,50 @@ def api_action(o):
             return chan_orders.pair_view(o.get("sym"))
         except Exception as e:
             return {"error": str(e)}
-    act = o.get("action"); pid = int(o.get("id", 0)); pct = float(o.get("pct", 0) or 0)
+    if o.get("action") == "miss_chart":   # патч 9
+        try:
+            import chan_orders
+            return chan_orders.miss_view(int(o.get("id", 0)))
+        except Exception as e:
+            return {"error": str(e)}
+    if o.get("action") == "closed_chart":   # патч 8
+        try:
+            import chan_orders
+            return chan_orders.closed_view(int(o.get("id", 0)))
+        except Exception as e:
+            return {"error": str(e)}
+    act = o.get("action")
+    if act in ("exit_cfg_set", "exit_cfg_reset", "exit_apply_stop"):   # патч 10
+        with lock():
+            if act == "exit_cfg_reset": exit_cfg.save(exit_cfg.DEFAULT_COPY())
+            elif act == "exit_cfg_set":
+                c, err = exit_cfg.validate(o.get("cfg"))
+                if err: return {"error": err}
+                exit_cfg.save(c)
+            else: return _apply_stop()
+        return snapshot()
+    pid = int(o.get("id", 0)); pct = float(o.get("pct", 0) or 0)
     with lock():
-        ps = load(); p = next((x for x in ps if x["id"] == pid and x["status"] == "open"), None)
+        ps = _update(); p = next((x for x in ps if x["id"] == pid and x["status"] == "open"), None)   # патч 7: сначала догоняем свечи до «сейчас»
         if not p: return {"error": "позиция не найдена или уже закрыта"}
         side = 1 if p["side"] == "long" else -1; px = price(p["sym"]); now = int(time.time() * 1000)
         if act == "close":
             close(p, px, now, "manual", True)
-        elif act in ("stop", "trail"):
-            if not (0.05 <= pct <= 20): return {"error": "расстояние от 0.05 до 20 %"}
+        elif act == "stop":   # патч 7: вводится ЦЕНА стопа
+            try: sp = float(str(o.get("price", "")).replace(",", "."))
+            except Exception: return {"error": "укажите цену стопа числом"}
+            liq = p["entry"] * (1 - side * LIQ / 100)
+            if side > 0 and not (liq < sp < px * 0.9998): return {"error": "лонг: стоп должен быть ниже текущей цены %.8g и выше ликвидации %.8g" % (px, liq)}
+            if side < 0 and not (px * 1.0002 < sp < liq): return {"error": "шорт: стоп должен быть выше текущей цены %.8g и ниже ликвидации %.8g" % (px, liq)}
+            old = p["stop"]; p["stop"] = sp; p["stop_manual"] = True; p["stop_manual_t"] = now; p["manual_stop_px"] = sp; p.pop("manual_stop", None); p.pop("manual_trail", None)
+            p.setdefault("stop_hist", []).append({"t": now, "from": old, "to": sp, "by": "manual"})
+        elif act == "auto":
+            p.pop("stop_manual", None); p.pop("manual_stop_px", None)
+        elif act == "trail":
+            if not (0.05 <= pct <= 20): return {"error": "расстояние трейлинга от 0.05 до 20 %"}
             dist = px * pct / 100
-            new_stop = px - side * dist                                   # лонг: ниже цены, шорт: выше цены
-            if act == "stop":
-                p["stop"] = new_stop; p["manual_stop"] = round(pct, 3)
-            else:
+            if True:
+                p.pop("stop_manual", None); p.pop("manual_stop_px", None)
                 p["trail_dist"] = dist; p["armed"] = True; p["manual_trail"] = round(pct, 3)
                 p["hi"] = max(p["hi"], px); p["lo"] = min(p["lo"], px)
                 tr = p["lo"] + dist if side < 0 else p["hi"] - dist
