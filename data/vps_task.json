@@ -1,1 +1,1 @@
-{"task_id": "c1793965044", "cmd": "cd /tmp/qs && curl -fsS https://raw.githubusercontent.com/ruslan591/weather-_Odessa/6c4cdcd91a2a13d2d5c60b71647213f9332566ca/scripts/chan_quarters_study.py -o chan_quarters_study.py && (nohup nice -n 10 /opt/trading-bot/venv/bin/python chan_quarters_study.py 5m 30 > /tmp/qs/out.log 2>&1 &); sleep 5; echo started 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 120}
+{"task_id": "c1793965333", "cmd": "tail -3 /tmp/qs/out.log 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 120}
