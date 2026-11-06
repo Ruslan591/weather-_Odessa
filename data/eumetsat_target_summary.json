@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-06T13:47:29Z",
+  "timestamp": "2026-11-06T13:54:27Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-11-06T12:00:00.000Z",
   "target_id": 0,
@@ -38,7 +38,7 @@
       "type_label": "низкая/средняя",
       "has_precip": true,
       "has_lightning": false,
-      "ir_confirmed": true,
+      "ir_confirmed": false,
       "geocolour_confirmed": true
     },
     {
@@ -125,26 +125,9 @@
       "has_lightning": false,
       "ir_confirmed": false,
       "geocolour_confirmed": true
-    },
-    {
-      "target_id": 12,
-      "area_km2": 65.4,
-      "distance_km": 284.9,
-      "bearing_deg": 330.0,
-      "compass": "СЗ",
-      "elongation_aspect_ratio": 1.45,
-      "elongation_axis_deg": 0.0,
-      "elongation_axis_compass": "С-Ю",
-      "frontlike": false,
-      "phase_label": null,
-      "type_label": null,
-      "has_precip": true,
-      "has_lightning": false,
-      "ir_confirmed": false,
-      "geocolour_confirmed": true
     }
   ],
-  "local_suppressed_count": 5,
+  "local_suppressed_count": 6,
   "system_candidates": [
     {
       "target_id": 2,
@@ -292,21 +275,21 @@
   "existence": {
     "modules": {
       "ir_motion": {
-        "confirmed": true,
-        "timestamp": "2026-11-06T13:20:00.000Z"
+        "confirmed": false,
+        "timestamp": "2026-11-06T13:30:00.000Z"
       },
       "geocolour_motion": {
         "confirmed": true,
-        "timestamp": "2026-11-06T13:20:00.000Z"
+        "timestamp": "2026-11-06T13:30:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": true,
         "timestamp": "2026-11-06T13:37:10Z"
       }
     },
-    "votes_confirmed": 3,
-    "votes_not_confirmed": 0,
-    "consensus": "confirmed"
+    "votes_confirmed": 2,
+    "votes_not_confirmed": 1,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -318,5 +301,5 @@
       "timestamp": "2026-11-06T13:47:05Z"
     }
   },
-  "verdict": "Облачная масса (69км², безоблачно) в 113км С подтверждена всеми доступными каналами. Идёт на Ю со скоростью ~56 км/ч, пройдёт мимо на ≈27км, город, скорее всего, не заденет. Наблюдаются осадки. Отдельно: система синоптического масштаба (1198км²) в 165км СВ (вытянута В-З (79°), похоже на фронт, плотная водяная, осадки)."
+  "verdict": "Цель в 113км С, безоблачно — каналы расходятся: geocolour_motion/cloud_phase_type подтверждают, ir_motion нет. Идёт на Ю со скоростью ~56 км/ч, пройдёт мимо на ≈27км, город, скорее всего, не заденет. Наблюдаются осадки. Отдельно: система синоптического масштаба (1198км²) в 165км СВ (вытянута В-З (79°), похоже на фронт, плотная водяная, осадки)."
 }
