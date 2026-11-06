@@ -16,7 +16,8 @@ sys.argv = ["chan_tv_study.py", TF, DAYS]
 ns = {"__name__": "chan_tv_study"}; exec(compile(src, "chan_tv_study.py", "exec"), ns)
 klines, atr14, ch_regression, real_trades, control_trades, fmt = (ns[k] for k in ("klines", "atr14", "ch_regression", "real_trades", "control_trades", "fmt"))
 SYMS, WARM = ns["SYMS"], ns["WARM"]
-if os.environ.get("QSYNTH"): SYMS = SYMS[:1]; DRAWS = 3; ns["DRAWS"] = DRAWS
+if os.environ.get("QSYNTH"): SYMS = SYMS[:1]
+DRAWS = 3; ns["DRAWS"] = DRAWS
 MODES = ("with", "counter"); DS = (2.0, 1.5, 1.0, 0.5); TGTS = ("mid", "opp1", "opp"); STOPS = ("bot", "edge")
 
 
