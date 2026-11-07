@@ -1,1 +1,1 @@
-{"task_id": "run5", "cmd": "sed -n '/== mean net/,$p' /tmp/fs/out1.txt | head -70 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 60}
+{"task_id": "diag1", "cmd": "cd /opt/weather-pipeline/repo && git fetch -q origin && git show origin/main:scripts/chan_life_diag.py > /tmp/fs/chan_life_diag.py && cd /tmp/fs && timeout 250 nice -n 10 /opt/trading-bot/venv/bin/python chan_life_diag.py 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 280}
