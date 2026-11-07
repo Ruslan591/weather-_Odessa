@@ -18,6 +18,11 @@ import json, os, sys, time
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import datetime
 import pos, trend_shadow
+try: import tg_gate
+except Exception:
+    class tg_gate:   # режимы Telegram недоступны: поведение как раньше
+        ENABLED = False
+        on_place = staticmethod(lambda p, now: True); on_cancel = staticmethod(lambda *a, **k: None); apply = staticmethod(lambda *a, **k: []); emit = staticmethod(lambda *a, **k: None)
 D = pos.D; OF = os.path.join(D, "orders.json"); LOG = os.path.join(D, "chan.log"); STF = os.path.join(D, "chan_state.json")
 EVF = os.path.join(D, "chan_events.json")
 CLASSIC = os.environ.get("CLASSIC_DIR", "/opt/trading-bot/classic")
@@ -62,6 +67,7 @@ CONFIRM_N = 2; TOUCH_ATR = 0.2; TOL_ATR = 0.2; AWAY_ATR = 0.5; ENTRY_OFF = 0.1; 
 RULE_RU = {"chan_top": "нисходящий канал: продажа на верхней границе", "chan_bottom": "восходящий канал: покупка на нижней границе",
            "retest_up": "пробой нисходящего канала вверх, возврат к уровню и подтверждение удержания: покупка у уровня", "retest_down": "пробой восходящего канала вниз, возврат к уровню и подтверждение удержания: продажа у уровня"}
 STATUS_RU = {"pending": "активна", "filled": "исполнена", "cancelled": "отменена", "expired": "истекла"}
+STATUS_RU.update({"proposed": "ждёт решения", "missed": "пропущен (нет ответа)", "rejected": "отклонён", "late": "поздно"})
 
 def log(m):
     with open(LOG, "a", encoding="utf-8") as f: f.write("%s %s\n" % (time.strftime("%m-%d %H:%M:%S", time.gmtime()), m))
@@ -358,6 +364,25 @@ def shadow_text(sh):
     return "Тренд (тень, на решение НЕ влияет; счёт -4..+4 по EMA; BTC/ETH и другой таймфрейм): " + "; ".join(parts) + "."
 
 _miss_t = 0
+def _tg_touched(o, now):
+    """Цена уже коснулась уровня ордера после его появления (по закрытым 1m свечам)? При ошибке считаем «поздно»."""
+    try:
+        for k in pos.kl(o["sym"] + "USDT", "1m", 1000, int(o["placed_t"]) - 60000):
+            ot = int(k[0])
+            if ot + 60000 > now or ot < o["placed_t"]: continue
+            if (o["side"] == "long" and float(k[3]) < o["price"]) or (o["side"] == "short" and float(k[2]) > o["price"]): return True
+        return False
+    except Exception as e:
+        log("tg touched error: %s" % e); return True
+
+
+def _tg_journal(o, action, extra):
+    try:
+        import decisions
+        decisions.entry(o, action, pos.kl, **extra)
+    except Exception as e: log("tg journal error: %s" % e)
+
+
 def cycle(dry=False):
     now = int(time.time() * 1000); stt = load_state(); props = {}; closes = {}; evs = load_events()
     for sym in PAIRS:
@@ -404,10 +429,13 @@ def cycle(dry=False):
         _miss_t = now
         try: miss_update(now)
         except Exception as ex: log("miss_update error: %s" % ex)
+    _tg_jobs = []
     with pos.lock():
         orders = load_orders(); ps_ = pos.load(); by_id = {o["id"]: o for o in orders}
         def n_open(): return sum(1 for p in ps_ if p["status"] == "open")
-        def cancel(o, why, t=None): o.update(status="cancelled", reason=why, t_end=t or now)
+        def cancel(o, why, t=None):
+            was = o["status"]; o.update(status="cancelled", reason=why, t_end=t or now); tg_gate.on_cancel(o, was, why)
+        _tg_jobs.extend(tg_gate.apply(orders, now, cancel, lambda o_: _tg_touched(o_, now)) or [])
         for x in orders:  # заменённые правила: заблаговременные у границы (флаг) и ретест без подтверждения
             if x["status"] == "pending" and ((x["rule"] in ("chan_top", "chan_bottom") and not CHAN_EDGE) or (x["rule"] in ("retest_up", "retest_down") and not x.get("rv"))):
                 cancel(x, "правило заменено: ретест с подтверждением удержания")
@@ -436,11 +464,12 @@ def cycle(dry=False):
                  "src": "chan", "order_id": o["id"], "rule": o["rule"], "placed_t": o["placed_t"], "fee_in": MAK, "fee_tp": MAK}
             ps_.append(p); o.update(status="filled", fill_t=ft, fill_px=fp, pos_id=p["id"], t_end=ft)
             log("FILLED order %d %s %s %.6g -> position #%d" % (o["id"], o["sym"], o["side"], fp, p["id"]))
+            tg_gate.emit({"type": "filled", "id": o["id"], "pos": p["id"]})
             if n_open() >= SLOTS:
                 for x in orders:
                     if x["status"] == "pending" and x["id"] != o["id"]: cancel(x, "слоты заняты: исполнилась заявка %s" % o["sym"], ft)
         pos.save(ps_)
-        pend_now = [x for x in orders if x["status"] == "pending"]
+        pend_now = [x for x in orders if x["status"] in ("pending", "proposed")]
         for sym, (ti, props_) in props.items():
             c0, a0, _ = closes[sym]; stt["last"][sym] = ti
             cur_o = [x for x in pend_now if x["sym"] == sym]
@@ -449,24 +478,28 @@ def cycle(dry=False):
                     lv = x["level"]["p"]
                     if (x["side"] == "long" and c0 < lv - 0.7 * a0) or (x["side"] == "short" and c0 > lv + 0.7 * a0): cancel(x, "пробой не удержался (закрытие за уровнем)", ti + TFM)
                     elif x.get("rv") in (2, 3) and ((x["side"] == "long" and (c0 - x["price"]) / a0 > AWAY_ATR) or (x["side"] == "short" and (x["price"] - c0) / a0 > AWAY_ATR)): cancel(x, "цена ушла от входа больше чем на %.1f ATR (в погоне не входим)" % AWAY_ATR, ti + TFM)
-            pend_sym = [x for x in orders if x["status"] == "pending" and x["sym"] == sym]
+            pend_sym = [x for x in orders if x["status"] in ("pending", "proposed") and x["sym"] == sym]
             for p in props_:
                 if p["key"] and any(x.get("key") == p["key"] for x in orders): continue  # событие пробоя уже обработано
+                if tg_gate.ENABLED and any(x["sym"] == sym and x["rule"] == p["rule"] and x["side"] == p["side"] and x["status"] in ("rejected", "missed", "late") and now - (x.get("t_end") or 0) < 1800000 and abs(x["price"] - p["price"]) <= 0.5 * a0 for x in orders): continue  # после отказа/пропуска не повторять ту же точку 30 минут
                 same = [x for x in pend_sym if x["rule"] == p["rule"] and x["side"] == p["side"]]
                 if same and abs(same[0]["price"] - p["price"]) <= KEEP_ATR * a0: continue
                 for x in same: cancel(x, "пересчёт: граница сместилась", ti + TFM)
-                if n_open() >= SLOTS or sum(1 for x in orders if x["status"] == "pending") >= MAXPEND: continue
+                if n_open() >= SLOTS or sum(1 for x in orders if x["status"] in ("pending", "proposed")) >= MAXPEND: continue
                 if any(pp["status"] == "open" and pp["sym"] == sym + "USDT" for pp in ps_): continue
-                p["id"] = max([x["id"] for x in orders] + [0]) + 1; orders.append(p); pend_sym.append(p)
+                p["id"] = max([x["id"] for x in orders] + [0]) + 1
+                if not tg_gate.on_place(p, now): continue   # режим сна: новых ордеров нет
+                orders.append(p); pend_sym.append(p)
                 log("PLACED order %d %s %s %s %.6g stop %.6g tp %.6g" % (p["id"], sym, p["rule"], p["side"], p["price"], p["stop"], p["tp"]))
                 log("SHADOW order %d agree=%s" % (p["id"], json.dumps((p.get("shadow") or {}).get("agree", {}))))
-            for x in [x for x in pend_sym if x["status"] == "pending" and x["rule"] in ("chan_top", "chan_bottom") and not any(pp["rule"] == x["rule"] and pp["side"] == x["side"] for pp in props_)]:
+            for x in [x for x in pend_sym if x["status"] in ("pending", "proposed") and x["rule"] in ("chan_top", "chan_bottom") and not any(pp["rule"] == x["rule"] and pp["side"] == x["side"] for pp in props_)]:
                 cancel(x, "условия исчезли (канал, расстояние или цель)", ti + TFM)
         # слоты заполнены: лишние заявки не держим
         if n_open() >= SLOTS:
             for x in orders:
-                if x["status"] == "pending": cancel(x, "слоты заняты")
+                if x["status"] in ("pending", "proposed"): cancel(x, "слоты заняты")
         save_orders(orders); save_state(stt); save_events(evs)
+    for _j in _tg_jobs: _tg_journal(*_j)
 
 def pair_view(sym):
     """Разметка сканера по паре (без заявки): что бот видит на 5m - канал, опорные точки, линии."""
