@@ -62,6 +62,27 @@ def build(o, h, l, c, atr, N):
     return mid, sd, dr, cid, exits, chans
 
 
+def build_slide(o, h, l, c, atr, N):
+    """Скользящий Fixed N как индикатор TradingView: канал на свече i по окну c[i-N..i-1] (данные <= i-1), перерисовывается каждую свечу.
+    exits: свечи, закрывшиеся за +-2 sigma (>=50% тела за линией); параметры линий берутся из канала этой свечи."""
+    n = len(c); mid = np.full(n, np.nan); sd = np.full(n, np.nan); dr = np.zeros(n, int); cid = np.full(n, -1, int); exits = []
+    x = np.arange(N, dtype=float); xm = x.mean(); sxx = ((x - xm) ** 2).sum()
+    W = np.lib.stride_tricks.sliding_window_view(c, N)  # строка w: c[w..w+N-1]
+    ym = W.mean(axis=1); Y = W - ym[:, None]
+    sl = (Y * (x - xm)).sum(axis=1) / sxx; syy = (Y ** 2).sum(axis=1); sxy = (Y * (x - xm)).sum(axis=1)
+    sdv = np.sqrt(np.maximum(syy - sl * sxy, 0.0) / (N - 2)); a0 = ym - sl * xm
+    for i in range(N, n):
+        w = i - N; m = a0[w] + sl[w] * N; mid[i] = m; sd[i] = sdv[w]; cid[i] = 0
+        th = FLAT * atr[i - 1]; d = 1 if sl[w] > th else (-1 if sl[w] < -th else 0); dr[i] = d
+        U = m + KS * sdv[w]; Lw = m - KS * sdv[w]; bl = min(o[i], c[i]); bh = max(o[i], c[i]); body = max(bh - bl, 1e-12); ex = 0
+        if c[i] > U and (bh - max(bl, U)) / body >= BODY_OUT: ex = 1
+        elif c[i] < Lw and (min(bh, Lw) - bl) / body >= BODY_OUT: ex = -1
+        if ex: exits.append((i, ex, float(a0[w]), float(sl[w]), w, float(sdv[w]), d))
+    return mid, sd, dr, cid, exits, len(exits)
+
+SLIDE = bool(os.environ.get("SLIDE"))
+
+
 def modeok_of(dr, s, mode):
     if mode == "with": return dr == s
     if mode == "counter": return dr == -s
@@ -216,7 +237,7 @@ def main():
         o, h, l, c = a[:, 1], a[:, 2], a[:, 3], a[:, 4]; v = a[:, 5] if a.shape[1] > 5 else np.ones(len(c)); atr = atr14(h, l, c); n = len(c)
         atrp = np.r_[atr[0], atr[:-1]]
         for N in NLIST:
-            mid, sd, dr, cid, exits, chans = build(o, h, l, c, atr, N)
+            mid, sd, dr, cid, exits, chans = (build_slide if SLIDE else build)(o, h, l, c, atr, N)
             S = stats.setdefault(N, dict(bars=0, chans=0, up=0, dn=0, fl=0, exits=0)); S["bars"] += n; S["chans"] += chans; S["exits"] += len(exits)
             S["up"] += int((dr == 1).sum()); S["dn"] += int((dr == -1).sum()); S["fl"] += int(((dr == 0) & (cid >= 0)).sum())
             print("%s N=%d bars %d channels %d exits %d  %.0fs" % (sym, N, n, chans, len(exits), time.time() - t0), flush=True)
@@ -256,7 +277,7 @@ def main():
                             ords = break_orders(o, h, l, c, v, atr, exits, kind, sel, vol, tg)
                             A = acc.setdefault((N, kind, "break", sel, vol, tg, "bot"), dict(real=[], ctl=[], n=n))
                             A["real"] += run_set(o, h, l, c, ords); A["ctl"] += ctl_market(o, h, l, c, atr, ords, rng)
-    print("\n==== Fixed N regression channel frozen; TF %s, %s days, pairs %d; net after fees; control = same ATR geometry at random bars x%d ====" % (TF, DAYS, len(SYMS), DRAWS))
+    print("\n==== Fixed N regression channel %s; TF %s, %s days, pairs %d; net after fees; control = same ATR geometry at random bars x%d ====" % ("SLIDING (as TradingView)" if SLIDE else "frozen", TF, DAYS, len(SYMS), DRAWS))
     for N, S in stats.items():
         print("N=%d: channels %d, avg life %.0f bars, exits %d, bars up/down/flat %.0f%%/%.0f%%/%.0f%%" % (N, S["chans"], S["bars"] / max(S["chans"], 1), S["exits"], 100.0 * S["up"] / (S["up"] + S["dn"] + S["fl"]), 100.0 * S["dn"] / (S["up"] + S["dn"] + S["fl"]), 100.0 * S["fl"] / (S["up"] + S["dn"] + S["fl"])))
     rows = []; K = len(acc)
