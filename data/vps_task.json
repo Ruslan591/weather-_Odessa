@@ -1,1 +1,1 @@
-{"task_id": "tg1", "cmd": "stat -c '%n owner=%U:%G mode=%a size=%s' /opt/trading-bot/tg.env; grep -c -E '^TG_TOKEN=[0-9]+:[A-Za-z0-9_-]{30,}$' /opt/trading-bot/tg.env 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 60}
+{"task_id": "tg2", "cmd": "cd /opt/weather-pipeline/repo && git fetch -q origin && git show origin/main:scripts/tg_probe.py > /tmp/fs/tg_probe.py && /usr/bin/python3 /tmp/fs/tg_probe.py 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 60}
