@@ -60,13 +60,17 @@ def render_order(o, kl, nbars=96, title=None):
     if len(ks) < 10: raise ValueError("мало свечей для графика")
     x0 = ks[0][0]
     X = lambda t: (t - x0) / BAR_MS
-    fig, ax = plt.subplots(figsize=(7.2, 5.2), dpi=130)
-    fig.patch.set_facecolor(BG); ax.set_facecolor(BG)
+    fig = plt.figure(figsize=(7.2, 6.3), dpi=130)
+    gs = fig.add_gridspec(2, 1, height_ratios=[4.3, 1], hspace=0.04)
+    ax = fig.add_subplot(gs[0]); axv = fig.add_subplot(gs[1], sharex=ax)
+    fig.patch.set_facecolor(BG); ax.set_facecolor(BG); axv.set_facecolor(BG)
+    vol_all = [float(k[5]) for k in kl]; idx0 = kl.index(ks[0])
     lows, highs = [], []
-    for k in ks:
+    for ii, k in enumerate(ks):
         op, hi, lo, cl = float(k[1]), float(k[2]), float(k[3]), float(k[4]); x = X(k[0]); col = "#26a69a" if cl >= op else "#ef5350"
         ax.plot([x, x], [lo, hi], color=col, lw=0.9, zorder=3)
         ax.add_patch(Rectangle((x - 0.32, min(op, cl)), 0.64, max(abs(cl - op), 1e-12), color=col, zorder=4)); lows.append(lo); highs.append(hi)
+        axv.bar(x, float(k[5]), width=0.72, color=col, alpha=0.85, zorder=3)
     xr = X(t_end)
     ch = o.get("chan") or {}; cc = chan_color(o.get("ctype") or ch.get("type"))
     if ch.get("upper") and ch.get("lower"):
@@ -92,15 +96,23 @@ def render_order(o, kl, nbars=96, title=None):
     for y, ty, col, name in labs:
         ax.text(xr + 0.4, ty, "%s %s" % (name, fmt_px(y)), color=BG, fontsize=7.5, va="center", fontweight="bold", zorder=6, bbox=dict(boxstyle="square,pad=0.25", fc=col, ec="none"))
         if abs(ty - y) > 1e-12: ax.plot([xr, xr + 0.4], [y, ty], color=col, lw=0.8, zorder=5)
-    ax.axvline(xp, color="#8b949e", lw=0.8, ls=":", zorder=2)
+    ax.axvline(xp, color="#8b949e", lw=0.8, ls=":", zorder=2); axv.axvline(xp, color="#8b949e", lw=0.8, ls=":", zorder=2)
+    ma = []
+    for ii in range(len(ks)):
+        g = idx0 + ii; w = vol_all[max(0, g - 19):g + 1]; ma.append(sum(w) / len(w))
+    axv.plot([X(k[0]) for k in ks], ma, color="#e3b341", lw=1.1, zorder=4)
+    last = [i for i, k in enumerate(ks) if k[0] <= o["placed_t"]][-1]; ratio = float(ks[last][5]) / ma[last] if ma[last] else 0
+    axv.text(0.005, 0.95, "объём · линия = среднее за 20 свечей · на свече выставления ×%.1f" % ratio, transform=axv.transAxes, color=TXT, fontsize=7, va="top")
+    axv.set_ylim(0, max(float(k[5]) for k in ks) * 1.15)
     ax.text(xp, 1.0, " лимит выставлен " + datetime.fromtimestamp(o["placed_t"] / 1000, tz).strftime("%H:%M"), transform=ax.get_xaxis_transform(), color=TXT, fontsize=7.5, va="top", ha="left")
     ax.set_xlim(-1, xr + 14)
     step = 12; xt = [i for i in range(0, int(xr) + 1, step)]
-    ax.set_xticks(xt); ax.set_xticklabels([datetime.fromtimestamp((x0 + i * BAR_MS) / 1000, tz).strftime("%H:%M") for i in xt], color=TXT, fontsize=7.5)
-    ax.tick_params(axis="y", colors=TXT, labelsize=7.5, labelleft=False, labelright=False, left=False)
-    ax.grid(color=GRID, lw=0.6); [s.set_color(GRID) for s in ax.spines.values()]
+    axv.set_xticks(xt); axv.set_xticklabels([datetime.fromtimestamp((x0 + i * BAR_MS) / 1000, tz).strftime("%H:%M") for i in xt], color=TXT, fontsize=7.5)
+    ax.tick_params(axis="x", labelbottom=False); ax.tick_params(axis="y", labelleft=False, labelright=False, left=False)
+    axv.tick_params(axis="y", labelleft=False, left=False)
+    for a_ in (ax, axv): a_.grid(color=GRID, lw=0.6); [sp.set_color(GRID) for sp in a_.spines.values()]
     ax.set_title(title or "%s  %s  %s" % (o.get("sym"), str(o.get("side", "")).upper(), o.get("rule", "")), color=TXT, fontsize=10, loc="left")
-    fig.subplots_adjust(left=0.02, right=0.99, top=0.93, bottom=0.07)
+    fig.subplots_adjust(left=0.02, right=0.99, top=0.94, bottom=0.05)
     buf = io.BytesIO(); fig.savefig(buf, format="png", facecolor=BG); plt.close(fig)
     return buf.getvalue()
 
