@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-07T20:32:52Z",
+  "timestamp": "2026-11-07T20:37:33Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-11-07T20:15:00.000Z",
   "target_id": 1,
@@ -87,7 +87,7 @@
       "frontlike": false,
       "phase_label": null,
       "type_label": null,
-      "has_precip": null,
+      "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
       "geocolour_confirmed": true
@@ -142,7 +142,7 @@
       "window_spanning": false,
       "phase_label": null,
       "type_label": null,
-      "has_precip": null,
+      "has_precip": true,
       "has_lightning": false,
       "ir_confirmed": false,
       "geocolour_confirmed": true
@@ -160,7 +160,7 @@
       "window_spanning": false,
       "phase_label": "безоблачно",
       "type_label": "безоблачно",
-      "has_precip": null,
+      "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
       "geocolour_confirmed": true
@@ -197,27 +197,27 @@
         "timestamp": "2026-11-07T20:10:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-11-07T20:00:00.000Z"
+        "confirmed": true,
+        "timestamp": "2026-11-07T20:10:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": false,
         "timestamp": "2026-11-07T16:57:14Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
       "confirmed": false,
-      "timestamp": "2026-11-07T20:18:22Z"
+      "timestamp": "2026-11-07T20:37:04Z"
     },
     "lightning_forecast": {
       "confirmed": false,
       "timestamp": "2026-11-07T20:32:17Z"
     }
   },
-  "verdict": "CLM отметил цель в 16км СЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (66169км²) в 13км Ю."
+  "verdict": "Цель в 16км СЗ, безоблачно — каналы расходятся: geocolour_motion подтверждают, ir_motion/cloud_phase_type нет. Отдельно: система синоптического масштаба (66169км²) в 13км Ю."
 }
