@@ -82,6 +82,7 @@ def levels(p, c=None):
     if t["mode"] == "rule": tp = p.get("tp")
     elif t["mode"] == "none": tp = None
     else: tp = e + side * dist(p, t["mode"], t["val"])
+    if p.get("tp_manual"): tp = p["tp_manual"]   # ручная цель (патч 11) главнее настроек
     t1 = c["tp1"]; tp1 = e + side * dist(p, t1["unit"], t1["val"]) if t1["on"] else None
     if tp1 is not None and tp is not None and (tp1 - tp) * side >= 0: tp1 = None   # частичная цель должна быть ближе конечной
     b = c["be"]; be_px = None
