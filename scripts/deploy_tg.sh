@@ -2,7 +2,8 @@
 # deploy_tg.sh: режимы Сон/Монитор/Авто и Telegram-бот для счёта «Регрессия» (запускать от root). Бэкап и откат при ошибке.
 set -u
 R=/opt/weather-pipeline/repo; P=/opt/trading-bot/positions; N=/opt/tg-notify; PR=/opt/trading-bot/positions_regr; TS=$(date +%Y%m%d_%H%M%S); VPY=/opt/trading-bot/venv/bin/python
-cd $R && git fetch -q origin || { echo FETCH_FAIL; exit 1; }
+cd $R || exit 1
+ok=0; for i in 1 2 3 4 5; do git fetch -q origin && ok=1 && break; sleep 6; done; [ $ok = 1 ] || { echo FETCH_FAIL; exit 1; }
 for f in chan_orders.py decisions.py; do cp $P/$f $P/$f.bak_tg_$TS || exit 1; done
 for f in chan_orders.py decisions.py tg_gate.py tg_notify.py tg_bot.py; do git show origin/main:bot/positions/$f > /tmp/$f.new || { echo "SHOW_FAIL $f"; exit 1; }; done
 $VPY -m py_compile /tmp/chan_orders.py.new /tmp/decisions.py.new /tmp/tg_gate.py.new /tmp/tg_notify.py.new /tmp/tg_bot.py.new || { echo COMPILE_FAIL; exit 1; }
