@@ -5,6 +5,7 @@
 Команды: open | update | status | loop. Данные: /opt/trading-bot/positions/positions.json. Реальных ордеров НЕ ставит."""
 import argparse, contextlib, fcntl, json, os, sys, time, urllib.request
 import exit_cfg   # патч 10: настройки выхода счёта (exit_cfg.json в каталоге счёта)
+import decisions   # патч 11: журнал решений (decisions.jsonl в каталоге счёта)
 D = os.environ.get("POS_DIR", "/opt/trading-bot/positions"); F = os.path.join(D, "positions.json")
 FEE = 0.05; SLIP = 0.02          # % за сторону (комиссия) и проскальзывание на входе и на рыночных/стоповых выходах
 BASE = "https://data-api.binance.vision/api/v3/klines"
@@ -90,19 +91,20 @@ def step(p, k):
     tp1 = L["tp1"]
     if tp1 is not None and not p.get("tp1_done") and reach(tp1):   # частичная цель: часть позиции лимитом, остаток дальше
         frac = cfg["tp1"]["part"] / 100.0
-        partial(p, tp1, t + 60000, frac, "tp1"); p["tp1_done"] = True; p["tp1_t"] = t + 60000
+        partial(p, tp1, t + 60000, frac, "tp1"); p["tp1_done"] = True; p["tp1_t"] = t + 60000; decisions.auto(p, "tp1", None, tp1, t + 60000, c, frac=frac)
     if L["tp"] is not None and reach(L["tp"]):
         close(p, L["tp"], t + 60000, "target", False); return
     p["hi"] = max(p["hi"], h); p["lo"] = min(p["lo"], l)
     b = cfg["be"]
     if not p["armed"] and b["on"] and ((L["be_px"] is not None and reach(L["be_px"])) or (b["trig"] == "tp1" and p.get("tp1_done"))):
-        p["armed"] = True; p["armed_t"] = t + 60000
+        _os = p["stop"]; p["armed"] = True; p["armed_t"] = t + 60000
         if not p.get("stop_manual"): p["stop"] = min(p["stop"], L["lock_px"]) if side < 0 else max(p["stop"], L["lock_px"])
+        decisions.auto(p, "be", _os, p["stop"], t + 60000, c)
     tr = cfg["trail"]
     if not p.get("trail_act") and (tr["on"] or p.get("manual_trail")):
         st = tr["start"]
         if p.get("manual_trail") or (st == "be" and p["armed"]) or st == "now" or (st == "tp1" and p.get("tp1_done")) or (L["trail_px"] is not None and reach(L["trail_px"])):
-            p["trail_act"] = True; p["trail_t"] = t + 60000
+            p["trail_act"] = True; p["trail_t"] = t + 60000; decisions.auto(p, "trail_start", p["stop"], p["stop"], t + 60000, c)
     if p.get("trail_act") and (tr["on"] or p.get("manual_trail")) and not p.get("stop_manual"):
         tl = p["lo"] + L["trail_dist"] if side < 0 else p["hi"] - L["trail_dist"]
         p["stop"] = min(p["stop"], tl) if side < 0 else max(p["stop"], tl)
@@ -128,7 +130,10 @@ def _update():
         if p["status"] == "open" and p.get("armed") and exit_cfg.load()["sr"]["on"]:
             try:
                 import sr_stop
+                _n0 = len(p.get("sr_hist", []))
                 if sr_stop.apply(p, kl, now, lambda m: print(m, flush=True)): changed = True
+                if len(p.get("sr_hist", [])) > _n0:
+                    _h = p["sr_hist"][-1]; decisions.auto(p, "sr", _h.get("from"), _h.get("to"), now, _h.get("px"), level=_h.get("level"), touches=_h.get("touches"))
             except Exception as e: print("sr_stop err", p.get("sym"), e, flush=True)
     if changed: save(ps)
     return ps
@@ -168,7 +173,7 @@ def snapshot():
     closed.sort(key=lambda p: -p["t_out"])
     return {"account": {"start": START, "lev": LEV, "stake": STAKE, "margin": STAKE / LEV, "realized": round(realized, 3), "unreal": round(unreal, 3),
                         "equity": round(START + realized + unreal, 3), "free": round(START + realized - margin, 3), "open_margin": round(margin, 3), "closed": len(closed)},
-            "open": opn, "closed": closed, "exit_cfg": exit_cfg.load(), "exit_default": exit_cfg.DEFAULT, "orders": _orders(), "shadow": _shadow(), "miss": _miss(), "ts": int(time.time() * 1000)}
+            "open": opn, "closed": closed, "journal": decisions.summary(), "exit_cfg": exit_cfg.load(), "exit_default": exit_cfg.DEFAULT, "orders": _orders(), "shadow": _shadow(), "miss": _miss(), "ts": int(time.time() * 1000)}
 
 def _orders():
     try:
@@ -235,12 +240,17 @@ def api_action(o):
                 exit_cfg.save(c)
             else: return _apply_stop()
         return snapshot()
+    if act == "journal_get":   # патч 11: выгрузка журнала (full=1 - со свечами и уровнями)
+        rows = decisions.all_rows(5000, int(o["id"]) if o.get("id") else None)
+        if not o.get("full"): rows = [{k: v for k, v in r.items() if k not in decisions.BIG} for r in rows]
+        return {"rows": rows, "n": len(rows)}
     pid = int(o.get("id", 0)); pct = float(o.get("pct", 0) or 0)
     with lock():
         ps = _update(); p = next((x for x in ps if x["id"] == pid and x["status"] == "open"), None)   # патч 7: сначала догоняем свечи до «сейчас»
         if not p: return {"error": "позиция не найдена или уже закрыта"}
         side = 1 if p["side"] == "long" else -1; px = price(p["sym"]); now = int(time.time() * 1000)
         if act == "close":
+            decisions.manual(p, px, kl, "close", p["stop"], px, o)
             close(p, px, now, "manual", True)
         elif act == "stop":   # патч 7: вводится ЦЕНА стопа
             try: sp = float(str(o.get("price", "")).replace(",", "."))
@@ -250,17 +260,31 @@ def api_action(o):
             if side < 0 and not (px * 1.0002 < sp < liq): return {"error": "шорт: стоп должен быть выше текущей цены %.8g и ниже ликвидации %.8g" % (px, liq)}
             old = p["stop"]; p["stop"] = sp; p["stop_manual"] = True; p["stop_manual_t"] = now; p["manual_stop_px"] = sp; p.pop("manual_stop", None); p.pop("manual_trail", None)
             p.setdefault("stop_hist", []).append({"t": now, "from": old, "to": sp, "by": "manual"})
+            decisions.manual(p, px, kl, "stop", old, sp, o)
+        elif act == "tp":   # патч 11: ручная цена цели (лимит), главнее настроек выхода
+            try: tg = float(str(o.get("price", "")).replace(",", "."))
+            except Exception: return {"error": "укажите цену цели числом"}
+            if side > 0 and not (tg > px * 1.0002): return {"error": "лонг: цель должна быть выше текущей цены %.8g" % px}
+            if side < 0 and not (tg < px * 0.9998): return {"error": "шорт: цель должна быть ниже текущей цены %.8g" % px}
+            old = exit_cfg.levels(p)["tp"]; p["tp_manual"] = tg; p["tp_manual_t"] = now
+            p.setdefault("tp_hist", []).append({"t": now, "from": old, "to": tg, "by": "manual"})
+            decisions.manual(p, px, kl, "tp", old, tg, o)
+        elif act == "tp_auto":
+            old = p.get("tp_manual"); p.pop("tp_manual", None); p.pop("tp_manual_t", None)
+            decisions.manual(p, px, kl, "tp_release", old, exit_cfg.levels(p)["tp"], o)
         elif act == "auto":
+            decisions.manual(p, px, kl, "release", p["stop"], p["stop"], o)
             p.pop("stop_manual", None); p.pop("manual_stop_px", None)
         elif act == "trail":
             if not (0.05 <= pct <= 20): return {"error": "расстояние трейлинга от 0.05 до 20 %"}
             dist = px * pct / 100
             if True:
                 p.pop("stop_manual", None); p.pop("manual_stop_px", None)
-                p["trail_dist"] = dist; p["armed"] = True; p["manual_trail"] = round(pct, 3)
+                _os = p["stop"]; p["trail_dist"] = dist; p["armed"] = True; p["manual_trail"] = round(pct, 3)
                 p["hi"] = max(p["hi"], px); p["lo"] = min(p["lo"], px)
                 tr = p["lo"] + dist if side < 0 else p["hi"] - dist
                 p["stop"] = min(p["stop"], tr) if side < 0 else max(p["stop"], tr)
+                decisions.manual(p, px, kl, "trail", _os, p["stop"], o, pct=pct)
         else: return {"error": "неизвестное действие"}
         save(ps)
     return snapshot()
