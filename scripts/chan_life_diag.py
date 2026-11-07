@@ -7,7 +7,7 @@ here = os.path.dirname(os.path.abspath(__file__))
 src = open(os.path.join(here, "chan_fixed_study.py"), encoding="utf-8").read().rstrip()
 assert src.endswith("main()"); src = src[:-len("main()")]
 sys.argv = ["chan_fixed_study.py", "5m", "60", "100"]
-ns = {"__name__": "chan_fixed_study"}; exec(compile(src, "chan_fixed_study.py", "exec"), ns)
+ns = {"__name__": "chan_fixed_study", "__file__": os.path.join(here, "chan_fixed_study.py")}; exec(compile(src, "chan_fixed_study.py", "exec"), ns)
 klines, atr14 = ns["klines"], ns["atr14"]; KS, FLAT, BO = 2.0, 0.03, 0.5
 
 def lives(o, h, l, c, atr, N, delay, need_out):
