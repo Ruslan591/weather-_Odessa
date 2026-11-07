@@ -63,6 +63,29 @@ def _context(p, px, kl, now):
         out["ctx_err"] = str(e)[:120]
     return out
 
+def _entry_reason(p):
+    """Причина входа в позицию: правило, тезис, тип канала и доводы бота из исходного ордера (для анализа ручных решений)."""
+    out = {"src": p.get("src"), "rule": p.get("rule"), "thesis": str(p.get("thesis") or "")[:240]}
+    try:
+        if p.get("order_id") is not None:
+            for o in json.load(open(os.path.join(D, "orders.json"), encoding="utf-8")):
+                if o.get("id") == p["order_id"]:
+                    out.update(ctype=o.get("ctype"), why=[str(w)[:160] for w in (o.get("why") or [])[:6]], rr=round(abs(o["tp"] - o["price"]) / max(abs(o["price"] - o["stop"]), 1e-12), 2), shadow=(o.get("shadow") or {}).get("agree")); break
+    except Exception: pass
+    return out
+
+def entry(o, action, kl, reason=None, latency_s=None, n=None, was=None, **kw):
+    """Решение пользователя по входу из Telegram: approve / approve_late / reject / missed. Контекст: параметры ордера, доводы бота и состояние рынка (5m, 1h, уровни)."""
+    try:
+        now = int(time.time() * 1000)
+        p = dict(sym=o["sym"] + "USDT", side=o["side"], entry=o["price"], R=abs(o["price"] - o["stop"]), id=o["id"], t_in=o.get("placed_t", now), atr1h=None)
+        ctx = _context(p, o["price"], kl, now); risk = abs(o["price"] - o["stop"]) / o["price"] * 100; rew = abs(o["tp"] - o["price"]) / o["price"] * 100
+        rec = dict(t=now, kind="entry", by="manual", action=action, order_id=o["id"], sym=o["sym"], side=o["side"], rule=o.get("rule"), ctype=o.get("ctype"), price=_r(o["price"], 8), stop=_r(o["stop"], 8), tp=_r(o["tp"], 8),
+                   atr=_r(o.get("atr") or 0, 6), risk_pct=round(risk, 3), rr=round(rew / risk, 2) if risk else None, reason=reason, latency_s=latency_s, n=n, was=was,
+                   why=[str(w)[:160] for w in (o.get("why") or [])[:6]], shadow=(o.get("shadow") or {}).get("agree"))
+        rec.update(kw); rec.update(ctx); _write(rec)
+    except Exception as e: print("decisions entry err", e, flush=True)
+
 def manual(p, px, kl, kind, old, new, o=None, **kw):
     """Ручное действие пользователя (kind: stop, tp, trail, release, tp_release, close). old/new - цены до и после. tag и note берутся из запроса o."""
     try:
@@ -71,7 +94,7 @@ def manual(p, px, kl, kind, old, new, o=None, **kw):
         rec.update(kind=kind, by="manual", **{"from": _r(old, 8) if old is not None else None, "to": _r(new, 8) if new is not None else None})
         if kind in ("stop", "tp", "trail"): rec.update(_dist(p, px, new, atr5))
         if kind in ("stop", "tp", "trail"): rec.update(_dist_old(p, px, old, atr5))
-        rec["tag"] = str(o.get("tag") or "")[:60]; rec["note"] = str(o.get("note") or "")[:300]; rec.update(kw); rec.update(ctx)
+        rec["tag"] = str(o.get("tag") or "")[:60]; rec["note"] = str(o.get("note") or "")[:300]; rec["entry"] = _entry_reason(p); rec.update(kw); rec.update(ctx)
         _write(rec)
     except Exception as e: print("decisions manual err", e, flush=True)
 
