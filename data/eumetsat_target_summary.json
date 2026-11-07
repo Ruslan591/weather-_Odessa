@@ -1,12 +1,17 @@
 {
-  "timestamp": "2026-11-07T01:13:53Z",
-  "status": "ok",
+  "timestamp": "2026-11-07T01:19:22Z",
+  "status": "suppressed_known_false_positive",
   "cloud_forecast_timestamp": "2026-11-07T00:15:00.000Z",
-  "target_id": 12,
-  "target_area_km2": 250.8,
-  "target_distance_km": 255.0,
-  "target_bearing_deg": 222.0,
-  "target_compass": "ЮЗ",
+  "suppressed_target": {
+    "signature": "-30_-20",
+    "area_km2": 56.0,
+    "distance_km": 35.6,
+    "bearing_deg": 238.0,
+    "compass": "ЮЗ",
+    "not_confirmed_streak": 6,
+    "total_not_confirmed": 89,
+    "excluded_since": "2026-11-06T23:37:57Z"
+  },
   "system": {
     "target_id": 0,
     "area_km2": 66075.7,
@@ -64,6 +69,7 @@
     }
   ],
   "system_suppressed_count": 2,
+  "verdict": "Известный шумовой объект в 36км ЮЗ (~56км²) — подавлено (не подтверждался 6 раз подряд). Отдельно: система синоптического масштаба (66076км²) в 13км Ю.",
   "frontal_tracks": [
     {
       "track_id": 2584,
@@ -321,43 +327,5 @@
       "front_type": null,
       "front_type_confidence": null
     }
-  ],
-  "also_suppressed_nearby": {
-    "signature": "-30_-20",
-    "area_km2": 56.0
-  },
-  "target_phase": {
-    "label": "безоблачно",
-    "cloud_fraction": 0.0
-  },
-  "existence": {
-    "modules": {
-      "ir_motion": {
-        "confirmed": false,
-        "timestamp": "2026-11-07T00:50:00.000Z"
-      },
-      "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-11-07T00:50:00.000Z"
-      },
-      "cloud_phase_type": {
-        "confirmed": false,
-        "timestamp": "2026-11-06T16:47:07Z"
-      }
-    },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
-  },
-  "phenomena": {
-    "precip_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-11-07T00:58:39Z"
-    },
-    "lightning_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-11-07T01:13:35Z"
-    }
-  },
-  "verdict": "CLM отметил цель в 255км ЮЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (66076км²) в 13км Ю."
+  ]
 }
