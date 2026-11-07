@@ -33,6 +33,7 @@ ns = {"__name__": "chan_tv_study"}; exec(compile(src, "chan_tv_study.py", "exec"
 klines, atr14, run_order, control_trades = (ns[k] for k in ("klines", "atr14", "run_order", "control_trades"))
 SYMS = ns["SYMS"]
 if os.environ.get("FSYNTH"): SYMS = SYMS[:2]
+if os.environ.get("SYMS"): SYMS = [x + "USDT" for x in os.environ["SYMS"].split(",")]
 DRAWS = 3; ns["DRAWS"] = DRAWS
 EXTRA = 0.03; MINTP = 0.0015; MAXB = 48; KS = 2.0; FLAT = 0.03; BODY_OUT = 0.5
 MODES = ("with", "flat", "counter", "user"); CONFS = ("c1c", "c1h", "pin", "eng", "dbl"); TG = ("q1", "mid", "q3", "opp"); STOPS = ("bot", "edge")
@@ -294,6 +295,9 @@ def main():
     print(hdr % ("N", "entry", "mode", "sel", "tgt", "stop", "fills", "win%", "net", "control", "diff/se", "half1", "half2"))
     fm = lambda r: "%-3d %-5s %-8s %-5s %d | %-4s %-4s | %5d %5.1f %+8.3f %+8.3f %+7.2f | %+7.3f %+7.3f" % (r[1][0], r[1][1], r[1][2], r[1][3], r[1][4], r[1][5], r[1][6], r[2], r[3], r[4], r[5], r[0] / r[6] if r[6] else 0, r[7], r[8])
     for r in rows[:30]: print(fm(r))
+    if os.environ.get("ALL"):
+        print("== ALL ROWS ==")
+        for r in rows: print(fm(r))
     print("... worst 5 ...")
     for r in rows[-5:]: print(fm(r))
     print("\n== mean net and mean diff vs control per entry/mode (all variants with >=30 fills, unweighted) ==")
