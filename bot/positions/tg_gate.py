@@ -91,7 +91,9 @@ def watch_needed(sym):
     """Нужно ли chan_orders считать канал для слежения по этой паре (только Монитор)."""
     if not ENABLED: return False
     m = load_mode()
-    return m["mode"] == "monitor" and not m.get("alerts_off")     # пауза алертов: канал для слежения не считаем
+    if m["mode"] != "monitor": return False
+    if not m.get("alerts_off"): return True
+    return any(x["status"] == "watching" for x in _wload()["items"])     # пауза алертов: считаем канал только пока идут слежения
 
 
 def _last(info):
@@ -125,7 +127,7 @@ def watch_scan(info, now):
     """Раз на новую закрытую свечу пары (из cycle). info: sym, t, o, h, l, c, atr, ctype, R, S, Rn, Sn, chan."""
     if not ENABLED: return
     m = load_mode()
-    if m["mode"] != "monitor" or m.get("alerts_off"): return     # alerts_off: новых алертов и обновлений слежения нет
+    if m["mode"] != "monitor": return
     W = _wload(); items = W["items"]; ch = False; sym = info["sym"]
     for x in items:
         if x["sym"] == sym and x["status"] == "watching" and info["t"] > (x.get("last") or {}).get("t", 0):
@@ -137,7 +139,7 @@ def watch_scan(info, now):
             elif now - x["t_follow"] > float(m.get("watch_hours", 4)) * 3600000: x.update(status="done", reason="прошло %s ч" % m.get("watch_hours", 4), t_end=now); emit({"type": "watch_end", "wid": x["id"], "why": "слежение длится дольше %s ч" % m.get("watch_hours", 4)})
             else: emit({"type": "watch_update", "wid": x["id"]})
     active = [x for x in items if x["status"] in ("alert", "watching")]
-    if info.get("ctype") and info.get("R") is not None and len(active) < int(m.get("max_watch", 3)) and not any(x["sym"] == sym for x in active) and info["R"] - info["S"] >= 1.5 * info["atr"]:
+    if not m.get("alerts_off") and info.get("ctype") and info.get("R") is not None and len(active) < int(m.get("max_watch", 3)) and not any(x["sym"] == sym for x in active) and info["R"] - info["S"] >= 1.5 * info["atr"]:
         down = info["ctype"] == "channel_down"; a = info["atr"]; main_line = "upper" if down else "lower"
         lines = [main_line] + ([("lower" if down else "upper")] if m.get("watch_counter", True) else [])   # линия по тренду, затем противоположная (коррекция / разворот)
         for line in lines:
@@ -153,10 +155,10 @@ def watch_scan(info, now):
     if ch: _wsave(W, now)
 
 
-def _end_watches(W, now, why):
+def _end_watches(W, now, why, statuses=("alert", "watching")):
     n = 0
     for x in W["items"]:
-        if x["status"] in ("alert", "watching"):
+        if x["status"] in statuses:
             x.update(status="done", reason=why, t_end=now); n += 1; emit({"type": "watch_end", "wid": x["id"], "why": why})
     return n
 
@@ -231,7 +233,7 @@ def apply(orders, now, cancel, touched, mkorder=None, price_fn=None):
             emit({"type": "mode", "mode": m["mode"], "until": m["until"], "why": "user", "cancelled": nc})
         elif t == "alerts":      # кнопка «Отключить / Включить алерты»: режим и таймер не трогаем
             off = not e.get("on", True); nc = 0
-            if off: nc = _end_watches(W, now, "алерты отключены вами"); wch = wch or bool(nc)
+            if off: nc = _end_watches(W, now, "алерты отключены вами", ("alert",)); wch = wch or bool(nc)
             m["alerts_off"] = off; m["missed"] = 0
             emit({"type": "alerts", "off": off, "cancelled": nc})
         elif t and t.startswith("w_"):
