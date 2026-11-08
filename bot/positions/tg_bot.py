@@ -72,8 +72,9 @@ def mode_text():
     return s
 
 
-MENU = [[{"text": "😴 Сон", "callback_data": "m:sleep"}, {"text": "👁 Монитор", "callback_data": "m:monitor"}, {"text": "🤖 Авто", "callback_data": "m:auto"}], [{"text": "💼 Счёт и позиции", "callback_data": "st"}]]
+MENU = [[{"text": "😴 Сон", "callback_data": "m:sleep"}, {"text": "👁 Монитор", "callback_data": "m:monitor"}, {"text": "🤖 Авто", "callback_data": "m:auto"}], [{"text": "💼 Счёт и позиции", "callback_data": "st"}, {"text": "📋 Ордера", "callback_data": "ol"}]]
 REFRESH = [[{"text": "🔄 Обновить", "callback_data": "st"}]]
+ORD_RULE = {"tg_market": "по рынку", "tg_limit": "лимит у линии", "chan_top": "авто: от верхней границы", "chan_bottom": "авто: от нижней границы", "retest_up": "авто: ретест после пробоя вверх", "retest_down": "авто: ретест после пробоя вниз"}
 
 
 def sg(x, nd=2, unit=""):
@@ -207,7 +208,7 @@ def handle_event(ev):
         api("sendMessage", chat_id=CHAT, text="😴 Ухожу в сон: %s.\nОтменено неподтверждённых ордеров: %d. Открытые позиции продолжает вести бот (стоп, безубыток, трейлинг).\nВключить снова: /mode" % (why, ev.get("cancelled", 0)), reply_markup={"inline_keyboard": MENU})
     elif t == "filled":
         o = load_order(oid)
-        if o: api("sendMessage", chat_id=CHAT, text="▶️ Ордер %s исполнен: %s %s по %s → позиция #%s" % (oid, o["sym"], o["side"].upper(), T.fmt_px(o.get("fill_px") or o["price"]), ev.get("pos")))
+        if o: api("sendMessage", chat_id=CHAT, text="▶️ Позиция #%s открыта: %s %s по %s (%s, ордер #%s)." % (ev.get("pos"), o["sym"], o["side"].upper(), T.fmt_px(o.get("fill_px") or o["price"]), ORD_RULE.get(o.get("rule"), "лимит"), oid), reply_markup={"inline_keyboard": REFRESH + MENU[:1]})
 
 
 def outbox_loop():
@@ -254,6 +255,27 @@ def status_text():
     return "\n".join(out)
 
 
+def last_px(sym):
+    kl = jload("/tmp/klcache/%s_5m_1000.json" % sym, [])
+    try: return float(kl[-1][4])
+    except Exception: return None
+
+
+def orders_list():
+    """Выставленные ордера (pending), которые ещё не исполнились: текст и кнопка отмены на каждый."""
+    pend = [o for o in jload(ORDF, []) if o.get("status") == "pending"]
+    if not pend: return "📋 Выставленных ордеров нет.", [[{"text": "🔄 Обновить", "callback_data": "ol"}]]
+    now = int(time.time() * 1000); lines = ["📋 Выставленные ордера (%d). Рыночные исполняются за секунды и сразу становятся позицией, лимитные ждут цену." % len(pend)]; kb = []
+    for o in sorted(pend, key=lambda x: x["id"]):
+        px = last_px(o["sym"]); dist = ""
+        if px: dist = " · цена ~%s (%s)" % (T.fmt_px(px), sg((o["price"] - px) / px * 100, 2, "%"))
+        left = max(0, int((o["expire_t"] - now) / 60000))
+        lines.append("#%d %s %s · %s · вход %s · стоп %s · цель %s%s · истекает через %d мин" % (o["id"], o["sym"], o["side"].upper(), ORD_RULE.get(o.get("rule"), o.get("rule")), T.fmt_px(o["price"]), T.fmt_px(o["stop"]), T.fmt_px(o["tp"]), dist, left))
+        kb.append([{"text": "❌ Отменить #%d %s %s" % (o["id"], o["sym"], o["side"].upper()), "callback_data": "oc:%d" % o["id"]}])
+    kb.append([{"text": "🔄 Обновить", "callback_data": "ol"}])
+    return "\n".join(lines), kb
+
+
 def on_callback(cq):
     data = cq.get("data", ""); msg = cq.get("message") or {}; mid = msg.get("message_id"); cid = cq["id"]
     if cq["from"]["id"] != ADMIN: api("answerCallbackQuery", callback_query_id=cid, text="нет доступа"); return
@@ -270,6 +292,24 @@ def on_callback(cq):
         api("answerCallbackQuery", callback_query_id=cid, text="Собираю данные…")
         try: api("editMessageText", chat_id=CHAT, message_id=mid, text=status_text(), reply_markup={"inline_keyboard": REFRESH + MENU[:1]})
         except Exception as e: log("status edit: %s" % e)
+    elif p[0] == "ol":
+        api("answerCallbackQuery", callback_query_id=cid); txt, kb = orders_list()
+        try: api("editMessageText", chat_id=CHAT, message_id=mid, text=txt, reply_markup={"inline_keyboard": kb})
+        except Exception as e: log("orders list edit: %s" % e)
+    elif p[0] == "oc":
+        oid = int(p[1]); api("answerCallbackQuery", callback_query_id=cid); o = load_order(oid)
+        if not o or o.get("status") != "pending": txt, kb = orders_list(); api("editMessageText", chat_id=CHAT, message_id=mid, text="Ордер #%d уже не активен.\n\n%s" % (oid, txt), reply_markup={"inline_keyboard": kb}); return
+        rows = [[{"text": REASONS[i][0], "callback_data": "oq:%d:%s" % (oid, REASONS[i][1])}, {"text": REASONS[i + 1][0], "callback_data": "oq:%d:%s" % (oid, REASONS[i + 1][1])}] for i in range(0, len(REASONS), 2)]
+        rows.append([{"text": "↩ назад к списку", "callback_data": "ol"}])
+        api("editMessageText", chat_id=CHAT, message_id=mid, text="Отменить ордер #%d %s %s. Причина отмены:" % (oid, o["sym"], o["side"].upper()), reply_markup={"inline_keyboard": rows})
+    elif p[0] == "oq":
+        oid = int(p[1]); code = p[2]
+        if code == "other":
+            pending_text.clear(); pending_text["oid"] = oid; api("answerCallbackQuery", callback_query_id=cid)
+            api("sendMessage", chat_id=CHAT, text="✍️ Причина отмены ордера %d: напишите одним сообщением (или /cancel, чтобы вернуться)." % oid, reply_markup={"force_reply": True, "input_field_placeholder": "причина"})
+        else:
+            pending_text.clear(); inbox({"type": "reject", "id": oid, "code": code}); api("answerCallbackQuery", callback_query_id=cid, text="Отменяю: %s" % REASON_RU.get(code, code))
+            api("editMessageText", chat_id=CHAT, message_id=mid, text="⏳ Отменяю ордер #%d (%s)… Через несколько секунд нажмите «Обновить»." % (oid, REASON_RU.get(code, code)), reply_markup={"inline_keyboard": [[{"text": "🔄 Обновить список", "callback_data": "ol"}]]})
     elif p[0] == "wa":
         wid = int(p[1]); inbox({"type": "w_follow", "wid": wid}); api("answerCallbackQuery", callback_query_id=cid, text="Слежу"); edit_watch(wid, "⏳ Принято…")
     elif p[0] == "wc":
@@ -341,13 +381,14 @@ def on_message(m):
         except Exception as e: log("restore buttons: %s" % e)
         return
     if t.startswith(("/start", "/mode", "/menu")): api("sendMessage", chat_id=CHAT, text=mode_text(), reply_markup={"inline_keyboard": MENU})
+    elif t.startswith(("/orders", "/ordera")): txt, kb = orders_list(); api("sendMessage", chat_id=CHAT, text=txt, reply_markup={"inline_keyboard": kb})
     elif t.startswith(("/status", "/balance")): api("sendMessage", chat_id=CHAT, text=status_text(), reply_markup={"inline_keyboard": REFRESH})
-    else: api("sendMessage", chat_id=CHAT, text="Команды: /mode (режим), /status (состояние).")
+    else: api("sendMessage", chat_id=CHAT, text="Команды: /mode (режим), /status (состояние), /orders (ордера и отмена).")
 
 
 def main():
     log("tg_bot start, POS_DIR=%s" % D)
-    try: api("setMyCommands", commands=[{"command": "mode", "description": "Режим: сон / монитор / авто"}, {"command": "status", "description": "Счёт, баланс, позиции"}])
+    try: api("setMyCommands", commands=[{"command": "mode", "description": "Режим: сон / монитор / авто"}, {"command": "status", "description": "Счёт, баланс, позиции"}, {"command": "orders", "description": "Выставленные ордера и отмена"}])
     except Exception as e: log("setMyCommands fail: %s" % e)
     threading.Thread(target=outbox_loop, daemon=True).start()
     offset = None
