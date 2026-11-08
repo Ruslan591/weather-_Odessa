@@ -47,7 +47,7 @@ def chan_color(ctype):
     return FLAT
 
 
-def render_order(o, kl, nbars=96, title=None):
+def render_order(o, kl, nbars=96, title=None, watch=False):
     """o: ордер из orders.json; kl: список свечей Binance [[t, o, h, l, c, v, ...], ...]. Возвращает PNG bytes."""
     import matplotlib
     matplotlib.use("Agg")
@@ -80,14 +80,19 @@ def render_order(o, kl, nbars=96, title=None):
         ax.fill_between(xs, lw, up, color=cc, alpha=0.08, zorder=1)
         ax.plot(xs, up, color=cc, lw=1.8, zorder=2); ax.plot(xs, lw, color=cc, lw=1.8, zorder=2); ax.plot(xs, md, color=cc, lw=1.0, ls="--", zorder=2)
         lows += [min(lw)]; highs += [max(up)]
-    en, st, tp = float(o["price"]), float(o["stop"]), float(o["tp"])
-    xp = X(o["placed_t"]); xe = X(o.get("expire_t") or (o["placed_t"] + 12 * BAR_MS))
-    ax.add_patch(Rectangle((xp, min(en, st)), xr - xp, abs(st - en), color="#ef5350", alpha=0.16, zorder=1))
-    ax.add_patch(Rectangle((xp, min(en, tp)), xr - xp, abs(tp - en), color="#26a69a", alpha=0.14, zorder=1))
-    labs = []
-    for y, col, name in ((en, "#e6edf3", "вход"), (st, "#ef5350", "стоп"), (tp, "#26a69a", "цель")):
-        ax.plot([xp, xr], [y, y], color=col, lw=1.3, ls="--" if name != "вход" else "-", zorder=5); labs.append([y, y, col, name])
-    lows += [st, tp, en]; highs += [st, tp, en]
+    xp = X(o["placed_t"]); labs = []
+    if watch:      # слежение: без входа/стопа/цели, отметка касания и текущая цена
+        lc = float(ks[-1][4]); labs.append([lc, lc, "#e6edf3", "цена"]); ax.plot([xp, xr], [lc, lc], color="#e6edf3", lw=1.0, ls=":", zorder=5)
+        if o.get("touch_px") is not None:
+            ax.plot([xp], [float(o["touch_px"])], marker="v" if o.get("side") == "short" else "^", color="#e3b341", ms=8, zorder=7); lows.append(float(o["touch_px"])); highs.append(float(o["touch_px"]))
+        lows.append(lc); highs.append(lc)
+    else:
+        en, st, tp = float(o["price"]), float(o["stop"]), float(o["tp"])
+        ax.add_patch(Rectangle((xp, min(en, st)), xr - xp, abs(st - en), color="#ef5350", alpha=0.16, zorder=1))
+        ax.add_patch(Rectangle((xp, min(en, tp)), xr - xp, abs(tp - en), color="#26a69a", alpha=0.14, zorder=1))
+        for y, col, name in ((en, "#e6edf3", "вход"), (st, "#ef5350", "стоп"), (tp, "#26a69a", "цель")):
+            ax.plot([xp, xr], [y, y], color=col, lw=1.3, ls="--" if name != "вход" else "-", zorder=5); labs.append([y, y, col, name])
+        lows += [st, tp, en]; highs += [st, tp, en]
     lo_, hi_ = min(lows), max(highs); pad = (hi_ - lo_) * 0.06 or lo_ * 0.001
     ax.set_ylim(lo_ - pad, hi_ + pad); gap = (hi_ - lo_ + 2 * pad) * 0.055
     labs.sort(key=lambda r: r[1])
@@ -102,9 +107,9 @@ def render_order(o, kl, nbars=96, title=None):
         g = idx0 + ii; w = vol_all[max(0, g - 19):g + 1]; ma.append(sum(w) / len(w))
     axv.plot([X(k[0]) for k in ks], ma, color="#e3b341", lw=1.1, zorder=4)
     last = [i for i, k in enumerate(ks) if k[0] <= o["placed_t"]][-1]; ratio = float(ks[last][5]) / ma[last] if ma[last] else 0
-    axv.text(0.005, 0.95, "объём · линия = среднее за 20 свечей · на свече выставления ×%.1f" % ratio, transform=axv.transAxes, color=TXT, fontsize=7, va="top")
+    axv.text(0.005, 0.95, ("объём · линия = среднее за 20 свечей · на свече касания ×%.1f" if watch else "объём · линия = среднее за 20 свечей · на свече выставления ×%.1f") % ratio, transform=axv.transAxes, color=TXT, fontsize=7, va="top")
     axv.set_ylim(0, max(float(k[5]) for k in ks) * 1.15)
-    ax.text(xp, 1.0, " лимит выставлен " + datetime.fromtimestamp(o["placed_t"] / 1000, tz).strftime("%H:%M"), transform=ax.get_xaxis_transform(), color=TXT, fontsize=7.5, va="top", ha="left")
+    ax.text(xp, 1.0, " " + o.get("mark", "лимит выставлен") + " " + datetime.fromtimestamp(o["placed_t"] / 1000, tz).strftime("%H:%M"), transform=ax.get_xaxis_transform(), color=TXT, fontsize=7.5, va="top", ha="left")
     ax.set_xlim(-1, xr + 14)
     step = 12; xt = [i for i in range(0, int(xr) + 1, step)]
     axv.set_xticks(xt); axv.set_xticklabels([datetime.fromtimestamp((x0 + i * BAR_MS) / 1000, tz).strftime("%H:%M") for i in xt], color=TXT, fontsize=7.5)
@@ -117,7 +122,7 @@ def render_order(o, kl, nbars=96, title=None):
     return buf.getvalue()
 
 
-RULE_RU = {"chan_top": "отбой от верхней границы канала", "chan_bottom": "отбой от нижней границы канала", "retest_up": "ретест после пробоя вверх", "retest_down": "ретест после пробоя вниз", "breakout_up": "пробой вверх", "breakout_down": "пробой вниз"}
+RULE_RU = {"tg_market": "по рынку (из слежения)", "tg_limit": "лимит у линии (из слежения)", "watch": "слежение за касанием", "chan_top": "отбой от верхней границы канала", "chan_bottom": "отбой от нижней границы канала", "retest_up": "ретест после пробоя вверх", "retest_down": "ретест после пробоя вниз", "breakout_up": "пробой вверх", "breakout_down": "пробой вниз"}
 
 
 def caption_order(o, acct="Регрессия"):
@@ -130,6 +135,28 @@ def caption_order(o, acct="Регрессия"):
         acct, o["sym"], "LONG" if s > 0 else "SHORT", fmt_px(en), fmt_px(st), risk, fmt_px(tp), rew, rew / risk if risk else 0, ctype, RULE_RU.get(o.get("rule"), o.get("rule", "")))
     if counter: txt += "\n⚠️ Направление сделки против направления канала (ретест/пробой)."
     return txt
+
+
+def render_watch(w, kl):
+    """График слежения: свечи, текущие границы канала, отметка касания, цена, объём."""
+    L = w.get("last") or {}; last_t = int(L.get("t") or w["t_alert"])
+    o = {"sym": w["sym"], "side": w["side"], "rule": "watch", "placed_t": int(w["t_alert"]), "expire_t": last_t + 2 * BAR_MS, "ctype": w.get("ctype"), "chan": w.get("chan"), "touch_px": w.get("touch_px"), "mark": "касание"}
+    return render_order(o, kl, title="%s  %s  слежение за касанием линии" % (w["sym"], str(w["side"]).upper()), watch=True)
+
+
+def caption_watch(w, kind):
+    """kind: alert | update."""
+    L = w.get("last") or {}; down = w["side"] == "short"; line = "верхнюю" if down else "нижнюю"; ct = "нисходящего" if down else "восходящего"; a = float(w.get("atr") or L.get("atr") or 0)
+    pos_ = ""
+    if L.get("R") is not None and L["R"] != L["S"]: pos_ = " · в канале на %d%% высоты" % round((float(L["c"]) - L["S"]) / (L["R"] - L["S"]) * 100)
+    if kind == "alert":
+        lp = float(w["line_px"]); tp_ = float(w["touch_px"]); d = (tp_ - lp) / a if (down and a) else ((lp - tp_) / a if a else 0)
+        how = "пересекла" if d > 0.05 else "коснулась"
+        return "⚡ %s: цена %s %s линию %s канала\nсвеча %s: экстремум %s, линия %s (%+.2f ATR)%s\nКанал %s. Следить или отклонить?" % (
+            w["sym"], how, line, ct, datetime.fromtimestamp(int(w["t_alert"]) / 1000, _tz()).strftime("%H:%M"), fmt_px(tp_), fmt_px(lp), d, pos_, "нисходящий" if down else "восходящий")
+    return "👁 %s: свеча %s закрыта, close %s%s\nДо линии: %.2f ATR · слежу %d-ю свечу (без ответа не более 3 подряд)" % (
+        w["sym"], datetime.fromtimestamp(int(L.get("t") or 0) / 1000, _tz()).strftime("%H:%M"), fmt_px(L.get("c") or 0), pos_,
+        ((float(L["R"]) - float(L["c"])) / a if down else (float(L["c"]) - float(L["S"])) / a) if a and L.get("R") is not None else 0, w.get("updates", 0))
 
 
 def _post(method, fields=None, files=None):
