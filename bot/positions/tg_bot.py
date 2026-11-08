@@ -74,7 +74,7 @@ def mode_text():
 
 MENU = [[{"text": "😴 Сон", "callback_data": "m:sleep"}, {"text": "👁 Монитор", "callback_data": "m:monitor"}, {"text": "🤖 Авто", "callback_data": "m:auto"}], [{"text": "💼 Счёт и позиции", "callback_data": "st"}, {"text": "📋 Ордера", "callback_data": "ol"}]]
 REFRESH = [[{"text": "🔄 Обновить", "callback_data": "st"}]]
-ORD_RULE = {"tg_market": "по рынку", "tg_limit": "лимит у линии", "chan_top": "авто: от верхней границы", "chan_bottom": "авто: от нижней границы", "retest_up": "авто: ретест после пробоя вверх", "retest_down": "авто: ретест после пробоя вниз"}
+ORD_RULE = {"tg_stop": "стоп-ордер на вход", "tg_market": "по рынку", "tg_limit": "лимит у линии", "chan_top": "авто: от верхней границы", "chan_bottom": "авто: от нижней границы", "retest_up": "авто: ретест после пробоя вверх", "retest_down": "авто: ретест после пробоя вниз"}
 
 
 def sg(x, nd=2, unit=""):
@@ -128,19 +128,55 @@ def edit_watch(wid, status, buttons=None):
     except Exception as e: log("edit watch fail %s: %s" % (wid, e))
 
 
-def target_options(w, entry):
-    """Цели по каналу на следующую свечу с оценкой прибыли и R:R (те же формулы, что при постановке в chan_orders)."""
+def plan_price(w, setup, entry):
+    """Цена входа для выбранного сетапа/типа входа (те же формулы, что _tg_mkorder в chan_orders). Возвращает (цена, ошибка)."""
     L = w.get("last") or {}
-    if L.get("Rn") is None: return []
-    a = float(L["atr"]); s = -1 if w["side"] == "short" else 1; R, S = float(L["Rn"]), float(L["Sn"]); H = R - S; line = R if s < 0 else S; px = float(L["c"])
-    price = line if (entry == "limit" and ((s < 0 and px < line) or (s > 0 and px > line))) else px
+    if L.get("Rn") is None: return None, "нет данных канала"
+    a = float(L["atr"]); R, S = float(L["Rn"]), float(L["Sn"]); px = float(L["c"])
+    up = (w.get("line") or ("upper" if w["side"] == "short" else "lower")) == "upper"; line = R if up else S; brk = setup == "k"
+    s = (1 if up else -1) if brk else (-1 if up else 1)
+    if brk:
+        if entry == "market": return px, None
+        if entry == "stop":
+            price = line + s * 0.15 * a
+            return (price, None) if (price - px) * s > 0.05 * a else (None, "цена уже за уровнем стоп-ордера (%s): выберите вход по рынку" % T.fmt_px(price))
+        price = line + s * 0.1 * a
+        return (price, None) if (px - price) * s >= 0.15 * a else (None, "ретест невозможен: цена ещё не ушла за линию (линия %s)" % T.fmt_px(line))
+    if entry == "market": return px, None
+    if entry == "limit": return (line if ((s < 0 and px < line) or (s > 0 and px > line)) else px), None
+    price = (float(L["l"]) if s < 0 else float(L["h"])) + s * 0.1 * a
+    return (price, None) if (price - px) * s > 0.05 * a else (None, "цена уже за уровнем стоп-ордера (%s): выберите вход по рынку" % T.fmt_px(price))
+
+
+def target_options(w, entry, setup="b"):
+    """Цели с оценкой прибыли и R:R. setup: b (отбой от линии) | k (пробой линии). Возвращает (список (подпись, код), ошибка)."""
+    price, err = plan_price(w, setup, entry)
+    if err: return [], err
+    L = w.get("last") or {}; a = float(L["atr"]); R, S = float(L["Rn"]), float(L["Sn"]); H = R - S
+    up = (w.get("line") or ("upper" if w["side"] == "short" else "lower")) == "upper"; line = R if up else S; brk = setup == "k"
+    s = (1 if up else -1) if brk else (-1 if up else 1)
     risk = max(1.2 * a, 0.005 * price); out = []
-    for code, label, f in (("opp", "противоположная линия", None), ("mid", "середина канала", 0.5), ("q1", "1/4 канала", 0.25), ("q3", "3/4 канала", 0.75)):
-        tp = ((S + 0.1 * a) if s < 0 else (R - 0.1 * a)) if f is None else ((R - f * H) if s < 0 else (S + f * H))
+    if brk: items = (("h05", "0.5 высоты канала за линией", 0.5), ("h1", "1 высота канала за линией", 1.0), ("h15", "1.5 высоты канала за линией", 1.5))
+    else: items = (("opp", "противоположная линия", None), ("mid", "середина канала", 0.5), ("q1", "1/4 канала", 0.25), ("q3", "3/4 канала", 0.75))
+    for code, label, f in items:
+        if brk: tp = line + s * f * H
+        else: tp = ((S + 0.1 * a) if s < 0 else (R - 0.1 * a)) if f is None else ((R - f * H) if s < 0 else (S + f * H))
         gain = (tp - price) * s
         if gain < max(0.0015 * price, 0.5 * a): out.append(("%s · уже пройдена/слишком близко" % label, "x")); continue
         out.append(("%s · +%.2f%% · R:R %.1f" % (label, gain / price * 100, gain / risk), code))
-    return out
+    return out, None
+
+
+def setup_menu(w, wid):
+    up = (w.get("line") or ("upper" if w["side"] == "short" else "lower")) == "upper"
+    bs, ks = ("SHORT", "LONG") if up else ("LONG", "SHORT"); ln = "верхней" if up else "нижней"
+    return [[{"text": "↩️ Отбой: %s от %s линии" % (bs, ln), "callback_data": "wps:%d:b" % wid}], [{"text": "💥 Пробой: %s через %s линию" % (ks, "верхнюю" if up else "нижнюю"), "callback_data": "wps:%d:k" % wid}], [{"text": "↩ назад", "callback_data": "wpb:%d" % wid}]]
+
+
+def entry_menu(wid, setup):
+    if setup == "k": rows = [[{"text": "📈 По рынку", "callback_data": "wpe:%d:k:market" % wid}], [{"text": "🎯 Стоп-ордер за линией", "callback_data": "wpe:%d:k:stop" % wid}], [{"text": "📌 Лимит на ретесте", "callback_data": "wpe:%d:k:limit" % wid}]]
+    else: rows = [[{"text": "📈 По рынку", "callback_data": "wpe:%d:b:market" % wid}], [{"text": "📌 Лимит у линии", "callback_data": "wpe:%d:b:limit" % wid}], [{"text": "🎯 Стоп-ордер (после движения от линии)", "callback_data": "wpe:%d:b:stop" % wid}]]
+    return rows + [[{"text": "↩ назад", "callback_data": "wp:%d" % wid}]]
 
 
 def send_order(o, kind):
@@ -330,17 +366,26 @@ def on_callback(cq):
         else:
             pending_text.clear(); inbox({"type": "w_reject", "wid": wid, "code": code}); api("answerCallbackQuery", callback_query_id=cid, text="Записал: %s" % REASON_RU.get(code, code)); edit_watch(wid, "⏳ Отклоняю (%s)…" % REASON_RU.get(code, code))
     elif p[0] == "wp":
+        wid = int(p[1]); w = watch_get(wid)
+        if not w: api("answerCallbackQuery", callback_query_id=cid, text="слежение уже не актуально"); return
+        api("answerCallbackQuery", callback_query_id=cid)
+        api("editMessageReplyMarkup", chat_id=CHAT, message_id=mid, reply_markup={"inline_keyboard": setup_menu(w, wid)})
+    elif p[0] == "wps":
         wid = int(p[1]); api("answerCallbackQuery", callback_query_id=cid)
-        api("editMessageReplyMarkup", chat_id=CHAT, message_id=mid, reply_markup={"inline_keyboard": [[{"text": "📈 По рынку", "callback_data": "wpe:%d:market" % wid}, {"text": "📌 Лимит у линии", "callback_data": "wpe:%d:limit" % wid}], [{"text": "↩ назад", "callback_data": "wpb:%d" % wid}]]})
+        api("editMessageReplyMarkup", chat_id=CHAT, message_id=mid, reply_markup={"inline_keyboard": entry_menu(wid, p[2])})
     elif p[0] == "wpb":
         wid = int(p[1]); api("answerCallbackQuery", callback_query_id=cid); api("editMessageReplyMarkup", chat_id=CHAT, message_id=mid, reply_markup={"inline_keyboard": watch_buttons(wid, "update")})
     elif p[0] == "wpe":
-        wid = int(p[1]); entry = p[2]; w = watch_get(wid); api("answerCallbackQuery", callback_query_id=cid)
-        opts = target_options(w, entry) if w else []
-        rows = [[{"text": lab, "callback_data": "wpt:%d:%s:%s" % (wid, entry, code)}] for lab, code in opts if code != "x"] + [[{"text": lab, "callback_data": "wpe:%d:%s" % (wid, entry)}] for lab, code in opts if code == "x"]
-        rows.append([{"text": "↩ назад", "callback_data": "wp:%d" % wid}]); api("editMessageReplyMarkup", chat_id=CHAT, message_id=mid, reply_markup={"inline_keyboard": rows})
+        wid = int(p[1]); setup, entry = (p[2], p[3]) if len(p) >= 4 else ("b", p[2]); w = watch_get(wid)     # старый формат: wpe:wid:entry = отбой
+        opts, err = target_options(w, entry, setup) if w else ([], "слежение уже не актуально")
+        if err: api("answerCallbackQuery", callback_query_id=cid, text=err, show_alert="true"); return
+        api("answerCallbackQuery", callback_query_id=cid)
+        rows = [[{"text": lab, "callback_data": "wpt:%d:%s:%s:%s" % (wid, setup, entry, code)}] for lab, code in opts if code != "x"] + [[{"text": lab, "callback_data": "wpe:%d:%s:%s" % (wid, setup, entry)}] for lab, code in opts if code == "x"]
+        rows.append([{"text": "↩ назад", "callback_data": "wps:%d:%s" % (wid, setup)}]); api("editMessageReplyMarkup", chat_id=CHAT, message_id=mid, reply_markup={"inline_keyboard": rows})
     elif p[0] == "wpt":
-        wid = int(p[1]); entry = p[2]; tgt = p[3]; inbox({"type": "w_place", "wid": wid, "entry": entry, "target": tgt}); api("answerCallbackQuery", callback_query_id=cid, text="Ставлю ордер…"); edit_watch(wid, "⏳ Ставлю ордер (%s, цель: %s)…" % ("по рынку" if entry == "market" else "лимит у линии", tgt))
+        wid = int(p[1]); setup, entry, tgt = (p[2], p[3], p[4]) if len(p) >= 5 else ("b", p[2], p[3])     # старый формат: wpt:wid:entry:target = отбой
+        inbox({"type": "w_place", "wid": wid, "entry": entry, "target": tgt, "setup": "breakout" if setup == "k" else "bounce"}); api("answerCallbackQuery", callback_query_id=cid, text="Ставлю ордер…")
+        edit_watch(wid, "⏳ Ставлю ордер (%s, %s, цель: %s)…" % ("пробой" if setup == "k" else "отбой", {"market": "по рынку", "limit": "лимит", "stop": "стоп-ордер"}.get(entry, entry), tgt))
     elif p[0] == "mb":
         api("answerCallbackQuery", callback_query_id=cid); api("editMessageText", chat_id=CHAT, message_id=mid, text=mode_text(), reply_markup={"inline_keyboard": MENU})
     elif p[0] == "a":
