@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-08T09:04:28Z",
+  "timestamp": "2026-11-08T09:08:21Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-11-08T08:30:00.000Z",
   "target_id": 5,
@@ -19,7 +19,7 @@
     "frontlike": false,
     "window_spanning": false,
     "phase_label": "безоблачно",
-    "cloud_fraction": 0.102,
+    "cloud_fraction": 0.117,
     "has_precip": false,
     "has_lightning": false
   },
@@ -53,7 +53,7 @@
       "frontlike": false,
       "phase_label": null,
       "type_label": null,
-      "has_precip": null,
+      "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": true,
       "geocolour_confirmed": true
@@ -108,9 +108,9 @@
       "elongation_axis_compass": "Ю-С",
       "frontlike": false,
       "window_spanning": false,
-      "phase_label": null,
-      "type_label": null,
-      "has_precip": null,
+      "phase_label": "средняя водяная",
+      "type_label": "плотная/высокая",
+      "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": true,
       "geocolour_confirmed": true
@@ -148,10 +148,10 @@
       "area_km2": 17337.9,
       "axis_deg": 93.0,
       "aspect_ratio": 2.33,
-      "velocity_kmh": 23.4,
-      "movement_bearing_deg": 152.1,
+      "velocity_kmh": 25.9,
+      "movement_bearing_deg": 145.4,
       "movement_bearing_compass": "ЮВ",
-      "axis_rotation_deg": 4.0,
+      "axis_rotation_deg": 5.0,
       "tile": "near",
       "ahead_station": null,
       "behind_station": {
@@ -165,15 +165,32 @@
         "icao": null,
         "usaf_raw": "335870",
         "source": "synop",
-        "along_km": -103.7,
-        "perp_km": -21.6,
+        "along_km": -105.5,
+        "perp_km": -9.3,
         "dist_km": 105.9
       },
       "direction_compass": "С",
       "current_target_id": 12,
       "has_precip": false,
       "has_lightning": false,
-      "ahead_obs": null,
+      "ahead_obs": {
+        "obs_time": "2026-11-08T06:00:00Z",
+        "raw": "33761,2026,11,08,06,00,AAXX 08061 33761 42/70 2//00 11020 21031 30064 40297 53003 82030 333 21026==",
+        "temp": -2.0,
+        "station_pressure": 1006.4,
+        "sea_pressure": 1029.7,
+        "pressure_tendency_code": "3",
+        "pressure_tendency_value": 0.3,
+        "total_cloud_okta": null,
+        "wind_dir_deg": null,
+        "wind_speed_ms": null,
+        "precip_mm": null,
+        "precip_period_hours": null,
+        "present_weather_code": null,
+        "present_weather_label": null,
+        "is_extreme_weather": false,
+        "obs_source": "SYNOP"
+      },
       "behind_obs": {
         "obs_time": "2026-11-08T08:00:00Z",
         "raw": "33587,2026,11,08,08,00,AAXX 08081 33587 22/// /3003 10005 21022 30021 40295 52008 333 60005 70000 91004==",
@@ -192,8 +209,8 @@
         "is_extreme_weather": false,
         "obs_source": "SYNOP"
       },
-      "front_type": null,
-      "front_type_confidence": null
+      "front_type": "warm",
+      "front_type_confidence": "station"
     }
   ],
   "also_suppressed_nearby": {
@@ -202,7 +219,7 @@
   },
   "target_phase": {
     "label": "безоблачно",
-    "cloud_fraction": 0.0
+    "cloud_fraction": 0.833
   },
   "existence": {
     "modules": {
@@ -212,26 +229,26 @@
       },
       "geocolour_motion": {
         "confirmed": false,
-        "timestamp": "2026-11-08T08:30:00.000Z"
+        "timestamp": "2026-11-08T08:40:00.000Z"
       },
       "cloud_phase_type": {
-        "confirmed": false,
-        "timestamp": "2026-11-08T08:47:10Z"
+        "confirmed": true,
+        "timestamp": "2026-11-08T09:07:11Z"
       }
     },
-    "votes_confirmed": 1,
-    "votes_not_confirmed": 2,
+    "votes_confirmed": 2,
+    "votes_not_confirmed": 1,
     "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
       "confirmed": false,
-      "timestamp": "2026-11-08T08:48:01Z"
+      "timestamp": "2026-11-08T09:07:53Z"
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-11-08T08:57:05Z"
+      "timestamp": "2026-11-08T09:08:02Z"
     }
   },
-  "verdict": "Цель в 95км СВ, безоблачно — каналы расходятся: ir_motion подтверждают, geocolour_motion/cloud_phase_type нет. Отдельно: система синоптического масштаба (48758км²) в 38км ЮВ."
+  "verdict": "Цель в 95км СВ, безоблачно — каналы расходятся: ir_motion/cloud_phase_type подтверждают, geocolour_motion нет. Отдельно: система синоптического масштаба (48758км²) в 38км ЮВ."
 }
