@@ -137,7 +137,7 @@ def target_options(w, entry):
     for code, label, f in (("opp", "противоположная линия", None), ("mid", "середина канала", 0.5), ("q1", "1/4 канала", 0.25), ("q3", "3/4 канала", 0.75)):
         tp = ((S + 0.1 * a) if s < 0 else (R - 0.1 * a)) if f is None else ((R - f * H) if s < 0 else (S + f * H))
         gain = (tp - price) * s
-        if gain <= 0: out.append(("%s · уже пройдена" % label, "x")); continue
+        if gain < max(0.0015 * price, 0.5 * a): out.append(("%s · уже пройдена/слишком близко" % label, "x")); continue
         out.append(("%s · +%.2f%% · R:R %.1f" % (label, gain / price * 100, gain / risk), code))
     return out
 
