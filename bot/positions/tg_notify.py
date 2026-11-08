@@ -86,6 +86,12 @@ def render_order(o, kl, nbars=96, title=None, watch=False):
         if o.get("touch_px") is not None:
             ax.plot([xp], [float(o["touch_px"])], marker="v" if o.get("side") == "short" else "^", color="#e3b341", ms=8, zorder=7); lows.append(float(o["touch_px"])); highs.append(float(o["touch_px"]))
         lows.append(lc); highs.append(lc)
+        ln = (ch.get("upper") if o.get("side") == "short" else ch.get("lower")) if ch else None
+        if ln:      # свечи, закрывшиеся за линией (по текущей линии): кружки на закрытии
+            for k in ks:
+                if k[0] < o["placed_t"]: continue
+                v = ln["p1"] + ln["s"] * (k[0] - ln["t1"]); cl = float(k[4])
+                if (o["side"] == "short" and cl > v) or (o["side"] == "long" and cl < v): ax.plot([X(k[0])], [cl], marker="o", mfc="none", mec="#e3b341", ms=6, mew=1.4, zorder=7)
     else:
         en, st, tp = float(o["price"]), float(o["stop"]), float(o["tp"])
         ax.add_patch(Rectangle((xp, min(en, st)), xr - xp, abs(st - en), color="#ef5350", alpha=0.16, zorder=1))
@@ -140,23 +146,32 @@ def caption_order(o, acct="Регрессия"):
 def render_watch(w, kl):
     """График слежения: свечи, текущие границы канала, отметка касания, цена, объём."""
     L = w.get("last") or {}; last_t = int(L.get("t") or w["t_alert"])
-    o = {"sym": w["sym"], "side": w["side"], "rule": "watch", "placed_t": int(w["t_alert"]), "expire_t": last_t + 2 * BAR_MS, "ctype": w.get("ctype"), "chan": w.get("chan"), "touch_px": w.get("touch_px"), "mark": "касание"}
+    mark = {"touch": "касание", "cross": "выход за линию", "break": "начало пробоя", "back": "выход и возврат"}.get(w.get("state0"), "касание")
+    o = {"sym": w["sym"], "side": w["side"], "rule": "watch", "placed_t": int(w.get("t_ref") or w["t_alert"]), "expire_t": last_t + 2 * BAR_MS, "ctype": w.get("ctype"), "chan": w.get("chan"), "touch_px": w.get("touch_px"), "mark": mark}
     return render_order(o, kl, title="%s  %s  слежение за касанием линии" % (w["sym"], str(w["side"]).upper()), watch=True)
 
 
+STATE_RU = {"touch": "касание линии", "cross": "свеча закрылась за линией (первая)", "break": "ПРОБОЙ ФОРМИРУЕТСЯ: несколько закрытий за линией", "back": "выход за линию и возврат внутрь", "away": "цена отошла от линии"}
+
+
 def caption_watch(w, kind):
-    """kind: alert | update."""
+    """kind: alert | update. Состояние у линии считается по текущим линиям канала на последних свечах."""
     L = w.get("last") or {}; down = w["side"] == "short"; line = "верхнюю" if down else "нижнюю"; ct = "нисходящего" if down else "восходящего"; a = float(w.get("atr") or L.get("atr") or 0)
+    hm = lambda ms: datetime.fromtimestamp(int(ms) / 1000, _tz()).strftime("%H:%M")
     pos_ = ""
     if L.get("R") is not None and L["R"] != L["S"]: pos_ = " · в канале на %d%% высоты" % round((float(L["c"]) - L["S"]) / (L["R"] - L["S"]) * 100)
     if kind == "alert":
-        lp = float(w["line_px"]); tp_ = float(w["touch_px"]); d = (tp_ - lp) / a if (down and a) else ((lp - tp_) / a if a else 0)
-        how = "пересекла" if d > 0.05 else "коснулась"
-        return "⚡ %s: цена %s %s линию %s канала\nсвеча %s: экстремум %s, линия %s (%+.2f ATR)%s\nКанал %s. Следить или отклонить?" % (
-            w["sym"], how, line, ct, datetime.fromtimestamp(int(w["t_alert"]) / 1000, _tz()).strftime("%H:%M"), fmt_px(tp_), fmt_px(lp), d, pos_, "нисходящий" if down else "восходящий")
-    return "👁 %s: свеча %s закрыта, close %s%s\nДо линии: %.2f ATR · слежу %d-ю свечу (без ответа не более 3 подряд)" % (
-        w["sym"], datetime.fromtimestamp(int(L.get("t") or 0) / 1000, _tz()).strftime("%H:%M"), fmt_px(L.get("c") or 0), pos_,
-        ((float(L["R"]) - float(L["c"])) / a if down else (float(L["c"]) - float(L["S"])) / a) if a and L.get("R") is not None else 0, w.get("updates", 0))
+        st = w.get("state0", "touch"); lp = float(w["line_px"]); sp = float(w["touch_px"]); nb = w.get("n_beyond", 0); nr = w.get("n_run", 1)
+        head = {"touch": "касается", "cross": "пересекла", "break": "ПРОБИВАЕТ", "back": "вышла за и вернулась к"}.get(st, "у")
+        if st == "touch": body = "свеча %s коснулась линии: экстремум %s, линия %s" % (hm(L.get("t") or w["t_alert"]), fmt_px(sp), fmt_px(lp))
+        elif st == "back": body = "%d св. закрылись за линией, последняя вернулась внутрь; эпизод с %s (экстремум %s)" % (nb, hm(w.get("t_ref") or w["t_alert"]), fmt_px(sp))
+        else: body = "%d из %d последних свечей закрылись за линией; эпизод с %s (экстремум %s, линия сейчас %s)" % (nb, nr, hm(w.get("t_ref") or w["t_alert"]), fmt_px(sp), fmt_px(lp))
+        return "⚡ %s: цена %s %s линию %s канала\n%s%s\nКанал %s. Следить или отклонить?" % (w["sym"], head, line if st != "back" else "", ct, body, pos_, "нисходящий" if down else "восходящий")
+    d = ((float(L["R"]) - float(L["c"])) / a if down else (float(L["c"]) - float(L["S"])) / a) if a and L.get("R") is not None else 0
+    txt = "👁 %s: свеча %s закрыта, close %s%s\nСостояние: %s · до линии %+.2f ATR (минус = за линией) · слежу %d-ю свечу" % (w["sym"], hm(L.get("t") or 0), fmt_px(L.get("c") or 0), pos_, STATE_RU.get(w.get("state"), "—"), d, w.get("updates", 0))
+    sh = w.get("shift")
+    if sh is not None and abs(sh) >= 0.5: txt += "\n⚠️ Канал перестроился: линия сместилась на %+.1f ATR за последнюю свечу (картинка показывает новые линии)." % sh
+    return txt
 
 
 def _post(method, fields=None, files=None):
