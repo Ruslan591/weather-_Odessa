@@ -15,8 +15,9 @@ OUTF = os.path.join(D, "tg_outbox.jsonl"); OUTOFF = os.path.join(D, "tg_out.off"
 MODEF = os.path.join(D, "tg_mode.json"); MSGF = os.path.join(D, "tg_msgs.json"); ORDF = os.path.join(D, "orders.json"); POSF = os.path.join(D, "positions.json")
 ENV = T._env(); ADMIN = int(ENV["TG_USER_ID"]); CHAT = str(ENV["TG_CHAT_ID"])
 MODE_RU = {"sleep": "😴 Сон", "monitor": "👁 Монитор", "auto": "🤖 Авто"}
-REASONS = [("против импульса", "impulse"), ("пробой границы", "brk"), ("флет", "flat"), ("слабый объём", "vol"), ("уровень не тот", "level"), ("далеко/поздно", "late"), ("другое", "other"), ("без причины", "none")]
-REASON_RU = {c: t for t, c in REASONS}
+REASONS = [("против импульса", "impulse"), ("пробой границы", "brk"), ("флет", "flat"), ("слабый объём", "vol"), ("уровень не тот", "level"), ("цена не дошла до уровня", "far"), ("поздно: точка пройдена", "passed"), ("не в ту сторону", "wrongdir"), ("другое (написать)", "other"), ("без причины", "none")]
+REASON_RU = {c: t for t, c in REASONS}; REASON_RU.update({"late": "далеко/поздно (старый код)", "other": "другое"})
+pending_text = {}   # oid ордера, по которому ждём текст причины («другое»)
 lock = threading.Lock()
 
 
@@ -65,13 +66,29 @@ def mode_text():
     if m["mode"] == "monitor":
         s += "\nПропущено подряд: %d из %d" % (m.get("missed", 0), m.get("max_missed", 3))
         if m.get("until"): s += "\nТаймер до %s" % hhmm(m["until"])
-    s += {"sleep": "\nНовых ордеров нет, уведомлений о новых точках нет. Выставленные ордера и позиции продолжают работать.",
+    s += {"sleep": "\nНовых ордеров нет, уведомлений о новых точках нет. Открытые позиции продолжает вести бот; неподтверждённые вами ордера отменены.",
           "monitor": "\nНайденные точки приходят вам на решение; без ответа ордер не ставится.",
           "auto": "\nБот ставит ордера сам и присылает график."}.get(m["mode"], "")
     return s
 
 
-MENU = [[{"text": "😴 Сон", "callback_data": "m:sleep"}, {"text": "👁 Монитор", "callback_data": "m:monitor"}, {"text": "🤖 Авто", "callback_data": "m:auto"}]]
+MENU = [[{"text": "😴 Сон", "callback_data": "m:sleep"}, {"text": "👁 Монитор", "callback_data": "m:monitor"}, {"text": "🤖 Авто", "callback_data": "m:auto"}], [{"text": "💼 Счёт и позиции", "callback_data": "st"}]]
+REFRESH = [[{"text": "🔄 Обновить", "callback_data": "st"}]]
+
+
+def sg(x, nd=2, unit=""):
+    return ("%+." + str(nd) + "f%s") % (x, unit)
+
+
+def fetch_snapshot():
+    import urllib.request
+    return json.load(urllib.request.urlopen("http://127.0.0.1:%s/api/claude" % os.environ.get("ACCT_PORT", "18102"), timeout=40))
+
+
+def order_buttons(oid):
+    rec = msgs_load().get(str(oid), {})
+    if rec.get("kind") == "proposal": return [[{"text": "✅ Поставить", "callback_data": "a:%d" % oid}, {"text": "❌ Отклонить", "callback_data": "r:%d" % oid}]]
+    return [[{"text": "❌ Отменить ордер", "callback_data": "r:%d" % oid}]]
 
 
 def send_order(o, kind):
@@ -115,10 +132,13 @@ def handle_event(ev):
     elif t == "missed":
         m = mode_state(); edit_order(oid, "⏱ Пропущено (нет ответа). Подряд: %d из %d" % (ev.get("n", 0), m.get("max_missed", 3)))
     elif t == "stale": edit_order(oid, "↻ Устарело: %s" % ev.get("why", ""))
-    elif t == "mode": api("sendMessage", chat_id=CHAT, text=mode_text(), reply_markup={"inline_keyboard": MENU})
+    elif t == "mode":
+        txt = mode_text()
+        if ev.get("mode") == "sleep": txt += "\nОтменено неподтверждённых ордеров: %d." % ev.get("cancelled", 0)
+        api("sendMessage", chat_id=CHAT, text=txt, reply_markup={"inline_keyboard": MENU})
     elif t == "sleep":
         why = {"missed": "пропущено подряд %s предложений" % ev.get("n"), "timer": "истёк таймер монитора"}.get(ev.get("why"), "")
-        api("sendMessage", chat_id=CHAT, text="😴 Ухожу в сон: %s.\nНовых ордеров нет. Включить снова: /mode" % why, reply_markup={"inline_keyboard": MENU})
+        api("sendMessage", chat_id=CHAT, text="😴 Ухожу в сон: %s.\nОтменено неподтверждённых ордеров: %d. Открытые позиции продолжает вести бот (стоп, безубыток, трейлинг).\nВключить снова: /mode" % (why, ev.get("cancelled", 0)), reply_markup={"inline_keyboard": MENU})
     elif t == "filled":
         o = load_order(oid)
         if o: api("sendMessage", chat_id=CHAT, text="▶️ Ордер %s исполнен: %s %s по %s → позиция #%s" % (oid, o["sym"], o["side"].upper(), T.fmt_px(o.get("fill_px") or o["price"]), ev.get("pos")))
@@ -146,11 +166,24 @@ def outbox_loop():
 
 
 def status_text():
+    """Карточка счёта: режим, баланс бумажного счёта (pos.snapshot через acct-api), открытые позиции (пара, net%, pnl, БУ). Входы/стопы/цели без графика не показываем."""
     orders = jload(ORDF, []); pend = sum(1 for o in orders if o.get("status") == "pending"); prop = sum(1 for o in orders if o.get("status") == "proposed")
-    ps = jload(POSF, []); op = [p for p in ps if p.get("status") == "open"]
-    s = mode_text() + "\n\nОрдеров ждут исполнения: %d, ждут вашего решения: %d, открытых позиций: %d" % (pend, prop, len(op))
-    for p in op[:6]: s += "\n· %s %s вход %s стоп %s цель %s" % (p["sym"], p["side"].upper(), T.fmt_px(p["entry"]), T.fmt_px(p["stop"]), T.fmt_px(p["tp"]))
-    return s
+    out = [mode_text(), ""]
+    try:
+        sn = fetch_snapshot(); a = sn["account"]; opn = sn.get("open", [])
+        tot = a["equity"] - a["start"]; totp = tot / a["start"] * 100
+        out += ["💼 Счёт «%s» (бумажный: старт %.0f $, плечо %d×, ставка %.0f $)" % (ACCT, a["start"], a["lev"], a["stake"]),
+                "%.2f $   %s $ (%s)" % (a["equity"], sg(tot), sg(totp, 2, "%")),
+                "Баланс кошелька: %.2f $" % (a["start"] + a["realized"]), "Нереализованный PnL: %s $" % sg(a["unreal"]),
+                "В марже: %.2f $" % a["open_margin"], "Доступно: %.2f $" % a["free"], "",
+                "Ордеров ждут исполнения: %d · ждут вашего решения: %d" % (pend, prop), "Открытых позиций: %d" % len(opn)]
+        for p in opn[:8]:
+            be = "БУ: да" if p.get("armed") else "БУ: нет"
+            part = " · часть закрыта" if p.get("rem", 1) < 0.999 else ""
+            out.append("· %s %s · net %s · %s $ · %s%s" % (str(p["sym"]).replace("USDT", ""), p["side"].upper(), sg(p["unreal_pct"], 2, "%"), sg(p["unreal_usd"]), be, part))
+    except Exception as e:
+        log("snapshot fail: %s" % e); out += ["Ордеров ждут исполнения: %d · ждут вашего решения: %d" % (pend, prop), "⚠️ Баланс и позиции сейчас получить не удалось."]
+    return "\n".join(out)
 
 
 def on_callback(cq):
@@ -165,6 +198,10 @@ def on_callback(cq):
             inbox({"type": "mode", "mode": p[1]}); api("answerCallbackQuery", callback_query_id=cid, text="Переключаю: %s" % MODE_RU[p[1]])
     elif p[0] == "mt":
         h = float(p[1]); inbox({"type": "mode", "mode": "monitor", "hours": h or None}); api("answerCallbackQuery", callback_query_id=cid, text="Монитор включается")
+    elif p[0] == "st":
+        api("answerCallbackQuery", callback_query_id=cid, text="Собираю данные…")
+        try: api("editMessageText", chat_id=CHAT, message_id=mid, text=status_text(), reply_markup={"inline_keyboard": REFRESH + MENU[:1]})
+        except Exception as e: log("status edit: %s" % e)
     elif p[0] == "mb":
         api("answerCallbackQuery", callback_query_id=cid); api("editMessageText", chat_id=CHAT, message_id=mid, text=mode_text(), reply_markup={"inline_keyboard": MENU})
     elif p[0] == "a":
@@ -177,24 +214,33 @@ def on_callback(cq):
     elif p[0] == "rr":
         oid = int(p[1]); code = p[2]
         if code == "back":
-            rec = msgs_load().get(str(oid), {}); o = load_order(oid)
-            btn = [[{"text": "✅ Поставить", "callback_data": "a:%d" % oid}, {"text": "❌ Отклонить", "callback_data": "r:%d" % oid}]] if rec.get("kind") == "proposal" else [[{"text": "❌ Отменить ордер", "callback_data": "r:%d" % oid}]]
-            api("answerCallbackQuery", callback_query_id=cid); api("editMessageReplyMarkup", chat_id=CHAT, message_id=mid, reply_markup={"inline_keyboard": btn})
+            pending_text.clear(); api("answerCallbackQuery", callback_query_id=cid); api("editMessageReplyMarkup", chat_id=CHAT, message_id=mid, reply_markup={"inline_keyboard": order_buttons(oid)})
+        elif code == "other":
+            pending_text["oid"] = oid; api("answerCallbackQuery", callback_query_id=cid)
+            api("sendMessage", chat_id=CHAT, text="✍️ Причина по ордеру %d: напишите одним сообщением (или /cancel, чтобы вернуться к кнопкам)." % oid, reply_markup={"force_reply": True, "input_field_placeholder": "причина"})
         else:
-            inbox({"type": "reject", "id": oid, "code": code}); api("answerCallbackQuery", callback_query_id=cid, text="Записал: %s" % REASON_RU.get(code, code)); edit_order(oid, "⏳ Отклоняю (%s)…" % REASON_RU.get(code, code))
+            pending_text.clear(); inbox({"type": "reject", "id": oid, "code": code}); api("answerCallbackQuery", callback_query_id=cid, text="Записал: %s" % REASON_RU.get(code, code)); edit_order(oid, "⏳ Отклоняю (%s)…" % REASON_RU.get(code, code))
 
 
 def on_message(m):
     if m["from"]["id"] != ADMIN: log("ignored message from other user"); return
-    t = (m.get("text") or "").strip().lower()
+    raw = (m.get("text") or "").strip(); t = raw.lower()
+    if pending_text.get("oid") and raw and not t.startswith("/"):
+        oid = pending_text.pop("oid"); inbox({"type": "reject", "id": oid, "code": "other", "text": raw[:300]})
+        api("sendMessage", chat_id=CHAT, text="Записал причину: «%s». Отклоняю ордер %d." % (raw[:120], oid)); edit_order(oid, "⏳ Отклоняю (другое: %s)…" % raw[:80]); return
+    if t.startswith("/cancel") and pending_text.get("oid"):
+        oid = pending_text.pop("oid"); api("sendMessage", chat_id=CHAT, text="Хорошо, ордер %d по-прежнему ждёт решения." % oid)
+        try: api("editMessageReplyMarkup", chat_id=CHAT, message_id=msgs_load()[str(oid)]["mid"], reply_markup={"inline_keyboard": order_buttons(oid)})
+        except Exception as e: log("restore buttons: %s" % e)
+        return
     if t.startswith(("/start", "/mode", "/menu")): api("sendMessage", chat_id=CHAT, text=mode_text(), reply_markup={"inline_keyboard": MENU})
-    elif t.startswith("/status"): api("sendMessage", chat_id=CHAT, text=status_text())
+    elif t.startswith(("/status", "/balance")): api("sendMessage", chat_id=CHAT, text=status_text(), reply_markup={"inline_keyboard": REFRESH})
     else: api("sendMessage", chat_id=CHAT, text="Команды: /mode (режим), /status (состояние).")
 
 
 def main():
     log("tg_bot start, POS_DIR=%s" % D)
-    try: api("setMyCommands", commands=[{"command": "mode", "description": "Режим: сон / монитор / авто"}, {"command": "status", "description": "Состояние счёта"}])
+    try: api("setMyCommands", commands=[{"command": "mode", "description": "Режим: сон / монитор / авто"}, {"command": "status", "description": "Счёт, баланс, позиции"}])
     except Exception as e: log("setMyCommands fail: %s" % e)
     threading.Thread(target=outbox_loop, daemon=True).start()
     offset = None
