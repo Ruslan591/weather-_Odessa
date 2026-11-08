@@ -59,8 +59,17 @@ def on_place(p, now):
 
 
 def on_cancel(o, was, why):
-    """Из cancel() в chan_orders: если отменено предложение, снять кнопки в Telegram."""
-    if ENABLED and was == "proposed": emit({"type": "stale", "id": o["id"], "why": why})
+    """Из cancel() в chan_orders: если отменено предложение или ордер не по команде пользователя, снять кнопки в Telegram."""
+    if ENABLED and was in ("proposed", "pending") and not str(why).startswith("отменён пользователем"): emit({"type": "stale", "id": o["id"], "why": why})
+
+
+def _go_sleep(orders, cancel, now):
+    """Переход в сон: предложения снимаются, а ордера, которые пользователь не подтверждал (поставлены в Авто), отменяются. Подтверждённые им ордера и открытые позиции остаются (позиции ведёт бот)."""
+    n = 0
+    for o in orders:
+        if o["status"] == "proposed": cancel(o, "режим сна", now)
+        elif o["status"] == "pending" and not o.get("approved_t"): cancel(o, "режим сна: ордер не подтверждён вами", now); n += 1
+    return n
 
 
 def _read_inbox():
@@ -93,10 +102,8 @@ def apply(orders, now, cancel, touched):
         if t == "mode" and e.get("mode") in MODES:
             m["mode"] = e["mode"]; m["missed"] = 0; h = e.get("hours")
             m["until"] = int(now + float(h) * 3600000) if h else None
-            if m["mode"] == "sleep":
-                for o in orders:
-                    if o["status"] == "proposed": cancel(o, "режим сна", now)
-            emit({"type": "mode", "mode": m["mode"], "until": m["until"], "why": "user"})
+            nc = _go_sleep(orders, cancel, now) if m["mode"] == "sleep" else 0
+            emit({"type": "mode", "mode": m["mode"], "until": m["until"], "why": "user", "cancelled": nc})
         elif t in ("approve", "reject"):
             o = by.get(e.get("id"))
             if not o: emit({"type": "ack", "id": e.get("id"), "ok": False, "why": "ордер не найден"}); continue
@@ -114,7 +121,8 @@ def apply(orders, now, cancel, touched):
                 if st == "proposed": o.update(status="rejected", reason="отклонён пользователем: %s" % code, t_end=int(now), rej_reason=code)
                 elif st == "pending": cancel(o, "отменён пользователем: %s" % code, now); o["rej_reason"] = code
                 else: emit({"type": "rejected", "id": o["id"], "ok": False, "why": "уже не актуально (статус: %s)" % st}); continue
-                m["missed"] = 0; emit({"type": "rejected", "id": o["id"], "ok": True, "code": code}); jobs.append((dict(o), "reject", {"reason": code, "was": st}))
+                m["missed"] = 0; emit({"type": "rejected", "id": o["id"], "ok": True, "code": code}); o["rej_text"] = (e.get("text") or "")[:300] or None
+                jobs.append((dict(o), "reject", {"reason": code, "was": st, "reason_text": o["rej_text"]}))
     for o in orders:
         if o["status"] == "proposed" and now >= o.get("ans_deadline", 0):
             o.update(status="missed", reason="нет ответа", t_end=int(o.get("ans_deadline", now))); m["missed"] += 1
@@ -123,8 +131,7 @@ def apply(orders, now, cancel, touched):
         why = "missed" if m["missed"] >= m["max_missed"] else ("timer" if m.get("until") and now >= m["until"] else None)
         if why:
             m["mode"] = "sleep"; n = m["missed"]; m["until"] = None
-            for o in orders:
-                if o["status"] == "proposed": cancel(o, "режим сна", now)
-            emit({"type": "sleep", "why": why, "n": n})
+            nc = _go_sleep(orders, cancel, now)
+            emit({"type": "sleep", "why": why, "n": n, "cancelled": nc})
     if json.dumps(m, sort_keys=True) != m0: save_mode(m)
     return jobs
