@@ -97,7 +97,8 @@ def render_order(o, kl, nbars=96, title=None, watch=False):
     if watch:      # слежение: без входа/стопа/цели, отметка касания и текущая цена
         lc = float(ks[-1][4]); labs.append([lc, lc, "#e6edf3", "цена"]); ax.plot([xp, xr], [lc, lc], color="#e6edf3", lw=1.0, ls=":", zorder=5)
         if o.get("touch_px") is not None:
-            ax.plot([xp], [float(o["touch_px"])], marker="v" if o.get("side") == "short" else "^", color="#e3b341", ms=8, zorder=7); lows.append(float(o["touch_px"])); highs.append(float(o["touch_px"]))
+            tpx = float(o["touch_px"]); my = tpx + (max(highs) - min(lows) or tpx * 0.01) * 0.045 * (1 if o.get("side") == "short" else -1)     # маркер отнесён от экстремума наружу, чтобы не сливался со свечой и линией канала
+            ax.plot([xp], [my], marker="v" if o.get("side") == "short" else "^", color="#e3b341", mec=BG, mew=0.8, ms=9, zorder=7); lows.append(my); highs.append(my)
         lows.append(lc); highs.append(lc)
         ln = (ch.get("upper") if o.get("side") == "short" else ch.get("lower")) if ch else None
         if ln:      # свечи, закрывшиеся за линией (по текущей линии): кружки на закрытии
@@ -188,6 +189,94 @@ def caption_watch(w, kind):
     sh = w.get("shift")
     if sh is not None and abs(sh) >= 0.5: txt += "\n⚠️ Канал перестроился: линия сместилась на %+.1f ATR за последнюю свечу (картинка показывает новые линии)." % sh
     return txt
+
+
+def render_status(d):
+    """Карточка счёта картинкой (тёмная тема как у графиков). d: acct, sub, mode, mode_ru, info[], equity, chg_usd, chg_pct, tiles[(подпись, значение, цвет)],
+    orders {pend, prop, rows[]}, positions[{sym, side, pct, usd, be, part}], watches[(текст, цвет)], max_watch, err, stamp."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import FancyBboxPatch
+    W = 936; PAD = 30; CARD = "#131a24"; DIM = "#7d8590"; GRN = "#26a69a"; RED = "#ef5350"; YEL = "#e3b341"; BLU = "#58a6ff"; LINE = "#222b38"
+    MODEC = {"monitor": GRN, "sleep": DIM, "auto": BLU}
+
+    def lay(ax):
+        y = 26
+        def T_(x, yy, s, **kw):
+            if ax is not None: ax.text(x, yy, str(s).replace("$", r"\$"), **kw)     # \$: иначе пара $ уходит в mathtext
+        def box(x, yy, w, h, fc, ec="none", r=10, alpha=1.0):
+            if ax is not None: ax.add_patch(FancyBboxPatch((x, yy), w, h, boxstyle="round,pad=0,rounding_size=%d" % r, fc=fc, ec=ec, lw=1.0, alpha=alpha))
+        def sect(title, y, right=None):
+            if ax is not None:
+                ax.text(PAD, y, title, color=DIM, fontsize=9, fontweight="bold", va="top")
+                if right: ax.text(W - PAD, y, right, color=DIM, fontsize=9, va="top", ha="right")
+                ax.plot([PAD, W - PAD], [y + 24, y + 24], color=LINE, lw=1.0)
+            return y + 36
+        # заголовок
+        T_(PAD, y, "Счёт «%s»" % d["acct"], color="#e6edf3", fontsize=18, fontweight="bold", va="top")
+        T_(PAD, y + 42, d.get("sub", ""), color=DIM, fontsize=9.5, va="top")
+        mc = MODEC.get(d.get("mode"), DIM)
+        box(W - PAD - 150, y + 2, 150, 38, mc, ec=mc, r=19, alpha=0.18)
+        T_(W - PAD - 75, y + 21, d.get("mode_ru", ""), color=mc, fontsize=12, fontweight="bold", va="center", ha="center")
+        y += 84
+        # эквити
+        if d.get("equity") is not None:
+            cc = GRN if d["chg_usd"] >= 0 else RED
+            T_(PAD, y, "%.2f $" % d["equity"], color="#f0f6fc", fontsize=36, fontweight="bold", va="top")
+            T_(PAD + 3, y + 70, "%+.2f $  (%+.2f%%) к старту" % (d["chg_usd"], d["chg_pct"]), color=cc, fontsize=13, fontweight="bold", va="top")
+            y += 116
+            n = len(d["tiles"]); gap = 12; tw = (W - 2 * PAD - gap * (n - 1)) / n
+            for i, (lab, val, col) in enumerate(d["tiles"]):
+                x = PAD + i * (tw + gap); box(x, y, tw, 74, CARD, ec=LINE)
+                T_(x + 14, y + 12, lab, color=DIM, fontsize=8.5, va="top"); T_(x + 14, y + 36, val, color=col, fontsize=15, fontweight="bold", va="top")
+            y += 74 + 26
+        else:
+            T_(PAD, y, "Баланс и позиции сейчас получить не удалось", color=YEL, fontsize=12, va="top"); y += 44
+        # ордера
+        o = d["orders"]; y = sect("ОРДЕРА", y)
+        for x0, n_, lab in ((PAD, o["pend"], "ждут исполнения"), (PAD + 300, o["prop"], "ждут вашего решения")):
+            T_(x0, y - 2, str(n_), color="#e6edf3" if n_ else DIM, fontsize=16, fontweight="bold", va="top"); T_(x0 + 30, y + 2, lab, color=DIM, fontsize=11.5, va="top")
+        y += 38
+        for (sym, side, rest) in o.get("rows", []):
+            sc = RED if side == "SHORT" else GRN
+            T_(PAD, y, sym, color="#e6edf3", fontsize=11, fontweight="bold", va="top"); T_(PAD + 92, y, side, color=sc, fontsize=10.5, fontweight="bold", va="top"); T_(PAD + 170, y, rest, color=DIM, fontsize=9.5, va="top")
+            y += 26
+        y += 14
+        # позиции
+        ps = d.get("positions", []); y = sect("ОТКРЫТЫЕ ПОЗИЦИИ", y, "%d" % len(ps))
+        if not ps: T_(PAD, y, "Открытых позиций нет", color=DIM, fontsize=11.5, va="top"); y += 34
+        else:
+            for c, x in (("пара", PAD + 14), ("net", 370), ("PnL", 500), ("БУ", 640)): T_(x, y, c, color=DIM, fontsize=8.5, va="top")
+            y += 22
+            for i, p in enumerate(ps):
+                box(PAD, y, W - 2 * PAD, 40, CARD, ec="none", r=8)
+                sc = RED if p["side"] == "SHORT" else GRN; pc = GRN if p["usd"] >= 0 else RED
+                T_(PAD + 14, y + 20, p["sym"], color="#e6edf3", fontsize=12.5, fontweight="bold", va="center")
+                box(PAD + 110, y + 8, 82, 24, sc, ec=sc, r=12, alpha=0.2); T_(PAD + 151, y + 20, p["side"], color=sc, fontsize=10, fontweight="bold", va="center", ha="center")
+                T_(370, y + 20, "%+.2f%%" % p["pct"], color=pc, fontsize=12, fontweight="bold", va="center"); T_(500, y + 20, "%+.2f $" % p["usd"], color=pc, fontsize=12, fontweight="bold", va="center")
+                T_(640, y + 20, "да" if p["be"] else "нет", color=GRN if p["be"] else DIM, fontsize=11.5, fontweight="bold" if p["be"] else "normal", va="center")
+                if p.get("part"): T_(W - PAD - 14, y + 20, "часть закрыта", color=YEL, fontsize=9.5, va="center", ha="right")
+                y += 46
+            y += 4
+        y += 10
+        # графики в работе
+        ws = d.get("watches", [])
+        if ws:
+            y = sect("ГРАФИКИ В РАБОТЕ", y, "%d из %d" % (len(ws), d.get("max_watch", 3)))
+            for txt, col in ws: T_(PAD, y, txt, color=col, fontsize=11, va="top"); y += 27
+            y += 12
+        # режим и время
+        for s in d.get("info", []): T_(PAD, y, s, color=DIM, fontsize=9.5, va="top"); y += 22
+        T_(PAD, y + 6, "обновлено " + d.get("stamp", ""), color="#4d5562", fontsize=8, va="top")
+        return y + 40
+
+    H = lay(None)
+    fig = plt.figure(figsize=(W / 130.0, H / 130.0), dpi=130); fig.patch.set_facecolor(BG)
+    ax = fig.add_axes([0, 0, 1, 1]); ax.set_xlim(0, W); ax.set_ylim(H, 0); ax.axis("off"); ax.set_facecolor(BG)
+    lay(ax)
+    buf = io.BytesIO(); fig.savefig(buf, format="png", facecolor=BG); plt.close(fig)
+    return buf.getvalue()
 
 
 def _post(method, fields=None, files=None):
