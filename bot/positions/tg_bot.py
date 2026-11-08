@@ -12,7 +12,7 @@ import tg_notify as T
 D = os.environ.get("POS_DIR", "/opt/trading-bot/positions_regr")
 ACCT = os.environ.get("TG_ACCT_NAME", "Регрессия")
 OUTF = os.path.join(D, "tg_outbox.jsonl"); OUTOFF = os.path.join(D, "tg_out.off"); INF = os.path.join(D, "tg_inbox.jsonl")
-MODEF = os.path.join(D, "tg_mode.json"); MSGF = os.path.join(D, "tg_msgs.json"); ORDF = os.path.join(D, "orders.json"); POSF = os.path.join(D, "positions.json")
+WATCHF = os.path.join(D, "tg_watch.json"); MODEF = os.path.join(D, "tg_mode.json"); MSGF = os.path.join(D, "tg_msgs.json"); ORDF = os.path.join(D, "orders.json"); POSF = os.path.join(D, "positions.json")
 ENV = T._env(); ADMIN = int(ENV["TG_USER_ID"]); CHAT = str(ENV["TG_CHAT_ID"])
 MODE_RU = {"sleep": "😴 Сон", "monitor": "👁 Монитор", "auto": "🤖 Авто"}
 REASONS = [("против импульса", "impulse"), ("пробой границы", "brk"), ("флет", "flat"), ("слабый объём", "vol"), ("уровень не тот", "level"), ("цена не дошла до уровня", "far"), ("поздно: точка пройдена", "passed"), ("не в ту сторону", "wrongdir"), ("другое (написать)", "other"), ("без причины", "none")]
@@ -67,7 +67,7 @@ def mode_text():
         s += "\nПропущено подряд: %d из %d" % (m.get("missed", 0), m.get("max_missed", 3))
         if m.get("until"): s += "\nТаймер до %s" % hhmm(m["until"])
     s += {"sleep": "\nНовых ордеров нет, уведомлений о новых точках нет. Открытые позиции продолжает вести бот; неподтверждённые вами ордера отменены.",
-          "monitor": "\nНайденные точки приходят вам на решение; без ответа ордер не ставится.",
+          "monitor": "\nБот присылает момент, когда цена касается или пересекает линию канала. Вы решаете: «Отклонить» или «Следить», а при слежении после каждой свечи можно выставить ордер. Одновременно не больше трёх графиков в работе.",
           "auto": "\nБот ставит ордера сам и присылает график."}.get(m["mode"], "")
     return s
 
@@ -91,12 +91,66 @@ def order_buttons(oid):
     return [[{"text": "❌ Отменить ордер", "callback_data": "r:%d" % oid}]]
 
 
+def watch_get(wid):
+    for x in (jload(WATCHF, {}).get("items") or []):
+        if x.get("id") == wid: return x
+    return None
+
+
+def watch_buttons(wid, kind):
+    if kind == "alert": return [[{"text": "👁 Следить", "callback_data": "wa:%d" % wid}, {"text": "❌ Отклонить", "callback_data": "wr:%d" % wid}]]
+    return [[{"text": "▶️ Продолжать следить", "callback_data": "wc:%d" % wid}, {"text": "⏹ Перестать следить", "callback_data": "ws:%d" % wid}], [{"text": "📌 Выставить ордер", "callback_data": "wp:%d" % wid}]]
+
+
+def send_watch(wid, kind):
+    w = watch_get(wid)
+    if not w: return
+    key = "w%d" % wid; m = msgs_load(); old = m.get(key)
+    if old and kind == "update":     # у предыдущего графика этой пары снимаем кнопки
+        try: api("editMessageReplyMarkup", chat_id=CHAT, message_id=old["mid"], reply_markup={"inline_keyboard": []})
+        except Exception as e: log("strip old buttons: %s" % e)
+    kl = jload("/tmp/klcache/%s_5m_1000.json" % w["sym"], [])
+    cap = T.caption_watch(w, kind); btn = watch_buttons(wid, kind)
+    try: r = T.send_photo(T.render_watch(w, kl), cap, btn); photo = True
+    except Exception as e:
+        log("render watch fail %s: %s" % (wid, e)); r = T.send_text(cap, btn); photo = False
+    m = msgs_load(); m[key] = {"mid": r["result"]["message_id"], "cap": cap, "kind": kind, "photo": photo}; msgs_save(m)
+
+
+def edit_watch(wid, status, buttons=None):
+    m = msgs_load(); rec = m.get("w%d" % wid)
+    if not rec: api("sendMessage", chat_id=CHAT, text="Слежение %d: %s" % (wid, status)); return
+    cap = rec["cap"] + "\n\n" + status; kb = {"inline_keyboard": buttons or []}
+    try:
+        if rec.get("photo"): api("editMessageCaption", chat_id=CHAT, message_id=rec["mid"], caption=cap, reply_markup=kb)
+        else: api("editMessageText", chat_id=CHAT, message_id=rec["mid"], text=cap, reply_markup=kb)
+    except Exception as e: log("edit watch fail %s: %s" % (wid, e))
+
+
+def target_options(w, entry):
+    """Цели по каналу на следующую свечу с оценкой прибыли и R:R (те же формулы, что при постановке в chan_orders)."""
+    L = w.get("last") or {}
+    if L.get("Rn") is None: return []
+    a = float(L["atr"]); s = -1 if w["side"] == "short" else 1; R, S = float(L["Rn"]), float(L["Sn"]); H = R - S; line = R if s < 0 else S; px = float(L["c"])
+    price = line if (entry == "limit" and ((s < 0 and px < line) or (s > 0 and px > line))) else px
+    risk = max(1.2 * a, 0.005 * price); out = []
+    for code, label, f in (("opp", "противоположная линия", None), ("mid", "середина канала", 0.5), ("q1", "1/4 канала", 0.25), ("q3", "3/4 канала", 0.75)):
+        tp = ((S + 0.1 * a) if s < 0 else (R - 0.1 * a)) if f is None else ((R - f * H) if s < 0 else (S + f * H))
+        gain = (tp - price) * s
+        if gain <= 0: out.append(("%s · уже пройдена" % label, "x")); continue
+        out.append(("%s · +%.2f%% · R:R %.1f" % (label, gain / price * 100, gain / risk), code))
+    return out
+
+
 def send_order(o, kind):
     kl = jload("/tmp/klcache/%s_5m_1000.json" % o["sym"], [])
     cap = T.caption_order(o, ACCT)
     if kind == "proposal":
         cap += "\n\n⏳ Нужно решение до %s (Киев). Без ответа ордер не ставится." % hhmm(o["ans_deadline"])
         btn = [[{"text": "✅ Поставить", "callback_data": "a:%d" % o["id"]}, {"text": "❌ Отклонить", "callback_data": "r:%d" % o["id"]}]]
+    elif o.get("src_watch"):
+        cap += "\n\n✅ Ордер выставлен вами из слежения (вход %s)." % ("по рынку" if o.get("rule") == "tg_market" else "лимитом у линии")
+        btn = [[{"text": "❌ Отменить ордер", "callback_data": "r:%d" % o["id"]}]]
     else:
         cap += "\n\n🤖 Авто: ордер выставлен."
         btn = [[{"text": "❌ Отменить ордер", "callback_data": "r:%d" % o["id"]}]]
@@ -132,6 +186,18 @@ def handle_event(ev):
     elif t == "missed":
         m = mode_state(); edit_order(oid, "⏱ Пропущено (нет ответа). Подряд: %d из %d" % (ev.get("n", 0), m.get("max_missed", 3)))
     elif t == "stale": edit_order(oid, "↻ Устарело: %s" % ev.get("why", ""))
+    elif t == "alert": send_watch(ev["wid"], "alert")
+    elif t == "watch_update": send_watch(ev["wid"], "update")
+    elif t == "watch_ack":
+        wid = ev.get("wid")
+        if not ev.get("ok"): api("sendMessage", chat_id=CHAT, text="⚠️ Слежение %s: %s" % (wid, ev.get("why", "не получилось")))
+        elif ev.get("what") == "follow": edit_watch(wid, "👁 Слежу. Следующий график пришлю после закрытия свечи.")
+        elif ev.get("what") == "continue": edit_watch(wid, "▶️ Продолжаю следить.")
+    elif t == "watch_end":
+        wid = ev.get("wid"); why = ev.get("why", "")
+        if ev.get("code"): why += " (%s)" % REASON_RU.get(ev["code"], ev["code"])
+        if ev.get("missed"): why += ". Пропущено подряд: %d из %d" % (ev["missed"], mode_state().get("max_missed", 3))
+        edit_watch(wid, "⏹ " + why)
     elif t == "mode":
         txt = mode_text()
         if ev.get("mode") == "sleep": txt += "\nОтменено неподтверждённых ордеров: %d." % ev.get("cancelled", 0)
@@ -169,6 +235,8 @@ def status_text():
     """Карточка счёта: режим, баланс бумажного счёта (pos.snapshot через acct-api), открытые позиции (пара, net%, pnl, БУ). Входы/стопы/цели без графика не показываем."""
     orders = jload(ORDF, []); pend = sum(1 for o in orders if o.get("status") == "pending"); prop = sum(1 for o in orders if o.get("status") == "proposed")
     out = [mode_text(), ""]
+    ws = [x for x in (jload(WATCHF, {}).get("items") or []) if x.get("status") in ("alert", "watching")]
+    if ws: out += ["Графиков в работе: %d из %d" % (len(ws), mode_state().get("max_watch", 3))] + ["· %s %s — %s" % (x["sym"], x["side"].upper(), "ждёт вашего решения" if x["status"] == "alert" else "слежу (%d св.)" % x.get("updates", 0)) for x in ws] + [""]
     try:
         sn = fetch_snapshot(); a = sn["account"]; opn = sn.get("open", [])
         tot = a["equity"] - a["start"]; totp = tot / a["start"] * 100
@@ -202,6 +270,37 @@ def on_callback(cq):
         api("answerCallbackQuery", callback_query_id=cid, text="Собираю данные…")
         try: api("editMessageText", chat_id=CHAT, message_id=mid, text=status_text(), reply_markup={"inline_keyboard": REFRESH + MENU[:1]})
         except Exception as e: log("status edit: %s" % e)
+    elif p[0] == "wa":
+        wid = int(p[1]); inbox({"type": "w_follow", "wid": wid}); api("answerCallbackQuery", callback_query_id=cid, text="Слежу"); edit_watch(wid, "⏳ Принято…")
+    elif p[0] == "wc":
+        wid = int(p[1]); inbox({"type": "w_continue", "wid": wid}); api("answerCallbackQuery", callback_query_id=cid, text="Продолжаю"); edit_watch(wid, "⏳ Принято…")
+    elif p[0] == "ws":
+        wid = int(p[1]); inbox({"type": "w_stop", "wid": wid}); api("answerCallbackQuery", callback_query_id=cid, text="Перестаю следить"); edit_watch(wid, "⏳ Останавливаю…")
+    elif p[0] == "wr":
+        wid = int(p[1]); api("answerCallbackQuery", callback_query_id=cid)
+        rows = [[{"text": REASONS[i][0], "callback_data": "wrr:%d:%s" % (wid, REASONS[i][1])}, {"text": REASONS[i + 1][0], "callback_data": "wrr:%d:%s" % (wid, REASONS[i + 1][1])}] for i in range(0, len(REASONS), 2)]
+        rows.append([{"text": "↩ назад", "callback_data": "wrr:%d:back" % wid}]); api("editMessageReplyMarkup", chat_id=CHAT, message_id=mid, reply_markup={"inline_keyboard": rows})
+    elif p[0] == "wrr":
+        wid = int(p[1]); code = p[2]; w = watch_get(wid); kind = (msgs_load().get("w%d" % wid) or {}).get("kind", "alert")
+        if code == "back":
+            pending_text.clear(); api("answerCallbackQuery", callback_query_id=cid); api("editMessageReplyMarkup", chat_id=CHAT, message_id=mid, reply_markup={"inline_keyboard": watch_buttons(wid, kind)})
+        elif code == "other":
+            pending_text.clear(); pending_text["wid"] = wid; api("answerCallbackQuery", callback_query_id=cid)
+            api("sendMessage", chat_id=CHAT, text="✍️ Причина по слежению %d: напишите одним сообщением (или /cancel, чтобы вернуться к кнопкам)." % wid, reply_markup={"force_reply": True, "input_field_placeholder": "причина"})
+        else:
+            pending_text.clear(); inbox({"type": "w_reject", "wid": wid, "code": code}); api("answerCallbackQuery", callback_query_id=cid, text="Записал: %s" % REASON_RU.get(code, code)); edit_watch(wid, "⏳ Отклоняю (%s)…" % REASON_RU.get(code, code))
+    elif p[0] == "wp":
+        wid = int(p[1]); api("answerCallbackQuery", callback_query_id=cid)
+        api("editMessageReplyMarkup", chat_id=CHAT, message_id=mid, reply_markup={"inline_keyboard": [[{"text": "📈 По рынку", "callback_data": "wpe:%d:market" % wid}, {"text": "📌 Лимит у линии", "callback_data": "wpe:%d:limit" % wid}], [{"text": "↩ назад", "callback_data": "wpb:%d" % wid}]]})
+    elif p[0] == "wpb":
+        wid = int(p[1]); api("answerCallbackQuery", callback_query_id=cid); api("editMessageReplyMarkup", chat_id=CHAT, message_id=mid, reply_markup={"inline_keyboard": watch_buttons(wid, "update")})
+    elif p[0] == "wpe":
+        wid = int(p[1]); entry = p[2]; w = watch_get(wid); api("answerCallbackQuery", callback_query_id=cid)
+        opts = target_options(w, entry) if w else []
+        rows = [[{"text": lab, "callback_data": "wpt:%d:%s:%s" % (wid, entry, code)}] for lab, code in opts if code != "x"] + [[{"text": lab, "callback_data": "wpe:%d:%s" % (wid, entry)}] for lab, code in opts if code == "x"]
+        rows.append([{"text": "↩ назад", "callback_data": "wp:%d" % wid}]); api("editMessageReplyMarkup", chat_id=CHAT, message_id=mid, reply_markup={"inline_keyboard": rows})
+    elif p[0] == "wpt":
+        wid = int(p[1]); entry = p[2]; tgt = p[3]; inbox({"type": "w_place", "wid": wid, "entry": entry, "target": tgt}); api("answerCallbackQuery", callback_query_id=cid, text="Ставлю ордер…"); edit_watch(wid, "⏳ Ставлю ордер (%s, цель: %s)…" % ("по рынку" if entry == "market" else "лимит у линии", tgt))
     elif p[0] == "mb":
         api("answerCallbackQuery", callback_query_id=cid); api("editMessageText", chat_id=CHAT, message_id=mid, text=mode_text(), reply_markup={"inline_keyboard": MENU})
     elif p[0] == "a":
@@ -225,6 +324,14 @@ def on_callback(cq):
 def on_message(m):
     if m["from"]["id"] != ADMIN: log("ignored message from other user"); return
     raw = (m.get("text") or "").strip(); t = raw.lower()
+    if pending_text.get("wid") and raw and not t.startswith("/"):
+        wid = pending_text.pop("wid"); inbox({"type": "w_reject", "wid": wid, "code": "other", "text": raw[:300]})
+        api("sendMessage", chat_id=CHAT, text="Записал причину: «%s». Отклоняю." % raw[:120]); edit_watch(wid, "⏳ Отклоняю (другое: %s)…" % raw[:80]); return
+    if t.startswith("/cancel") and pending_text.get("wid"):
+        wid = pending_text.pop("wid"); api("sendMessage", chat_id=CHAT, text="Хорошо, слежение %d по-прежнему ждёт решения." % wid)
+        try: api("editMessageReplyMarkup", chat_id=CHAT, message_id=msgs_load()["w%d" % wid]["mid"], reply_markup={"inline_keyboard": watch_buttons(wid, (msgs_load().get("w%d" % wid) or {}).get("kind", "alert"))})
+        except Exception as e: log("restore watch buttons: %s" % e)
+        return
     if pending_text.get("oid") and raw and not t.startswith("/"):
         oid = pending_text.pop("oid"); inbox({"type": "reject", "id": oid, "code": "other", "text": raw[:300]})
         api("sendMessage", chat_id=CHAT, text="Записал причину: «%s». Отклоняю ордер %d." % (raw[:120], oid)); edit_order(oid, "⏳ Отклоняю (другое: %s)…" % raw[:80]); return
