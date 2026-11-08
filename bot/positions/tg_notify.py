@@ -111,18 +111,25 @@ def render_order(o, kl, nbars=96, title=None):
     ax.tick_params(axis="x", labelbottom=False); ax.tick_params(axis="y", labelleft=False, labelright=False, left=False)
     axv.tick_params(axis="y", labelleft=False, left=False)
     for a_ in (ax, axv): a_.grid(color=GRID, lw=0.6); [sp.set_color(GRID) for sp in a_.spines.values()]
-    ax.set_title(title or "%s  %s  %s" % (o.get("sym"), str(o.get("side", "")).upper(), o.get("rule", "")), color=TXT, fontsize=10, loc="left")
+    ax.set_title(title or "%s  %s  %s" % (o.get("sym"), str(o.get("side", "")).upper(), RULE_RU.get(o.get("rule"), o.get("rule", ""))), color=TXT, fontsize=10, loc="left")
     fig.subplots_adjust(left=0.02, right=0.99, top=0.94, bottom=0.05)
     buf = io.BytesIO(); fig.savefig(buf, format="png", facecolor=BG); plt.close(fig)
     return buf.getvalue()
+
+
+RULE_RU = {"chan_top": "отбой от верхней границы канала", "chan_bottom": "отбой от нижней границы канала", "retest_up": "ретест после пробоя вверх", "retest_down": "ретест после пробоя вниз", "breakout_up": "пробой вверх", "breakout_down": "пробой вниз"}
 
 
 def caption_order(o, acct="Регрессия"):
     en, st, tp = float(o["price"]), float(o["stop"]), float(o["tp"]); s = 1 if o["side"] == "long" else -1
     risk = abs(en - st) / en * 100; rew = abs(tp - en) / en * 100
     ctype = {"channel_up": "восходящий", "channel_down": "нисходящий"}.get(str(o.get("ctype")), "flat")
-    return "%s · %s %s лимит %s\nстоп %s (−%.2f%%) · цель %s (+%.2f%%) · R:R %.1f\nканал: %s · правило %s" % (
-        acct, o["sym"], "LONG" if s > 0 else "SHORT", fmt_px(en), fmt_px(st), risk, fmt_px(tp), rew, rew / risk if risk else 0, ctype, o.get("rule", ""))
+    ct = str(o.get("ctype") or "")
+    counter = (s > 0 and "down" in ct) or (s < 0 and "up" in ct)
+    txt = "%s · %s %s лимит %s\nстоп %s (−%.2f%%) · цель %s (+%.2f%%) · R:R %.1f\nканал: %s · сетап: %s" % (
+        acct, o["sym"], "LONG" if s > 0 else "SHORT", fmt_px(en), fmt_px(st), risk, fmt_px(tp), rew, rew / risk if risk else 0, ctype, RULE_RU.get(o.get("rule"), o.get("rule", "")))
+    if counter: txt += "\n⚠️ Направление сделки против направления канала (ретест/пробой)."
+    return txt
 
 
 def _post(method, fields=None, files=None):
