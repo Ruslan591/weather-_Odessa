@@ -371,6 +371,7 @@ def _tg_info(sym, A):
     if st and st.get("lower") and st.get("upper") and st["type"] in ("channel_down", "channel_up"):
         R, S = st["upper"], st["lower"]
         info.update(ctype=st["type"], R=float(tl.at(R, i)), S=float(tl.at(S, i)), Rn=float(tl.at(R, i + 1)), Sn=float(tl.at(S, i + 1)), chan={"type": st["type"], "upper": ldict(R, t), "lower": ldict(S, t)})
+        info["hist"] = [[int(t[j]), float(A["o"][j]), float(A["h"][j]), float(A["l"][j]), float(A["c"][j]), float(tl.at(R, j)), float(tl.at(S, j))] for j in range(max(0, i - 11), i + 1)]   # свечи и ТЕКУЩИЕ линии на них
     return info
 
 
