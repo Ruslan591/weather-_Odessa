@@ -86,6 +86,18 @@ def entry(o, action, kl, reason=None, latency_s=None, n=None, was=None, **kw):
         rec.update(kw); rec.update(ctx); _write(rec)
     except Exception as e: print("decisions entry err", e, flush=True)
 
+def watch(w, action, kl, reason=None, reason_text=None, latency_s=None, n=None, was=None, **kw):
+    """Решение пользователя в режиме слежения (Telegram): w_follow, w_continue, w_stop, w_reject, w_place, w_missed. Контекст: канал, линия, касание, состояние рынка (5m, 1h, уровни)."""
+    try:
+        now = int(time.time() * 1000); L = w.get("last") or {}
+        p = dict(sym=w["sym"] + "USDT", side=w["side"], entry=w.get("line_px") or L.get("c"), R=w.get("atr") or 0, id=w["id"], t_in=w.get("t_alert", now), atr1h=None)
+        ctx = _context(p, L.get("c") or w.get("line_px"), kl, now)
+        rec = dict(t=now, kind="watch", by="manual", action=action, wid=w["id"], sym=w["sym"], side=w["side"], line=w.get("line"), ctype=w.get("ctype"), line_px=_r(w.get("line_px") or 0, 8), touch_px=_r(w.get("touch_px") or 0, 8),
+                   atr=_r(w.get("atr") or 0, 6), updates=w.get("updates"), unanswered=w.get("unanswered"), reason=reason, reason_text=reason_text, latency_s=latency_s, n=n, was=was, close=L.get("c"),
+                   chan_pos=(round((L["c"] - L["S"]) / (L["R"] - L["S"]), 3) if L.get("R") is not None and L["R"] != L["S"] else None))
+        rec.update(kw); rec.update(ctx); _write(rec)
+    except Exception as e: print("decisions watch err", e, flush=True)
+
 def manual(p, px, kl, kind, old, new, o=None, **kw):
     """Ручное действие пользователя (kind: stop, tp, trail, release, tp_release, close). old/new - цены до и после. tag и note берутся из запроса o."""
     try:
