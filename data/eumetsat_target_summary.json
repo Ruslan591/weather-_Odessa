@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-08T07:48:07Z",
+  "timestamp": "2026-11-08T07:55:42Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-11-08T06:30:00.000Z",
   "target_id": 18,
@@ -19,30 +19,12 @@
     "frontlike": false,
     "window_spanning": false,
     "phase_label": "безоблачно",
-    "cloud_fraction": 0.094,
+    "cloud_fraction": 0.079,
     "has_precip": false,
     "has_lightning": false
   },
-  "local_candidates": [
-    {
-      "target_id": 18,
-      "area_km2": 266.9,
-      "distance_km": 126.5,
-      "bearing_deg": 5.0,
-      "compass": "С",
-      "elongation_aspect_ratio": 1.63,
-      "elongation_axis_deg": 177.0,
-      "elongation_axis_compass": "Ю-С",
-      "frontlike": false,
-      "phase_label": "безоблачно",
-      "type_label": "плотная/высокая",
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": true,
-      "geocolour_confirmed": true
-    }
-  ],
-  "local_suppressed_count": 27,
+  "local_candidates": [],
+  "local_suppressed_count": 28,
   "system_candidates": [
     {
       "target_id": 26,
@@ -494,26 +476,26 @@
   },
   "target_phase": {
     "label": "безоблачно",
-    "cloud_fraction": 0.854
+    "cloud_fraction": 0.827
   },
   "existence": {
     "modules": {
       "ir_motion": {
-        "confirmed": true,
-        "timestamp": "2026-11-08T07:20:00.000Z"
+        "confirmed": false,
+        "timestamp": "2026-11-08T07:30:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": true,
-        "timestamp": "2026-11-08T07:20:00.000Z"
+        "confirmed": false,
+        "timestamp": "2026-11-08T07:30:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": true,
-        "timestamp": "2026-11-08T07:43:49Z"
+        "timestamp": "2026-11-08T07:54:23Z"
       }
     },
-    "votes_confirmed": 3,
-    "votes_not_confirmed": 0,
-    "consensus": "confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -525,5 +507,5 @@
       "timestamp": "2026-11-08T07:44:39Z"
     }
   },
-  "verdict": "Облачная масса (267км², безоблачно) в 126км С подтверждена всеми доступными каналами. Отдельно: система синоптического масштаба (48602км²) в 12км ЮВ."
+  "verdict": "Цель в 126км С, безоблачно — каналы расходятся: cloud_phase_type подтверждают, ir_motion/geocolour_motion нет. Отдельно: система синоптического масштаба (48602км²) в 12км ЮВ."
 }
