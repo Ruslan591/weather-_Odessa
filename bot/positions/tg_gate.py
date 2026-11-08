@@ -22,7 +22,7 @@ D = os.environ.get("POS_DIR", "/opt/trading-bot/positions")
 ENABLED = os.environ.get("TG_GATE", "0") == "1"
 WATCHF = os.path.join(D, "tg_watch.json"); MODEF = os.path.join(D, "tg_mode.json"); OUTF = os.path.join(D, "tg_outbox.jsonl"); INF = os.path.join(D, "tg_inbox.jsonl"); OFFF = os.path.join(D, "tg_inbox.off")
 MODES = ("sleep", "monitor", "auto"); TFM = 300000
-DEFAULT = {"mode": "auto", "missed": 0, "max_missed": 3, "answer_win": 3, "until": None, "max_watch": 3, "watch_unanswered": 3, "watch_hours": 4}
+DEFAULT = {"mode": "auto", "missed": 0, "max_missed": 3, "answer_win": 3, "until": None, "max_watch": 3, "watch_unanswered": 3, "watch_hours": 4, "alerts_off": False}
 
 
 def load_mode():
@@ -89,7 +89,9 @@ def _wsave(W, now=None):
 
 def watch_needed(sym):
     """Нужно ли chan_orders считать канал для слежения по этой паре (только Монитор)."""
-    return ENABLED and load_mode()["mode"] == "monitor"
+    if not ENABLED: return False
+    m = load_mode()
+    return m["mode"] == "monitor" and not m.get("alerts_off")     # пауза алертов: канал для слежения не считаем
 
 
 def _last(info):
@@ -123,7 +125,7 @@ def watch_scan(info, now):
     """Раз на новую закрытую свечу пары (из cycle). info: sym, t, o, h, l, c, atr, ctype, R, S, Rn, Sn, chan."""
     if not ENABLED: return
     m = load_mode()
-    if m["mode"] != "monitor": return
+    if m["mode"] != "monitor" or m.get("alerts_off"): return     # alerts_off: новых алертов и обновлений слежения нет
     W = _wload(); items = W["items"]; ch = False; sym = info["sym"]
     for x in items:
         if x["sym"] == sym and x["status"] == "watching" and info["t"] > (x.get("last") or {}).get("t", 0):
@@ -222,10 +224,16 @@ def apply(orders, now, cancel, touched, mkorder=None, price_fn=None):
         if t == "mode" and e.get("mode") in MODES:
             m["mode"] = e["mode"]; m["missed"] = 0; h = e.get("hours")
             m["until"] = int(now + float(h) * 3600000) if h else None
+            if m["mode"] == "monitor": m["alerts_off"] = False     # явный выбор Монитора включает алерты
             nc = _go_sleep(orders, cancel, now) if m["mode"] == "sleep" else 0
             if m["mode"] == "auto": _end_watches(W, now, "режим авто"); wch = True
             if m["mode"] == "sleep": W = _wload()
             emit({"type": "mode", "mode": m["mode"], "until": m["until"], "why": "user", "cancelled": nc})
+        elif t == "alerts":      # кнопка «Отключить / Включить алерты»: режим и таймер не трогаем
+            off = not e.get("on", True); nc = 0
+            if off: nc = _end_watches(W, now, "алерты отключены вами"); wch = wch or bool(nc)
+            m["alerts_off"] = off; m["missed"] = 0
+            emit({"type": "alerts", "off": off, "cancelled": nc})
         elif t and t.startswith("w_"):
             wch = _wevent(e, W, m, orders, now, mkorder, price_fn, jobs) or wch
         elif t in ("approve", "reject"):
