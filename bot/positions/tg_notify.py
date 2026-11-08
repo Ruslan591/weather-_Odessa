@@ -40,6 +40,11 @@ def fmt_px(p):
     return "%.7f" % p
 
 
+def _lighter(hexcol, f=0.5):
+    h = hexcol.lstrip("#"); r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+    return "#%02x%02x%02x" % tuple(int(v + (255 - v) * f) for v in (r, g, b))
+
+
 def chan_color(ctype):
     c = str(ctype or "")
     if "up" in c: return UP
@@ -80,6 +85,14 @@ def render_order(o, kl, nbars=96, title=None, watch=False):
         ax.fill_between(xs, lw, up, color=cc, alpha=0.08, zorder=1)
         ax.plot(xs, up, color=cc, lw=1.8, zorder=2); ax.plot(xs, lw, color=cc, lw=1.8, zorder=2); ax.plot(xs, md, color=cc, lw=1.0, ls="--", zorder=2)
         lows += [min(lw)]; highs += [max(up)]
+    c0 = o.get("chan0") if watch else None
+    if c0 and c0.get("upper") and c0.get("lower") and c0 != ch:      # канал на момент касания (начало слежения): тот же цвет, светлее, пунктиром
+        U0, L0 = c0["upper"], c0["lower"]; xa0 = X(max(U0["t1"], x0)); ts0 = [x0 + xa0 * BAR_MS, t_end]; c0c = _lighter(chan_color(o.get("ctype") or c0.get("type")), 0.55)
+        up0 = [U0["p1"] + U0["s"] * (t - U0["t1"]) for t in ts0]; lw0 = [L0["p1"] + L0["s"] * (t - L0["t1"]) for t in ts0]; xs0 = [xa0, xr]
+        ax.plot(xs0, up0, color=c0c, lw=1.5, ls=(0, (5, 3)), zorder=2); ax.plot(xs0, lw0, color=c0c, lw=1.5, ls=(0, (5, 3)), zorder=2)
+        ax.plot(xs0, [(p + q) / 2 for p, q in zip(up0, lw0)], color=c0c, lw=0.8, ls=(0, (2, 3)), zorder=2)
+        lows += [min(lw0)]; highs += [max(up0)]
+        ax.text(0.01, 0.02, "светлый пунктир — канал на момент касания · цветной — текущий", transform=ax.transAxes, color=c0c, fontsize=7, va="bottom", ha="left", zorder=8)
     xp = X(o["placed_t"]); labs = []
     if watch:      # слежение: без входа/стопа/цели, отметка касания и текущая цена
         lc = float(ks[-1][4]); labs.append([lc, lc, "#e6edf3", "цена"]); ax.plot([xp, xr], [lc, lc], color="#e6edf3", lw=1.0, ls=":", zorder=5)
@@ -128,7 +141,7 @@ def render_order(o, kl, nbars=96, title=None, watch=False):
     return buf.getvalue()
 
 
-RULE_RU = {"tg_market": "по рынку (из слежения)", "tg_limit": "лимит у линии (из слежения)", "watch": "слежение за касанием", "chan_top": "отбой от верхней границы канала", "chan_bottom": "отбой от нижней границы канала", "retest_up": "ретест после пробоя вверх", "retest_down": "ретест после пробоя вниз", "breakout_up": "пробой вверх", "breakout_down": "пробой вниз"}
+RULE_RU = {"tg_stop": "стоп-ордер на вход (из слежения)", "tg_market": "по рынку (из слежения)", "tg_limit": "лимит у линии (из слежения)", "watch": "слежение за касанием", "chan_top": "отбой от верхней границы канала", "chan_bottom": "отбой от нижней границы канала", "retest_up": "ретест после пробоя вверх", "retest_down": "ретест после пробоя вниз", "breakout_up": "пробой вверх", "breakout_down": "пробой вниз"}
 
 
 def caption_order(o, acct="Регрессия"):
@@ -137,8 +150,10 @@ def caption_order(o, acct="Регрессия"):
     ctype = {"channel_up": "восходящий", "channel_down": "нисходящий"}.get(str(o.get("ctype")), "flat")
     ct = str(o.get("ctype") or "")
     counter = (s > 0 and "down" in ct) or (s < 0 and "up" in ct)
-    txt = "%s · %s %s лимит %s\nстоп %s (−%.2f%%) · цель %s (+%.2f%%) · R:R %.1f\nканал: %s · сетап: %s" % (
-        acct, o["sym"], "LONG" if s > 0 else "SHORT", fmt_px(en), fmt_px(st), risk, fmt_px(tp), rew, rew / risk if risk else 0, ctype, RULE_RU.get(o.get("rule"), o.get("rule", "")))
+    ew = {"tg_market": "по рынку", "tg_stop": "стоп-ордер (вход при срабатывании)"}.get(o.get("rule"), "лимит")
+    txt = "%s · %s %s %s %s\nстоп %s (−%.2f%%) · цель %s (+%.2f%%) · R:R %.1f\nканал: %s · сетап: %s" % (
+        acct, o["sym"], "LONG" if s > 0 else "SHORT", ew, fmt_px(en), fmt_px(st), risk, fmt_px(tp), rew, rew / risk if risk else 0, ctype, RULE_RU.get(o.get("rule"), o.get("rule", "")))
+    if o.get("setup"): txt += "\nтип: %s %s линии" % ("пробой" if o["setup"] == "breakout" else "отбой от", "верхней" if o.get("line") == "upper" else "нижней")
     if counter: txt += "\n⚠️ Направление сделки против направления канала (ретест/пробой)."
     return txt
 
@@ -147,7 +162,7 @@ def render_watch(w, kl):
     """График слежения: свечи, текущие границы канала, отметка касания, цена, объём."""
     L = w.get("last") or {}; last_t = int(L.get("t") or w["t_alert"])
     mark = {"touch": "касание", "cross": "выход за линию", "break": "начало пробоя", "back": "выход и возврат"}.get(w.get("state0"), "касание")
-    o = {"sym": w["sym"], "side": w["side"], "rule": "watch", "placed_t": int(w.get("t_ref") or w["t_alert"]), "expire_t": last_t + 2 * BAR_MS, "ctype": w.get("ctype"), "chan": w.get("chan"), "touch_px": w.get("touch_px"), "mark": mark}
+    o = {"sym": w["sym"], "side": w["side"], "rule": "watch", "placed_t": int(w.get("t_ref") or w["t_alert"]), "expire_t": last_t + 2 * BAR_MS, "ctype": w.get("ctype"), "chan": w.get("chan"), "chan0": w.get("chan0"), "touch_px": w.get("touch_px"), "mark": mark}
     return render_order(o, kl, title="%s  %s  слежение за касанием линии" % (w["sym"], str(w["side"]).upper()), watch=True)
 
 
@@ -156,7 +171,7 @@ STATE_RU = {"touch": "касание линии", "cross": "свеча закр�
 
 def caption_watch(w, kind):
     """kind: alert | update. Состояние у линии считается по текущим линиям канала на последних свечах."""
-    L = w.get("last") or {}; down = w["side"] == "short"; line = "верхнюю" if down else "нижнюю"; ct = "нисходящего" if down else "восходящего"; a = float(w.get("atr") or L.get("atr") or 0)
+    L = w.get("last") or {}; down = w["side"] == "short"; line = "верхнюю" if down else "нижнюю"; ctd = w.get("ctype") == "channel_down"; ct = "нисходящего" if ctd else "восходящего"; a = float(w.get("atr") or L.get("atr") or 0)
     hm = lambda ms: datetime.fromtimestamp(int(ms) / 1000, _tz()).strftime("%H:%M")
     pos_ = ""
     if L.get("R") is not None and L["R"] != L["S"]: pos_ = " · в канале на %d%% высоты" % round((float(L["c"]) - L["S"]) / (L["R"] - L["S"]) * 100)
@@ -166,7 +181,8 @@ def caption_watch(w, kind):
         if st == "touch": body = "свеча %s коснулась линии: экстремум %s, линия %s" % (hm(L.get("t") or w["t_alert"]), fmt_px(sp), fmt_px(lp))
         elif st == "back": body = "%d св. закрылись за линией, последняя вернулась внутрь; эпизод с %s (экстремум %s)" % (nb, hm(w.get("t_ref") or w["t_alert"]), fmt_px(sp))
         else: body = "%d из %d последних свечей закрылись за линией; эпизод с %s (экстремум %s, линия сейчас %s)" % (nb, nr, hm(w.get("t_ref") or w["t_alert"]), fmt_px(sp), fmt_px(lp))
-        return "⚡ %s: цена %s %s линию %s канала\n%s%s\nКанал %s. Следить или отклонить?" % (w["sym"], head, line if st != "back" else "", ct, body, pos_, "нисходящий" if down else "восходящий")
+        note = ("\nЭто линия против тренда: отбой от неё = коррекция, пробой = продолжение тренда." if w.get("counter") else "\nЭто линия по тренду: отбой от неё = по тренду, пробой = разворот.")
+        return "⚡ %s: цена %s %s линию %s канала\n%s%s\nКанал %s.%s\nСледить или отклонить?" % (w["sym"], head, line if st != "back" else "", ct, body, pos_, "нисходящий" if ctd else "восходящий", note)
     d = ((float(L["R"]) - float(L["c"])) / a if down else (float(L["c"]) - float(L["S"])) / a) if a and L.get("R") is not None else 0
     txt = "👁 %s: свеча %s закрыта, close %s%s\nСостояние: %s · до линии %+.2f ATR (минус = за линией) · слежу %d-ю свечу" % (w["sym"], hm(L.get("t") or 0), fmt_px(L.get("c") or 0), pos_, STATE_RU.get(w.get("state"), "—"), d, w.get("updates", 0))
     sh = w.get("shift")
