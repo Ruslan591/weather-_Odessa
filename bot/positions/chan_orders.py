@@ -64,7 +64,7 @@ CONF_MOVE_ATR = 0.2; CONF_WAIT = 3     # подтверждающая свеча
 MISS_H = 6; MISS_TP_R = 2.0            # учёт пропущенных: окно 6 часов, виртуальная цель 2R
 DEP_ATR = 1.0; MIN_GAP = 2; WICK_ATR = 1.0; RV = 3        # отход от уровня >= 1 ATR, касание не раньше чем через 2 свечи после пробоя, тень за уровнем <= 1 ATR
 CONFIRM_N = 2; TOUCH_ATR = 0.2; TOL_ATR = 0.2; AWAY_ATR = 0.5; ENTRY_OFF = 0.1; STOP_PAD = 0.5; VALID_C = 12
-RULE_RU = {"chan_top": "нисходящий канал: продажа на верхней границе", "chan_bottom": "восходящий канал: покупка на нижней границе",
+RULE_RU = {"tg_market": "вход по рынку из слежения", "tg_limit": "лимит у линии из слежения", "chan_top": "нисходящий канал: продажа на верхней границе", "chan_bottom": "восходящий канал: покупка на нижней границе",
            "retest_up": "пробой нисходящего канала вверх, возврат к уровню и подтверждение удержания: покупка у уровня", "retest_down": "пробой восходящего канала вниз, возврат к уровню и подтверждение удержания: продажа у уровня"}
 STATUS_RU = {"pending": "активна", "filled": "исполнена", "cancelled": "отменена", "expired": "истекла"}
 STATUS_RU.update({"proposed": "ждёт решения", "missed": "пропущен (нет ответа)", "rejected": "отклонён", "late": "поздно"})
@@ -476,6 +476,12 @@ def cycle(dry=False):
         def cancel(o, why, t=None):
             was = o["status"]; o.update(status="cancelled", reason=why, t_end=t or now); tg_gate.on_cancel(o, was, why)
         _tg_jobs.extend(tg_gate.apply(orders, now, cancel, lambda o_: _tg_touched(o_, now), _tg_mkorder, _tg_price) or [])
+        by_id = {o["id"]: o for o in orders}   # apply мог добавить ордера из слежения
+        for o_ in orders:   # рыночный ордер из слежения исполняется сразу по цене нажатия (с проскальзыванием), без ожидания свечи
+            if o_["status"] != "pending" or o_.get("rule") != "tg_market": continue
+            at_ = int(o_.get("approved_t") or now)
+            if now - at_ > 600000: fills.pop(o_["id"], None); cancel(o_, "рыночный ордер не исполнен за 10 минут", now)
+            else: fills[o_["id"]] = (at_, float(o_["price"]))
         for x in orders:  # заменённые правила: заблаговременные у границы (флаг) и ретест без подтверждения
             if x["status"] == "pending" and ((x["rule"] in ("chan_top", "chan_bottom") and not CHAN_EDGE) or (x["rule"] in ("retest_up", "retest_down") and not x.get("rv"))):
                 cancel(x, "правило заменено: ретест с подтверждением удержания")
@@ -497,7 +503,8 @@ def cycle(dry=False):
             except Exception: stp = o["stop"]
             R = abs(fp - stp)
             if R <= 0 or (side > 0 and stp >= fp) or (side < 0 and stp <= fp): cancel(o, "стоп по ту сторону входа", ft); continue
-            th = "Лимит %s %s по правилу «%s», выставлен %s UTC на %.6g, исполнен %s UTC (сквозь уровень)." % (o["side"], o["sym"], RULE_RU[o["rule"]], pos.tstr(o["placed_t"]), o["price"], pos.tstr(ft))
+            if o["rule"] == "tg_market": th = "Рыночный вход %s %s из слежения по цене %.6g (с проскальзыванием 0.03%%), исполнен %s UTC." % (o["side"], o["sym"], o["price"], pos.tstr(ft))
+            else: th = "Лимит %s %s по правилу «%s», выставлен %s UTC на %.6g, исполнен %s UTC (сквозь уровень)." % (o["side"], o["sym"], RULE_RU.get(o["rule"], o["rule"]), pos.tstr(o["placed_t"]), o["price"], pos.tstr(ft))
             p = {"id": max([x["id"] for x in ps_] + [0]) + 1, "sym": sym, "side": o["side"], "t_in": ft, "entry": fp, "px_signal": o["price"], "stop0": stp, "stop": stp, "tp": o["tp"],
                  "R": R, "R_pct": R / fp * 100, "be_r": 1.0, "lock_pct": 0.2, "be_px": fp + side * R, "lock_px": fp * (1 + side * 0.2 / 100), "armed": False,
                  "trail_dist": 1.5 * a1, "atr1h": a1, "max_h": MAXH, "stake": pos.STAKE, "lev": pos.LEV, "thesis": th, "last_t": (ft // 60000) * 60000, "hi": fp, "lo": fp, "status": "open",
