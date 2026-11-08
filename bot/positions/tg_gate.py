@@ -96,13 +96,15 @@ def _last(info):
     return {k: info.get(k) for k in ("t", "o", "h", "l", "c", "atr", "R", "S", "Rn", "Sn")}
 
 
-def _episode(info):
-    """Эпизод у линии: серия подряд идущих свечей (по текущим линиям), которые коснулись или пересекли линию, заканчивающаяся последней свечой.
+def _episode(info, line=None):
+    """Эпизод у линии (line: upper | lower; по умолчанию линия по направлению канала): серия подряд идущих свечей (по текущим линиям), которые коснулись или пересекли линию, заканчивающаяся последней свечой.
     state: touch (касание, ни одна свеча не закрылась за линией), cross (последняя свеча закрылась за линией, первая), break (>=2 закрытий за линией, пробой формируется), back (были закрытия за линией, последняя вернулась внутрь)."""
-    down = info["ctype"] == "channel_down"; a = info["atr"]; run = []
+    a = info["atr"]; run = []
+    if line is None: line = "upper" if info["ctype"] == "channel_down" else "lower"
+    up = line == "upper"
     for t, o_, h_, l_, c_, R_, S_ in reversed(info.get("hist") or []):
-        if not ((h_ >= R_ - 0.1 * a) if down else (l_ <= S_ + 0.1 * a)): break
-        run.append((t, (c_ > R_) if down else (c_ < S_), h_ if down else l_))
+        if not ((h_ >= R_ - 0.1 * a) if up else (l_ <= S_ + 0.1 * a)): break
+        run.append((t, (c_ > R_) if up else (c_ < S_), h_ if up else l_))
     if not run: return None
     run.reverse(); nb = sum(1 for r in run if r[1]); lb = run[-1][1]
     st = "break" if (nb >= 2 and lb) else ("cross" if (nb >= 1 and lb) else ("back" if nb >= 1 else "touch"))
@@ -125,7 +127,7 @@ def watch_scan(info, now):
     W = _wload(); items = W["items"]; ch = False; sym = info["sym"]
     for x in items:
         if x["sym"] == sym and x["status"] == "watching" and info["t"] > (x.get("last") or {}).get("t", 0):
-            ep = _episode(info) if info.get("ctype") else None
+            ep = _episode(info, x.get("line")) if info.get("ctype") else None
             x["shift"] = _shift(x, info) if info.get("ctype") else None
             x["last"] = _last(info); x["chan"] = info.get("chan") or x.get("chan"); x["updates"] += 1; x["unanswered"] += 1; ch = True
             x["state"] = ep["state"] if ep else "away"; x["n_beyond"] = ep["n_beyond"] if ep else 0
@@ -134,15 +136,18 @@ def watch_scan(info, now):
             else: emit({"type": "watch_update", "wid": x["id"]})
     active = [x for x in items if x["status"] in ("alert", "watching")]
     if info.get("ctype") and info.get("R") is not None and len(active) < int(m.get("max_watch", 3)) and not any(x["sym"] == sym for x in active) and info["R"] - info["S"] >= 1.5 * info["atr"]:
-        down = info["ctype"] == "channel_down"; side = "short" if down else "long"; a = info["atr"]
-        ep = _episode(info)
-        cool = any(x["sym"] == sym and x["side"] == side and x["status"] == "done" and now - x.get("t_end", 0) < 1800000 for x in items)
-        if ep and not cool:
-            W["seq"] += 1; line_px = info["R"] if down else info["S"]
-            x = {"id": W["seq"], "sym": sym, "side": side, "line": "upper" if down else "lower", "status": "alert", "ctype": info["ctype"], "chan": info.get("chan"), "t_alert": info["t"], "created": now,
+        down = info["ctype"] == "channel_down"; a = info["atr"]; main_line = "upper" if down else "lower"
+        lines = [main_line] + ([("lower" if down else "upper")] if m.get("watch_counter", True) else [])   # линия по тренду, затем противоположная (коррекция / разворот)
+        for line in lines:
+            side = "short" if line == "upper" else "long"      # side = направление отбоя от этой линии
+            ep = _episode(info, line)
+            cool = any(x["sym"] == sym and x["side"] == side and x["status"] == "done" and now - x.get("t_end", 0) < 1800000 for x in items)
+            if not ep or cool: continue
+            W["seq"] += 1; line_px = info["R"] if line == "upper" else info["S"]
+            x = {"id": W["seq"], "sym": sym, "side": side, "line": line, "counter": line != main_line, "status": "alert", "ctype": info["ctype"], "chan": info.get("chan"), "chan0": info.get("chan"), "t_alert": info["t"], "created": now,
                  "deadline": now + int(m.get("answer_win", 3)) * TFM, "line_px": line_px, "touch_px": ep["start_px"], "atr": a, "last": _last(info), "updates": 0, "unanswered": 0,
                  "state0": ep["state"], "state": ep["state"], "n_beyond": ep["n_beyond"], "n_run": ep["n_run"], "t_ref": ep["t_start"], "shift": None}
-            items.append(x); emit({"type": "alert", "wid": x["id"]}); ch = True
+            items.append(x); emit({"type": "alert", "wid": x["id"]}); ch = True; break
     if ch: _wsave(W, now)
 
 
@@ -197,12 +202,12 @@ def _wevent(e, W, m, orders, now, mkorder, price_fn, jobs):
         if mkorder is None: emit({"type": "watch_ack", "wid": x["id"], "ok": False, "what": "place", "why": "постановка недоступна"}); return False
         try: px = price_fn(x["sym"]) if price_fn else None
         except Exception: px = None
-        o, why = mkorder(x, e.get("entry"), e.get("target"), px or x["last"]["c"])
+        o, why = mkorder(x, e.get("entry"), e.get("target"), px or x["last"]["c"], e.get("setup") or "bounce")
         if not o: emit({"type": "watch_ack", "wid": x["id"], "ok": False, "what": "place", "why": why}); return False
         o["id"] = max([q["id"] for q in orders] + [0]) + 1; o["approved_t"] = now; o["src_watch"] = x["id"]; orders.append(o)
         x.update(status="done", reason="ордер #%d" % o["id"], t_end=now, order_id=o["id"]); m["missed"] = 0
         emit({"type": "placed", "id": o["id"], "src": "watch", "wid": x["id"]}); emit({"type": "watch_end", "wid": x["id"], "why": "ордер #%d выставлен" % o["id"], "order": o["id"]})
-        jobs.append((dict(x, _w=1), "w_place", {"entry": e.get("entry"), "target": e.get("target"), "order_id": o["id"], "price": o["price"]})); return True
+        jobs.append((dict(x, _w=1), "w_place", {"entry": e.get("entry"), "target": e.get("target"), "setup": e.get("setup") or "bounce", "order_id": o["id"], "price": o["price"]})); return True
     return False
 
 
