@@ -22,7 +22,7 @@ try: import tg_gate
 except Exception:
     class tg_gate:   # режимы Telegram недоступны: поведение как раньше
         ENABLED = False
-        on_place = staticmethod(lambda p, now: True); on_cancel = staticmethod(lambda *a, **k: None); apply = staticmethod(lambda *a, **k: []); emit = staticmethod(lambda *a, **k: None)
+        on_place = staticmethod(lambda p, now: True); on_cancel = staticmethod(lambda *a, **k: None); apply = staticmethod(lambda *a, **k: []); emit = staticmethod(lambda *a, **k: None); watch_needed = staticmethod(lambda *a, **k: False); watch_scan = staticmethod(lambda *a, **k: None)
 D = pos.D; OF = os.path.join(D, "orders.json"); LOG = os.path.join(D, "chan.log"); STF = os.path.join(D, "chan_state.json")
 EVF = os.path.join(D, "chan_events.json")
 CLASSIC = os.environ.get("CLASSIC_DIR", "/opt/trading-bot/classic")
@@ -364,6 +364,41 @@ def shadow_text(sh):
     return "Тренд (тень, на решение НЕ влияет; счёт -4..+4 по EMA; BTC/ETH и другой таймфрейм): " + "; ".join(parts) + "."
 
 _miss_t = 0
+def _tg_info(sym, A):
+    """Последняя закрытая свеча и канал по паре для режима слежения (tg_gate.watch_scan)."""
+    i = A["M"] - 1; t = A["t"]; tl = A["tl"]; a = float(A["atr"][i]); st = A["st_at"](i)
+    info = dict(sym=sym, t=int(t[i]), o=float(A["o"][i]), h=float(A["h"][i]), l=float(A["l"][i]), c=float(A["c"][i]), atr=a, ctype=None)
+    if st and st.get("lower") and st.get("upper") and st["type"] in ("channel_down", "channel_up"):
+        R, S = st["upper"], st["lower"]
+        info.update(ctype=st["type"], R=float(tl.at(R, i)), S=float(tl.at(S, i)), Rn=float(tl.at(R, i + 1)), Sn=float(tl.at(S, i + 1)), chan={"type": st["type"], "upper": ldict(R, t), "lower": ldict(S, t)})
+    return info
+
+
+def _tg_price(sym):
+    return float(pos.price(sym + "USDT"))
+
+
+def _tg_mkorder(w, entry, target, px):
+    """Ордер из слежения по направлению канала (short в нисходящем, long в восходящем). entry: market | limit (у линии); target: opp | mid | q1 | q3. Возвращает (ордер, None) или (None, причина)."""
+    L = w.get("last") or {}
+    if L.get("Rn") is None or not w.get("chan"): return None, "нет данных канала"
+    a = float(L["atr"]); s = -1 if w["side"] == "short" else 1; R, S = float(L["Rn"]), float(L["Sn"]); H = R - S; line = R if s < 0 else S; px = float(px)
+    if H <= 0: return None, "канал сжался"
+    if entry == "limit" and ((s < 0 and px < line) or (s > 0 and px > line)): price = line
+    else: price = px * (1 + s * 0.0003)      # по рынку (или лимит у линии, но цена уже за линией: исполнится сразу)
+    f = {"q1": 0.25, "mid": 0.5, "q3": 0.75}.get(target)
+    if target == "opp": tp = (S + TPBUF * a) if s < 0 else (R - TPBUF * a)
+    elif f is not None: tp = (R - f * H) if s < 0 else (S + f * H)
+    else: return None, "неизвестная цель"
+    risk = max(STOP_ATR * a, MIN_RISK / 100 * price); stop = price - s * risk
+    if (tp - price) * s < max(0.0015 * price, 0.5 * a): return None, "цель уже пройдена или слишком близко (%s)" % P(tp)
+    t_pl = (int(time.time() * 1000) // 60000 + 1) * 60000
+    why = ["Ордер выставлен вами из режима слежения: вход %s, цель %s. Канал %s, сторона по направлению канала." % ("по рынку" if entry == "market" else "лимитом у линии", {"opp": "противоположная линия", "mid": "середина", "q1": "1/4 канала", "q3": "3/4 канала"}[target], "нисходящий" if s < 0 else "восходящий"),
+           "Касание линии было на свече %s, слежение шло %d свечей." % (tok(int(w["t_alert"])), int(w.get("updates", 0))), risk_text(a, price, risk, stop, w["side"])]
+    o = mk(w["sym"], "tg_market" if entry == "market" else "tg_limit", w["side"], price, stop, tp, a, t_pl, VALID_A, w["chan"], ctype=w["ctype"], why=why, atr_c=float(L["c"]))
+    return o, None
+
+
 def _tg_touched(o, now):
     """Цена уже коснулась уровня ордера после его появления (по закрытым 1m свечам)? При ошибке считаем «поздно»."""
     try:
@@ -379,7 +414,8 @@ def _tg_touched(o, now):
 def _tg_journal(o, action, extra):
     try:
         import decisions
-        decisions.entry(o, action, pos.kl, **extra)
+        if o.get("_w"): decisions.watch(o, action, pos.kl, **extra)
+        else: decisions.entry(o, action, pos.kl, **extra)
     except Exception as e: log("tg journal error: %s" % e)
 
 
@@ -396,6 +432,9 @@ def cycle(dry=False):
                 try: p["shadow"] = trend_shadow.shadow(sym, p["side"]); p["why"].append(shadow_text(p["shadow"]))
                 except Exception as e: log("shadow %s error: %s" % (sym, e))
             props[sym] = (ti, ps)
+            if tg_gate.ENABLED and tg_gate.watch_needed(sym):
+                try: tg_gate.watch_scan(_tg_info(sym, A), now)
+                except Exception as e_: log("watch %s error: %s" % (sym, e_))
         except Exception as e:
             log("scan %s error: %s" % (sym, e))
     # fills for pending orders (no lock while fetching)
@@ -435,7 +474,7 @@ def cycle(dry=False):
         def n_open(): return sum(1 for p in ps_ if p["status"] == "open")
         def cancel(o, why, t=None):
             was = o["status"]; o.update(status="cancelled", reason=why, t_end=t or now); tg_gate.on_cancel(o, was, why)
-        _tg_jobs.extend(tg_gate.apply(orders, now, cancel, lambda o_: _tg_touched(o_, now)) or [])
+        _tg_jobs.extend(tg_gate.apply(orders, now, cancel, lambda o_: _tg_touched(o_, now), _tg_mkorder, _tg_price) or [])
         for x in orders:  # заменённые правила: заблаговременные у границы (флаг) и ретест без подтверждения
             if x["status"] == "pending" and ((x["rule"] in ("chan_top", "chan_bottom") and not CHAN_EDGE) or (x["rule"] in ("retest_up", "retest_down") and not x.get("rv"))):
                 cancel(x, "правило заменено: ретест с подтверждением удержания")
