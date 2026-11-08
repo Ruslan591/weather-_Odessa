@@ -305,6 +305,64 @@ def status_text():
     return "\n".join(out)
 
 
+def status_data():
+    """Данные для картинки-карточки счёта (tg_notify.render_status)."""
+    m = mode_state(); orders = jload(ORDF, [])
+    pend = sorted([o for o in orders if o.get("status") == "pending"], key=lambda x: x["id"]); prop = sum(1 for o in orders if o.get("status") == "proposed"); now = int(time.time() * 1000)
+    mo = m.get("mode", "auto"); info = []
+    if mo == "sleep": info.append("Новых ордеров и уведомлений нет. Открытые позиции продолжает вести бот.")
+    elif mo == "monitor":
+        parts = (["Таймер до %s" % hhmm(m["until"])] if m.get("until") else []) + ["пропущено подряд %d из %d" % (m.get("missed", 0), m.get("max_missed", 3))]
+        info.append(" · ".join(parts))
+        if m.get("alerts_off"): info.append("Новые алерты отключены (идущие слежения продолжаются)")
+    else: info.append("Бот ставит ордера сам и присылает график.")
+    ws = [x for x in (jload(WATCHF, {}).get("items") or []) if x.get("status") in ("alert", "watching")]
+    d = {"acct": ACCT, "sub": "", "mode": mo, "mode_ru": {"sleep": "Сон", "monitor": "Монитор", "auto": "Авто"}.get(mo, mo), "info": info, "equity": None, "tiles": [], "positions": [],
+         "orders": {"pend": len(pend), "prop": prop, "rows": [(o["sym"], o["side"].upper(), "%s · вход %s · цель %s · через %d мин" % (ORD_RULE.get(o.get("rule"), o.get("rule")), T.fmt_px(o["price"]), T.fmt_px(o["tp"]), max(0, int((o["expire_t"] - now) / 60000)))) for o in pend[:5]]},
+         "watches": [("%s %s: %s" % (x["sym"], x["side"].upper(), "ждёт вашего решения" if x["status"] == "alert" else "слежу (%d св.)" % x.get("updates", 0)), "#e3b341" if x["status"] == "alert" else "#c9d1d9") for x in ws],
+         "max_watch": m.get("max_watch", 3), "stamp": datetime.now(T._tz()).strftime("%H:%M:%S")}
+    try:
+        sn = fetch_snapshot(); a = sn["account"]; opn = sn.get("open", []); tot = a["equity"] - a["start"]; wh = "#e6edf3"
+        d.update(sub="бумажный счёт · старт %.0f $ · плечо %d× · ставка %.0f $" % (a["start"], a["lev"], a["stake"]), equity=a["equity"], chg_usd=tot, chg_pct=tot / a["start"] * 100,
+                 tiles=[("Кошелёк", "%.2f $" % (a["start"] + a["realized"]), wh), ("Нереализ. PnL", "%s $" % sg(a["unreal"]), "#26a69a" if a["unreal"] >= 0 else "#ef5350"), ("В марже", "%.2f $" % a["open_margin"], wh), ("Доступно", "%.2f $" % a["free"], wh)],
+                 positions=[{"sym": str(p["sym"]).replace("USDT", ""), "side": p["side"].upper(), "pct": p["unreal_pct"], "usd": p["unreal_usd"], "be": bool(p.get("armed")), "part": p.get("rem", 1) < 0.999} for p in opn[:8]])
+    except Exception as e:
+        log("snapshot fail: %s" % e); d["sub"] = "бумажный счёт"
+    return d
+
+
+def status_caption(d):
+    if d.get("equity") is None: return "Счёт «%s»: баланс и позиции получить не удалось" % ACCT
+    return "Счёт «%s»: %.2f $ (%s) · позиций %d · ордеров ждут %d" % (ACCT, d["equity"], sg(d["chg_pct"], 2, "%"), len(d["positions"]), d["orders"]["pend"])
+
+
+def status_kb():
+    rows = [[{"text": "🔄 Обновить", "callback_data": "st"}, {"text": "📋 Ордера", "callback_data": "ol"}]] + MENU[:1]
+    mm = menu()
+    if len(mm) > len(MENU): rows.append(mm[-1])      # в Мониторе: кнопка отключения / включения алертов
+    return rows
+
+
+def status_card(msg=None):
+    """Карточка счёта картинкой. msg - сообщение с нажатой кнопкой: если это уже картинка, обновляем её на месте, иначе присылаем новую. Если картинку построить не удалось, текстовая карточка."""
+    try: d = status_data(); png = T.render_status(d); cap = status_caption(d)
+    except Exception:
+        log("status render fail: " + traceback.format_exc()[-400:]); txt = status_text()
+        if msg and not msg.get("photo"): api("editMessageText", chat_id=CHAT, message_id=msg["message_id"], text=txt, reply_markup={"inline_keyboard": REFRESH + MENU[:1]})
+        else: api("sendMessage", chat_id=CHAT, text=txt, reply_markup={"inline_keyboard": REFRESH + MENU[:1]})
+        return
+    if msg and msg.get("photo"):
+        try: T._post("editMessageMedia", {"chat_id": CHAT, "message_id": msg["message_id"], "media": json.dumps({"type": "photo", "media": "attach://photo", "caption": cap}, ensure_ascii=False), "reply_markup": json.dumps({"inline_keyboard": status_kb()})}, {"photo": ("status.png", png, "image/png")})
+        except Exception as e: log("status edit media: %s" % e)
+    else: T.send_photo(png, cap, status_kb())
+
+
+def edit_text(msg, **kw):
+    """Правка текстового сообщения; если нажата кнопка под картинкой (текст в ней править нельзя), шлём новое сообщение."""
+    if msg.get("photo"): api("sendMessage", chat_id=CHAT, text=kw["text"], reply_markup=kw.get("reply_markup"))
+    else: api("editMessageText", chat_id=CHAT, message_id=msg["message_id"], **kw)
+
+
 def last_px(sym):
     kl = jload("/tmp/klcache/%s_5m_1000.json" % sym, [])
     try: return float(kl[-1][4])
@@ -333,7 +391,7 @@ def on_callback(cq):
     if p[0] == "m":
         if p[1] == "monitor":
             api("answerCallbackQuery", callback_query_id=cid)
-            api("editMessageText", chat_id=CHAT, message_id=mid, text="Монитор: на какое время включить? Счётчик пропусков работает всегда.", reply_markup={"inline_keyboard": [[{"text": "1 ч", "callback_data": "mt:1"}, {"text": "2 ч", "callback_data": "mt:2"}, {"text": "4 ч", "callback_data": "mt:4"}, {"text": "8 ч", "callback_data": "mt:8"}], [{"text": "без таймера", "callback_data": "mt:0"}, {"text": "↩ назад", "callback_data": "mb"}]]})
+            edit_text(msg, text="Монитор: на какое время включить? Счётчик пропусков работает всегда.", reply_markup={"inline_keyboard": [[{"text": "1 ч", "callback_data": "mt:1"}, {"text": "2 ч", "callback_data": "mt:2"}, {"text": "4 ч", "callback_data": "mt:4"}, {"text": "8 ч", "callback_data": "mt:8"}], [{"text": "без таймера", "callback_data": "mt:0"}, {"text": "↩ назад", "callback_data": "mb"}]]})
         else:
             inbox({"type": "mode", "mode": p[1]}); api("answerCallbackQuery", callback_query_id=cid, text="Переключаю: %s" % MODE_RU[p[1]])
     elif p[0] == "al":
@@ -342,8 +400,8 @@ def on_callback(cq):
         h = float(p[1]); inbox({"type": "mode", "mode": "monitor", "hours": h or None}); api("answerCallbackQuery", callback_query_id=cid, text="Монитор включается")
     elif p[0] == "st":
         api("answerCallbackQuery", callback_query_id=cid, text="Собираю данные…")
-        try: api("editMessageText", chat_id=CHAT, message_id=mid, text=status_text(), reply_markup={"inline_keyboard": REFRESH + MENU[:1]})
-        except Exception as e: log("status edit: %s" % e)
+        try: status_card(msg)
+        except Exception as e: log("status card: %s" % e)
     elif p[0] == "ol":
         api("answerCallbackQuery", callback_query_id=cid); txt, kb = orders_list()
         try: api("editMessageText", chat_id=CHAT, message_id=mid, text=txt, reply_markup={"inline_keyboard": kb})
@@ -446,7 +504,7 @@ def on_message(m):
         on = bool(mode_state().get("alerts_off")); inbox({"type": "alerts", "on": on})
         api("sendMessage", chat_id=CHAT, text="Включаю алерты…" if on else "Отключаю алерты…")
     elif t.startswith(("/orders", "/ordera")): txt, kb = orders_list(); api("sendMessage", chat_id=CHAT, text=txt, reply_markup={"inline_keyboard": kb})
-    elif t.startswith(("/status", "/balance")): api("sendMessage", chat_id=CHAT, text=status_text(), reply_markup={"inline_keyboard": REFRESH})
+    elif t.startswith(("/status", "/balance")): status_card()
     else: api("sendMessage", chat_id=CHAT, text="Команды: /mode (режим), /alerts (алерты вкл/выкл), /status (состояние), /orders (ордера и отмена).")
 
 
