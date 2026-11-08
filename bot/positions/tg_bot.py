@@ -66,6 +66,7 @@ def mode_text():
     if m["mode"] == "monitor":
         s += "\nПропущено подряд: %d из %d" % (m.get("missed", 0), m.get("max_missed", 3))
         if m.get("until"): s += "\nТаймер до %s" % hhmm(m["until"])
+        if m.get("alerts_off"): s += "\n🔕 Алерты отключены: новых графиков нет, пока не включите. Таймер идёт."
     s += {"sleep": "\nНовых ордеров нет, уведомлений о новых точках нет. Открытые позиции продолжает вести бот; неподтверждённые вами ордера отменены.",
           "monitor": "\nБот присылает момент, когда цена касается или пересекает линию канала. Вы решаете: «Отклонить» или «Следить», а при слежении после каждой свечи можно выставить ордер. Одновременно не больше трёх графиков в работе.",
           "auto": "\nБот ставит ордера сам и присылает график."}.get(m["mode"], "")
@@ -74,6 +75,14 @@ def mode_text():
 
 MENU = [[{"text": "😴 Сон", "callback_data": "m:sleep"}, {"text": "👁 Монитор", "callback_data": "m:monitor"}, {"text": "🤖 Авто", "callback_data": "m:auto"}], [{"text": "💼 Счёт и позиции", "callback_data": "st"}, {"text": "📋 Ордера", "callback_data": "ol"}]]
 REFRESH = [[{"text": "🔄 Обновить", "callback_data": "st"}]]
+
+
+def menu(off=None):
+    """Главное меню; в Мониторе добавляется кнопка отключения / включения алертов (off - явное состояние из события)."""
+    m = mode_state()
+    if m.get("mode") != "monitor": return MENU
+    if off is None: off = bool(m.get("alerts_off"))
+    return MENU + [[{"text": "🔔 Включить алерты" if off else "🔕 Отключить алерты", "callback_data": "al:1" if off else "al:0"}]]
 ORD_RULE = {"tg_stop": "стоп-ордер на вход", "tg_market": "по рынку", "tg_limit": "лимит у линии", "chan_top": "авто: от верхней границы", "chan_bottom": "авто: от нижней границы", "retest_up": "авто: ретест после пробоя вверх", "retest_down": "авто: ретест после пробоя вниз"}
 
 
@@ -99,8 +108,9 @@ def watch_get(wid):
 
 
 def watch_buttons(wid, kind):
-    if kind == "alert": return [[{"text": "👁 Следить", "callback_data": "wa:%d" % wid}, {"text": "❌ Отклонить", "callback_data": "wr:%d" % wid}]]
-    return [[{"text": "▶️ Продолжать следить", "callback_data": "wc:%d" % wid}, {"text": "⏹ Перестать следить", "callback_data": "ws:%d" % wid}], [{"text": "📌 Выставить ордер", "callback_data": "wp:%d" % wid}]]
+    off = [{"text": "🔕 Отключить алерты", "callback_data": "al:0"}]
+    if kind == "alert": return [[{"text": "👁 Следить", "callback_data": "wa:%d" % wid}, {"text": "❌ Отклонить", "callback_data": "wr:%d" % wid}], off]
+    return [[{"text": "▶️ Продолжать следить", "callback_data": "wc:%d" % wid}, {"text": "⏹ Перестать следить", "callback_data": "ws:%d" % wid}], [{"text": "📌 Выставить ордер", "callback_data": "wp:%d" % wid}], off]
 
 
 def send_watch(wid, kind):
@@ -238,10 +248,14 @@ def handle_event(ev):
     elif t == "mode":
         txt = mode_text()
         if ev.get("mode") == "sleep": txt += "\nОтменено неподтверждённых ордеров: %d." % ev.get("cancelled", 0)
-        api("sendMessage", chat_id=CHAT, text=txt, reply_markup={"inline_keyboard": MENU})
+        api("sendMessage", chat_id=CHAT, text=txt, reply_markup={"inline_keyboard": menu()})
+    elif t == "alerts":
+        off = bool(ev.get("off")); n = ev.get("cancelled", 0)
+        txt = ("🔕 Алерты отключены. Новых графиков не будет" + (", текущие алерты и слежения сняты (%d)" % n if n else "") + ". Выставленные ордера и позиции работают как раньше, таймер идёт.\nВключить: кнопка ниже или /alerts") if off else "🔔 Алерты включены. Новые касания линий снова будут приходить."
+        api("sendMessage", chat_id=CHAT, text=txt, reply_markup={"inline_keyboard": menu(off)})
     elif t == "sleep":
         why = {"missed": "пропущено подряд %s предложений" % ev.get("n"), "timer": "истёк таймер монитора"}.get(ev.get("why"), "")
-        api("sendMessage", chat_id=CHAT, text="😴 Ухожу в сон: %s.\nОтменено неподтверждённых ордеров: %d. Открытые позиции продолжает вести бот (стоп, безубыток, трейлинг).\nВключить снова: /mode" % (why, ev.get("cancelled", 0)), reply_markup={"inline_keyboard": MENU})
+        api("sendMessage", chat_id=CHAT, text="😴 Ухожу в сон: %s.\nОтменено неподтверждённых ордеров: %d. Открытые позиции продолжает вести бот (стоп, безубыток, трейлинг).\nВключить снова: /mode" % (why, ev.get("cancelled", 0)), reply_markup={"inline_keyboard": menu()})
     elif t == "filled":
         o = load_order(oid)
         if o: api("sendMessage", chat_id=CHAT, text="▶️ Позиция #%s открыта: %s %s по %s (%s, ордер #%s)." % (ev.get("pos"), o["sym"], o["side"].upper(), T.fmt_px(o.get("fill_px") or o["price"]), ORD_RULE.get(o.get("rule"), "лимит"), oid), reply_markup={"inline_keyboard": REFRESH + MENU[:1]})
@@ -322,6 +336,8 @@ def on_callback(cq):
             api("editMessageText", chat_id=CHAT, message_id=mid, text="Монитор: на какое время включить? Счётчик пропусков работает всегда.", reply_markup={"inline_keyboard": [[{"text": "1 ч", "callback_data": "mt:1"}, {"text": "2 ч", "callback_data": "mt:2"}, {"text": "4 ч", "callback_data": "mt:4"}, {"text": "8 ч", "callback_data": "mt:8"}], [{"text": "без таймера", "callback_data": "mt:0"}, {"text": "↩ назад", "callback_data": "mb"}]]})
         else:
             inbox({"type": "mode", "mode": p[1]}); api("answerCallbackQuery", callback_query_id=cid, text="Переключаю: %s" % MODE_RU[p[1]])
+    elif p[0] == "al":
+        on = p[1] == "1"; inbox({"type": "alerts", "on": on}); api("answerCallbackQuery", callback_query_id=cid, text="Включаю алерты…" if on else "Отключаю алерты…")
     elif p[0] == "mt":
         h = float(p[1]); inbox({"type": "mode", "mode": "monitor", "hours": h or None}); api("answerCallbackQuery", callback_query_id=cid, text="Монитор включается")
     elif p[0] == "st":
@@ -387,7 +403,7 @@ def on_callback(cq):
         inbox({"type": "w_place", "wid": wid, "entry": entry, "target": tgt, "setup": "breakout" if setup == "k" else "bounce"}); api("answerCallbackQuery", callback_query_id=cid, text="Ставлю ордер…")
         edit_watch(wid, "⏳ Ставлю ордер (%s, %s, цель: %s)…" % ("пробой" if setup == "k" else "отбой", {"market": "по рынку", "limit": "лимит", "stop": "стоп-ордер"}.get(entry, entry), tgt))
     elif p[0] == "mb":
-        api("answerCallbackQuery", callback_query_id=cid); api("editMessageText", chat_id=CHAT, message_id=mid, text=mode_text(), reply_markup={"inline_keyboard": MENU})
+        api("answerCallbackQuery", callback_query_id=cid); api("editMessageText", chat_id=CHAT, message_id=mid, text=mode_text(), reply_markup={"inline_keyboard": menu()})
     elif p[0] == "a":
         inbox({"type": "approve", "id": int(p[1])}); api("answerCallbackQuery", callback_query_id=cid, text="Принято, применяю…"); edit_order(int(p[1]), "⏳ Принято, применяю…")
     elif p[0] == "r":
@@ -425,15 +441,18 @@ def on_message(m):
         try: api("editMessageReplyMarkup", chat_id=CHAT, message_id=msgs_load()[str(oid)]["mid"], reply_markup={"inline_keyboard": order_buttons(oid)})
         except Exception as e: log("restore buttons: %s" % e)
         return
-    if t.startswith(("/start", "/mode", "/menu")): api("sendMessage", chat_id=CHAT, text=mode_text(), reply_markup={"inline_keyboard": MENU})
+    if t.startswith(("/start", "/mode", "/menu")): api("sendMessage", chat_id=CHAT, text=mode_text(), reply_markup={"inline_keyboard": menu()})
+    elif t.startswith("/alerts"):
+        on = bool(mode_state().get("alerts_off")); inbox({"type": "alerts", "on": on})
+        api("sendMessage", chat_id=CHAT, text="Включаю алерты…" if on else "Отключаю алерты…")
     elif t.startswith(("/orders", "/ordera")): txt, kb = orders_list(); api("sendMessage", chat_id=CHAT, text=txt, reply_markup={"inline_keyboard": kb})
     elif t.startswith(("/status", "/balance")): api("sendMessage", chat_id=CHAT, text=status_text(), reply_markup={"inline_keyboard": REFRESH})
-    else: api("sendMessage", chat_id=CHAT, text="Команды: /mode (режим), /status (состояние), /orders (ордера и отмена).")
+    else: api("sendMessage", chat_id=CHAT, text="Команды: /mode (режим), /alerts (алерты вкл/выкл), /status (состояние), /orders (ордера и отмена).")
 
 
 def main():
     log("tg_bot start, POS_DIR=%s" % D)
-    try: api("setMyCommands", commands=[{"command": "mode", "description": "Режим: сон / монитор / авто"}, {"command": "status", "description": "Счёт, баланс, позиции"}, {"command": "orders", "description": "Выставленные ордера и отмена"}])
+    try: api("setMyCommands", commands=[{"command": "mode", "description": "Режим: сон / монитор / авто"}, {"command": "status", "description": "Счёт, баланс, позиции"}, {"command": "orders", "description": "Выставленные ордера и отмена"}, {"command": "alerts", "description": "Алерты: отключить / включить"}])
     except Exception as e: log("setMyCommands fail: %s" % e)
     threading.Thread(target=outbox_loop, daemon=True).start()
     offset = None
