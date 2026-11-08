@@ -1,1 +1,1 @@
-{"task_id": "dep5a", "cmd": "cd /opt/weather-pipeline/repo && git fetch -q origin && git show origin/main:scripts/deploy_tg_update5.sh | bash 2>&1 | LC_ALL=C tr -cd '\\\\11\\\\12\\\\40-\\\\176'", "timeout": 280}
+{"task_id": "chk5a", "cmd": "systemctl is-active tg-bot-regr chan-orders-regr; cat /opt/trading-bot/positions_regr/tg_mode.json; echo; tail -2 /opt/trading-bot/positions_regr/chan.log; journalctl -u tg-bot-regr -n 2 --no-pager", "timeout": 30}
