@@ -64,7 +64,7 @@ CONF_MOVE_ATR = 0.2; CONF_WAIT = 3     # подтверждающая свеча
 MISS_H = 6; MISS_TP_R = 2.0            # учёт пропущенных: окно 6 часов, виртуальная цель 2R
 DEP_ATR = 1.0; MIN_GAP = 2; WICK_ATR = 1.0; RV = 3        # отход от уровня >= 1 ATR, касание не раньше чем через 2 свечи после пробоя, тень за уровнем <= 1 ATR
 CONFIRM_N = 2; TOUCH_ATR = 0.2; TOL_ATR = 0.2; AWAY_ATR = 0.5; ENTRY_OFF = 0.1; STOP_PAD = 0.5; VALID_C = 12
-RULE_RU = {"tg_market": "вход по рынку из слежения", "tg_limit": "лимит у линии из слежения", "chan_top": "нисходящий канал: продажа на верхней границе", "chan_bottom": "восходящий канал: покупка на нижней границе",
+RULE_RU = {"tg_stop": "стоп-ордер на вход из слежения", "tg_market": "вход по рынку из слежения", "tg_limit": "лимит у линии из слежения", "chan_top": "нисходящий канал: продажа на верхней границе", "chan_bottom": "восходящий канал: покупка на нижней границе",
            "retest_up": "пробой нисходящего канала вверх, возврат к уровню и подтверждение удержания: покупка у уровня", "retest_down": "пробой восходящего канала вниз, возврат к уровню и подтверждение удержания: продажа у уровня"}
 STATUS_RU = {"pending": "активна", "filled": "исполнена", "cancelled": "отменена", "expired": "истекла"}
 STATUS_RU.update({"proposed": "ждёт решения", "missed": "пропущен (нет ответа)", "rejected": "отклонён", "late": "поздно"})
@@ -379,24 +379,65 @@ def _tg_price(sym):
     return float(pos.price(sym + "USDT"))
 
 
-def _tg_mkorder(w, entry, target, px):
-    """Ордер из слежения по направлению канала (short в нисходящем, long в восходящем). entry: market | limit (у линии); target: opp | mid | q1 | q3. Возвращает (ордер, None) или (None, причина)."""
+BRK_BUF = 0.15   # стоп-ордер на пробой стоит за линией на 0.15 ATR
+TG_RULE = {"market": "tg_market", "limit": "tg_limit", "stop": "tg_stop"}
+TG_ENTRY_RU = {"market": "по рынку", "limit": "лимитом", "stop": "стоп-ордером (вход по срабатыванию уровня)"}
+TG_TGT_RU = {"opp": "противоположная линия", "mid": "середина канала", "q1": "1/4 канала", "q3": "3/4 канала", "h05": "0.5 высоты канала за линией", "h1": "1 высота канала за линией", "h15": "1.5 высоты канала за линией"}
+
+
+def fill_px(o, op, hi, lo):
+    """Цена исполнения ордера на 1m свече (open, high, low) или None. Лимит: long при lo < цена, short при hi > цена. Стоп-ордер на вход (tg_stop): long при hi > цена, short при lo < цена, цена исполнения не лучше уровня (гэп берём по open)."""
+    p = o["price"]; long_ = o["side"] == "long"
+    if o.get("rule") == "tg_stop":
+        if long_ and hi > p: return max(p, op)
+        if (not long_) and lo < p: return min(p, op)
+        return None
+    if long_ and lo < p: return min(p, op)
+    if (not long_) and hi > p: return max(p, op)
+    return None
+
+
+def _tg_mkorder(w, entry, target, px, setup="bounce"):
+    """Ордер из слежения. setup: bounce (отбой от линии, сторона от касаемой линии: у верхней short, у нижней long) | breakout (пробой линии: у верхней long, у нижней short).
+    entry: market | limit (отбой: у линии; пробой: на ретесте) | stop (стоп-ордер на вход: отбой - за экстремумом последней свечи, пробой - за линией).
+    target: отбой opp | mid | q1 | q3; пробой h05 | h1 | h15 (высота канала от линии). Возвращает (ордер, None) или (None, причина)."""
     L = w.get("last") or {}
     if L.get("Rn") is None or not w.get("chan"): return None, "нет данных канала"
-    a = float(L["atr"]); s = -1 if w["side"] == "short" else 1; R, S = float(L["Rn"]), float(L["Sn"]); H = R - S; line = R if s < 0 else S; px = float(px)
+    a = float(L["atr"]); R, S = float(L["Rn"]), float(L["Sn"]); H = R - S; px = float(px)
     if H <= 0: return None, "канал сжался"
-    if entry == "limit" and ((s < 0 and px < line) or (s > 0 and px > line)): price = line
-    else: price = px * (1 + s * 0.0003)      # по рынку (или лимит у линии, но цена уже за линией: исполнится сразу)
-    f = {"q1": 0.25, "mid": 0.5, "q3": 0.75}.get(target)
-    if target == "opp": tp = (S + TPBUF * a) if s < 0 else (R - TPBUF * a)
-    elif f is not None: tp = (R - f * H) if s < 0 else (S + f * H)
-    else: return None, "неизвестная цель"
+    up = (w.get("line") or ("upper" if w["side"] == "short" else "lower")) == "upper"; line = R if up else S
+    brk = setup == "breakout"
+    s = (1 if up else -1) if brk else (-1 if up else 1)       # направление сделки: +1 long, -1 short
+    if entry not in TG_RULE: return None, "неизвестный тип входа"
+    if brk:
+        if entry == "market": price = px * (1 + s * 0.0003)
+        elif entry == "stop":
+            price = line + s * BRK_BUF * a
+            if (price - px) * s <= 0.05 * a: return None, "цена уже за уровнем стоп-ордера (%s): выберите вход по рынку" % P(price)
+        else:
+            price = line + s * 0.1 * a
+            if (px - price) * s < 0.15 * a: return None, "ретест невозможен: цена ещё не ушла за линию (линия %s)" % P(line)
+        k = {"h05": 0.5, "h1": 1.0, "h15": 1.5}.get(target)
+        if k is None: return None, "неизвестная цель"
+        tp = line + s * k * H
+    else:
+        if entry == "market": price = px * (1 + s * 0.0003)
+        elif entry == "limit": price = line if ((s < 0 and px < line) or (s > 0 and px > line)) else px * (1 + s * 0.0003)    # цена уже за линией: исполнится сразу
+        else:
+            price = (float(L["l"]) if s < 0 else float(L["h"])) + s * 0.1 * a      # за экстремумом последней закрытой свечи
+            if (price - px) * s <= 0.05 * a: return None, "цена уже за уровнем стоп-ордера (%s): выберите вход по рынку" % P(price)
+        f = {"q1": 0.25, "mid": 0.5, "q3": 0.75}.get(target)
+        if target == "opp": tp = (S + TPBUF * a) if s < 0 else (R - TPBUF * a)
+        elif f is not None: tp = (R - f * H) if s < 0 else (S + f * H)
+        else: return None, "неизвестная цель"
     risk = max(STOP_ATR * a, MIN_RISK / 100 * price); stop = price - s * risk
     if (tp - price) * s < max(0.0015 * price, 0.5 * a): return None, "цель уже пройдена или слишком близко (%s)" % P(tp)
+    ct = w.get("ctype"); counter = (s > 0 and ct == "channel_down") or (s < 0 and ct == "channel_up")
     t_pl = (int(time.time() * 1000) // 60000 + 1) * 60000
-    why = ["Ордер выставлен вами из режима слежения: вход %s, цель %s. Канал %s, сторона по направлению канала." % ("по рынку" if entry == "market" else "лимитом у линии", {"opp": "противоположная линия", "mid": "середина", "q1": "1/4 канала", "q3": "3/4 канала"}[target], "нисходящий" if s < 0 else "восходящий"),
-           "Касание линии было на свече %s, слежение шло %d свечей." % (tok(int(w["t_alert"])), int(w.get("updates", 0))), risk_text(a, price, risk, stop, w["side"])]
-    o = mk(w["sym"], "tg_market" if entry == "market" else "tg_limit", w["side"], price, stop, tp, a, t_pl, VALID_A, w["chan"], ctype=w["ctype"], why=why, atr_c=float(L["c"]))
+    why = ["Ордер выставлен вами из режима слежения: %s %s линии, вход %s, цель %s. Канал %s%s." % ("пробой" if brk else "отбой от", "верхней" if up else "нижней", TG_ENTRY_RU[entry], TG_TGT_RU.get(target, target), "нисходящий" if ct == "channel_down" else "восходящий", ", сделка против направления канала" if counter else ", сделка по направлению канала"),
+           "Касание линии было на свече %s, слежение шло %d свечей." % (tok(int(w["t_alert"])), int(w.get("updates", 0))), risk_text(a, price, risk, stop, "long" if s > 0 else "short")]
+    mark = {"market": "вход по рынку", "limit": "лимит выставлен", "stop": "стоп-ордер выставлен"}[entry]
+    o = mk(w["sym"], TG_RULE[entry], "long" if s > 0 else "short", price, stop, tp, a, t_pl, VALID_A, w["chan"], ctype=w["ctype"], why=why, atr_c=float(L["c"]), setup=setup, line="upper" if up else "lower", counter=counter, mark=mark)
     return o, None
 
 
@@ -449,8 +490,8 @@ def cycle(dry=False):
                 if ot >= o["expire_t"]: expired.append((o["id"], o["expire_t"])); break
                 if ot < o["placed_t"]: continue
                 op, hi, lo = float(k[1]), float(k[2]), float(k[3]); last = ot
-                if (o["side"] == "long" and lo < o["price"]) or (o["side"] == "short" and hi > o["price"]):
-                    fills[o["id"]] = (ot, min(o["price"], op) if o["side"] == "long" else max(o["price"], op)); break
+                fpx = fill_px(o, op, hi, lo)
+                if fpx is not None: fills[o["id"]] = (ot, fpx); break
             o["_last"] = last
         except Exception as e:
             log("fill-check %s error: %s" % (o["sym"], e))
@@ -504,6 +545,7 @@ def cycle(dry=False):
             R = abs(fp - stp)
             if R <= 0 or (side > 0 and stp >= fp) or (side < 0 and stp <= fp): cancel(o, "стоп по ту сторону входа", ft); continue
             if o["rule"] == "tg_market": th = "Рыночный вход %s %s из слежения по цене %.6g (с проскальзыванием 0.03%%), исполнен %s UTC." % (o["side"], o["sym"], o["price"], pos.tstr(ft))
+            elif o["rule"] == "tg_stop": th = "Стоп-ордер на вход %s %s из слежения (%s), уровень %.6g, выставлен %s UTC, сработал %s UTC." % (o["side"], o["sym"], "пробой" if o.get("setup") == "breakout" else "отбой", o["price"], pos.tstr(o["placed_t"]), pos.tstr(ft))
             else: th = "Лимит %s %s по правилу «%s», выставлен %s UTC на %.6g, исполнен %s UTC (сквозь уровень)." % (o["side"], o["sym"], RULE_RU.get(o["rule"], o["rule"]), pos.tstr(o["placed_t"]), o["price"], pos.tstr(ft))
             p = {"id": max([x["id"] for x in ps_] + [0]) + 1, "sym": sym, "side": o["side"], "t_in": ft, "entry": fp, "px_signal": o["price"], "stop0": stp, "stop": stp, "tp": o["tp"],
                  "R": R, "R_pct": R / fp * 100, "be_r": 1.0, "lock_pct": 0.2, "be_px": fp + side * R, "lock_px": fp * (1 + side * 0.2 / 100), "armed": False,
