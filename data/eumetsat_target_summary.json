@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-08T08:17:44Z",
+  "timestamp": "2026-11-08T08:23:18Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-11-08T08:00:00.000Z",
   "target_id": 7,
@@ -19,7 +19,7 @@
     "frontlike": false,
     "window_spanning": false,
     "phase_label": "безоблачно",
-    "cloud_fraction": 0.099,
+    "cloud_fraction": 0.097,
     "has_precip": false,
     "has_lightning": false
   },
@@ -37,8 +37,8 @@
       "elongation_axis_compass": "Ю-С",
       "frontlike": true,
       "window_spanning": false,
-      "phase_label": null,
-      "type_label": null,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
       "has_precip": null,
       "has_lightning": false,
       "ir_confirmed": true,
@@ -55,8 +55,8 @@
       "elongation_axis_compass": "В-З",
       "frontlike": true,
       "window_spanning": false,
-      "phase_label": null,
-      "type_label": null,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
       "has_precip": null,
       "has_lightning": false,
       "ir_confirmed": true,
@@ -246,26 +246,26 @@
   },
   "target_phase": {
     "label": "безоблачно",
-    "cloud_fraction": 1.0
+    "cloud_fraction": 0.0
   },
   "existence": {
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-11-08T07:50:00.000Z"
+        "timestamp": "2026-11-08T08:00:00.000Z"
       },
       "geocolour_motion": {
         "confirmed": false,
-        "timestamp": "2026-11-08T07:50:00.000Z"
+        "timestamp": "2026-11-08T08:00:00.000Z"
       },
       "cloud_phase_type": {
-        "confirmed": true,
-        "timestamp": "2026-11-08T08:07:37Z"
+        "confirmed": false,
+        "timestamp": "2026-11-08T08:22:05Z"
       }
     },
-    "votes_confirmed": 1,
-    "votes_not_confirmed": 2,
-    "consensus": "disputed"
+    "votes_confirmed": 0,
+    "votes_not_confirmed": 3,
+    "consensus": "not_confirmed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -274,8 +274,8 @@
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-11-08T08:17:21Z"
+      "timestamp": "2026-11-08T08:22:46Z"
     }
   },
-  "verdict": "Цель в 120км ЮЗ, безоблачно — каналы расходятся: cloud_phase_type подтверждают, ir_motion/geocolour_motion нет. Отдельно: система синоптического масштаба (47681км²) в 38км ЮВ."
+  "verdict": "CLM отметил цель в 120км ЮЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (47681км²) в 38км ЮВ."
 }
