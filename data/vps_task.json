@@ -1,1 +1,1 @@
-{"task_id": "rs3bg2-1794207928", "cmd": "cd /opt/weather-pipeline/repo && git fetch -q origin; git show origin/main:scripts/reach_study3.py > /tmp/rs3.py; nohup python3 /tmp/rs3.py > /tmp/rs3.out 2>&1 &\nsleep 1; echo started", "timeout": 60}
+{"task_id": "rs3rd5-1794208174", "cmd": "cat /tmp/rs3.out | LC_ALL=C tr -cd '\\11\\12\\40-\\176' | tail -40; ps -eo etime,args | grep '[r]s3.py' | head -2", "timeout": 60}
