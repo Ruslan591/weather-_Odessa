@@ -65,7 +65,7 @@ def render_order(o, kl, nbars=96, title=None, watch=False):
     if len(ks) < 10: raise ValueError("мало свечей для графика")
     x0 = ks[0][0]
     X = lambda t: (t - x0) / BAR_MS
-    fig = plt.figure(figsize=(7.2, 6.3), dpi=130)
+    fig = plt.figure(figsize=(7.2, 6.3), dpi=DPI_OUT)
     gs = fig.add_gridspec(2, 1, height_ratios=[4.3, 1], hspace=0.04)
     ax = fig.add_subplot(gs[0]); axv = fig.add_subplot(gs[1], sharex=ax)
     fig.patch.set_facecolor(BG); ax.set_facecolor(BG); axv.set_facecolor(BG)
@@ -141,6 +141,8 @@ def render_order(o, kl, nbars=96, title=None, watch=False):
     buf = io.BytesIO(); fig.savefig(buf, format="png", facecolor=BG); plt.close(fig)
     return buf.getvalue()
 
+
+DPI_OUT = 175  # 7.2in*175=1260px; Telegram sendPhoto режет всё свыше 1280px по длинной стороне
 
 RULE_RU = {"tg_stop": "стоп-ордер на вход (из слежения)", "tg_market": "по рынку (из слежения)", "tg_limit": "лимит у линии (из слежения)", "watch": "слежение за касанием", "chan_top": "отбой от верхней границы канала", "chan_bottom": "отбой от нижней границы канала", "retest_up": "ретест после пробоя вверх", "retest_down": "ретест после пробоя вниз", "breakout_up": "пробой вверх", "breakout_down": "пробой вниз"}
 
@@ -272,7 +274,7 @@ def render_status(d):
         return y + 40
 
     H = lay(None)
-    fig = plt.figure(figsize=(W / 130.0, H / 130.0), dpi=130); fig.patch.set_facecolor(BG)
+    fig = plt.figure(figsize=(W / 130.0, H / 130.0), dpi=DPI_OUT); fig.patch.set_facecolor(BG)
     ax = fig.add_axes([0, 0, 1, 1]); ax.set_xlim(0, W); ax.set_ylim(H, 0); ax.axis("off"); ax.set_facecolor(BG)
     lay(ax)
     buf = io.BytesIO(); fig.savefig(buf, format="png", facecolor=BG); plt.close(fig)
