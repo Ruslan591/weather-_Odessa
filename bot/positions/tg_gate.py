@@ -22,7 +22,7 @@ D = os.environ.get("POS_DIR", "/opt/trading-bot/positions")
 ENABLED = os.environ.get("TG_GATE", "0") == "1"
 WATCHF = os.path.join(D, "tg_watch.json"); MODEF = os.path.join(D, "tg_mode.json"); OUTF = os.path.join(D, "tg_outbox.jsonl"); INF = os.path.join(D, "tg_inbox.jsonl"); OFFF = os.path.join(D, "tg_inbox.off")
 MODES = ("sleep", "monitor", "auto"); TFM = 300000
-DEFAULT = {"mode": "auto", "missed": 0, "max_missed": 3, "answer_win": 3, "until": None, "max_watch": 3, "watch_unanswered": 3, "watch_hours": 4, "alerts_off": False, "express": False, "autoorder": False}
+DEFAULT = {"mode": "auto", "missed": 0, "max_missed": 3, "answer_win": 3, "until": None, "max_watch": 3, "watch_unanswered": 3, "watch_hours": 4, "alerts_off": False, "express": False, "autoorder": False, "express_away": 6, "express_hours": 2}
 
 
 def load_mode():
@@ -135,8 +135,11 @@ def watch_scan(info, now):
             x["shift"] = _shift(x, info) if info.get("ctype") else None
             x["last"] = _last(info); x["chan"] = info.get("chan") or x.get("chan"); x["updates"] += 1; x["unanswered"] += 1; ch = True
             x["state"] = ep["state"] if ep else "away"; x["n_beyond"] = ep["n_beyond"] if ep else 0
+            x["away_n"] = (int(x.get("away_n") or 0) + 1) if x["state"] == "away" else 0     # подряд свечей вдали от линии
             if not exp and x["unanswered"] > int(m.get("watch_unanswered", 3)): x.update(status="done", reason="нет ответа на обновления", t_end=now); emit({"type": "watch_end", "wid": x["id"], "why": "нет ответа на %d обновления подряд" % int(m.get("watch_unanswered", 3))})
             elif not exp and now - x["t_follow"] > float(m.get("watch_hours", 4)) * 3600000: x.update(status="done", reason="прошло %s ч" % m.get("watch_hours", 4), t_end=now); emit({"type": "watch_end", "wid": x["id"], "why": "слежение длится дольше %s ч" % m.get("watch_hours", 4)})
+            elif exp and x["away_n"] >= int(m.get("express_away", 6)): x.update(status="done", reason="цена ушла от линии", t_end=now); emit({"type": "watch_end", "wid": x["id"], "why": "цена %d свечей подряд вдали от линии: слежение закончено (новое касание даст новый алерт)" % x["away_n"]})
+            elif exp and now - x["t_follow"] > float(m.get("express_hours", 2)) * 3600000: x.update(status="done", reason="предел времени экспресса", t_end=now); emit({"type": "watch_end", "wid": x["id"], "why": "слежение длится дольше %s ч: закончено (новое касание даст новый алерт)" % m.get("express_hours", 2)})
             else: emit({"type": "watch_update", "wid": x["id"]})
     active = [x for x in items if x["status"] in ("alert", "watching")]
     if not m.get("alerts_off") and info.get("ctype") and info.get("R") is not None and len(active) < int(m.get("max_watch", 3)) and not any(x["sym"] == sym for x in active) and info["R"] - info["S"] >= 1.5 * info["atr"]:
