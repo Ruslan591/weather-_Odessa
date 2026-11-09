@@ -69,3 +69,36 @@ def verdict(w, kl=None):
     feat = {"dist": round(dist, 3), "wick": round(wick, 3), "cpos": round(cpos, 3), "favor": int(favor), "rr": round(rr_t, 2), "st": st, "counter": int(counter), "width": round(H / a, 2), "nb": nb}
     geo = {"line": line, "H": H, "risk": risk, "a": a}
     return {"call": call, "text": text, "feat": feat, "plan": plan, "geo": geo, "t": int(L.get("t") or 0), "sym": w.get("sym"), "side": side}
+
+
+def verdict_break(w, kl=None):
+    """Мнение по ПРОБОЮ линии (для Автоордера): пробой формируется, когда >=2 свечи подряд закрылись за линией (состояние break).
+    Дополняет verdict (отбой): у отбоя условие «за линию не закрывались», поэтому вместе они не пересекаются.
+    Условия: (1) >=2 закрытия за линией, последняя свеча за линией; (2) не гонимся: цена за линией на 0.2..1.5 ATR; (3) последняя свеча идёт в сторону пробоя (тело >=30% диапазона);
+    (4) R:R до цели 0.5 высоты канала за линией >= 1.0; (5) канал не перестроился >=0.5 ATR. Вход по рынку по close, стоп max(1.2 ATR, 0.5%). Пороги начальные.
+    Возвращает {call: enter|wait|None, text, plan{side, entry, stop, tp, target}} или None, если пробоя нет (состояние не break)."""
+    L = w.get("last") or {}
+    if L.get("Rn") is None or not L.get("atr"): return None
+    st = w.get("state") or w.get("state0") or "touch"
+    if st != "break": return None
+    a = _f(L["atr"]); o, h, l, c = (_f(L[k]) for k in ("o", "h", "l", "c")); R, S = _f(L["Rn"]), _f(L["Sn"]); H = R - S
+    if a <= 0 or H <= 0: return None
+    up = (w.get("line") or ("upper" if w.get("side") == "short" else "lower")) == "upper"
+    s = 1 if up else -1                      # направление пробоя: через верхнюю - вверх (LONG), через нижнюю - вниз (SHORT)
+    line = R if up else S
+    rng = max(h - l, 1e-12); beyond = (c - line) * s / a; body = (c - o) * s / rng
+    risk = max(1.2 * a, 0.005 * c); tp = line + s * 0.5 * H; rr = (tp - c) * s / risk; sh = w.get("shift")
+    conds = [
+        (int(w.get("n_beyond") or 0) >= 2, "%d закрытия за линией подряд" % int(w.get("n_beyond") or 0), "закрытий за линией меньше двух"),
+        (0.2 <= beyond <= 1.5, "цена за линией на %.2f ATR" % beyond, "цена за линией на %.2f ATR: %s" % (beyond, "ещё не ушла" if beyond < 0.2 else "уже далеко, в погоню не идём")),
+        (body >= 0.3, "последняя свеча идёт в сторону пробоя (тело %d%%)" % round(body * 100), "последняя свеча не поддерживает пробой (тело %d%%)" % round(body * 100)),
+        (rr >= 1.0, "до цели 0.5 канала R:R %.1f" % rr, "до цели 0.5 канала R:R %.1f < 1.0" % rr),
+        (sh is None or abs(sh) < 0.5, "канал стабилен", "канал перестроился (%+.1f ATR)" % (sh or 0)),
+    ]
+    call = "enter" if all(x[0] for x in conds) else "wait"
+    side = "long" if s > 0 else "short"; stop = c - s * risk
+    plan = {"side": side, "entry": c, "stop": stop, "tp": tp, "target": "h05", "rr": round(rr, 2)}
+    lines = ["%s %s" % ("✓" if ok else "✗", good if ok else bad) for ok, good, bad in conds]
+    if call == "enter": head = "💥 Пробой линии: ✅ можно заходить — %s по рынку ~%s, стоп %s, цель %s (0.5 высоты канала за линией), R:R %.1f" % (side.upper(), _fmt(c), _fmt(stop), _fmt(tp), rr)
+    else: head = "💥 Пробой линии формируется: ⏳ ждём — %s" % next(bad for ok, good, bad in conds if not ok)
+    return {"call": call, "text": head + "\n" + "\n".join(lines), "plan": plan, "t": int(L.get("t") or 0), "sym": w.get("sym"), "side": side}
