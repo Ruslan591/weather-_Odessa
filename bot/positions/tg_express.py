@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 """tg_express.py -- мнение бота («заходить сейчас или ждать») для режима «Экспресс слежение». Только stdlib, без побочных эффектов.
 Правила прозрачные (не предсказание): 5 условий по последней закрытой свече у линии канала. Вход «по рынку» оценивается по текущей цене закрытия.
+Цель берётся из tg_target.choose (статистика дальности отбоя, самообучение); без него - середина канала.
 Подключается из tg_bot.py через try/except: удалить файл -> бот работает без мнения."""
+try: import tg_target as TG
+except Exception: TG = None
 
 
 def _f(x, d=0.0):
@@ -18,7 +21,7 @@ def _fmt(p):
 
 
 def verdict(w, kl=None):
-    """w: элемент tg_watch.json (слежение). Возвращает {call: enter|wait, text, feat, plan, t} или None, если данных нет."""
+    """w: элемент tg_watch.json (слежение). Возвращает {call: enter|wait, text, feat, plan, geo, t, sym, side} или None, если данных нет."""
     L = w.get("last") or {}
     if L.get("Rn") is None or not L.get("atr"): return None
     a = _f(L["atr"]); o, h, l, c = (_f(L[k]) for k in ("o", "h", "l", "c")); R, S = _f(L["Rn"]), _f(L["Sn"]); H = R - S
@@ -33,27 +36,36 @@ def verdict(w, kl=None):
     cpos = ((c - l) if s > 0 else (h - c)) / rng                      # где закрылась: 1 = у дальнего от линии края свечи
     favor = (c - o) * s > 0
     risk = max(1.2 * a, 0.005 * c)
-    mid = S + 0.5 * H; opp = (S + 0.1 * a) if s < 0 else (R - 0.1 * a)
-    rr_mid = (mid - c) * s / risk; rr_opp = (opp - c) * s / risk
-    counter = bool(w.get("counter")); sh = w.get("shift"); need = 1.5 if counter else 1.2
+    counter = bool(w.get("counter")); sh = w.get("shift"); need = 1.0 if counter else 0.8
+    tgt = None
+    if TG:
+        try: tgt = TG.choose(H / a, counter)
+        except Exception: tgt = None
+    f = tgt["f"] if tgt else 0.5
+    tp = line + s * f * H; opp = (S + 0.1 * a) if s < 0 else (R - 0.1 * a)
+    rr_t = (tp - c) * s / risk; rr_opp = (opp - c) * s / risk
     reaction = (favor and cpos >= 0.5) or wick >= 0.4
+    ftxt = {0.25: "1/4", 0.33: "1/3", 0.5: "1/2", 0.75: "3/4", 1.0: "линия"}.get(f, "%.2f" % f)
     conds = [
-        (st in ("touch", "back"), "закрытий за линией нет" if st == "touch" else "выходила за линию и вернулась",
-         "свеча(и) закрылись за линией: риск пробоя" if st in ("cross", "break") else "цена ушла от линии"),
+        (st not in ("cross", "break"), "закрытий за линией нет" if st == "touch" else "за линию не закрывались",
+         "свеча(и) закрылись за линией: риск пробоя"),
         (-0.15 <= dist <= 0.9, "цена у линии (%+.2f ATR)" % dist, "цена в %.2f ATR от линии: %s" % (dist, "поздно" if dist > 0.9 else "за линией")),
         (reaction, "есть реакция от линии (хвост %d%%)" % round(wick * 100), "реакции от линии пока нет (хвост %d%%)" % round(wick * 100)),
-        (rr_mid >= need, "до середины канала R:R %.1f" % rr_mid, "до середины канала R:R %.1f < %.1f" % (rr_mid, need)),
+        (rr_t >= need, "до цели %s R:R %.1f" % (ftxt, rr_t), "до цели %s R:R %.1f < %.1f" % (ftxt, rr_t, need)),
         (sh is None or abs(sh) < 0.5, "канал стабилен", "канал перестроился (%+.1f ATR)" % (sh or 0)),
     ]
     call = "enter" if all(x[0] for x in conds) else "wait"
     side = "long" if s > 0 else "short"; stop = c - s * risk
-    plan = {"side": side, "entry": c, "stop": stop, "tp": mid, "rr": round(rr_mid, 2), "rr_opp": round(rr_opp, 2)}
+    plan = {"side": side, "entry": c, "stop": stop, "tp": tp, "f": f, "rr": round(rr_t, 2), "rr_opp": round(rr_opp, 2)}
     lines = ["%s %s" % ("✓" if ok else "✗", good if ok else bad) for ok, good, bad in conds]
     if call == "enter":
-        head = "🧠 Моё мнение: ✅ можно заходить — %s по рынку ~%s, стоп %s, цель (середина) %s, R:R %.1f" % (side.upper(), _fmt(c), _fmt(stop), _fmt(mid), rr_mid)
-        if counter: head += "\n⚠️ против тренда канала: цель консервативная"
+        head = "🧠 Моё мнение: ✅ можно заходить — %s по рынку ~%s, стоп %s, цель %s (%s канала), R:R %.1f" % (side.upper(), _fmt(c), _fmt(stop), _fmt(tp), ftxt, rr_t)
+        if counter: head += "\n⚠️ против тренда канала"
     else:
         why = next(bad for ok, good, bad in conds if not ok)
         head = "🧠 Моё мнение: ⏳ ждём — %s" % why
-    feat = {"dist": round(dist, 3), "wick": round(wick, 3), "cpos": round(cpos, 3), "favor": int(favor), "rr": round(rr_mid, 2), "st": st, "counter": int(counter), "width": round(H / a, 2), "nb": nb}
-    return {"call": call, "text": head + "\n" + "\n".join(lines), "feat": feat, "plan": plan, "t": int(L.get("t") or 0), "sym": w.get("sym"), "side": side}
+    text = head + "\n" + "\n".join(lines)
+    if tgt: text += "\n🎯 Если заходить: " + tgt["text"] + (" ≈ %s" % _fmt(tp))
+    feat = {"dist": round(dist, 3), "wick": round(wick, 3), "cpos": round(cpos, 3), "favor": int(favor), "rr": round(rr_t, 2), "st": st, "counter": int(counter), "width": round(H / a, 2), "nb": nb}
+    geo = {"line": line, "H": H, "risk": risk, "a": a}
+    return {"call": call, "text": text, "feat": feat, "plan": plan, "geo": geo, "t": int(L.get("t") or 0), "sym": w.get("sym"), "side": side}
