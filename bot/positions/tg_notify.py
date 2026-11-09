@@ -296,13 +296,15 @@ def _post(method, fields=None, files=None):
     return json.load(urllib.request.urlopen(req, timeout=30))
 
 
-def send_text(text, buttons=None):
+def send_text(text, buttons=None, reply_to=None):
     f = {"chat_id": _env()["TG_CHAT_ID"], "text": text}
+    if reply_to: f["reply_to_message_id"] = str(reply_to); f["allow_sending_without_reply"] = "true"
     if buttons: f["reply_markup"] = json.dumps({"inline_keyboard": buttons})
     return _post("sendMessage", f)
 
 
-def send_photo(png, caption, buttons=None):
+def send_photo(png, caption, buttons=None, reply_to=None):
     f = {"chat_id": _env()["TG_CHAT_ID"], "caption": caption}
+    if reply_to: f["reply_to_message_id"] = str(reply_to); f["allow_sending_without_reply"] = "true"
     if buttons: f["reply_markup"] = json.dumps({"inline_keyboard": buttons})
     return _post("sendPhoto", f, {"photo": ("order.png", png, "image/png")})
