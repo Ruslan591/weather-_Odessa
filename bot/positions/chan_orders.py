@@ -108,6 +108,8 @@ def analyze(sym, now):
         st_at = chan_src.make_st_at(SRC, sym, t, h, l, c, atr)
     return dict(t=t, o=o, h=h, l=l, c=c, atr=atr, M=M, st_at=st_at, tl=tl)
 
+try: import tg_target as TGT      # цель по статистике дальности отбоя (самообучение); удалить файл или TG_TARGET=0 -> цель «противоположная линия»
+except Exception: TGT = None
 def ldict(ln, t):
     i1 = int(ln[0]); return {"t1": t[i1], "p1": float(ln[1]), "s": float(ln[4]) / TFM}
 def mk(sym, rule, side, price, stop, tp, a, t_placed, valid, chan, level=None, key=None, ctype="", **extra):
@@ -165,16 +167,20 @@ def propose(sym, A, evs):
             ch = {"type": st["type"], "upper": ldict(R, t), "lower": ldict(S, t)}
             down = st["type"] == "channel_down"
             price = Rn if down else Sn; dist = abs(price - float(c[i])) / a; risk = max(STOP_ATR * a, MIN_RISK / 100 * price)
-            stop = price + risk if down else price - risk; tp = (Sn + TPBUF * a) if down else (Rn - TPBUF * a)
-            good = (price - tp >= risk) if down else (tp - price >= risk)
+            stop = price + risk if down else price - risk; tp = (Sn + TPBUF * a) if down else (Rn - TPBUF * a); tgt = None
+            if TGT and TGT.auto_enabled():     # цель по статистике (tg_target); не определена (коррекция, мало данных) - минимальная 1/4 канала
+                try: tgt = TGT.choose((Rn - Sn) / a, False); tp = (Rn - tgt["f"] * (Rn - Sn)) if down else (Sn + tgt["f"] * (Rn - Sn))
+                except Exception as e: tgt = None; log("tg_target: %s" % e)
+            mingain = max(0.0015 * price, 0.5 * a) if tgt else risk
+            good = (price - tp >= mingain) if down else (tp - price >= mingain)
             ok_side = (price >= float(c[i])) if down else (price <= float(c[i]))
             if DIST_A[0] <= dist <= DIST_A[1] and good and ok_side:
                 why = [chan_text(b),
                        "Цена сейчас %s, до %s границы канала %.1f ATR; лимит %s стоит на границе, спроецированной на следующую свечу: %s (ATR 5m = %s)." % (P(float(c[i])), "верхней" if down else "нижней", dist, "продажи" if down else "покупки", P(price), P(a)),
                        risk_text(a, price, risk, stop, "short" if down else "long"),
-                       "Цель = %s граница канала на следующей свече %s 0.1 ATR = %s; соотношение цель/риск %.1f." % ("нижняя" if down else "верхняя", "плюс" if down else "минус", P(tp), abs(price - tp) / risk),
+                       ("Цель = %s от линии = %s (%s); соотношение цель/риск %.1f." % ("%.2f высоты канала" % tgt["f"], P(tp), tgt["text"], abs(price - tp) / risk)) if tgt else "Цель = %s граница канала на следующей свече %s 0.1 ATR = %s; соотношение цель/риск %.1f." % ("нижняя" if down else "верхняя", "плюс" if down else "минус", P(tp), abs(price - tp) / risk),
                        "Заявка живёт %d свечей (до %s). На каждой закрытой свече пересчёт: граница сместилась больше чем на 0.15 ATR или условия исчезли - отмена и новая заявка." % (VALID_A, tok(tp_ + (VALID_A - 1) * TFM))]
-                out.append(mk(sym, "chan_top" if down else "chan_bottom", "short" if down else "long", price, stop, tp, a, tp_, VALID_A, ch, ctype=st["type"], basis=b, why=why, atr_c=float(c[i])))
+                out.append(mk(sym, "chan_top" if down else "chan_bottom", "short" if down else "long", price, stop, tp, a, tp_, VALID_A, ch, ctype=st["type"], basis=b, why=why, atr_c=float(c[i]), tgt=tgt))
     st1 = A["st_at"](i - 1)
     if st1 and st1.get("lower") and st1.get("upper") and st1["type"] in ("channel_down", "channel_up"):
         Ri = float(tl.at(st1["upper"], i)); Rp = float(tl.at(st1["upper"], i - 1)); Si = float(tl.at(st1["lower"], i)); Sp = float(tl.at(st1["lower"], i - 1))
