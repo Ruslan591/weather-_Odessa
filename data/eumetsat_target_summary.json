@@ -1,17 +1,12 @@
 {
-  "timestamp": "2026-11-09T20:30:29Z",
-  "status": "suppressed_known_false_positive",
+  "timestamp": "2026-11-09T20:36:36Z",
+  "status": "ok",
   "cloud_forecast_timestamp": "2026-11-08T20:30:00.000Z",
-  "suppressed_target": {
-    "signature": "-30_-20",
-    "area_km2": 56.0,
-    "distance_km": 35.6,
-    "bearing_deg": 238.0,
-    "compass": "ЮЗ",
-    "not_confirmed_streak": 16,
-    "total_not_confirmed": 99,
-    "excluded_since": "2026-11-09T16:42:08Z"
-  },
+  "target_id": 5,
+  "target_area_km2": 53.4,
+  "target_distance_km": 118.1,
+  "target_bearing_deg": 110.0,
+  "target_compass": "В",
   "system": {
     "target_id": 0,
     "area_km2": 69685.0,
@@ -78,7 +73,7 @@
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": true,
-      "geocolour_confirmed": false
+      "geocolour_confirmed": true
     },
     {
       "target_id": 10,
@@ -138,6 +133,39 @@
     }
   ],
   "system_suppressed_count": 2,
-  "verdict": "Известный шумовой объект в 36км ЮЗ (~56км²) — подавлено (не подтверждался 16 раз подряд). Отдельно: система синоптического масштаба (69685км²) в 3км В.",
-  "frontal_tracks": []
+  "frontal_tracks": [],
+  "also_suppressed_nearby": {
+    "signature": "-30_-20",
+    "area_km2": 56.0
+  },
+  "existence": {
+    "modules": {
+      "ir_motion": {
+        "confirmed": null,
+        "timestamp": "2026-11-09T19:40:00.000Z"
+      },
+      "geocolour_motion": {
+        "confirmed": false,
+        "timestamp": "2026-11-09T20:10:00.000Z"
+      },
+      "cloud_phase_type": {
+        "confirmed": null,
+        "timestamp": "2026-11-09T09:53:48Z"
+      }
+    },
+    "votes_confirmed": 0,
+    "votes_not_confirmed": 1,
+    "consensus": "not_confirmed"
+  },
+  "phenomena": {
+    "precip_forecast": {
+      "confirmed": false,
+      "timestamp": "2026-11-09T10:55:14Z"
+    },
+    "lightning_forecast": {
+      "confirmed": false,
+      "timestamp": "2026-11-09T17:43:58Z"
+    }
+  },
+  "verdict": "CLM отметил цель в 118км В, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (69685км²) в 3км В."
 }
