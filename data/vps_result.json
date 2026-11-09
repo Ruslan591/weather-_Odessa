@@ -1,7 +1,7 @@
 {
-  "task_id": "reach-1794206433",
+  "task_id": "reach2-1794206479",
   "returncode": 0,
-  "stdout": "rows 133\n[(('chan_top', 'chan'), 76), (('chan_bottom', 'chan'), 55), (('tg_market', 'chan'), 2)]\nall n=133 median 0.25 P>=0.10:76% P>=0.25:50% P>=0.50:23% P>=0.75:13% P>=1.00:2% | start med -0.01 | mae med 0.13\nrule chan_bottom n=55 median 0.26 P>=0.10:75% P>=0.25:51% P>=0.50:27% P>=0.75:13% P>=1.00:0% | start med -0.01 | mae med 0.19\nrule tg_market 2\nrule chan_top n=76 median 0.23 P>=0.10:76% P>=0.25:49% P>=0.50:20% P>=0.75:13% P>=1.00:3% | start med -0.01 | mae med 0.12\nstart<0.25 n=133 median 0.25 P>=0.10:76% P>=0.25:50% P>=0.50:23% P>=0.75:13% P>=1.00:2% | start med -0.01 | mae med 0.13\nbounce with n=133 median 0.25 P>=0.10:76% P>=0.25:50% P>=0.50:23% P>=0.75:13% P>=1.00:2% | start med -0.01 | mae med 0.13\nbounce counter 0\n",
+  "stdout": "Traceback (most recent call last):\n  File \"/tmp/rs2.py\", line 4, in <module>\n    print(collections.Counter((x.get('kind'),x.get('bo'),x.get('res'),x.get('done')) for x in m).most_common(12))\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/collections/__init__.py\", line 607, in __init__\n    self.update(iterable, **kwds)\n  File \"/usr/lib/python3.12/collections/__init__.py\", line 699, in update\n    _count_elements(self, iterable)\nTypeError: unhashable type: 'dict'\n",
   "stderr": "",
-  "completed_at_utc": "2026-11-09T06:41:02Z"
+  "completed_at_utc": "2026-11-09T06:42:02Z"
 }
