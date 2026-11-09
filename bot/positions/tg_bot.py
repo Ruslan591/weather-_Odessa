@@ -12,6 +12,8 @@ try: import tg_express as X        # мнение бота в экспрессе
 except Exception: X = None
 try: import tg_target as TGT      # самообучение цели (Авто и экспресс); см. tg_target.py
 except Exception: TGT = None
+try: import tg_review as RV        # разбор закрытых сделок и коррекции порогов; удалить файл -> без самообучения
+except Exception: RV = None
 try: import tg_learn as LRN        # журнал «согласен / не согласен»; можно отключить кнопкой или удалить файл
 except Exception: LRN = None
 
@@ -226,6 +228,9 @@ def send_watch(wid, kind):
                 LRN.record(V, 1, wid, mid_new); mm = msgs_load(); rec_ = mm.get(key) or {}
                 if rec_.get("v"): rec_["v"]["ans"] = 1; mm[key] = rec_; msgs_save(mm)
             except Exception as e: log("autoorder learn: %s" % e)
+        elif auto[0] == "breakout" and Bk and LRN and LRN.enabled():     # база по пробоям (отдельная от базы отбоев)
+            try: LRN.record_brk(Bk, 1, wid, mid_new)
+            except Exception as e: log("autoorder learn brk: %s" % e)
 
 
 def edit_watch(wid, status, buttons=None):
@@ -372,7 +377,7 @@ def handle_event(ev):
         if o: api("sendMessage", chat_id=CHAT, text="▶️ Позиция #%s открыта: %s %s по %s (%s, ордер #%s)." % (ev.get("pos"), o["sym"], o["side"].upper(), T.fmt_px(o.get("fill_px") or o["price"]), ORD_RULE.get(o.get("rule"), "лимит"), oid), reply_markup={"inline_keyboard": REFRESH + MENU[:1]})
 
 
-_res_t = [0.0]; _pos_t = [0.0]
+_res_t = [0.0]; _pos_t = [0.0]; _rev_t = [0.0]; _rb_t = [0.0]
 
 
 def outbox_loop():
@@ -397,6 +402,17 @@ def outbox_loop():
             _res_t[0] = time.time()
             try: LRN.resolve(lambda sym: jload("/tmp/klcache/%s_5m_1000.json" % sym, []))
             except Exception: log("learn resolve: " + traceback.format_exc()[-300:])
+        if RV and time.time() - _rev_t[0] > 120:      # разбор закрытых сделок: сообщение с анализом и коррекциями
+            _rev_t[0] = time.time()
+            try:
+                for rv in RV.run(limit=3):
+                    kb = [[{"text": lab, "callback_data": "cr:%d" % hid}] for hid, lab in rv["buttons"]]
+                    api("sendMessage", chat_id=CHAT, text=rv["text"][:4000], **({"reply_markup": {"inline_keyboard": kb}} if kb else {}))
+            except Exception: log("review: " + traceback.format_exc()[-400:])
+        if LRN and time.time() - _rb_t[0] > 300 and hasattr(LRN, "resolve_brk"):
+            _rb_t[0] = time.time()
+            try: LRN.resolve_brk(lambda sym: jload("/tmp/klcache/%s_5m_1000.json" % sym, []))
+            except Exception: log("learn resolve brk: " + traceback.format_exc()[-300:])
         if TGT and time.time() - _pos_t[0] > 300:      # самообучение цели: закрытые позиции счёта -> дальность отбоя в выборку (tg_target.py)
             _pos_t[0] = time.time()
             try: TGT.learn_positions(limit=2)
@@ -519,6 +535,9 @@ def on_callback(cq):
             inbox({"type": "mode", "mode": p[1]}); api("answerCallbackQuery", callback_query_id=cid, text="Переключаю: %s" % MODE_RU[p[1]])
     elif p[0] == "ex":
         inbox({"type": "express", "on": p[1] == "1"}); api("answerCallbackQuery", callback_query_id=cid, text="Включаю экспресс…" if p[1] == "1" else "Выключаю экспресс…")
+    elif p[0] == "cr":      # откат коррекции порога
+        txt = RV.revert(int(p[1])) if RV else "Самообучение недоступно."
+        api("answerCallbackQuery", callback_query_id=cid, text=txt[:180], show_alert="true"); api("sendMessage", chat_id=CHAT, text="↩ " + txt)
     elif p[0] == "ao":
         inbox({"type": "autoorder", "on": p[1] == "1"}); api("answerCallbackQuery", callback_query_id=cid, text="Включаю Автоордер…" if p[1] == "1" else "Выключаю Автоордер…")
     elif p[0] == "xl":
@@ -651,6 +670,8 @@ def on_message(m):
         except Exception as e: log("restore buttons: %s" % e)
         return
     if t.startswith(("/start", "/mode", "/menu")): api("sendMessage", chat_id=CHAT, text=mode_text(), reply_markup={"inline_keyboard": menu()})
+    elif t.startswith(("/learn", "/corr")):
+        api("sendMessage", chat_id=CHAT, text=(RV.summary(LRN) if RV else "Самообучение недоступно."))
     elif t.startswith("/alerts"):
         on = bool(mode_state().get("alerts_off")); inbox({"type": "alerts", "on": on})
         api("sendMessage", chat_id=CHAT, text="Включаю алерты…" if on else "Отключаю алерты…")
