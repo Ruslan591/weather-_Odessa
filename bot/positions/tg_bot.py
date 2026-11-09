@@ -425,7 +425,7 @@ def status_text():
     orders = jload(ORDF, []); pend = sum(1 for o in orders if o.get("status") == "pending"); prop = sum(1 for o in orders if o.get("status") == "proposed")
     out = [mode_text(), ""]
     ws = [x for x in (jload(WATCHF, {}).get("items") or []) if x.get("status") in ("alert", "watching")]
-    if ws: out += ["Графиков в работе: %d из %d" % (len(ws), mode_state().get("max_watch", 3))] + ["· %s %s — %s" % (x["sym"], x["side"].upper(), "ждёт вашего решения" if x["status"] == "alert" else "слежу (%d св.)" % x.get("updates", 0)) for x in ws] + [""]
+    if ws: out += ["Графиков в работе: %d из %d" % (len(ws), (lambda _m: int(_m.get("max_watch_auto", 12)) if (_m.get("mode") == "monitor" and _m.get("express") and _m.get("autoorder")) else int(_(int(m.get("max_watch_auto", 12)) if (m.get("mode") == "monitor" and m.get("express") and m.get("autoorder")) else int(m.get("max_watch", 3)))))(mode_state()))] + ["· %s %s — %s" % (x["sym"], x["side"].upper(), "ждёт вашего решения" if x["status"] == "alert" else "слежу (%d св.)" % x.get("updates", 0)) for x in ws] + [""]
     try:
         sn = fetch_snapshot(); a = sn["account"]; opn = sn.get("open", [])
         tot = a["equity"] - a["start"]; totp = tot / a["start"] * 100
@@ -459,7 +459,7 @@ def status_data():
     d = {"acct": ACCT, "sub": "", "mode": mo, "mode_ru": {"sleep": "Сон", "monitor": "Монитор", "auto": "Авто"}.get(mo, mo), "info": info, "equity": None, "tiles": [], "positions": [],
          "orders": {"pend": len(pend), "prop": prop, "rows": [(o["sym"], o["side"].upper(), "%s · вход %s · цель %s · через %d мин" % (ORD_RULE.get(o.get("rule"), o.get("rule")), T.fmt_px(o["price"]), T.fmt_px(o["tp"]), max(0, int((o["expire_t"] - now) / 60000)))) for o in pend[:5]]},
          "watches": [("%s %s: %s" % (x["sym"], x["side"].upper(), "ждёт вашего решения" if x["status"] == "alert" else "слежу (%d св.)" % x.get("updates", 0)), "#e3b341" if x["status"] == "alert" else "#c9d1d9") for x in ws],
-         "max_watch": m.get("max_watch", 3), "stamp": datetime.now(T._tz()).strftime("%H:%M:%S")}
+         "max_watch": (int(m.get("max_watch_auto", 12)) if (m.get("mode") == "monitor" and m.get("express") and m.get("autoorder")) else int(m.get("max_watch", 3))), "stamp": datetime.now(T._tz()).strftime("%H:%M:%S")}
     try:
         sn = fetch_snapshot(); a = sn["account"]; opn = sn.get("open", []); tot = a["equity"] - a["start"]; wh = "#e6edf3"
         d.update(sub="бумажный счёт · старт %.0f $ · плечо %d× · ставка %.0f $" % (a["start"], a["lev"], a["stake"]), equity=a["equity"], chg_usd=tot, chg_pct=tot / a["start"] * 100,
