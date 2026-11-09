@@ -22,7 +22,7 @@ D = os.environ.get("POS_DIR", "/opt/trading-bot/positions")
 ENABLED = os.environ.get("TG_GATE", "0") == "1"
 WATCHF = os.path.join(D, "tg_watch.json"); MODEF = os.path.join(D, "tg_mode.json"); OUTF = os.path.join(D, "tg_outbox.jsonl"); INF = os.path.join(D, "tg_inbox.jsonl"); OFFF = os.path.join(D, "tg_inbox.off")
 MODES = ("sleep", "monitor", "auto"); TFM = 300000
-DEFAULT = {"mode": "auto", "missed": 0, "max_missed": 3, "answer_win": 3, "until": None, "max_watch": 3, "watch_unanswered": 3, "watch_hours": 4, "alerts_off": False}
+DEFAULT = {"mode": "auto", "missed": 0, "max_missed": 3, "answer_win": 3, "until": None, "max_watch": 3, "watch_unanswered": 3, "watch_hours": 4, "alerts_off": False, "express": False}
 
 
 def load_mode():
@@ -128,15 +128,15 @@ def watch_scan(info, now):
     if not ENABLED: return
     m = load_mode()
     if m["mode"] != "monitor": return
-    W = _wload(); items = W["items"]; ch = False; sym = info["sym"]
+    W = _wload(); items = W["items"]; ch = False; sym = info["sym"]; exp = bool(m.get("express"))     # экспресс: слежения не завершаются из-за отсутствия ответа и времени
     for x in items:
         if x["sym"] == sym and x["status"] == "watching" and info["t"] > (x.get("last") or {}).get("t", 0):
             ep = _episode(info, x.get("line")) if info.get("ctype") else None
             x["shift"] = _shift(x, info) if info.get("ctype") else None
             x["last"] = _last(info); x["chan"] = info.get("chan") or x.get("chan"); x["updates"] += 1; x["unanswered"] += 1; ch = True
             x["state"] = ep["state"] if ep else "away"; x["n_beyond"] = ep["n_beyond"] if ep else 0
-            if x["unanswered"] > int(m.get("watch_unanswered", 3)): x.update(status="done", reason="нет ответа на обновления", t_end=now); emit({"type": "watch_end", "wid": x["id"], "why": "нет ответа на %d обновления подряд" % int(m.get("watch_unanswered", 3))})
-            elif now - x["t_follow"] > float(m.get("watch_hours", 4)) * 3600000: x.update(status="done", reason="прошло %s ч" % m.get("watch_hours", 4), t_end=now); emit({"type": "watch_end", "wid": x["id"], "why": "слежение длится дольше %s ч" % m.get("watch_hours", 4)})
+            if not exp and x["unanswered"] > int(m.get("watch_unanswered", 3)): x.update(status="done", reason="нет ответа на обновления", t_end=now); emit({"type": "watch_end", "wid": x["id"], "why": "нет ответа на %d обновления подряд" % int(m.get("watch_unanswered", 3))})
+            elif not exp and now - x["t_follow"] > float(m.get("watch_hours", 4)) * 3600000: x.update(status="done", reason="прошло %s ч" % m.get("watch_hours", 4), t_end=now); emit({"type": "watch_end", "wid": x["id"], "why": "слежение длится дольше %s ч" % m.get("watch_hours", 4)})
             else: emit({"type": "watch_update", "wid": x["id"]})
     active = [x for x in items if x["status"] in ("alert", "watching")]
     if not m.get("alerts_off") and info.get("ctype") and info.get("R") is not None and len(active) < int(m.get("max_watch", 3)) and not any(x["sym"] == sym for x in active) and info["R"] - info["S"] >= 1.5 * info["atr"]:
@@ -151,6 +151,7 @@ def watch_scan(info, now):
             x = {"id": W["seq"], "sym": sym, "side": side, "line": line, "counter": line != main_line, "status": "alert", "ctype": info["ctype"], "chan": info.get("chan"), "chan0": info.get("chan"), "t_alert": info["t"], "created": now,
                  "deadline": now + int(m.get("answer_win", 3)) * TFM, "line_px": line_px, "touch_px": ep["start_px"], "atr": a, "last": _last(info), "updates": 0, "unanswered": 0,
                  "state0": ep["state"], "state": ep["state"], "n_beyond": ep["n_beyond"], "n_run": ep["n_run"], "t_ref": ep["t_start"], "shift": None}
+            if exp: x.update(status="watching", t_follow=now, auto_follow=True)     # экспресс: следим сразу, ответа не ждём
             items.append(x); emit({"type": "alert", "wid": x["id"]}); ch = True; break
     if ch: _wsave(W, now)
 
@@ -224,13 +225,21 @@ def apply(orders, now, cancel, touched, mkorder=None, price_fn=None):
     for e in _read_inbox():
         t = e.get("type"); ts = int(e.get("ts") or now)
         if t == "mode" and e.get("mode") in MODES:
-            m["mode"] = e["mode"]; m["missed"] = 0; h = e.get("hours")
+            m["mode"] = e["mode"]; m["missed"] = 0; m["express"] = False; h = e.get("hours")
             m["until"] = int(now + float(h) * 3600000) if h else None
             if m["mode"] == "monitor": m["alerts_off"] = False     # явный выбор Монитора включает алерты
             nc = _go_sleep(orders, cancel, now) if m["mode"] == "sleep" else 0
             if m["mode"] == "auto": _end_watches(W, now, "режим авто"); wch = True
             if m["mode"] == "sleep": W = _wload()
             emit({"type": "mode", "mode": m["mode"], "until": m["until"], "why": "user", "cancelled": nc})
+        elif t == "express":     # кнопка «Экспресс слежение» (только в Мониторе): счётчик пропусков и таймер не действуют
+            on = bool(e.get("on")); refused = on and m["mode"] != "monitor"; on = on and not refused
+            m["express"] = on; m["missed"] = 0
+            if not on:     # выключили: идущим слежениям даём чистый счёт, чтобы они не закрылись разом; истёкший за время экспресса таймер снимаем (иначе сон сразу)
+                if m.get("until") and now >= m["until"]: m["until"] = None
+                for x in W["items"]:
+                    if x["status"] == "watching": x["unanswered"] = 0; x["t_follow"] = now; wch = True
+            emit({"type": "express", "on": on, "refused": refused})
         elif t == "alerts":      # кнопка «Отключить / Включить алерты»: режим и таймер не трогаем
             off = not e.get("on", True); nc = 0
             if off: nc = _end_watches(W, now, "алерты отключены вами", ("alert",)); wch = wch or bool(nc)
@@ -263,10 +272,10 @@ def apply(orders, now, cancel, touched, mkorder=None, price_fn=None):
             emit({"type": "missed", "id": o["id"], "n": m["missed"]}); jobs.append((dict(o), "missed", {"n": m["missed"]}))
     for x in W["items"]:
         if x["status"] == "alert" and now >= x["deadline"]:
-            x.update(status="done", reason="нет ответа", t_end=now); m["missed"] += 1; wch = True
+            x.update(status="done", reason="нет ответа", t_end=now); m["missed"] += 0 if m.get("express") else 1; wch = True
             emit({"type": "watch_end", "wid": x["id"], "why": "нет ответа", "missed": m["missed"]}); jobs.append((dict(x, _w=1), "w_missed", {"n": m["missed"]}))
     if wch: _wsave(W, now)
-    if m["mode"] == "monitor":
+    if m["mode"] == "monitor" and not m.get("express"):
         why = "missed" if m["missed"] >= m["max_missed"] else ("timer" if m.get("until") and now >= m["until"] else None)
         if why:
             m["mode"] = "sleep"; n = m["missed"]; m["until"] = None
