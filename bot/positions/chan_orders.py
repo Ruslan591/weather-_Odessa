@@ -409,6 +409,12 @@ def _tg_mkorder(w, entry, target, px, setup="bounce"):
     target: отбой opp | mid | q1 | q3; пробой h05 | h1 | h15 (высота канала от линии). Возвращает (ордер, None) или (None, причина)."""
     L = w.get("last") or {}
     if L.get("Rn") is None or not w.get("chan"): return None, "нет данных канала"
+    if w.get("_auto"):     # Автоордер из экспресса: те же ограничения слотов и открытых позиций, что у сканера
+        try:
+            ps0 = pos.load()
+            if any(pp["status"] == "open" and pp["sym"] == w["sym"] + "USDT" for pp in ps0): return None, "по паре уже есть открытая позиция"
+            if sum(1 for pp in ps0 if pp["status"] == "open") >= SLOTS: return None, "все слоты позиций заняты"
+        except Exception as e: log("auto guard: %s" % e)
     a = float(L["atr"]); R, S = float(L["Rn"]), float(L["Sn"]); H = R - S; px = float(px)
     if H <= 0: return None, "канал сжался"
     up = (w.get("line") or ("upper" if w["side"] == "short" else "lower")) == "upper"; line = R if up else S
@@ -433,6 +439,9 @@ def _tg_mkorder(w, entry, target, px, setup="bounce"):
             price = (float(L["l"]) if s < 0 else float(L["h"])) + s * 0.1 * a      # за экстремумом последней закрытой свечи
             if (price - px) * s <= 0.05 * a: return None, "цена уже за уровнем стоп-ордера (%s): выберите вход по рынку" % P(price)
         f = {"q1": 0.25, "mid": 0.5, "q3": 0.75}.get(target)
+        if f is None and str(target).startswith("f"):     # доля высоты канала от линии (цель по статистике из экспресса, например f0.33)
+            try: f = float(str(target)[1:]); f = f if 0.1 <= f < 1.0 else None
+            except Exception: f = None
         if target == "opp": tp = (S + TPBUF * a) if s < 0 else (R - TPBUF * a)
         elif f is not None: tp = (R - f * H) if s < 0 else (S + f * H)
         else: return None, "неизвестная цель"
@@ -440,7 +449,7 @@ def _tg_mkorder(w, entry, target, px, setup="bounce"):
     if (tp - price) * s < max(0.0015 * price, 0.5 * a): return None, "цель уже пройдена или слишком близко (%s)" % P(tp)
     ct = w.get("ctype"); counter = (s > 0 and ct == "channel_down") or (s < 0 and ct == "channel_up")
     t_pl = (int(time.time() * 1000) // 60000 + 1) * 60000
-    why = ["Ордер выставлен вами из режима слежения: %s %s линии, вход %s, цель %s. Канал %s%s." % ("пробой" if brk else "отбой от", "верхней" if up else "нижней", TG_ENTRY_RU[entry], TG_TGT_RU.get(target, target), "нисходящий" if ct == "channel_down" else "восходящий", ", сделка против направления канала" if counter else ", сделка по направлению канала"),
+    why = [("Ордер выставлен Автоордером (экспресс: мнение бота «заходить»): " if w.get("_auto") else "Ордер выставлен вами из режима слежения: ") + "%s %s линии, вход %s, цель %s. Канал %s%s." % ("пробой" if brk else "отбой от", "верхней" if up else "нижней", TG_ENTRY_RU[entry], TG_TGT_RU.get(target, "%s высоты канала от линии" % str(target)[1:] if str(target).startswith("f") else target), "нисходящий" if ct == "channel_down" else "восходящий", ", сделка против направления канала" if counter else ", сделка по направлению канала"),
            "Касание линии было на свече %s, слежение шло %d свечей." % (tok(int(w["t_alert"])), int(w.get("updates", 0))), risk_text(a, price, risk, stop, "long" if s > 0 else "short")]
     mark = {"market": "вход по рынку", "limit": "лимит выставлен", "stop": "стоп-ордер выставлен"}[entry]
     o = mk(w["sym"], TG_RULE[entry], "long" if s > 0 else "short", price, stop, tp, a, t_pl, VALID_A, w["chan"], ctype=w["ctype"], why=why, atr_c=float(L["c"]), setup=setup, line="upper" if up else "lower", counter=counter, mark=mark)
