@@ -5,6 +5,14 @@
 Подключается из tg_bot.py через try/except: удалить файл -> бот работает без мнения."""
 try: import tg_target as TG
 except Exception: TG = None
+try: import tg_review as RV     # пороги с коррекцией по опыту (tg_corr.json); удалить файл -> исходные пороги
+except Exception: RV = None
+_DEF = {"wick_min": 0.4, "dist_max": 0.9, "rr_add": 0.0, "rr_add_counter": 0.0, "brk_n_min": 2, "brk_body_min": 0.3, "brk_beyond_max": 1.5}
+
+
+def _C():
+    try: return RV.corr() if RV else dict(_DEF)
+    except Exception: return dict(_DEF)
 
 
 def _f(x, d=0.0):
@@ -36,7 +44,7 @@ def verdict(w, kl=None):
     cpos = ((c - l) if s > 0 else (h - c)) / rng                      # где закрылась: 1 = у дальнего от линии края свечи
     favor = (c - o) * s > 0
     risk = max(1.2 * a, 0.005 * c)
-    counter = bool(w.get("counter")); sh = w.get("shift"); need = 1.0 if counter else 0.8
+    counter = bool(w.get("counter")); sh = w.get("shift"); C = _C(); need = (1.0 + C["rr_add_counter"]) if counter else (0.8 + C["rr_add"])
     tgt = None
     if TG:
         try: tgt = TG.choose(H / a, counter)
@@ -44,12 +52,12 @@ def verdict(w, kl=None):
     f = tgt["f"] if tgt else 0.5
     tp = line + s * f * H; opp = (S + 0.1 * a) if s < 0 else (R - 0.1 * a)
     rr_t = (tp - c) * s / risk; rr_opp = (opp - c) * s / risk
-    reaction = (favor and cpos >= 0.5) or wick >= 0.4
+    reaction = (favor and cpos >= 0.5 and wick >= max(0.0, C["wick_min"] - 0.4)) or wick >= C["wick_min"]
     ftxt = {0.25: "1/4", 0.33: "1/3", 0.5: "1/2", 0.75: "3/4", 1.0: "линия"}.get(f, "%.2f" % f)
     conds = [
         (st not in ("cross", "break"), "закрытий за линией нет" if st == "touch" else "за линию не закрывались",
          "свеча(и) закрылись за линией: риск пробоя"),
-        (-0.15 <= dist <= 0.9, "цена у линии (%+.2f ATR)" % dist, "цена в %.2f ATR от линии: %s" % (dist, "поздно" if dist > 0.9 else "за линией")),
+        (-0.15 <= dist <= C["dist_max"], "цена у линии (%+.2f ATR)" % dist, "цена в %.2f ATR от линии: %s" % (dist, "поздно" if dist > C["dist_max"] else "за линией")),
         (reaction, "есть реакция от линии (хвост %d%%)" % round(wick * 100), "реакции от линии пока нет (хвост %d%%)" % round(wick * 100)),
         (rr_t >= need, "до цели %s R:R %.1f" % (ftxt, rr_t), "до цели %s R:R %.1f < %.1f" % (ftxt, rr_t, need)),
         (sh is None or abs(sh) < 0.5, "канал стабилен", "канал перестроился (%+.1f ATR)" % (sh or 0)),
@@ -65,6 +73,9 @@ def verdict(w, kl=None):
         why = next(bad for ok, good, bad in conds if not ok)
         head = "🧠 Моё мнение: ⏳ ждём — %s" % why
     text = head + "\n" + "\n".join(lines)
+    try: cn = RV.corr_note() if RV else ""
+    except Exception: cn = ""
+    if cn: text += "\n" + cn
     if tgt: text += "\n🎯 Если заходить: " + tgt["text"] + (" ≈ %s" % _fmt(tp))
     feat = {"dist": round(dist, 3), "wick": round(wick, 3), "cpos": round(cpos, 3), "favor": int(favor), "rr": round(rr_t, 2), "st": st, "counter": int(counter), "width": round(H / a, 2), "nb": nb}
     geo = {"line": line, "H": H, "risk": risk, "a": a}
@@ -81,7 +92,7 @@ def verdict_break(w, kl=None):
     if L.get("Rn") is None or not L.get("atr"): return None
     st = w.get("state") or w.get("state0") or "touch"
     if st != "break": return None
-    a = _f(L["atr"]); o, h, l, c = (_f(L[k]) for k in ("o", "h", "l", "c")); R, S = _f(L["Rn"]), _f(L["Sn"]); H = R - S
+    a = _f(L["atr"]); o, h, l, c = (_f(L[k]) for k in ("o", "h", "l", "c")); R, S = _f(L["Rn"]), _f(L["Sn"]); H = R - S; C = _C()
     if a <= 0 or H <= 0: return None
     up = (w.get("line") or ("upper" if w.get("side") == "short" else "lower")) == "upper"
     s = 1 if up else -1                      # направление пробоя: через верхнюю - вверх (LONG), через нижнюю - вниз (SHORT)
@@ -89,16 +100,17 @@ def verdict_break(w, kl=None):
     rng = max(h - l, 1e-12); beyond = (c - line) * s / a; body = (c - o) * s / rng
     risk = max(1.2 * a, 0.005 * c); tp = line + s * 0.5 * H; rr = (tp - c) * s / risk; sh = w.get("shift")
     conds = [
-        (int(w.get("n_beyond") or 0) >= 2, "%d закрытия за линией подряд" % int(w.get("n_beyond") or 0), "закрытий за линией меньше двух"),
-        (0.2 <= beyond <= 1.5, "цена за линией на %.2f ATR" % beyond, "цена за линией на %.2f ATR: %s" % (beyond, "ещё не ушла" if beyond < 0.2 else "уже далеко, в погоню не идём")),
-        (body >= 0.3, "последняя свеча идёт в сторону пробоя (тело %d%%)" % round(body * 100), "последняя свеча не поддерживает пробой (тело %d%%)" % round(body * 100)),
+        (int(w.get("n_beyond") or 0) >= int(C["brk_n_min"]), "%d закрытия за линией подряд" % int(w.get("n_beyond") or 0), "закрытий за линией меньше %d" % int(C["brk_n_min"])),
+        (0.2 <= beyond <= C["brk_beyond_max"], "цена за линией на %.2f ATR" % beyond, "цена за линией на %.2f ATR: %s" % (beyond, "ещё не ушла" if beyond < 0.2 else "уже далеко, в погоню не идём")),
+        (body >= C["brk_body_min"], "последняя свеча идёт в сторону пробоя (тело %d%%)" % round(body * 100), "последняя свеча не поддерживает пробой (тело %d%%)" % round(body * 100)),
         (rr >= 1.0, "до цели 0.5 канала R:R %.1f" % rr, "до цели 0.5 канала R:R %.1f < 1.0" % rr),
         (sh is None or abs(sh) < 0.5, "канал стабилен", "канал перестроился (%+.1f ATR)" % (sh or 0)),
     ]
     call = "enter" if all(x[0] for x in conds) else "wait"
     side = "long" if s > 0 else "short"; stop = c - s * risk
     plan = {"side": side, "entry": c, "stop": stop, "tp": tp, "target": "h05", "rr": round(rr, 2)}
+    feat = {"beyond": round(beyond, 3), "body": round(body, 3), "rr": round(rr, 2), "n": int(w.get("n_beyond") or 0), "width": round(H / a, 2), "counter": int(bool(w.get("counter")))}
     lines = ["%s %s" % ("✓" if ok else "✗", good if ok else bad) for ok, good, bad in conds]
     if call == "enter": head = "💥 Пробой линии: ✅ можно заходить — %s по рынку ~%s, стоп %s, цель %s (0.5 высоты канала за линией), R:R %.1f" % (side.upper(), _fmt(c), _fmt(stop), _fmt(tp), rr)
     else: head = "💥 Пробой линии формируется: ⏳ ждём — %s" % next(bad for ok, good, bad in conds if not ok)
-    return {"call": call, "text": head + "\n" + "\n".join(lines), "plan": plan, "t": int(L.get("t") or 0), "sym": w.get("sym"), "side": side}
+    return {"call": call, "text": head + "\n" + "\n".join(lines), "plan": plan, "feat": feat, "t": int(L.get("t") or 0), "sym": w.get("sym"), "side": side}
