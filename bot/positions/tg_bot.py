@@ -221,6 +221,11 @@ def send_watch(wid, kind):
     post_add({"mid": mid_new, "wid": wid, "sym": w["sym"], "kind": kind, "ts": int(time.time() * 1000), "prev": prev, "v": m[key].get("v")})
     if auto and ao_on():     # Автоордер: ставим через тот же путь, что кнопка «Выставить ордер» (w_place), отметка auto
         inbox({"type": "w_place", "wid": wid, "entry": "market", "target": auto[1], "setup": auto[0], "auto": 1}); log("autoorder %s %s %s" % (wid, auto[0], auto[1]))
+        if auto[0] == "bounce" and V and LRN and LRN.enabled():     # Автоордер = автоматическое «Согласен открыть сейчас»: запись в базу обучения как при нажатии кнопки (пробой в базу отбоя не пишем: другое направление плана)
+            try:
+                LRN.record(V, 1, wid, mid_new); mm = msgs_load(); rec_ = mm.get(key) or {}
+                if rec_.get("v"): rec_["v"]["ans"] = 1; mm[key] = rec_; msgs_save(mm)
+            except Exception as e: log("autoorder learn: %s" % e)
 
 
 def edit_watch(wid, status, buttons=None):
