@@ -10,6 +10,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tg_notify as T
 try: import tg_express as X        # мнение бота в экспрессе; удалить файл -> работает без него
 except Exception: X = None
+try: import tg_target as TGT      # самообучение цели (Авто и экспресс); см. tg_target.py
+except Exception: TGT = None
 try: import tg_learn as LRN        # журнал «согласен / не согласен»; можно отключить кнопкой или удалить файл
 except Exception: LRN = None
 
@@ -116,11 +118,38 @@ def watch_get(wid):
     return None
 
 
+POSTSF = os.path.join(os.path.dirname(MSGF), "tg_posts.jsonl")      # журнал постов слежения: чтобы связывать посты пары в цепочку и отмечать моменты задним числом
+
+
+def post_add(rec):
+    try:
+        with open(POSTSF, "a", encoding="utf-8") as f: f.write(json.dumps(rec, ensure_ascii=False, separators=(",", ":")) + "\n")
+    except Exception as e: log("post_add: %s" % e)
+
+
+def posts_tail(n=3000):
+    try: lines = open(POSTSF, encoding="utf-8").read().split("\n")[-n:]
+    except OSError: return []
+    out = []
+    for ln in lines:
+        try: out.append(json.loads(ln))
+        except Exception: pass
+    return out
+
+
+def post_get(mid): return next((p for p in reversed(posts_tail()) if p.get("mid") == mid), None)
+def post_last_mid(sym): return next((p["mid"] for p in reversed(posts_tail()) if p.get("sym") == sym), None)
+
+
+def retro_row(done=False):
+    return [{"text": "📝 Отмечено: здесь надо было заходить" if done else "🎯 Здесь надо было заходить", "callback_data": "xn" if done else "xr"}]
+
+
 def express_on():
     m = mode_state(); return bool(m.get("express")) and m.get("mode") == "monitor"
 
 
-def watch_buttons(wid, kind, V=None):
+def watch_buttons(wid, kind, V=None, retro_done=False):
     off = [{"text": "🔕 Отключить алерты", "callback_data": "al:0"}]
     if express_on():     # экспресс: слежение уже идёт само, «Продолжать» не нужно
         if V is None: V = (msgs_load().get("w%d" % wid) or {}).get("v")
@@ -128,6 +157,7 @@ def watch_buttons(wid, kind, V=None):
         if V and V.get("call") == "enter" and LRN and LRN.enabled():
             if V.get("ans") is None: rows.append([{"text": "✅ Согласен открыть сейчас", "callback_data": "xa:%d:1" % wid}, {"text": "🚫 Не согласен", "callback_data": "xa:%d:0" % wid}])
             else: rows.append([{"text": "📝 Записано: %s" % ("согласен" if V["ans"] else "не согласен"), "callback_data": "xn"}])
+        if V and LRN and LRN.enabled(): rows.append(retro_row(retro_done))
         return rows + [[{"text": "⚡ Выключить экспресс", "callback_data": "ex:0"}] + off]
     if kind == "alert": return [[{"text": "👁 Следить", "callback_data": "wa:%d" % wid}, {"text": "❌ Отклонить", "callback_data": "wr:%d" % wid}], off]
     return [[{"text": "▶️ Продолжать следить", "callback_data": "wc:%d" % wid}, {"text": "⏹ Перестать следить", "callback_data": "ws:%d" % wid}], [{"text": "📌 Выставить ордер", "callback_data": "wp:%d" % wid}], off]
@@ -137,8 +167,10 @@ def send_watch(wid, kind):
     w = watch_get(wid)
     if not w: return
     key = "w%d" % wid; m = msgs_load(); old = m.get(key)
-    if old and kind == "update":     # у предыдущего графика этой пары снимаем кнопки
-        try: api("editMessageReplyMarkup", chat_id=CHAT, message_id=old["mid"], reply_markup={"inline_keyboard": []})
+    if old and kind == "update":     # у предыдущего графика этой пары снимаем кнопки (в экспрессе остаётся только отметка «здесь надо было заходить»)
+        try:
+            keep = [retro_row(bool(LRN and LRN.has_mark(old["mid"], 2)))] if (old.get("v") and LRN and LRN.enabled()) else []
+            api("editMessageReplyMarkup", chat_id=CHAT, message_id=old["mid"], reply_markup={"inline_keyboard": keep})
         except Exception as e: log("strip old buttons: %s" % e)
     kl = jload("/tmp/klcache/%s_5m_1000.json" % w["sym"], [])
     cap = T.caption_watch(w, kind); V = None
@@ -153,12 +185,15 @@ def send_watch(wid, kind):
                 if len(cap) > 940: cap = cap[:937] + "..."
         except Exception as e: log("express verdict: %s" % e); V = None
     btn = watch_buttons(wid, kind, V)
-    try: r = T.send_photo(T.render_watch(w, kl), cap, btn); photo = True
+    prev = post_last_mid(w["sym"]); photo = True       # ответ на предыдущий пост этой пары: в Telegram виден как цитата, нажатие переносит к нему
+    try: r = T.send_photo(T.render_watch(w, kl), cap, btn, reply_to=prev)
     except Exception as e:
-        log("render watch fail %s: %s" % (wid, e)); r = T.send_text(cap, btn); photo = False
-    m = msgs_load(); m[key] = {"mid": r["result"]["message_id"], "cap": cap, "kind": kind, "photo": photo}
-    if V: m[key]["v"] = {k: V[k] for k in ("call", "feat", "plan", "t", "sym", "side")}; m[key]["v"]["ans"] = None
+        log("render watch fail %s: %s" % (wid, e)); r = T.send_text(cap, btn, reply_to=prev); photo = False
+    mid_new = r["result"]["message_id"]
+    m = msgs_load(); m[key] = {"mid": mid_new, "cap": cap, "kind": kind, "photo": photo}
+    if V: m[key]["v"] = {k: V.get(k) for k in ("call", "feat", "plan", "geo", "t", "sym", "side")}; m[key]["v"]["ans"] = None
     msgs_save(m)
+    post_add({"mid": mid_new, "wid": wid, "sym": w["sym"], "kind": kind, "ts": int(time.time() * 1000), "prev": prev, "v": m[key].get("v")})
 
 
 def edit_watch(wid, status, buttons=None):
@@ -297,7 +332,7 @@ def handle_event(ev):
         if o: api("sendMessage", chat_id=CHAT, text="▶️ Позиция #%s открыта: %s %s по %s (%s, ордер #%s)." % (ev.get("pos"), o["sym"], o["side"].upper(), T.fmt_px(o.get("fill_px") or o["price"]), ORD_RULE.get(o.get("rule"), "лимит"), oid), reply_markup={"inline_keyboard": REFRESH + MENU[:1]})
 
 
-_res_t = [0.0]
+_res_t = [0.0]; _pos_t = [0.0]
 
 
 def outbox_loop():
@@ -322,6 +357,10 @@ def outbox_loop():
             _res_t[0] = time.time()
             try: LRN.resolve(lambda sym: jload("/tmp/klcache/%s_5m_1000.json" % sym, []))
             except Exception: log("learn resolve: " + traceback.format_exc()[-300:])
+        if TGT and time.time() - _pos_t[0] > 300:      # самообучение цели: закрытые позиции счёта -> дальность отбоя в выборку (tg_target.py)
+            _pos_t[0] = time.time()
+            try: TGT.learn_positions(limit=2)
+            except Exception: log("learn positions: " + traceback.format_exc()[-300:])
         time.sleep(2)
 
 
@@ -445,11 +484,21 @@ def on_callback(cq):
         api("answerCallbackQuery", callback_query_id=cid, text="Обучение включено" if p[1] == "1" else "Обучение выключено (журнал сохранён)")
         api("sendMessage", chat_id=CHAT, text=mode_text(), reply_markup={"inline_keyboard": menu()})
     elif p[0] == "xn": api("answerCallbackQuery", callback_query_id=cid, text="Ответ уже записан")
+    elif p[0] == "xr":      # отметка задним числом: «здесь надо было заходить»
+        pr = post_get(mid); V = (pr or {}).get("v")
+        if not V or not LRN or not LRN.enabled(): api("answerCallbackQuery", callback_query_id=cid, text="Обучение выключено или нет данных по этому посту"); return
+        if LRN.has_mark(mid, 2): api("answerCallbackQuery", callback_query_id=cid, text="Уже отмечено"); return
+        try: LRN.record(V, 2, pr.get("wid"), mid)
+        except Exception as e: log("learn retro: %s" % e); api("answerCallbackQuery", callback_query_id=cid, text="Не удалось записать"); return
+        api("answerCallbackQuery", callback_query_id=cid, text="Записал: здесь надо было заходить")
+        rec = msgs_load().get("w%d" % (pr.get("wid") or -1)) or {}
+        kb = watch_buttons(pr["wid"], rec.get("kind", "update"), rec.get("v"), retro_done=True) if rec.get("mid") == mid else [retro_row(True)]
+        api("editMessageReplyMarkup", chat_id=CHAT, message_id=mid, reply_markup={"inline_keyboard": kb})
     elif p[0] == "xa":
         wid = int(p[1]); ok = p[2] == "1"; mm = msgs_load(); rec = mm.get("w%d" % wid) or {}; V = rec.get("v")
         if not V or not LRN or not LRN.enabled(): api("answerCallbackQuery", callback_query_id=cid, text="Обучение выключено или пост устарел"); return
         if V.get("ans") is not None: api("answerCallbackQuery", callback_query_id=cid, text="Ответ уже записан"); return
-        try: LRN.record(V, 1 if ok else 0, wid)
+        try: LRN.record(V, 1 if ok else 0, wid, mid)
         except Exception as e: log("learn record: %s" % e); api("answerCallbackQuery", callback_query_id=cid, text="Не удалось записать"); return
         V["ans"] = 1 if ok else 0; mm["w%d" % wid] = rec; msgs_save(mm)
         api("answerCallbackQuery", callback_query_id=cid, text="Записал: %s" % ("согласен" if ok else "не согласен"))
