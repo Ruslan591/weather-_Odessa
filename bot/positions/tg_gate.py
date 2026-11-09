@@ -22,7 +22,13 @@ D = os.environ.get("POS_DIR", "/opt/trading-bot/positions")
 ENABLED = os.environ.get("TG_GATE", "0") == "1"
 WATCHF = os.path.join(D, "tg_watch.json"); MODEF = os.path.join(D, "tg_mode.json"); OUTF = os.path.join(D, "tg_outbox.jsonl"); INF = os.path.join(D, "tg_inbox.jsonl"); OFFF = os.path.join(D, "tg_inbox.off")
 MODES = ("sleep", "monitor", "auto"); TFM = 300000
-DEFAULT = {"mode": "auto", "missed": 0, "max_missed": 3, "answer_win": 3, "until": None, "max_watch": 3, "watch_unanswered": 3, "watch_hours": 4, "alerts_off": False, "express": False, "autoorder": False, "express_away": 6, "express_hours": 2}
+def maxw(m):
+    """Сколько слежений одновременно: в Автоордере (Монитор + экспресс) больше (max_watch_auto), иначе max_watch."""
+    if m.get("mode") == "monitor" and m.get("express") and m.get("autoorder"): return int(m.get("max_watch_auto", 12))
+    return int(m.get("max_watch", 3))
+
+
+DEFAULT = {"mode": "auto", "missed": 0, "max_missed": 3, "answer_win": 3, "until": None, "max_watch": 3, "watch_unanswered": 3, "watch_hours": 4, "alerts_off": False, "express": False, "autoorder": False, "express_away": 6, "express_hours": 2, "max_watch_auto": 12}
 
 
 def load_mode():
@@ -142,7 +148,7 @@ def watch_scan(info, now):
             elif exp and now - x["t_follow"] > float(m.get("express_hours", 2)) * 3600000: x.update(status="done", reason="предел времени экспресса", t_end=now); emit({"type": "watch_end", "wid": x["id"], "why": "слежение длится дольше %s ч: закончено (новое касание даст новый алерт)" % m.get("express_hours", 2)})
             else: emit({"type": "watch_update", "wid": x["id"]})
     active = [x for x in items if x["status"] in ("alert", "watching")]
-    if not m.get("alerts_off") and info.get("ctype") and info.get("R") is not None and len(active) < int(m.get("max_watch", 3)) and not any(x["sym"] == sym for x in active) and info["R"] - info["S"] >= 1.5 * info["atr"]:
+    if not m.get("alerts_off") and info.get("ctype") and info.get("R") is not None and len(active) < maxw(m) and not any(x["sym"] == sym for x in active) and info["R"] - info["S"] >= 1.5 * info["atr"]:
         down = info["ctype"] == "channel_down"; a = info["atr"]; main_line = "upper" if down else "lower"
         lines = [main_line] + ([("lower" if down else "upper")] if m.get("watch_counter", True) else [])   # линия по тренду, затем противоположная (коррекция / разворот)
         for line in lines:
