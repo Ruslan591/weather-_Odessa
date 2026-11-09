@@ -1827,6 +1827,20 @@ window.addEventListener('resize',draw);
 </script></body></html>'''
 
 
+@web.middleware
+async def gzip_mw(request, handler):
+    """gzip для ответов (JSON /api/runs ~3.8 МБ): только если клиент просит и тело больше 1 КБ."""
+    resp = await handler(request)
+    try:
+        if (isinstance(resp, web.Response) and not resp.prepared
+                and "gzip" in request.headers.get("Accept-Encoding", "")
+                and isinstance(resp.body, (bytes, bytearray)) and len(resp.body) > 1024):
+            resp.enable_compression(web.ContentCoding.gzip)
+    except Exception:
+        pass
+    return resp
+
+
 async def serve():
     global SES
     SES = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15))
@@ -1834,14 +1848,14 @@ async def serve():
     asyncio.create_task(refresher())
     asyncio.create_task(manual_loop())
     asyncio.create_task(screen_loop())
-    app1 = web.Application()
+    app1 = web.Application(middlewares=[gzip_mw])
     app1.router.add_get("/", index)
     app1.router.add_get("/api/chart", api_chart)
     app1.router.add_get("/api/mtf", api_mtf)
     app1.router.add_route("*", "/api/pairs", api_pairs)
     app1.router.add_route("*", "/api/labels", api_labels)
     app1.router.add_route("*", "/api/hand", api_hand)
-    app2 = web.Application()
+    app2 = web.Application(middlewares=[gzip_mw])
     app2.router.add_get("/", pos_index)
     app2.router.add_get("/api/trades", api_trades)
     app2.router.add_route("*", "/api/pairs", api_pairs)
