@@ -22,7 +22,7 @@ D = os.environ.get("POS_DIR", "/opt/trading-bot/positions")
 ENABLED = os.environ.get("TG_GATE", "0") == "1"
 WATCHF = os.path.join(D, "tg_watch.json"); MODEF = os.path.join(D, "tg_mode.json"); OUTF = os.path.join(D, "tg_outbox.jsonl"); INF = os.path.join(D, "tg_inbox.jsonl"); OFFF = os.path.join(D, "tg_inbox.off")
 MODES = ("sleep", "monitor", "auto"); TFM = 300000
-DEFAULT = {"mode": "auto", "missed": 0, "max_missed": 3, "answer_win": 3, "until": None, "max_watch": 3, "watch_unanswered": 3, "watch_hours": 4, "alerts_off": False, "express": False}
+DEFAULT = {"mode": "auto", "missed": 0, "max_missed": 3, "answer_win": 3, "until": None, "max_watch": 3, "watch_unanswered": 3, "watch_hours": 4, "alerts_off": False, "express": False, "autoorder": False}
 
 
 def load_mode():
@@ -205,14 +205,21 @@ def _wevent(e, W, m, orders, now, mkorder, price_fn, jobs):
         emit({"type": "watch_end", "wid": x["id"], "why": "отклонено", "code": code}); jobs.append((dict(x, _w=1), "w_reject", {"reason": code, "reason_text": (e.get("text") or "")[:300] or None, "was": was})); return True
     if t == "w_place":
         if mkorder is None: emit({"type": "watch_ack", "wid": x["id"], "ok": False, "what": "place", "why": "постановка недоступна"}); return False
+        auto = bool(e.get("auto"))
+        if auto and not (m["mode"] == "monitor" and m.get("express") and m.get("autoorder")):     # Автоордер уже выключили, пока шло нажатие
+            emit({"type": "watch_ack", "wid": x["id"], "ok": False, "what": "place", "auto": True, "why": "Автоордер выключен"}); return False
+        if auto and any(q["sym"] == x["sym"] and q["status"] in ("pending", "proposed") for q in orders):
+            emit({"type": "watch_ack", "wid": x["id"], "ok": False, "what": "place", "auto": True, "why": "по паре уже есть ордер в ожидании"}); return False
         try: px = price_fn(x["sym"]) if price_fn else None
         except Exception: px = None
-        o, why = mkorder(x, e.get("entry"), e.get("target"), px or x["last"]["c"], e.get("setup") or "bounce")
-        if not o: emit({"type": "watch_ack", "wid": x["id"], "ok": False, "what": "place", "why": why}); return False
-        o["id"] = max([q["id"] for q in orders] + [0]) + 1; o["approved_t"] = now; o["src_watch"] = x["id"]; orders.append(o)
+        o, why = mkorder(dict(x, _auto=1) if auto else x, e.get("entry"), e.get("target"), px or x["last"]["c"], e.get("setup") or "bounce")
+        if not o: emit({"type": "watch_ack", "wid": x["id"], "ok": False, "what": "place", "auto": auto, "why": why}); return False
+        o["id"] = max([q["id"] for q in orders] + [0]) + 1; o["approved_t"] = now; o["src_watch"] = x["id"]
+        if auto: o["auto_express"] = 1
+        orders.append(o)
         x.update(status="done", reason="ордер #%d" % o["id"], t_end=now, order_id=o["id"]); m["missed"] = 0
-        emit({"type": "placed", "id": o["id"], "src": "watch", "wid": x["id"]}); emit({"type": "watch_end", "wid": x["id"], "why": "ордер #%d выставлен" % o["id"], "order": o["id"]})
-        jobs.append((dict(x, _w=1), "w_place", {"entry": e.get("entry"), "target": e.get("target"), "setup": e.get("setup") or "bounce", "order_id": o["id"], "price": o["price"]})); return True
+        emit({"type": "placed", "id": o["id"], "src": "watch", "wid": x["id"], "auto": auto}); emit({"type": "watch_end", "wid": x["id"], "why": ("🤖 Автоордер: ордер #%d выставлен" if auto else "ордер #%d выставлен") % o["id"], "order": o["id"], "auto": auto})
+        jobs.append((dict(x, _w=1), "w_place", {"entry": e.get("entry"), "target": e.get("target"), "setup": e.get("setup") or "bounce", "order_id": o["id"], "price": o["price"], "auto": auto})); return True
     return False
 
 
@@ -225,7 +232,7 @@ def apply(orders, now, cancel, touched, mkorder=None, price_fn=None):
     for e in _read_inbox():
         t = e.get("type"); ts = int(e.get("ts") or now)
         if t == "mode" and e.get("mode") in MODES:
-            m["mode"] = e["mode"]; m["missed"] = 0; m["express"] = False; h = e.get("hours")
+            m["mode"] = e["mode"]; m["missed"] = 0; m["express"] = False; m["autoorder"] = False; h = e.get("hours")
             m["until"] = int(now + float(h) * 3600000) if h else None
             if m["mode"] == "monitor": m["alerts_off"] = False     # явный выбор Монитора включает алерты
             nc = _go_sleep(orders, cancel, now) if m["mode"] == "sleep" else 0
@@ -235,11 +242,15 @@ def apply(orders, now, cancel, touched, mkorder=None, price_fn=None):
         elif t == "express":     # кнопка «Экспресс слежение» (только в Мониторе): счётчик пропусков и таймер не действуют
             on = bool(e.get("on")); refused = on and m["mode"] != "monitor"; on = on and not refused
             m["express"] = on; m["missed"] = 0
+            if not on: m["autoorder"] = False     # Автоордер работает только вместе с экспрессом
             if not on:     # выключили: идущим слежениям даём чистый счёт, чтобы они не закрылись разом; истёкший за время экспресса таймер снимаем (иначе сон сразу)
                 if m.get("until") and now >= m["until"]: m["until"] = None
                 for x in W["items"]:
                     if x["status"] == "watching": x["unanswered"] = 0; x["t_follow"] = now; wch = True
             emit({"type": "express", "on": on, "refused": refused})
+        elif t == "autoorder":   # кнопка «Автоордер» (только Монитор + Экспресс): бот сам ставит ордер, когда его мнение «заходить» (отбой) или «пробой»
+            on = bool(e.get("on")); refused = on and not (m["mode"] == "monitor" and m.get("express")); on = on and not refused
+            m["autoorder"] = on; emit({"type": "autoorder", "on": on, "refused": refused})
         elif t == "alerts":      # кнопка «Отключить / Включить алерты»: режим и таймер не трогаем
             off = not e.get("on", True); nc = 0
             if off: nc = _end_watches(W, now, "алерты отключены вами", ("alert",)); wch = wch or bool(nc)
