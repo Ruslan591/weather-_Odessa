@@ -1,7 +1,7 @@
 {
-  "task_id": "gz-deploy-1794221930",
+  "task_id": "gz-diff-1794221952",
   "returncode": 0,
-  "stdout": "DIVERGED on VPS: classic_panel.py (not touched)\ndeploy skipped\nbackup: /opt/trading-bot/classic/backup_20261109_105902\n",
+  "stdout": "  1865 /tmp/cp_parent.py\n  1898 /opt/trading-bot/classic/classic_panel.py\n  3763 total\n502a503,534\n> async def api_claude(req):\n>     \"\"\" Claude: GET   ( 7 $, 5x, , ), POST {action: close|stop|trail, id, pct}. : /opt/trading-bot/positions/pos.py.\"\"\"\n>     acct = req.query.get(\"acct\", \"\")  # acct_proxy:  AFD /  /      (acct_api.py)\n>     _ports = {\"afd\": 18101, \"regr\": 18102, \"combo\": 18103}\n>     if acct in _ports:\n>         try:\n>             import aiohttp\n>             _u = \"http://127.0.0.1:%d/api/claude\" % _ports[acct]; _to = aiohttp.ClientTimeout(total=60)\n>             async with aiohttp.ClientSession(timeout=_to) as _cs:\n>                 if req.method == \"POST\":\n>                     async with _cs.post(_u, json=await req.json()) as _r: res = await _r.json()\n>                 else:\n>                     async with _cs.get(_u) as _r: res = await _r.json()\n>         except Exception as e:\n>             res = {\"error\": \"acct \" + acct + \": \" + str(e)}\n>         return web.json_response(res)\n>     import sys as _s\n>     if \"/opt/trading-bot/positions\" not in _s.path:\n>         _s.path.insert(0, \"/opt/trading-bot/positions\")\n>     try:\n>         import pos as _pos\n>         loop = asyncio.get_running_loop()\n>         if req.method == \"POST\":\n>             o = await req.json()\n>             res = await loop.run_in_executor(None, _pos.api_action, o)\n>         else:\n>             res = await loop.run_in_executor(None, _pos.snapshot)\n>     except Exception as e:\n>         res = {\"error\": str(e)}\n>     return web.json_response(res)\n> \n> \n1850a1883\n>     app2.router.add_route(\"*\", \"/api/claude\", api_claude)\n---LOG\n8792b3f 2026-11-09 12:58:41 +0200\n27524c8 2026-11-09 12:08:14 +0200\n",
   "stderr": "",
-  "completed_at_utc": "2026-11-09T10:59:02Z"
+  "completed_at_utc": "2026-11-09T11:00:01Z"
 }
