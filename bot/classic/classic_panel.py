@@ -500,6 +500,38 @@ async def api_config(req):
         return web.json_response({"error": str(e)}, status=400)
 
 
+async def api_claude(req):
+    """Счёт «Claude»: GET — снимок (счёт 7 $, 5x, позиции, журнал), POST {action: close|stop|trail, id, pct}. Данные: /opt/trading-bot/positions/pos.py."""
+    acct = req.query.get("acct", "")  # acct_proxy: счета AFD / Регрессия / Комбо живут в отдельных процессах (acct_api.py)
+    _ports = {"afd": 18101, "regr": 18102, "combo": 18103}
+    if acct in _ports:
+        try:
+            import aiohttp
+            _u = "http://127.0.0.1:%d/api/claude" % _ports[acct]; _to = aiohttp.ClientTimeout(total=60)
+            async with aiohttp.ClientSession(timeout=_to) as _cs:
+                if req.method == "POST":
+                    async with _cs.post(_u, json=await req.json()) as _r: res = await _r.json()
+                else:
+                    async with _cs.get(_u) as _r: res = await _r.json()
+        except Exception as e:
+            res = {"error": "acct " + acct + ": " + str(e)}
+        return web.json_response(res)
+    import sys as _s
+    if "/opt/trading-bot/positions" not in _s.path:
+        _s.path.insert(0, "/opt/trading-bot/positions")
+    try:
+        import pos as _pos
+        loop = asyncio.get_running_loop()
+        if req.method == "POST":
+            o = await req.json()
+            res = await loop.run_in_executor(None, _pos.api_action, o)
+        else:
+            res = await loop.run_in_executor(None, _pos.snapshot)
+    except Exception as e:
+        res = {"error": str(e)}
+    return web.json_response(res)
+
+
 async def api_cand(req):
     """Фильтр счёта «Кандидат»: GET — текущие значения, POST {filter:{...}} или {reset:true}. Каждое изменение параметров добавляет версию в history."""
     try:
@@ -1862,6 +1894,7 @@ async def serve():
     app2.router.add_route("*", "/api/config", api_config)
     app2.router.add_route("*", "/api/runs", api_runs)
     app2.router.add_route("*", "/api/cand", api_cand)
+    app2.router.add_route("*", "/api/claude", api_claude)
     app2.router.add_get("/api/prop_chart", api_prop_chart)
     app2.router.add_route("*", "/api/screen", api_screen)
     for app, port in ((app1, PORT), (app2, PORT2)):
