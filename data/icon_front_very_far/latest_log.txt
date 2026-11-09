@@ -1,64 +1,60 @@
-[2026-11-09T13:06:01.963890+00:00] Синхронизирую репозиторий...
-[2026-11-09T13:06:02.669230+00:00] Ищу самый свежий опубликованный run+lead ICON-EU...
-[2026-11-09T13:06:02.777464+00:00] run=2026-11-09T06:00:00+00:00 lead=7 valid_time=2026-11-09T13:00:00+00:00
-[2026-11-09T13:06:02.778570+00:00] Тиры к обновлению: ['near', 'far', 'very_far']
-[2026-11-09T13:06:02.778613+00:00] скачиваю pmsl: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/pmsl/icon-eu_europe_regular-lat-lon_single-level_2026110906_007_PMSL.grib2.bz2
-[2026-11-09T13:06:05.961028+00:00] скачиваю fi500: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/fi/icon-eu_europe_regular-lat-lon_pressure-level_2026110906_007_500_FI.grib2.bz2
-[2026-11-09T13:06:08.686034+00:00] скачиваю fi1000: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/fi/icon-eu_europe_regular-lat-lon_pressure-level_2026110906_007_1000_FI.grib2.bz2
-[2026-11-09T13:06:11.319698+00:00] скачиваю u850: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/u/icon-eu_europe_regular-lat-lon_pressure-level_2026110906_007_850_U.grib2.bz2
-[2026-11-09T13:06:14.415470+00:00] скачиваю v850: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/v/icon-eu_europe_regular-lat-lon_pressure-level_2026110906_007_850_V.grib2.bz2
-[2026-11-09T13:06:17.271917+00:00] скачиваю relhum850: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/relhum/icon-eu_europe_regular-lat-lon_pressure-level_2026110906_007_850_RELHUM.grib2.bz2
-[2026-11-09T13:06:20.116402+00:00] скачиваю t850: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/t/icon-eu_europe_regular-lat-lon_pressure-level_2026110906_007_850_T.grib2.bz2
-[2026-11-09T13:06:22.970299+00:00] скачиваю fr_land: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/fr_land/icon-eu_europe_regular-lat-lon_time-invariant_2026110906_FR_LAND.grib2.bz2
-[2026-11-09T13:06:25.631062+00:00] скачиваю fr_lake: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/fr_lake/icon-eu_europe_regular-lat-lon_time-invariant_2026110906_FR_LAKE.grib2.bz2
-[2026-11-09T13:06:28.304989+00:00] скачиваю hsurf: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/hsurf/icon-eu_europe_regular-lat-lon_time-invariant_2026110906_HSURF.grib2.bz2
-[2026-11-09T13:06:31.021826+00:00] Скачано всего ~8.18 МБ (на все три тира сразу)
-[2026-11-09T13:06:31.074807+00:00] L/H диагностика [L]: окно 500км, порог 1.5 гПа, выделенность p50=2.76 p90=6.04 p99=8.85 max=10.61, найдено 2
-[2026-11-09T13:06:31.099361+00:00] L/H диагностика [H]: окно 1200км, порог 1.0 гПа, выделенность p50=4.34 p90=9.90 p99=12.98 max=14.76, найдено 1
-[2026-11-09T13:06:31.099429+00:00] L/H: найдено 3 центров в области
-[2026-11-09T13:06:31.835709+00:00] фронты: сегментов 10, суммарно 6001 км; |∇θe850| К/100км p50=1.17 p90=3.70 max=13.17; порог(адапт.) 4.00 (перцентиль 88.0, p99=9.02), валидных точек 12.2%
-[2026-11-09T13:06:31.836131+00:00] [near] считаю P_front...
-[2026-11-09T13:06:32.057254+00:00] [near] запрашиваю EUMETSAT GeoColour...
-[2026-11-09T13:06:42.459161+00:00] [near]  2026-11-09T12:50:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
-[2026-11-09T13:06:52.524489+00:00] [near]  2026-11-09T12:45:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
-[2026-11-09T13:07:02.816111+00:00] [near]  2026-11-09T12:55:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
-[2026-11-09T13:07:12.901157+00:00] [near]  2026-11-09T12:40:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
-[2026-11-09T13:07:23.193108+00:00] [near]  2026-11-09T12:35:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
-[2026-11-09T13:07:33.277189+00:00] [near]  2026-11-09T13:00:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
-[2026-11-09T13:07:43.342109+00:00] [near]  2026-11-09T12:30:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
-[2026-11-09T13:07:43.342166+00:00] [near] EUMETSAT недоступен даже с fallback — пропускаю тир на этот цикл
-[2026-11-09T13:07:43.343393+00:00] [far] считаю P_front...
-[2026-11-09T13:07:43.565820+00:00] [far] запрашиваю EUMETSAT GeoColour...
-[2026-11-09T13:07:53.626509+00:00] [far]  2026-11-09T12:50:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
-[2026-11-09T13:08:03.718971+00:00] [far]  2026-11-09T12:45:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
-[2026-11-09T13:08:13.784197+00:00] [far]  2026-11-09T12:55:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
-[2026-11-09T13:08:23.848176+00:00] [far]  2026-11-09T12:40:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
-[2026-11-09T13:08:25.566845+00:00] [far]  точного кадра не было, использован ближайший: 2026-11-09T12:35:00Z (-25 мин)
-[2026-11-09T13:08:35.639772+00:00] [far]  ИК 2026-11-09T12:35:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
-[2026-11-09T13:08:46.744445+00:00] [far]  ИК 2026-11-09T12:50:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
-[2026-11-09T13:08:56.807205+00:00] [far]  ИК 2026-11-09T12:45:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
-[2026-11-09T13:09:06.870196+00:00] [far]  ИК 2026-11-09T12:55:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
-[2026-11-09T13:09:17.185006+00:00] [far]  ИК 2026-11-09T12:40:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
-[2026-11-09T13:09:27.250844+00:00] [far]  ИК 2026-11-09T13:00:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
-[2026-11-09T13:09:27.250897+00:00] [far] ИК недоступен — кадр без ИК-слоя
-[2026-11-09T13:09:27.250905+00:00] [far] рендерю изобары и P_front...
-[2026-11-09T13:09:27.428467+00:00] изобары: над рельефом (>800 м) продолжено 44813 клеток
-[2026-11-09T13:09:27.485394+00:00] изобары: оставлено 16 линий, отброшено 5 мелких/над-горных фрагментов
-[2026-11-09T13:09:27.485466+00:00] L/H: нарисовано 0 центров
-[2026-11-09T13:09:28.431851+00:00] [far] фронты: 6 линий в кадре
-[2026-11-09T13:09:28.432971+00:00] [very_far] считаю P_front...
-[2026-11-09T13:09:28.641882+00:00] [very_far] запрашиваю EUMETSAT GeoColour...
-[2026-11-09T13:09:38.701198+00:00] [very_far]  2026-11-09T12:50:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
-[2026-11-09T13:09:48.762890+00:00] [very_far]  2026-11-09T12:45:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
-[2026-11-09T13:09:58.829502+00:00] [very_far]  2026-11-09T12:55:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
-[2026-11-09T13:10:04.197937+00:00] [very_far]  точного кадра не было, использован ближайший: 2026-11-09T12:40:00Z (-20 мин)
-[2026-11-09T13:10:14.303699+00:00] [very_far]  ИК 2026-11-09T12:40:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
-[2026-11-09T13:10:24.365339+00:00] [very_far]  ИК 2026-11-09T12:50:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
-[2026-11-09T13:10:26.853796+00:00] [very_far] ИК сохранён (71 КБ)
-[2026-11-09T13:10:26.853832+00:00] [very_far] рендерю изобары и P_front...
-[2026-11-09T13:10:27.008685+00:00] изобары: над рельефом (>800 м) продолжено 44813 клеток
-[2026-11-09T13:10:27.091841+00:00] изобары: оставлено 24 линий, отброшено 8 мелких/над-горных фрагментов
-[2026-11-09T13:10:27.092211+00:00] L/H: нарисовано 1 центров
-[2026-11-09T13:10:28.031311+00:00] [very_far] фронты: 10 линий в кадре
-[2026-11-09T13:10:28.794159+00:00] [far] удалён старый снимок 2026-11-08T10:00:00+00:00
-[2026-11-09T13:10:28.796632+00:00] [very_far] удалён старый снимок 2026-11-08T10:00:00+00:00
+[2026-11-09T14:06:02.158442+00:00] Синхронизирую репозиторий...
+[2026-11-09T14:06:02.816305+00:00] Ищу самый свежий опубликованный run+lead ICON-EU...
+[2026-11-09T14:06:02.948442+00:00] run=2026-11-09T06:00:00+00:00 lead=8 valid_time=2026-11-09T14:00:00+00:00
+[2026-11-09T14:06:02.949506+00:00] Тиры к обновлению: ['near', 'far', 'very_far']
+[2026-11-09T14:06:02.949550+00:00] скачиваю pmsl: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/pmsl/icon-eu_europe_regular-lat-lon_single-level_2026110906_008_PMSL.grib2.bz2
+[2026-11-09T14:06:06.381132+00:00] скачиваю fi500: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/fi/icon-eu_europe_regular-lat-lon_pressure-level_2026110906_008_500_FI.grib2.bz2
+[2026-11-09T14:06:09.153006+00:00] скачиваю fi1000: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/fi/icon-eu_europe_regular-lat-lon_pressure-level_2026110906_008_1000_FI.grib2.bz2
+[2026-11-09T14:06:11.822596+00:00] скачиваю u850: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/u/icon-eu_europe_regular-lat-lon_pressure-level_2026110906_008_850_U.grib2.bz2
+[2026-11-09T14:06:14.674684+00:00] скачиваю v850: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/v/icon-eu_europe_regular-lat-lon_pressure-level_2026110906_008_850_V.grib2.bz2
+[2026-11-09T14:06:17.381312+00:00] скачиваю relhum850: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/relhum/icon-eu_europe_regular-lat-lon_pressure-level_2026110906_008_850_RELHUM.grib2.bz2
+[2026-11-09T14:06:20.212253+00:00] скачиваю t850: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/t/icon-eu_europe_regular-lat-lon_pressure-level_2026110906_008_850_T.grib2.bz2
+[2026-11-09T14:06:23.155686+00:00] скачиваю fr_land: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/fr_land/icon-eu_europe_regular-lat-lon_time-invariant_2026110906_FR_LAND.grib2.bz2
+[2026-11-09T14:06:26.066379+00:00] скачиваю fr_lake: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/fr_lake/icon-eu_europe_regular-lat-lon_time-invariant_2026110906_FR_LAKE.grib2.bz2
+[2026-11-09T14:06:28.814451+00:00] скачиваю hsurf: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/hsurf/icon-eu_europe_regular-lat-lon_time-invariant_2026110906_HSURF.grib2.bz2
+[2026-11-09T14:06:31.598602+00:00] Скачано всего ~8.06 МБ (на все три тира сразу)
+[2026-11-09T14:06:31.652456+00:00] L/H диагностика [L]: окно 500км, порог 1.5 гПа, выделенность p50=2.69 p90=6.05 p99=8.72 max=10.35, найдено 2
+[2026-11-09T14:06:31.676241+00:00] L/H диагностика [H]: окно 1200км, порог 1.0 гПа, выделенность p50=4.41 p90=9.85 p99=12.77 max=14.47, найдено 1
+[2026-11-09T14:06:31.676305+00:00] L/H: найдено 3 центров в области
+[2026-11-09T14:06:32.420458+00:00] фронты: сегментов 12, суммарно 6457 км; |∇θe850| К/100км p50=1.16 p90=3.72 max=13.17; порог(адапт.) 4.00 (перцентиль 88.0, p99=8.96), валидных точек 12.3%
+[2026-11-09T14:06:32.420898+00:00] [near] считаю P_front...
+[2026-11-09T14:06:32.639085+00:00] [near] запрашиваю EUMETSAT GeoColour...
+[2026-11-09T14:06:42.889900+00:00] [near]  2026-11-09T13:50:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
+[2026-11-09T14:06:44.474374+00:00] [near]  точного кадра не было, использован ближайший: 2026-11-09T13:45:00Z (-15 мин)
+[2026-11-09T14:06:55.807854+00:00] [near]  ИК 2026-11-09T13:45:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
+[2026-11-09T14:07:05.869161+00:00] [near]  ИК 2026-11-09T13:50:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
+[2026-11-09T14:07:15.935616+00:00] [near]  ИК 2026-11-09T13:55:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
+[2026-11-09T14:07:26.001578+00:00] [near]  ИК 2026-11-09T13:40:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
+[2026-11-09T14:07:36.069960+00:00] [near]  ИК 2026-11-09T14:00:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
+[2026-11-09T14:07:36.070010+00:00] [near] ИК недоступен — кадр без ИК-слоя
+[2026-11-09T14:07:36.070018+00:00] [near] рендерю изобары и P_front...
+[2026-11-09T14:07:36.245810+00:00] изобары: над рельефом (>800 м) продолжено 44813 клеток
+[2026-11-09T14:07:36.276581+00:00] изобары: оставлено 4 линий, отброшено 0 мелких/над-горных фрагментов
+[2026-11-09T14:07:36.276636+00:00] L/H: нарисовано 0 центров
+[2026-11-09T14:07:36.380361+00:00] [near] фронты: 0 линий в кадре
+[2026-11-09T14:07:36.380874+00:00] [far] считаю P_front...
+[2026-11-09T14:07:36.602409+00:00] [far] запрашиваю EUMETSAT GeoColour...
+[2026-11-09T14:07:46.692466+00:00] [far]  2026-11-09T13:50:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
+[2026-11-09T14:07:57.197171+00:00] [far]  2026-11-09T13:45:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
+[2026-11-09T14:08:07.256469+00:00] [far]  2026-11-09T13:55:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
+[2026-11-09T14:08:17.323898+00:00] [far]  2026-11-09T13:40:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
+[2026-11-09T14:08:27.389109+00:00] [far]  2026-11-09T13:35:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
+[2026-11-09T14:08:37.453240+00:00] [far]  2026-11-09T14:00:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
+[2026-11-09T14:08:47.517601+00:00] [far]  2026-11-09T13:30:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
+[2026-11-09T14:08:47.517662+00:00] [far] EUMETSAT недоступен даже с fallback — пропускаю тир на этот цикл
+[2026-11-09T14:08:47.518242+00:00] [very_far] считаю P_front...
+[2026-11-09T14:08:47.732161+00:00] [very_far] запрашиваю EUMETSAT GeoColour...
+[2026-11-09T14:08:51.851886+00:00] [very_far]  точного кадра не было, использован ближайший: 2026-11-09T13:50:00Z (-10 мин)
+[2026-11-09T14:09:01.917166+00:00] [very_far]  ИК 2026-11-09T13:50:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
+[2026-11-09T14:09:11.983074+00:00] [very_far]  ИК 2026-11-09T13:45:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
+[2026-11-09T14:09:22.054414+00:00] [very_far]  ИК 2026-11-09T13:55:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
+[2026-11-09T14:09:32.121927+00:00] [very_far]  ИК 2026-11-09T13:40:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
+[2026-11-09T14:09:42.178146+00:00] [very_far]  ИК 2026-11-09T14:00:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
+[2026-11-09T14:09:42.178204+00:00] [very_far] ИК недоступен — кадр без ИК-слоя
+[2026-11-09T14:09:42.178213+00:00] [very_far] рендерю изобары и P_front...
+[2026-11-09T14:09:42.316420+00:00] изобары: над рельефом (>800 м) продолжено 44813 клеток
+[2026-11-09T14:09:42.395622+00:00] изобары: оставлено 24 линий, отброшено 13 мелких/над-горных фрагментов
+[2026-11-09T14:09:42.395998+00:00] L/H: нарисовано 1 центров
+[2026-11-09T14:09:43.320943+00:00] [very_far] фронты: 12 линий в кадре
+[2026-11-09T14:09:43.904626+00:00] [near] удалён старый снимок 2026-11-08T13:00:00+00:00
+[2026-11-09T14:09:43.906319+00:00] [very_far] удалён старый снимок 2026-11-08T11:00:00+00:00
