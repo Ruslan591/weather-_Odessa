@@ -1,1 +1,1 @@
-{"task_id": "tbl-1794219069", "cmd": "cd /opt/weather-pipeline/repo && git fetch -q origin; git show origin/main:scripts/reach_table.py > /tmp/reach_table.py; python3 /tmp/reach_table.py 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 60}
+{"task_id": "gz-deploy-1794221930", "cmd": "(cd /opt/weather-pipeline/repo && git fetch -q origin && git show origin/main:scripts/deploy_classic_files.sh | bash -s classic_panel.py:8792b3f00e8a887dc9378ce55ced932354ba54a0) 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 280}
