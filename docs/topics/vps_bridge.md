@@ -32,3 +32,8 @@
 ## Инцидент 2026-11-05: мост завис из-за невалидного UTF-8 в выводе
 - Причина: в cmd команда `cut -c1-N` резала русский текст посреди буквы -> stdout невалидный UTF-8 -> в vps_github_bridge.py падал subprocess.run(...) с UnicodeDecodeError на КАЖДОМ запуске cron, результат не публиковался, задача не помечалась выполненной. Лечение: записать в vps_task.json НОВУЮ задачу (другой task_id) с чистым выводом, мост оживает сам.
 - Правило: вывод команд пропускать через `| LC_ALL=C tr -cd '\11\12\40-\176'` (оставляет только ASCII), не использовать `cut -c`/`head -c` по строкам с кириллицей. Помощник Claude в сессии добавляет этот фильтр к каждой команде. Длинные команды в фоне, команды дольше ~300 с обрываются.
+
+## Заметки 2026-11-09
+- Мост запускает cmd через sh: конструкция `<(...)` (process substitution) не работает, задача падает с «Syntax error: "(" unexpected». Использовать временные файлы или `bash -c`.
+- Дрейф: classic_panel.py на VPS содержал обработчик api_claude (прокси /api/claude к acct-api счетов afd/regr/combo, порты 18101-18103, и pos.snapshot) и маршрут /api/claude, которых не было в git, из-за чего deploy_classic_files.sh писал DIVERGED. Версия синхронизирована в git (коммит 516c409). Перед выкладкой файла всегда сравнивать VPS с родительским коммитом: `git show <commit>^:bot/classic/classic_panel.py | diff - /opt/trading-bot/classic/classic_panel.py`; если есть чужие правки, брать файл с VPS (кириллицу вытаскивать через `sed -n 'A,Bp' файл | base64 -w0`), накладывать правку и коммитить объединённый результат.
+- Ручная выкладка при DIVERGED: бэкап в /opt/trading-bot/classic/backup_*, `git show <коммит>:bot/classic/<файл> > файл`, py_compile, systemctl restart classicbot, проверка is-active, откат из бэкапа при неудаче.
