@@ -98,3 +98,51 @@ def note(V, k=8, max_d=0.35):
     s = "📚 Похожих ситуаций: %d, вы хотели зайти в %d" % (len(near), len(ag))
     if done: s += "; завершились: цель %d, стоп %d" % (sum(r["res"] == "tp" for r in done), sum(r["res"] == "stop" for r in done))
     return s + (" (выборка мала, это подсказка, не прогноз)" if len(recs) < 30 else "")
+
+
+# ---------- база по ПРОБОЯМ (отдельно от базы отбоев: направление и цель другие) ----------
+LOGB = os.path.join(D, "tg_learn_brk.jsonl")
+
+
+def _loadb():
+    out = []
+    try:
+        for ln in open(LOGB, encoding="utf-8"):
+            try: out.append(json.loads(ln))
+            except Exception: pass
+    except OSError: pass
+    return out
+
+
+def record_brk(B, answer, wid, mid=None):
+    """B - результат tg_express.verdict_break; answer: 1 - Автоордер/согласие, 0 - отказ. Запись в tg_learn_brk.jsonl; исход (tp | stop | none) дописывает resolve_brk."""
+    rec = {"ts": int(time.time() * 1000), "wid": wid, "mid": mid, "sym": B["sym"], "side": B["side"], "t": B["t"], "call": B.get("call"), "feat": B.get("feat") or {}, "plan": B["plan"], "ans": int(answer), "res": None}
+    with open(LOGB, "a", encoding="utf-8") as f: f.write(json.dumps(rec, ensure_ascii=False, separators=(",", ":")) + "\n")
+
+
+def resolve_brk(load_kl):
+    """Исходы записей по пробоям по свечам 5m (стоп раньше цели при обеих в одной свече)."""
+    recs = _loadb(); ch = False
+    for r in recs:
+        if r.get("res") is not None: continue
+        try:
+            kl = load_kl(r["sym"]) or []; res = _outcome(r, kl)
+            if res: r["res"] = res; ch = True
+        except Exception: pass
+    if ch:
+        tmp = LOGB + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            for r in recs: f.write(json.dumps(r, ensure_ascii=False, separators=(",", ":")) + "\n")
+        os.replace(tmp, LOGB)
+
+
+def stats_text():
+    """Сводка баз обучения: отбои и пробои (согласия и исходы)."""
+    def one(recs, name):
+        ag = [r for r in recs if r.get("ans") in (1, 2)]; done = [r for r in ag if r.get("res") in ("tp", "stop")]; tp = sum(r["res"] == "tp" for r in done)
+        s = "%s: записей %d, согласий %d, исходов %d" % (name, len(recs), len(ag), len(done))
+        if done:
+            R = sum((r["plan"].get("rr", 1) if r["res"] == "tp" else -1.0) for r in done) / len(done)
+            s += " (цель %d, стоп %d, средний результат %+.2f R без комиссий)" % (tp, len(done) - tp, R)
+        return s
+    return "Базы обучения:\n• " + one(_load(), "отбои") + "\n• " + one(_loadb(), "пробои")
