@@ -1,17 +1,12 @@
 {
-  "timestamp": "2026-11-09T21:11:43Z",
-  "status": "suppressed_known_false_positive",
+  "timestamp": "2026-11-09T21:19:07Z",
+  "status": "ok",
   "cloud_forecast_timestamp": "2026-11-08T20:30:00.000Z",
-  "suppressed_target": {
-    "signature": "-30_-20",
-    "area_km2": 56.0,
-    "distance_km": 35.6,
-    "bearing_deg": 238.0,
-    "compass": "ЮЗ",
-    "not_confirmed_streak": 16,
-    "total_not_confirmed": 99,
-    "excluded_since": "2026-11-09T16:42:08Z"
-  },
+  "target_id": 10,
+  "target_area_km2": 68.0,
+  "target_distance_km": 216.6,
+  "target_bearing_deg": 225.0,
+  "target_compass": "ЮЗ",
   "system": {
     "target_id": 0,
     "area_km2": 69685.0,
@@ -47,23 +42,6 @@
       "geocolour_confirmed": true
     },
     {
-      "target_id": 9,
-      "area_km2": 153.4,
-      "distance_km": 215.5,
-      "bearing_deg": 218.0,
-      "compass": "ЮЗ",
-      "elongation_aspect_ratio": 1.92,
-      "elongation_axis_deg": 155.0,
-      "elongation_axis_compass": "ЮВ-СЗ",
-      "frontlike": false,
-      "phase_label": "безоблачно",
-      "type_label": "плотная/высокая",
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": false,
-      "geocolour_confirmed": true
-    },
-    {
       "target_id": 10,
       "area_km2": 68.0,
       "distance_km": 216.6,
@@ -81,7 +59,7 @@
       "geocolour_confirmed": true
     }
   ],
-  "local_suppressed_count": 5,
+  "local_suppressed_count": 6,
   "system_candidates": [
     {
       "target_id": 4,
@@ -139,6 +117,39 @@
     }
   ],
   "system_suppressed_count": 1,
-  "verdict": "Известный шумовой объект в 36км ЮЗ (~56км²) — подавлено (не подтверждался 16 раз подряд). Отдельно: система синоптического масштаба (69685км²) в 3км В.",
-  "frontal_tracks": []
+  "frontal_tracks": [],
+  "also_suppressed_nearby": {
+    "signature": "-30_-20",
+    "area_km2": 56.0
+  },
+  "existence": {
+    "modules": {
+      "ir_motion": {
+        "confirmed": false,
+        "timestamp": "2026-11-09T20:30:00.000Z"
+      },
+      "geocolour_motion": {
+        "confirmed": true,
+        "timestamp": "2026-11-09T20:50:00.000Z"
+      },
+      "cloud_phase_type": {
+        "confirmed": null,
+        "timestamp": "2026-11-09T09:53:48Z"
+      }
+    },
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 1,
+    "consensus": "disputed"
+  },
+  "phenomena": {
+    "precip_forecast": {
+      "confirmed": false,
+      "timestamp": "2026-11-09T20:54:00Z"
+    },
+    "lightning_forecast": {
+      "confirmed": false,
+      "timestamp": "2026-11-09T20:54:25Z"
+    }
+  },
+  "verdict": "Цель в 217км ЮЗ — каналы расходятся: geocolour_motion подтверждают, ir_motion нет. Отдельно: система синоптического масштаба (69685км²) в 3км В."
 }
