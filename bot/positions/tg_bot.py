@@ -73,6 +73,7 @@ def mode_text():
         s += "\nПропущено подряд: %d из %d" % (m.get("missed", 0), m.get("max_missed", 3))
         if m.get("until"): s += "\nТаймер до %s%s" % (hhmm(m["until"]), " (в экспрессе не действует)" if m.get("express") else "")
         if m.get("express"): s += "\n⚡ Экспресс слежение ВКЛ: счётчик пропусков и таймер не действуют, анализ с мнением бота приходит после каждой закрытой свечи, пока не выключите." + ("\n🧠 Обучение (запись ваших ответов): %s" % ("вкл" if LRN and LRN.enabled() else "выкл") if LRN else "")
+        if m.get("express") and m.get("autoorder"): s += "\n🤖 Автоордер ВКЛ: когда в посте мнение бота «можно заходить» (отбой от линии или пробой), бот сам ставит ордер по рынку, параллельно с постами. Ордер можно отменить в /orders."
         if m.get("alerts_off"): s += "\n🔕 Новые алерты отключены (идущие слежения продолжаются). Таймер идёт."
     s += {"sleep": "\nНовых ордеров нет, уведомлений о новых точках нет. Открытые позиции продолжает вести бот; неподтверждённые вами ордера отменены.",
           "monitor": "\nБот присылает момент, когда цена касается или пересекает линию канала. Вы решаете: «Отклонить» или «Следить», а при слежении после каждой свечи можно выставить ордер. Одновременно не больше трёх графиков в работе.",
@@ -92,6 +93,9 @@ def menu(off=None):
     rows = MENU + [[{"text": "🔔 Включить алерты" if off else "🔕 Отключить алерты", "callback_data": "al:1" if off else "al:0"}]]
     ex = bool(m.get("express"))
     rows.append([{"text": "⚡ Выключить экспресс" if ex else "⚡ Экспресс слежение", "callback_data": "ex:0" if ex else "ex:1"}])
+    if ex:
+        ao = bool(m.get("autoorder"))
+        rows.append([{"text": "🤖 Автоордер: ВКЛ (нажмите, чтобы выключить)" if ao else "🤖 Автоордер: выкл (нажмите, чтобы включить)", "callback_data": "ao:0" if ao else "ao:1"}])
     if ex and LRN: rows.append([{"text": "🧠 Обучение: %s (нажмите, чтобы %s)" % (("вкл", "выключить") if LRN.enabled() else ("выкл", "включить")), "callback_data": "xl:0" if LRN.enabled() else "xl:1"}])
     return rows
 ORD_RULE = {"tg_stop": "стоп-ордер на вход", "tg_market": "по рынку", "tg_limit": "лимит у линии", "chan_top": "авто: от верхней границы", "chan_bottom": "авто: от нижней границы", "retest_up": "авто: ретест после пробоя вверх", "retest_down": "авто: ретест после пробоя вниз"}
@@ -163,6 +167,21 @@ def watch_buttons(wid, kind, V=None, retro_done=False):
     return [[{"text": "▶️ Продолжать следить", "callback_data": "wc:%d" % wid}, {"text": "⏹ Перестать следить", "callback_data": "ws:%d" % wid}], [{"text": "📌 Выставить ордер", "callback_data": "wp:%d" % wid}], off]
 
 
+def ao_on():
+    m = mode_state(); return m.get("mode") == "monitor" and bool(m.get("express")) and bool(m.get("autoorder"))
+
+
+AO_TGT = {0.25: "q1", 0.5: "mid", 0.75: "q3", 1.0: "opp"}
+
+
+def ao_pick(V, B):
+    """Что ставит Автоордер по мнению бота: (setup, цель) или None. Отбой: цель по статистике (доля высоты канала); пробой: 0.5 высоты канала за линией. Вход всегда по рынку."""
+    if V and V.get("call") == "enter":
+        f = float((V.get("plan") or {}).get("f") or 0.5); return "bounce", AO_TGT.get(f) or "f%.2f" % f
+    if B and B.get("call") == "enter": return "breakout", "h05"
+    return None
+
+
 def send_watch(wid, kind):
     w = watch_get(wid)
     if not w: return
@@ -173,7 +192,7 @@ def send_watch(wid, kind):
             api("editMessageReplyMarkup", chat_id=CHAT, message_id=old["mid"], reply_markup={"inline_keyboard": keep})
         except Exception as e: log("strip old buttons: %s" % e)
     kl = jload("/tmp/klcache/%s_5m_1000.json" % w["sym"], [])
-    cap = T.caption_watch(w, kind); V = None
+    cap = T.caption_watch(w, kind); V = None; Bk = None; auto = None
     if X and express_on():     # экспресс: добавляем мнение бота (заходить или ждать) и, если заходить, подсказку из журнала
         try:
             V = X.verdict(w, kl)
@@ -182,8 +201,14 @@ def send_watch(wid, kind):
                 if V["call"] == "enter" and LRN and LRN.enabled():
                     try: cap += "\n" + LRN.note(V)
                     except Exception as e: log("learn note: %s" % e)
+                try: Bk = X.verdict_break(w, kl) if hasattr(X, "verdict_break") else None
+                except Exception as e: log("express break: %s" % e); Bk = None
+                if Bk: cap += "\n\n" + Bk["text"]
+                if ao_on():
+                    auto = ao_pick(V, Bk)
+                    if auto: cap += "\n\n🤖 Автоордер: ставлю %s по рынку (цель: %s)." % ("пробой" if auto[0] == "breakout" else "отбой", auto[1])
                 if len(cap) > 940: cap = cap[:937] + "..."
-        except Exception as e: log("express verdict: %s" % e); V = None
+        except Exception as e: log("express verdict: %s" % e); V = None; auto = None
     btn = watch_buttons(wid, kind, V)
     prev = post_last_mid(w["sym"]); photo = True       # ответ на предыдущий пост этой пары: в Telegram виден как цитата, нажатие переносит к нему
     try: r = T.send_photo(T.render_watch(w, kl), cap, btn, reply_to=prev)
@@ -194,6 +219,8 @@ def send_watch(wid, kind):
     if V: m[key]["v"] = {k: V.get(k) for k in ("call", "feat", "plan", "geo", "t", "sym", "side")}; m[key]["v"]["ans"] = None
     msgs_save(m)
     post_add({"mid": mid_new, "wid": wid, "sym": w["sym"], "kind": kind, "ts": int(time.time() * 1000), "prev": prev, "v": m[key].get("v")})
+    if auto and ao_on():     # Автоордер: ставим через тот же путь, что кнопка «Выставить ордер» (w_place), отметка auto
+        inbox({"type": "w_place", "wid": wid, "entry": "market", "target": auto[1], "setup": auto[0], "auto": 1}); log("autoorder %s %s %s" % (wid, auto[0], auto[1]))
 
 
 def edit_watch(wid, status, buttons=None):
@@ -305,14 +332,22 @@ def handle_event(ev):
     elif t == "watch_update": send_watch(ev["wid"], "update")
     elif t == "watch_ack":
         wid = ev.get("wid")
-        if not ev.get("ok"): api("sendMessage", chat_id=CHAT, text="⚠️ Слежение %s: %s" % (wid, ev.get("why", "не получилось")))
+        if not ev.get("ok") and ev.get("auto"): edit_watch(wid, "🤖 Автоордер не поставлен: %s" % ev.get("why", "не получилось"), watch_buttons(wid, "update"))
+        elif not ev.get("ok"): api("sendMessage", chat_id=CHAT, text="⚠️ Слежение %s: %s" % (wid, ev.get("why", "не получилось")))
         elif ev.get("what") == "follow": edit_watch(wid, "👁 Слежу. Следующий график пришлю после закрытия свечи.", watch_buttons(wid, "update") if express_on() else None)
         elif ev.get("what") == "continue": edit_watch(wid, "▶️ Продолжаю следить.")
     elif t == "watch_end":
         wid = ev.get("wid"); why = ev.get("why", "")
         if ev.get("code"): why += " (%s)" % REASON_RU.get(ev["code"], ev["code"])
         if ev.get("missed"): why += ". Пропущено подряд: %d из %d" % (ev["missed"], mode_state().get("max_missed", 3))
-        edit_watch(wid, "⏹ " + why)
+        keep = None
+        if ev.get("auto"):     # после Автоордера у поста остаётся отметка «здесь надо было заходить»
+            rec = msgs_load().get("w%d" % wid) or {}
+            if rec.get("v") and LRN and LRN.enabled(): keep = [retro_row(bool(LRN.has_mark(rec.get("mid"), 2)))]
+        edit_watch(wid, "⏹ " + why, keep)
+    elif t == "autoorder":
+        if ev.get("refused"): api("sendMessage", chat_id=CHAT, text="🤖 Автоордер доступен только в режиме Монитор с включённым экспрессом.", reply_markup={"inline_keyboard": menu()})
+        else: api("sendMessage", chat_id=CHAT, text=("🤖 Автоордер включён.\n" if ev.get("on") else "🤖 Автоордер выключен: бот снова только присылает посты.\n") + mode_text(), reply_markup={"inline_keyboard": menu()})
     elif t == "mode":
         txt = mode_text()
         if ev.get("mode") == "sleep": txt += "\nОтменено неподтверждённых ордеров: %d." % ev.get("cancelled", 0)
@@ -479,6 +514,8 @@ def on_callback(cq):
             inbox({"type": "mode", "mode": p[1]}); api("answerCallbackQuery", callback_query_id=cid, text="Переключаю: %s" % MODE_RU[p[1]])
     elif p[0] == "ex":
         inbox({"type": "express", "on": p[1] == "1"}); api("answerCallbackQuery", callback_query_id=cid, text="Включаю экспресс…" if p[1] == "1" else "Выключаю экспресс…")
+    elif p[0] == "ao":
+        inbox({"type": "autoorder", "on": p[1] == "1"}); api("answerCallbackQuery", callback_query_id=cid, text="Включаю Автоордер…" if p[1] == "1" else "Выключаю Автоордер…")
     elif p[0] == "xl":
         if LRN: LRN.set_enabled(p[1] == "1")
         api("answerCallbackQuery", callback_query_id=cid, text="Обучение включено" if p[1] == "1" else "Обучение выключено (журнал сохранён)")
