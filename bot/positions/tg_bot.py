@@ -8,6 +8,10 @@ import json, os, sys, time, threading, traceback
 from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tg_notify as T
+try: import tg_express as X        # мнение бота в экспрессе; удалить файл -> работает без него
+except Exception: X = None
+try: import tg_learn as LRN        # журнал «согласен / не согласен»; можно отключить кнопкой или удалить файл
+except Exception: LRN = None
 
 D = os.environ.get("POS_DIR", "/opt/trading-bot/positions_regr")
 ACCT = os.environ.get("TG_ACCT_NAME", "Регрессия")
@@ -65,7 +69,8 @@ def mode_text():
     m = mode_state(); s = "Режим счёта «%s»: %s" % (ACCT, MODE_RU.get(m["mode"], m["mode"]))
     if m["mode"] == "monitor":
         s += "\nПропущено подряд: %d из %d" % (m.get("missed", 0), m.get("max_missed", 3))
-        if m.get("until"): s += "\nТаймер до %s" % hhmm(m["until"])
+        if m.get("until"): s += "\nТаймер до %s%s" % (hhmm(m["until"]), " (в экспрессе не действует)" if m.get("express") else "")
+        if m.get("express"): s += "\n⚡ Экспресс слежение ВКЛ: счётчик пропусков и таймер не действуют, анализ с мнением бота приходит после каждой закрытой свечи, пока не выключите." + ("\n🧠 Обучение (запись ваших ответов): %s" % ("вкл" if LRN and LRN.enabled() else "выкл") if LRN else "")
         if m.get("alerts_off"): s += "\n🔕 Новые алерты отключены (идущие слежения продолжаются). Таймер идёт."
     s += {"sleep": "\nНовых ордеров нет, уведомлений о новых точках нет. Открытые позиции продолжает вести бот; неподтверждённые вами ордера отменены.",
           "monitor": "\nБот присылает момент, когда цена касается или пересекает линию канала. Вы решаете: «Отклонить» или «Следить», а при слежении после каждой свечи можно выставить ордер. Одновременно не больше трёх графиков в работе.",
@@ -82,7 +87,11 @@ def menu(off=None):
     m = mode_state()
     if m.get("mode") != "monitor": return MENU
     if off is None: off = bool(m.get("alerts_off"))
-    return MENU + [[{"text": "🔔 Включить алерты" if off else "🔕 Отключить алерты", "callback_data": "al:1" if off else "al:0"}]]
+    rows = MENU + [[{"text": "🔔 Включить алерты" if off else "🔕 Отключить алерты", "callback_data": "al:1" if off else "al:0"}]]
+    ex = bool(m.get("express"))
+    rows.append([{"text": "⚡ Выключить экспресс" if ex else "⚡ Экспресс слежение", "callback_data": "ex:0" if ex else "ex:1"}])
+    if ex and LRN: rows.append([{"text": "🧠 Обучение: %s (нажмите, чтобы %s)" % (("вкл", "выключить") if LRN.enabled() else ("выкл", "включить")), "callback_data": "xl:0" if LRN.enabled() else "xl:1"}])
+    return rows
 ORD_RULE = {"tg_stop": "стоп-ордер на вход", "tg_market": "по рынку", "tg_limit": "лимит у линии", "chan_top": "авто: от верхней границы", "chan_bottom": "авто: от нижней границы", "retest_up": "авто: ретест после пробоя вверх", "retest_down": "авто: ретест после пробоя вниз"}
 
 
@@ -107,8 +116,19 @@ def watch_get(wid):
     return None
 
 
-def watch_buttons(wid, kind):
+def express_on():
+    m = mode_state(); return bool(m.get("express")) and m.get("mode") == "monitor"
+
+
+def watch_buttons(wid, kind, V=None):
     off = [{"text": "🔕 Отключить алерты", "callback_data": "al:0"}]
+    if express_on():     # экспресс: слежение уже идёт само, «Продолжать» не нужно
+        if V is None: V = (msgs_load().get("w%d" % wid) or {}).get("v")
+        rows = [[{"text": "📌 Выставить ордер", "callback_data": "wp:%d" % wid}, {"text": "❌ Отклонить", "callback_data": "wr:%d" % wid}, {"text": "⏹ Стоп", "callback_data": "ws:%d" % wid}]]
+        if V and V.get("call") == "enter" and LRN and LRN.enabled():
+            if V.get("ans") is None: rows.append([{"text": "✅ Согласен открыть сейчас", "callback_data": "xa:%d:1" % wid}, {"text": "🚫 Не согласен", "callback_data": "xa:%d:0" % wid}])
+            else: rows.append([{"text": "📝 Записано: %s" % ("согласен" if V["ans"] else "не согласен"), "callback_data": "xn"}])
+        return rows + [[{"text": "⚡ Выключить экспресс", "callback_data": "ex:0"}] + off]
     if kind == "alert": return [[{"text": "👁 Следить", "callback_data": "wa:%d" % wid}, {"text": "❌ Отклонить", "callback_data": "wr:%d" % wid}], off]
     return [[{"text": "▶️ Продолжать следить", "callback_data": "wc:%d" % wid}, {"text": "⏹ Перестать следить", "callback_data": "ws:%d" % wid}], [{"text": "📌 Выставить ордер", "callback_data": "wp:%d" % wid}], off]
 
@@ -121,11 +141,24 @@ def send_watch(wid, kind):
         try: api("editMessageReplyMarkup", chat_id=CHAT, message_id=old["mid"], reply_markup={"inline_keyboard": []})
         except Exception as e: log("strip old buttons: %s" % e)
     kl = jload("/tmp/klcache/%s_5m_1000.json" % w["sym"], [])
-    cap = T.caption_watch(w, kind); btn = watch_buttons(wid, kind)
+    cap = T.caption_watch(w, kind); V = None
+    if X and express_on():     # экспресс: добавляем мнение бота (заходить или ждать) и, если заходить, подсказку из журнала
+        try:
+            V = X.verdict(w, kl)
+            if V:
+                cap = cap.replace("\nСледить или отклонить?", "\n⚡ Экспресс: слежу автоматически.") + "\n\n" + V["text"]
+                if V["call"] == "enter" and LRN and LRN.enabled():
+                    try: cap += "\n" + LRN.note(V)
+                    except Exception as e: log("learn note: %s" % e)
+                if len(cap) > 940: cap = cap[:937] + "..."
+        except Exception as e: log("express verdict: %s" % e); V = None
+    btn = watch_buttons(wid, kind, V)
     try: r = T.send_photo(T.render_watch(w, kl), cap, btn); photo = True
     except Exception as e:
         log("render watch fail %s: %s" % (wid, e)); r = T.send_text(cap, btn); photo = False
-    m = msgs_load(); m[key] = {"mid": r["result"]["message_id"], "cap": cap, "kind": kind, "photo": photo}; msgs_save(m)
+    m = msgs_load(); m[key] = {"mid": r["result"]["message_id"], "cap": cap, "kind": kind, "photo": photo}
+    if V: m[key]["v"] = {k: V[k] for k in ("call", "feat", "plan", "t", "sym", "side")}; m[key]["v"]["ans"] = None
+    msgs_save(m)
 
 
 def edit_watch(wid, status, buttons=None):
@@ -238,7 +271,7 @@ def handle_event(ev):
     elif t == "watch_ack":
         wid = ev.get("wid")
         if not ev.get("ok"): api("sendMessage", chat_id=CHAT, text="⚠️ Слежение %s: %s" % (wid, ev.get("why", "не получилось")))
-        elif ev.get("what") == "follow": edit_watch(wid, "👁 Слежу. Следующий график пришлю после закрытия свечи.")
+        elif ev.get("what") == "follow": edit_watch(wid, "👁 Слежу. Следующий график пришлю после закрытия свечи.", watch_buttons(wid, "update") if express_on() else None)
         elif ev.get("what") == "continue": edit_watch(wid, "▶️ Продолжаю следить.")
     elif t == "watch_end":
         wid = ev.get("wid"); why = ev.get("why", "")
@@ -249,6 +282,9 @@ def handle_event(ev):
         txt = mode_text()
         if ev.get("mode") == "sleep": txt += "\nОтменено неподтверждённых ордеров: %d." % ev.get("cancelled", 0)
         api("sendMessage", chat_id=CHAT, text=txt, reply_markup={"inline_keyboard": menu()})
+    elif t == "express":
+        if ev.get("refused"): api("sendMessage", chat_id=CHAT, text="⚡ Экспресс доступен только в режиме Монитор. Сначала включите Монитор: /mode", reply_markup={"inline_keyboard": menu()})
+        else: api("sendMessage", chat_id=CHAT, text=("⚡ Экспресс слежение включено.\n" if ev.get("on") else "⚡ Экспресс выключен: счётчик пропусков и таймер снова действуют.\n") + mode_text(), reply_markup={"inline_keyboard": menu()})
     elif t == "alerts":
         off = bool(ev.get("off")); n = ev.get("cancelled", 0)
         txt = ("🔕 Алерты отключены. Новых алертов не будет" + (", алерты без ответа сняты (%d)" % n if n else "") + ". Идущие слежения продолжаются. Выставленные ордера и позиции работают как раньше, таймер идёт.\nВключить: кнопка ниже или /alerts") if off else "🔔 Алерты включены. Новые касания линий снова будут приходить."
@@ -259,6 +295,9 @@ def handle_event(ev):
     elif t == "filled":
         o = load_order(oid)
         if o: api("sendMessage", chat_id=CHAT, text="▶️ Позиция #%s открыта: %s %s по %s (%s, ордер #%s)." % (ev.get("pos"), o["sym"], o["side"].upper(), T.fmt_px(o.get("fill_px") or o["price"]), ORD_RULE.get(o.get("rule"), "лимит"), oid), reply_markup={"inline_keyboard": REFRESH + MENU[:1]})
+
+
+_res_t = [0.0]
 
 
 def outbox_loop():
@@ -279,6 +318,10 @@ def outbox_loop():
                         except Exception: log("event error: " + traceback.format_exc()[-400:])
                     with open(OUTOFF, "w") as f: f.write(str(off + cut + 1))
         except Exception: log("outbox loop error: " + traceback.format_exc()[-400:])
+        if LRN and time.time() - _res_t[0] > 300:      # раз в 5 минут дописываем исходы (цель/стоп) к записям журнала
+            _res_t[0] = time.time()
+            try: LRN.resolve(lambda sym: jload("/tmp/klcache/%s_5m_1000.json" % sym, []))
+            except Exception: log("learn resolve: " + traceback.format_exc()[-300:])
         time.sleep(2)
 
 
@@ -315,6 +358,7 @@ def status_data():
         parts = (["Таймер до %s" % hhmm(m["until"])] if m.get("until") else []) + ["пропущено подряд %d из %d" % (m.get("missed", 0), m.get("max_missed", 3))]
         info.append(" · ".join(parts))
         if m.get("alerts_off"): info.append("Новые алерты отключены (идущие слежения продолжаются)")
+        if m.get("express"): info.append("⚡ Экспресс: анализ после каждой свечи, пропуски и таймер не действуют")
     else: info.append("Бот ставит ордера сам и присылает график.")
     ws = [x for x in (jload(WATCHF, {}).get("items") or []) if x.get("status") in ("alert", "watching")]
     d = {"acct": ACCT, "sub": "", "mode": mo, "mode_ru": {"sleep": "Сон", "monitor": "Монитор", "auto": "Авто"}.get(mo, mo), "info": info, "equity": None, "tiles": [], "positions": [],
@@ -339,7 +383,7 @@ def status_caption(d):
 def status_kb():
     rows = [[{"text": "🔄 Обновить", "callback_data": "st"}, {"text": "📋 Ордера", "callback_data": "ol"}]] + MENU[:1]
     mm = menu()
-    if len(mm) > len(MENU): rows.append(mm[-1])      # в Мониторе: кнопка отключения / включения алертов
+    if len(mm) > len(MENU): rows.extend(mm[len(MENU):])      # в Мониторе: кнопки алертов, экспресса (и обучения)
     return rows
 
 
@@ -394,6 +438,22 @@ def on_callback(cq):
             edit_text(msg, text="Монитор: на какое время включить? Счётчик пропусков работает всегда.", reply_markup={"inline_keyboard": [[{"text": "1 ч", "callback_data": "mt:1"}, {"text": "2 ч", "callback_data": "mt:2"}, {"text": "4 ч", "callback_data": "mt:4"}, {"text": "8 ч", "callback_data": "mt:8"}], [{"text": "без таймера", "callback_data": "mt:0"}, {"text": "↩ назад", "callback_data": "mb"}]]})
         else:
             inbox({"type": "mode", "mode": p[1]}); api("answerCallbackQuery", callback_query_id=cid, text="Переключаю: %s" % MODE_RU[p[1]])
+    elif p[0] == "ex":
+        inbox({"type": "express", "on": p[1] == "1"}); api("answerCallbackQuery", callback_query_id=cid, text="Включаю экспресс…" if p[1] == "1" else "Выключаю экспресс…")
+    elif p[0] == "xl":
+        if LRN: LRN.set_enabled(p[1] == "1")
+        api("answerCallbackQuery", callback_query_id=cid, text="Обучение включено" if p[1] == "1" else "Обучение выключено (журнал сохранён)")
+        api("sendMessage", chat_id=CHAT, text=mode_text(), reply_markup={"inline_keyboard": menu()})
+    elif p[0] == "xn": api("answerCallbackQuery", callback_query_id=cid, text="Ответ уже записан")
+    elif p[0] == "xa":
+        wid = int(p[1]); ok = p[2] == "1"; mm = msgs_load(); rec = mm.get("w%d" % wid) or {}; V = rec.get("v")
+        if not V or not LRN or not LRN.enabled(): api("answerCallbackQuery", callback_query_id=cid, text="Обучение выключено или пост устарел"); return
+        if V.get("ans") is not None: api("answerCallbackQuery", callback_query_id=cid, text="Ответ уже записан"); return
+        try: LRN.record(V, 1 if ok else 0, wid)
+        except Exception as e: log("learn record: %s" % e); api("answerCallbackQuery", callback_query_id=cid, text="Не удалось записать"); return
+        V["ans"] = 1 if ok else 0; mm["w%d" % wid] = rec; msgs_save(mm)
+        api("answerCallbackQuery", callback_query_id=cid, text="Записал: %s" % ("согласен" if ok else "не согласен"))
+        api("editMessageReplyMarkup", chat_id=CHAT, message_id=mid, reply_markup={"inline_keyboard": watch_buttons(wid, rec.get("kind", "update"), V)})
     elif p[0] == "al":
         on = p[1] == "1"; inbox({"type": "alerts", "on": on}); api("answerCallbackQuery", callback_query_id=cid, text="Включаю алерты…" if on else "Отключаю алерты…")
     elif p[0] == "mt":
