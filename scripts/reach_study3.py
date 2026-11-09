@@ -3,11 +3,13 @@ D='/opt/trading-bot/positions_regr/'
 BASE="https://data-api.binance.vision/api/v3/klines"
 pos=json.load(open(D+'positions.json')); orders={o['id']:o for o in json.load(open(D+'orders.json'))}
 def kl(sym,start,limit):
-    u="%s?symbol=%sUSDT&interval=5m&limit=%d&startTime=%d"%(BASE,sym,limit,start)
+    sy=sym if sym.endswith("USDT") else sym+"USDT"; u="%s?symbol=%s&interval=5m&limit=%d&startTime=%d"%(BASE,sy,limit,start)
     for i in range(3):
         try: return json.load(urllib.request.urlopen(u,timeout=20))
         except Exception: time.sleep(1)
     return []
+import sys
+sys.stdout.reconfigure(line_buffering=True)
 FR=[round(0.1+0.05*i,2) for i in range(19)]    # 0.10 .. 1.00
 rows=[]
 for p in pos:
