@@ -14,8 +14,25 @@ def _r(x, n=6):
     try: return float("%.*g" % (n, float(x)))
     except Exception: return x
 
+def _mkt():
+    """Рыночный контекст для каждой записи журнала: режим рынка BTC 1h (tg_regime.json) и последние снимки BTC 1m по сторонам (tg_btc1m_last.json); устаревшее (30 мин / 15 мин) не пишется."""
+    out = {}; now = time.time()
+    try:
+        st = json.load(open(os.path.join(D, "tg_regime.json"), encoding="utf-8"))
+        if now - int(st.get("t", 0)) / 1000.0 <= 1800:
+            d = st.get("detail") or {}
+            out["rg"] = {"regime": st.get("regime"), "raw": st.get("raw"), "bear": d.get("bear"), "bull": d.get("bull"), "adx": d.get("adx"), "ret24": d.get("ret24"), "ds": d.get("down_share")}
+    except Exception: pass
+    try:
+        b = json.load(open(os.path.join(D, "tg_btc1m_last.json"), encoding="utf-8"))
+        b = {k: v for k, v in b.items() if isinstance(v, dict) and now - int(v.get("t", 0)) <= 900}
+        if b: out["b1"] = b
+    except Exception: pass
+    return out
+
 def _write(rec):
     try:
+        for k, v in _mkt().items(): rec.setdefault(k, v)
         os.makedirs(D, exist_ok=True)
         with open(J, "a", encoding="utf-8") as f: f.write(json.dumps(rec, ensure_ascii=False, separators=(",", ":")) + "\n")
     except Exception as e: print("decisions write err", e, flush=True)
