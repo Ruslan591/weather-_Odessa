@@ -3,7 +3,7 @@
 Опора: BTCUSDT 1h (EMA20/50/200, наклон регрессии 24 ч в ATR, ADX14, ход за 24 ч) и ширина рынка (доля корзины из 20 пар в минусе за 24 ч).
 6 факторов за каждую сторону. down: медвежьих >= 4 и ADX >= 18; up: бычьих >= 4 и ADX >= 18; иначе flat. Гистерезис: смена режима после 3 подряд подтверждений (оценка раз в 5 мин).
 Функции regime_at / classify чистые (используются и в живом боте, и в бэктесте истории: scripts/regime_study.py). Файлы POS_DIR: tg_regime.json (текущий режим), tg_regime_log.jsonl (раз в 30 мин).
-Сейчас только ПОКАЗ и запись в ордера/разборы; фильтр входов по режиму не включён. Удалить файл: tg_bot/tg_gate подключают через try/except."""
+Показ, запись в ордера/разборы и фильтр входов (cond(side) -> условие в tg_express; выключить: tg_regime_cfg.json {"filter": false}). Удалить файл: tg_bot/tg_gate подключают через try/except."""
 import json, math, os, time, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
@@ -136,6 +136,24 @@ def snap():
     """Краткий снимок для записи в ордер/разбор."""
     st = get()
     return None if not st else {"regime": st["regime"], "raw": st.get("raw"), "strength": st.get("strength"), "t": st.get("t")}
+
+
+def filter_on():
+    """Фильтр входов по режиму: POS_DIR/tg_regime_cfg.json {"filter": false} выключает (по умолчанию включён)."""
+    try: return bool(json.load(open(os.path.join(D, "tg_regime_cfg.json"), encoding="utf-8")).get("filter", True))
+    except Exception: return True
+
+
+def cond(side):
+    """Условие для мнения бота (ok, good, bad) или None (фильтр выключен / режим неизвестен или устарел: не применяется).
+    Падающий рынок: шорт можно, лонг нет; растущий: наоборот; флэт: обе стороны."""
+    if not filter_on(): return None
+    st = get()
+    if not st: return None
+    r = st["regime"]; d = st.get("detail") or {}; n = max(d.get("bear", 0), d.get("bull", 0))
+    if r == "flat": return (True, "рынок BTC 1h: флэт, обе стороны можно", "")
+    ok = (side == "short") == (r == "down")
+    return (ok, "режим рынка %s (%d из 6): %s по течению" % (RU[r], n, side.upper()), "режим рынка %s (%d из 6): %s против течения" % (RU[r], n, side.upper()))
 
 
 def line(side=None, st=None):
