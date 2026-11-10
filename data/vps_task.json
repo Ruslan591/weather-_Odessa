@@ -1,1 +1,1 @@
-{"task_id": "btc1m_probe_20261110a", "cmd": "cd /opt/weather-pipeline/repo && git cat-file -t 867ab52 2>&1; git log -3 --format='%h %s' origin/main -- bot/positions/tg_express.py 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'; git rev-parse --short origin/main; cd /opt/tg-notify && md5sum tg_express.py", "timeout": 60}
+{"task_id": "btc1m_deploy_20261110b", "cmd": "cd /opt/weather-pipeline/repo && git fetch -q origin; git show origin/main:scripts/deploy_tg_btc1m.sh | bash -s 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 200}
