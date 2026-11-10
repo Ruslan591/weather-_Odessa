@@ -1,1 +1,1 @@
-{"task_id": "edge_ctrl_run_1", "cmd": "cd /opt/weather-pipeline/repo && for i in 1 2 3 4 5; do git fetch -q origin && break; sleep 6; done; git show origin/main:scripts/edge_control.py > /tmp/es/edge_control.py && cd /tmp/es && (nohup /opt/trading-bot/venv/bin/python edge_control.py > /tmp/edge_control.out 2>&1 &) ; sleep 40; head -c 500 /tmp/edge_control.out", "timeout": 100}
+{"task_id": "edge_ctrl_poll_1", "cmd": "sleep 200; tail -c 120 /tmp/edge_control.out", "timeout": 220}
