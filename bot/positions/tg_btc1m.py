@@ -89,8 +89,24 @@ def evaluate(ks, side):
     return {"ok": ok, "allowed": allowed, "blocked": bool(blocks), "good": good, "bad": bad, "snap": snap}
 
 
+LASTF = os.path.join(D, "tg_btc1m_last.json")
+
+
+def _save_last(side, snap):
+    """Последний снимок по стороне (читают tg_gate для ордера и decisions для журнала). Пишет только tg_bot (процесс с gate)."""
+    try:
+        try: st = json.load(open(LASTF, encoding="utf-8"))
+        except Exception: st = {}
+        st[side] = snap; tmp = LASTF + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh: json.dump(st, fh, separators=(",", ":"))
+        os.replace(tmp, LASTF)
+    except Exception: pass
+
+
 def gate(side):
-    """Живой вызов: None, если выключено или нет данных (тогда фильтр не применяется)."""
+    """Живой вызов: None, если выключено или нет данных (тогда фильтр не применяется). Снимок пишется в tg_btc1m_last.json."""
     if not enabled(): return None
-    try: return evaluate(klines(), side)
+    try: g = evaluate(klines(), side)
     except Exception: return None
+    if g: _save_last(side, g["snap"])
+    return g
