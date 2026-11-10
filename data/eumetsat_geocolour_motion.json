@@ -1,7 +1,7 @@
 {
   "timestamp": "2026-11-10T18:20:00.000Z",
-  "buffer_size": 3,
-  "buffer_span_minutes": 30,
+  "buffer_size": 6,
+  "buffer_span_minutes": 50,
   "observed_area": {
     "center_lat": 46.4406,
     "center_lon": 30.7703,
@@ -13,16 +13,40 @@
     "state_radius_km": 12
   },
   "valid": true,
-  "speed_kmh": 9.2,
+  "speed_kmh": 24.3,
   "direction_compass": "С",
-  "bearing_deg": 19.1,
-  "frame_pairs_used": 2,
+  "bearing_deg": 11.1,
+  "frame_pairs_used": 5,
+  "acceleration_kmh": 4.6,
+  "turning_deg": 17.9,
+  "acceleration_verdict": "скорость стабильна",
+  "turning_verdict": "направление стабильно",
+  "forecast_displacement": {
+    "30min": {
+      "distance_km": 15.5,
+      "bearing_deg": 29.0,
+      "compass": "СВ"
+    },
+    "60min": {
+      "distance_km": 35.1,
+      "bearing_deg": 35.0,
+      "compass": "СВ"
+    },
+    "120min": {
+      "distance_km": 88.5,
+      "bearing_deg": 43.0,
+      "compass": "СВ"
+    }
+  },
   "area_fraction_over_time": [
+    0.582,
+    0.609,
     0.643,
+    0.693,
     0.709,
     0.761
   ],
-  "area_trend_delta": 0.118,
+  "area_trend_delta": 0.179,
   "area_trend_verdict": "растёт",
   "station_state": "cloud",
   "station_area_fraction": 0.827,
@@ -50,5 +74,5 @@
       "confirmed": true
     }
   ],
-  "method_note": "Буфер 3/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
+  "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
 }
