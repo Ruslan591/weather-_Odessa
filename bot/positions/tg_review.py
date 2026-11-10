@@ -178,6 +178,8 @@ def _text(p, o, A, ch, notes, rel):
     f = A["facts"]; sym = p["sym"]; side = p["side"].upper(); auto = A["auto"]
     head = "%s Разбор сделки #%s %s %s (%s%s)" % ("✅" if A["res"] == "win" else ("🔻" if A["res"] == "loss" else "➖"), p.get("id"), sym, side, "пробой" if f["setup"] == "breakout" else "отбой", ", Автоордер" if auto else "")
     lines = [head, "Итог: %+.2f R (net %+.2f%%), выход: %s." % (A["r"], A["net"], A["reason"] or "—")] + _facts_text(A)
+    rg = (o.get("regime") or {}).get("regime")
+    if rg: lines.append("Рынок при входе: %s; сделка %s." % ({"down": "падающий", "up": "растущий", "flat": "флэт"}[rg], ("в боковике" if rg == "flat" else ("по режиму" if (p["side"] == "short") == (rg == "down") else "ПРОТИВ режима"))))
     if A["res"] == "loss":
         lines.append("")
         lines.append("Что пошло не так: " + "; ".join(CAUSE_RU[c] for c in A["causes"]) + ".")
@@ -214,7 +216,7 @@ def run(limit=3):
         if not ks: continue            # свечей нет (сеть): попробуем в следующий раз
         try: A = analyze(p, o, ks)
         except Exception: seen.add(pid); continue
-        c = _cfg_full(); rec = {"ts": int(time.time() * 1000), "pid": pid, "oid": o.get("id"), "sym": p["sym"], "side": p["side"], "setup": A["facts"]["setup"], "res": A["res"], "r": A["r"], "causes": A["causes"], "facts": A["facts"], "auto": A["auto"]}
+        c = _cfg_full(); rec = {"ts": int(time.time() * 1000), "pid": pid, "oid": o.get("id"), "sym": p["sym"], "side": p["side"], "setup": A["facts"]["setup"], "res": A["res"], "r": A["r"], "causes": A["causes"], "facts": A["facts"], "auto": A["auto"], "regime": (o.get("regime") or {}).get("regime")}
         with open(LOGF, "a", encoding="utf-8") as f: f.write(json.dumps(rec, ensure_ascii=False, separators=(",", ":")) + "\n")
         ch, notes = _update(c, A, pid) if A["res"] == "loss" else ([], [])
         rel = _relax(c) if (A["res"] != "loss" and not ch) else None
@@ -244,6 +246,10 @@ def summary(lrn=None):
     if h:
         s.append(""); s.append("Последние коррекции:")
         for x in h: s.append("• %s %s: %g → %g (%s)" % (time.strftime("%m-%d %H:%M", time.gmtime(x["ts"] / 1000)), x["param"], x["old"], x["new"], CAUSE_RU.get(x["cause"], x["cause"])))
+    al = [r for r in rows if r.get("regime") in ("down", "up")]
+    if al:
+        def grp(f): xs = [r["r"] for r in al if f(r)]; return "n=%d, средний %+.2f R" % (len(xs), sum(xs) / len(xs)) if xs else "n=0"
+        s.append(""); s.append("Сделки по режиму рынка (с момента записи режима): по режиму %s; против режима %s" % (grp(lambda r: (r["side"] == "short") == (r["regime"] == "down")), grp(lambda r: (r["side"] == "short") != (r["regime"] == "down"))))
     if lrn:
         try: s.append(""); s.append(lrn.stats_text())
         except Exception: pass
