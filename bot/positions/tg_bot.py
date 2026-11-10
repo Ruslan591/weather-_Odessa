@@ -224,6 +224,11 @@ def send_watch(wid, kind):
         b1l = B1.line() if B1 else ""
         if b1l: cap += "\n" + b1l
     except Exception as e: log("btc1m line: %s" % e)
+    if X and not express_on():     # в экспрессе RSI 5m виден строкой условия в мнении бота
+        try:
+            r5l = X.rsi5_line(w, kl)
+            if r5l: cap += "\n" + r5l
+        except Exception as e: log("rsi5 line: %s" % e)
     if X and express_on():     # экспресс: добавляем мнение бота (заходить или ждать) и, если заходить, подсказку из журнала
         try:
             V = X.verdict(w, kl)
