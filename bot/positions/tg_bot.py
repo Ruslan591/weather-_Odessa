@@ -12,6 +12,8 @@ try: import tg_express as X        # мнение бота в экспрессе
 except Exception: X = None
 try: import tg_target as TGT      # самообучение цели (Авто и экспресс); см. tg_target.py
 except Exception: TGT = None
+try: import tg_regime as RG        # режим рынка (падающий/растущий/флэт): пока только показ и запись; удалить файл -> без режима
+except Exception: RG = None
 try: import tg_review as RV        # разбор закрытых сделок и коррекции порогов; удалить файл -> без самообучения
 except Exception: RV = None
 try: import tg_learn as LRN        # журнал «согласен / не согласен»; можно отключить кнопкой или удалить файл
@@ -212,6 +214,10 @@ def send_watch(wid, kind):
         except Exception as e: log("strip old buttons: %s" % e)
     kl = jload("/tmp/klcache/%s_5m_1000.json" % w["sym"], [])
     cap = T.caption_watch(w, kind); V = None; Bk = None; auto = None
+    try:
+        rgl = RG.line(w.get("side")) if RG else ""
+        if rgl: cap += "\n" + rgl
+    except Exception as e: log("regime line: %s" % e)
     if X and express_on():     # экспресс: добавляем мнение бота (заходить или ждать) и, если заходить, подсказку из журнала
         try:
             V = X.verdict(w, kl)
@@ -398,7 +404,7 @@ def handle_event(ev):
         if o: api("sendMessage", chat_id=CHAT, text="▶️ Позиция #%s открыта: %s %s по %s (%s, ордер #%s)." % (ev.get("pos"), o["sym"], o["side"].upper(), T.fmt_px(o.get("fill_px") or o["price"]), ORD_RULE.get(o.get("rule"), "лимит"), oid), reply_markup={"inline_keyboard": REFRESH + MENU[:1]})
 
 
-_res_t = [0.0]; _pos_t = [0.0]; _rev_t = [0.0]; _rb_t = [0.0]
+_res_t = [0.0]; _pos_t = [0.0]; _rev_t = [0.0]; _rb_t = [0.0]; _rg_t = [0.0]
 
 
 def outbox_loop():
@@ -423,6 +429,10 @@ def outbox_loop():
             _res_t[0] = time.time()
             try: LRN.resolve(lambda sym: jload("/tmp/klcache/%s_5m_1000.json" % sym, []))
             except Exception: log("learn resolve: " + traceback.format_exc()[-300:])
+        if RG and time.time() - _rg_t[0] > 120:      # режим рынка: пересчёт (внутри не чаще раза в 5 мин)
+            _rg_t[0] = time.time()
+            try: RG.update()
+            except Exception: log("regime: " + traceback.format_exc()[-300:])
         if RV and time.time() - _rev_t[0] > 120:      # разбор закрытых сделок: сообщение с анализом и коррекциями
             _rev_t[0] = time.time()
             try:
@@ -704,6 +714,11 @@ def on_message(m):
         except Exception as e: log("restore buttons: %s" % e)
         return
     if t.startswith(("/start", "/mode", "/menu")): api("sendMessage", chat_id=CHAT, text=mode_text(), reply_markup={"inline_keyboard": menu()})
+    elif t.startswith("/regime"):
+        try:
+            st = RG.update(force=True) if RG else None; d = (st or {}).get("detail") or {}
+            api("sendMessage", chat_id=CHAT, text=(RG.line(None, st) + "\nBTC 1h: EMA20/50/200 = %s, наклон 24 ч %+.1f ATR, ход за 72 ч %+.1f%%, ADX %s; бычьих факторов %s, медвежьих %s из 6. Режим держится с %s." % (d.get("ema"), d.get("slope24_atr", 0), d.get("ret72", 0), d.get("adx"), d.get("bull"), d.get("bear"), hhmm(st.get("since", 0))) if st else "Режим рынка пока не определён."))
+        except Exception as e: api("sendMessage", chat_id=CHAT, text="Режим рынка: ошибка расчёта (%s)" % e)
     elif t.startswith(("/learn", "/corr")):
         api("sendMessage", chat_id=CHAT, text=(RV.summary(LRN) if RV else "Самообучение недоступно."))
     elif t.startswith("/alerts"):
