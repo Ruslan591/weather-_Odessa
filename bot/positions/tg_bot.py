@@ -242,7 +242,7 @@ def send_watch(wid, kind):
         log("render watch fail %s: %s" % (wid, e)); r = T.send_text(cap, btn, reply_to=prev); photo = False
     mid_new = r["result"]["message_id"]
     m = msgs_load(); m[key] = {"mid": mid_new, "cap": cap, "kind": kind, "photo": photo}
-    if V: m[key]["v"] = {k: V.get(k) for k in ("call", "feat", "plan", "geo", "t", "sym", "side")}; m[key]["v"]["ans"] = None
+    if V: m[key]["v"] = {k: V.get(k) for k in ("call", "feat", "plan", "geo", "t", "sym", "side", "b1", "rg")}; m[key]["v"]["ans"] = None
     msgs_save(m)
     post_add({"mid": mid_new, "wid": wid, "sym": w["sym"], "kind": kind, "ts": int(time.time() * 1000), "prev": prev, "v": m[key].get("v")})
     if auto and ao_on():     # Автоордер: ставим через тот же путь, что кнопка «Выставить ордер» (w_place), отметка auto
