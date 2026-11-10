@@ -31,6 +31,14 @@ def reg_snap():
     except Exception: return None
 
 
+def b1_snap(side, max_age_min=15):
+    """Последний снимок BTC 1m для стороны сделки (tg_btc1m_last.json пишет tg_bot при мнении) или None, если старше max_age_min."""
+    try:
+        sn = json.load(open(os.path.join(D, "tg_btc1m_last.json"), encoding="utf-8")).get(side)
+        return sn if sn and time.time() - int(sn.get("t", 0)) <= max_age_min * 60 else None
+    except Exception: return None
+
+
 SLOTS_FN = None     # ставит chan_orders: () -> (слотов, открытых позиций, баланс)
 
 
@@ -247,7 +255,7 @@ def _wevent(e, W, m, orders, now, mkorder, price_fn, jobs):
         except Exception: px = None
         o, why = mkorder(dict(x, _auto=1) if auto else x, e.get("entry"), e.get("target"), px or x["last"]["c"], e.get("setup") or "bounce")
         if not o: emit({"type": "watch_ack", "wid": x["id"], "ok": False, "what": "place", "auto": auto, "why": why}); return False
-        o["id"] = max([q["id"] for q in orders] + [0]) + 1; o["approved_t"] = now; o["src_watch"] = x["id"]; o["regime"] = reg_snap()
+        o["id"] = max([q["id"] for q in orders] + [0]) + 1; o["approved_t"] = now; o["src_watch"] = x["id"]; o["regime"] = reg_snap(); o["b1"] = b1_snap(o.get("side"))
         if auto: o["auto_express"] = 1
         orders.append(o)
         x.update(status="done", reason="ордер #%d" % o["id"], t_end=now, order_id=o["id"]); m["missed"] = 0
