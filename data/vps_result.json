@@ -1,7 +1,7 @@
 {
-  "task_id": "set_mw8_1",
+  "task_id": "auto_vs_mon_1",
   "returncode": 0,
-  "stdout": "max_watch 8 mode monitor\n{\"type\":\"watch_update\",\"wid\":112,\"ts\":1794303635961}\n{\"type\":\"watch_update\",\"wid\":108,\"ts\":1794303642364}\n{\"type\":\"max_watch\",\"n\":8,\"cap\":15,\"asked\":8,\"ts\":1794303670248}\n",
+  "stdout": "ExecStart=/opt/trading-bot/venv/bin/python /opt/trading-bot/positions/chan_orders.py loop\nEnvironment=POS_DIR=/opt/trading-bot/positions_regr\nEnvironment=CHAN_SRC=regr\nEnvironment=CHAN_EDGE=1\nEnvironment=TG_GATE=1\norders total 1244 keys ['approved_t', 'atr', 'atr_c', 'auto_express', 'chan', 'checked_t', 'counter', 'ctype', 'expire_t', 'fill_px', 'fill_t', 'id', 'key', 'level', 'line', 'mark', 'placed_t', 'pos_id', 'price', 'rule', 'setup', 'side', 'src_watch', 'status', 'stop', 'sym', 't_end', 'tf', 'tp', 'why']\nrecent 300\n[(('chan_bottom', 'cancelled'), 122), (('chan_top', 'cancelled'), 120), (('chan_top', 'filled'), 28), (('tg_market', 'filled'), 21), (('chan_bottom', 'filled'), 8), (('tg_limit', 'filled'), 1)]\nАвто limit у линии n 148 win% 56 sum r -7.6 avg r -0.05\nМонитор/экспресс (tg_*) n 24 win% 33 sum r -11.9 avg r -0.50\n",
   "stderr": "",
-  "completed_at_utc": "2026-11-10T09:41:16Z"
+  "completed_at_utc": "2026-11-10T09:43:01Z"
 }
