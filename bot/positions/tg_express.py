@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 """tg_express.py -- мнение бота («заходить сейчас или ждать») для режима «Экспресс слежение». Только stdlib, без побочных эффектов.
-Правила прозрачные (не предсказание): 5 условий по последней закрытой свече у линии канала. Вход «по рынку» оценивается по текущей цене закрытия.
+Правила прозрачные (не предсказание): 5 условий по последней закрытой свече у линии канала + 6-е: BTC на 1m не против сделки (tg_btc1m). Вход «по рынку» оценивается по текущей цене закрытия.
 Цель берётся из tg_target.choose (статистика дальности отбоя, самообучение); без него - середина канала.
 Подключается из tg_bot.py через try/except: удалить файл -> бот работает без мнения."""
 try: import tg_target as TG
 except Exception: TG = None
 try: import tg_review as RV     # пороги с коррекцией по опыту (tg_corr.json); удалить файл -> исходные пороги
 except Exception: RV = None
+try: import tg_btc1m as B1      # фильтр по BTC 1m (свечи, EMA9, RSI14, блокировки); удалить файл или {"enabled": false} в tg_btc1m.json -> без фильтра
+except Exception: B1 = None
 _DEF = {"wick_min": 0.4, "dist_max": 0.9, "rr_add": 0.0, "rr_add_counter": 0.0, "brk_n_min": 2, "brk_body_min": 0.3, "brk_beyond_max": 1.5}
 
 
@@ -26,6 +28,14 @@ def _fmt(p):
     if p >= 10: return "%.3f" % p
     if p >= 1: return "%.4f" % p
     return "%.5f" % p
+
+
+def _btc1m(side):
+    """Условие (ok, good, bad) по BTC 1m для стороны сделки или None, если выключено / нет данных (фильтр тогда не применяется)."""
+    if not B1: return None
+    try: g = B1.gate(side)
+    except Exception: g = None
+    return (g["ok"], g["good"], g["bad"]) if g else None
 
 
 def verdict(w, kl=None):
@@ -62,6 +72,8 @@ def verdict(w, kl=None):
         (rr_t >= need, "до цели %s R:R %.1f" % (ftxt, rr_t), "до цели %s R:R %.1f < %.1f" % (ftxt, rr_t, need)),
         (sh is None or abs(sh) < 0.5, "канал стабилен", "канал перестроился (%+.1f ATR)" % (sh or 0)),
     ]
+    b1 = _btc1m("long" if s > 0 else "short")
+    if b1: conds.append(b1)
     call = "enter" if all(x[0] for x in conds) else "wait"
     side = "long" if s > 0 else "short"; stop = c - s * risk
     plan = {"side": side, "entry": c, "stop": stop, "tp": tp, "f": f, "rr": round(rr_t, 2), "rr_opp": round(rr_opp, 2)}
@@ -106,6 +118,8 @@ def verdict_break(w, kl=None):
         (rr >= 1.0, "до цели 0.5 канала R:R %.1f" % rr, "до цели 0.5 канала R:R %.1f < 1.0" % rr),
         (sh is None or abs(sh) < 0.5, "канал стабилен", "канал перестроился (%+.1f ATR)" % (sh or 0)),
     ]
+    b1 = _btc1m("long" if s > 0 else "short")
+    if b1: conds.append(b1)
     call = "enter" if all(x[0] for x in conds) else "wait"
     side = "long" if s > 0 else "short"; stop = c - s * risk
     plan = {"side": side, "entry": c, "stop": stop, "tp": tp, "target": "h05", "rr": round(rr, 2)}
