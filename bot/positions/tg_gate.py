@@ -22,13 +22,20 @@ D = os.environ.get("POS_DIR", "/opt/trading-bot/positions")
 ENABLED = os.environ.get("TG_GATE", "0") == "1"
 WATCHF = os.path.join(D, "tg_watch.json"); MODEF = os.path.join(D, "tg_mode.json"); OUTF = os.path.join(D, "tg_outbox.jsonl"); INF = os.path.join(D, "tg_inbox.jsonl"); OFFF = os.path.join(D, "tg_inbox.off")
 MODES = ("sleep", "monitor", "auto"); TFM = 300000
+SLOTS_FN = None     # ставит chan_orders: () -> (слотов, открытых позиций, баланс)
+
+
 def maxw(m):
-    """Сколько слежений одновременно: в Автоордере (Монитор + экспресс) больше (max_watch_auto), иначе max_watch."""
-    if m.get("mode") == "monitor" and m.get("express") and m.get("autoorder"): return int(m.get("max_watch_auto", 12))
+    """Сколько слежений одновременно. В Автоордере (Монитор + экспресс): не больше свободных слотов позиций (слотов по балансу минус открытые): при занятых слотах слежение без ордеров не нужно. Иначе max_watch."""
+    if m.get("mode") == "monitor" and m.get("express") and m.get("autoorder") and SLOTS_FN:
+        try:
+            sl, op, eq = SLOTS_FN(); open(os.path.join(D, "tg_slots.json"), "w").write(json.dumps({"slots": sl, "open": op, "equity": round(eq, 3), "t": int(time.time())}))
+            return max(0, sl - op)
+        except Exception: pass
     return int(m.get("max_watch", 3))
 
 
-DEFAULT = {"mode": "auto", "missed": 0, "max_missed": 3, "answer_win": 3, "until": None, "max_watch": 3, "watch_unanswered": 3, "watch_hours": 4, "alerts_off": False, "express": False, "autoorder": False, "express_away": 6, "express_hours": 2, "max_watch_auto": 12}
+DEFAULT = {"mode": "auto", "missed": 0, "max_missed": 3, "answer_win": 3, "until": None, "max_watch": 3, "watch_unanswered": 3, "watch_hours": 4, "alerts_off": False, "express": False, "autoorder": False, "express_away": 6, "express_hours": 2}
 
 
 def load_mode():
