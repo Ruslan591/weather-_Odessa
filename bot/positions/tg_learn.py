@@ -39,7 +39,7 @@ def has_mark(mid, ans=None):
 
 def record(V, answer, wid, mid=None):
     """V - мнение из tg_express.verdict; answer: 1 согласен / 0 не согласен / 2 надо было заходить здесь; mid - сообщение (пост)."""
-    rec = {"ts": int(time.time() * 1000), "wid": wid, "mid": mid, "sym": V["sym"], "side": V["side"], "t": V["t"], "call": V.get("call"), "feat": V["feat"], "plan": V["plan"], "geo": V.get("geo"), "ans": int(answer), "res": None}
+    rec = {"ts": int(time.time() * 1000), "wid": wid, "mid": mid, "sym": V["sym"], "side": V["side"], "t": V["t"], "call": V.get("call"), "feat": V["feat"], "plan": V["plan"], "geo": V.get("geo"), "b1": V.get("b1"), "rg": V.get("rg"), "ans": int(answer), "res": None}
     with open(LOGF, "a", encoding="utf-8") as f: f.write(json.dumps(rec, ensure_ascii=False, separators=(",", ":")) + "\n")
 
 
@@ -116,7 +116,7 @@ def _loadb():
 
 def record_brk(B, answer, wid, mid=None):
     """B - результат tg_express.verdict_break; answer: 1 - Автоордер/согласие, 0 - отказ. Запись в tg_learn_brk.jsonl; исход (tp | stop | none) дописывает resolve_brk."""
-    rec = {"ts": int(time.time() * 1000), "wid": wid, "mid": mid, "sym": B["sym"], "side": B["side"], "t": B["t"], "call": B.get("call"), "feat": B.get("feat") or {}, "plan": B["plan"], "ans": int(answer), "res": None}
+    rec = {"ts": int(time.time() * 1000), "wid": wid, "mid": mid, "sym": B["sym"], "side": B["side"], "t": B["t"], "call": B.get("call"), "feat": B.get("feat") or {}, "plan": B["plan"], "b1": B.get("b1"), "rg": B.get("rg"), "ans": int(answer), "res": None}
     with open(LOGB, "a", encoding="utf-8") as f: f.write(json.dumps(rec, ensure_ascii=False, separators=(",", ":")) + "\n")
 
 
