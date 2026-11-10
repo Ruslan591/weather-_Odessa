@@ -83,7 +83,8 @@ def evaluate(ks, side):
     if pos: goods.append("%s EMA%d и уходит %s" % ("ниже" if sg < 0 else "выше", EMA_N, "вниз" if sg < 0 else "вверх"))
     if rs_ok: goods.append("RSI %.0f %s" % (rs, "вниз" if sg < 0 else "вверх"))
     allowed = bool(goods); ok = allowed and not blocks
-    snap = {"side": side, "ok": ok, "imp": int(impulse), "pos": int(pos), "rsi": round(rs, 1), "rsi_ok": int(rs_ok), "big": int(bool(big)), "run3": int(run3), "exh": int(exh), "t": int(time.time())}
+    cols = "".join("g" if c[i] > o[i] else ("r" if c[i] < o[i] else "d") for i in (-3, -2, -1))
+    snap = {"side": side, "ok": ok, "cols": cols, "emad": round((c[-1] / e[-1] - 1) * 100, 3), "rsd": round(rs - r[-3], 1), "imp": int(impulse), "pos": int(pos), "rsi": round(rs, 1), "rsi_ok": int(rs_ok), "big": int(bool(big)), "run3": int(run3), "exh": int(exh), "t": int(time.time())}
     if ok: good = "BTC 1m за %s: %s" % (nm, ", ".join(goods)); bad = ""
     else: good = ""; bad = "BTC 1m против %s: %s" % (nm, "; ".join(blocks) if blocks else "нет подтверждения (RSI %.0f, свечи/EMA не в сторону сделки)" % rs)
     return {"ok": ok, "allowed": allowed, "blocked": bool(blocks), "good": good, "bad": bad, "snap": snap}
@@ -110,3 +111,12 @@ def gate(side):
     except Exception: return None
     if g: _save_last(side, g["snap"])
     return g
+
+
+def line():
+    """Строка для постов слежения: значения BTC 1m и вердикт по обеим сторонам (отбой и пробой идут в разные стороны). "" если выключено или нет данных."""
+    gs, gl = gate("short"), gate("long")
+    if not gs or not gl: return ""
+    sn = gs["snap"]; ic = {"r": "🔴", "g": "🟢", "d": "⚪"}
+    def v(nm, g): return "%s %s" % (nm, "✅" if g["ok"] else "⛔ " + g["bad"].split(": ", 1)[-1])
+    return "₿ BTC 1m: %s, EMA%d %+.2f%%, RSI %.0f%s\n   %s | %s" % ("".join(ic[x] for x in sn["cols"]), EMA_N, sn["emad"], sn["rsi"], "↑" if sn["rsd"] > 0 else ("↓" if sn["rsd"] < 0 else "→"), v("SHORT", gs), v("LONG", gl))
