@@ -23,6 +23,7 @@ except Exception:
     class tg_gate:   # режимы Telegram недоступны: поведение как раньше
         ENABLED = False
         on_place = staticmethod(lambda p, now: True); on_cancel = staticmethod(lambda *a, **k: None); apply = staticmethod(lambda *a, **k: []); emit = staticmethod(lambda *a, **k: None); watch_needed = staticmethod(lambda *a, **k: False); watch_scan = staticmethod(lambda *a, **k: None)
+tg_gate.SLOTS_FN = lambda: slots_state()     # слоты нужны слежению (Автоордер: слежений не больше свободных слотов)
 D = pos.D; OF = os.path.join(D, "orders.json"); LOG = os.path.join(D, "chan.log"); STF = os.path.join(D, "chan_state.json")
 EVF = os.path.join(D, "chan_events.json")
 CLASSIC = os.environ.get("CLASSIC_DIR", "/opt/trading-bot/classic")
@@ -44,7 +45,19 @@ def kl_shared(sym, now):
         os.makedirs(KLC, exist_ok=True); tmp = f + ".tmp%d" % os.getpid(); json.dump(d, open(tmp, "w")); os.replace(tmp, f)
     except Exception: pass
     return d
-VALID_A = 12; VALID_B = 24; MAXPEND = 8; SLOTS = 3; MAXH = 24
+VALID_A = 12; VALID_B = 24; MAXPEND = 8; SLOTS = 3; MAXH = 24      # SLOTS - минимум слотов; реальное число растёт с балансом (slots_state)
+SLOT_EQ = float(os.environ.get("CHAN_SLOT_EQ", "2.0"))     # баланса на одну сделку: маржа 1.2 $ (позиция 6 $, плечо 5x) + 0.8 $ запас на просадку; 7 $ -> 3 слота, 8 $ -> 4, 10 $ -> 5
+
+
+def slots_state():
+    """(слотов, открытых позиций, баланс): баланс = старт + реализованный результат закрытых сделок счёта; слотов не меньше SLOTS."""
+    try:
+        ps = pos.load(); eq = pos.START + sum(float(p.get("pnl_usd") or 0) for p in ps if p.get("status") == "closed")
+        return max(SLOTS, int(eq // SLOT_EQ)), sum(1 for p in ps if p.get("status") == "open"), eq
+    except Exception: return SLOTS, 0, pos.START
+
+
+def slots_now(): return slots_state()[0]
 DIST_A = (0.0, 3.0); DIST_B = (0.3, 4.0); KEEP_ATR = 0.15
 # ретест с подтверждением (допущения на проверку пользователю, см. doc): N свечей, допуски в ATR на момент пробоя
 CHAN_EDGE = os.environ.get("CHAN_EDGE", "0") == "1"   # chan_top / chan_bottom (лимит у границы заранее): выключены
@@ -413,7 +426,7 @@ def _tg_mkorder(w, entry, target, px, setup="bounce"):
         try:
             ps0 = pos.load()
             if any(pp["status"] == "open" and pp["sym"] == w["sym"] + "USDT" for pp in ps0): return None, "по паре уже есть открытая позиция"
-            if sum(1 for pp in ps0 if pp["status"] == "open") >= SLOTS: return None, "все слоты позиций заняты"
+            if sum(1 for pp in ps0 if pp["status"] == "open") >= slots_now(): return None, "все слоты позиций заняты"
         except Exception as e: log("auto guard: %s" % e)
     a = float(L["atr"]); R, S = float(L["Rn"]), float(L["Sn"]); H = R - S; px = float(px)
     if H <= 0: return None, "канал сжался"
@@ -552,7 +565,7 @@ def cycle(dry=False):
             if not o or o["status"] != "pending": continue
             sym = o["sym"] + "USDT"
             if any(p["status"] == "open" and p["sym"] == sym for p in ps_): cancel(o, "по паре уже есть позиция", ft); continue
-            if n_open() >= SLOTS: cancel(o, "слоты заняты", ft); continue
+            if n_open() >= slots_now(): cancel(o, "слоты заняты", ft); continue
             side = 1 if o["side"] == "long" else -1; a1 = at1.get(oid, o["atr"] * 3.46)
             try:
                 import exit_cfg; stp = exit_cfg.stop_at_fill(exit_cfg.load(), side, fp, a1, o["stop"])   # патч 10б: стоп по настройкам счёта
@@ -569,7 +582,7 @@ def cycle(dry=False):
             ps_.append(p); o.update(status="filled", fill_t=ft, fill_px=fp, pos_id=p["id"], t_end=ft)
             log("FILLED order %d %s %s %.6g -> position #%d" % (o["id"], o["sym"], o["side"], fp, p["id"]))
             tg_gate.emit({"type": "filled", "id": o["id"], "pos": p["id"]})
-            if n_open() >= SLOTS:
+            if n_open() >= slots_now():
                 for x in orders:
                     if x["status"] == "pending" and x["id"] != o["id"]: cancel(x, "слоты заняты: исполнилась заявка %s" % o["sym"], ft)
         pos.save(ps_)
@@ -589,7 +602,7 @@ def cycle(dry=False):
                 same = [x for x in pend_sym if x["rule"] == p["rule"] and x["side"] == p["side"]]
                 if same and abs(same[0]["price"] - p["price"]) <= KEEP_ATR * a0: continue
                 for x in same: cancel(x, "пересчёт: граница сместилась", ti + TFM)
-                if n_open() >= SLOTS or sum(1 for x in orders if x["status"] in ("pending", "proposed")) >= MAXPEND: continue
+                if n_open() >= slots_now() or sum(1 for x in orders if x["status"] in ("pending", "proposed")) >= MAXPEND: continue
                 if any(pp["status"] == "open" and pp["sym"] == sym + "USDT" for pp in ps_): continue
                 p["id"] = max([x["id"] for x in orders] + [0]) + 1
                 if not tg_gate.on_place(p, now): continue   # режим сна: новых ордеров нет
@@ -599,7 +612,7 @@ def cycle(dry=False):
             for x in [x for x in pend_sym if x["status"] in ("pending", "proposed") and x["rule"] in ("chan_top", "chan_bottom") and not any(pp["rule"] == x["rule"] and pp["side"] == x["side"] for pp in props_)]:
                 cancel(x, "условия исчезли (канал, расстояние или цель)", ti + TFM)
         # слоты заполнены: лишние заявки не держим
-        if n_open() >= SLOTS:
+        if n_open() >= slots_now():
             for x in orders:
                 if x["status"] in ("pending", "proposed"): cancel(x, "слоты заняты")
         save_orders(orders); save_state(stt); save_events(evs)
