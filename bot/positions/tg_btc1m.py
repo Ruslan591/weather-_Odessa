@@ -1,0 +1,96 @@
+# -*- coding: utf-8 -*-
+"""tg_btc1m.py -- фильтр входа по BTCUSDT 1m (по ЗАКРЫТЫМ минутным свечам). Только stdlib, без побочных эффектов, без сети в чистых функциях.
+Проверка перед входом по альту (сигнал на 5m): что делает BTC прямо сейчас. gate(side) -> {ok, allowed, blocked, good, bad, snap}.
+Вход РАЗРЕШЁН, если нет блокировки и выполнено хотя бы одно из трёх условий (для SHORT; для LONG зеркально):
+  1) импульс: последние 2 закрытые свечи BTC строго красные (close<open);
+  2) положение: цена BTC ниже EMA9 (1m) и удаляется от неё вниз (расстояние больше, чем на предыдущей свече);
+  3) осциллятор: RSI14 (1m) от 40 до 60 и направлен вниз (ниже, чем 2 свечи назад).
+БЛОКИРОВКА SHORT: (а) в последних 3 свечах аномально крупная зелёная (тело >= BIG_K x медианного тела предыдущих 20) или 3 закрытия подряд вверх; (б) RSI14 < 30.
+БЛОКИРОВКА LONG: (а) крупная красная в последних 3 свечах или 3 закрытия подряд вниз; (б) RSI14 > 70.
+Нет данных (сеть, мало свечей) -> gate возвращает None, вызывающий код фильтр не применяет (не блокирует).
+Выключить: POS_DIR/tg_btc1m.json {"enabled": false}, либо удалить файл (tg_express подключает через try/except).
+Пороги: EMA_N=9, RSI_N=14, BIG_K=3.0 -- начальные, подбираются по опыту."""
+import json, os, time, urllib.request
+
+D = os.environ.get("POS_DIR", "/opt/trading-bot/positions_regr")
+CFG = os.path.join(D, "tg_btc1m.json")
+BASE = "https://data-api.binance.vision/api/v3/klines"
+EMA_N = 9; RSI_N = 14; BIG_K = 3.0; MS = 60000; _cache = {"t": 0, "ks": None}
+
+
+def enabled():
+    try: return bool(json.load(open(CFG, encoding="utf-8")).get("enabled", True))
+    except Exception: return True
+
+
+def klines(limit=80):
+    """Закрытые 1m свечи BTCUSDT [(o,h,l,c)...]; кэш 20 с. None при ошибке."""
+    now = time.time()
+    if _cache["ks"] and now - _cache["t"] < 20: return _cache["ks"]
+    u = "%s?symbol=BTCUSDT&interval=1m&limit=%d" % (BASE, limit)
+    for _ in range(2):
+        try:
+            raw = json.load(urllib.request.urlopen(u, timeout=8)); nowms = int(now * 1000)
+            ks = [(float(k[1]), float(k[2]), float(k[3]), float(k[4])) for k in raw if int(k[0]) + MS <= nowms]
+            if len(ks) >= 40: _cache["t"] = now; _cache["ks"] = ks; return ks
+        except Exception: time.sleep(0.5)
+    return _cache["ks"] if (_cache["ks"] and now - _cache["t"] < 120) else None
+
+
+def ema(xs, n):
+    e = sum(xs[:n]) / n; out = [None] * (n - 1) + [e]; k = 2.0 / (n + 1)
+    for x in xs[n:]: e = x * k + e * (1 - k); out.append(e)
+    return out
+
+
+def rsi(xs, n):
+    """RSI по Уайлдеру, список значений (первые n None)."""
+    out = [None] * len(xs)
+    if len(xs) <= n: return out
+    g = [max(xs[i] - xs[i - 1], 0.0) for i in range(1, len(xs))]; l = [max(xs[i - 1] - xs[i], 0.0) for i in range(1, len(xs))]
+    ag = sum(g[:n]) / n; al = sum(l[:n]) / n
+    out[n] = 100.0 if al == 0 else 100 - 100 / (1 + ag / al)
+    for i in range(n, len(g)):
+        ag = (ag * (n - 1) + g[i]) / n; al = (al * (n - 1) + l[i]) / n
+        out[i + 1] = 100.0 if al == 0 else 100 - 100 / (1 + ag / al)
+    return out
+
+
+def evaluate(ks, side):
+    """Чистая функция (используется и в бэктесте): ks = закрытые свечи (o,h,l,c), side long|short. None, если свечей мало."""
+    if not ks or len(ks) < 40: return None
+    sg = 1 if side == "long" else -1; nm = "LONG" if sg > 0 else "SHORT"
+    o = [k[0] for k in ks]; c = [k[3] for k in ks]
+    e = ema(c, EMA_N); r = rsi(c, RSI_N)
+    if e[-1] is None or e[-2] is None or r[-1] is None or r[-3] is None: return None
+    body = [abs(c[i] - o[i]) for i in range(len(c))]
+    med = sorted(body[-23:-3])[10] or 1e-9                      # медианное тело 20 свечей до последних трёх
+    dirn = lambda i: (c[i] - o[i]) * sg                          # >0: свеча по направлению сделки
+    impulse = dirn(-1) > 0 and dirn(-2) > 0
+    d_now = (c[-1] - e[-1]) * sg; d_prev = (c[-2] - e[-2]) * sg
+    pos = d_now > 0 and d_now > d_prev
+    rs = r[-1]; rs_ok = 40 <= rs <= 60 and (rs - r[-3]) * sg > 0
+    big = [i for i in (-1, -2, -3) if dirn(i) < 0 and body[i] >= BIG_K * med]
+    run3 = all((c[i] - c[i - 1]) * sg < 0 for i in (-1, -2, -3))
+    exh = rs < 30 if sg < 0 else rs > 70
+    mine = "красные" if sg < 0 else "зелёные"; opp = "зелёная" if sg < 0 else "красная"
+    blocks = []
+    if big: blocks.append("крупная %s свеча BTC (тело x%.1f от обычного)" % (opp, body[big[0]] / med))
+    if run3: blocks.append("BTC 3 минуты подряд идёт против %s" % ("шорта (растёт)" if sg < 0 else "лонга (падает)"))
+    if exh: blocks.append("RSI BTC 1m %.0f: %s" % (rs, "перепродан, жди отскок" if sg < 0 else "перекуплен, жди откат"))
+    goods = []
+    if impulse: goods.append("2 свечи подряд: %s" % mine)
+    if pos: goods.append("%s EMA%d и уходит %s" % ("ниже" if sg < 0 else "выше", EMA_N, "вниз" if sg < 0 else "вверх"))
+    if rs_ok: goods.append("RSI %.0f %s" % (rs, "вниз" if sg < 0 else "вверх"))
+    allowed = bool(goods); ok = allowed and not blocks
+    snap = {"side": side, "ok": ok, "imp": int(impulse), "pos": int(pos), "rsi": round(rs, 1), "rsi_ok": int(rs_ok), "big": int(bool(big)), "run3": int(run3), "exh": int(exh), "t": int(time.time())}
+    if ok: good = "BTC 1m за %s: %s" % (nm, ", ".join(goods)); bad = ""
+    else: good = ""; bad = "BTC 1m против %s: %s" % (nm, "; ".join(blocks) if blocks else "нет подтверждения (RSI %.0f, свечи/EMA не в сторону сделки)" % rs)
+    return {"ok": ok, "allowed": allowed, "blocked": bool(blocks), "good": good, "bad": bad, "snap": snap}
+
+
+def gate(side):
+    """Живой вызов: None, если выключено или нет данных (тогда фильтр не применяется)."""
+    if not enabled(): return None
+    try: return evaluate(klines(), side)
+    except Exception: return None
