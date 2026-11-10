@@ -94,7 +94,7 @@ def menu(off=None):
     if off is None: off = bool(m.get("alerts_off"))
     rows = MENU + [[{"text": "🔔 Включить алерты" if off else "🔕 Отключить алерты", "callback_data": "al:1" if off else "al:0"}]]
     ex = bool(m.get("express"))
-    rows.append([{"text": "👁 Слежений одновременно: %d (изменить)" % min(int(m.get("max_watch", 3)), slots_cap()[0]), "callback_data": "mw"}])
+    rows.append([{"text": "👁 Слежений одновременно: %d (изменить)" % int(m.get("max_watch", 8)), "callback_data": "mw"}])
     rows.append([{"text": "⚡ Выключить экспресс" if ex else "⚡ Экспресс слежение", "callback_data": "ex:0" if ex else "ex:1"}])
     if ex:
         ao = bool(m.get("autoorder"))
@@ -176,10 +176,14 @@ def slots_cap():
 
 
 def eff_maxw():
-    """Лимит одновременных слежений (как считает tg_gate.maxw): заданный кнопкой max_watch, не больше слотов; в Автоордере ещё и не больше свободных слотов."""
-    m = mode_state(); sl, op, eq = slots_cap(); n = min(int(m.get("max_watch", 3)), sl)
-    if m.get("mode") == "monitor" and m.get("express") and m.get("autoorder"): n = min(n, max(0, sl - op))
-    return n
+    """Лимит одновременных слежений (как в tg_gate.maxw): значение кнопки max_watch, по умолчанию 8, не больше 15; со слотами не связан."""
+    return min(int(mode_state().get("max_watch", 8)), 15)
+
+
+def slots_full():
+    """True, если все слоты позиций заняты (tg_slots.json свежий, не старше 15 мин): Автоордер тогда ордер не пытается ставить."""
+    s = jload(os.path.join(D, "tg_slots.json"), {})
+    return bool(s) and time.time() - float(s.get("t", 0)) < 900 and int(s.get("open", 0)) >= int(s.get("slots", 3))
 
 
 def ao_on():
@@ -221,7 +225,8 @@ def send_watch(wid, kind):
                 if Bk: cap += "\n\n" + Bk["text"]
                 if ao_on():
                     auto = ao_pick(V, Bk)
-                    if auto: cap += "\n\n🤖 Автоордер: ставлю %s по рынку (цель: %s)." % ("пробой" if auto[0] == "breakout" else "отбой", auto[1])
+                    if auto and slots_full(): cap += "\n\n🤖 Все слоты позиций заняты: ордер не ставлю."; auto = None
+                    elif auto: cap += "\n\n🤖 Автоордер: ставлю %s по рынку (цель: %s)." % ("пробой" if auto[0] == "breakout" else "отбой", auto[1])
                 if len(cap) > 940: cap = cap[:937] + "..."
         except Exception as e: log("express verdict: %s" % e); V = None; auto = None
     btn = watch_buttons(wid, kind, V)
@@ -355,7 +360,8 @@ def handle_event(ev):
     elif t == "watch_update": send_watch(ev["wid"], "update")
     elif t == "watch_ack":
         wid = ev.get("wid")
-        if not ev.get("ok") and ev.get("auto"): edit_watch(wid, "🤖 Автоордер не поставлен: %s" % ev.get("why", "не получилось"), watch_buttons(wid, "update"))
+        if not ev.get("ok") and ev.get("auto") and ("слоты" in str(ev.get("why")) or "по паре уже есть" in str(ev.get("why"))): log("autoorder skipped %s: %s" % (wid, ev.get("why")))
+        elif not ev.get("ok") and ev.get("auto"): edit_watch(wid, "🤖 Автоордер не поставлен: %s" % ev.get("why", "не получилось"), watch_buttons(wid, "update"))
         elif not ev.get("ok"): api("sendMessage", chat_id=CHAT, text="⚠️ Слежение %s: %s" % (wid, ev.get("why", "не получилось")))
         elif ev.get("what") == "follow": edit_watch(wid, "👁 Слежу. Следующий график пришлю после закрытия свечи.", watch_buttons(wid, "update") if express_on() else None)
         elif ev.get("what") == "continue": edit_watch(wid, "▶️ Продолжаю следить.")
@@ -554,9 +560,9 @@ def on_callback(cq):
         txt = RV.revert(int(p[1])) if RV else "Самообучение недоступно."
         api("answerCallbackQuery", callback_query_id=cid, text=txt[:180], show_alert="true"); api("sendMessage", chat_id=CHAT, text="↩ " + txt)
     elif p[0] == "mw":      # изменить число слежений: запрос числа текстом
-        sl, op, eq = slots_cap(); cap = min(sl, 10); pending_text["mw"] = cap; cur = min(int(mode_state().get("max_watch", 3)), sl)
+        cap = 15; pending_text["mw"] = cap; cur = int(mode_state().get("max_watch", 8))
         api("answerCallbackQuery", callback_query_id=cid)
-        api("sendMessage", chat_id=CHAT, text="Сколько слежений вести одновременно? Введите число от 1 до %d (сейчас %d).\nМаксимум равен числу сделок, которое позволяет баланс%s: слежений больше возможных сделок не нужно, ордер всё равно не поставить. Растёт вместе с балансом. /cancel - отмена." % (cap, cur, "" if eq is None else " (%.2f $, на сделку нужно 2 $)" % eq), reply_markup={"force_reply": True, "input_field_placeholder": "число 1-%d" % cap})
+        api("sendMessage", chat_id=CHAT, text="Сколько слежений вести одновременно? Введите число от 1 до %d (сейчас %d).\nС числом открытых сделок это не связано: слежения ищут точки входа, а ордера бот ставит, только пока есть свободный слот. Чем больше слежений, тем больше постов и пар под наблюдением. /cancel - отмена." % (cap, cur), reply_markup={"force_reply": True, "input_field_placeholder": "число 1-%d" % cap})
     elif p[0] == "ao":
         inbox({"type": "autoorder", "on": p[1] == "1"}); api("answerCallbackQuery", callback_query_id=cid, text="Включаю Автоордер…" if p[1] == "1" else "Выключаю Автоордер…")
     elif p[0] == "xl":
