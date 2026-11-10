@@ -34,18 +34,16 @@ def slots_info():
 
 
 def maxw(m):
-    """Сколько слежений одновременно: заданное кнопкой max_watch, но не больше слотов по балансу; в Автоордере (Монитор + экспресс) ещё и не больше свободных слотов (слоты минус открытые): при занятых слотах слежение без ордеров не нужно."""
-    try:
-        sl, op, eq = slots_info(); n = min(int(m.get("max_watch", 3)), sl)
-        if m.get("mode") == "monitor" and m.get("express") and m.get("autoorder"): n = min(n, max(0, sl - op))
-        return n
-    except Exception: return int(m.get("max_watch", 3))
+    """Сколько слежений одновременно: заданное кнопкой max_watch (по умолчанию 8, не больше MAXW_HARD). К слотам позиций не привязано: слежения ищут точки входа, слоты ограничивают только число открытых сделок (при занятых слотах tg_bot ордера не ставит). tg_slots.json обновляется для tg_bot."""
+    try: slots_info()
+    except Exception: pass
+    return min(int(m.get("max_watch", 8)), MAXW_HARD)
 
 
-MAXW_HARD = 10     # жёсткий потолок настройки, даже если баланс позволит больше слотов
+MAXW_HARD = 15     # потолок настройки числа слежений (нагрузка и поток постов)
 
 
-DEFAULT = {"mode": "auto", "missed": 0, "max_missed": 3, "answer_win": 3, "until": None, "max_watch": 3, "watch_unanswered": 3, "watch_hours": 4, "alerts_off": False, "express": False, "autoorder": False, "express_away": 6, "express_hours": 2}
+DEFAULT = {"mode": "auto", "missed": 0, "max_missed": 3, "answer_win": 3, "until": None, "max_watch": 8, "watch_unanswered": 3, "watch_hours": 4, "alerts_off": False, "express": False, "autoorder": False, "express_away": 6, "express_hours": 2}
 
 
 def load_mode():
@@ -274,9 +272,8 @@ def apply(orders, now, cancel, touched, mkorder=None, price_fn=None):
                 for x in W["items"]:
                     if x["status"] == "watching": x["unanswered"] = 0; x["t_follow"] = now; wch = True
             emit({"type": "express", "on": on, "refused": refused})
-        elif t == "max_watch":   # кнопка «Слежений одновременно»: число 1..слотов по балансу (не больше MAXW_HARD)
-            try: cap = min(slots_info()[0], MAXW_HARD)
-            except Exception: cap = 3
+        elif t == "max_watch":   # кнопка «Слежений одновременно»: число 1..MAXW_HARD
+            cap = MAXW_HARD
             n = min(max(1, int(e.get("n") or 1)), cap); m["max_watch"] = n; emit({"type": "max_watch", "n": n, "cap": cap, "asked": int(e.get("n") or 0)})
         elif t == "autoorder":   # кнопка «Автоордер» (только Монитор + Экспресс): бот сам ставит ордер, когда его мнение «заходить» (отбой) или «пробой»
             on = bool(e.get("on")); refused = on and not (m["mode"] == "monitor" and m.get("express")); on = on and not refused
