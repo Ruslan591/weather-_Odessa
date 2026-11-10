@@ -11,6 +11,52 @@ try: import tg_btc1m as B1      # фильтр по BTC 1m (свечи, EMA9, RS
 except Exception: B1 = None
 try: import tg_regime as RG     # режим рынка BTC 1h: фильтр по течению (RG.cond); удалить файл или tg_regime_cfg.json {"filter": false} -> без фильтра
 except Exception: RG = None
+import json, os
+RSI5_CFG = os.path.join(os.environ.get("POS_DIR", "/opt/trading-bot/positions_regr"), "tg_rsi5.json")
+
+
+def _rcfg():
+    """Фильтр RSI(14) 5m для ОТБОЯ: шорт только при RSI > short (65, лучше > 70), лонг только при RSI < long (35, лучше < 30). Выключить: POS_DIR/tg_rsi5.json {"enabled": false}; пороги там же."""
+    c = {"enabled": True, "short": 65.0, "long": 35.0}
+    try: c.update(json.load(open(RSI5_CFG, encoding="utf-8")))
+    except Exception: pass
+    return c
+
+
+def _rsi5(w, kl, n=14):
+    """RSI(14) по Уайлдеру на 5m: закрытия свечей до последней закрытой + её close (w.last.c); None, если свечей мало."""
+    L = w.get("last") or {}
+    try:
+        t = int(L.get("t") or 0); c = float(L.get("c"))
+        xs = [float(k[4]) for k in (kl or []) if int(k[0]) < t] + [c]
+    except Exception: return None
+    if len(xs) < 60: return None
+    xs = xs[-300:]; g = [max(xs[i] - xs[i - 1], 0.0) for i in range(1, len(xs))]; l = [max(xs[i - 1] - xs[i], 0.0) for i in range(1, len(xs))]
+    ag = sum(g[:n]) / n; al = sum(l[:n]) / n
+    for i in range(n, len(g)): ag = (ag * (n - 1) + g[i]) / n; al = (al * (n - 1) + l[i]) / n
+    return 100.0 if al == 0 else 100 - 100 / (1 + ag / al)
+
+
+def _rsi5_cond(side, r):
+    """Условие (ok, good, bad) для отбоя или None (выключено / нет данных: фильтр не применяется)."""
+    c = _rcfg()
+    if r is None or not c.get("enabled", True): return None
+    if side == "short":
+        th = float(c["short"]); ok = r > th
+        return (ok, "RSI 5m %.0f: перегрев для шорта (> %g)%s" % (r, th, ", сильный" if r > 70 else ""), "RSI 5m %.0f: шорт только при RSI > %g (нет перегрева, цена может пробить канал)" % (r, th))
+    th = float(c["long"]); ok = r < th
+    return (ok, "RSI 5m %.0f: перепродано для лонга (< %g)%s" % (r, th, ", сильный" if r < 30 else ""), "RSI 5m %.0f: лонг только при RSI < %g (нет перепроданности, цена может пробить канал)" % (r, th))
+
+
+def rsi5_line(w, kl):
+    """Строка для постов слежения (не экспресс): RSI 5m и допуск по сторонам; "" если нет данных."""
+    r = _rsi5(w, kl)
+    if r is None: return ""
+    cs, cl = _rsi5_cond("short", r), _rsi5_cond("long", r)
+    if not cs or not cl: return "📈 RSI 5m: %.0f" % r
+    return "📈 RSI 5m: %.0f | SHORT %s | LONG %s" % (r, "✅" if cs[0] else "⛔", "✅" if cl[0] else "⛔")
+
+
 _DEF = {"wick_min": 0.4, "dist_max": 0.9, "rr_add": 0.0, "rr_add_counter": 0.0, "brk_n_min": 2, "brk_body_min": 0.3, "brk_beyond_max": 1.5}
 
 
@@ -85,6 +131,8 @@ def verdict(w, kl=None):
     if b1: conds.append(b1[:3])
     rgc, rgs = _regime("long" if s > 0 else "short")
     if rgc: conds.append(rgc)
+    r5 = _rsi5(w, kl); r5c = _rsi5_cond("long" if s > 0 else "short", r5)
+    if r5c: conds.append(r5c)
     call = "enter" if all(x[0] for x in conds) else "wait"
     side = "long" if s > 0 else "short"; stop = c - s * risk
     plan = {"side": side, "entry": c, "stop": stop, "tp": tp, "f": f, "rr": round(rr_t, 2), "rr_opp": round(rr_opp, 2)}
@@ -100,7 +148,7 @@ def verdict(w, kl=None):
     except Exception: cn = ""
     if cn: text += "\n" + cn
     if tgt: text += "\n🎯 Если заходить: " + tgt["text"] + (" ≈ %s" % _fmt(tp))
-    feat = {"dist": round(dist, 3), "wick": round(wick, 3), "cpos": round(cpos, 3), "favor": int(favor), "rr": round(rr_t, 2), "st": st, "counter": int(counter), "width": round(H / a, 2), "nb": nb}
+    feat = {"dist": round(dist, 3), "wick": round(wick, 3), "cpos": round(cpos, 3), "favor": int(favor), "rr": round(rr_t, 2), "st": st, "counter": int(counter), "width": round(H / a, 2), "nb": nb, "rsi5": None if r5 is None else round(r5, 1)}
     geo = {"line": line, "H": H, "risk": risk, "a": a}
     return {"call": call, "text": text, "feat": feat, "plan": plan, "geo": geo, "t": int(L.get("t") or 0), "sym": w.get("sym"), "side": side, "b1": b1[3] if b1 else None, "rg": rgs}
 
