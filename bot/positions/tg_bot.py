@@ -14,6 +14,8 @@ try: import tg_target as TGT      # самообучение цели (Авто 
 except Exception: TGT = None
 try: import tg_regime as RG        # режим рынка (падающий/растущий/флэт): пока только показ и запись; удалить файл -> без режима
 except Exception: RG = None
+try: import tg_btc1m as B1       # данные BTC 1m и вердикт в постах слежения; удалить файл -> без строки
+except Exception: B1 = None
 try: import tg_review as RV        # разбор закрытых сделок и коррекции порогов; удалить файл -> без самообучения
 except Exception: RV = None
 try: import tg_learn as LRN        # журнал «согласен / не согласен»; можно отключить кнопкой или удалить файл
@@ -218,6 +220,10 @@ def send_watch(wid, kind):
         rgl = RG.line(w.get("side")) if RG else ""
         if rgl: cap += "\n" + rgl
     except Exception as e: log("regime line: %s" % e)
+    try:
+        b1l = B1.line() if B1 else ""
+        if b1l: cap += "\n" + b1l
+    except Exception as e: log("btc1m line: %s" % e)
     if X and express_on():     # экспресс: добавляем мнение бота (заходить или ждать) и, если заходить, подсказку из журнала
         try:
             V = X.verdict(w, kl)
@@ -233,7 +239,7 @@ def send_watch(wid, kind):
                     auto = ao_pick(V, Bk)
                     if auto and slots_full(): cap += "\n\n🤖 Все слоты позиций заняты: ордер не ставлю."; auto = None
                     elif auto: cap += "\n\n🤖 Автоордер: ставлю %s по рынку (цель: %s)." % ("пробой" if auto[0] == "breakout" else "отбой", auto[1])
-                if len(cap) > 940: cap = cap[:937] + "..."
+                if len(cap) > 1020: cap = cap[:1017] + "..."
         except Exception as e: log("express verdict: %s" % e); V = None; auto = None
     btn = watch_buttons(wid, kind, V)
     prev = post_last_mid(w["sym"]); photo = True       # ответ на предыдущий пост этой пары: в Telegram виден как цитата, нажатие переносит к нему
