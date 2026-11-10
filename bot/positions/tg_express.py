@@ -9,6 +9,8 @@ try: import tg_review as RV     # пороги с коррекцией по оп
 except Exception: RV = None
 try: import tg_btc1m as B1      # фильтр по BTC 1m (свечи, EMA9, RSI14, блокировки); удалить файл или {"enabled": false} в tg_btc1m.json -> без фильтра
 except Exception: B1 = None
+try: import tg_regime as RG     # режим рынка BTC 1h: фильтр по течению (RG.cond); удалить файл или tg_regime_cfg.json {"filter": false} -> без фильтра
+except Exception: RG = None
 _DEF = {"wick_min": 0.4, "dist_max": 0.9, "rr_add": 0.0, "rr_add_counter": 0.0, "brk_n_min": 2, "brk_body_min": 0.3, "brk_beyond_max": 1.5}
 
 
@@ -35,7 +37,14 @@ def _btc1m(side):
     if not B1: return None
     try: g = B1.gate(side)
     except Exception: g = None
-    return (g["ok"], g["good"], g["bad"]) if g else None
+    return (g["ok"], g["good"], g["bad"], g["snap"]) if g else None
+
+
+def _regime(side):
+    """Условие (ok, good, bad) по режиму рынка 1h или None; и снимок режима для записи."""
+    if not RG: return None, None
+    try: return RG.cond(side), RG.snap()
+    except Exception: return None, None
 
 
 def verdict(w, kl=None):
@@ -73,7 +82,9 @@ def verdict(w, kl=None):
         (sh is None or abs(sh) < 0.5, "канал стабилен", "канал перестроился (%+.1f ATR)" % (sh or 0)),
     ]
     b1 = _btc1m("long" if s > 0 else "short")
-    if b1: conds.append(b1)
+    if b1: conds.append(b1[:3])
+    rgc, rgs = _regime("long" if s > 0 else "short")
+    if rgc: conds.append(rgc)
     call = "enter" if all(x[0] for x in conds) else "wait"
     side = "long" if s > 0 else "short"; stop = c - s * risk
     plan = {"side": side, "entry": c, "stop": stop, "tp": tp, "f": f, "rr": round(rr_t, 2), "rr_opp": round(rr_opp, 2)}
@@ -91,7 +102,7 @@ def verdict(w, kl=None):
     if tgt: text += "\n🎯 Если заходить: " + tgt["text"] + (" ≈ %s" % _fmt(tp))
     feat = {"dist": round(dist, 3), "wick": round(wick, 3), "cpos": round(cpos, 3), "favor": int(favor), "rr": round(rr_t, 2), "st": st, "counter": int(counter), "width": round(H / a, 2), "nb": nb}
     geo = {"line": line, "H": H, "risk": risk, "a": a}
-    return {"call": call, "text": text, "feat": feat, "plan": plan, "geo": geo, "t": int(L.get("t") or 0), "sym": w.get("sym"), "side": side}
+    return {"call": call, "text": text, "feat": feat, "plan": plan, "geo": geo, "t": int(L.get("t") or 0), "sym": w.get("sym"), "side": side, "b1": b1[3] if b1 else None, "rg": rgs}
 
 
 def verdict_break(w, kl=None):
@@ -119,7 +130,9 @@ def verdict_break(w, kl=None):
         (sh is None or abs(sh) < 0.5, "канал стабилен", "канал перестроился (%+.1f ATR)" % (sh or 0)),
     ]
     b1 = _btc1m("long" if s > 0 else "short")
-    if b1: conds.append(b1)
+    if b1: conds.append(b1[:3])
+    rgc, rgs = _regime("long" if s > 0 else "short")
+    if rgc: conds.append(rgc)
     call = "enter" if all(x[0] for x in conds) else "wait"
     side = "long" if s > 0 else "short"; stop = c - s * risk
     plan = {"side": side, "entry": c, "stop": stop, "tp": tp, "target": "h05", "rr": round(rr, 2)}
@@ -127,4 +140,4 @@ def verdict_break(w, kl=None):
     lines = ["%s %s" % ("✓" if ok else "✗", good if ok else bad) for ok, good, bad in conds]
     if call == "enter": head = "💥 Пробой линии: ✅ можно заходить — %s по рынку ~%s, стоп %s, цель %s (0.5 высоты канала за линией), R:R %.1f" % (side.upper(), _fmt(c), _fmt(stop), _fmt(tp), rr)
     else: head = "💥 Пробой линии формируется: ⏳ ждём — %s" % next(bad for ok, good, bad in conds if not ok)
-    return {"call": call, "text": head + "\n" + "\n".join(lines), "plan": plan, "feat": feat, "t": int(L.get("t") or 0), "sym": w.get("sym"), "side": side}
+    return {"call": call, "text": head + "\n" + "\n".join(lines), "plan": plan, "feat": feat, "t": int(L.get("t") or 0), "sym": w.get("sym"), "side": side, "b1": b1[3] if b1 else None, "rg": rgs}
