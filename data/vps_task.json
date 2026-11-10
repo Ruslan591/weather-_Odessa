@@ -1,1 +1,1 @@
-{"task_id": "reach1m_poll_1", "cmd": "sleep 240; tail -2 /tmp/reach1m.out", "timeout": 280}
+{"task_id": "reach1m_poll_2", "cmd": "tail -3 /tmp/reach1m.out; pgrep -f reach_1m_check >/dev/null && echo RUNNING || echo DONE", "timeout": 30}
