@@ -1,1 +1,1 @@
-{"task_id": "reach1m_run_1", "cmd": "cd /opt/weather-pipeline/repo && for i in 1 2 3 4 5; do git fetch -q origin && break; sleep 6; done; mkdir -p /tmp/r1m && git show origin/main:scripts/reach_1m_check.py > /tmp/r1m/reach_1m_check.py && cd /tmp/r1m && (PYTHONPATH=/opt/tg-notify nohup /opt/trading-bot/venv/bin/python reach_1m_check.py > /tmp/reach1m.out 2>&1 &) ; sleep 50; cat /tmp/reach1m.out | head -c 1500", "timeout": 120}
+{"task_id": "reach1m_poll_1", "cmd": "sleep 240; tail -2 /tmp/reach1m.out", "timeout": 280}
