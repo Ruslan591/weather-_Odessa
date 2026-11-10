@@ -22,6 +22,15 @@ D = os.environ.get("POS_DIR", "/opt/trading-bot/positions")
 ENABLED = os.environ.get("TG_GATE", "0") == "1"
 WATCHF = os.path.join(D, "tg_watch.json"); MODEF = os.path.join(D, "tg_mode.json"); OUTF = os.path.join(D, "tg_outbox.jsonl"); INF = os.path.join(D, "tg_inbox.jsonl"); OFFF = os.path.join(D, "tg_inbox.off")
 MODES = ("sleep", "monitor", "auto"); TFM = 300000
+def reg_snap():
+    """Снимок режима рынка (tg_regime.json пишет tg_bot) для записи в ордер: {regime, raw, strength, t} или None."""
+    try:
+        st = json.load(open(os.path.join(D, "tg_regime.json"), encoding="utf-8"))
+        if time.time() * 1000 - int(st.get("t", 0)) > 30 * 60000: return None
+        return {"regime": st["regime"], "raw": st.get("raw"), "strength": st.get("strength"), "t": st.get("t")}
+    except Exception: return None
+
+
 SLOTS_FN = None     # ставит chan_orders: () -> (слотов, открытых позиций, баланс)
 
 
@@ -238,7 +247,7 @@ def _wevent(e, W, m, orders, now, mkorder, price_fn, jobs):
         except Exception: px = None
         o, why = mkorder(dict(x, _auto=1) if auto else x, e.get("entry"), e.get("target"), px or x["last"]["c"], e.get("setup") or "bounce")
         if not o: emit({"type": "watch_ack", "wid": x["id"], "ok": False, "what": "place", "auto": auto, "why": why}); return False
-        o["id"] = max([q["id"] for q in orders] + [0]) + 1; o["approved_t"] = now; o["src_watch"] = x["id"]
+        o["id"] = max([q["id"] for q in orders] + [0]) + 1; o["approved_t"] = now; o["src_watch"] = x["id"]; o["regime"] = reg_snap()
         if auto: o["auto_express"] = 1
         orders.append(o)
         x.update(status="done", reason="ордер #%d" % o["id"], t_end=now, order_id=o["id"]); m["missed"] = 0
