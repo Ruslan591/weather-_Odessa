@@ -36,21 +36,22 @@ _pairs_try = [0.0]
 def refresh_pairs(f, cur):
     """Раз в сутки: пары USDT с оборотом за 24 ч не меньше minvol (data-api.binance.vision), по убыванию оборота, добавленные к PAIRS0 (они остаются всегда) до размера n. Файл POS_DIR/pairs.json {pairs, t, n, minvol} создаётся вручную; где его нет (другие счета), список прежний."""
     import urllib.request
-    n = int((cur or {}).get("n", 45)); minvol = float((cur or {}).get("minvol", 20e6))
+    n = int((cur or {}).get("n", 45)); minvol = float((cur or {}).get("minvol", 8e6)); excl = set(str(x) for x in ((cur or {}).get("exclude") or []))
     r = json.load(urllib.request.urlopen("https://data-api.binance.vision/api/v3/ticker/24hr", timeout=30))
     cand = []
     for x in r:
         sy = x.get("symbol", "")
         if not sy.endswith("USDT"): continue
         b = sy[:-4]
-        if b in BAD_BASE or not b.isascii() or not b.isalnum(): continue
+        if b in BAD_BASE or b in excl or not b.isascii() or not b.isalnum(): continue
+        if len(b) >= 5 and b.endswith("B"): continue      # токенизированные акции и ETF (SNDKB, NVDAB, SOXLB...): торгуются по часам биржи, не подходят; остальное - поле exclude в pairs.json
         qv = float(x.get("quoteVolume") or 0)
         if qv >= minvol: cand.append((qv, b))
     cand.sort(reverse=True); out = list(PAIRS0)
     for qv, b in cand:
         if len(out) >= max(n, len(PAIRS0)): break
         if b not in out: out.append(b)
-    d = {"pairs": out, "t": time.time(), "n": n, "minvol": minvol}
+    d = {"pairs": out, "t": time.time(), "n": n, "minvol": minvol, "exclude": sorted(excl)}
     tmp = f + ".tmp"; json.dump(d, open(tmp, "w")); os.replace(tmp, f); log("pairs refreshed: %d" % len(out)); return d
 
 
