@@ -485,7 +485,7 @@ def status_text():
     return "\n".join(out)
 
 
-def status_data():
+def status_data(sn=None):
     """Данные для картинки-карточки счёта (tg_notify.render_status)."""
     m = mode_state(); orders = jload(ORDF, [])
     pend = sorted([o for o in orders if o.get("status") == "pending"], key=lambda x: x["id"]); prop = sum(1 for o in orders if o.get("status") == "proposed"); now = int(time.time() * 1000)
@@ -503,7 +503,7 @@ def status_data():
          "watches": [("%s %s: %s" % (x["sym"], x["side"].upper(), "ждёт вашего решения" if x["status"] == "alert" else "слежу (%d св.)" % x.get("updates", 0)), "#e3b341" if x["status"] == "alert" else "#c9d1d9") for x in ws],
          "max_watch": eff_maxw(), "stamp": datetime.now(T._tz()).strftime("%H:%M:%S")}
     try:
-        sn = fetch_snapshot(); a = sn["account"]; opn = sn.get("open", []); tot = a["equity"] - a["start"]; wh = "#e6edf3"
+        sn = sn if sn is not None else fetch_snapshot(); a = sn["account"]; opn = sn.get("open", []); tot = a["equity"] - a["start"]; wh = "#e6edf3"
         d.update(sub="бумажный счёт · старт %.0f $ · плечо %d× · ставка %.0f $" % (a["start"], a["lev"], a["stake"]), equity=a["equity"], chg_usd=tot, chg_pct=tot / a["start"] * 100,
                  tiles=[("Кошелёк", "%.2f $" % (a["start"] + a["realized"]), wh), ("Нереализ. PnL", "%s $" % sg(a["unreal"]), "#26a69a" if a["unreal"] >= 0 else "#ef5350"), ("В марже", "%.2f $" % a["open_margin"], wh), ("Доступно", "%.2f $" % a["free"], wh)],
                  positions=[{"sym": str(p["sym"]).replace("USDT", ""), "side": p["side"].upper(), "pct": p["unreal_pct"], "usd": p["unreal_usd"], "be": bool(p.get("armed")), "part": p.get("rem", 1) < 0.999} for p in opn[:8]])
@@ -740,6 +740,103 @@ def on_message(m):
     else: api("sendMessage", chat_id=CHAT, text="Команды: /mode (режим), /alerts (алерты вкл/выкл), /status (состояние), /orders (ордера и отмена).")
 
 
+# ---------- Живая карточка счёта в канале TG_CHAT_LIVE (картинка редко, подпись часто) ----------
+LIVEF = os.path.join(D, "tg_live.json"); LIVECFG = os.path.join(D, "tg_live_cfg.json")
+
+
+def live_cfg():
+    c = {"enabled": True, "tick": 5, "snap": 30, "img": 60, "img_min": 15, "heartbeat": 30}
+    c.update(jload(LIVECFG, {})); return c
+
+
+def tg_try(method, fields, files=None):
+    """Вызов Telegram без исключений: (True, ответ) | ("wait", секунды) | ("gone", текст) | (False, текст)."""
+    import urllib.error
+    try: return True, T._post(method, fields, files)
+    except urllib.error.HTTPError as e:
+        try: j = json.loads(e.read().decode("utf-8", "replace"))
+        except Exception: j = {}
+        desc = str(j.get("description", e)); ra = (j.get("parameters") or {}).get("retry_after")
+        if "not modified" in desc: return True, {}
+        if ra: return "wait", int(ra)
+        if "not found" in desc or "MESSAGE_ID_INVALID" in desc or "can't be edited" in desc: return "gone", desc
+        return False, desc
+    except Exception as e: return False, str(e)
+
+
+def live_prices(syms):
+    """Последние цены одним запросом к Binance (по парам открытых позиций)."""
+    import urllib.request, urllib.parse
+    syms = sorted(set(syms))
+    if not syms: return {}
+    q = urllib.parse.quote(json.dumps(syms, separators=(",", ":")))
+    r = json.load(urllib.request.urlopen("https://data-api.binance.vision/api/v3/ticker/price?symbols=" + q, timeout=10))
+    return {x["symbol"]: float(x["price"]) for x in r}
+
+
+def live_calc(sn, px):
+    """PnL открытых позиций по свежей цене: линейная поправка к значению снимка (pnl% зависит от цены линейно)."""
+    a = sn["account"]; rows = []; dsum = 0.0
+    for p in sn.get("open", []):
+        side = 1 if p["side"] == "long" else -1; rem = p.get("rem", 1.0); cur = px.get(p["sym"], p["px"])
+        u = p["unreal_pct"] + rem * side * 100 * (cur - p["px"]) / p["entry"]; ud = p["stake"] * u / 100
+        dsum += ud - p["unreal_usd"]
+        rows.append({"sym": str(p["sym"]).replace("USDT", ""), "side": p["side"].upper(), "pct": u, "usd": ud, "be": bool(p.get("armed")), "part": rem < 0.999})
+    return a["equity"] + dsum, a["unreal"] + dsum, rows
+
+
+def live_body(sn, eq, unreal, rows):
+    a = sn["account"]; chg = eq - a["start"]; orders = jload(ORDF, [])
+    pend = sum(1 for o in orders if o.get("status") == "pending"); prop = sum(1 for o in orders if o.get("status") == "proposed")
+    L = ["💼 «%s» · %s" % (ACCT, MODE_RU.get(mode_state().get("mode", "auto"), "")),
+         "%.2f $  %s $ (%s)" % (eq, sg(chg), sg(chg / a["start"] * 100, 2, "%")),
+         "Нереализ. %s $ · в марже %.2f $ · доступно %.2f $" % (sg(unreal), a["open_margin"], a["free"]),
+         "Ордеров ждут: %d%s · позиций: %d" % (pend, (" (на решении %d)" % prop) if prop else "", len(rows))]
+    for r in rows[:8]:
+        L.append("· %s %s %s · %s $%s%s" % (r["sym"], r["side"], sg(r["pct"], 2, "%"), sg(r["usd"]), " · БУ" if r["be"] else "", " · часть закрыта" if r["part"] else ""))
+    return "\n".join(L)[:960]
+
+
+def live_loop():
+    chat = ENV.get("TG_CHAT_LIVE")
+    if not chat: log("live: TG_CHAT_LIVE не задан, живая карточка выключена"); return
+    log("live: старт, канал %s" % chat)
+    st = jload(LIVEF, {}); sn = None; sn_t = 0.0; last_body = None; last_edit = 0.0; last_img = 0.0; last_sig = None; wait_until = 0.0; fails = 0
+    while True:
+        try:
+            c = live_cfg(); time.sleep(max(2, c["tick"])); now = time.time()
+            if not c["enabled"] or now < wait_until: continue
+            if sn is None or now - sn_t >= c["snap"]:
+                try: sn = fetch_snapshot(); sn_t = now
+                except Exception as e:
+                    log("live: снимок не получен: %s" % e)
+                    if sn is None: continue
+            try: px = live_prices([p["sym"] for p in sn.get("open", [])])
+            except Exception as e: log("live: цены не получены: %s" % e); px = {}
+            eq, unreal, rows = live_calc(sn, px); body = live_body(sn, eq, unreal, rows)
+            stale = int(now - sn_t); stamp = datetime.now(T._tz()).strftime("%H:%M:%S") + ((" ⚠️ данные счёта %d с назад" % stale) if stale > 3 * c["snap"] else "")
+            cap = "🕒 %s\n%s" % (stamp, body); mid = st.get("mid")
+            sig = (tuple(sorted((p["sym"], p["side"]) for p in sn.get("open", []))), tuple(sorted(o["id"] for o in jload(ORDF, []) if o.get("status") in ("pending", "proposed"))), mode_state().get("mode"))
+            res = None
+            if not mid or (sig != last_sig and now - last_img >= c["img_min"]) or now - last_img >= c["img"]:
+                d = status_data(sn); png = T.render_status(d)
+                if not mid: res = tg_try("sendPhoto", {"chat_id": chat, "caption": cap}, {"photo": ("status.png", png, "image/png")})
+                else: res = tg_try("editMessageMedia", {"chat_id": chat, "message_id": mid, "media": json.dumps({"type": "photo", "media": "attach://photo", "caption": cap}, ensure_ascii=False)}, {"photo": ("status.png", png, "image/png")})
+                if res[0] is True:
+                    if not mid: st["mid"] = res[1]["result"]["message_id"]; json.dump(st, open(LIVEF, "w"))
+                    last_img = now; last_edit = now; last_body = body; last_sig = sig
+            elif body != last_body or now - last_edit >= c["heartbeat"]:
+                res = tg_try("editMessageCaption", {"chat_id": chat, "message_id": mid, "caption": cap})
+                if res[0] is True: last_edit = now; last_body = body
+            if res is None: continue
+            if res[0] is True: fails = 0
+            elif res[0] == "wait": wait_until = time.time() + res[1] + 1; log("live: лимит Telegram, пауза %d с" % (res[1] + 1))
+            elif res[0] == "gone": log("live: сообщение недоступно (%s), создам заново" % res[1]); st.pop("mid", None); json.dump(st, open(LIVEF, "w")); last_img = 0.0
+            else:
+                fails += 1; wait_until = time.time() + min(60, 5 * fails); log("live: ошибка Telegram: %s" % str(res[1])[:200])
+        except Exception: log("live error: " + traceback.format_exc()[-500:]); time.sleep(10)
+
+
 def seen_chat(c):
     """Запоминает чаты/каналы, откуда пришли события (для настройки маршрутизации по чатам). Секретов не содержит."""
     if not c or "id" not in c: return
@@ -755,6 +852,7 @@ def main():
     try: api("setMyCommands", commands=[{"command": "mode", "description": "Режим: сон / монитор / авто"}, {"command": "status", "description": "Счёт, баланс, позиции"}, {"command": "orders", "description": "Выставленные ордера и отмена"}, {"command": "alerts", "description": "Алерты: отключить / включить"}])
     except Exception as e: log("setMyCommands fail: %s" % e)
     threading.Thread(target=outbox_loop, daemon=True).start()
+    threading.Thread(target=live_loop, daemon=True).start()
     offset = None
     while True:
         try:
