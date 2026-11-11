@@ -1,7 +1,7 @@
 {
-  "task_id": "env-chats-1",
+  "task_id": "snap-1",
   "returncode": 0,
-  "stdout": "-rw------- 1 tbot tbot 157 Nov 11 06:57 /opt/trading-bot/tg.env\n3\nTG_TOKEN\nTG_CHAT_ID\nTG_USER_ID\nTG_CHAT_LIVE\nTG_CHAT_REVIEWS\n",
+  "stdout": "['account', 'open', 'closed', 'journal', 'exit_cfg', 'exit_default', 'orders', 'shadow', 'miss', 'ts']\n{\"start\": 7.0, \"lev\": 5, \"stake\": 6.0, \"margin\": 1.2, \"realized\": -0.652, \"unreal\": 0.0, \"equity\": 6.348, \"free\": 6.348, \"open_margin\": 0.0, \"closed\": 224}\n0\nnone\n162:    ps = cmd_update(); opn = []; closed = []; realized = 0.0; unreal = 0.0; margin = 0.0\n167:            unreal += ud; margin += m\n168:            q = dict(p); q.update(px=px, unreal_pct=round(u, 3), unreal_usd=round(ud, 3), r_now=round(u / p[\"R_pct\"], 2), margin=m,\n174:    return {\"account\": {\"start\": START, \"lev\": LEV, \"stake\": STAKE, \"margin\": STAKE / LEV, \"realized\": round(realized, 3), \"unreal\": round(unreal, 3),\n175:                        \"equity\": round(START + realized + unreal, 3), \"free\": round(START + realized - margin, 3), \"open_margin\": round(margin, 3), \"closed\": len(closed)},\n297:            print(\"#%d OPEN %s %s since %s entry %.6f now %.6f unreal %.2f%% (%.2fR) stop %.6f%s tp %.6f\" % (\n",
   "stderr": "",
-  "completed_at_utc": "2026-11-11T06:57:02Z"
+  "completed_at_utc": "2026-11-11T07:00:02Z"
 }
