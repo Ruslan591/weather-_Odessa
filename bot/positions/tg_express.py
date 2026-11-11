@@ -48,6 +48,18 @@ def _rsi5_cond(side, r):
     return (ok, "RSI 5m %.0f: перепродано для лонга (< %g)%s" % (r, th, ", сильный" if r < 30 else ""), "RSI 5m %.0f: лонг только при RSI < %g (нет перепроданности, цена может пробить канал)" % (r, th))
 
 
+def _rsi5_brk(side, r):
+    """Условие для ПРОБОЯ (2026-11-11, сделка #225: SHORT на пробое при RSI 5m 30): не гонимся за уже сделанным движением.
+    SHORT на пробое вниз только если RSI 5m > long (35); LONG на пробое вверх только если RSI < short (65). Выключить: tg_rsi5.json {"brk": false}."""
+    c = _rcfg()
+    if r is None or not c.get("enabled", True) or not c.get("brk", True): return None
+    if side == "short":
+        th = float(c["long"]); ok = r > th
+        return (ok, "RSI 5m %.0f: не перепродано, шорт на пробое не в погоне (> %g)" % (r, th), "RSI 5m %.0f: перепродано (<= %g), шорт на пробое не открываем: движение уже сделано" % (r, th))
+    th = float(c["short"]); ok = r < th
+    return (ok, "RSI 5m %.0f: не перекуплено, лонг на пробое не в погоне (< %g)" % (r, th), "RSI 5m %.0f: перекуплено (>= %g), лонг на пробое не открываем: движение уже сделано" % (r, th))
+
+
 def rsi5_line(w, kl):
     """Строка для постов слежения (не экспресс): RSI 5m и допуск по сторонам; "" если нет данных."""
     r = _rsi5(w, kl)
@@ -181,10 +193,12 @@ def verdict_break(w, kl=None):
     if b1: conds.append(b1[:3])
     rgc, rgs = _regime("long" if s > 0 else "short")
     if rgc: conds.append(rgc)
+    r5 = _rsi5(w, kl); r5c = _rsi5_brk("long" if s > 0 else "short", r5)
+    if r5c: conds.append(r5c)
     call = "enter" if all(x[0] for x in conds) else "wait"
     side = "long" if s > 0 else "short"; stop = c - s * risk
     plan = {"side": side, "entry": c, "stop": stop, "tp": tp, "target": "h05", "rr": round(rr, 2)}
-    feat = {"beyond": round(beyond, 3), "body": round(body, 3), "rr": round(rr, 2), "n": int(w.get("n_beyond") or 0), "width": round(H / a, 2), "counter": int(bool(w.get("counter")))}
+    feat = {"beyond": round(beyond, 3), "body": round(body, 3), "rr": round(rr, 2), "n": int(w.get("n_beyond") or 0), "width": round(H / a, 2), "counter": int(bool(w.get("counter"))), "rsi5": None if r5 is None else round(r5, 1)}
     lines = ["%s %s" % ("✓" if ok else "✗", good if ok else bad) for ok, good, bad in conds]
     if call == "enter": head = "💥 Пробой линии: ✅ можно заходить — %s по рынку ~%s, стоп %s, цель %s (0.5 высоты канала за линией), R:R %.1f" % (side.upper(), _fmt(c), _fmt(stop), _fmt(tp), rr)
     else: head = "💥 Пробой линии формируется: ⏳ ждём — %s" % next(bad for ok, good, bad in conds if not ok)
