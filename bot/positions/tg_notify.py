@@ -281,6 +281,79 @@ def render_status(d):
     return buf.getvalue()
 
 
+POS_REASON_RU = {"stop": "стоп", "trail/BE": "трейлинг / безубыток", "target": "цель", "time": "по времени", "manual": "вручную", "liquidation": "ликвидация"}
+
+
+def render_position(p, kl, chan=None, now_ms=None):
+    """График сделки (журнал позиций): свечи 5m, вход, стоп (текущий и начальный), цель, выход и итог для закрытой; p - запись из positions.json, kl - свечи Binance, chan - канал ордера (необязательно)."""
+    import time as _t
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Rectangle
+    tz = _tz(); now_ms = int(now_ms or _t.time() * 1000)
+    closed = p.get("status") == "closed" and p.get("t_out")
+    t_in = int(p["t_in"]); t_last = int(p["t_out"]) if closed else now_ms
+    t_start = max(t_in - 30 * BAR_MS, t_last - 190 * BAR_MS); t_stop = t_last + 6 * BAR_MS
+    ks = [k for k in kl if t_start <= k[0] <= t_stop]
+    if len(ks) < 10: raise ValueError("мало свечей для графика сделки")
+    x0 = ks[0][0]; X = lambda t: (t - x0) / BAR_MS
+    side = 1 if p["side"] == "long" else -1
+    fig = plt.figure(figsize=(7.2, 5.6), dpi=DPI_OUT)
+    gs = fig.add_gridspec(2, 1, height_ratios=[4.3, 1], hspace=0.04)
+    ax = fig.add_subplot(gs[0]); axv = fig.add_subplot(gs[1], sharex=ax)
+    fig.patch.set_facecolor(BG); ax.set_facecolor(BG); axv.set_facecolor(BG)
+    lows, highs = [], []
+    for k in ks:
+        op, hi, lo, cl = float(k[1]), float(k[2]), float(k[3]), float(k[4]); x = X(k[0]); col = "#26a69a" if cl >= op else "#ef5350"
+        ax.plot([x, x], [lo, hi], color=col, lw=0.9, zorder=3)
+        ax.add_patch(Rectangle((x - 0.32, min(op, cl)), 0.64, max(abs(cl - op), 1e-12), color=col, zorder=4)); lows.append(lo); highs.append(hi)
+        axv.bar(x, float(k[5]), width=0.72, color=col, alpha=0.85, zorder=3)
+    xin = X(t_in); xend = X(t_last) if closed else X(ks[-1][0]) + 1; xr = xend + 1.5
+    try:
+        if chan and chan.get("upper") and chan.get("lower"):
+            U, L = chan["upper"], chan["lower"]; cc = chan_color(chan.get("type")); xa = X(max(U["t1"], x0)); ts = [x0 + xa * BAR_MS, x0 + xend * BAR_MS]
+            up = [U["p1"] + U["s"] * (t - U["t1"]) for t in ts]; lw = [L["p1"] + L["s"] * (t - L["t1"]) for t in ts]; xs = [xa, xend]
+            ax.fill_between(xs, lw, up, color=cc, alpha=0.08, zorder=1); ax.plot(xs, up, color=cc, lw=1.5, zorder=2); ax.plot(xs, lw, color=cc, lw=1.5, zorder=2)
+            ax.plot(xs, [(a + b) / 2 for a, b in zip(up, lw)], color=cc, lw=0.9, ls="--", zorder=2); lows.append(min(lw)); highs.append(max(up))
+    except Exception: pass
+    en = float(p["entry"]); st = float(p["stop"]); st0 = float(p.get("stop0", st)); tp = p.get("tp"); tp = float(tp) if tp is not None else None
+    ax.add_patch(Rectangle((xin, min(en, st0)), xend - xin, abs(st0 - en), color="#ef5350", alpha=0.14, zorder=1))
+    if tp is not None: ax.add_patch(Rectangle((xin, min(en, tp)), xend - xin, abs(tp - en), color="#26a69a", alpha=0.12, zorder=1))
+    labs = []
+    def lvl(y, col, name, ls="--", lw=1.3):
+        ax.plot([xin, xend], [y, y], color=col, lw=lw, ls=ls, zorder=5); labs.append([y, y, col, name]); lows.append(y); highs.append(y)
+    lvl(en, "#e6edf3", "вход", "-"); lvl(st, "#ef5350", "стоп")
+    if abs(st - st0) > 1e-12: ax.plot([xin, xend], [st0, st0], color="#ef5350", lw=0.8, ls=":", zorder=4); lows.append(st0); highs.append(st0)
+    if tp is not None: lvl(tp, "#26a69a", "цель")
+    ax.plot([xin], [en], marker="^" if side > 0 else "v", color="#e6edf3", mec=BG, mew=0.8, ms=9, zorder=7)
+    ax.axvline(xin, color="#8b949e", lw=0.8, ls=":", zorder=2); axv.axvline(xin, color="#8b949e", lw=0.8, ls=":", zorder=2)
+    pnl = float(p.get("pnl_usd", 0) or 0); rcol = "#26a69a" if pnl > 0 else ("#ef5350" if pnl < 0 else "#8b949e")
+    if closed:
+        ex = float(p["exit"]); ax.plot([X(t_last)], [ex], marker="X", color=rcol, mec=BG, mew=0.8, ms=10, zorder=8); labs.append([ex, ex, rcol, "выход"]); lows.append(ex); highs.append(ex)
+        ax.axvline(X(t_last), color="#8b949e", lw=0.8, ls=":", zorder=2); axv.axvline(X(t_last), color="#8b949e", lw=0.8, ls=":", zorder=2)
+        ax.text(0.01, 0.97, "%s · net %+.2f%% · %+.3f $ · %+.2fR" % (POS_REASON_RU.get(p.get("reason"), p.get("reason", "")), p.get("net_pct", 0), pnl, p.get("r_mult", 0)), transform=ax.transAxes, color=rcol, fontsize=8.5, fontweight="bold", va="top", ha="left", zorder=9)
+    else:
+        lc = float(ks[-1][4]); labs.append([lc, lc, "#58a6ff", "сейчас"]); ax.plot([xin, xend], [lc, lc], color="#58a6ff", lw=0.9, ls=":", zorder=5); lows.append(lc); highs.append(lc)
+    lo_, hi_ = min(lows), max(highs); pad = (hi_ - lo_) * 0.06 or lo_ * 0.001
+    ax.set_ylim(lo_ - pad, hi_ + pad); gap = (hi_ - lo_ + 2 * pad) * 0.055
+    labs.sort(key=lambda r: r[1])
+    for i in range(1, len(labs)):
+        if labs[i][1] - labs[i - 1][1] < gap: labs[i][1] = labs[i - 1][1] + gap
+    for y, ty, col, name in labs:
+        ax.text(xr + 0.4, ty, "%s %s" % (name, fmt_px(y)), color=BG, fontsize=7.5, va="center", fontweight="bold", zorder=6, bbox=dict(boxstyle="square,pad=0.25", fc=col, ec="none"))
+        if abs(ty - y) > 1e-12: ax.plot([xr, xr + 0.4], [y, ty], color=col, lw=0.8, zorder=5)
+    axv.set_ylim(0, max(float(k[5]) for k in ks) * 1.15); ax.set_xlim(-1, xr + 14)
+    step = 12; xt = list(range(0, int(xr) + 1, step))
+    axv.set_xticks(xt); axv.set_xticklabels([datetime.fromtimestamp((x0 + i * BAR_MS) / 1000, tz).strftime("%H:%M") for i in xt], color=TXT, fontsize=7.5)
+    ax.tick_params(axis="x", labelbottom=False); ax.tick_params(axis="y", labelleft=False, labelright=False, left=False); axv.tick_params(axis="y", labelleft=False, left=False)
+    for a_ in (ax, axv): a_.grid(color=GRID, lw=0.6); [sp.set_color(GRID) for sp in a_.spines.values()]
+    ax.set_title("#%s  %s  %s  ·  %s" % (p.get("id"), str(p.get("sym", "")).replace("USDT", ""), p["side"].upper(), "закрыта" if closed else "открыта"), color=TXT, fontsize=10, loc="left")
+    fig.subplots_adjust(left=0.02, right=0.99, top=0.94, bottom=0.05)
+    buf = io.BytesIO(); fig.savefig(buf, format="png", facecolor=BG); plt.close(fig)
+    return buf.getvalue()
+
+
 def _post(method, fields=None, files=None):
     e = _env(); url = "https://api.telegram.org/bot%s/%s" % (e["TG_TOKEN"], method)
     if files:
