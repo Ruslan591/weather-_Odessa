@@ -1,1 +1,1 @@
-{"task_id": "getme-1111", "cmd": "T=$(grep '^TG_TOKEN=' /opt/trading-bot/tg.env | cut -d= -f2- | tr -d '\"'); curl -s \"https://api.telegram.org/bot$T/getMe\" | grep -o '\"username\":\"[A-Za-z0-9_]*\"' | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 60}
+{"task_id": "md5-1111", "cmd": "md5sum /opt/tg-notify/tg_bot.py /opt/trading-bot/positions/tg_bot.py 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 60}
