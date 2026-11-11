@@ -27,7 +27,53 @@ tg_gate.SLOTS_FN = lambda: slots_state()     # слоты нужны слеже�
 D = pos.D; OF = os.path.join(D, "orders.json"); LOG = os.path.join(D, "chan.log"); STF = os.path.join(D, "chan_state.json")
 EVF = os.path.join(D, "chan_events.json")
 CLASSIC = os.environ.get("CLASSIC_DIR", "/opt/trading-bot/classic")
-PAIRS = "BTC ETH SOL XRP DOGE ADA BNB LINK AVAX SUI LTC DOT APT ATOM PHA ZEC NEAR TREE ANIME IOST REZ NIL HAEDAL".split()
+PAIRS0 = "BTC ETH SOL XRP DOGE ADA BNB LINK AVAX SUI LTC DOT APT ATOM PHA ZEC NEAR TREE ANIME IOST REZ NIL HAEDAL".split()
+PAIRS = PAIRS0      # старое имя (список по умолчанию); действующий список счёта даёт pairs_now()
+BAD_BASE = set("USDC FDUSD TUSD USDP DAI BUSD EUR AEUR USDE XUSD PYUSD USD1 RLUSD BFUSD EURI UST USTC WBTC WBETH BETH STETH WBNB".split())     # стейблы и обёрнутые копии (дублируют BTC/ETH/BNB)
+_pairs_try = [0.0]
+
+
+def refresh_pairs(f, cur):
+    """Раз в сутки: пары USDT с оборотом за 24 ч не меньше minvol (data-api.binance.vision), по убыванию оборота, добавленные к PAIRS0 (они остаются всегда) до размера n. Файл POS_DIR/pairs.json {pairs, t, n, minvol} создаётся вручную; где его нет (другие счета), список прежний."""
+    import urllib.request
+    n = int((cur or {}).get("n", 45)); minvol = float((cur or {}).get("minvol", 20e6))
+    r = json.load(urllib.request.urlopen("https://data-api.binance.vision/api/v3/ticker/24hr", timeout=30))
+    cand = []
+    for x in r:
+        sy = x.get("symbol", "")
+        if not sy.endswith("USDT"): continue
+        b = sy[:-4]
+        if b in BAD_BASE or not b.isascii() or not b.isalnum(): continue
+        qv = float(x.get("quoteVolume") or 0)
+        if qv >= minvol: cand.append((qv, b))
+    cand.sort(reverse=True); out = list(PAIRS0)
+    for qv, b in cand:
+        if len(out) >= max(n, len(PAIRS0)): break
+        if b not in out: out.append(b)
+    d = {"pairs": out, "t": time.time(), "n": n, "minvol": minvol}
+    tmp = f + ".tmp"; json.dump(d, open(tmp, "w")); os.replace(tmp, f); log("pairs refreshed: %d" % len(out)); return d
+
+
+def pairs_now():
+    """Пары счёта: POS_DIR/pairs.json (если создан), иначе PAIRS0."""
+    f = os.path.join(D, "pairs.json")
+    try: d = json.load(open(f))
+    except Exception: return PAIRS0
+    now = time.time()
+    if now - float(d.get("t", 0)) > 86400 and now - _pairs_try[0] > 3600:
+        _pairs_try[0] = now
+        try: d = refresh_pairs(f, d)
+        except Exception as e: log("pairs refresh error: %s" % e)
+    return [str(x) for x in (d.get("pairs") or [])] or PAIRS0
+
+
+def _radar_save(new, now):
+    """Строки для карточки «Радар» (tg_bot): канал, ATR и линии по парам; пишется раз на новую свечу пары."""
+    f = os.path.join(D, "radar_state.json")
+    try: old = json.load(open(f)).get("rows") or {}
+    except Exception: old = {}
+    keep = set(pairs_now()); rows = {k: v for k, v in old.items() if k in keep}; rows.update(new)
+    tmp = f + ".tmp"; json.dump({"t": now, "rows": rows}, open(tmp, "w")); os.replace(tmp, f)
 TFM = 300000; MAK = 0.02
 STOP_ATR = 1.2; MIN_RISK = 0.5; TPBUF = 0.1
 # Источник каналов счёта: classic (наш автоканал, по умолчанию) | afd | regr | combo (chan_src.py). Счёт определяется POS_DIR + CHAN_SRC (+ CHAN_EDGE).
@@ -490,8 +536,8 @@ def _tg_journal(o, action, extra):
 
 
 def cycle(dry=False):
-    now = int(time.time() * 1000); stt = load_state(); props = {}; closes = {}; evs = load_events()
-    for sym in PAIRS:
+    now = int(time.time() * 1000); stt = load_state(); props = {}; closes = {}; evs = load_events(); radar_ = {}
+    for sym in pairs_now():
         try:
             A = analyze(sym, now)
             if not A: continue
@@ -502,11 +548,19 @@ def cycle(dry=False):
                 try: p["shadow"] = trend_shadow.shadow(sym, p["side"]); p["why"].append(shadow_text(p["shadow"]))
                 except Exception as e: log("shadow %s error: %s" % (sym, e))
             props[sym] = (ti, ps)
-            if tg_gate.ENABLED and tg_gate.watch_needed(sym):
-                try: tg_gate.watch_scan(_tg_info(sym, A), now)
+            if tg_gate.ENABLED:
+                try:
+                    need = tg_gate.watch_needed(sym)
+                    if need or tg_gate.load_mode().get("mode") == "monitor":
+                        info_ = _tg_info(sym, A)
+                        if need: tg_gate.watch_scan(info_, now)
+                        radar_[sym] = {k: info_.get(k) for k in ("t", "c", "atr", "ctype", "R", "S", "Rn", "Sn")}
                 except Exception as e_: log("watch %s error: %s" % (sym, e_))
         except Exception as e:
             log("scan %s error: %s" % (sym, e))
+    if radar_:
+        try: _radar_save(radar_, now)
+        except Exception as e_: log("radar save error: %s" % e_)
     # fills for pending orders (no lock while fetching)
     pend = [o for o in load_orders() if o["status"] == "pending"]; fills = {}; expired = []
     for o in pend:
@@ -621,7 +675,7 @@ def cycle(dry=False):
 def pair_view(sym):
     """Разметка сканера по паре (без заявки): что бот видит на 5m - канал, опорные точки, линии."""
     sym = (sym or "").upper().replace("USDT", "")
-    if sym not in PAIRS: return {"error": "пара не из списка сканера"}
+    if sym not in pairs_now(): return {"error": "пара не из списка сканера"}
     now = int(time.time() * 1000); A = analyze(sym, now)
     if not A: return {"error": "мало данных по паре"}
     i = A["M"] - 1; t = A["t"]; st = A["st_at"](i); lo = max(0, A["M"] - 300)
@@ -663,7 +717,7 @@ def orders_view():
         else:
             q = {k: o.get(k) for k in ("id", "sym", "side", "rule", "price", "placed_t", "t_end", "status", "reason", "pos_id")}; q["status_ru"] = STATUS_RU.get(o["status"], o["status"]); rec.append(q)
     rec.sort(key=lambda x: -(x.get("t_end") or 0)); pend.sort(key=lambda x: x["dist_pct"])
-    return {"pending": pend, "recent": rec[:12], "pairs": PAIRS, "ts": now}
+    return {"pending": pend, "recent": rec[:12], "pairs": pairs_now(), "ts": now}
 
 
 SH_LAB = {"btc_5m": "BTC 5m", "btc_15m": "BTC 15m", "eth_5m": "ETH 5m", "eth_15m": "ETH 15m", "own_15m": "сама пара 15m", "own_1h": "сама пара 1h"}
