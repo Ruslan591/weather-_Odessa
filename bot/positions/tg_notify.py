@@ -326,11 +326,22 @@ def render_position(p, kl, chan=None, now_ms=None):
     lvl(en, "#e6edf3", "вход", "-"); lvl(st, "#ef5350", "стоп")
     if abs(st - st0) > 1e-12: ax.plot([xin, xend], [st0, st0], color="#ef5350", lw=0.8, ls=":", zorder=4); lows.append(st0); highs.append(st0)
     if tp is not None: lvl(tp, "#26a69a", "цель")
-    ax.plot([xin], [en], marker="^" if side > 0 else "v", color="#e6edf3", mec=BG, mew=0.8, ms=9, zorder=7)
+    def _cand(t):
+        for k_ in ks:
+            if k_[0] <= t < k_[0] + BAR_MS: return k_
+        return None
+    off = ((max(highs) - min(lows)) or en * 0.002) * 0.04          # отступ маркеров от свечи (4% диапазона графика)
+    kin = _cand(t_in); my = en
+    if kin is not None: my = (float(kin[3]) - off) if side > 0 else (float(kin[2]) + off)      # long: треугольник под минимумом свечи входа, short: над максимумом
+    ax.plot([xin], [my], marker="^" if side > 0 else "v", color="#e6edf3", mec=BG, mew=0.8, ms=9, zorder=7); lows.append(my); highs.append(my)
     ax.axvline(xin, color="#8b949e", lw=0.8, ls=":", zorder=2); axv.axvline(xin, color="#8b949e", lw=0.8, ls=":", zorder=2)
     pnl = float(p.get("pnl_usd", 0) or 0); rcol = "#26a69a" if pnl > 0 else ("#ef5350" if pnl < 0 else "#8b949e")
     if closed:
-        ex = float(p["exit"]); ax.plot([X(t_last)], [ex], marker="X", color=rcol, mec=BG, mew=0.8, ms=10, zorder=8); labs.append([ex, ex, rcol, "выход"]); lows.append(ex); highs.append(ex)
+        ex = float(p["exit"]); kout = _cand(t_last); my2 = ex; xo = X(t_last)
+        if kout is not None:      # крестик выхода над свечой (если выход в верхней половине свечи или выше) или под ней; метка «выход» остаётся на точной цене
+            kh, kl_ = float(kout[2]), float(kout[3]); xo = X(kout[0])
+            my2 = (max(kh, ex) + off) if ex >= (kh + kl_) / 2 else (min(kl_, ex) - off)
+        ax.plot([xo], [my2], marker="X", color=rcol, mec=BG, mew=0.8, ms=10, zorder=8); labs.append([ex, ex, rcol, "выход"]); lows.extend([ex, my2]); highs.extend([ex, my2])
         ax.axvline(X(t_last), color="#8b949e", lw=0.8, ls=":", zorder=2); axv.axvline(X(t_last), color="#8b949e", lw=0.8, ls=":", zorder=2)
         ax.text(0.01, 0.97, "%s · net %+.2f%% · %+.3f $ · %+.2fR" % (POS_REASON_RU.get(p.get("reason"), p.get("reason", "")), p.get("net_pct", 0), pnl, p.get("r_mult", 0)), transform=ax.transAxes, color=rcol, fontsize=8.5, fontweight="bold", va="top", ha="left", zorder=9)
     else:
