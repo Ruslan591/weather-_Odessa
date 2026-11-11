@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-11T19:38:02Z",
+  "timestamp": "2026-11-11T19:44:54Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-11-11T19:15:00.000Z",
   "target_id": 0,
@@ -21,23 +21,6 @@
     "has_lightning": false
   },
   "local_candidates": [
-    {
-      "target_id": 1,
-      "area_km2": 138.8,
-      "distance_km": 101.7,
-      "bearing_deg": 84.0,
-      "compass": "В",
-      "elongation_aspect_ratio": 1.14,
-      "elongation_axis_deg": 19.0,
-      "elongation_axis_compass": "С-Ю",
-      "frontlike": false,
-      "phase_label": "безоблачно",
-      "type_label": "безоблачно",
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": false,
-      "geocolour_confirmed": true
-    },
     {
       "target_id": 6,
       "area_km2": 201.5,
@@ -90,7 +73,7 @@
       "geocolour_confirmed": true
     }
   ],
-  "local_suppressed_count": 8,
+  "local_suppressed_count": 9,
   "system_candidates": [
     {
       "target_id": 2,
@@ -167,17 +150,17 @@
         "timestamp": "2026-11-11T19:10:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-11-11T19:10:00.000Z"
+        "confirmed": true,
+        "timestamp": "2026-11-11T19:00:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": false,
         "timestamp": "2026-11-11T16:57:08Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -189,5 +172,5 @@
       "timestamp": "2026-11-11T19:37:39Z"
     }
   },
-  "verdict": "CLM отметил цель в 86км В, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (539км²) в 132км СЗ."
+  "verdict": "Цель в 86км В, безоблачно — каналы расходятся: geocolour_motion подтверждают, ir_motion/cloud_phase_type нет. Почти не движется. Отдельно: система синоптического масштаба (539км²) в 132км СЗ."
 }
