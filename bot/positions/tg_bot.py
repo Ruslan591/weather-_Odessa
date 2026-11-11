@@ -740,6 +740,16 @@ def on_message(m):
     else: api("sendMessage", chat_id=CHAT, text="Команды: /mode (режим), /alerts (алерты вкл/выкл), /status (состояние), /orders (ордера и отмена).")
 
 
+def seen_chat(c):
+    """Запоминает чаты/каналы, откуда пришли события (для настройки маршрутизации по чатам). Секретов не содержит."""
+    if not c or "id" not in c: return
+    f = os.path.join(D, "tg_chats_seen.json")
+    try: d = json.load(open(f))
+    except Exception: d = {}
+    d[str(c["id"])] = {"title": c.get("title") or c.get("username") or "", "type": c.get("type"), "t": int(time.time())}
+    json.dump(d, open(f, "w"), ensure_ascii=False)
+
+
 def main():
     log("tg_bot start, POS_DIR=%s" % D)
     try: api("setMyCommands", commands=[{"command": "mode", "description": "Режим: сон / монитор / авто"}, {"command": "status", "description": "Счёт, баланс, позиции"}, {"command": "orders", "description": "Выставленные ордера и отмена"}, {"command": "alerts", "description": "Алерты: отключить / включить"}])
@@ -748,13 +758,15 @@ def main():
     offset = None
     while True:
         try:
-            kw = {"timeout": 25, "allowed_updates": ["message", "callback_query"]}
+            kw = {"timeout": 25, "allowed_updates": ["message", "callback_query", "channel_post", "my_chat_member"]}
             if offset is not None: kw["offset"] = offset
             for u in api("getUpdates", **kw).get("result", []):
                 offset = u["update_id"] + 1
                 try:
                     if "callback_query" in u: on_callback(u["callback_query"])
                     elif "message" in u: on_message(u["message"])
+                    elif "channel_post" in u: seen_chat(u["channel_post"].get("chat"))
+                    elif "my_chat_member" in u: seen_chat(u["my_chat_member"].get("chat"))
                 except Exception: log("update error: " + traceback.format_exc()[-500:])
         except Exception as e:
             log("poll error: %s" % e); time.sleep(5)
