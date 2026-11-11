@@ -56,8 +56,27 @@ def rsi(xs, n):
     return out
 
 
-def evaluate(ks, side):
-    """Чистая функция (используется и в бэктесте): ks = закрытые свечи (o,h,l,c), side long|short. None, если свечей мало."""
+def _mode():
+    """rsi (по умолчанию, спецификация 2026-11-11) или legacy (старые 3 условия + блокировки). tg_btc1m.json {"mode": "legacy"}."""
+    try: return str(json.load(open(CFG, encoding="utf-8")).get("mode", "rsi"))
+    except Exception: return "rsi"
+
+
+ACT_BRK = 1.0     # «активно падает/растёт» на пробое: RSI14 BTC 1m изменился минимум на столько пунктов за 2 свечи (допущение Claude)
+
+
+def _rsi_rule(rs, rsd, sg, setup):
+    """Правила RSI(14) BTC 1m по стороне сделки и стратегии. Возвращает (in_range, dir_ok, blocked, (lo, hi), block_txt)."""
+    if setup == "breakout":
+        lo, hi = (35.0, 50.0) if sg < 0 else (50.0, 65.0); act = ACT_BRK; lim = 30.0 if sg < 0 else 70.0
+    else:
+        lo, hi = (45.0, 65.0) if sg < 0 else (35.0, 55.0); act = 0.0; lim = 32.0 if sg < 0 else 68.0
+    blocked = rs < lim if sg < 0 else rs > lim
+    return lo <= rs <= hi, rsd * sg > act, blocked, (lo, hi), lim
+
+
+def evaluate(ks, side, setup="bounce"):
+    """Чистая функция (используется и в бэктесте): ks = закрытые свечи (o,h,l,c), side long|short, setup bounce|breakout. None, если свечей мало."""
     if not ks or len(ks) < 40: return None
     sg = 1 if side == "long" else -1; nm = "LONG" if sg > 0 else "SHORT"
     o = [k[0] for k in ks]; c = [k[3] for k in ks]
@@ -83,8 +102,15 @@ def evaluate(ks, side):
     if pos: goods.append("%s EMA%d и уходит %s" % ("ниже" if sg < 0 else "выше", EMA_N, "вниз" if sg < 0 else "вверх"))
     if rs_ok: goods.append("RSI %.0f %s" % (rs, "вниз" if sg < 0 else "вверх"))
     allowed = bool(goods); ok = allowed and not blocks
+    if _mode() != "legacy":      # спецификация 2026-11-11: только RSI14 BTC 1m (диапазон + направление + запретная зона), свечи/EMA в решении не участвуют
+        rsd_ = rs - r[-3]; inr, dok, blk, (lo, hi), lim = _rsi_rule(rs, rsd_, sg, setup)
+        allowed = inr and dok; ok = allowed and not blk; blocks = []
+        if blk: blocks.append("RSI BTC 1m %.0f %s %g: %s запрещён" % (rs, "<" if sg < 0 else ">", lim, "шорт" if sg < 0 else "лонг"))
+        if not inr: blocks.append("RSI BTC 1m %.0f вне диапазона %g-%g" % (rs, lo, hi))
+        if inr and not dok: blocks.append("RSI BTC 1m %.0f %s (%+.1f за 2 свечи)" % (rs, ("не падает активно" if sg < 0 else "не растёт активно") if setup == "breakout" else ("не направлен вниз" if sg < 0 else "не направлен вверх"), rsd_))
+        goods = ["RSI BTC 1m %.0f в зоне %g-%g и %s (%+.1f)" % (rs, lo, hi, "падает" if sg < 0 else "растёт", rsd_)] if ok else []
     cols = "".join("g" if c[i] > o[i] else ("r" if c[i] < o[i] else "d") for i in (-3, -2, -1))
-    snap = {"side": side, "ok": ok, "cols": cols, "emad": round((c[-1] / e[-1] - 1) * 100, 3), "rsd": round(rs - r[-3], 1), "imp": int(impulse), "pos": int(pos), "rsi": round(rs, 1), "rsi_ok": int(rs_ok), "big": int(bool(big)), "run3": int(run3), "exh": int(exh), "t": int(time.time())}
+    snap = {"side": side, "ok": ok, "cols": cols, "emad": round((c[-1] / e[-1] - 1) * 100, 3), "rsd": round(rs - r[-3], 1), "imp": int(impulse), "pos": int(pos), "rsi": round(rs, 1), "rsi_ok": int(rs_ok), "big": int(bool(big)), "run3": int(run3), "exh": int(exh), "setup": setup, "t": int(time.time())}
     if ok: good = "BTC 1m за %s: %s" % (nm, ", ".join(goods)); bad = ""
     else: good = ""; bad = "BTC 1m против %s: %s" % (nm, "; ".join(blocks) if blocks else "нет подтверждения (RSI %.0f, свечи/EMA не в сторону сделки)" % rs)
     return {"ok": ok, "allowed": allowed, "blocked": bool(blocks), "good": good, "bad": bad, "snap": snap}
@@ -104,19 +130,18 @@ def _save_last(side, snap):
     except Exception: pass
 
 
-def gate(side):
+def gate(side, setup="bounce", save=True):
     """Живой вызов: None, если выключено или нет данных (тогда фильтр не применяется). Снимок пишется в tg_btc1m_last.json."""
     if not enabled(): return None
-    try: g = evaluate(klines(), side)
+    try: g = evaluate(klines(), side, setup)
     except Exception: return None
-    if g: _save_last(side, g["snap"])
+    if g and save: _save_last(side, g["snap"])
     return g
 
 
 def line():
-    """Строка для постов слежения: значения BTC 1m и вердикт по обеим сторонам (отбой и пробой идут в разные стороны). "" если выключено или нет данных."""
-    gs, gl = gate("short"), gate("long")
-    if not gs or not gl: return ""
-    sn = gs["snap"]; ic = {"r": "🔴", "g": "🟢", "d": "⚪"}
-    def v(nm, g): return "%s %s" % (nm, "✅" if g["ok"] else "⛔ " + g["bad"].split(": ", 1)[-1])
-    return "₿ BTC 1m: %s, EMA%d %+.2f%%, RSI %.0f%s\n   %s | %s" % ("".join(ic[x] for x in sn["cols"]), EMA_N, sn["emad"], sn["rsi"], "↑" if sn["rsd"] > 0 else ("↓" if sn["rsd"] < 0 else "→"), v("SHORT", gs), v("LONG", gl))
+    """Строка для постов слежения: RSI BTC 1m и вердикт отбой/пробой по обеим сторонам. "" если выключено или нет данных."""
+    g = {(sd, st): gate(sd, st, save=False) for sd in ("short", "long") for st in ("bounce", "breakout")}
+    if not all(g.values()): return ""
+    sn = g[("short", "bounce")]["snap"]; ic = {"r": "🔴", "g": "🟢", "d": "⚪"}; mk = lambda x: "✅" if x["ok"] else "⛔"
+    return "₿ BTC 1m: %s, RSI %.0f%s\n   отбой: SHORT %s LONG %s | пробой: SHORT %s LONG %s" % ("".join(ic[x] for x in sn["cols"]), sn["rsi"], "↑" if sn["rsd"] > 0 else ("↓" if sn["rsd"] < 0 else "→"), mk(g[("short", "bounce")]), mk(g[("long", "bounce")]), mk(g[("short", "breakout")]), mk(g[("long", "breakout")]))
