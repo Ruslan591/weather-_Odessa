@@ -180,7 +180,7 @@ def watch_scan(info, now):
             elif exp and now - x["t_follow"] > float(m.get("express_hours", 2)) * 3600000: x.update(status="done", reason="предел времени экспресса", t_end=now); emit({"type": "watch_end", "wid": x["id"], "why": "слежение длится дольше %s ч: закончено (новое касание даст новый алерт)" % m.get("express_hours", 2)})
             else: emit({"type": "watch_update", "wid": x["id"]})
     active = [x for x in items if x["status"] in ("alert", "watching")]
-    if not m.get("alerts_off") and info.get("ctype") and info.get("R") is not None and len(active) < maxw(m) and not any(x["sym"] == sym for x in active) and info["R"] - info["S"] >= 1.5 * info["atr"]:
+    if not m.get("alerts_off") and info.get("ctype") and info.get("R") is not None and not any(x["sym"] == sym for x in active) and info["R"] - info["S"] >= 1.5 * info["atr"]:
         down = info["ctype"] == "channel_down"; a = info["atr"]; main_line = "upper" if down else "lower"
         lines = [main_line] + ([("lower" if down else "upper")] if m.get("watch_counter", True) else [])   # линия по тренду, затем противоположная (коррекция / разворот)
         for line in lines:
@@ -188,6 +188,11 @@ def watch_scan(info, now):
             ep = _episode(info, line)
             cool = any(x["sym"] == sym and x["side"] == side and x["status"] == "done" and now - x.get("t_end", 0) < 1800000 for x in items)
             if not ep or cool: continue
+            if len(active) >= maxw(m):     # мест нет: освобождаем его у самого «залежавшегося» слежения, где цена уже ушла от линии (не меньше 2 свечей подряд); иначе новое касание пропускаем
+                gone = [y for y in active if y["status"] == "watching" and int(y.get("away_n") or 0) >= 2]
+                if not gone: break
+                y = max(gone, key=lambda z: int(z.get("away_n") or 0)); y.update(status="done", reason="место отдано новому касанию", t_end=now)
+                emit({"type": "watch_end", "wid": y["id"], "why": "цена ушла от линии: место отдано новому касанию (%s)" % sym}); active.remove(y); ch = True
             W["seq"] += 1; line_px = info["R"] if line == "upper" else info["S"]
             x = {"id": W["seq"], "sym": sym, "side": side, "line": line, "counter": line != main_line, "status": "alert", "ctype": info["ctype"], "chan": info.get("chan"), "chan0": info.get("chan"), "t_alert": info["t"], "created": now,
                  "deadline": now + int(m.get("answer_win", 3)) * TFM, "line_px": line_px, "touch_px": ep["start_px"], "atr": a, "last": _last(info), "updates": 0, "unanswered": 0,
