@@ -1,1 +1,1 @@
-{"task_id": "chatseen-titles-1", "cmd": "python3 -c \"import json;d=json.load(open('/opt/trading-bot/positions_regr/tg_chats_seen.json'));print(json.dumps(d))\"", "timeout": 60}
+{"task_id": "env-chats-1", "cmd": "F=/opt/trading-bot/tg.env; cp -p $F $F.bak_chats; grep -q '^TG_CHAT_LIVE=' $F || { [ -n \"$(tail -c1 $F)\" ] && echo >> $F; printf 'TG_CHAT_LIVE=-1004308619338\\nTG_CHAT_REVIEWS=-1004486967571\\n' >> $F; }; ls -l $F | LC_ALL=C tr -cd '\\11\\12\\40-\\176'; grep -c '^TG_CHAT' $F; cut -d= -f1 $F | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 60}
