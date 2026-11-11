@@ -1,1 +1,1 @@
-{"task_id": "deploy-chatseen-1", "cmd": "cd /opt/weather-pipeline/repo && git fetch -q origin; git show origin/main:scripts/deploy_tg_chatseen.sh | bash -s 2037535799bf94556c5ce594d1a19183 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 200}
+{"task_id": "chatseen-read-1", "cmd": "cat /opt/trading-bot/positions_regr/tg_chats_seen.json 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'; echo; grep '^TG_CHAT_ID=' /opt/trading-bot/tg.env | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 60}
