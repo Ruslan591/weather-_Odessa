@@ -130,6 +130,17 @@ def watch_get(wid):
     return None
 
 
+MONCHAT = str(ENV.get("TG_CHAT_MONITOR") or "")      # канал «Монитор»: посты «ждём» (без звука, только отметка «здесь надо было заходить») и карточка «Радар»
+MON_OFF = 10 ** 7        # ключ сообщения канала «Монитор» в журналах (tg_posts, tg_msgs, база обучения) = настоящий message_id + MON_OFF: ключи двух чатов не пересекаются
+
+
+def kmid(chat, mid): return int(mid) + MON_OFF if (MONCHAT and str(chat) == MONCHAT) else int(mid)
+def rmid(k): return int(k) - MON_OFF if int(k) >= MON_OFF else int(k)          # ключ -> настоящий message_id
+def kchat(k): return MONCHAT if int(k) >= MON_OFF else CHAT                    # ключ -> чат сообщения
+def route_cfg(): return jload(os.path.join(D, "tg_route_cfg.json"), {})       # {"enabled": true, "radar_tick": 45}; {"enabled": false} вернёт все посты в основной чат
+def mon_on(): return bool(MONCHAT) and bool(route_cfg().get("enabled", True))
+
+
 POSTSF = os.path.join(os.path.dirname(MSGF), "tg_posts.jsonl")      # журнал постов слежения: чтобы связывать посты пары в цепочку и отмечать моменты задним числом
 
 
@@ -150,7 +161,11 @@ def posts_tail(n=3000):
 
 
 def post_get(mid): return next((p for p in reversed(posts_tail()) if p.get("mid") == mid), None)
-def post_last_mid(sym): return next((p["mid"] for p in reversed(posts_tail()) if p.get("sym") == sym), None)
+def post_last_mid(sym, chat=None):
+    """Ключ последнего поста пары (в заданном чате, если указан: ответить можно только в том же чате)."""
+    for p in reversed(posts_tail()):
+        if p.get("sym") == sym and p.get("mid") and (chat is None or str(kchat(p["mid"])) == str(chat)): return p["mid"]
+    return None
 
 
 def retro_row(done=False):
@@ -213,7 +228,7 @@ def send_watch(wid, kind):
     if old and kind == "update":     # у предыдущего графика этой пары снимаем кнопки (в экспрессе остаётся только отметка «здесь надо было заходить»)
         try:
             keep = [retro_row(bool(LRN and LRN.has_mark(old["mid"], 2)))] if (old.get("v") and LRN and LRN.enabled()) else []
-            api("editMessageReplyMarkup", chat_id=CHAT, message_id=old["mid"], reply_markup={"inline_keyboard": keep})
+            api("editMessageReplyMarkup", chat_id=kchat(old["mid"]), message_id=rmid(old["mid"]), reply_markup={"inline_keyboard": keep})
         except Exception as e: log("strip old buttons: %s" % e)
     kl = jload("/tmp/klcache/%s_5m_1000.json" % w["sym"], [])
     cap = T.caption_watch(w, kind); V = None; Bk = None; auto = None
@@ -247,16 +262,19 @@ def send_watch(wid, kind):
                     elif auto: cap += "\n\n🤖 Автоордер: ставлю %s по рынку (цель: %s)." % ("пробой" if auto[0] == "breakout" else "отбой", auto[1])
                 if len(cap) > 1020: cap = cap[:1017] + "..."
         except Exception as e: log("express verdict: %s" % e); V = None; auto = None
-    btn = watch_buttons(wid, kind, V)
-    prev = post_last_mid(w["sym"]); photo = True       # ответ на предыдущий пост этой пары: в Telegram виден как цитата, нажатие переносит к нему
-    try: r = T.send_photo(T.render_watch(w, kl), cap, btn, reply_to=prev)
+    prop = bool(V and V.get("call") == "enter") or bool(Bk and Bk.get("call") == "enter")     # предложение «заходить» остаётся в основном чате; «ждём» уходит в канал «Монитор»
+    dest = MONCHAT if (mon_on() and X and express_on() and V is not None and not prop) else CHAT
+    btn = [retro_row(False)] if (dest == MONCHAT and V and LRN and LRN.enabled()) else ([] if dest == MONCHAT else watch_buttons(wid, kind, V))
+    prev = post_last_mid(w["sym"], dest); photo = True       # ответ на предыдущий пост этой пары в том же чате: в Telegram виден как цитата, нажатие переносит к нему
+    rto = rmid(prev) if prev else None; silent = dest == MONCHAT
+    try: r = T.send_photo(T.render_watch(w, kl), cap, btn, reply_to=rto, chat=dest, silent=silent)
     except Exception as e:
-        log("render watch fail %s: %s" % (wid, e)); r = T.send_text(cap, btn, reply_to=prev); photo = False
-    mid_new = r["result"]["message_id"]
-    m = msgs_load(); m[key] = {"mid": mid_new, "cap": cap, "kind": kind, "photo": photo}
+        log("render watch fail %s: %s" % (wid, e)); r = T.send_text(cap, btn, reply_to=rto, chat=dest, silent=silent); photo = False
+    mid_new = kmid(dest, r["result"]["message_id"])
+    m = msgs_load(); m[key] = {"mid": mid_new, "cap": cap, "kind": kind, "photo": photo, "chat": "mon" if dest == MONCHAT else "main"}
     if V: m[key]["v"] = {k: V.get(k) for k in ("call", "feat", "plan", "geo", "t", "sym", "side", "b1", "rg")}; m[key]["v"]["ans"] = None
     msgs_save(m)
-    post_add({"mid": mid_new, "wid": wid, "sym": w["sym"], "kind": kind, "ts": int(time.time() * 1000), "prev": prev, "v": m[key].get("v")})
+    post_add({"mid": mid_new, "wid": wid, "sym": w["sym"], "kind": kind, "ts": int(time.time() * 1000), "prev": prev, "v": m[key].get("v"), "chat": "mon" if dest == MONCHAT else "main"})
     if auto and ao_on():     # Автоордер: ставим через тот же путь, что кнопка «Выставить ордер» (w_place), отметка auto
         inbox({"type": "w_place", "wid": wid, "entry": "market", "target": auto[1], "setup": auto[0], "auto": 1}); log("autoorder %s %s %s" % (wid, auto[0], auto[1]))
         if auto[0] == "bounce" and V and LRN and LRN.enabled():     # Автоордер = автоматическое «Согласен открыть сейчас»: запись в базу обучения как при нажатии кнопки (пробой в базу отбоя не пишем: другое направление плана)
@@ -272,10 +290,12 @@ def send_watch(wid, kind):
 def edit_watch(wid, status, buttons=None):
     m = msgs_load(); rec = m.get("w%d" % wid)
     if not rec: api("sendMessage", chat_id=CHAT, text="Слежение %d: %s" % (wid, status)); return
+    ch = kchat(rec["mid"]); rm = rmid(rec["mid"])
+    if buttons is None and ch == MONCHAT and rec.get("v") and LRN and LRN.enabled(): buttons = [retro_row(bool(LRN.has_mark(rec["mid"], 2)))]     # у последнего поста «Монитора» отметка остаётся и после конца слежения
     cap = rec["cap"] + "\n\n" + status; kb = {"inline_keyboard": buttons or []}
     try:
-        if rec.get("photo"): api("editMessageCaption", chat_id=CHAT, message_id=rec["mid"], caption=cap, reply_markup=kb)
-        else: api("editMessageText", chat_id=CHAT, message_id=rec["mid"], text=cap, reply_markup=kb)
+        if rec.get("photo"): api("editMessageCaption", chat_id=ch, message_id=rm, caption=cap, reply_markup=kb)
+        else: api("editMessageText", chat_id=ch, message_id=rm, text=cap, reply_markup=kb)
     except Exception as e: log("edit watch fail %s: %s" % (wid, e))
 
 
@@ -593,15 +613,16 @@ def on_callback(cq):
         api("sendMessage", chat_id=CHAT, text=mode_text(), reply_markup={"inline_keyboard": menu()})
     elif p[0] == "xn": api("answerCallbackQuery", callback_query_id=cid, text="Ответ уже записан")
     elif p[0] == "xr":      # отметка задним числом: «здесь надо было заходить»
-        pr = post_get(mid); V = (pr or {}).get("v")
+        chn = str((msg.get("chat") or {}).get("id", CHAT)); km = kmid(chn, mid)      # ключ поста: у канала «Монитор» со смещением
+        pr = post_get(km); V = (pr or {}).get("v")
         if not V or not LRN or not LRN.enabled(): api("answerCallbackQuery", callback_query_id=cid, text="Обучение выключено или нет данных по этому посту"); return
-        if LRN.has_mark(mid, 2): api("answerCallbackQuery", callback_query_id=cid, text="Уже отмечено"); return
-        try: LRN.record(V, 2, pr.get("wid"), mid)
+        if LRN.has_mark(km, 2): api("answerCallbackQuery", callback_query_id=cid, text="Уже отмечено"); return
+        try: LRN.record(V, 2, pr.get("wid"), km)
         except Exception as e: log("learn retro: %s" % e); api("answerCallbackQuery", callback_query_id=cid, text="Не удалось записать"); return
         api("answerCallbackQuery", callback_query_id=cid, text="Записал: здесь надо было заходить")
         rec = msgs_load().get("w%d" % (pr.get("wid") or -1)) or {}
-        kb = watch_buttons(pr["wid"], rec.get("kind", "update"), rec.get("v"), retro_done=True) if rec.get("mid") == mid else [retro_row(True)]
-        api("editMessageReplyMarkup", chat_id=CHAT, message_id=mid, reply_markup={"inline_keyboard": kb})
+        kb = watch_buttons(pr["wid"], rec.get("kind", "update"), rec.get("v"), retro_done=True) if (rec.get("mid") == km and chn != MONCHAT) else [retro_row(True)]
+        api("editMessageReplyMarkup", chat_id=chn, message_id=mid, reply_markup={"inline_keyboard": kb})
     elif p[0] == "xa":
         wid = int(p[1]); ok = p[2] == "1"; mm = msgs_load(); rec = mm.get("w%d" % wid) or {}; V = rec.get("v")
         if not V or not LRN or not LRN.enabled(): api("answerCallbackQuery", callback_query_id=cid, text="Обучение выключено или пост устарел"); return
@@ -838,6 +859,91 @@ def live_loop():
         except Exception: log("live error: " + traceback.format_exc()[-500:]); time.sleep(10)
 
 
+# ---------- Карточка «Радар» в канале «Монитор»: все пары сканера по близости к сигналу (одно сообщение, правится, закреплено) ----------
+RADARF = os.path.join(D, "radar_state.json"); RADARM = os.path.join(D, "tg_radar.json")
+
+
+def radar_text():
+    """Данные по каналам пар пишет chan_orders (radar_state.json: ATR, линии на последней закрытой свече). Цена живая (один запрос к Binance), RSI 5m альта и BTC 1m считаются теми же функциями, что и в мнении бота (tg_express._rsi5_cond / _rsi5_brk, tg_btc1m.gate)."""
+    st = jload(RADARF, {}); rows = st.get("rows") or {}
+    if not rows or not X: return None
+    px = {}
+    try: px = live_prices([k + "USDT" for k in rows])
+    except Exception as e: log("radar: цены не получены: %s" % e)
+    bg = {}
+    if B1:
+        for sd in ("short", "long"):
+            for sp in ("bounce", "breakout"):
+                try: bg[(sd, sp)] = B1.gate(sd, sp, save=False)
+                except Exception: bg[(sd, sp)] = None
+    cand = []; n_no = 0; n_narrow = 0
+    for sym, r in rows.items():
+        try:
+            a = float(r.get("atr") or 0); R = r.get("Rn") or r.get("R"); S = r.get("Sn") or r.get("S")
+            if not r.get("ctype") or R is None or S is None or a <= 0: n_no += 1; continue
+            if R - S < 1.5 * a: n_narrow += 1; continue
+            p = px.get(sym + "USDT") or float(r["c"]); du = (R - p) / a; dd = (p - S) / a; up = du <= dd; d = du if up else dd
+            sb = "short" if up else "long"; sk = "long" if up else "short"
+            r5 = X._rsi5({"last": {"t": r["t"], "c": r["c"]}}, jload("/tmp/klcache/%s_5m_1000.json" % sym, []))
+            cb = X._rsi5_cond(sb, r5) if r5 is not None else None; ck = X._rsi5_brk(sk, r5) if r5 is not None else None
+            gb = bg.get((sb, "bounce")); gk = bg.get((sk, "breakout"))
+            okb = bool(cb and cb[0]) and (gb is None or bool(gb["ok"])); okk = bool(ck and ck[0]) and (gk is None or bool(gk["ok"]))
+            cand.append(dict(sym=sym, up=up, d=d, r5=r5, sb=sb, sk=sk, okb=okb, okk=okk, cb=cb, ck=ck, gb=gb, gk=gk))
+        except Exception as e: log("radar %s: %s" % (sym, e))
+
+    def fmt(c, ok):
+        ln = "верх." if c["up"] else "ниж."; rs = ("%.0f" % c["r5"]) if c["r5"] is not None else "-"
+        pos_ = ("%.1f ATR до %s линии" % (c["d"], ln)) if c["d"] >= 0 else ("за %s линией на %.1f ATR" % (ln, -c["d"]))
+        s_ = "%s %s %s · RSI 5m %s" % (c["sym"], "↑" if c["up"] else "↓", pos_, rs)
+        if ok:
+            o = (["%s отбой" % c["sb"].upper()] if c["okb"] else []) + (["%s пробой" % c["sk"].upper()] if c["okk"] else [])
+            return s_ + " → " + ", ".join(o)
+        cond, g = (c["cb"], c["gb"]) if c["d"] >= 0 else (c["ck"], c["gk"])
+        if cond is None: why = "нет данных RSI"
+        elif not cond[0]: why = cond[2].split(": ", 1)[-1][:60]
+        elif g is not None and not g["ok"]: why = "BTC 1m: " + g["bad"].split(": ", 1)[-1][:45]
+        else: why = "условия не сошлись"
+        return s_ + " ✗ " + why
+    NEAR = 1.0
+    ready = sorted([c for c in cand if -NEAR <= c["d"] <= NEAR and (c["okb"] or c["okk"])], key=lambda c: abs(c["d"]))
+    coming = sorted([c for c in cand if NEAR < c["d"] <= 3.0 and c["okb"]], key=lambda c: c["d"])
+    stuck = sorted([c for c in cand if -NEAR <= c["d"] <= NEAR and not (c["okb"] or c["okk"])], key=lambda c: abs(c["d"]))
+    mk = lambda g: "-" if g is None else ("✅" if g["ok"] else "⛔")
+    sn = (bg.get(("short", "bounce")) or {}).get("snap") or {}
+    L = ["📡 Радар · %s · пар %d, с каналом %d" % (datetime.now(T._tz()).strftime("%H:%M"), len(rows), len(cand) + n_narrow)]
+    if sn: L.append("₿ BTC 1m RSI %.0f · отбой: SHORT %s LONG %s · пробой: SHORT %s LONG %s" % (sn["rsi"], mk(bg.get(("short", "bounce"))), mk(bg.get(("long", "bounce"))), mk(bg.get(("short", "breakout"))), mk(bg.get(("long", "breakout")))))
+    if time.time() * 1000 - float(st.get("t") or 0) > 900000: L.append("⚠️ данные сканера старше 15 минут")
+    L.append("")
+    if ready: L.append("🟢 У линии, условия есть:"); L += [fmt(c, True) for c in ready[:10]]; L.append("")
+    if coming: L.append("🟡 Условия есть, цена идёт к линии:"); L += [fmt(c, True) for c in coming[:8]]; L.append("")
+    if stuck: L.append("👀 У линии, условия не выполнены:"); L += [fmt(c, False) for c in stuck[:10]]; L.append("")
+    if not (ready or coming or stuck): L.append("Сейчас нет пар ближе 1 ATR к линии.")
+    L.append("Остальных пар: %d (далеко от линий), без канала или узкий канал: %d. Посты «ждём» идут сюда без звука." % (len(cand) - len(ready) - len(coming) - len(stuck), n_no + n_narrow))
+    return "\n".join(L)[:4000]
+
+
+def radar_loop():
+    time.sleep(45); st = jload(RADARM, {}); last = None; wait_until = 0.0; fails = 0
+    while True:
+        try:
+            time.sleep(max(20, float(route_cfg().get("radar_tick", 45)))); now = time.time()
+            if not mon_on() or now < wait_until: continue
+            txt = radar_text()
+            if not txt or txt == last: continue
+            mid = st.get("mid")
+            if not mid: res = tg_try("sendMessage", {"chat_id": MONCHAT, "text": txt, "disable_notification": "true"})
+            else: res = tg_try("editMessageText", {"chat_id": MONCHAT, "message_id": mid, "text": txt})
+            if res[0] is True:
+                fails = 0; last = txt
+                if not mid:
+                    st["mid"] = res[1]["result"]["message_id"]; json.dump(st, open(RADARM, "w"))
+                    tg_try("pinChatMessage", {"chat_id": MONCHAT, "message_id": st["mid"], "disable_notification": "true"})
+            elif res[0] == "wait": wait_until = time.time() + res[1] + 1; log("radar: лимит Telegram, пауза %d с" % (res[1] + 1))
+            elif res[0] == "gone": log("radar: сообщение недоступно (%s), создам заново" % res[1]); st.pop("mid", None); json.dump(st, open(RADARM, "w"))
+            else: fails += 1; wait_until = time.time() + min(120, 10 * fails); log("radar: ошибка Telegram: %s" % str(res[1])[:200])
+        except Exception: log("radar error: " + traceback.format_exc()[-500:]); time.sleep(15)
+
+
 # ---------- Журнал позиций в канале TG_CHAT_LIVE: по сообщению с графиком на позицию (открыта -> правится при событиях и закрытии) ----------
 JRNF = os.path.join(D, "tg_journal.json")
 
@@ -861,7 +967,7 @@ def rec_post(p):
         for ln in open(POSTSF, encoding="utf-8"):
             try: r = json.loads(ln)
             except Exception: continue
-            if r.get("wid") == wid and r.get("mid"): ps.append(r)
+            if r.get("wid") == wid and r.get("mid") and int(r["mid"]) < MON_OFF: ps.append(r)
         if not ps: return None
         ent = [r for r in ps if (r.get("v") or {}).get("call") == "enter" and r.get("ts", 0) <= lim]
         bef = [r for r in ps if r.get("ts", 0) <= lim]
@@ -990,6 +1096,7 @@ def main():
     threading.Thread(target=live_loop, daemon=True).start()
     threading.Thread(target=journal_loop, daemon=True).start()
     threading.Thread(target=digest_loop, daemon=True).start()
+    threading.Thread(target=radar_loop, daemon=True).start()
     offset = None
     while True:
         try:
