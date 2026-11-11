@@ -1,1 +1,1 @@
-{"task_id": "c2ea0becb6d", "cmd": "( ls -la /opt/trading-bot/positions/ | head -30; systemctl list-units --type=service --no-pager | grep -i 'chan\\|tg-\\|pos' | cut -c1-120 ) 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 60}
+{"task_id": "c8629abdd61", "cmd": "( grep -n 'ExecStart\\|Environment\\|WorkingDirectory' /etc/systemd/system/chan-orders-regr.service; md5sum /opt/trading-bot/positions/chan_orders.py /opt/trading-bot/positions/tg_gate.py /opt/tg-notify/tg_gate.py 2>&1 | head ) 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 60}
