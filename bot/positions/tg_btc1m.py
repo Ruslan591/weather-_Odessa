@@ -57,9 +57,9 @@ def rsi(xs, n):
 
 
 def _mode():
-    """rsi (по умолчанию, спецификация 2026-11-11) или legacy (старые 3 условия + блокировки). tg_btc1m.json {"mode": "legacy"}."""
-    try: return str(json.load(open(CFG, encoding="utf-8")).get("mode", "rsi"))
-    except Exception: return "rsi"
+    """both (по умолчанию): старые условия (3 условия + блокировки) И правила RSI; legacy: только старые; rsi: только RSI. tg_btc1m.json {"mode": "legacy"|"rsi"}."""
+    try: return str(json.load(open(CFG, encoding="utf-8")).get("mode", "both"))
+    except Exception: return "both"
 
 
 ACT_BRK = 1.0     # «активно падает/растёт» на пробое: RSI14 BTC 1m изменился минимум на столько пунктов за 2 свечи (допущение Claude)
@@ -102,13 +102,17 @@ def evaluate(ks, side, setup="bounce"):
     if pos: goods.append("%s EMA%d и уходит %s" % ("ниже" if sg < 0 else "выше", EMA_N, "вниз" if sg < 0 else "вверх"))
     if rs_ok: goods.append("RSI %.0f %s" % (rs, "вниз" if sg < 0 else "вверх"))
     allowed = bool(goods); ok = allowed and not blocks
-    if _mode() != "legacy":      # спецификация 2026-11-11: только RSI14 BTC 1m (диапазон + направление + запретная зона), свечи/EMA в решении не участвуют
+    md = _mode()
+    if md != "legacy":      # правила RSI14 BTC 1m (диапазон + направление + запретная зона) по стратегии; в режиме both добавляются К старым условиям
         rsd_ = rs - r[-3]; inr, dok, blk, (lo, hi), lim = _rsi_rule(rs, rsd_, sg, setup)
-        allowed = inr and dok; ok = allowed and not blk; blocks = []
-        if blk: blocks.append("RSI BTC 1m %.0f %s %g: %s запрещён" % (rs, "<" if sg < 0 else ">", lim, "шорт" if sg < 0 else "лонг"))
-        if not inr: blocks.append("RSI BTC 1m %.0f вне диапазона %g-%g" % (rs, lo, hi))
-        if inr and not dok: blocks.append("RSI BTC 1m %.0f %s (%+.1f за 2 свечи)" % (rs, ("не падает активно" if sg < 0 else "не растёт активно") if setup == "breakout" else ("не направлен вниз" if sg < 0 else "не направлен вверх"), rsd_))
-        goods = ["RSI BTC 1m %.0f в зоне %g-%g и %s (%+.1f)" % (rs, lo, hi, "падает" if sg < 0 else "растёт", rsd_)] if ok else []
+        rallowed = inr and dok; rblocks = []
+        if blk: rblocks.append("RSI BTC 1m %.0f %s %g: %s запрещён" % (rs, "<" if sg < 0 else ">", lim, "шорт" if sg < 0 else "лонг"))
+        if not inr: rblocks.append("RSI BTC 1m %.0f вне диапазона %g-%g" % (rs, lo, hi))
+        if inr and not dok: rblocks.append("RSI BTC 1m %.0f %s (%+.1f за 2 свечи)" % (rs, ("не падает активно" if sg < 0 else "не растёт активно") if setup == "breakout" else ("не направлен вниз" if sg < 0 else "не направлен вверх"), rsd_))
+        rgood = "RSI BTC 1m %.0f в зоне %g-%g и %s (%+.1f)" % (rs, lo, hi, "падает" if sg < 0 else "растёт", rsd_)
+        if md == "rsi": allowed = rallowed; blocks = list(rblocks); goods = [rgood] if (rallowed and not blk) else []
+        else: allowed = allowed and rallowed; blocks = blocks + rblocks; goods = goods + ([rgood] if (rallowed and not blk) else [])
+        ok = allowed and not blocks
     cols = "".join("g" if c[i] > o[i] else ("r" if c[i] < o[i] else "d") for i in (-3, -2, -1))
     snap = {"side": side, "ok": ok, "cols": cols, "emad": round((c[-1] / e[-1] - 1) * 100, 3), "rsd": round(rs - r[-3], 1), "imp": int(impulse), "pos": int(pos), "rsi": round(rs, 1), "rsi_ok": int(rs_ok), "big": int(bool(big)), "run3": int(run3), "exh": int(exh), "setup": setup, "t": int(time.time())}
     if ok: good = "BTC 1m за %s: %s" % (nm, ", ".join(goods)); bad = ""
