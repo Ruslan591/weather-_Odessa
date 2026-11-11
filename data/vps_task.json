@@ -1,1 +1,1 @@
-{"task_id": "rsi5_deploy_20261110a", "cmd": "cd /opt/weather-pipeline/repo && git fetch -q origin; git show origin/main:scripts/deploy_tg_rsi5.sh | bash -s tg_express=2d21e99b1d69be0f777debc808210f8c tg_bot=44112e7354a2d1614466afbd13b063a9 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 200}
+{"task_id": "getme-1111", "cmd": "T=$(grep '^TG_TOKEN=' /opt/trading-bot/tg.env | cut -d= -f2- | tr -d '\"'); curl -s \"https://api.telegram.org/bot$T/getMe\" | grep -o '\"username\":\"[A-Za-z0-9_]*\"' | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 60}
