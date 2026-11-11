@@ -26,6 +26,7 @@ ACCT = os.environ.get("TG_ACCT_NAME", "Регрессия")
 OUTF = os.path.join(D, "tg_outbox.jsonl"); OUTOFF = os.path.join(D, "tg_out.off"); INF = os.path.join(D, "tg_inbox.jsonl")
 WATCHF = os.path.join(D, "tg_watch.json"); MODEF = os.path.join(D, "tg_mode.json"); MSGF = os.path.join(D, "tg_msgs.json"); ORDF = os.path.join(D, "orders.json"); POSF = os.path.join(D, "positions.json")
 ENV = T._env(); ADMIN = int(ENV["TG_USER_ID"]); CHAT = str(ENV["TG_CHAT_ID"])
+RVCHAT = str(ENV.get("TG_CHAT_REVIEWS") or CHAT)      # разборы сделок идут в канал «Разборы и обучение», если задан
 MODE_RU = {"sleep": "😴 Сон", "monitor": "👁 Монитор", "auto": "🤖 Авто"}
 REASONS = [("против импульса", "impulse"), ("пробой границы", "brk"), ("флет", "flat"), ("слабый объём", "vol"), ("уровень не тот", "level"), ("цена не дошла до уровня", "far"), ("поздно: точка пройдена", "passed"), ("не в ту сторону", "wrongdir"), ("другое (написать)", "other"), ("без причины", "none")]
 REASON_RU = {c: t for t, c in REASONS}; REASON_RU.update({"late": "далеко/поздно (старый код)", "other": "другое"})
@@ -449,7 +450,7 @@ def outbox_loop():
             try:
                 for rv in RV.run(limit=3):
                     kb = [[{"text": lab, "callback_data": "cr:%d" % hid}] for hid, lab in rv["buttons"]]
-                    api("sendMessage", chat_id=CHAT, text=rv["text"][:4000], **({"reply_markup": {"inline_keyboard": kb}} if kb else {}))
+                    api("sendMessage", chat_id=RVCHAT, text=rv["text"][:4000], **({"reply_markup": {"inline_keyboard": kb}} if kb else {}))
             except Exception: log("review: " + traceback.format_exc()[-400:])
         if LRN and time.time() - _rb_t[0] > 300 and hasattr(LRN, "resolve_brk"):
             _rb_t[0] = time.time()
@@ -579,7 +580,7 @@ def on_callback(cq):
         inbox({"type": "express", "on": p[1] == "1"}); api("answerCallbackQuery", callback_query_id=cid, text="Включаю экспресс…" if p[1] == "1" else "Выключаю экспресс…")
     elif p[0] == "cr":      # откат коррекции порога
         txt = RV.revert(int(p[1])) if RV else "Самообучение недоступно."
-        api("answerCallbackQuery", callback_query_id=cid, text=txt[:180], show_alert="true"); api("sendMessage", chat_id=CHAT, text="↩ " + txt)
+        api("answerCallbackQuery", callback_query_id=cid, text=txt[:180], show_alert="true"); api("sendMessage", chat_id=(msg.get("chat") or {}).get("id", CHAT), text="↩ " + txt)
     elif p[0] == "mw":      # изменить число слежений: запрос числа текстом
         cap = 15; pending_text["mw"] = cap; cur = int(mode_state().get("max_watch", 8))
         api("answerCallbackQuery", callback_query_id=cid)
@@ -908,6 +909,33 @@ def journal_loop():
         except Exception: log("journal error: " + traceback.format_exc()[-500:]); time.sleep(10)
 
 
+# ---------- Сводка обучения в канале TG_CHAT_REVIEWS (одно сообщение, правится; команда /learn в личном чате работает как раньше) ----------
+DGF = os.path.join(D, "tg_digest.json")
+
+
+def digest_loop():
+    chat = ENV.get("TG_CHAT_REVIEWS")
+    if not chat or not RV: return
+    log("digest: старт, канал %s" % chat)
+    st = jload(DGF, {}); last_body = None; last_t = 0.0; time.sleep(20); wait_until = 0.0
+    while True:
+        try:
+            now = time.time()
+            if live_cfg().get("digest", True) and now >= wait_until:
+                body = RV.summary(LRN)
+                if body != last_body or now - last_t >= 1800:
+                    txt = ("🧠 Обучение · обновлено %s\n\n" % datetime.now(T._tz()).strftime("%d.%m %H:%M") + body)[:4000]; mid = st.get("mid")
+                    res = tg_try("editMessageText", {"chat_id": chat, "message_id": mid, "text": txt}) if mid else tg_try("sendMessage", {"chat_id": chat, "text": txt, "disable_notification": "true"})
+                    if res[0] is True:
+                        if not mid: st["mid"] = res[1]["result"]["message_id"]; json.dump(st, open(DGF, "w"))
+                        last_body = body; last_t = now
+                    elif res[0] == "wait": wait_until = time.time() + res[1] + 1
+                    elif res[0] == "gone": st.pop("mid", None); json.dump(st, open(DGF, "w"))
+                    else: log("digest: ошибка Telegram: %s" % str(res[1])[:200]); wait_until = time.time() + 60
+        except Exception: log("digest error: " + traceback.format_exc()[-500:])
+        time.sleep(300)
+
+
 def seen_chat(c):
     """Запоминает чаты/каналы, откуда пришли события (для настройки маршрутизации по чатам). Секретов не содержит."""
     if not c or "id" not in c: return
@@ -925,6 +953,7 @@ def main():
     threading.Thread(target=outbox_loop, daemon=True).start()
     threading.Thread(target=live_loop, daemon=True).start()
     threading.Thread(target=journal_loop, daemon=True).start()
+    threading.Thread(target=digest_loop, daemon=True).start()
     offset = None
     while True:
         try:
