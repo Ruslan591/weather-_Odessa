@@ -837,6 +837,77 @@ def live_loop():
         except Exception: log("live error: " + traceback.format_exc()[-500:]); time.sleep(10)
 
 
+# ---------- Журнал позиций в канале TG_CHAT_LIVE: по сообщению с графиком на позицию (открыта -> правится при событиях и закрытии) ----------
+JRNF = os.path.join(D, "tg_journal.json")
+
+
+def journal_kl(sym, t_in):
+    import urllib.request
+    return json.load(urllib.request.urlopen("https://data-api.binance.vision/api/v3/klines?symbol=%s&interval=5m&startTime=%d&limit=500" % (sym, max(0, int(t_in) - 60 * T.BAR_MS)), timeout=15))
+
+
+def journal_caption(p, last_px=None):
+    side = 1 if p["side"] == "long" else -1; cl = p.get("status") == "closed" and p.get("t_out"); sym = str(p["sym"]).replace("USDT", "")
+    rule = T.RULE_RU.get(p.get("rule"), p.get("rule") or "")
+    if cl:
+        pnl = float(p.get("pnl_usd", 0) or 0); ic = "✅" if pnl > 0 else ("❌" if pnl < 0 else "⚪"); mins = int((p["t_out"] - p["t_in"]) / 60000)
+        L = ["%s #%s %s %s · закрыта %s · %s" % (ic, p["id"], sym, p["side"].upper(), hhmm(p["t_out"]), ("%d ч %d мин" % (mins // 60, mins % 60)) if mins >= 60 else ("%d мин" % mins)),
+             "вход %s → выход %s · %s" % (T.fmt_px(p["entry"]), T.fmt_px(p["exit"]), T.POS_REASON_RU.get(p.get("reason"), p.get("reason", ""))),
+             "net %s · %s $ · %s R" % (sg(p.get("net_pct", 0), 2, "%"), sg(pnl, 3), sg(p.get("r_mult", 0), 2)),
+             "ход в плюс до %s, против до -%s" % (sg(p.get("mfe_pct", 0), 2, "%"), "%.2f%%" % abs(p.get("mae_pct", 0)))]
+    else:
+        L = ["🟢 #%s %s %s · открыта %s" % (p["id"], sym, p["side"].upper(), hhmm(p["t_in"])),
+             "вход %s · стоп %s · цель %s" % (T.fmt_px(p["entry"]), T.fmt_px(p["stop"]), T.fmt_px(p["tp"]) if p.get("tp") is not None else "—"),
+             "ставка %.0f $ · плечо %d× · БУ: %s%s" % (p.get("stake", 0), p.get("lev", 5), "да" if p.get("armed") else "нет", " · часть закрыта" if p.get("rem", 1) < 0.999 else "")]
+        if last_px: L.append("цена %s · %s до комиссий" % (T.fmt_px(last_px), sg(side * (last_px / p["entry"] - 1) * 100, 2, "%")))
+    if rule: L.append(rule)
+    return "\n".join(L)[:1000]
+
+
+def journal_loop():
+    chat = ENV.get("TG_CHAT_LIVE")
+    if not chat: return
+    log("journal: старт, канал %s" % chat)
+    j = jload(JRNF, None); first = j is None
+    if first: j = {"posts": {}}
+    wait_until = 0.0; fails = 0
+    while True:
+        try:
+            time.sleep(10); c = live_cfg(); now = time.time()
+            if not c.get("journal", True) or now < wait_until: continue
+            ps = sorted(jload(POSF, []), key=lambda x: x["id"])
+            if first:      # при первом запуске закрытые не выкладываем (иначе 200+ сообщений); открытые выкладываются
+                for p in ps:
+                    if p.get("status") == "closed": j["posts"][str(p["id"])] = {"state": "skip"}
+                first = False; json.dump(j, open(JRNF, "w"))
+            lv = jload(LIVEF, {})
+            if lv.get("mid") and j.get("pinned") != lv["mid"] and c.get("pin", True):      # один раз закрепляем живую карточку
+                r = tg_try("pinChatMessage", {"chat_id": chat, "message_id": lv["mid"], "disable_notification": "true"})
+                j["pinned"] = lv["mid"]; json.dump(j, open(JRNF, "w")); log("journal: закрепление карточки: %s" % (r[0],))
+            done = 0
+            for p in ps:
+                if done >= 2: break
+                key = str(p["id"]); rec = j["posts"].get(key) or {}
+                if rec.get("state") == "skip": continue
+                closed = p.get("status") == "closed" and p.get("t_out")
+                sig = [bool(closed), bool(p.get("armed")), round(p.get("rem", 1.0), 3), p.get("stop")]
+                if rec.get("mid") and rec.get("sig") == sig and (closed or now - rec.get("t", 0) < c.get("jr_refresh", 300)): continue
+                try:
+                    kl = journal_kl(p["sym"], p["t_in"]); png = T.render_position(p, kl, chan=((next((o for o in jload(ORDF, []) if o.get("id") == p.get("order_id")), None) or {}).get("chan")))
+                except Exception as e:
+                    log("journal: график #%s не построен: %s" % (key, e)); rec["t"] = now; j["posts"][key] = rec; continue
+                cap = journal_caption(p, float(kl[-1][4]) if kl else None)
+                if rec.get("mid"): res = tg_try("editMessageMedia", {"chat_id": chat, "message_id": rec["mid"], "media": json.dumps({"type": "photo", "media": "attach://photo", "caption": cap}, ensure_ascii=False)}, {"photo": ("trade.png", png, "image/png")})
+                else: res = tg_try("sendPhoto", {"chat_id": chat, "caption": cap, "disable_notification": "true"}, {"photo": ("trade.png", png, "image/png")})
+                if res[0] is True:
+                    if not rec.get("mid"): rec["mid"] = res[1]["result"]["message_id"]
+                    rec["sig"] = sig; rec["t"] = now; j["posts"][key] = rec; json.dump(j, open(JRNF, "w")); done += 1; fails = 0
+                elif res[0] == "wait": wait_until = time.time() + res[1] + 1; log("journal: лимит Telegram, пауза %d с" % (res[1] + 1)); break
+                elif res[0] == "gone": log("journal: сообщение #%s недоступно, пересоздаю" % key); rec.pop("mid", None); j["posts"][key] = rec
+                else: fails += 1; wait_until = time.time() + min(60, 5 * fails); log("journal: ошибка Telegram: %s" % str(res[1])[:200]); break
+        except Exception: log("journal error: " + traceback.format_exc()[-500:]); time.sleep(10)
+
+
 def seen_chat(c):
     """Запоминает чаты/каналы, откуда пришли события (для настройки маршрутизации по чатам). Секретов не содержит."""
     if not c or "id" not in c: return
@@ -853,6 +924,7 @@ def main():
     except Exception as e: log("setMyCommands fail: %s" % e)
     threading.Thread(target=outbox_loop, daemon=True).start()
     threading.Thread(target=live_loop, daemon=True).start()
+    threading.Thread(target=journal_loop, daemon=True).start()
     offset = None
     while True:
         try:
