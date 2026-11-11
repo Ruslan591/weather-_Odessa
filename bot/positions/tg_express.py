@@ -17,10 +17,21 @@ RSI5_CFG = os.path.join(os.environ.get("POS_DIR", "/opt/trading-bot/positions_re
 
 def _rcfg():
     """Фильтр RSI(14) 5m для ОТБОЯ: шорт только при RSI > short (65, лучше > 70), лонг только при RSI < long (35, лучше < 30). Выключить: POS_DIR/tg_rsi5.json {"enabled": false}; пороги там же."""
-    c = {"enabled": True, "short": 65.0, "long": 35.0}
+    c = {"enabled": True, "short": 65.0, "long": 35.0, "round": True, "brk_short_lo": 38.0, "brk_short_hi": 50.0, "brk_short_no": 35.0, "brk_long_lo": 50.0, "brk_long_hi": 62.0, "brk_long_no": 65.0}
     try: c.update(json.load(open(RSI5_CFG, encoding="utf-8")))
     except Exception: pass
     return c
+
+
+def _rsi5_pair(w, kl):
+    """(RSI сейчас, RSI на предыдущей закрытой свече) на 5m или (None, None)."""
+    L = w.get("last") or {}
+    try:
+        t = int(L.get("t") or 0); c = float(L.get("c"))
+        xs = [float(k[4]) for k in (kl or []) if int(k[0]) < t] + [c]
+    except Exception: return None, None
+    if len(xs) < 61: return None, None
+    return _rsi_xs(xs), _rsi_xs(xs[:-1])
 
 
 def _rsi5(w, kl, n=14):
@@ -31,42 +42,56 @@ def _rsi5(w, kl, n=14):
         xs = [float(k[4]) for k in (kl or []) if int(k[0]) < t] + [c]
     except Exception: return None
     if len(xs) < 60: return None
+    return _rsi_xs(xs)
+
+
+def _rsi_xs(xs, n=14):
     xs = xs[-300:]; g = [max(xs[i] - xs[i - 1], 0.0) for i in range(1, len(xs))]; l = [max(xs[i - 1] - xs[i], 0.0) for i in range(1, len(xs))]
     ag = sum(g[:n]) / n; al = sum(l[:n]) / n
     for i in range(n, len(g)): ag = (ag * (n - 1) + g[i]) / n; al = (al * (n - 1) + l[i]) / n
     return 100.0 if al == 0 else 100 - 100 / (1 + ag / al)
 
 
-def _rsi5_cond(side, r):
-    """Условие (ok, good, bad) для отбоя или None (выключено / нет данных: фильтр не применяется)."""
+def _rsi5_cond(side, r, rp=None):
+    """ОТБОЙ: SHORT только при RSI 5m > short (65) и RSI закругляется вниз (меньше, чем на предыдущей свече); LONG только при RSI < long (35) и закругляется вверх.
+    rp = RSI предыдущей закрытой свечи (None -> закругление не проверяется). Условие (ok, good, bad) или None (выключено / нет данных)."""
     c = _rcfg()
     if r is None or not c.get("enabled", True): return None
+    rd = bool(c.get("round", True)) and rp is not None
     if side == "short":
-        th = float(c["short"]); ok = r > th
-        return (ok, "RSI 5m %.0f: перегрев для шорта (> %g)%s" % (r, th, ", сильный" if r > 70 else ""), "RSI 5m %.0f: шорт только при RSI > %g (нет перегрева, цена может пробить канал)" % (r, th))
-    th = float(c["long"]); ok = r < th
-    return (ok, "RSI 5m %.0f: перепродано для лонга (< %g)%s" % (r, th, ", сильный" if r < 30 else ""), "RSI 5m %.0f: лонг только при RSI < %g (нет перепроданности, цена может пробить канал)" % (r, th))
+        th = float(c["short"]); rnd = (r < rp) if rd else True
+        good = "RSI 5m %.0f: перегрев для шорта (> %g)%s%s" % (r, th, ", сильный" if r > 70 else "", (", закругляется вниз (%.0f → %.0f)" % (rp, r)) if rd else "")
+        if r <= th: bad = "RSI 5m %.0f: шорт только при RSI > %g (нет перегрева, цена может пробить канал)" % (r, th)
+        else: bad = "RSI 5m %.0f > %g, но ещё не закруглился вниз (%.0f → %.0f): ждём" % (r, th, rp or 0, r)
+        return (r > th and rnd, good, bad)
+    th = float(c["long"]); rnd = (r > rp) if rd else True
+    good = "RSI 5m %.0f: перепродано для лонга (< %g)%s%s" % (r, th, ", сильный" if r < 30 else "", (", закругляется вверх (%.0f → %.0f)" % (rp, r)) if rd else "")
+    if r >= th: bad = "RSI 5m %.0f: лонг только при RSI < %g (нет перепроданности, цена может пробить канал)" % (r, th)
+    else: bad = "RSI 5m %.0f < %g, но ещё не закруглился вверх (%.0f → %.0f): ждём" % (r, th, rp or 0, r)
+    return (r < th and rnd, good, bad)
 
 
 def _rsi5_brk(side, r):
-    """Условие для ПРОБОЯ (2026-11-11, сделка #225: SHORT на пробое при RSI 5m 30): не гонимся за уже сделанным движением.
-    SHORT на пробое вниз только если RSI 5m > long (35); LONG на пробое вверх только если RSI < short (65). Выключить: tg_rsi5.json {"brk": false}."""
+    """ПРОБОЙ (спецификация 2026-11-11, сделка #225): ловим свежий импульс, нужен запас хода. SHORT (пробой нижней линии): RSI 5m в 38..50, ниже 35 - запрещено;
+    LONG (пробой верхней линии): RSI 5m в 50..62, выше 65 - запрещено. Пороги в tg_rsi5.json (brk_short_lo/hi/no, brk_long_lo/hi/no); выключить {"brk": false}."""
     c = _rcfg()
     if r is None or not c.get("enabled", True) or not c.get("brk", True): return None
+    if side == "short": lo, hi, no = float(c["brk_short_lo"]), float(c["brk_short_hi"]), float(c["brk_short_no"])
+    else: lo, hi, no = float(c["brk_long_lo"]), float(c["brk_long_hi"]), float(c["brk_long_no"])
     if side == "short":
-        th = float(c["long"]); ok = r > th
-        return (ok, "RSI 5m %.0f: не перепродано, шорт на пробое не в погоне (> %g)" % (r, th), "RSI 5m %.0f: перепродано (<= %g), шорт на пробое не открываем: движение уже сделано" % (r, th))
-    th = float(c["short"]); ok = r < th
-    return (ok, "RSI 5m %.0f: не перекуплено, лонг на пробое не в погоне (< %g)" % (r, th), "RSI 5m %.0f: перекуплено (>= %g), лонг на пробое не открываем: движение уже сделано" % (r, th))
+        if r < no: return (False, "", "RSI 5m %.0f уже ниже %g: движение сделано, пробой вниз не торгуем" % (r, no))
+    elif r > no: return (False, "", "RSI 5m %.0f уже выше %g: движение сделано, пробой вверх не торгуем" % (r, no))
+    ok = lo <= r <= hi
+    return (ok, "RSI 5m %.0f в зоне %g-%g: есть запас хода %s" % (r, lo, hi, "вниз" if side == "short" else "вверх"), "RSI 5m %.0f вне зоны %g-%g: нет свежего импульса / нет запаса хода" % (r, lo, hi))
 
 
 def rsi5_line(w, kl):
-    """Строка для постов слежения (не экспресс): RSI 5m и допуск по сторонам; "" если нет данных."""
-    r = _rsi5(w, kl)
+    """Строка для постов слежения (не экспресс): RSI 5m (со стрелкой) и допуск по сторонам для отбоя и пробоя; "" если нет данных."""
+    r, rp = _rsi5_pair(w, kl)
     if r is None: return ""
-    cs, cl = _rsi5_cond("short", r), _rsi5_cond("long", r)
-    if not cs or not cl: return "📈 RSI 5m: %.0f" % r
-    return "📈 RSI 5m: %.0f | SHORT %s | LONG %s" % (r, "✅" if cs[0] else "⛔", "✅" if cl[0] else "⛔")
+    mk = lambda x: "—" if not x else ("✅" if x[0] else "⛔")
+    ar = "↘" if r < rp else ("↗" if r > rp else "→")
+    return "📈 RSI 5m: %.0f%s | отбой: SHORT %s LONG %s | пробой: SHORT %s LONG %s" % (r, ar, mk(_rsi5_cond("short", r, rp)), mk(_rsi5_cond("long", r, rp)), mk(_rsi5_brk("short", r)), mk(_rsi5_brk("long", r)))
 
 
 _DEF = {"wick_min": 0.4, "dist_max": 0.9, "rr_add": 0.0, "rr_add_counter": 0.0, "brk_n_min": 2, "brk_body_min": 0.3, "brk_beyond_max": 1.5}
@@ -90,10 +115,10 @@ def _fmt(p):
     return "%.5f" % p
 
 
-def _btc1m(side):
+def _btc1m(side, setup="bounce"):
     """Условие (ok, good, bad) по BTC 1m для стороны сделки или None, если выключено / нет данных (фильтр тогда не применяется)."""
     if not B1: return None
-    try: g = B1.gate(side)
+    try: g = B1.gate(side, setup)
     except Exception: g = None
     return (g["ok"], g["good"], g["bad"], g["snap"]) if g else None
 
@@ -139,11 +164,11 @@ def verdict(w, kl=None):
         (rr_t >= need, "до цели %s R:R %.1f" % (ftxt, rr_t), "до цели %s R:R %.1f < %.1f" % (ftxt, rr_t, need)),
         (sh is None or abs(sh) < 0.5, "канал стабилен", "канал перестроился (%+.1f ATR)" % (sh or 0)),
     ]
-    b1 = _btc1m("long" if s > 0 else "short")
+    b1 = _btc1m("long" if s > 0 else "short", "bounce")
     if b1: conds.append(b1[:3])
     rgc, rgs = _regime("long" if s > 0 else "short")
     if rgc: conds.append(rgc)
-    r5 = _rsi5(w, kl); r5c = _rsi5_cond("long" if s > 0 else "short", r5)
+    r5, r5p = _rsi5_pair(w, kl); r5c = _rsi5_cond("long" if s > 0 else "short", r5, r5p)
     if r5c: conds.append(r5c)
     call = "enter" if all(x[0] for x in conds) else "wait"
     side = "long" if s > 0 else "short"; stop = c - s * risk
@@ -189,7 +214,7 @@ def verdict_break(w, kl=None):
         (rr >= 1.0, "до цели 0.5 канала R:R %.1f" % rr, "до цели 0.5 канала R:R %.1f < 1.0" % rr),
         (sh is None or abs(sh) < 0.5, "канал стабилен", "канал перестроился (%+.1f ATR)" % (sh or 0)),
     ]
-    b1 = _btc1m("long" if s > 0 else "short")
+    b1 = _btc1m("long" if s > 0 else "short", "breakout")
     if b1: conds.append(b1[:3])
     rgc, rgs = _regime("long" if s > 0 else "short")
     if rgc: conds.append(rgc)
