@@ -847,7 +847,37 @@ def journal_kl(sym, t_in):
     return json.load(urllib.request.urlopen("https://data-api.binance.vision/api/v3/klines?symbol=%s&interval=5m&startTime=%d&limit=500" % (sym, max(0, int(t_in) - 60 * T.BAR_MS)), timeout=15))
 
 
-def journal_caption(p, last_px=None):
+LINK_BTN = [True]      # False, если Telegram отверг кнопку-ссылку (BUTTON_URL_INVALID): дальше без кнопки, только текст
+
+
+def rec_post(p):
+    """Пост с рекомендацией открыть эту позицию (основной чат): из tg_posts.jsonl по src_watch ордера. Предпочитаем пост с мнением «заходить» (call=enter), поставленный не позже ордера (+3 мин); иначе последний пост слежения до ордера, иначе первый."""
+    try:
+        o = next((x for x in jload(ORDF, []) if x.get("id") == p.get("order_id")), None) or {}
+        wid = o.get("src_watch")
+        if wid is None: return None
+        lim = int(o.get("approved_t") or o.get("placed_t") or 0) + 180000
+        ps = []
+        for ln in open(POSTSF, encoding="utf-8"):
+            try: r = json.loads(ln)
+            except Exception: continue
+            if r.get("wid") == wid and r.get("mid"): ps.append(r)
+        if not ps: return None
+        ent = [r for r in ps if (r.get("v") or {}).get("call") == "enter" and r.get("ts", 0) <= lim]
+        bef = [r for r in ps if r.get("ts", 0) <= lim]
+        r = (ent or bef or ps)[-1] if (ent or bef) else ps[0]
+        return {"mid": r["mid"], "ts": r.get("ts", 0), "enter": bool(ent)}
+    except Exception: return None
+
+
+def post_link(mid):
+    """Ссылка на сообщение основного чата. Для канала/супергруппы (id -100...) обычная t.me/c; для личного чата с ботом web-ссылок нет, пробуем tg://openmessage (работает не везде)."""
+    if CHAT.startswith("-100"): return "https://t.me/c/%s/%s" % (CHAT[4:], mid)
+    bot = str(ENV.get("TG_TOKEN") or "").split(":")[0]
+    return ("tg://openmessage?user_id=%s&message_id=%s" % (bot, mid)) if bot.isdigit() else None
+
+
+def journal_caption(p, last_px=None, rec=None):
     side = 1 if p["side"] == "long" else -1; cl = p.get("status") == "closed" and p.get("t_out"); sym = str(p["sym"]).replace("USDT", "")
     rule = T.RULE_RU.get(p.get("rule"), p.get("rule") or "")
     if cl:
@@ -862,6 +892,7 @@ def journal_caption(p, last_px=None):
              "ставка %.0f $ · плечо %d× · БУ: %s%s" % (p.get("stake", 0), p.get("lev", 5), "да" if p.get("armed") else "нет", " · часть закрыта" if p.get("rem", 1) < 0.999 else "")]
         if last_px: L.append("цена %s · %s до комиссий" % (T.fmt_px(last_px), sg(side * (last_px / p["entry"] - 1) * 100, 2, "%")))
     if rule: L.append(rule)
+    if rec: L.append("🔗 Рекомендация бота: пост %s в чате «Алерты и слежение»" % hhmm(rec["ts"]))
     return "\n".join(L)[:1000]
 
 
@@ -897,9 +928,14 @@ def journal_loop():
                     kl = journal_kl(p["sym"], p["t_in"]); png = T.render_position(p, kl, chan=((next((o for o in jload(ORDF, []) if o.get("id") == p.get("order_id")), None) or {}).get("chan")))
                 except Exception as e:
                     log("journal: график #%s не построен: %s" % (key, e)); rec["t"] = now; j["posts"][key] = rec; continue
-                cap = journal_caption(p, float(kl[-1][4]) if kl else None)
-                if rec.get("mid"): res = tg_try("editMessageMedia", {"chat_id": chat, "message_id": rec["mid"], "media": json.dumps({"type": "photo", "media": "attach://photo", "caption": cap}, ensure_ascii=False)}, {"photo": ("trade.png", png, "image/png")})
-                else: res = tg_try("sendPhoto", {"chat_id": chat, "caption": cap, "disable_notification": "true"}, {"photo": ("trade.png", png, "image/png")})
+                rp = rec_post(p); cap = journal_caption(p, float(kl[-1][4]) if kl else None, rp)
+                lk = post_link(rp["mid"]) if rp else None; mk = {"reply_markup": json.dumps({"inline_keyboard": [[{"text": "🔗 К рекомендации", "url": lk}]]})} if (lk and LINK_BTN[0]) else {}
+                for _try in (0, 1):
+                    if rec.get("mid"): res = tg_try("editMessageMedia", dict({"chat_id": chat, "message_id": rec["mid"], "media": json.dumps({"type": "photo", "media": "attach://photo", "caption": cap}, ensure_ascii=False)}, **mk), {"photo": ("trade.png", png, "image/png")})
+                    else: res = tg_try("sendPhoto", dict({"chat_id": chat, "caption": cap, "disable_notification": "true"}, **mk), {"photo": ("trade.png", png, "image/png")})
+                    if res[0] is False and mk and "BUTTON" in str(res[1]).upper():
+                        LINK_BTN[0] = False; mk = {}; log("journal: кнопка-ссылка отвергнута (%s), дальше без кнопки" % str(res[1])[:120]); continue
+                    break
                 if res[0] is True:
                     if not rec.get("mid"): rec["mid"] = res[1]["result"]["message_id"]
                     rec["sig"] = sig; rec["t"] = now; j["posts"][key] = rec; json.dump(j, open(JRNF, "w")); done += 1; fails = 0
