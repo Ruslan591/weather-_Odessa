@@ -17,7 +17,7 @@ RSI5_CFG = os.path.join(os.environ.get("POS_DIR", "/opt/trading-bot/positions_re
 
 def _rcfg():
     """Фильтр RSI(14) 5m для ОТБОЯ: шорт только при RSI > short (65, лучше > 70), лонг только при RSI < long (35, лучше < 30). Выключить: POS_DIR/tg_rsi5.json {"enabled": false}; пороги там же."""
-    c = {"enabled": True, "short": 65.0, "long": 35.0, "round": True, "brk_short_lo": 38.0, "brk_short_hi": 50.0, "brk_short_no": 35.0, "brk_long_lo": 50.0, "brk_long_hi": 62.0, "brk_long_no": 65.0}
+    c = {"enabled": True, "short": 65.0, "long": 35.0, "round": False, "brk_short_lo": 38.0, "brk_short_hi": 50.0, "brk_short_no": 35.0, "brk_long_lo": 50.0, "brk_long_hi": 62.0, "brk_long_no": 65.0}
     try: c.update(json.load(open(RSI5_CFG, encoding="utf-8")))
     except Exception: pass
     return c
@@ -57,7 +57,7 @@ def _rsi5_cond(side, r, rp=None):
     rp = RSI предыдущей закрытой свечи (None -> закругление не проверяется). Условие (ok, good, bad) или None (выключено / нет данных)."""
     c = _rcfg()
     if r is None or not c.get("enabled", True): return None
-    rd = bool(c.get("round", True)) and rp is not None
+    rd = bool(c.get("round", False)) and rp is not None
     if side == "short":
         th = float(c["short"]); rnd = (r < rp) if rd else True
         good = "RSI 5m %.0f: перегрев для шорта (> %g)%s%s" % (r, th, ", сильный" if r > 70 else "", (", закругляется вниз (%.0f → %.0f)" % (rp, r)) if rd else "")
