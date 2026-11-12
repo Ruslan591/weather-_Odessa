@@ -78,7 +78,7 @@ def partial(p, px, t, frac, why):
 def step(p, k):
     t, o, h, l, c = int(k[0]), float(k[1]), float(k[2]), float(k[3]), float(k[4])
     side = 1 if p["side"] == "long" else -1; stop = p["stop"]
-    cfg = exit_cfg.load(); L = exit_cfg.levels(p, cfg)
+    cfg = exit_cfg.eff(p); L = exit_cfg.levels(p, cfg)   # eff: правило flat_brk (частичная цель 0.4R + БУ) для помеченных позиций
     liq = p["entry"] * (1 - side * LIQ / 100)
     if (h >= liq) if side < 0 else (l <= liq):
         rem = p.get("rem", 1.0); parts_c = sum(x["contrib_pct"] for x in p.get("parts", []))
