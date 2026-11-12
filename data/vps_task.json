@@ -1,1 +1,1 @@
-{"task_id": "tune_poll_54227690", "cmd": "pgrep -f flat_brk_tune_run | head -3; wc -c /tmp/fbt_out.txt; head -c 3500 /tmp/fbt_out.txt | LC_ALL=C tr -cd '\\11\\12\\40-\\176' ", "timeout": 60}
+{"task_id": "tune_poll2_82174601", "cmd": "python3 -c \"\ns=open('/tmp/fbt_out.txt',encoding='utf-8',errors='replace').read()\ni=s.find('TOP 8 keeping')\nprint(s[i:])\n\" | LC_ALL=C tr -cd '\\11\\12\\40-\\176' ", "timeout": 60}
