@@ -100,6 +100,11 @@ def step(p, k):
         _os = p["stop"]; p["armed"] = True; p["armed_t"] = t + 60000
         if not p.get("stop_manual"): p["stop"] = min(p["stop"], L["lock_px"]) if side < 0 else max(p["stop"], L["lock_px"])
         decisions.auto(p, "be", _os, p["stop"], t + 60000, c)
+    b2 = cfg.get("be2")   # второй этап правила flat_brk: после частичной цели на +be2.r R стоп остатка в безубыток с комиссиями
+    if b2 and p.get("tp1_done") and not p.get("be2_done") and not p.get("stop_manual") and reach(p["entry"] + side * b2["r"] * p["R"]):
+        _o2 = p["stop"]; lk2 = p["entry"] * (1 + side * b2["lock_pct"] / 100.0)
+        p["stop"] = min(p["stop"], lk2) if side < 0 else max(p["stop"], lk2); p["be2_done"] = True; p["be2_t"] = t + 60000
+        decisions.auto(p, "be2", _o2, p["stop"], t + 60000, c)
     tr = cfg["trail"]
     if not p.get("trail_act") and (tr["on"] or p.get("manual_trail")):
         st = tr["start"]
