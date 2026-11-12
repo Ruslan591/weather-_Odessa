@@ -18,6 +18,7 @@ import json, os, sys, time
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import datetime
 import pos, trend_shadow
+import concurrent.futures as cf
 try: import tg_gate
 except Exception:
     class tg_gate:   # режимы Telegram недоступны: поведение как раньше
@@ -92,6 +93,21 @@ def kl_shared(sym, now):
         os.makedirs(KLC, exist_ok=True); tmp = f + ".tmp%d" % os.getpid(); json.dump(d, open(tmp, "w")); os.replace(tmp, f)
     except Exception: pass
     return d
+def prefetch_5m(pairs, now):
+    """Параллельная подкачка общего кэша 5m: запрос к Binance с VPS идёт 1-2 с, последовательный обход 39 пар давал минуты (задержка входа 2-3 мин)."""
+    def need(sym):
+        try:
+            d = json.load(open(os.path.join(KLC, "%s_5m_1000.json" % sym)))
+            return not (d and int(now) < int(d[-1][0]) + TFM)
+        except Exception: return True
+    def one(sym):
+        try: kl_shared(sym, now)
+        except Exception as e: log("prefetch %s error: %s" % (sym, e))
+    todo = [x for x in pairs if need(x)]
+    if todo:
+        with cf.ThreadPoolExecutor(max_workers=min(12, len(todo))) as ex: list(ex.map(one, todo))
+    return len(todo)
+_TM = {}; _tm_log = [0.0]
 VALID_A = 12; VALID_B = 24; MAXPEND = 8; SLOTS = 3; MAXH = 24      # SLOTS - минимум слотов; реальное число растёт с балансом (slots_state)
 SLOT_EQ = float(os.environ.get("CHAN_SLOT_EQ", "2.0"))     # баланса на одну сделку: маржа 1.2 $ (позиция 6 $, плечо 5x) + 0.8 $ запас на просадку; 7 $ -> 3 слота, 8 $ -> 4, 10 $ -> 5
 
@@ -538,16 +554,15 @@ def _tg_journal(o, action, extra):
 
 def cycle(dry=False):
     now = int(time.time() * 1000); stt = load_state(); props = {}; closes = {}; evs = load_events(); radar_ = {}
-    for sym in pairs_now():
+    _t0 = time.time(); pairs_ = pairs_now(); _TM["fetched"] = prefetch_5m(pairs_, now); _TM["prefetch"] = round(time.time() - _t0, 1); _shq = []
+    for sym in pairs_:
         try:
             A = analyze(sym, now)
             if not A: continue
             ti = A["t"][A["M"] - 1]; closes[sym] = (float(A["c"][A["M"] - 1]), float(A["atr"][A["M"] - 1]), ti)
             if stt["last"].get(sym) == ti: continue
             ps = propose(sym, A, evs) + eval_events(sym, A, evs)
-            for p in ps:
-                try: p["shadow"] = trend_shadow.shadow(sym, p["side"]); p["why"].append(shadow_text(p["shadow"]))
-                except Exception as e: log("shadow %s error: %s" % (sym, e))
+            for p in ps: _shq.append((sym, p))   # тень тренда считаем после скана, одним параллельным заходом (раньше: до 6 запросов по 1-2 с на каждое предложение прямо в скане)
             props[sym] = (ti, ps)
             if tg_gate.ENABLED:
                 try:
@@ -559,14 +574,29 @@ def cycle(dry=False):
                 except Exception as e_: log("watch %s error: %s" % (sym, e_))
         except Exception as e:
             log("scan %s error: %s" % (sym, e))
+    _t1 = time.time()
+    if _shq:
+        try: trend_shadow.prefetch([("BTC", "5m"), ("BTC", "15m"), ("ETH", "5m"), ("ETH", "15m")] + [(x, tf) for x in {x for x, _ in _shq} for tf in ("15m", "1h")])
+        except Exception as e_: log("shadow prefetch error: %s" % e_)
+        for sym_, p_ in _shq:
+            try: p_["shadow"] = trend_shadow.shadow(sym_, p_["side"]); p_["why"].append(shadow_text(p_["shadow"]))
+            except Exception as e_: log("shadow %s error: %s" % (sym_, e_))
+    _TM["scan"] = round(_t1 - _t0 - _TM["prefetch"], 1); _TM["shadow"] = round(time.time() - _t1, 1); _TM["nprop"] = len(_shq)
     if radar_:
         try: _radar_save(radar_, now)
         except Exception as e_: log("radar save error: %s" % e_)
     # fills for pending orders (no lock while fetching)
-    pend = [o for o in load_orders() if o["status"] == "pending"]; fills = {}; expired = []
+    pend = [o for o in load_orders() if o["status"] == "pending"]; fills = {}; expired = []; _t2 = time.time(); _fd = {}
+    if pend:
+        def _ff(o):
+            try: return pos.kl(o["sym"] + "USDT", "1m", 1000, o["checked_t"] + 60000)
+            except Exception as e: return e
+        with cf.ThreadPoolExecutor(max_workers=min(8, len(pend))) as ex: _fd = dict(zip([o["id"] for o in pend], ex.map(_ff, pend)))
     for o in pend:
         try:
-            d = pos.kl(o["sym"] + "USDT", "1m", 1000, o["checked_t"] + 60000); d = [k for k in d if int(k[0]) + 60000 <= now]
+            d = _fd[o["id"]]
+            if isinstance(d, Exception): raise d
+            d = [k for k in d if int(k[0]) + 60000 <= now]
             last = o["checked_t"]
             for k in d:
                 ot = int(k[0])
@@ -578,7 +608,7 @@ def cycle(dry=False):
             o["_last"] = last
         except Exception as e:
             log("fill-check %s error: %s" % (o["sym"], e))
-    at1 = {}
+    _TM["fills"] = round(time.time() - _t2, 1); at1 = {}
     for oid in fills:
         o = next(x for x in pend if x["id"] == oid)
         try: at1[oid] = pos.atr1h(o["sym"] + "USDT")
@@ -776,8 +806,11 @@ if __name__ == "__main__":
         print(c)
     elif cmd == "loop":
         while True:
+            _c0 = time.time()
             try: cycle()
             except Exception as e: log("cycle error: %s" % e)
-            time.sleep(20)
+            _dt = time.time() - _c0
+            if _dt > 15 or time.time() - _tm_log[0] > 600: _tm_log[0] = time.time(); log("cycle %.1fs %s" % (_dt, json.dumps(_TM)))
+            time.sleep(5)
     else:
         for o in load_orders(): print(o["id"], o["sym"], o["rule"], o["side"], "%.6g" % o["price"], o["status"], pos.tstr(o["placed_t"]), o.get("reason", ""))
