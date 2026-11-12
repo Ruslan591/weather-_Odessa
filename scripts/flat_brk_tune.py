@@ -53,7 +53,9 @@ def sim(p0, par):
             fav = ((p["hi"] - p["entry"]) if side > 0 else (p["entry"] - p["lo"])) / p["R"]
             if fav < npg[1]: pos.close(p, float(k[4]), k[0] + 60000, "noprog", True); break
     return p.get("net_pct") if p["status"] == "closed" else 0.0, p.get("reason")
-flat = [(p, r) for p, r in S if r == "flat"]; nonflat = [(p, r) for p, r in S if r != "flat"]
+GROUP = os.environ.get("GROUP", "flat")   # flat | against (пробой против режима BTC 1h: long при down, short при up)
+def _in(p, r): return r == "flat" if GROUP == "flat" else ((p["side"] == "long" and r == "down") or (p["side"] == "short" and r == "up"))
+flat = [(p, r) for p, r in S if _in(p, r)]; nonflat = [(p, r) for p, r in S if not _in(p, r)]
 print("sample: breakout total %d, flat %d, other %d" % (len(S), len(flat), len(nonflat)))
 print("ids flat:", [p["id"] for p, r in flat])
 chk = [(p["id"], round(p["net_pct"], 3), round(sim(p, None)[0], 3)) for p, r in S]
