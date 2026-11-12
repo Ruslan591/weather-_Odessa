@@ -1,12 +1,17 @@
 {
-  "timestamp": "2026-11-12T14:59:47Z",
-  "status": "ok",
+  "timestamp": "2026-11-12T15:02:51Z",
+  "status": "suppressed_known_false_positive",
   "cloud_forecast_timestamp": "2026-11-12T06:45:00.000Z",
-  "target_id": 1,
-  "target_area_km2": 86.7,
-  "target_distance_km": 293.7,
-  "target_bearing_deg": 156.0,
-  "target_compass": "ЮВ",
+  "suppressed_target": {
+    "signature": "120_-270",
+    "area_km2": 86.7,
+    "distance_km": 293.7,
+    "bearing_deg": 156.0,
+    "compass": "ЮВ",
+    "not_confirmed_streak": 3,
+    "total_not_confirmed": 6,
+    "excluded_since": "2026-11-12T14:59:47Z"
+  },
   "system": {
     "target_id": 0,
     "area_km2": 468.3,
@@ -27,39 +32,6 @@
   "local_suppressed_count": 1,
   "system_candidates": [],
   "system_suppressed_count": 1,
-  "frontal_tracks": [],
-  "target_phase": {
-    "label": "безоблачно",
-    "cloud_fraction": 0.0
-  },
-  "existence": {
-    "modules": {
-      "ir_motion": {
-        "confirmed": false,
-        "timestamp": "2026-11-12T14:30:00.000Z"
-      },
-      "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-11-12T14:30:00.000Z"
-      },
-      "cloud_phase_type": {
-        "confirmed": false,
-        "timestamp": "2026-11-12T14:58:17Z"
-      }
-    },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
-  },
-  "phenomena": {
-    "precip_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-11-12T14:59:03Z"
-    },
-    "lightning_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-11-12T14:59:12Z"
-    }
-  },
-  "verdict": "CLM отметил цель в 294км ЮВ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (468км²) в 259км Ю."
+  "verdict": "Известный шумовой объект в 294км ЮВ (~87км²) — подавлено (не подтверждался 3 раз подряд). Отдельно: система синоптического масштаба (468км²) в 259км Ю.",
+  "frontal_tracks": []
 }
