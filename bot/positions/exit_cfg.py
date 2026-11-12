@@ -75,9 +75,24 @@ def dist(p, unit, v):
     if unit == "pct": return p["entry"] * v / 100.0
     return v * (p.get("atr1h") or 0.0)
 
+# Правило выхода «флэт + пробой» (позиция помечена p["xr"] = "flat_brk" при исполнении ордера, см. chan_orders): на +0.4 R закрыть 50% объёма,
+# остаток перевести в безубыток с учётом комиссий. Остальное (конечная цель, трейлинг после БУ, перенос на S/R) - как в настройках счёта.
+FLAT_BRK = {"r": 0.4, "part": 50}
+FEE_TAKER = 0.05; SLIP = 0.02   # % за сторону: комиссия тейкера на стопе и проскальзывание стопа (те же значения, что pos.FEE / pos.SLIP)
+
+def eff(p, c=None):
+    """Настройки выхода для конкретной позиции: настройки счёта; для позиций с правилом flat_brk - частичная цель 0.4R (50%) и БУ сразу после неё.
+    Замок БУ = комиссия входа + комиссия стопа + проскальзывание (остаток при выходе по БУ даёт 0 после всех издержек)."""
+    c = c or load()
+    if not isinstance(p, dict) or p.get("xr") != "flat_brk": return c
+    e = json.loads(json.dumps(c))
+    e["tp1"].update(on=1, unit="r", val=FLAT_BRK["r"], part=FLAT_BRK["part"])
+    e["be"].update(on=1, trig="tp1", lock_unit="pct", lock_val=round(float(p.get("fee_in", FEE_TAKER)) + FEE_TAKER + SLIP, 3))
+    return e
+
 def levels(p, c=None):
     """Эффективные уровни позиции по текущим настройкам: tp (конечная или None), tp1 (или None), be_px (или None), lock_px, trail_px (порог старта трейлинга или None), trail_dist."""
-    c = c or load(); side = 1 if p["side"] == "long" else -1; e = p["entry"]; out = {}
+    c = c or eff(p); side = 1 if p["side"] == "long" else -1; e = p["entry"]; out = {}
     t = c["tp"]
     if t["mode"] == "rule": tp = p.get("tp")
     elif t["mode"] == "none": tp = None
