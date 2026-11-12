@@ -605,7 +605,7 @@ def cycle(dry=False):
             if o_["status"] != "pending" or o_.get("rule") != "tg_market": continue
             at_ = int(o_.get("approved_t") or now)
             if now - at_ > 600000: fills.pop(o_["id"], None); cancel(o_, "рыночный ордер не исполнен за 10 минут", now)
-            else: fills[o_["id"]] = (at_, float(o_["price"]))
+            else: fills[o_["id"]] = (int(time.time() * 1000), float(o_["price"]))   # время входа = момент снятия цены (а не approved_t = начало цикла: при 39 парах разница 2-3 минуты, позиция «открывалась» задним числом и ловила стоп до реального входа, #236)
         for x in orders:  # заменённые правила: заблаговременные у границы (флаг) и ретест без подтверждения
             if x["status"] == "pending" and ((x["rule"] in ("chan_top", "chan_bottom") and not CHAN_EDGE) or (x["rule"] in ("retest_up", "retest_down") and not x.get("rv"))):
                 cancel(x, "правило заменено: ретест с подтверждением удержания")
@@ -636,7 +636,7 @@ def cycle(dry=False):
                  "src": "chan", "order_id": o["id"], "rule": o["rule"], "placed_t": o["placed_t"], "fee_in": MAK, "fee_tp": MAK}
             if o.get("setup") == "breakout" and (o.get("regime") or {}).get("regime") == "flat":   # правило выхода «флэт + пробой»: 50% на +0.4R, остаток в БУ с комиссиями
                 if (o["tp"] - fp) * side > 0.4 * R:
-                    p["xr"] = "flat_brk"; p["thesis"] += " Правило выхода (флэт, пробой): на +0.4R закрыть 50% объёма, остаток в безубыток с учётом комиссий."
+                    p["xr"] = "flat_brk"; p["thesis"] += " Правило выхода (флэт, пробой): на +0.4R закрыть 50% объёма, стоп остатка на -0.15R, на +0.8R в безубыток с учётом комиссий."
                 else: log("flat_brk skipped order %d %s: цель ближе 0.4R" % (o["id"], o["sym"]))
             ps_.append(p); o.update(status="filled", fill_t=ft, fill_px=fp, pos_id=p["id"], t_end=ft)
             log("FILLED order %d %s %s %.6g -> position #%d" % (o["id"], o["sym"], o["side"], fp, p["id"]))
