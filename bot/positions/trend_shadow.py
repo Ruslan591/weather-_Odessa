@@ -43,7 +43,7 @@ def prefetch(items):
         try: snap(*k)
         except Exception: pass
     if todo:
-        with cf.ThreadPoolExecutor(max_workers=min(12, len(todo))) as ex: list(ex.map(one, todo))
+        with cf.ThreadPoolExecutor(max_workers=min(30, len(todo))) as ex: list(ex.map(one, todo))
 
 def agree(side, s):
     if s is None: return None
