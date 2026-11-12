@@ -634,6 +634,10 @@ def cycle(dry=False):
                  "R": R, "R_pct": R / fp * 100, "be_r": 1.0, "lock_pct": 0.2, "be_px": fp + side * R, "lock_px": fp * (1 + side * 0.2 / 100), "armed": False,
                  "trail_dist": 1.5 * a1, "atr1h": a1, "max_h": MAXH, "stake": pos.STAKE, "lev": pos.LEV, "thesis": th, "last_t": (ft // 60000) * 60000, "hi": fp, "lo": fp, "status": "open",
                  "src": "chan", "order_id": o["id"], "rule": o["rule"], "placed_t": o["placed_t"], "fee_in": MAK, "fee_tp": MAK}
+            if o.get("setup") == "breakout" and (o.get("regime") or {}).get("regime") == "flat":   # правило выхода «флэт + пробой»: 50% на +0.4R, остаток в БУ с комиссиями
+                if (o["tp"] - fp) * side > 0.4 * R:
+                    p["xr"] = "flat_brk"; p["thesis"] += " Правило выхода (флэт, пробой): на +0.4R закрыть 50% объёма, остаток в безубыток с учётом комиссий."
+                else: log("flat_brk skipped order %d %s: цель ближе 0.4R" % (o["id"], o["sym"]))
             ps_.append(p); o.update(status="filled", fill_t=ft, fill_px=fp, pos_id=p["id"], t_end=ft)
             log("FILLED order %d %s %s %.6g -> position #%d" % (o["id"], o["sym"], o["side"], fp, p["id"]))
             tg_gate.emit({"type": "filled", "id": o["id"], "pos": p["id"]})
