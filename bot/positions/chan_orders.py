@@ -105,7 +105,7 @@ def prefetch_5m(pairs, now):
         except Exception as e: log("prefetch %s error: %s" % (sym, e))
     todo = [x for x in pairs if need(x)]
     if todo:
-        with cf.ThreadPoolExecutor(max_workers=min(12, len(todo))) as ex: list(ex.map(one, todo))
+        with cf.ThreadPoolExecutor(max_workers=min(40, len(todo))) as ex: list(ex.map(one, todo))
     return len(todo)
 _TM = {}; _tm_log = [0.0]
 VALID_A = 12; VALID_B = 24; MAXPEND = 8; SLOTS = 3; MAXH = 24      # SLOTS - минимум слотов; реальное число растёт с балансом (slots_state)
