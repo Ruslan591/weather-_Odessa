@@ -35,6 +35,16 @@ def snap(sym, tf, now=None):
         r = {"s": int(ss[i]), "state": st, "flip_t": int(d[j][0]), "flip_to": st}
     _c[key] = (time.time(), r); return r
 
+def prefetch(items):
+    """items: [(sym, tf)]: параллельно заполняет кэш snap (запросы к Binance с VPS идут 1-2 с, последовательно это секунды на каждый вызов shadow)."""
+    import concurrent.futures as cf
+    todo = [k for k in set(items) if not (_c.get(k) and time.time() - _c[k][0] < TTL)]
+    def one(k):
+        try: snap(*k)
+        except Exception: pass
+    if todo:
+        with cf.ThreadPoolExecutor(max_workers=min(12, len(todo))) as ex: list(ex.map(one, todo))
+
 def agree(side, s):
     if s is None: return None
     want = 1 if side == "long" else -1; st = _state(s)
