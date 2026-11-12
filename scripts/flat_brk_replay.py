@@ -3,7 +3,8 @@
 Запуск на VPS: cd /opt/trading-bot/positions && POS_DIR=/opt/trading-bot/positions_regr /opt/trading-bot/venv/bin/python flat_brk_replay.py [id_from id_to]
 Берёт позицию, сбрасывает состояние, ставит xr=flat_brk и гонит pos.step по 1m свечам от входа. Перенос стопа на S/R (pos._update) не воспроизводится."""
 import sys, json, copy
-import pos
+import pos, decisions
+decisions._write = lambda rec: None   # прогон не пишет в журнал решений
 a = int(sys.argv[1]) if len(sys.argv) > 1 else 227; b = int(sys.argv[2]) if len(sys.argv) > 2 else 232
 ps = json.load(open(pos.F)); om = {o["id"]: o for o in json.load(open(pos.F.replace("positions.json", "orders.json")))}
 tot0 = tot1 = 0.0
