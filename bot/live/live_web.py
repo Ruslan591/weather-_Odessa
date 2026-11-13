@@ -66,6 +66,7 @@ def jl(name):
     if c and c[0] == ver: return c[1]
     try: d = json.load(open(p, encoding="utf-8"))
     except Exception: return c[1] if c else None
+    if name == "orders.json" and isinstance(d, list): d = d[-400:]     # файл на МБ, нужны только свежие ордера
     CACHE[name] = (ver, d); return d
 
 
