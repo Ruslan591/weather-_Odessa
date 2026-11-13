@@ -3,7 +3,7 @@
 Источники: POS_DIR (orders.json, tg_watch.json, decisions.jsonl, tg_*.json), acct-api (GET /api/claude), цены Binance (публичный поток, ретрансляция).
 Вход: Telegram Mini App (подпись initData по токену бота и TG_USER_ID) или секретная ссылка (token.txt). Не больше 3 подключений.
 Настройки: порт LIVE_PORT (18110), Caddy проксирует /live* на него. docs/topics/live_web.md"""
-import asyncio, collections, hashlib, hmac, json, os, time, urllib.parse
+import asyncio, collections, hashlib, hmac, json, os, re, time, urllib.parse
 from aiohttp import web, ClientSession, ClientTimeout, WSMsgType
 
 POS = os.environ.get("POS_DIR", "/opt/trading-bot/positions_regr")
@@ -12,6 +12,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SNAP = "http://127.0.0.1:%s/api/claude" % os.environ.get("ACCT_PORT", "18102")
 BWS = "wss://data-stream.binance.vision/stream"
 REST = "https://data-api.binance.vision/api/v3/ticker/price"
+KL = "https://data-api.binance.vision/api/v3/klines"
+IVS = {"1m": 60000, "5m": 300000, "15m": 900000, "1h": 3600000}
 MAXC = 3
 
 
@@ -31,7 +33,7 @@ try: TOK = open(os.path.join(HERE, "token.txt"), encoding="utf-8").read().strip(
 except Exception: TOK = ""
 
 PX = {}; BTCK = {}; DIRTY = set(); CL = set(); EVT = collections.deque(maxlen=120); NEW = []
-ST = {"state": None, "sig": None, "syms": set()}; FAILS = {}; CACHE = {}; OSEEN = {}; DEC = {"pos": None, "buf": b""}; BASE = {"orders": False}
+ST = {"state": None, "sig": None, "syms": set(), "arch": [], "asig": None, "extra": {}}; CHANS = {}; LASTQ = {}; FAILS = {}; CACHE = {}; OSEEN = {}; DEC = {"pos": None, "buf": b""}; BASE = {"orders": False}
 
 
 def log(m): print("%s %s" % (time.strftime("%m-%d %H:%M:%S", time.gmtime()), m), flush=True)
@@ -66,7 +68,10 @@ def jl(name):
     if c and c[0] == ver: return c[1]
     try: d = json.load(open(p, encoding="utf-8"))
     except Exception: return c[1] if c else None
-    if name == "orders.json" and isinstance(d, list): d = d[-400:]     # файл на МБ, нужны только свежие ордера
+    if name == "orders.json" and isinstance(d, list):      # файл на МБ: каналы запоминаем по всем ордерам (для графика сделки), остальное только свежие
+        for o in d:
+            if o.get("chan") and o.get("id") is not None: CHANS[o["id"]] = o["chan"]
+        d = d[-400:]
     CACHE[name] = (ver, d); return d
 
 
@@ -105,8 +110,8 @@ def tail_decisions():
         ev(d.get("t") or time.time() * 1000, "dec", fmt_dec(d), str(d.get("sym") or ""), new=not first)
 
 
-OPEN_F = ("id", "sym", "side", "entry", "stop", "stop0", "tp", "R", "stake", "lev", "t_in", "armed", "be_px")
-CLOSED_F = ("id", "sym", "side", "net_pct", "r_mult", "pnl_usd", "reason", "t_out", "entry", "exit")
+OPEN_F = ("id", "sym", "side", "entry", "stop", "stop0", "tp", "R", "stake", "lev", "t_in", "armed", "be_px", "lock_px", "order_id")
+CLOSED_F = ("id", "sym", "side", "entry", "exit", "stop0", "stop", "tp", "t_in", "t_out", "net_pct", "r_mult", "pnl_usd", "reason", "order_id", "stake", "be_px", "lock_px")
 ORD_F = ("id", "sym", "side", "price", "stop", "tp", "atr", "line_px", "live1m", "live1m_tries", "rule", "approved_t", "placed_t", "setup")
 
 
@@ -114,7 +119,7 @@ def derive(snap):
     orders = jl("orders.json") or []; W = jl("tg_watch.json") or {}
     b1 = jl("tg_btc1m_last.json"); reg = jl("tg_regime.json"); sl = jl("tg_slots.json"); mode = jl("tg_mode.json"); lc = jl("tg_live1m.json") or {}
     now = int(time.time() * 1000)
-    pend = [{k: o.get(k) for k in ORD_F} for o in orders if o.get("status") == "pending"][-20:]
+    pend = [dict({k: o.get(k) for k in ORD_F}, ch=o.get("chan")) for o in orders if o.get("status") == "pending"][-20:]
     for o in orders[-80:]:
         if not str(o.get("rule", "")).startswith("tg_"): continue
         l1 = o.get("live1m") or {}; sig = (o.get("status"), o.get("live1m_tries"), l1.get("ok")); old = OSEEN.get(o["id"]); OSEEN[o["id"]] = sig
@@ -134,14 +139,19 @@ def derive(snap):
         if w.get("status") in ("alert", "watching"):
             L = w.get("last") or {}; line = L.get("Rn") if w.get("line") == "upper" else L.get("Sn")
             watch.append({"id": w["id"], "sym": w["sym"], "side": w.get("side"), "line": w.get("line"), "lp": line if line is not None else w.get("line_px"),
-                          "atr": L.get("atr") or w.get("atr"), "state": w.get("state"), "nb": w.get("n_beyond"), "ct": w.get("ctype"), "st": w.get("status"), "upd": w.get("updates"), "tf": w.get("t_follow") or w.get("created")})
+                          "atr": L.get("atr") or w.get("atr"), "state": w.get("state"), "nb": w.get("n_beyond"), "ct": w.get("ctype"), "st": w.get("status"), "upd": w.get("updates"), "tf": w.get("t_follow") or w.get("created"), "ch": w.get("chan")})
     watch = watch[-20:]
     s = snap if isinstance(snap, dict) else {}
-    st = {"t": "state", "acc": s.get("account"), "open": [{k: p.get(k) for k in OPEN_F} for p in (s.get("open") or [])],
-          "closed": [{k: p.get(k) for k in CLOSED_F} for p in (s.get("closed") or [])[-8:]], "pend": pend, "watch": watch,
+    st = {"t": "state", "acc": s.get("account"), "open": [dict({k: p.get(k) for k in OPEN_F}, ch=CHANS.get(p.get("order_id"))) for p in (s.get("open") or [])], "pend": pend, "watch": watch,
           "b1": b1, "reg": reg, "slots": sl, "mode": mode, "mx": float(lc.get("max_dist_atr", 0.9)) if lc.get("enabled", True) else None}
     syms = {"BTCUSDT"} | {p["sym"] for p in st["open"]} | {o["sym"] + "USDT" for o in pend} | {w["sym"] + "USDT" for w in watch}
     return st, set(list(syms)[:30])
+
+
+def build_arch(snap):
+    c = (snap or {}).get("closed") if isinstance(snap, dict) else None
+    out = [{k: p.get(k) for k in CLOSED_F} for p in (c or []) if p.get("t_out")]
+    out.sort(key=lambda x: x["t_out"], reverse=True); return out
 
 
 # ---------- рассылка ----------
@@ -165,6 +175,9 @@ async def state_loop(app):
                 except Exception as e: log("snap: %s" % e)
             await loop.run_in_executor(None, tail_decisions)
             st, syms = await loop.run_in_executor(None, derive, snap)
+            if isinstance(snap, dict):
+                arch = build_arch(snap); asig = (len(arch), arch[0]["id"] if arch else None, arch[0]["t_out"] if arch else None)
+                if asig != ST["asig"]: ST["asig"] = asig; ST["arch"] = arch; await bcast({"t": "arch", "a": arch})
             ST["syms"] = syms; sig = json.dumps(st, sort_keys=True, ensure_ascii=False, default=str)
             if sig != ST["sig"]: ST["sig"] = sig; ST["state"] = st; await bcast(dict(st, srv=int(time.time() * 1000)))
             while NEW: await bcast({"t": "evt", "e": NEW.pop(0)})
@@ -197,7 +210,7 @@ async def binance_loop(app):
                 back = 1; subs = set(); last = 0
                 while True:
                     if time.time() - last > 2:
-                        last = time.time(); want = {"btcusdt@kline_1m"} | {s.lower() + "@aggTrade" for s in ST["syms"]}
+                        last = time.time(); ex = {s for s, t in ST["extra"].items() if t > time.time()}; want = {"btcusdt@kline_1m"} | {s.lower() + "@aggTrade" for s in (ST["syms"] | ex)}
                         add = sorted(want - subs); rem = sorted(subs - want)
                         if rem: await ws.send_json({"method": "UNSUBSCRIBE", "params": rem, "id": 1})
                         if add: await ws.send_json({"method": "SUBSCRIBE", "params": add, "id": 2})
@@ -241,10 +254,33 @@ async def ws_handler(req):
         await ws.close(); return ws
     CL.add(ws)
     try:
-        await ws.send_str(json.dumps({"t": "hello", "state": ST["state"], "px": PX, "k": BTCK, "evt": list(EVT)[-80:], "srv": int(time.time() * 1000)}, ensure_ascii=False, default=str))
-        async for _ in ws: pass
-    finally: CL.discard(ws)
+        await ws.send_str(json.dumps({"t": "hello", "state": ST["state"], "arch": ST["arch"], "px": PX, "k": BTCK, "evt": list(EVT)[-80:], "srv": int(time.time() * 1000)}, ensure_ascii=False, default=str))
+        async for m in ws:
+            if m.type != WSMsgType.TEXT: continue
+            try: q = json.loads(m.data)
+            except Exception: continue
+            if q.get("q") == "candles": await handle_candles(req.app["sess"], ws, q)
+    finally: CL.discard(ws); LASTQ.pop(id(ws), None)
     return ws
+
+
+async def handle_candles(sess, ws, q):
+    now = time.time(); k = id(ws)
+    if now - LASTQ.get(k, 0) < 0.1: return
+    LASTQ[k] = now; sym = str(q.get("sym", "")); iv = str(q.get("iv", "5m")); rid = q.get("rid")
+    if not re.fullmatch(r"[A-Z0-9]{2,15}USDT", sym) or iv not in IVS: return
+    try:
+        pr = {"symbol": sym, "interval": iv, "limit": max(50, min(500, int(q.get("lim") or 120)))}
+        if q.get("end"): pr["endTime"] = int(q["end"])
+        async with sess.get(KL, params=pr) as r: rows = await r.json()
+        c = [[int(x[0]), float(x[1]), float(x[2]), float(x[3]), float(x[4]), float(x[5])] for x in rows]
+    except Exception as e:
+        log("candles %s: %s" % (sym, e)); await ws.send_json({"t": "candles", "rid": rid, "err": 1}); return
+    ST["extra"][sym] = now + 60
+    if c and sym not in PX: PX[sym] = c[-1][4]; DIRTY.add(sym)
+    try: ch = CHANS.get(int(q["oid"])) if q.get("oid") is not None else None
+    except Exception: ch = None
+    await ws.send_str(json.dumps({"t": "candles", "rid": rid, "sym": sym, "iv": iv, "c": c, "ch": ch, "srv": int(time.time() * 1000)}))
 
 
 async def on_start(app):
