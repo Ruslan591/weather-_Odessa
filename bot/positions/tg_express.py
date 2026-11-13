@@ -180,6 +180,16 @@ def _btc1m(side, setup="bounce"):
     return (g["ok"], g["good"], g["bad"], g["snap"]) if g else None
 
 
+def _strict_lines(b1):
+    """Справочно, на решение не влияет: строгий BTC 1m = pos (цена за EMA9 в сторону сделки и растёт) И rsi_ok (RSI14 40-60 по ходу сделки). Строка в пост; признак strict пишется в снимок b1 (журнал, ордера, разборы)."""
+    try:
+        sn = b1[3] if b1 else None
+        if not isinstance(sn, dict): return []
+        st = bool(sn.get("strict")) if "strict" in sn else bool(sn.get("pos") and sn.get("rsi_ok"))
+        return ["ℹ️ Строгий BTC 1м (цена по EMA9 и RSI): %s" % ("пройден" if st else "не пройден")]
+    except Exception: return []
+
+
 def _regime(side):
     """Условие (ok, good, bad) по режиму рынка 1h или None; и снимок режима для записи."""
     if not RG: return None, None
@@ -233,6 +243,7 @@ def verdict(w, kl=None):
     side = "long" if s > 0 else "short"; stop = c - s * risk
     plan = {"side": side, "entry": c, "stop": stop, "tp": tp, "f": f, "rr": round(rr_t, 2), "rr_opp": round(rr_opp, 2)}
     lines = ["%s %s" % ("✓" if ok else "✗", good if ok else bad) for ok, good, bad in conds]
+    lines += _strict_lines(b1)
     if call == "enter":
         head = "🧠 Моё мнение: ✅ можно заходить — %s по рынку ~%s, стоп %s, цель %s (%s канала), R:R %.1f" % (side.upper(), _fmt(c), _fmt(stop), _fmt(tp), ftxt, rr_t)
         if counter: head += "\n⚠️ против тренда канала"
@@ -295,6 +306,7 @@ def verdict_break(w, kl=None):
     if against: feat["cr"] = 1
     if bcr: feat["bc"] = bcr
     lines = ["%s %s" % ("✓" if ok else "✗", good if ok else bad) for ok, good, bad in conds]
+    lines += _strict_lines(b1)
     if call == "enter": head = "💥 Пробой линии: ✅ можно заходить — %s по рынку ~%s, стоп %s, цель %s (0.5 высоты канала за линией), R:R %.1f" % (side.upper(), _fmt(c), _fmt(stop), _fmt(tp), rr)
     else: head = "💥 Пробой линии формируется: ⏳ ждём — %s" % next(bad for ok, good, bad in conds if not ok)
     return {"call": call, "text": head + "\n" + "\n".join(lines), "plan": plan, "feat": feat, "t": int(L.get("t") or 0), "sym": w.get("sym"), "side": side, "b1": b1[3] if b1 else None, "rg": rgs}
