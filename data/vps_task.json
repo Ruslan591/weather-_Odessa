@@ -1,1 +1,1 @@
-{"task_id": "ccs_start", "cmd": "cd /opt/weather-pipeline/repo && git update-ref -d refs/remotes/origin/main 2>/dev/null; git fetch -q origin main:refs/remotes/origin/main; git show origin/main:scripts/chan_combo_study.py > /tmp/ccs.py && (setsid nohup /opt/trading-bot/venv/bin/python /tmp/ccs.py > /tmp/ccs.out 2>&1 &) ; sleep 5; head -c 300 /tmp/ccs.out; echo started", "timeout": 60}
+{"task_id": "ccs_poll", "cmd": "sleep 20; ls -la /tmp/ccs.out; cat /tmp/ccs.out | head -60; pgrep -f ccs.py >/dev/null && echo RUNNING || echo FINISHED", "timeout": 60}
