@@ -1,1 +1,1 @@
-{"task_id": "cfg1", "cmd": "cat /opt/trading-bot/positions_regr/tg_express_cfg.json 2>/dev/null | head -c 600; ls /opt/tg-notify | head -40; grep -n 'dist_max' /opt/tg-notify/tg_express.py | head -3", "timeout": 60}
+{"task_id": "dep_live1m_1", "cmd": "cd /opt/weather-pipeline/repo && git update-ref -d refs/remotes/origin/main 2>/dev/null; git fetch -q origin main:refs/remotes/origin/main; git show origin/main:scripts/deploy_flat_brk.sh | bash -s chan_orders.py:11d672a236a8ef01de976e9bc74897f1 2>&1 | tail -15", "timeout": 180}
