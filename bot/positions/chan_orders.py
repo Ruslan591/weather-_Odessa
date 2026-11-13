@@ -461,6 +461,59 @@ def _tg_price(sym):
     return float(pos.price(sym + "USDT"))
 
 
+LIVE1M_CFG = os.path.join(D, "tg_live1m.json")   # {"enabled": true, "max_dist_atr": 0.9}; выключить: {"enabled": false} (применяется сразу)
+
+
+def _live1m_cfg():
+    c = {"enabled": True, "max_dist_atr": 0.9}
+    try: c.update(json.load(open(LIVE1M_CFG, encoding="utf-8")))
+    except Exception: pass
+    return c
+
+
+def _btc_live_candle():
+    """Текущая (ещё не закрытая) свеча BTCUSDT 1m: (open, last) или None при ошибке."""
+    import urllib.request
+    u = "https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=1"
+    for _ in range(2):
+        try:
+            k = json.load(urllib.request.urlopen(u, timeout=5))[-1]
+            return float(k[1]), float(k[4])
+        except Exception: time.sleep(0.3)
+    return None
+
+
+def _live1m_gate(o, now, cfg=None, price_fn=None, candle_fn=None):
+    """Рыночный вход из слежения: в момент открытия текущая свеча BTC 1m должна идти по ходу сделки (short: цена ниже открытия свечи, long: выше).
+    Не по ходу -> не открываем, ордер остаётся pending и проверяется заново в следующем цикле, пока цена не ушла от линии дальше max_dist_atr (тогда отмена; общий потолок 10 мин остаётся).
+    По ходу -> цена и стоп обновляются по живой цене (стоп сдвигается на ту же дельту). Возвращает (go | wait | cancel, причина). Нет цены или свечи BTC -> go (как раньше)."""
+    cfg = cfg or _live1m_cfg()
+    if not cfg.get("enabled", True): return "go", None
+    s = 1 if o["side"] == "long" else -1
+    try: px = float((price_fn or _tg_price)(o["sym"]))
+    except Exception: px = None
+    if not px: log("live1m %s: нет цены, вход без проверки" % o["sym"]); return "go", None
+    atr = float(o.get("atr") or 0); lp = o.get("line_px"); mx = float(cfg.get("max_dist_atr", 0.9))
+    if lp is not None and atr > 0:
+        moved = (px - float(lp)) * s / atr          # путь цены от линии по ходу сделки, ATR (минус: цена ушла за линию против сделки)
+        if abs(moved) > mx:
+            return "cancel", "вход по рынку не открыт: цена ушла от линии на %.2f ATR (лимит %.2f), подтверждения BTC 1m не было" % (moved, mx)
+    cd = (candle_fn or _btc_live_candle)()
+    if not cd: log("live1m %s: нет свечи BTC 1m, вход без проверки" % o["sym"]); return "go", None
+    bo, bc = cd; o["live1m_tries"] = int(o.get("live1m_tries") or 0) + 1
+    if (bc - bo) * s <= 0:
+        o["live1m"] = {"ok": 0, "o": bo, "c": bc, "px": px, "t": now}
+        log("live1m %s %s: свеча BTC 1m не по ходу (o %.2f c %.2f), ждём (попытка %d)" % (o["sym"], o["side"], bo, bc, o["live1m_tries"]))
+        return "wait", None
+    newp = px * (1 + s * 0.0003); delta = newp - float(o["price"])
+    o["price"] = newp; o["stop"] = float(o["stop"]) + delta
+    if (float(o["tp"]) - newp) * s < max(0.0015 * newp, 0.5 * atr):
+        return "cancel", "BTC 1m подтвердил, но цель уже слишком близко к цене входа"
+    o["live1m"] = {"ok": 1, "o": bo, "c": bc, "px": px, "t": now, "tries": o["live1m_tries"]}
+    log("live1m %s %s: свеча BTC 1m по ходу (o %.2f c %.2f), вход по %.6g (попытка %d)" % (o["sym"], o["side"], bo, bc, newp, o["live1m_tries"]))
+    return "go", None
+
+
 BRK_BUF = 0.15   # стоп-ордер на пробой стоит за линией на 0.15 ATR
 TG_RULE = {"market": "tg_market", "limit": "tg_limit", "stop": "tg_stop"}
 TG_ENTRY_RU = {"market": "по рынку", "limit": "лимитом", "stop": "стоп-ордером (вход по срабатыванию уровня)"}
@@ -529,6 +582,7 @@ def _tg_mkorder(w, entry, target, px, setup="bounce"):
            "Касание линии было на свече %s, слежение шло %d свечей." % (tok(int(w["t_alert"])), int(w.get("updates", 0))), risk_text(a, price, risk, stop, "long" if s > 0 else "short")]
     mark = {"market": "вход по рынку", "limit": "лимит выставлен", "stop": "стоп-ордер выставлен"}[entry]
     o = mk(w["sym"], TG_RULE[entry], "long" if s > 0 else "short", price, stop, tp, a, t_pl, VALID_A, w["chan"], ctype=w["ctype"], why=why, atr_c=float(L["c"]), setup=setup, line="upper" if up else "lower", counter=counter, mark=mark)
+    o["line_px"] = line
     return o, None
 
 
@@ -635,7 +689,11 @@ def cycle(dry=False):
             if o_["status"] != "pending" or o_.get("rule") != "tg_market": continue
             at_ = int(o_.get("approved_t") or now)
             if now - at_ > 600000: fills.pop(o_["id"], None); cancel(o_, "рыночный ордер не исполнен за 10 минут", now)
-            else: fills[o_["id"]] = (int(time.time() * 1000), float(o_["price"]))   # время входа = момент снятия цены (а не approved_t = начало цикла: при 39 парах разница 2-3 минуты, позиция «открывалась» задним числом и ловила стоп до реального входа, #236)
+            else:
+                _g, _gw = _live1m_gate(o_, now)
+                if _g != "go": fills.pop(o_["id"], None)     # в том числе свечной заливки из прошлых циклов: без подтверждения BTC 1m не открываем
+                if _g == "cancel": cancel(o_, _gw, now)
+                if _g == "go": fills[o_["id"]] = (int(time.time() * 1000), float(o_["price"]))   # время входа = момент снятия цены (а не approved_t = начало цикла: при 39 парах разница 2-3 минуты, позиция «открывалась» задним числом и ловила стоп до реального входа, #236)
         for x in orders:  # заменённые правила: заблаговременные у границы (флаг) и ретест без подтверждения
             if x["status"] == "pending" and ((x["rule"] in ("chan_top", "chan_bottom") and not CHAN_EDGE) or (x["rule"] in ("retest_up", "retest_down") and not x.get("rv"))):
                 cancel(x, "правило заменено: ретест с подтверждением удержания")
