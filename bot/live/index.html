@@ -26,7 +26,7 @@ h2{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut)
 .ar{display:flex;align-items:center;gap:8px;padding:7px 2px;border-bottom:1px solid var(--bd);cursor:pointer;font-variant-numeric:tabular-nums}.ar:active{background:var(--card)}
 #msg{padding:30px 10px;text-align:center;color:var(--mut)}
 #chart{position:fixed;inset:0;z-index:20;background:var(--bg);display:none;flex-direction:column;padding:env(safe-area-inset-top,0) 8px calc(env(safe-area-inset-bottom,0) + 8px)}
-#ch_h{flex-wrap:nowrap!important;overflow-x:auto;gap:6px;padding:6px 0}#chart.on{display:flex}#cv{flex:1;width:100%;min-height:0;display:block;touch-action:none}
+#ch_h{flex-wrap:nowrap!important;overflow-x:auto;gap:6px;padding:6px 0}#ch_t{flex-wrap:nowrap;gap:5px;padding-top:6px}#ch_t .cb{flex:1;padding:8px 0;font-size:14px}#chart.on{display:flex}#cv{flex:1;width:100%;min-height:0;display:block;touch-action:none}
 </style></head><body>
 <div class="top"><div class="row"><span class="dot" id="dot"></span><span id="conn" class="small mut">подключение…</span><span class="sp"></span><span id="mode" class="small mut"></span></div>
 <div class="row" style="margin-top:4px"><span class="big" id="btc">BTC —</span><span id="k" class="small"></span><span class="sp"></span><span id="cols" class="small"></span></div>
@@ -40,7 +40,7 @@ h2{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut)
 <h2>События</h2><div class="card" id="evt"></div>
 <h2>Архив закрытых</h2><div class="card small" id="asum"></div><div id="arch"></div>
 </div>
-<div id="chart"><div class="row" id="ch_h"></div><canvas id="cv"></canvas><div class="small mut" id="ch_f" style="padding-top:4px"></div></div>
+<div id="chart"><div class="row" id="ch_h"></div><canvas id="cv"></canvas><div class="row" id="ch_t"></div><div class="small mut" id="ch_f" style="padding-top:4px"></div></div>
 <script async src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>
 const S={st:null,px:{},k:{},evt:[],arch:[],archN:30,t:0,tpx:0,q:0,off:0};
@@ -89,8 +89,8 @@ function chanAt(l,t){return l?l.p1+l.s*(t-l.t1):null}
 function clampLim(x){return Math.max(100,Math.min(1000,Math.round(x)))}
 function fitView(){
   const iv=IVMS[CH.iv];
-  if(CH.closed)CH.view={n:Math.max(40,Math.round((CH.t_out-CH.t_in)/iv)+60),tL:CH.t_in-30*iv,follow:false};
-  else CH.view={n:(CH.view&&CH.view.n)||100,tL:0,follow:true};
+  if(CH.closed)CH.view={n:Math.max(40,Math.round((CH.t_out-CH.t_in)/iv)+60),tL:CH.t_in-30*iv,follow:false,vz:1,vo:0};
+  else CH.view={n:(CH.view&&CH.view.n)||100,tL:0,follow:true,vz:1,vo:0};
   CH.lim=CH.closed?clampLim((CH.t_out-CH.t_in)/iv+250):Math.max(CH.lim||300,300)
 }
 function openChart(ctx){
@@ -113,34 +113,47 @@ function tickChart(){
   else{l[4]=p;if(p>l[2])l[2]=p;if(p<l[3])l[3]=p}
 }
 setInterval(()=>{if(CH&&!CH.closed&&!CH.loading)reqCandles()},20000);
+const cl=(x,a,b)=>Math.max(a,Math.min(b,x));
+function leftT(){const v=CH.view,iv=IVMS[CH.iv],cs=CH.cs;return v.follow&&cs.length?cs[cs.length-1][0]+iv*6-v.n*iv:v.tL}
+function setN(n1,b){
+  const v=CH.view,iv=IVMS[CH.iv],pw=CH.pw||300;n1=cl(n1,12,800);
+  if(b.follow&&!CH.closed){v.n=n1;v.follow=true}
+  else{const xf=b.mid!=null?b.mid/pw:.5,tAt=b.tL+xf*b.n*iv;v.tL=tAt-xf*n1*iv;v.n=n1;v.follow=false}
+  dirty()
+}
+function panTo(tL){
+  const v=CH.view,iv=IVMS[CH.iv],cs=CH.cs;if(!cs.length)return;const first=cs[0][0],last=cs[cs.length-1][0];
+  v.tL=cl(tL,first-.3*v.n*iv,last+iv*8-v.n*iv*.7);v.follow=!CH.closed&&v.tL+v.n*iv>=last+iv*5.5;dirty()
+}
+function curBase(){const v=CH.view;return{tL:leftT(),n:v.n,follow:v.follow}}
 function buildChartHead(){
   const hd=$('#ch_h');hd.replaceChildren();
   const x=h('button','cb','✕');x.onclick=closeChart;hd.append(x,h('b',null,usd(CH.sym).replace('USDT','')),CH.side?side(CH.side):h('span'),h('span','sp'));
   for(const iv of Object.keys(IVMS)){const b=h('button','cb'+(CH.iv===iv?' on':''),iv);b.onclick=()=>{CH.iv=iv;CH.cs=[];fitView();buildChartHead();reqCandles()};hd.append(b)}
-  const mn=h('button','cb','−'),pl=h('button','cb','+'),fl=h('button','cb','▶');
-  mn.onclick=()=>zoomAt(null,1.4);pl.onclick=()=>zoomAt(null,1/1.4);fl.onclick=()=>{if(CH.closed){const l=CH.lim;fitView();CH.lim=l}else CH.view.follow=true;dirty()};hd.append(mn,pl,fl)
-}
-function zoomAt(xpx,f){
-  if(!CH)return;const v=CH.view,iv=IVMS[CH.iv],pw=CH.pw||300,n0=v.n,n1=Math.max(12,Math.min(800,n0*f));
-  if(!v.follow){const xx=xpx==null?pw/2:xpx,tAt=v.tL+xx/pw*n0*iv;v.tL=tAt-xx/pw*n1*iv}
-  v.n=n1;dirty()
-}
-function panBy(dx){
-  if(!CH||!CH.cs.length)return;const v=CH.view,iv=IVMS[CH.iv],pw=CH.pw||300;
-  if(v.follow){v.tL=CH.cs[CH.cs.length-1][0]+iv*6-v.n*iv;v.follow=false}
-  v.tL-=dx/pw*v.n*iv;const first=CH.cs[0][0],last=CH.cs[CH.cs.length-1][0];
-  v.tL=Math.max(first-0.3*v.n*iv,Math.min(last+iv*8-v.n*iv*0.7,v.tL));
-  if(!CH.closed&&v.tL+v.n*iv>=last+iv*5)v.follow=true;dirty()
+  const tb=$('#ch_t');tb.replaceChildren();const iv=()=>IVMS[CH.iv];
+  const B=[['◀',()=>panTo(leftT()-CH.view.n*iv()*.25)],['▶',()=>panTo(leftT()+CH.view.n*iv()*.25)],['↔−',()=>setN(CH.view.n*1.25,curBase())],['↔+',()=>setN(CH.view.n*.8,curBase())],
+    ['↕−',()=>{CH.view.vz=cl(CH.view.vz/1.25,.15,12);dirty()}],['↕+',()=>{CH.view.vz=cl(CH.view.vz*1.25,.15,12);dirty()}],
+    ['⟲',()=>{const l=CH.lim;fitView();CH.lim=Math.max(l,CH.lim);if(!CH.closed)CH.view.n=100;dirty()}],['⏭',()=>{if(CH.closed){const l=CH.lim;fitView();CH.lim=l}else{CH.view.follow=true;CH.view.vz=1;CH.view.vo=0}dirty()}]];
+  for(const [l,f] of B){const b=h('button','cb',l);b.onclick=f;tb.append(b)}
 }
 (function(){
-  const cv=document.getElementById('cv'),xy=e=>e.clientX-cv.getBoundingClientRect().left;
-  cv.addEventListener('pointerdown',e=>{try{cv.setPointerCapture(e.pointerId)}catch(_){}P.set(e.pointerId,{x:e.clientX});G=null});
-  cv.addEventListener('pointermove',e=>{if(!CH||!P.has(e.pointerId))return;const pr=P.get(e.pointerId);P.set(e.pointerId,{x:e.clientX});
-    if(P.size===1){panBy(e.clientX-pr.x);G=null}
-    else if(P.size>=2){const [a,b]=[...P.values()],d=Math.abs(a.x-b.x)||1;if(G&&G.d)zoomAt((a.x+b.x)/2-cv.getBoundingClientRect().left,G.d/d);G={d}}});
-  const up=e=>{P.delete(e.pointerId);G=null};cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
-  cv.addEventListener('wheel',e=>{if(!CH)return;e.preventDefault();zoomAt(xy(e),e.deltaY>0?1.15:1/1.15)},{passive:false});
-  cv.addEventListener('dblclick',()=>{if(CH){CH.view.n=100;CH.view.follow=!CH.closed;dirty()}})
+  const cv=document.getElementById('cv'),pos=e=>{const r=cv.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}};
+  cv.addEventListener('pointerdown',e=>{try{cv.setPointerCapture(e.pointerId)}catch(_){}const q=pos(e);P.set(e.pointerId,q);if(!CH)return;const v=CH.view;
+    if(P.size===1)G={x:q.x,y:q.y,tL:leftT(),n:v.n,follow:v.follow,vz:v.vz,vo:v.vo,zone:q.x>CH.pw?'price':q.y>CH.yT?'time':'plot',moved:0};
+    else if(P.size===2&&G){const a=[...P.values()];G.pinch={dx:Math.abs(a[0].x-a[1].x),dy:Math.abs(a[0].y-a[1].y),n:v.n,vz:v.vz,mid:(a[0].x+a[1].x)/2,tL:leftT(),follow:v.follow};G.moved=1}});
+  cv.addEventListener('pointermove',e=>{if(!CH||!G||!P.has(e.pointerId))return;const q=pos(e);P.set(e.pointerId,q);const v=CH.view,iv=IVMS[CH.iv];
+    if(P.size>=2&&G.pinch){const a=[...P.values()],dx=Math.abs(a[0].x-a[1].x),dy=Math.abs(a[0].y-a[1].y);
+      if(G.pinch.dy>G.pinch.dx*1.2){v.vz=cl(G.pinch.vz*Math.max(dy,10)/Math.max(G.pinch.dy,10),.15,12);dirty()}
+      else setN(G.pinch.n*Math.max(G.pinch.dx,10)/Math.max(dx,10),G.pinch);return}
+    const dx=q.x-G.x,dy=q.y-G.y;if(Math.abs(dx)>5||Math.abs(dy)>5)G.moved=1;if(!G.moved)return;
+    if(G.zone==='price'){v.vz=cl(G.vz*Math.exp(-dy/120),.15,12);dirty()}
+    else if(G.zone==='time')setN(G.n*Math.exp(-dx/120),G);
+    else{panTo(G.tL-dx/(CH.pw||300)*G.n*iv);v.vo=cl(G.vo+dy*(CH.pxVo||0),-6,6);dirty()}});
+  const up=e=>{P.delete(e.pointerId);if(!P.size)G=null};cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
+  cv.addEventListener('wheel',e=>{if(!CH)return;e.preventDefault();const f=e.deltaY>0?1.15:1/1.15;
+    if(e.shiftKey){CH.view.vz=cl(CH.view.vz/f,.15,12);dirty()}else if(e.altKey)panTo(leftT()+(e.deltaY>0?1:-1)*CH.view.n*IVMS[CH.iv]*.1);
+    else setN(CH.view.n*f,Object.assign(curBase(),{mid:pos(e).x}))},{passive:false});
+  cv.addEventListener('dblclick',()=>{if(CH){CH.view.n=100;CH.view.follow=!CH.closed;CH.view.vz=1;CH.view.vo=0;dirty()}})
 })();
 function drawChart(){
   if(!CH)return;const cv=$('#cv'),dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=cv.clientHeight;if(!W||!H)return;
@@ -160,7 +173,7 @@ function drawChart(){
   const chn=[];if(CH.ch&&CH.ch.upper&&CH.ch.lower){const u=CH.ch.upper,l=CH.ch.lower;chn.push(chanAt(u,t0),chanAt(u,t1),chanAt(l,t0),chanAt(l,t1))}
   for(const L of lv){if(L.v>lo-span0&&L.v<hi+span0){lo=Math.min(lo,L.v);hi=Math.max(hi,L.v)}}
   for(const x of chn){if(x>lo-span0&&x<hi+span0){lo=Math.min(lo,x);hi=Math.max(hi,x)}}
-  const pad=(hi-lo)*.06;lo-=pad;hi+=pad;const Y=x=>PT+(hi-x)/(hi-lo)*(ph-vh),X=t=>(t-t0)/(t1-t0)*pw;
+  const rng=(hi-lo)||hi*.01,cen=(hi+lo)/2+v.vo*rng,half=rng*.525/v.vz;hi=cen+half;lo=cen-half;CH.pxVo=1.05/v.vz/Math.max(1,ph-vh-12);CH.yT=PT+ph;const Y=x=>PT+(hi-x)/(hi-lo)*(ph-vh),X=t=>(t-t0)/(t1-t0)*pw;
   c.save();c.beginPath();c.rect(0,0,pw,H);c.clip();
   c.strokeStyle='#232b3a';c.lineWidth=1;
   for(let i=0;i<=4;i++){const y=Y(lo+(hi-lo)*i/4);c.beginPath();c.moveTo(0,y);c.lineTo(pw,y);c.stroke()}
@@ -183,7 +196,7 @@ function drawChart(){
   if(CH.closed&&CH.exit!=null)f='Закрыта: '+CH.reason+' · '+sg(CH.net_pct,2)+'% · '+sg(CH.r_mult,2)+' R';
   else if(e!=null&&pc!=null&&CH.side){const s=CH.side==='long'?1:-1;f='Сейчас '+sg((pc/e-1)*s*100,2)+'% от входа'}
   else if(CH.line_px!=null&&pc!=null)f='Цена '+fp(pc)+' · линия '+fp(CH.line_px);
-  $('#ch_f').textContent=f+(CH.closed?'':v.follow?' · в реальном времени':' · листаешь историю, ▶ вернёт к текущей цене')
+  $('#ch_f').textContent=f+(CH.closed?'':v.follow?' · в реальном времени':' · листаешь историю, ⏭ вернёт к текущей цене')
 }
 addEventListener('resize',dirty);
 
