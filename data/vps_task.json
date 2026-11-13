@@ -1,1 +1,1 @@
-{"task_id": "inst_live1", "cmd": "cd /opt/weather-pipeline/repo && git update-ref -d refs/remotes/origin/main 2>/dev/null; git fetch -q origin main:refs/remotes/origin/main; git show origin/main:scripts/install_live.sh | bash -s 2>&1 | tail -20", "timeout": 240}
+{"task_id": "chk_live", "cmd": "sleep 8; systemctl is-active live-web; journalctl -u live-web -n 12 --no-pager | cut -c1-200; ps -o rss,pcpu,comm -C python | head -3; systemctl show live-web -p MemoryCurrent -p CPUUsageNSec | tr '\\n' ' '", "timeout": 60}
