@@ -270,7 +270,7 @@ async def handle_candles(sess, ws, q):
     LASTQ[k] = now; sym = str(q.get("sym", "")); iv = str(q.get("iv", "5m")); rid = q.get("rid")
     if not re.fullmatch(r"[A-Z0-9]{2,15}USDT", sym) or iv not in IVS: return
     try:
-        pr = {"symbol": sym, "interval": iv, "limit": max(50, min(500, int(q.get("lim") or 120)))}
+        pr = {"symbol": sym, "interval": iv, "limit": max(50, min(1000, int(q.get("lim") or 120)))}
         if q.get("end"): pr["endTime"] = int(q["end"])
         async with sess.get(KL, params=pr) as r: rows = await r.json()
         c = [[int(x[0]), float(x[1]), float(x[2]), float(x[3]), float(x[4]), float(x[5])] for x in rows]
