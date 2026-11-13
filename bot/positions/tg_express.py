@@ -18,7 +18,7 @@ BRKCR_CFG = os.path.join(os.environ.get("POS_DIR", "/opt/trading-bot/positions_r
 
 def _rcfg():
     """Фильтр RSI(14) 5m для ОТБОЯ: шорт только при RSI > short (65, лучше > 70), лонг только при RSI < long (35, лучше < 30). Выключить: POS_DIR/tg_rsi5.json {"enabled": false}; пороги там же."""
-    c = {"enabled": True, "short": 65.0, "long": 35.0, "round": False, "brk_short_lo": 38.0, "brk_short_hi": 50.0, "brk_short_no": 35.0, "brk_long_lo": 50.0, "brk_long_hi": 62.0, "brk_long_no": 65.0}
+    c = {"enabled": True, "short": 65.0, "long": 35.0, "short_down": 55.0, "long_up": 45.0, "round": False, "brk_short_lo": 38.0, "brk_short_hi": 50.0, "brk_short_no": 35.0, "brk_long_lo": 50.0, "brk_long_hi": 62.0, "brk_long_no": 65.0}
     try: c.update(json.load(open(RSI5_CFG, encoding="utf-8")))
     except Exception: pass
     return c
@@ -62,19 +62,22 @@ def _rsi_xs(xs, n=14):
     return 100.0 if al == 0 else 100 - 100 / (1 + ag / al)
 
 
-def _rsi5_cond(side, r, rp=None):
+def _rsi5_cond(side, r, rp=None, reg=None):
     """ОТБОЙ: SHORT только при RSI 5m > short (65) и RSI закругляется вниз (меньше, чем на предыдущей свече); LONG только при RSI < long (35) и закругляется вверх.
     rp = RSI предыдущей закрытой свечи (None -> закругление не проверяется). Условие (ok, good, bad) или None (выключено / нет данных)."""
     c = _rcfg()
     if r is None or not c.get("enabled", True): return None
+    if reg is None and RG:   # по течению режима BTC 1h порог мягче: падающий рынок - шорт от RSI 55 (short_down), растущий - лонг до RSI 45 (long_up); бэктест 2026-11-13: у шорт-отбоев в down RSI 55-65 дал 13 из 20 побед, RSI 50-55 только 4 из 11
+        try: reg = (RG.snap() or {}).get("regime")
+        except Exception: reg = None
     rd = bool(c.get("round", False)) and rp is not None
     if side == "short":
-        th = float(c["short"]); rnd = (r < rp) if rd else True
+        th = float(c["short_down"]) if reg == "down" else float(c["short"]); rnd = (r < rp) if rd else True
         good = "RSI 5m %.0f: перегрев для шорта (> %g)%s%s" % (r, th, ", сильный" if r > 70 else "", (", закругляется вниз (%.0f → %.0f)" % (rp, r)) if rd else "")
         if r <= th: bad = "RSI 5m %.0f: шорт только при RSI > %g (нет перегрева, цена может пробить канал)" % (r, th)
         else: bad = "RSI 5m %.0f > %g, но ещё не закруглился вниз (%.0f → %.0f): ждём" % (r, th, rp or 0, r)
         return (r > th and rnd, good, bad)
-    th = float(c["long"]); rnd = (r > rp) if rd else True
+    th = float(c["long_up"]) if reg == "up" else float(c["long"]); rnd = (r > rp) if rd else True
     good = "RSI 5m %.0f: перепродано для лонга (< %g)%s%s" % (r, th, ", сильный" if r < 30 else "", (", закругляется вверх (%.0f → %.0f)" % (rp, r)) if rd else "")
     if r >= th: bad = "RSI 5m %.0f: лонг только при RSI < %g (нет перепроданности, цена может пробить канал)" % (r, th)
     else: bad = "RSI 5m %.0f < %g, но ещё не закруглился вверх (%.0f → %.0f): ждём" % (r, th, rp or 0, r)
