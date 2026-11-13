@@ -1,1 +1,1 @@
-{"task_id": "port1", "cmd": "ss -ltnp 2>/dev/null | grep -E ':(80|443|180[0-9][0-9]|80[0-9][0-9])\\b' | head -20; which nginx caddy cloudflared 2>/dev/null; ufw status 2>/dev/null | head -5", "timeout": 60}
+{"task_id": "caddy1", "cmd": "cat /etc/caddy/Caddyfile 2>/dev/null | sed -E 's/(basicauth|basic_auth).*/\\1 [hidden]/' | head -40; echo ---; curl -s -m 5 localhost:18102/ 2>&1 | head -c 300", "timeout": 60}
