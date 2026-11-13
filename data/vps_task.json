@@ -1,1 +1,1 @@
-{"task_id": "c1794556092", "cmd": "( grep -rln 'rsi_ok' /opt/trading-bot --include=*.py | head; echo ===; F=$(grep -rln 'rsi_ok' /opt/trading-bot/positions --include=*.py | head -1); echo $F; grep -n 'rsi_ok\\|emad\\|rsd\\|\"pos\"\\|def b1\\|def _b1' $F | head -40 ) 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 60}
+{"task_id": "c1794556161", "cmd": "( grep -rl 'rsi_ok' /opt --include=*.py 2>/dev/null | head -5; echo ===; grep -rl 'rsi_ok' /opt/weather-pipeline/repo/bot 2>/dev/null | head -5 ) 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 90}
