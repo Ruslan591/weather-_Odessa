@@ -14,6 +14,8 @@ except Exception: RG = None
 import json, os
 RSI5_CFG = os.path.join(os.environ.get("POS_DIR", "/opt/trading-bot/positions_regr"), "tg_rsi5.json")
 BRKCR_CFG = os.path.join(os.environ.get("POS_DIR", "/opt/trading-bot/positions_regr"), "tg_brk_cr.json")
+BTCCORR_CFG = os.path.join(os.environ.get("POS_DIR", "/opt/trading-bot/positions_regr"), "tg_btc_corr.json")
+BTC5_KL = "/tmp/klcache/BTC_5m_1000.json"   # 5m свечи BTC, их обновляет сканер chan_orders
 
 
 def _rcfg():
@@ -31,6 +33,48 @@ def _brk_cr_cfg():
     try: c.update(json.load(open(BRKCR_CFG, encoding="utf-8")))
     except Exception: pass
     return c
+
+
+def _bcc_cfg():
+    """Корреляция альта с BTC (разбор 2026-11-13). mode: shadow (только показ и запись, по умолчанию) | block (блок лонга) | off. Блок лонга: BTC за последний час изменился меньше b1h_max (0%, т.е. красный/стоящий) И корреляция 5m-доходностей альта с BTC за n свечей >= corr_min (0.6).
+    Выключить: POS_DIR/tg_btc_corr.json {"mode": "off"}; включить блок: {"mode": "block"}."""
+    c = {"mode": "shadow", "corr_min": 0.6, "b1h_max": 0.0, "n": 72}
+    try: c.update(json.load(open(BTCCORR_CFG, encoding="utf-8")))
+    except Exception: pass
+    return c
+
+
+def _btc_corr(w, kl):
+    """(корреляция 5m-доходностей альта и BTC за n закрытых свечей, ход BTC за 1 ч в %, ход BTC за 15 мин в %) или None, если данных нет."""
+    import math
+    try:
+        t = int((w.get("last") or {}).get("t") or 0); n = int(_bcc_cfg()["n"])
+        if not kl or not t: return None
+        a = {int(k[0]): float(k[4]) for k in kl if int(k[0]) <= t}
+        b = {int(k[0]): float(k[4]) for k in json.load(open(BTC5_KL)) if int(k[0]) <= t}
+        ts = sorted(set(a) & set(b))[-(n + 1):]; tb = sorted(b)
+        if len(ts) < 41 or len(tb) < 14: return None
+        ra = [math.log(a[ts[i]] / a[ts[i - 1]]) for i in range(1, len(ts))]; rb = [math.log(b[ts[i]] / b[ts[i - 1]]) for i in range(1, len(ts))]
+        ma = sum(ra) / len(ra); mb = sum(rb) / len(rb)
+        sa = math.sqrt(sum((x - ma) ** 2 for x in ra)); sb = math.sqrt(sum((x - mb) ** 2 for x in rb))
+        if sa == 0 or sb == 0: return None
+        cr = sum((x - ma) * (y - mb) for x, y in zip(ra, rb)) / (sa * sb)
+        return cr, (b[tb[-1]] / b[tb[-13]] - 1) * 100, (b[tb[-1]] / b[tb[-4]] - 1) * 100
+    except Exception: return None
+
+
+def _bcc_cond(side, w, kl):
+    """Условие (ok, good, bad) и [corr, btc1h] для записи; (None, None) если данных нет или режим off. В режиме shadow условие всегда ok (только показ)."""
+    cfg = _bcc_cfg()
+    if cfg.get("mode") == "off": return None, None
+    r = _btc_corr(w, kl)
+    if r is None: return None, None
+    cr, h1, m15 = r
+    bad = side == "long" and h1 < float(cfg["b1h_max"]) and cr >= float(cfg["corr_min"])
+    txt = "корреляция с BTC %.2f, BTC за 1 ч %+.2f%%" % (cr, h1)
+    rec = [round(cr, 2), round(h1, 2)]
+    if cfg.get("mode") == "block": return (not bad, txt + ": лонг не против BTC", txt + ": лонг при красном BTC и высокой корреляции, ждём"), rec
+    return (True, txt + (" ⚠ лонг при красном BTC и высокой корреляции (пока только запись)" if bad else ""), ""), rec
 
 
 def _rsi5_pair(w, kl):
@@ -183,6 +227,8 @@ def verdict(w, kl=None):
     if rgc: conds.append(rgc)
     r5, r5p = _rsi5_pair(w, kl); r5c = _rsi5_cond("long" if s > 0 else "short", r5, r5p)
     if r5c: conds.append(r5c)
+    bcc, bcr = _bcc_cond("long" if s > 0 else "short", w, kl)
+    if bcc: conds.append(bcc)
     call = "enter" if all(x[0] for x in conds) else "wait"
     side = "long" if s > 0 else "short"; stop = c - s * risk
     plan = {"side": side, "entry": c, "stop": stop, "tp": tp, "f": f, "rr": round(rr_t, 2), "rr_opp": round(rr_opp, 2)}
@@ -199,6 +245,7 @@ def verdict(w, kl=None):
     if cn: text += "\n" + cn
     if tgt: text += "\n🎯 Если заходить: " + tgt["text"] + (" ≈ %s" % _fmt(tp))
     feat = {"dist": round(dist, 3), "wick": round(wick, 3), "cpos": round(cpos, 3), "favor": int(favor), "rr": round(rr_t, 2), "st": st, "counter": int(counter), "width": round(H / a, 2), "nb": nb, "rsi5": None if r5 is None else round(r5, 1)}
+    if bcr: feat["bc"] = bcr
     geo = {"line": line, "H": H, "risk": risk, "a": a}
     return {"call": call, "text": text, "feat": feat, "plan": plan, "geo": geo, "t": int(L.get("t") or 0), "sym": w.get("sym"), "side": side, "b1": b1[3] if b1 else None, "rg": rgs}
 
@@ -233,6 +280,8 @@ def verdict_break(w, kl=None):
     if rgc: conds.append(rgc)
     r5 = _rsi5(w, kl); r5c = _rsi5_brk("long" if s > 0 else "short", r5)
     if r5c: conds.append(r5c)
+    bcc, bcr = _bcc_cond("long" if s > 0 else "short", w, kl)
+    if bcc: conds.append(bcc)
     cr = _brk_cr_cfg(); rgm = (rgs or {}).get("regime"); nb_ = int(w.get("n_beyond") or 0); against = bool(rgm) and ((s > 0 and rgm == "down") or (s < 0 and rgm == "up"))
     if cr.get("enabled", True) and against:   # пробой против режима: только сильная свеча и без погони (в разборах такие пробои чаще всего уходили в стоп сразу после входа)
         bmin, nmax = float(cr["body"]), int(cr["nmax"]); okc = body >= bmin and nb_ <= nmax
@@ -244,6 +293,7 @@ def verdict_break(w, kl=None):
     plan = {"side": side, "entry": c, "stop": stop, "tp": tp, "target": "h05", "rr": round(rr, 2)}
     feat = {"beyond": round(beyond, 3), "body": round(body, 3), "rr": round(rr, 2), "n": int(w.get("n_beyond") or 0), "width": round(H / a, 2), "counter": int(bool(w.get("counter"))), "rsi5": None if r5 is None else round(r5, 1)}
     if against: feat["cr"] = 1
+    if bcr: feat["bc"] = bcr
     lines = ["%s %s" % ("✓" if ok else "✗", good if ok else bad) for ok, good, bad in conds]
     if call == "enter": head = "💥 Пробой линии: ✅ можно заходить — %s по рынку ~%s, стоп %s, цель %s (0.5 высоты канала за линией), R:R %.1f" % (side.upper(), _fmt(c), _fmt(stop), _fmt(tp), rr)
     else: head = "💥 Пробой линии формируется: ⏳ ждём — %s" % next(bad for ok, good, bad in conds if not ok)
