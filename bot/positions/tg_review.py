@@ -174,6 +174,11 @@ def _relax(c):
     c["hist"].append(h); c["params"][k] = new; return h
 
 
+def _strict(b1):
+    """Строгий BTC 1m: pos (цена за EMA9 в сторону сделки и растёт) И rsi_ok (RSI14 40-60 по ходу сделки). Только для статистики, решения не меняет; в старых записях считается из pos и rsi_ok."""
+    return bool(b1.get("strict")) if "strict" in b1 else bool(b1.get("pos") and b1.get("rsi_ok"))
+
+
 def _text(p, o, A, ch, notes, rel):
     f = A["facts"]; sym = p["sym"]; side = p["side"].upper(); auto = A["auto"]
     head = "%s Разбор сделки #%s %s %s (%s%s)" % ("✅" if A["res"] == "win" else ("🔻" if A["res"] == "loss" else "➖"), p.get("id"), sym, side, "пробой" if f["setup"] == "breakout" else "отбой", ", Автоордер" if auto else "")
@@ -182,6 +187,7 @@ def _text(p, o, A, ch, notes, rel):
     if rg: lines.append("Рынок при входе: %s; сделка %s." % ({"down": "падающий", "up": "растущий", "flat": "флэт"}[rg], ("в боковике" if rg == "flat" else ("по режиму" if (p["side"] == "short") == (rg == "down") else "ПРОТИВ режима"))))
     b1 = o.get("b1")
     if b1: lines.append("BTC 1m при входе: %s, RSI %s, фильтр %s." % ("за сделку" if b1.get("ok") else "против сделки", b1.get("rsi"), "пройден" if b1.get("ok") else "не пройден"))
+    if b1: lines.append("Строгий BTC 1m (цена по EMA9 и RSI по ходу сделки): %s." % ("пройден" if _strict(b1) else "не пройден"))
     if A["res"] == "loss":
         lines.append("")
         lines.append("Что пошло не так: " + "; ".join(CAUSE_RU[c] for c in A["causes"]) + ".")
@@ -256,6 +262,8 @@ def summary(lrn=None):
     if bl:
         def g1(ok): xs = [r["r"] for r in bl if bool(r["b1"].get("ok")) == ok]; return "n=%d, средний %+.2f R" % (len(xs), sum(xs) / len(xs)) if xs else "n=0"
         s.append(""); s.append("Сделки по BTC 1m при входе (с момента записи): фильтр пройден %s; не пройден %s" % (g1(True), g1(False)))
+        def g2(v): xs = [r["r"] for r in bl if _strict(r["b1"]) == v]; return "n=%d, средний %+.2f R" % (len(xs), sum(xs) / len(xs)) if xs else "n=0"
+        s.append("Строгий BTC 1m (pos И rsi_ok): пройден %s; не пройден %s" % (g2(True), g2(False)))
     if lrn:
         try: s.append(""); s.append(lrn.stats_text())
         except Exception: pass
