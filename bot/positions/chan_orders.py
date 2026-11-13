@@ -483,6 +483,12 @@ def _btc_live_candle():
     return None
 
 
+def _l1m_emit(o, state, bo, bc, moved=None, mx=None):
+    """Событие для поста ордера в Telegram (tg_bot.handle_event, тип live1m): wait - ждём свечу BTC 1m по ходу, go - вошли."""
+    try: tg_gate.emit({"type": "live1m", "id": o["id"], "state": state, "o": bo, "c": bc, "n": o.get("live1m_tries"), "moved": moved, "mx": mx, "side": o["side"]})
+    except Exception as e: log("live1m emit: %s" % e)
+
+
 def _live1m_gate(o, now, cfg=None, price_fn=None, candle_fn=None):
     """Рыночный вход из слежения: в момент открытия текущая свеча BTC 1m должна идти по ходу сделки (short: цена ниже открытия свечи, long: выше).
     Не по ходу -> не открываем, ордер остаётся pending и проверяется заново в следующем цикле, пока цена не ушла от линии дальше max_dist_atr (тогда отмена; общий потолок 10 мин остаётся).
@@ -501,17 +507,18 @@ def _live1m_gate(o, now, cfg=None, price_fn=None, candle_fn=None):
     cd = (candle_fn or _btc_live_candle)()
     if not cd: log("live1m %s: нет свечи BTC 1m, вход без проверки" % o["sym"]); return "go", None
     bo, bc = cd; o["live1m_tries"] = int(o.get("live1m_tries") or 0) + 1
+    mv = None if (lp is None or atr <= 0) else round((px - float(lp)) * s / atr, 2)
     if (bc - bo) * s <= 0:
         o["live1m"] = {"ok": 0, "o": bo, "c": bc, "px": px, "t": now}
         log("live1m %s %s: свеча BTC 1m не по ходу (o %.2f c %.2f), ждём (попытка %d)" % (o["sym"], o["side"], bo, bc, o["live1m_tries"]))
-        return "wait", None
+        _l1m_emit(o, "wait", bo, bc, mv, mx); return "wait", None
     newp = px * (1 + s * 0.0003); delta = newp - float(o["price"])
     o["price"] = newp; o["stop"] = float(o["stop"]) + delta
     if (float(o["tp"]) - newp) * s < max(0.0015 * newp, 0.5 * atr):
         return "cancel", "BTC 1m подтвердил, но цель уже слишком близко к цене входа"
     o["live1m"] = {"ok": 1, "o": bo, "c": bc, "px": px, "t": now, "tries": o["live1m_tries"]}
     log("live1m %s %s: свеча BTC 1m по ходу (o %.2f c %.2f), вход по %.6g (попытка %d)" % (o["sym"], o["side"], bo, bc, newp, o["live1m_tries"]))
-    return "go", None
+    _l1m_emit(o, "go", bo, bc, mv, mx); return "go", None
 
 
 BRK_BUF = 0.15   # стоп-ордер на пробой стоит за линией на 0.15 ATR
