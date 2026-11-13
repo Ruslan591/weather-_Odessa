@@ -114,7 +114,7 @@ def evaluate(ks, side, setup="bounce"):
         else: allowed = allowed and rallowed; blocks = blocks + rblocks; goods = goods + ([rgood] if (rallowed and not blk) else [])
         ok = allowed and not blocks
     cols = "".join("g" if c[i] > o[i] else ("r" if c[i] < o[i] else "d") for i in (-3, -2, -1))
-    snap = {"side": side, "ok": ok, "cols": cols, "emad": round((c[-1] / e[-1] - 1) * 100, 3), "rsd": round(rs - r[-3], 1), "imp": int(impulse), "pos": int(pos), "rsi": round(rs, 1), "rsi_ok": int(rs_ok), "big": int(bool(big)), "run3": int(run3), "exh": int(exh), "setup": setup, "t": int(time.time())}
+    snap = {"side": side, "ok": ok, "cols": cols, "emad": round((c[-1] / e[-1] - 1) * 100, 3), "rsd": round(rs - r[-3], 1), "imp": int(impulse), "pos": int(pos), "rsi": round(rs, 1), "rsi_ok": int(rs_ok), "strict": int(bool(pos and rs_ok)), "big": int(bool(big)), "run3": int(run3), "exh": int(exh), "setup": setup, "t": int(time.time())}
     if ok: good = "BTC 1m за %s: %s" % (nm, ", ".join(goods)); bad = ""
     else: good = ""; bad = "BTC 1m против %s: %s" % (nm, "; ".join(blocks) if blocks else "нет подтверждения (RSI %.0f, свечи/EMA не в сторону сделки)" % rs)
     return {"ok": ok, "allowed": allowed, "blocked": bool(blocks), "good": good, "bad": bad, "snap": snap}
