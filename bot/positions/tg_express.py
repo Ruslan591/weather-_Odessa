@@ -13,12 +13,22 @@ try: import tg_regime as RG     # режим рынка BTC 1h: фильтр п�
 except Exception: RG = None
 import json, os
 RSI5_CFG = os.path.join(os.environ.get("POS_DIR", "/opt/trading-bot/positions_regr"), "tg_rsi5.json")
+BRKCR_CFG = os.path.join(os.environ.get("POS_DIR", "/opt/trading-bot/positions_regr"), "tg_brk_cr.json")
 
 
 def _rcfg():
     """Фильтр RSI(14) 5m для ОТБОЯ: шорт только при RSI > short (65, лучше > 70), лонг только при RSI < long (35, лучше < 30). Выключить: POS_DIR/tg_rsi5.json {"enabled": false}; пороги там же."""
     c = {"enabled": True, "short": 65.0, "long": 35.0, "round": False, "brk_short_lo": 38.0, "brk_short_hi": 50.0, "brk_short_no": 35.0, "brk_long_lo": 50.0, "brk_long_hi": 62.0, "brk_long_no": 65.0}
     try: c.update(json.load(open(RSI5_CFG, encoding="utf-8")))
+    except Exception: pass
+    return c
+
+
+def _brk_cr_cfg():
+    """Фильтр «пробой ПРОТИВ режима рынка BTC 1h» (лонг при падающем, шорт при растущем), разбор #243-251, 2026-11-13: такой пробой берём только сильный и свежий:
+    тело последней свечи >= body (0.6 диапазона) и закрытий за линией не больше nmax (5, без погони). Выключить: POS_DIR/tg_brk_cr.json {"enabled": false}; пороги там же."""
+    c = {"enabled": True, "body": 0.6, "nmax": 5}
+    try: c.update(json.load(open(BRKCR_CFG, encoding="utf-8")))
     except Exception: pass
     return c
 
@@ -220,10 +230,17 @@ def verdict_break(w, kl=None):
     if rgc: conds.append(rgc)
     r5 = _rsi5(w, kl); r5c = _rsi5_brk("long" if s > 0 else "short", r5)
     if r5c: conds.append(r5c)
+    cr = _brk_cr_cfg(); rgm = (rgs or {}).get("regime"); nb_ = int(w.get("n_beyond") or 0); against = bool(rgm) and ((s > 0 and rgm == "down") or (s < 0 and rgm == "up"))
+    if cr.get("enabled", True) and against:   # пробой против режима: только сильная свеча и без погони (в разборах такие пробои чаще всего уходили в стоп сразу после входа)
+        bmin, nmax = float(cr["body"]), int(cr["nmax"]); okc = body >= bmin and nb_ <= nmax
+        if body < bmin: bad = "пробой против режима рынка (%s): тело свечи %d%% < %d%%, слабый импульс" % ("лонг при падающем" if s > 0 else "шорт при растущем", round(body * 100), round(bmin * 100))
+        else: bad = "пробой против режима рынка: %d закрытий за линией (> %d), это погоня за ушедшей ценой" % (nb_, nmax)
+        conds.append((okc, "пробой против режима рынка, но свежий и сильный: тело %d%%, закрытий за линией %d" % (round(body * 100), nb_), bad))
     call = "enter" if all(x[0] for x in conds) else "wait"
     side = "long" if s > 0 else "short"; stop = c - s * risk
     plan = {"side": side, "entry": c, "stop": stop, "tp": tp, "target": "h05", "rr": round(rr, 2)}
     feat = {"beyond": round(beyond, 3), "body": round(body, 3), "rr": round(rr, 2), "n": int(w.get("n_beyond") or 0), "width": round(H / a, 2), "counter": int(bool(w.get("counter"))), "rsi5": None if r5 is None else round(r5, 1)}
+    if against: feat["cr"] = 1
     lines = ["%s %s" % ("✓" if ok else "✗", good if ok else bad) for ok, good, bad in conds]
     if call == "enter": head = "💥 Пробой линии: ✅ можно заходить — %s по рынку ~%s, стоп %s, цель %s (0.5 высоты канала за линией), R:R %.1f" % (side.upper(), _fmt(c), _fmt(stop), _fmt(tp), rr)
     else: head = "💥 Пробой линии формируется: ⏳ ждём — %s" % next(bad for ok, good, bad in conds if not ok)
