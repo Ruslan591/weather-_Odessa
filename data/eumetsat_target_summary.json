@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-13T21:52:11Z",
+  "timestamp": "2026-11-13T22:01:55Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-11-13T19:30:00.000Z",
   "target_id": 1,
@@ -23,26 +23,8 @@
     "has_precip": true,
     "has_lightning": false
   },
-  "local_candidates": [
-    {
-      "target_id": 1,
-      "area_km2": 81.4,
-      "distance_km": 173.2,
-      "bearing_deg": 104.0,
-      "compass": "В",
-      "elongation_aspect_ratio": 1.46,
-      "elongation_axis_deg": 152.0,
-      "elongation_axis_compass": "ЮВ-СЗ",
-      "frontlike": false,
-      "phase_label": "безоблачно",
-      "type_label": "безоблачно",
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": false,
-      "geocolour_confirmed": true
-    }
-  ],
-  "local_suppressed_count": 10,
+  "local_candidates": [],
+  "local_suppressed_count": 11,
   "system_candidates": [],
   "system_suppressed_count": 3,
   "frontal_tracks": [],
@@ -57,17 +39,17 @@
         "timestamp": "2026-11-13T20:30:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": true,
-        "timestamp": "2026-11-13T19:10:00.000Z"
+        "confirmed": false,
+        "timestamp": "2026-11-13T21:20:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": false,
         "timestamp": "2026-11-13T16:52:38Z"
       }
     },
-    "votes_confirmed": 1,
-    "votes_not_confirmed": 2,
-    "consensus": "disputed"
+    "votes_confirmed": 0,
+    "votes_not_confirmed": 3,
+    "consensus": "not_confirmed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -79,5 +61,5 @@
       "timestamp": "2026-11-13T19:52:47Z"
     }
   },
-  "verdict": "Цель в 173км В, безоблачно — каналы расходятся: geocolour_motion подтверждают, ir_motion/cloud_phase_type нет. Отдельно: система синоптического масштаба (188156км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора, осадки)."
+  "verdict": "CLM отметил цель в 173км В, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (188156км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора, осадки)."
 }
