@@ -1,1 +1,1 @@
-{"task_id": "caddy1", "cmd": "cat /etc/caddy/Caddyfile 2>/dev/null | sed -E 's/(basicauth|basic_auth).*/\\1 [hidden]/' | head -40; echo ---; curl -s -m 5 localhost:18102/ 2>&1 | head -c 300", "timeout": 60}
+{"task_id": "res1", "cmd": "nproc; free -m | head -2; uptime; df -h / | tail -1; ps -eo rss,comm --sort=-rss | head -8; systemctl is-active caddy", "timeout": 60}
