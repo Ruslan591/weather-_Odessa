@@ -165,3 +165,20 @@ def line(side=None, st=None):
     if st.get("raw") and st["raw"] != r: s += "; новый режим %s набирает подтверждения %d из %d" % (RU[st["raw"]], st.get("cand_n", 0), NEED)
     if side and r in ("down", "up"): s += "\n" + (("✅ сделка по режиму" if (side == "short") == (r == "down") else "⚠️ сделка ПРОТИВ режима (%s)" % ("лонг на падающем рынке" if side == "long" else "шорт на растущем рынке")))
     return s
+
+def factors(st=None):
+    """Шесть факторов режима по BTC 1h для «Радара»: три строки (заголовок и по три фактора), сторона - доминирующая (медвежьи при падающем, бычьи при растущем, при флэте та, где факторов больше). \"\" если данных нет."""
+    st = st or get()
+    if not st: return ""
+    d = st.get("detail") or {}; e = d.get("ema") or []; px = d.get("price")
+    if len(e) < 3 or px is None: return ""
+    r = st["regime"]; bear = d.get("bear", 0); bull = d.get("bull", 0); sl = d.get("slope24_atr"); r24 = d.get("ret24"); ds = d.get("down_share")
+    if r == "up" or (r == "flat" and bull > bear):
+        f = [(px > e[1], "цена > EMA50"), (e[0] > e[1], "EMA20 > EMA50"), (px > e[2], "цена > EMA200"), (sl is not None and sl >= 1.0, "наклон 24ч %+.1f ATR" % (sl or 0)),
+             (r24 is not None and r24 >= 1.0, "24ч %+.1f%%" % (r24 or 0)), (ds is not None and ds <= 0.35, "в плюсе %d%% корзины" % round((1 - (ds or 0)) * 100))]; n = bull; side = "бычьи"
+    else:
+        f = [(px < e[1], "цена < EMA50"), (e[0] < e[1], "EMA20 < EMA50"), (px < e[2], "цена < EMA200"), (sl is not None and sl <= -1.0, "наклон 24ч %+.1f ATR" % (sl or 0)),
+             (r24 is not None and r24 <= -1.0, "24ч %+.1f%%" % (r24 or 0)), (ds is not None and ds >= 0.65, "в минусе %d%% корзины" % round((ds or 0) * 100))]; n = bear; side = "медвежьи"
+    mk = lambda x: ("✅ " if x[0] else "⬜ ") + x[1]
+    return "\n".join(["🧭 Рынок BTC 1h: %s · %s факторы %d из 6 · ADX %s" % (RU[r], side, n, d.get("adx", "?")), "  ".join(mk(x) for x in f[:3]), "  ".join(mk(x) for x in f[3:])])
+
