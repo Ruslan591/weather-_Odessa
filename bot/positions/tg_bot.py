@@ -896,7 +896,9 @@ def radar_text():
         pos_ = ("%.1f ATR до %s линии" % (c["d"], ln)) if c["d"] >= 0 else ("за %s линией на %.1f ATR" % (ln, -c["d"]))
         s_ = "%s %s %s · RSI 5m %s" % (c["sym"], "↑" if c["up"] else "↓", pos_, rs)
         if ok:
-            o = (["%s отбой" % c["sb"].upper()] if c["okb"] else []) + (["%s пробой" % c["sk"].upper()] if c["okk"] else [])
+            rgm = ((RG.snap() or {}).get("regime") if RG else None)
+            agn = (c["sk"] == "long" and rgm == "down") or (c["sk"] == "short" and rgm == "up")
+            o = (["%s отбой" % c["sb"].upper()] if c["okb"] else []) + (["%s пробой%s" % (c["sk"].upper(), " (против режима: нужна свеча с телом от 60%)" if agn else "")] if c["okk"] else [])
             return s_ + " → " + ", ".join(o)
         cond, g = (c["cb"], c["gb"]) if c["d"] >= 0 else (c["ck"], c["gk"])
         if cond is None: why = "нет данных RSI"
@@ -911,6 +913,9 @@ def radar_text():
     mk = lambda g: "-" if g is None else ("✅" if g["ok"] else "⛔")
     sn = (bg.get(("short", "bounce")) or {}).get("snap") or {}
     L = ["📡 Радар · %s · пар %d, с каналом %d" % (datetime.now(T._tz()).strftime("%H:%M"), len(rows), len(cand) + n_narrow)]
+    try: fl = RG.factors() if RG else ""   # порядок «Радара»: сначала глобальные условия: 6 факторов режима, затем BTC 1m, затем группы пар
+    except Exception: fl = ""
+    if fl: L.append(fl)
     if sn: L.append("₿ BTC 1m RSI %.0f · отбой: SHORT %s LONG %s · пробой: SHORT %s LONG %s" % (sn["rsi"], mk(bg.get(("short", "bounce"))), mk(bg.get(("long", "bounce"))), mk(bg.get(("short", "breakout"))), mk(bg.get(("long", "breakout")))))
     if time.time() * 1000 - float(st.get("t") or 0) > 900000: L.append("⚠️ данные сканера старше 15 минут")
     L.append("")
