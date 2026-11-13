@@ -394,6 +394,16 @@ def handle_event(ev):
     elif t == "missed":
         m = mode_state(); edit_order(oid, "⏱ Пропущено (нет ответа). Подряд: %d из %d" % (ev.get("n", 0), m.get("max_missed", 3)))
     elif t == "stale": edit_order(oid, "↻ Устарело: %s" % ev.get("why", ""))
+    elif t == "live1m":     # живая проверка BTC 1m в момент открытия (chan_orders._live1m_gate)
+        try:
+            bo, bc = float(ev["o"]), float(ev["c"]); pc = (bc / bo - 1) * 100 if bo else 0.0
+            way = "short" if ev.get("side") == "short" else "long"
+            dist = (", цена %+.2f ATR от линии (лимит %.2f)" % (ev["moved"], ev["mx"])) if ev.get("moved") is not None and ev.get("mx") is not None else ""
+            if ev.get("state") == "wait":
+                edit_order(oid, "⏳ Вход не открыт: свеча BTC 1m не по ходу %s (%+.3f%%)%s. Повторю проверку, попытка %s, %s" % (way.upper(), pc, dist, ev.get("n"), datetime.fromtimestamp(ev.get("ts", 0) / 1000, T._tz()).strftime("%H:%M:%S")), [[{"text": "❌ Отменить ордер", "callback_data": "r:%d" % oid}]])
+            else:
+                edit_order(oid, "✅ Свеча BTC 1m по ходу %s (%+.3f%%): вход открыт, попыток %s%s" % (way.upper(), pc, ev.get("n"), dist))
+        except Exception as e: log("live1m event fail %s: %s" % (oid, e))
     elif t == "alert": send_watch(ev["wid"], "alert")
     elif t == "watch_update": send_watch(ev["wid"], "update")
     elif t == "watch_ack":
