@@ -1,7 +1,7 @@
 {
-  "task_id": "inv1",
+  "task_id": "inv2",
   "returncode": 0,
-  "stdout": "aiohttp            3.14.4\naiohttp-fast-zlib  0.3.0\n3.14.3\nacct_api.py\nbackup_acct_20261105_194601\npos.py.bak_acct\npositions.json.bak_acct\nacct-api-regr.service\nchan-orders-regr.service\nchan-orders-regr.service.d\npos-tracker-regr.service\ntg-bot-regr.service\ntg-bot-regr.service.d\n",
+  "stdout": "User=tbot\nEnvironment=POS_DIR=/opt/trading-bot/positions_regr\nEnvironment=MPLCONFIGDIR=/tmp/mpl-tg\nEnvironment=TG_ACCT_NAME=Регрессия\nExecStart=/opt/tg-notify/venv/bin/python /opt/tg-notify/tg_bot.py\nEnvironment=ACCT_PORT=18102\nExecStart=/opt/trading-bot/venv/bin/python /opt/trading-bot/positions/acct_api.py\nEnvironment=POS_DIR=/opt/trading-bot/positions_regr\nEnvironment=CHAN_SRC=regr\nEnvironment=CHAN_EDGE=1\nEnvironment=ACCT_PORT=18102\n5:HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)\n16:        path = \"/api/v3/klines?symbol=%s&interval=%s&limit=%d\" % (sym, tf, limit) + (\"&startTime=%d\" % start if start else \"\")\n21:                _kconn[0].request(\"GET\", path); r = _kconn[0].getresponse(); body = r.read()\n44:app = web.Application(); app.router.add_route(\"*\", \"/api/claude\", api)\n",
   "stderr": "",
-  "completed_at_utc": "2026-11-13T11:23:02Z"
+  "completed_at_utc": "2026-11-13T11:24:01Z"
 }
