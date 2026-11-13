@@ -1,1 +1,1 @@
-{"task_id": "md5a", "cmd": "cd /opt/trading-bot/positions && md5sum chan_orders.py tg_gate.py; ls /opt/trading-bot | head -30; systemctl is-active chan-orders-regr; systemctl cat chan-orders-regr 2>/dev/null | grep -i 'ExecStart\\|Environment\\|WorkingDir'", "timeout": 60}
+{"task_id": "cfg1", "cmd": "cat /opt/trading-bot/positions_regr/tg_express_cfg.json 2>/dev/null | head -c 600; ls /opt/tg-notify | head -40; grep -n 'dist_max' /opt/tg-notify/tg_express.py | head -3", "timeout": 60}
