@@ -89,8 +89,8 @@ function chanAt(l,t){return l?l.p1+l.s*(t-l.t1):null}
 function clampLim(x){return Math.max(100,Math.min(1000,Math.round(x)))}
 function fitView(){
   const iv=IVMS[CH.iv];
-  if(CH.closed)CH.view={n:Math.max(40,Math.round((CH.t_out-CH.t_in)/iv)+60),tL:CH.t_in-30*iv,follow:false,vz:1,vo:0};
-  else CH.view={n:(CH.view&&CH.view.n)||100,tL:0,follow:true,vz:1,vo:0};
+  if(CH.closed)CH.view={n:Math.max(40,Math.round((CH.t_out-CH.t_in)/iv)+60),tL:CH.t_in-30*iv,follow:false,y:null};
+  else CH.view={n:(CH.view&&CH.view.n)||100,tL:0,follow:true,y:null};
   CH.lim=CH.closed?clampLim((CH.t_out-CH.t_in)/iv+250):Math.max(CH.lim||300,300)
 }
 function openChart(ctx){
@@ -122,45 +122,48 @@ function layoutLabels(lab,top,bot){
   return lab
 }
 function leftT(){const v=CH.view,iv=IVMS[CH.iv],cs=CH.cs;return v.follow&&cs.length?cs[cs.length-1][0]+iv*6-v.n*iv:v.tL}
-function setN(n1,b){
+function setN(n1,b){      // масштаб по времени: всегда вручную, без привязки к правому краю; опора: точка между пальцами (mid) или центр
   const v=CH.view,iv=IVMS[CH.iv],pw=CH.pw||300;n1=cl(n1,12,800);
-  if(b.follow&&!CH.closed){v.n=n1;v.follow=true}
-  else{const xf=b.mid!=null?b.mid/pw:.5,tAt=b.tL+xf*b.n*iv;v.tL=tAt-xf*n1*iv;v.n=n1;v.follow=false}
-  dirty()
+  const xf=b.mid!=null?b.mid/pw:.5,tAt=b.tL+xf*b.n*iv;v.tL=tAt-xf*n1*iv;v.n=n1;v.follow=false;dirty()
 }
-function panTo(tL){
+function panTo(tL){       // сдвиг по времени: после любого сдвига следование за ценой выключено, пока не нажмёшь ⏭
   const v=CH.view,iv=IVMS[CH.iv],cs=CH.cs;if(!cs.length)return;const first=cs[0][0],last=cs[cs.length-1][0];
-  v.tL=cl(tL,first-.3*v.n*iv,last+iv*8-v.n*iv*.7);v.follow=!CH.closed&&v.tL+v.n*iv>=last+iv*5.5;dirty()
+  v.tL=cl(tL,first-.6*v.n*iv,last+iv*8+.6*v.n*iv-v.n*iv*.5);v.follow=false;dirty()
 }
 function curBase(){const v=CH.view;return{tL:leftT(),n:v.n,follow:v.follow}}
+function freezeY(){const v=CH.view;if(!v.y&&CH.yr)v.y={lo:CH.yr.lo,hi:CH.yr.hi};return v.y}
+function scaleY(f){const y=freezeY();if(!y)return;const c=(y.lo+y.hi)/2,hf=(y.hi-y.lo)/2*f;CH.view.y={lo:c-hf,hi:c+hf};dirty()}
 function buildChartHead(){
   const hd=$('#ch_h');hd.replaceChildren();
   const x=h('button','cb','✕');x.onclick=closeChart;hd.append(x,h('b',null,usd(CH.sym).replace('USDT','')),CH.side?side(CH.side):h('span'),h('span','sp'));
-  for(const iv of Object.keys(IVMS)){const b=h('button','cb'+(CH.iv===iv?' on':''),iv);b.onclick=()=>{CH.iv=iv;CH.cs=[];fitView();buildChartHead();reqCandles()};hd.append(b)}
+  for(const iv of Object.keys(IVMS)){const b=h('button','cb'+(CH.iv===iv?' on':''),iv);b.onclick=()=>{CH.iv=iv;CH.cs=[];CH.cross=null;fitView();buildChartHead();reqCandles()};hd.append(b)}
   const tb=$('#ch_t');tb.replaceChildren();const iv=()=>IVMS[CH.iv];
   const B=[['◀',()=>panTo(leftT()-CH.view.n*iv()*.25)],['▶',()=>panTo(leftT()+CH.view.n*iv()*.25)],['↔−',()=>setN(CH.view.n*1.25,curBase())],['↔+',()=>setN(CH.view.n*.8,curBase())],
-    ['↕−',()=>{CH.view.vz=cl(CH.view.vz/1.25,.15,12);dirty()}],['↕+',()=>{CH.view.vz=cl(CH.view.vz*1.25,.15,12);dirty()}],
-    ['⟲',()=>{const l=CH.lim;fitView();CH.lim=Math.max(l,CH.lim);if(!CH.closed)CH.view.n=100;dirty()}],['⏭',()=>{if(CH.closed){const l=CH.lim;fitView();CH.lim=l}else{CH.view.follow=true;CH.view.vz=1;CH.view.vo=0}dirty()}]];
+    ['↕−',()=>scaleY(1.25)],['↕+',()=>scaleY(1/1.25)],
+    ['⟲',()=>{const l=CH.lim;CH.cross=null;fitView();CH.lim=Math.max(l,CH.lim);if(!CH.closed)CH.view.n=100;dirty()}],['⏭',()=>{CH.cross=null;if(CH.closed){const l=CH.lim;fitView();CH.lim=l}else{CH.view.follow=true;CH.view.y=null}dirty()}]];
   for(const [l,f] of B){const b=h('button','cb',l);b.onclick=f;tb.append(b)}
 }
 (function(){
   const cv=document.getElementById('cv'),pos=e=>{const r=cv.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}};
+  const endLP=()=>{if(G&&G.lp){clearTimeout(G.lp);G.lp=null}};
   cv.addEventListener('pointerdown',e=>{try{cv.setPointerCapture(e.pointerId)}catch(_){}const q=pos(e);P.set(e.pointerId,q);if(!CH)return;const v=CH.view;
-    if(P.size===1)G={x:q.x,y:q.y,tL:leftT(),n:v.n,follow:v.follow,vz:v.vz,vo:v.vo,zone:q.x>CH.pw?'price':q.y>CH.yT?'time':'plot',moved:0};
-    else if(P.size===2&&G){const a=[...P.values()];G.pinch={dx:Math.abs(a[0].x-a[1].x),dy:Math.abs(a[0].y-a[1].y),n:v.n,vz:v.vz,mid:(a[0].x+a[1].x)/2,tL:leftT(),follow:v.follow};G.moved=1}});
+    if(P.size===1){const y0=(q.x>CH.pw?freezeY():null)||v.y;G={x:q.x,y:q.y,tL:leftT(),n:v.n,y0:y0?{lo:y0.lo,hi:y0.hi}:null,zone:q.x>CH.pw?'price':q.y>CH.yT?'time':'plot',moved:0,mode:null,wasCross:!!CH.cross,ppp:CH.ppp||0};
+      G.lp=setTimeout(()=>{G.lp=null;if(G&&!G.moved&&P.size===1&&G.zone==='plot'){CH.cross={x:G.x,y:G.y};G.mode='cross';dirty()}},380)}
+    else if(P.size===2&&G){endLP();const a=[...P.values()],y0=freezeY();G.pinch={dx:Math.abs(a[0].x-a[1].x),dy:Math.abs(a[0].y-a[1].y),n:v.n,mid:(a[0].x+a[1].x)/2,tL:leftT(),y0:y0?{lo:y0.lo,hi:y0.hi}:null};G.moved=1;CH.cross=null}});
   cv.addEventListener('pointermove',e=>{if(!CH||!G||!P.has(e.pointerId))return;const q=pos(e);P.set(e.pointerId,q);const v=CH.view,iv=IVMS[CH.iv];
+    if(G.mode==='cross'){CH.cross={x:q.x,y:q.y};dirty();return}
     if(P.size>=2&&G.pinch){const a=[...P.values()],dx=Math.abs(a[0].x-a[1].x),dy=Math.abs(a[0].y-a[1].y);
-      if(G.pinch.dy>G.pinch.dx*1.2){v.vz=cl(G.pinch.vz*Math.max(dy,10)/Math.max(G.pinch.dy,10),.15,12);dirty()}
+      if(G.pinch.dy>G.pinch.dx*1.2&&G.pinch.y0){const f=Math.max(G.pinch.dy,10)/Math.max(dy,10),c=(G.pinch.y0.lo+G.pinch.y0.hi)/2,hf=(G.pinch.y0.hi-G.pinch.y0.lo)/2*f;v.y={lo:c-hf,hi:c+hf};dirty()}
       else setN(G.pinch.n*Math.max(G.pinch.dx,10)/Math.max(dx,10),G.pinch);return}
-    const dx=q.x-G.x,dy=q.y-G.y;if(Math.abs(dx)>5||Math.abs(dy)>5)G.moved=1;if(!G.moved)return;
-    if(G.zone==='price'){v.vz=cl(G.vz*Math.exp(-dy/120),.15,12);dirty()}
+    const dx=q.x-G.x,dy=q.y-G.y;if(Math.abs(dx)>6||Math.abs(dy)>6){G.moved=1;endLP()}if(!G.moved)return;
+    if(G.zone==='price'&&G.y0){const c=(G.y0.lo+G.y0.hi)/2,hf=(G.y0.hi-G.y0.lo)/2*Math.exp(dy/120);v.y={lo:c-hf,hi:c+hf};dirty()}
     else if(G.zone==='time')setN(G.n*Math.exp(-dx/120),G);
-    else{panTo(G.tL-dx/(CH.pw||300)*G.n*iv);v.vo=cl(G.vo+dy*(CH.pxVo||0),-6,6);dirty()}});
-  const up=e=>{P.delete(e.pointerId);if(!P.size)G=null};cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
+    else{panTo(G.tL-dx/(CH.pw||300)*G.n*iv);if(G.ppp){const y=G.y0||freezeY();if(y){G.y0=G.y0||{lo:y.lo,hi:y.hi};v.y={lo:G.y0.lo+dy*G.ppp,hi:G.y0.hi+dy*G.ppp}}}dirty()}});
+  const up=e=>{endLP();if(G&&!G.moved&&G.mode!=='cross'&&G.wasCross){CH&&(CH.cross=null);dirty()}P.delete(e.pointerId);if(!P.size)G=null};cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
   cv.addEventListener('wheel',e=>{if(!CH)return;e.preventDefault();const f=e.deltaY>0?1.15:1/1.15;
-    if(e.shiftKey){CH.view.vz=cl(CH.view.vz/f,.15,12);dirty()}else if(e.altKey)panTo(leftT()+(e.deltaY>0?1:-1)*CH.view.n*IVMS[CH.iv]*.1);
+    if(e.shiftKey)scaleY(f);else if(e.altKey)panTo(leftT()+(e.deltaY>0?1:-1)*CH.view.n*IVMS[CH.iv]*.1);
     else setN(CH.view.n*f,Object.assign(curBase(),{mid:pos(e).x}))},{passive:false});
-  cv.addEventListener('dblclick',()=>{if(CH){CH.view.n=100;CH.view.follow=!CH.closed;CH.view.vz=1;CH.view.vo=0;dirty()}})
+  cv.addEventListener('dblclick',()=>{if(CH){CH.view.n=100;CH.view.follow=!CH.closed;CH.view.y=null;CH.cross=null;dirty()}})
 })();
 function drawChart(){
   if(!CH)return;const cv=$('#cv'),dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=cv.clientHeight;if(!W||!H)return;
@@ -180,7 +183,7 @@ function drawChart(){
   const chn=[];if(CH.ch&&CH.ch.upper&&CH.ch.lower){const u=CH.ch.upper,l=CH.ch.lower;chn.push(chanAt(u,t0),chanAt(u,t1),chanAt(l,t0),chanAt(l,t1))}
   for(const L of lv){if(L.v>lo-span0&&L.v<hi+span0){lo=Math.min(lo,L.v);hi=Math.max(hi,L.v)}}
   for(const x of chn){if(x>lo-span0&&x<hi+span0){lo=Math.min(lo,x);hi=Math.max(hi,x)}}
-  const rng=(hi-lo)||hi*.01,cen=(hi+lo)/2+v.vo*rng,half=rng*.525/v.vz;hi=cen+half;lo=cen-half;CH.pxVo=1.05/v.vz/Math.max(1,ph-vh-12);CH.yT=PT+ph;const Y=x=>PT+(hi-x)/(hi-lo)*(ph-vh),X=t=>(t-t0)/(t1-t0)*pw;
+  {const rng=(hi-lo)||hi*.01;lo-=rng*.06;hi+=rng*.06}if(v.y){lo=v.y.lo;hi=v.y.hi}CH.yr={lo,hi};CH.ppp=(hi-lo)/Math.max(1,ph-vh);CH.yT=PT+ph;const Y=x=>PT+(hi-x)/(hi-lo)*(ph-vh),X=t=>(t-t0)/(t1-t0)*pw;
   c.save();c.beginPath();c.rect(0,0,pw,H);c.clip();
   c.strokeStyle='#232b3a';c.lineWidth=1;
   for(let i=0;i<=4;i++){const y=Y(lo+(hi-lo)*i/4);c.beginPath();c.moveTo(0,y);c.lineTo(pw,y);c.stroke()}
@@ -204,11 +207,18 @@ function drawChart(){
   for(const L of lab){const w=Math.min(Math.max(c.measureText(L.tx).width,L.sub?c.measureText(L.sub).width:0)+8,PR-1);
     if(Math.abs(L.t+L.h/2-L.y)>3){c.strokeStyle=L.col;c.lineWidth=1;c.beginPath();c.moveTo(pw-5,L.y);c.lineTo(pw+1,L.t+L.h/2);c.stroke()}
     c.fillStyle=L.col;c.fillRect(pw+1,L.t,w,L.h);c.fillStyle='#0b0e14';c.fillText(L.tx,pw+4,L.t+11.5,PR-6);if(L.sub){c.font='9px -apple-system,Segoe UI,sans-serif';c.fillText(L.sub,pw+4,L.t+23,PR-6);c.font='11px -apple-system,Segoe UI,sans-serif'}}
+  if(CH.cross){const xc=CH.cross.x,yc=CH.cross.y,pyb=PT+ph-vh;
+    if(xc>=0&&xc<=pw){const tc=Math.floor((t0+xc/pw*(t1-t0))/iv)*iv,xs=X(tc)+bw/2,pr=hi-(yc-PT)/(ph-vh)*(hi-lo);
+      c.save();c.setLineDash([4,3]);c.strokeStyle='#aab2c3';c.lineWidth=1;c.beginPath();c.moveTo(xs,PT);c.lineTo(xs,PT+ph);c.moveTo(0,yc);c.lineTo(pw,yc);c.stroke();c.setLineDash([]);c.restore();
+      if(yc<=pyb+vh){const tx=fp(pr),w=PR-1;c.fillStyle='#2a3140';c.fillRect(pw+1,yc-8,w,16);c.fillStyle='#e6e9ef';c.fillText(tx,pw+4,yc+3.5,PR-6)}
+      const lb=new Date(tc).toLocaleString('ru-RU',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}),lw=c.measureText(lb).width+12,lx=Math.max(0,Math.min(xs-lw/2,pw-lw));
+      c.fillStyle='#2a3140';c.fillRect(lx,PT+ph+1,lw,17);c.fillStyle='#e6e9ef';c.fillText(lb,lx+6,PT+ph+13);
+      const k=cs.find(z=>z[0]===tc);if(k){const chg=(k[4]/k[1]-1)*100;c.fillStyle='#8b94a7';c.fillText('О '+fp(k[1])+'  В '+fp(k[2])+'  Н '+fp(k[3])+'  З '+fp(k[4])+'  '+sg(chg,2)+'%',6,PT+12)}}}
   const e=CH.entry,pc=CH.closed?null:cur;let f='';
   if(CH.closed&&CH.exit!=null)f='Закрыта: '+CH.reason+' · '+sg(CH.net_pct,2)+'% · '+sg(CH.r_mult,2)+' R';
   else if(e!=null&&pc!=null&&CH.side){const s=CH.side==='long'?1:-1;f='Сейчас '+sg((pc/e-1)*s*100,2)+'% от входа'}
   else if(CH.line_px!=null&&pc!=null)f='Цена '+fp(pc)+' · линия '+fp(CH.line_px);
-  $('#ch_f').textContent=f+(CH.closed?'':v.follow?' · в реальном времени':' · листаешь историю, ⏭ вернёт к текущей цене')
+  $('#ch_f').textContent=f+(CH.closed?'':v.follow?' · в реальном времени':' · ручной вид (график не прилипает), ⏭ вернёт к текущей цене')
 }
 addEventListener('resize',dirty);
 
