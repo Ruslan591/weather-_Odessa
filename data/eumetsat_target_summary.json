@@ -1,12 +1,17 @@
 {
-  "timestamp": "2026-11-14T02:32:48Z",
-  "status": "ok",
+  "timestamp": "2026-11-14T02:37:29Z",
+  "status": "suppressed_known_false_positive",
   "cloud_forecast_timestamp": "2026-11-14T02:15:00.000Z",
-  "target_id": 1,
-  "target_area_km2": 109.4,
-  "target_distance_km": 150.7,
-  "target_bearing_deg": 108.0,
-  "target_compass": "В",
+  "suppressed_target": {
+    "signature": "145_-45",
+    "area_km2": 109.4,
+    "distance_km": 150.7,
+    "bearing_deg": 108.0,
+    "compass": "В",
+    "not_confirmed_streak": 5,
+    "total_not_confirmed": 5,
+    "excluded_since": "2026-11-14T02:32:48Z"
+  },
   "system": {
     "target_id": 0,
     "area_km2": 205194.9,
@@ -26,46 +31,6 @@
   "local_suppressed_count": 1,
   "system_candidates": [],
   "system_suppressed_count": 1,
-  "frontal_tracks": [],
-  "target_movement": {
-    "speed_kmh": 90.3,
-    "direction_compass": "СВ",
-    "cpa_km": 150.7,
-    "eta_min": null,
-    "verdict": "удаляется"
-  },
-  "target_phase": {
-    "label": "безоблачно",
-    "cloud_fraction": 0.0
-  },
-  "existence": {
-    "modules": {
-      "ir_motion": {
-        "confirmed": false,
-        "timestamp": "2026-11-14T02:10:00.000Z"
-      },
-      "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-11-14T02:10:00.000Z"
-      },
-      "cloud_phase_type": {
-        "confirmed": false,
-        "timestamp": "2026-11-14T02:32:12Z"
-      }
-    },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
-  },
-  "phenomena": {
-    "precip_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-11-14T02:22:53Z"
-    },
-    "lightning_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-11-14T02:32:27Z"
-    }
-  },
-  "verdict": "CLM отметил цель в 151км В, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (205195км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора)."
+  "verdict": "Известный шумовой объект в 151км В (~109км²) — подавлено (не подтверждался 5 раз подряд). Отдельно: система синоптического масштаба (205195км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора).",
+  "frontal_tracks": []
 }
