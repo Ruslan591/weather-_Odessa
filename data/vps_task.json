@@ -1,1 +1,1 @@
-{"task_id": "pc_start", "cmd": "cd /opt/weather-pipeline/repo && git update-ref -d refs/remotes/origin/main 2>/dev/null; git fetch -q origin main:refs/remotes/origin/main; git show origin/main:scripts/paths_cache.py > /tmp/paths_cache.py && (setsid nohup /opt/trading-bot/venv/bin/python /tmp/paths_cache.py > /tmp/paths_cache.out 2>&1 &); sleep 20; cat /tmp/paths_cache.out", "timeout": 60}
+{"task_id": "pc_chk", "cmd": "tail -3 /tmp/paths_cache.out; pgrep -f paths_cache.py >/dev/null && echo CACHING || echo CACHE_DONE; ls -la /opt/trading-bot/cache/", "timeout": 60}
