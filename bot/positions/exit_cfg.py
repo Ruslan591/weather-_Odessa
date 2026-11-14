@@ -85,6 +85,10 @@ def eff(p, c=None):
     """Настройки выхода для конкретной позиции: настройки счёта; для позиций с правилом flat_brk - частичная цель (0.4R, 50%), стоп остатка на -0.15R сразу после неё
     и второй этап be2: на +0.8R стоп в безубыток с комиссиями (комиссия входа + комиссия стопа + проскальзывание, остаток при выходе по нему даёт 0 после всех издержек)."""
     c = c or load()
+    if isinstance(p, dict) and p.get("mgr") and not p.get("mgr_off") and p.get("xr") != "flat_brk":   # менеджер сделки (trade_mgr): правила класса поверх настроек счёта
+        try:
+            import trade_mgr; return trade_mgr.cfg_for(p, c)
+        except Exception: return c
     if not isinstance(p, dict) or p.get("xr") != "flat_brk": return c
     e = json.loads(json.dumps(c))
     e["tp1"].update(on=1, unit="r", val=FLAT_BRK["r"], part=FLAT_BRK["part"])
