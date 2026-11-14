@@ -1,1 +1,1 @@
-{"task_id": "ccs_poll", "cmd": "sleep 20; ls -la /tmp/ccs.out; cat /tmp/ccs.out | head -60; pgrep -f ccs.py >/dev/null && echo RUNNING || echo FINISHED", "timeout": 60}
+{"task_id": "ccs_poll2", "cmd": "pgrep -f ccs.py >/dev/null && echo RUNNING || echo FINISHED; wc -c /tmp/ccs.out; cat /tmp/ccs.out", "timeout": 60}
