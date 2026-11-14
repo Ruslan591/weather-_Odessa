@@ -1,22 +1,22 @@
 {
-  "timestamp": "2026-11-14T05:17:28Z",
+  "timestamp": "2026-11-14T05:23:22Z",
   "status": "ok",
-  "cloud_forecast_timestamp": "2026-11-14T04:45:00.000Z",
-  "target_id": 2,
-  "target_area_km2": 137.4,
-  "target_distance_km": 194.6,
-  "target_bearing_deg": 46.0,
-  "target_compass": "СВ",
+  "cloud_forecast_timestamp": "2026-11-14T05:00:00.000Z",
+  "target_id": 1,
+  "target_area_km2": 140.1,
+  "target_distance_km": 116.7,
+  "target_bearing_deg": 108.0,
+  "target_compass": "В",
   "system": {
     "target_id": 0,
-    "area_km2": 5133.0,
-    "distance_km": 88.4,
-    "bearing_deg": 56.0,
+    "area_km2": 321.6,
+    "distance_km": 109.4,
+    "bearing_deg": 61.0,
     "compass": "СВ",
-    "elongation_aspect_ratio": 1.88,
-    "elongation_axis_deg": 66.0,
-    "elongation_axis_compass": "СВ-ЮЗ",
-    "frontlike": false,
+    "elongation_aspect_ratio": 2.62,
+    "elongation_axis_deg": 2.0,
+    "elongation_axis_compass": "С-Ю",
+    "frontlike": true,
     "window_spanning": false,
     "phase_label": "безоблачно",
     "cloud_fraction": 0.0,
@@ -24,10 +24,67 @@
     "has_lightning": false
   },
   "local_candidates": [],
-  "local_suppressed_count": 1,
+  "local_suppressed_count": 5,
   "system_candidates": [],
-  "system_suppressed_count": 3,
-  "frontal_tracks": [],
+  "system_suppressed_count": 4,
+  "frontal_tracks": [
+    {
+      "track_id": 3050,
+      "first_seen": "2026-11-14T04:30:00.000Z",
+      "last_seen": "2026-11-14T05:00:00.000Z",
+      "points_count": 3,
+      "age_minutes": 30.0,
+      "distance_from_odessa_km": 132.2,
+      "dx_km": 129.93,
+      "dy_km": -24.35,
+      "area_km2": 934.0,
+      "axis_deg": 89.0,
+      "aspect_ratio": 3.14,
+      "velocity_kmh": 61.6,
+      "movement_bearing_deg": 54.0,
+      "movement_bearing_compass": "СВ",
+      "axis_rotation_deg": 12.0,
+      "tile": "near",
+      "ahead_station": {
+        "name": "KHERSON",
+        "ctry": "UP",
+        "lat": 46.633,
+        "lon": 32.567,
+        "elev_m": "+0054.0",
+        "dist_km_from_odessa": 139.1,
+        "wmo_synop_id": "33902",
+        "icao": null,
+        "usaf_raw": "339020",
+        "source": "synop",
+        "along_km": 33.3,
+        "perp_km": 32.4,
+        "dist_km": 46.4
+      },
+      "behind_station": {
+        "name": "CHORNOMORS'KE",
+        "ctry": "UP",
+        "lat": 45.517,
+        "lon": 32.7,
+        "elev_m": "+0010.0",
+        "dist_km_from_odessa": 181.0,
+        "wmo_synop_id": "33924",
+        "icao": null,
+        "usaf_raw": "339240",
+        "source": "synop",
+        "along_km": -31.5,
+        "perp_km": -74.1,
+        "dist_km": 80.5
+      },
+      "direction_compass": "В",
+      "current_target_id": 3,
+      "has_precip": false,
+      "has_lightning": false,
+      "ahead_obs": null,
+      "behind_obs": null,
+      "front_type": null,
+      "front_type_confidence": null
+    }
+  ],
   "target_phase": {
     "label": "безоблачно",
     "cloud_fraction": 0.0
@@ -36,15 +93,15 @@
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-11-14T04:50:00.000Z"
+        "timestamp": "2026-11-14T05:00:00.000Z"
       },
       "geocolour_motion": {
         "confirmed": false,
-        "timestamp": "2026-11-14T04:50:00.000Z"
+        "timestamp": "2026-11-14T05:00:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": false,
-        "timestamp": "2026-11-14T05:07:27Z"
+        "timestamp": "2026-11-14T05:22:32Z"
       }
     },
     "votes_confirmed": 0,
@@ -58,8 +115,8 @@
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-11-14T05:17:06Z"
+      "timestamp": "2026-11-14T05:22:58Z"
     }
   },
-  "verdict": "CLM отметил цель в 195км СВ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (5133км²) в 88км СВ."
+  "verdict": "CLM отметил цель в 117км В, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (322км²) в 109км СВ (вытянута С-Ю (2°), похоже на фронт)."
 }
