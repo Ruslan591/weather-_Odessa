@@ -113,6 +113,10 @@ def step(p, k):
     if p.get("trail_act") and (tr["on"] or p.get("manual_trail")) and not p.get("stop_manual"):
         tl = p["lo"] + L["trail_dist"] if side < 0 else p["hi"] - L["trail_dist"]
         p["stop"] = min(p["stop"], tl) if side < 0 else max(p["stop"], tl)
+    try:   # менеджер сделки: лесенка стопа по достигнутому ходу цены (trade_mgr), только ужесточение
+        import trade_mgr; _r = trade_mgr.ladder(p, side, t + 60000)
+        if _r: decisions.auto(p, "mgr_ladder", _r[0], _r[1], t + 60000, c, mfe_r=_r[2], lvl=_r[3])
+    except Exception as e: print("mgr ladder err", p.get("sym"), e, flush=True)
     mh = cfg["maxh"] if cfg["maxh"] is not None else p["max_h"]
     if mh and (t + 60000 - p["t_in"]) / 3600000 >= mh: close(p, c, t + 60000, "time", True)
 
@@ -123,16 +127,37 @@ def _update():
     ps = load(); changed = False; now = int(time.time() * 1000)
     for p in ps:
         if p["status"] != "open": continue
+        try:
+            import trade_mgr
+            if trade_mgr.attach(p): changed = True
+        except Exception as e: print("mgr attach err", p.get("sym"), e, flush=True)
         while p["status"] == "open":
             d = kl(p["sym"], "1m", 1000, p["last_t"] + 60000)
             d = [k for k in d if int(k[0]) + 60000 <= now]
             if not d: break
             for k in d:
                 step(p, k); p["last_t"] = int(k[0]); changed = True
+                _b = p.get("base")
+                if _b and _b["status"] == "open":   # «что было бы» по прежним правилам счёта (trade_mgr): те же свечи
+                    try: step(_b, k); _b["last_t"] = int(k[0])
+                    except Exception as e: print("base step err", p.get("sym"), e, flush=True)
                 if p["status"] != "open": break
             if len(d) < 1000: break
-    for p in ps:   # патч 6: после БУ стоп подтягивается на подтверждённую линию поддержки/сопротивления (sr_stop.py)
-        if p["status"] == "open" and p.get("armed") and exit_cfg.load()["sr"]["on"]:
+    for p in ps:   # копия «что было бы» закрытых позиций доигрывается до своего выхода
+        _b = p.get("base")
+        if _b and _b.get("status") == "open" and p["status"] != "open":
+            try:
+                while _b["status"] == "open":
+                    d = [k for k in kl(_b["sym"], "1m", 1000, _b["last_t"] + 60000) if int(k[0]) + 60000 <= now]
+                    if not d: break
+                    for k in d:
+                        step(_b, k); _b["last_t"] = int(k[0]); changed = True
+                        if _b["status"] != "open": break
+                    if len(d) < 1000: break
+            except Exception as e: print("base finish err", p.get("sym"), e, flush=True)
+    for p0 in ps:   # патч 6: после БУ стоп подтягивается на подтверждённую линию поддержки/сопротивления (sr_stop.py); и для копии «что было бы»
+      for p in (p0, p0.get("base")):
+        if p and p["status"] == "open" and p.get("armed") and exit_cfg.load()["sr"]["on"]:
             try:
                 import sr_stop
                 _n0 = len(p.get("sr_hist", []))
