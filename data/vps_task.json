@@ -1,1 +1,1 @@
-{"task_id": "pc_chk", "cmd": "tail -3 /tmp/paths_cache.out; pgrep -f paths_cache.py >/dev/null && echo CACHING || echo CACHE_DONE; ls -la /opt/trading-bot/cache/", "timeout": 60}
+{"task_id": "pc_chk2", "cmd": "tail -2 /tmp/paths_cache.out; if pgrep -f paths_cache.py >/dev/null; then echo CACHING; else echo CACHE_DONE; fi", "timeout": 60}
