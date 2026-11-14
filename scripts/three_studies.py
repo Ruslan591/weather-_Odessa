@@ -53,6 +53,7 @@ def rr(q, t): return q["net_pct"] / t["p"]["R_pct"]
 
 BASEQ = [play(t) for t in T]; BASE = [rr(q, t) for q, t in zip(BASEQ, T)]
 print("Базовая симуляция (правила счёта): сумма %+.1f R (факт %+.1f R)\n" % (sum(BASE), sum(t["p"]["r_mult"] or 0 for t in T)))
+print("   по половинам (1-я / 2-я): %+.1f / %+.1f R\n" % (sum(r for r, t in zip(BASE, T) if t["p"]["id"] < half), sum(r for r, t in zip(BASE, T) if t["p"]["id"] >= half)))
 
 
 def summ(label, rs, ex=""):
