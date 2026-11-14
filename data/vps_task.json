@@ -1,1 +1,1 @@
-{"task_id": "dep_live7", "cmd": "cd /opt/weather-pipeline/repo && git update-ref -d refs/remotes/origin/main 2>/dev/null; git fetch -q origin main:refs/remotes/origin/main; git show origin/main:bot/live/index.html > /tmp/lv_index.html && install -o tbot -g tbot -m 644 /tmp/lv_index.html /opt/trading-bot/live/index.html && grep -c 'arc(x,Y(tt' /opt/trading-bot/live/index.html", "timeout": 90}
+{"task_id": "cls_all", "cmd": "/opt/trading-bot/venv/bin/python /tmp/es.py 1 99999 2>&1 | sed -n 27,60p", "timeout": 60}
