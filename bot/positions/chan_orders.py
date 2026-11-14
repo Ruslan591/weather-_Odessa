@@ -729,6 +729,9 @@ def cycle(dry=False):
                  "R": R, "R_pct": R / fp * 100, "be_r": 1.0, "lock_pct": 0.2, "be_px": fp + side * R, "lock_px": fp * (1 + side * 0.2 / 100), "armed": False,
                  "trail_dist": 1.5 * a1, "atr1h": a1, "max_h": MAXH, "stake": pos.STAKE, "lev": pos.LEV, "thesis": th, "last_t": (ft // 60000) * 60000, "hi": fp, "lo": fp, "status": "open",
                  "src": "chan", "order_id": o["id"], "rule": o["rule"], "placed_t": o["placed_t"], "fee_in": MAK, "fee_tp": MAK}
+            try:
+                import trade_mgr; p["cls"] = trade_mgr.classify(o)   # менеджер сделки: класс для правил выхода (trade_mgr.attach вешает правила и копию «что было бы» на первом цикле трекера)
+            except Exception as e: log("cls skipped: %s" % e)
             if o.get("setup") == "breakout" and (o.get("regime") or {}).get("regime") == "flat":   # правило выхода «флэт + пробой»: 50% на +0.4R, остаток в БУ с комиссиями
                 if (o["tp"] - fp) * side > 0.4 * R:
                     p["xr"] = "flat_brk"; p["thesis"] += " Правило выхода (флэт, пробой): на +0.4R закрыть 50% объёма, стоп остатка на -0.15R, на +0.8R в безубыток с учётом комиссий."
