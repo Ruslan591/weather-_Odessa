@@ -1,25 +1,122 @@
 {
-  "timestamp": "2026-11-14T05:47:29Z",
-  "status": "system_only",
-  "reason": "локальных компактных масс нет, есть только система(ы) синоптического масштаба",
-  "cloud_forecast_timestamp": "2026-11-14T05:15:00.000Z",
+  "timestamp": "2026-11-14T05:53:12Z",
+  "status": "ok",
+  "cloud_forecast_timestamp": "2026-11-14T05:30:00.000Z",
+  "target_id": 1,
+  "target_area_km2": 158.8,
+  "target_distance_km": 172.2,
+  "target_bearing_deg": 96.0,
+  "target_compass": "В",
   "system": {
     "target_id": 0,
-    "area_km2": 2349.7,
-    "distance_km": 148.4,
-    "bearing_deg": 61.0,
+    "area_km2": 693.8,
+    "distance_km": 167.9,
+    "bearing_deg": 63.0,
     "compass": "СВ",
-    "elongation_aspect_ratio": 1.91,
-    "elongation_axis_deg": 37.0,
-    "elongation_axis_compass": "СВ-ЮЗ",
-    "frontlike": false,
+    "elongation_aspect_ratio": 2.85,
+    "elongation_axis_deg": 9.0,
+    "elongation_axis_compass": "С-Ю",
+    "frontlike": true,
     "window_spanning": false,
     "phase_label": "безоблачно",
-    "cloud_fraction": 0.029,
+    "cloud_fraction": 0.31,
     "has_precip": false,
     "has_lightning": false
   },
+  "local_candidates": [],
+  "local_suppressed_count": 2,
   "system_candidates": [],
   "system_suppressed_count": 3,
-  "verdict": "Локальных облачных масс нет. Система синоптического масштаба (2350км²) в 148км СВ."
+  "frontal_tracks": [
+    {
+      "track_id": 3049,
+      "first_seen": "2026-11-14T04:15:00.000Z",
+      "last_seen": "2026-11-14T05:30:00.000Z",
+      "points_count": 3,
+      "age_minutes": 75.0,
+      "distance_from_odessa_km": 167.9,
+      "dx_km": 149.11,
+      "dy_km": 77.23,
+      "area_km2": 693.8,
+      "axis_deg": 9.0,
+      "aspect_ratio": 2.85,
+      "velocity_kmh": 12.4,
+      "movement_bearing_deg": 334.3,
+      "movement_bearing_compass": "СЗ",
+      "axis_rotation_deg": 9.0,
+      "tile": "near",
+      "ahead_station": {
+        "name": "KRYVYI RIH",
+        "ctry": "UP",
+        "lat": 48.033,
+        "lon": 33.217,
+        "elev_m": "+0124.0",
+        "dist_km_from_odessa": 255.9,
+        "wmo_synop_id": "33791",
+        "icao": null,
+        "usaf_raw": "337910",
+        "source": "synop",
+        "along_km": 73.4,
+        "perp_km": -78.1,
+        "dist_km": 107.2
+      },
+      "behind_station": {
+        "name": "KHERSON",
+        "ctry": "UP",
+        "lat": 46.633,
+        "lon": 32.567,
+        "elev_m": "+0054.0",
+        "dist_km_from_odessa": 139.1,
+        "wmo_synop_id": "33902",
+        "icao": null,
+        "usaf_raw": "339020",
+        "source": "synop",
+        "along_km": -45.4,
+        "perp_km": 34.4,
+        "dist_km": 56.9
+      },
+      "direction_compass": "СВ",
+      "current_target_id": 0,
+      "has_precip": false,
+      "has_lightning": false,
+      "ahead_obs": null,
+      "behind_obs": null,
+      "front_type": null,
+      "front_type_confidence": null
+    }
+  ],
+  "target_phase": {
+    "label": "безоблачно",
+    "cloud_fraction": 0.092
+  },
+  "existence": {
+    "modules": {
+      "ir_motion": {
+        "confirmed": false,
+        "timestamp": "2026-11-14T05:30:00.000Z"
+      },
+      "geocolour_motion": {
+        "confirmed": false,
+        "timestamp": "2026-11-14T05:30:00.000Z"
+      },
+      "cloud_phase_type": {
+        "confirmed": false,
+        "timestamp": "2026-11-14T05:52:25Z"
+      }
+    },
+    "votes_confirmed": 0,
+    "votes_not_confirmed": 3,
+    "consensus": "not_confirmed"
+  },
+  "phenomena": {
+    "precip_forecast": {
+      "confirmed": null,
+      "timestamp": "2026-11-14T05:42:05Z"
+    },
+    "lightning_forecast": {
+      "confirmed": false,
+      "timestamp": "2026-11-14T05:52:49Z"
+    }
+  },
+  "verdict": "CLM отметил цель в 172км В, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (694км²) в 168км СВ (вытянута С-Ю (9°), похоже на фронт)."
 }
