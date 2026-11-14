@@ -133,6 +133,7 @@ def _dist_old(p, px, v, atr5):
 def auto(p, kind, old, new, t, px=None, **kw):
     """Автоматическое событие движка (be, trail_start, tp1, sr): короткая запись без свечей."""
     try:
+        if p.get("mgr_off"): return   # копия «что было бы» (trade_mgr) в журнал не пишет
         px = px if px is not None else p["entry"]; rec = _base(p, px, t)
         rec.update(kind=kind, by="auto", **{"from": _r(old, 8) if old is not None else None, "to": _r(new, 8) if new is not None else None}); rec.update(kw)
         _write(rec)
