@@ -1,1 +1,1 @@
-{"task_id": "es_tail", "cmd": "tail -n 12 /tmp/estudy.out", "timeout": 60}
+{"task_id": "sw_run", "cmd": "cd /opt/weather-pipeline/repo && git update-ref -d refs/remotes/origin/main 2>/dev/null; git fetch -q origin main:refs/remotes/origin/main; git show origin/main:scripts/stop_width_study.py > /tmp/estudy/stop_width_study.py; cd /tmp/estudy && (setsid nohup /opt/trading-bot/venv/bin/python stop_width_study.py > /tmp/swstudy.out 2>&1 &); sleep 100; cat /tmp/swstudy.out", "timeout": 160}
