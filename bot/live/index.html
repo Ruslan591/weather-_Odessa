@@ -190,7 +190,9 @@ function drawChart(){
   if(CH.ch&&CH.ch.upper&&CH.ch.lower){const u=CH.ch.upper,l=CH.ch.lower,col=CH.ch.type==='channel_down'?'#f6465d':CH.ch.type==='channel_up'?'#2ebd85':'#4c8dff';
     c.lineWidth=1.5;c.strokeStyle=col;for(const L of [u,l]){c.beginPath();c.moveTo(0,Y(chanAt(L,t0)));c.lineTo(pw,Y(chanAt(L,t1)));c.stroke()}
     c.setLineDash([5,4]);c.strokeStyle=col+'aa';c.beginPath();c.moveTo(0,Y((chanAt(u,t0)+chanAt(l,t0))/2));c.lineTo(pw,Y((chanAt(u,t1)+chanAt(l,t1))/2));c.stroke();c.setLineDash([])}
-  for(const tt of [[CH.t_in,'вход'],[CH.t_out,'выход']]){if(tt[0]&&tt[0]>=t0&&tt[0]<=t1){const x=X(tt[0]);c.setLineDash([3,3]);c.strokeStyle='#8b94a7';c.beginPath();c.moveTo(x,PT);c.lineTo(x,PT+ph);c.stroke();c.setLineDash([]);c.fillStyle='#8b94a7';c.fillText(tt[1],Math.min(x+3,pw-30),PT+10)}}
+  for(const tt of [[CH.t_in,'вход',CH.entry,'#4c8dff'],[CH.t_out,'выход',CH.exit,'#f0b90b']]){if(tt[0]&&tt[0]>=t0&&tt[0]<=t1){const x=X(Math.floor(tt[0]/iv)*iv)+bw/2;
+    c.setLineDash([3,3]);c.strokeStyle='#8b94a7';c.beginPath();c.moveTo(x,PT);c.lineTo(x,PT+ph);c.stroke();c.setLineDash([]);c.fillStyle='#8b94a7';c.fillText(tt[1],Math.min(x+3,pw-30),PT+10);
+    if(tt[2]!=null){c.fillStyle=tt[3];c.strokeStyle='#0b0e14';c.lineWidth=1.5;c.beginPath();c.arc(x,Y(tt[2]),4.5,0,6.3);c.fill();c.stroke()}}}
   c.lineWidth=1;const lab=[];
   const drawL=(x,col,lb,dash,sub)=>{if(x<lo||x>hi)return;const y=Y(x);c.setLineDash(dash?[6,4]:[]);c.strokeStyle=col;c.beginPath();c.moveTo(0,y);c.lineTo(pw,y);c.stroke();c.setLineDash([]);lab.push({y,col,tx:lb+' '+fp(x),sub})};
   for(const L of lv)drawL(L.v,L.col,L.lab,L.dash);
