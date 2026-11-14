@@ -51,7 +51,7 @@ def play(base, ks, cfg):
     return p
 
 
-C = copy.deepcopy(trade_mgr.DEFAULT)
+C = copy.deepcopy(trade_mgr.DEFAULT); C["enabled"] = True   # в симуляции менеджер включён явно (по умолчанию в trade_mgr он выключен)
 def var(**kw):
     c = copy.deepcopy(C)
     for k, v in kw.items():
