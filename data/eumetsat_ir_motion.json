@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-14T15:20:00.000Z",
+  "timestamp": "2026-11-14T15:30:00.000Z",
   "buffer_size": 6,
   "buffer_span_minutes": 50,
   "observed_area": {
@@ -12,67 +12,76 @@
     "local_trend_radius_km": 50
   },
   "valid": true,
-  "speed_kmh": 129.3,
+  "speed_kmh": 129.4,
   "direction_compass": "СВ",
   "bearing_deg": 59.2,
   "frame_pairs_used": 5,
-  "acceleration_kmh": 1.9,
-  "turning_deg": 0.5,
+  "acceleration_kmh": -0.5,
+  "turning_deg": 0.3,
   "acceleration_verdict": "скорость стабильна",
   "turning_verdict": "направление стабильно",
   "forecast_displacement": {
     "30min": {
-      "distance_km": 65.8,
+      "distance_km": 64.4,
       "bearing_deg": 60.0,
       "compass": "СВ"
     },
     "60min": {
-      "distance_km": 132.7,
+      "distance_km": 128.5,
       "bearing_deg": 60.0,
       "compass": "СВ"
     },
     "120min": {
-      "distance_km": 269.8,
-      "bearing_deg": 61.0,
+      "distance_km": 255.8,
+      "bearing_deg": 60.0,
       "compass": "СВ"
     }
   },
   "area_fraction_over_time": [
-    0.384,
-    0.293,
-    0.208,
-    0.193,
-    0.173,
-    0.115
+    0.376,
+    0.274,
+    0.23,
+    0.205,
+    0.154,
+    0.086
   ],
-  "area_trend_delta": -0.269,
+  "area_trend_delta": -0.29,
   "area_trend_verdict": "сокращается",
   "mean_brightness_over_time": [
-    98.5,
     92.3,
     86.2,
     84.8,
     83.0,
-    80.2
+    80.2,
+    76.4
   ],
-  "brightness_trend_delta": -18.3,
+  "brightness_trend_delta": -15.9,
   "station_state": "clear",
-  "station_area_fraction": 0.068,
-  "cloud_mass_distance_km": 127.4,
-  "cloud_mass_bearing_deg": 201.0,
-  "cloud_mass_compass": "Ю",
-  "cloud_mass_area_km2": 149,
-  "cloud_mass_contrast_sigma": 1.65,
+  "station_area_fraction": 0.0,
+  "cloud_mass_distance_km": 52.4,
+  "cloud_mass_bearing_deg": 71.0,
+  "cloud_mass_compass": "В",
+  "cloud_mass_area_km2": 57,
+  "cloud_mass_contrast_sigma": 1.59,
   "temperature_trend_verdict": "потепление верхней границы (возможно ослабление конвекции)",
   "target_confirmation": {
-    "confirmed": null,
-    "reason": "известный шумовой объект в этой точке подавлен (сигнатура -175_-10), других локальных целей нет"
+    "confirmed": false,
+    "target_id": 1,
+    "target_area_km2": 56.0,
+    "roi_contrast_sigma": -1.23,
+    "verdict": "ИК НЕ подтверждает: в ROI CLM-цели нет значимого контраста — возможна тонкая/низкая облачность, невидимая на ИК, либо расхождение слоёв"
   },
   "system_analysis_all": [
     {
       "target_id": 0,
       "available": true,
-      "roi_contrast_sigma": 0.16,
+      "roi_contrast_sigma": 0.1,
+      "confirmed": false
+    },
+    {
+      "target_id": 3,
+      "available": true,
+      "roi_contrast_sigma": -0.86,
       "confirmed": false
     }
   ],
@@ -80,19 +89,25 @@
     {
       "target_id": 1,
       "available": true,
-      "roi_contrast_sigma": -0.87,
+      "roi_contrast_sigma": -1.23,
       "confirmed": false
     },
     {
       "target_id": 2,
       "available": true,
-      "roi_contrast_sigma": -0.82,
+      "roi_contrast_sigma": -1.0,
       "confirmed": false
     },
     {
-      "target_id": 3,
+      "target_id": 4,
       "available": true,
-      "roi_contrast_sigma": -0.75,
+      "roi_contrast_sigma": -0.97,
+      "confirmed": false
+    },
+    {
+      "target_id": 5,
+      "available": true,
+      "roi_contrast_sigma": -0.95,
       "confirmed": false
     }
   ],
