@@ -18,7 +18,8 @@ for p in snap["closed"]:
     o = orders.get(p.get("order_id")) or {}; rg = (o.get("regime") or {}).get("regime")
     sgn = "short" if p["side"] == "short" else "long"
     with_reg = None if rg in (None, "flat") else ((rg == "down") == (sgn == "short"))
-    cost = ((p.get("fee_in") or 0) + (p.get("fee_tp") or 0)) / (p.get("stake") or 1) * 100
+    gross = (p["exit"] / p["entry"] - 1) * 100 * (1 if p["side"] == "long" else -1)
+    cost = max(0.0, gross - p["net_pct"])          # комиссии и проскальзывание круга, % (по факту сделки)
     rows.append(dict(id=p["id"], sym=p["sym"], side=sgn, reason=str(p["reason"]), net=p["net_pct"], Rp=p["R_pct"], R=p["r_mult"], mfe=(p.get("mfe_pct") or 0) / p["R_pct"],
                      mae=(p.get("mae_pct") or 0) / p["R_pct"], cost=cost / p["R_pct"], setup=o.get("setup"), with_reg=with_reg, counter=o.get("counter"), rule=p.get("rule")))
 n = len(rows); ids = [r["id"] for r in rows]
@@ -33,7 +34,7 @@ print("\nДошли до порога БУ (%.1f R): %d сделок. Чем к�
       sum(r["R"] for r in hit) / max(1, len(hit)), sum(r["net"] for r in hit) / max(1, len(hit)), sum(r["mfe"] for r in hit) / max(1, len(hit))))
 print("Не дошли: %d сделок, стоп %.0f%%, средний итог %+.2f R, средний MFE %.2f R, из них MFE от 0.5 до порога: %d" % (len(no), 100 * sum(r["reason"] == "stop" for r in no) / max(1, len(no)), sum(r["R"] for r in no) / max(1, len(no)),
       sum(r["mfe"] for r in no) / max(1, len(no)), sum(0.5 <= r["mfe"] < cfg["be"]["val"] for r in no)))
-print("\nЕсли бы закрывать ЦЕЛИКОМ при достижении уровня X (R), остальное как было (грубо по MFE, минус комиссии сделки):")
+print("\nЕсли бы закрывать ЦЕЛИКОМ при достижении уровня X (R), остальное как было (грубо по MFE, минус комиссии и проскальзывание по факту сделки):")
 base = sum(r["R"] for r in rows)
 print("  как есть: сумма %+.1f R, средний %+.2f R" % (base, base / n))
 for x in (0.3, 0.5, 0.75, 1.0, 1.5, 2.0):
