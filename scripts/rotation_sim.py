@@ -103,6 +103,48 @@ rs, rot = lockstep(0.5, 0.15, "low_ur", same_dir=False)
 print("   (группа = все позиции независимо от стороны, low_ur, 0.5/0.15): закрыто %d, сумма %+.1f R, к базе %+.1f R" % (rot, sum(rs), sum(rs) - sum(BASE)))
 
 
+
+def lockstep_new(min_r, tol, sel):
+    """Идея пользователя в чистом виде: анализ ТОЛЬКО в момент входа новой позиции; закрываем одну из более старых позиций той же стороны."""
+    Q = [build(t) for t in T]; res = [None] * N; rot = 0
+    order = sorted(range(N), key=lambda i: T[i]["p"]["t_in"]); nxt = 0; active = []; m = tmin
+    while m <= tmax:
+        newc = []
+        while nxt < N and T[order[nxt]]["last_t"] + 60000 <= m: active.append(order[nxt]); newc.append(order[nxt]); nxt += 1
+        px_now = {}
+        for i in list(active):
+            k = T[i]["kmap"].get(m)
+            if k is None: continue
+            pos.step(Q[i], k); px_now[i] = k[4]
+            if Q[i]["status"] != "open": active.remove(i); res[i] = Q[i]
+        for nw in newc:
+            if nw not in active: continue
+            olds = [i for i in active if i != nw and T[i]["sd"] == T[nw]["sd"] and T[i]["p"]["sym"] != T[nw]["p"]["sym"] and i in px_now and Q[i]["status"] == "open"]
+            cand = {}
+            for i in olds:
+                q = Q[i]; sd = T[i]["sd"]; E = q["entry"]; ur = sd * (px_now[i] / E - 1) * 100 / q["R_pct"]; mfe = ((q["hi"] - E) if sd > 0 else (E - q["lo"])) / q["R"]
+                if ur >= min_r and mfe - ur <= tol: cand[i] = (ur, mfe)
+            if not cand: continue
+            if sel == "low_ur": pick = [min(cand, key=lambda i: cand[i][0])]
+            elif sel == "hi_ur": pick = [max(cand, key=lambda i: cand[i][0])]
+            elif sel == "old": pick = [min(cand, key=lambda i: T[i]["p"]["t_in"])]
+            else: pick = list(cand)
+            for i in pick:
+                pos.close(Q[i], px_now[i], m + 60000, "rot", True); active.remove(i); res[i] = Q[i]; rot += 1
+        m += 60000
+    for i in range(N):
+        if res[i] is None:
+            if Q[i]["status"] == "open": pos.close(Q[i], T[i]["ks"][-1][4], T[i]["ks"][-1][0] + 60000, "time", True)
+            res[i] = Q[i]
+    return [rn(res[i], T[i]) for i in range(N)], rot
+
+
+print("\n== A2. Только в момент входа НОВОЙ позиции в ту же сторону (другая пара): закрыть одну из более старых")
+for sel in ("low_ur", "hi_ur", "old", "all"):
+    for min_r, tol in ((0.3, 0.15), (0.5, 0.15), (0.5, 9.0), (0.7, 9.0)):
+        rs, rot = lockstep_new(min_r, tol, sel); h1 = sum(r for r, t in zip(rs, T) if t["p"]["id"] < half)
+        print("   выбор %-6s | >= %.1f R, откат <= %s: закрыто %3d, сумма %+7.1f R (1/2: %+6.1f / %+6.1f), к базе %+6.1f R" % (sel, min_r, "%.2f R" % tol if tol < 9 else "любой", rot, sum(rs), h1, sum(rs) - h1, sum(rs) - sum(BASE)))
+
 # ---------- B. стоп по структуре ----------
 def bars5(pre):
     g = {}
