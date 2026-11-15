@@ -23,6 +23,7 @@ After=network-online.target acct-api-regr.service
 User=tbot
 Environment=POS_DIR=/opt/trading-bot/positions_regr
 Environment=LIVE_PORT=18110
+Environment=LIVE_CTL_PORT=18111
 Environment=ACCT_PORT=18102
 ExecStart=$VPY $L/live_web.py
 Restart=always
@@ -34,6 +35,7 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
+ReadWritePaths=/opt/trading-bot/live
 
 [Install]
 WantedBy=multi-user.target
