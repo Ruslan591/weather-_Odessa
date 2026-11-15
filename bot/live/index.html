@@ -37,7 +37,7 @@ h2{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut)
 <h2>Открытые позиции</h2><div id="open"></div>
 <h2>Ордера в ожидании</h2><div id="pend"></div>
 <h2>Слежения у линий</h2><div id="watch"></div>
-<h2>События</h2><div class="card" id="evt"></div>
+<h2 id="evt_h" style="cursor:pointer">События <span id="evt_n"></span> <span id="evt_a">▸</span></h2><div class="card" id="evt" hidden></div>
 <h2>Архив закрытых</h2><div class="card small" id="asum"></div><div id="arch"></div>
 </div>
 <div id="chart"><div class="row" id="ch_h"></div><canvas id="cv"></canvas><div class="row" id="ch_t"></div><div class="small mut" id="ch_f" style="padding-top:4px"></div></div>
@@ -135,7 +135,7 @@ function freezeY(){const v=CH.view;if(!v.y&&CH.yr)v.y={lo:CH.yr.lo,hi:CH.yr.hi};
 function scaleY(f){const y=freezeY();if(!y)return;const c=(y.lo+y.hi)/2,hf=(y.hi-y.lo)/2*f;CH.view.y={lo:c-hf,hi:c+hf};dirty()}
 function buildChartHead(){
   const hd=$('#ch_h');hd.replaceChildren();
-  const x=h('button','cb','✕');x.onclick=closeChart;hd.append(x,h('b',null,usd(CH.sym).replace('USDT','')),CH.side?side(CH.side):h('span'),h('span','sp'));
+  const x=h('button','cb','✕');x.onclick=closeChart;hd.append(x,h('b',null,usd(CH.sym).replace('USDT','')),CH.side?side(CH.side):h('span'),CH.id!=null?h('span','mut small','#'+CH.id):h('span'),h('span','sp'));
   for(const iv of Object.keys(IVMS)){const b=h('button','cb'+(CH.iv===iv?' on':''),iv);b.onclick=()=>{CH.iv=iv;CH.cs=[];CH.cross=null;fitView();buildChartHead();reqCandles()};hd.append(b)}
   const tb=$('#ch_t');tb.replaceChildren();const iv=()=>IVMS[CH.iv];
   const B=[['◀',()=>panTo(leftT()-CH.view.n*iv()*.25)],['▶',()=>panTo(leftT()+CH.view.n*iv()*.25)],['↔−',()=>setN(CH.view.n*1.25,curBase())],['↔+',()=>setN(CH.view.n*.8,curBase())],
@@ -235,7 +235,7 @@ function render(){
   const md=st.mode||{};$('#mode').textContent=(md.mode||'')+(md.express?' · экспресс':'')+(md.autoorder?' · автоордер':'');
   let unreal=0,all=true;const op=$('#open');op.replaceChildren();
   for(const p of st.open||[]){const s=p.side==='long'?1:-1,x=px(p.sym),c=h('div','card tap');
-    c.onclick=()=>openChart({sym:p.sym,side:p.side,entry:p.entry,stop:p.stop,stop0:p.stop0,tp:p.tp,be:p.be_px,lock:p.lock_px,t_in:p.t_in,ch:p.ch,oid:p.order_id,pos:1});
+    c.onclick=()=>openChart({id:p.id,sym:p.sym,side:p.side,entry:p.entry,stop:p.stop,stop0:p.stop0,tp:p.tp,be:p.be_px,lock:p.lock_px,t_in:p.t_in,ch:p.ch,oid:p.order_id,pos:1});
     const pct=x?(x/p.entry-1)*s*100:null,u=pct!=null?pct/100*p.stake:null,r=x&&p.R?(x-p.entry)*s/p.R:null;
     if(u==null)all=false;else unreal+=u;
     const t=h('div','row');t.append(h('b',null,p.sym.replace('USDT','')),side(p.side),h('span','mut small','#'+p.id+' · '+(p.t_in?tm(p.t_in):'')),h('span','sp'),h('b','big '+cls(pct),pct==null?'—':sg(pct,2)+'%'),h('span','mut','📈'));c.append(t);
@@ -260,9 +260,10 @@ function render(){
     t.append(h('b',null,w.sym),side(w.side),h('span','mut small',(w.line==='upper'?'верх':'низ')+' · '+(w.state||'')),h('span','sp'),h('b',null,w.dist==null?'—':sg(w.dist,2)+' ATR'),h('span','mut','📈'));c.append(t);
     c.append(h('div','small mut','цена '+fp(w.x)+' · линия '+fp(w.lp)+(w.tf?' · слежу с '+tm(w.tf):'')));we.append(c)}
   if(!ws_.length)we.append(h('div','card mut','Активных слежений нет'));
-  const ev_=$('#evt');ev_.replaceChildren();
+  const ev_=$('#evt');ev_.replaceChildren();const evOpen=!ev_.hidden;$('#evt_n').textContent='('+S.evt.length+(S.evt.length?', последнее '+tm(S.evt[0].t):'')+')';$('#evt_a').textContent=evOpen?'▾':'▸';
+  if(evOpen){
   for(const e of S.evt){const d=h('div','ev'+(e.n?' n':''));d.append(h('time',null,tm(e.t)),h('span',/отмен|истёк/.test(e.x)?'r':/✅/.test(e.x)?'g':/⏳/.test(e.x)?'a':'',e.x));ev_.append(d);e.n=0}
-  if(!S.evt.length)ev_.append(h('div','mut','Пока пусто'));
+  if(!S.evt.length)ev_.append(h('div','mut','Пока пусто'));}
   renderArch();
 }
 function renderArch(){
@@ -271,9 +272,11 @@ function renderArch(){
   const sum=A.reduce((x,p)=>x+(p.pnl_usd||0),0),w=A.filter(p=>(p.pnl_usd||0)>0).length,R=A.reduce((x,p)=>x+(p.r_mult||0),0);
   sm.append('Сделок '+A.length+' · плюс '+w+' / минус '+(A.length-w)+' · успешных '+Math.round(w/A.length*100)+'% · итого ',h('b',cls(sum),sg(sum,3)+' $'),' · '+sg(R,1)+' R');
   for(const p of A.slice(0,S.archN)){const r=h('div','ar'),pct=p.net_pct;
-    r.onclick=()=>openChart({sym:p.sym,side:p.side,entry:p.entry,exit:p.exit,stop:p.stop,stop0:p.stop0,tp:p.tp,be:p.be_px,lock:p.lock_px,t_in:p.t_in,t_out:p.t_out,oid:p.order_id,reason:p.reason,net_pct:p.net_pct,r_mult:p.r_mult,closed:1});
-    r.append(h('span','mut small',dt(p.t_out)),h('b',null,p.sym.replace('USDT','')),side(p.side),h('span','sp'),h('span','small mut',String(p.reason||'').slice(0,18)),h('b',cls(pct),sg(pct,2)+'%'),h('span','small '+cls(p.pnl_usd),sg(p.pnl_usd,3)+'$'),h('span','mut','📈'));ar.append(r)}
+    r.onclick=()=>openChart({id:p.id,sym:p.sym,side:p.side,entry:p.entry,exit:p.exit,stop:p.stop,stop0:p.stop0,tp:p.tp,be:p.be_px,lock:p.lock_px,t_in:p.t_in,t_out:p.t_out,oid:p.order_id,reason:p.reason,net_pct:p.net_pct,r_mult:p.r_mult,closed:1});
+    r.append(h('span','mut small','#'+p.id),h('span','mut small',dt(p.t_out)),h('b',null,p.sym.replace('USDT','')),side(p.side),h('span','sp'),h('span','small mut',String(p.reason||'').slice(0,18)),h('b',cls(pct),sg(pct,2)+'%'),h('span','small '+cls(p.pnl_usd),sg(p.pnl_usd,3)+'$'),h('span','mut','📈'));ar.append(r)}
   if(A.length>S.archN){const m=h('button','cb','Показать ещё');m.style.margin='8px 0';m.onclick=()=>{S.archN+=30;dirty()};ar.append(m)}
 }
+try{if(localStorage.getItem('evt_open')==='1')$('#evt').hidden=false}catch(e){}
+$('#evt_h').onclick=()=>{const e=$('#evt');e.hidden=!e.hidden;try{localStorage.setItem('evt_open',e.hidden?'0':'1')}catch(_){}dirty()};
 connect();
 </script></body></html>
