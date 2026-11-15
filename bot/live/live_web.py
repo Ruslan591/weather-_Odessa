@@ -3,11 +3,13 @@
 Источники: POS_DIR (orders.json, tg_watch.json, decisions.jsonl, tg_*.json), acct-api (GET /api/claude), цены Binance (публичный поток, ретрансляция).
 Вход: Telegram Mini App (подпись initData по токену бота и TG_USER_ID) или секретная ссылка (token.txt). Не больше 3 подключений.
 Настройки: порт LIVE_PORT (18110), Caddy проксирует /live* на него. docs/topics/live_web.md"""
-import asyncio, collections, hashlib, hmac, json, os, re, time, urllib.parse
+import asyncio, collections, hashlib, hmac, json, os, re, signal, time, urllib.parse
 from aiohttp import web, ClientSession, ClientTimeout, WSMsgType
 
 POS = os.environ.get("POS_DIR", "/opt/trading-bot/positions_regr")
 PORT = int(os.environ.get("LIVE_PORT", "18110"))
+CTL_PORT = int(os.environ.get("LIVE_CTL_PORT", "18111"))   # порт управления: только localhost, на VPS не проброшен наружу, доступен через туннель SSH из Termux
+AUDIT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ctl_audit.log")
 HERE = os.path.dirname(os.path.abspath(__file__))
 SNAP = "http://127.0.0.1:%s/api/claude" % os.environ.get("ACCT_PORT", "18102")
 BWS = "wss://data-stream.binance.vision/stream"
@@ -33,7 +35,7 @@ try: TOK = open(os.path.join(HERE, "token.txt"), encoding="utf-8").read().strip(
 except Exception: TOK = ""
 
 PX = {}; BTCK = {}; DIRTY = set(); CL = set(); EVT = collections.deque(maxlen=120); NEW = []
-ST = {"state": None, "sig": None, "syms": set(), "arch": [], "asig": None, "extra": {}}; CHANS = {}; LASTQ = {}; FAILS = {}; CACHE = {}; OSEEN = {}; DEC = {"pos": None, "buf": b""}; BASE = {"orders": False}
+ST = {"state": None, "sig": None, "syms": set(), "arch": [], "asig": None, "extra": {}, "force": False}; CHANS = {}; LASTQ = {}; FAILS = {}; CACHE = {}; OSEEN = {}; DEC = {"pos": None, "buf": b""}; BASE = {"orders": False}
 
 
 def log(m): print("%s %s" % (time.strftime("%m-%d %H:%M:%S", time.gmtime()), m), flush=True)
@@ -110,7 +112,7 @@ def tail_decisions():
         ev(d.get("t") or time.time() * 1000, "dec", fmt_dec(d), str(d.get("sym") or ""), new=not first)
 
 
-OPEN_F = ("id", "sym", "side", "entry", "stop", "stop0", "tp", "R", "stake", "lev", "t_in", "armed", "be_px", "lock_px", "order_id")
+OPEN_F = ("id", "sym", "side", "entry", "stop", "stop0", "tp", "R", "stake", "lev", "t_in", "armed", "be_px", "lock_px", "order_id", "stop_manual", "tp_manual", "manual_trail", "rem")
 CLOSED_F = ("id", "sym", "side", "entry", "exit", "stop0", "stop", "tp", "t_in", "t_out", "net_pct", "r_mult", "pnl_usd", "reason", "order_id", "stake", "be_px", "lock_px")
 ORD_F = ("id", "sym", "side", "price", "stop", "tp", "atr", "line_px", "live1m", "live1m_tries", "rule", "approved_t", "placed_t", "setup")
 
@@ -168,8 +170,8 @@ async def state_loop(app):
     sess = app["sess"]; loop = asyncio.get_running_loop(); nxt = 0; snap = None
     while True:
         try:
-            if time.time() >= nxt:
-                nxt = time.time() + 3
+            if time.time() >= nxt or ST["force"]:
+                ST["force"] = False; nxt = time.time() + 3
                 try:
                     async with sess.get(SNAP) as r: snap = await r.json()
                 except Exception as e: log("snap: %s" % e)
@@ -254,12 +256,14 @@ async def ws_handler(req):
         await ws.close(); return ws
     CL.add(ws)
     try:
-        await ws.send_str(json.dumps({"t": "hello", "state": ST["state"], "arch": ST["arch"], "px": PX, "k": BTCK, "evt": list(EVT)[-80:], "srv": int(time.time() * 1000)}, ensure_ascii=False, default=str))
+        ctl = (req.transport.get_extra_info("sockname") or ("", 0))[1] == CTL_PORT
+        await ws.send_str(json.dumps({"t": "hello", "ctl": ctl, "state": ST["state"], "arch": ST["arch"], "px": PX, "k": BTCK, "evt": list(EVT)[-80:], "srv": int(time.time() * 1000)}, ensure_ascii=False, default=str))
         async for m in ws:
             if m.type != WSMsgType.TEXT: continue
             try: q = json.loads(m.data)
             except Exception: continue
             if q.get("q") == "candles": await handle_candles(req.app["sess"], ws, q)
+            elif q.get("q") == "act" and ctl: await handle_act(req.app["sess"], ws, q, ip)
     finally: CL.discard(ws); LASTQ.pop(id(ws), None)
     return ws
 
@@ -283,6 +287,37 @@ async def handle_candles(sess, ws, q):
     await ws.send_str(json.dumps({"t": "candles", "rid": rid, "sym": sym, "iv": iv, "c": c, "ch": ch, "srv": int(time.time() * 1000)}))
 
 
+ACTS = {"close", "stop", "tp", "tp_auto", "auto", "trail"}
+ACT_LOCK = asyncio.Lock()
+
+
+async def handle_act(sess, ws, q, ip):
+    """Ручные действия по позициям (только через порт управления). Исполняет движок бота (pos.api_action через acct-api), страница ничего не считает за него."""
+    rid = q.get("rid"); a = str(q.get("a", ""))
+    async def ack(ok, err=None, **kw): await ws.send_str(json.dumps(dict({"t": "ack", "rid": rid, "ok": ok, "err": err}, **kw), ensure_ascii=False))
+    now = time.time()
+    if now - LASTQ.get(("act", id(ws)), 0) < 0.7: return await ack(False, "слишком часто")
+    LASTQ[("act", id(ws))] = now
+    if a not in ACTS: return await ack(False, "неизвестное действие")
+    try:
+        body = {"action": a, "id": int(q.get("id"))}
+        if a in ("stop", "tp"): body["price"] = float(q.get("price"))
+        if a == "trail": body["pct"] = float(q.get("pct"))
+    except Exception: return await ack(False, "неверные параметры")
+    async with ACT_LOCK:
+        try:
+            async with sess.post(SNAP, json=body) as r: res = await r.json()
+        except Exception as e:
+            res = {"error": "бот не ответил: %s" % type(e).__name__}
+        err = res.get("error") if isinstance(res, dict) else None
+        try:
+            with open(AUDIT, "a", encoding="utf-8") as f: f.write(json.dumps({"t": int(now * 1000), "ip": ip, "act": body, "err": err}, ensure_ascii=False) + "\n")
+        except Exception: pass
+    log("act %s %s -> %s" % (a, body.get("id"), err or "ok"))
+    ST["force"] = True
+    await ack(err is None, err)
+
+
 async def on_start(app):
     app["sess"] = ClientSession(timeout=ClientTimeout(total=15))
     app["tasks"] = [asyncio.ensure_future(f(app)) for f in (state_loop, px_loop, binance_loop)]
@@ -300,5 +335,14 @@ def make_app():
     return app
 
 
+async def main():
+    runner = web.AppRunner(make_app()); await runner.setup()
+    await web.TCPSite(runner, "127.0.0.1", PORT).start(); await web.TCPSite(runner, "127.0.0.1", CTL_PORT).start()
+    stop = asyncio.Event(); loop = asyncio.get_running_loop()
+    for sg in (signal.SIGTERM, signal.SIGINT): loop.add_signal_handler(sg, stop.set)
+    log("live-web: публичный порт %d (только чтение), порт управления %d (туннель)" % (PORT, CTL_PORT))
+    await stop.wait(); await runner.cleanup()
+
+
 if __name__ == "__main__":
-    web.run_app(make_app(), host="127.0.0.1", port=PORT, print=None)
+    asyncio.run(main())
