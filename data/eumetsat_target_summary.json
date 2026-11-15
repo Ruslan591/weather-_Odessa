@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-15T09:43:14Z",
+  "timestamp": "2026-11-15T09:47:54Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-11-15T08:00:00.000Z",
   "target_id": 7,
@@ -19,7 +19,7 @@
     "frontlike": false,
     "window_spanning": false,
     "phase_label": "средняя водяная",
-    "cloud_fraction": 0.337,
+    "cloud_fraction": 0.305,
     "has_precip": false,
     "has_lightning": false
   },
@@ -164,6 +164,10 @@
     "signature": "-30_-20",
     "area_km2": 56.0
   },
+  "target_phase": {
+    "label": "безоблачно",
+    "cloud_fraction": 0.667
+  },
   "existence": {
     "modules": {
       "ir_motion": {
@@ -175,23 +179,23 @@
         "timestamp": "2026-11-15T09:20:00.000Z"
       },
       "cloud_phase_type": {
-        "confirmed": null,
-        "timestamp": "2026-11-15T09:27:50Z"
+        "confirmed": true,
+        "timestamp": "2026-11-15T09:47:06Z"
       }
     },
-    "votes_confirmed": 0,
+    "votes_confirmed": 1,
     "votes_not_confirmed": 2,
-    "consensus": "not_confirmed"
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
       "confirmed": false,
-      "timestamp": "2026-11-15T09:32:06Z"
+      "timestamp": "2026-11-15T09:47:39Z"
     },
     "lightning_forecast": {
       "confirmed": false,
       "timestamp": "2026-11-15T09:42:57Z"
     }
   },
-  "verdict": "CLM отметил цель в 213км ЮЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (39669км²) в 46км ЮВ (средняя водяная)."
+  "verdict": "Цель в 213км ЮЗ, безоблачно — каналы расходятся: cloud_phase_type подтверждают, ir_motion/geocolour_motion нет. Отдельно: система синоптического масштаба (39669км²) в 46км ЮВ (средняя водяная)."
 }
