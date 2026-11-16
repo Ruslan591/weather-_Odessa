@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-16T13:32:34Z",
+  "timestamp": "2026-11-16T13:43:23Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-11-16T13:00:00.000Z",
   "target_id": 1,
@@ -19,49 +19,13 @@
     "frontlike": false,
     "window_spanning": false,
     "phase_label": "безоблачно",
-    "cloud_fraction": 0.211,
+    "cloud_fraction": 0.354,
     "has_precip": false,
     "has_lightning": false
   },
-  "local_candidates": [
-    {
-      "target_id": 1,
-      "area_km2": 65.4,
-      "distance_km": 197.1,
-      "bearing_deg": 114.0,
-      "compass": "ЮВ",
-      "elongation_aspect_ratio": 2.72,
-      "elongation_axis_deg": 10.0,
-      "elongation_axis_compass": "С-Ю",
-      "frontlike": false,
-      "phase_label": null,
-      "type_label": null,
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": false,
-      "geocolour_confirmed": true
-    }
-  ],
-  "local_suppressed_count": 1,
+  "local_candidates": [],
+  "local_suppressed_count": 2,
   "system_candidates": [
-    {
-      "target_id": 2,
-      "area_km2": 3038.2,
-      "distance_km": 203.9,
-      "bearing_deg": 180.0,
-      "compass": "Ю",
-      "elongation_aspect_ratio": 2.49,
-      "elongation_axis_deg": 122.0,
-      "elongation_axis_compass": "ЮВ-СЗ",
-      "frontlike": true,
-      "window_spanning": false,
-      "phase_label": "безоблачно",
-      "type_label": "плотная/высокая",
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": false,
-      "geocolour_confirmed": true
-    },
     {
       "target_id": 3,
       "area_km2": 408.3,
@@ -81,36 +45,69 @@
       "geocolour_confirmed": true
     }
   ],
-  "system_suppressed_count": 1,
-  "frontal_tracks": [],
+  "system_suppressed_count": 2,
+  "frontal_tracks": [
+    {
+      "track_id": 3147,
+      "first_seen": "2026-11-16T13:00:00.000Z",
+      "last_seen": "2026-11-16T13:00:00.000Z",
+      "points_count": 3,
+      "age_minutes": 0.0,
+      "distance_from_odessa_km": 203.9,
+      "dx_km": 0.48,
+      "dy_km": -203.85,
+      "area_km2": 3038.2,
+      "axis_deg": 122.0,
+      "aspect_ratio": 2.49,
+      "velocity_kmh": null,
+      "movement_bearing_deg": null,
+      "movement_bearing_compass": null,
+      "axis_rotation_deg": null,
+      "tile": "near",
+      "ahead_station": null,
+      "behind_station": null,
+      "direction_compass": "Ю",
+      "current_target_id": 2,
+      "has_precip": false,
+      "has_lightning": false,
+      "ahead_obs": null,
+      "behind_obs": null,
+      "front_type": null,
+      "front_type_confidence": null
+    }
+  ],
+  "target_phase": {
+    "label": "безоблачно",
+    "cloud_fraction": 1.0
+  },
   "existence": {
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-11-16T13:10:00.000Z"
+        "timestamp": "2026-11-16T13:20:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": true,
-        "timestamp": "2026-11-16T13:10:00.000Z"
+        "confirmed": false,
+        "timestamp": "2026-11-16T13:20:00.000Z"
       },
       "cloud_phase_type": {
-        "confirmed": null,
-        "timestamp": "2026-11-16T13:22:26Z"
+        "confirmed": true,
+        "timestamp": "2026-11-16T13:42:07Z"
       }
     },
     "votes_confirmed": 1,
-    "votes_not_confirmed": 1,
+    "votes_not_confirmed": 2,
     "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
       "confirmed": false,
-      "timestamp": "2026-11-16T13:23:02Z"
+      "timestamp": "2026-11-16T13:42:48Z"
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-11-16T13:32:07Z"
+      "timestamp": "2026-11-16T13:42:50Z"
     }
   },
-  "verdict": "Цель в 197км ЮВ — каналы расходятся: geocolour_motion подтверждают, ir_motion нет. Отдельно: система синоптического масштаба (24258км²) в 58км В."
+  "verdict": "Цель в 197км ЮВ, безоблачно — каналы расходятся: cloud_phase_type подтверждают, ir_motion/geocolour_motion нет. Отдельно: система синоптического масштаба (24258км²) в 58км В."
 }
