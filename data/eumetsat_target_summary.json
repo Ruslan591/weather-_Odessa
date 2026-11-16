@@ -1,37 +1,69 @@
 {
-  "timestamp": "2026-11-16T04:42:30Z",
-  "status": "suppressed_known_false_positive",
-  "cloud_forecast_timestamp": "2026-11-16T04:15:00.000Z",
-  "suppressed_target": {
-    "signature": "65_15",
-    "area_km2": 69.4,
-    "distance_km": 65.4,
-    "bearing_deg": 77.0,
-    "compass": "В",
-    "not_confirmed_streak": 3,
-    "total_not_confirmed": 87,
-    "excluded_since": "2026-11-16T04:07:43Z"
-  },
+  "timestamp": "2026-11-16T04:47:47Z",
+  "status": "ok",
+  "cloud_forecast_timestamp": "2026-11-16T04:30:00.000Z",
+  "target_id": 3,
+  "target_area_km2": 65.4,
+  "target_distance_km": 166.6,
+  "target_bearing_deg": 295.0,
+  "target_compass": "СЗ",
   "system": {
     "target_id": 0,
-    "area_km2": 163069.8,
-    "distance_km": 0.8,
-    "bearing_deg": 326.0,
-    "compass": "СЗ",
-    "elongation_aspect_ratio": 1.84,
-    "elongation_axis_deg": 166.0,
+    "area_km2": 38853.4,
+    "distance_km": 32.5,
+    "bearing_deg": 61.0,
+    "compass": "СВ",
+    "elongation_aspect_ratio": 2.45,
+    "elongation_axis_deg": 176.0,
     "elongation_axis_compass": "Ю-С",
-    "frontlike": false,
-    "window_spanning": true,
+    "frontlike": true,
+    "window_spanning": false,
     "phase_label": "безоблачно",
     "cloud_fraction": 0.0,
     "has_precip": false,
     "has_lightning": false
   },
   "local_candidates": [],
-  "local_suppressed_count": 5,
+  "local_suppressed_count": 7,
   "system_candidates": [],
-  "system_suppressed_count": 2,
-  "verdict": "Известный шумовой объект в 65км В (~69км²) — подавлено (не подтверждался 3 раз подряд). Отдельно: система синоптического масштаба (163070км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора).",
-  "frontal_tracks": []
+  "system_suppressed_count": 5,
+  "frontal_tracks": [],
+  "also_suppressed_nearby": {
+    "signature": "55_-10",
+    "area_km2": 121.4
+  },
+  "target_phase": {
+    "label": "безоблачно",
+    "cloud_fraction": 0.0
+  },
+  "existence": {
+    "modules": {
+      "ir_motion": {
+        "confirmed": false,
+        "timestamp": "2026-11-16T04:30:00.000Z"
+      },
+      "geocolour_motion": {
+        "confirmed": false,
+        "timestamp": "2026-11-16T04:20:00.000Z"
+      },
+      "cloud_phase_type": {
+        "confirmed": false,
+        "timestamp": "2026-11-16T04:47:16Z"
+      }
+    },
+    "votes_confirmed": 0,
+    "votes_not_confirmed": 3,
+    "consensus": "not_confirmed"
+  },
+  "phenomena": {
+    "precip_forecast": {
+      "confirmed": false,
+      "timestamp": "2026-11-16T04:47:33Z"
+    },
+    "lightning_forecast": {
+      "confirmed": null,
+      "timestamp": "2026-11-16T04:42:06Z"
+    }
+  },
+  "verdict": "CLM отметил цель в 167км СЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (38853км²) в 32км СВ (вытянута Ю-С (176°), похоже на фронт)."
 }
