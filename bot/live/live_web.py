@@ -287,7 +287,7 @@ async def handle_candles(sess, ws, q):
     await ws.send_str(json.dumps({"t": "candles", "rid": rid, "sym": sym, "iv": iv, "c": c, "ch": ch, "srv": int(time.time() * 1000)}))
 
 
-ACTS = {"close", "stop", "tp", "tp_auto", "auto", "trail"}
+ACTS = {"close", "stop", "tp", "tp_auto", "auto", "trail", "ord_cancel", "ord_edit"}
 ACT_LOCK = asyncio.Lock()
 
 
@@ -303,6 +303,12 @@ async def handle_act(sess, ws, q, ip):
         body = {"action": a, "id": int(q.get("id"))}
         if a in ("stop", "tp"): body["price"] = float(q.get("price"))
         if a == "trail": body["pct"] = float(q.get("pct"))
+        if a == "ord_edit":
+            for k_ in ("price", "stop", "tp"):
+                if q.get(k_) is not None:
+                    v_ = float(q[k_])
+                    if not (0 < v_ < 1e12): raise ValueError(k_)
+                    body[k_] = v_
     except Exception: return await ack(False, "неверные параметры")
     async with ACT_LOCK:
         try:
