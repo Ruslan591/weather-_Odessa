@@ -1,16 +1,16 @@
 {
-  "timestamp": "2026-11-16T23:37:24Z",
+  "timestamp": "2026-11-16T23:57:06Z",
   "current_state": "no_precip",
   "target_type": "precip_mass",
-  "distance_km_now": 8.8,
-  "bearing_deg": 151.0,
-  "compass": "ЮВ",
-  "speed_kmh": 21.7,
-  "direction_compass": "В",
-  "cpa_km": 8.8,
-  "eta_min": 0.0,
-  "blob_area_km2": 278.0,
-  "verdict": "уже у города",
+  "distance_km_now": 36.6,
+  "bearing_deg": 194.0,
+  "compass": "Ю",
+  "speed_kmh": 67.6,
+  "direction_compass": "ЮЗ",
+  "cpa_km": 36.6,
+  "eta_min": null,
+  "blob_area_km2": 56574.0,
+  "verdict": "удаляется",
   "approaching": false,
   "frame_pairs_used": 3,
   "probability_percent": 68,
@@ -18,12 +18,22 @@
   "method_note": "Скорость усреднена по 4 кадрам msg_fes:h60b (шаг 15 мин, phase correlation). Presence = непрозрачный пиксель. Край ищется только среди связных областей >= 40px (~53км²). Линейная экстраполяция, годится на ~1 час.",
   "target_confirmation": {
     "confirmed": null,
-    "reason": "candidates пуст или отсутствует (снапшот от старой версии cloud_forecast.py?)"
+    "reason": "среди кандидатов нет локальных масс (только системы синоптического масштаба)"
   },
   "system_analysis": {
-    "available": false,
-    "reason": "candidates пуст или отсутствует"
+    "available": true,
+    "target_id": 0,
+    "area_km2": 213202.0,
+    "roi_precip_fraction": 0.276,
+    "has_precip": true
   },
-  "system_analysis_all": [],
+  "system_analysis_all": [
+    {
+      "target_id": 0,
+      "available": true,
+      "roi_precip_fraction": 0.276,
+      "has_precip": true
+    }
+  ],
   "local_analysis_all": []
 }
