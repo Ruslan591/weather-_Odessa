@@ -702,7 +702,7 @@ def cycle(dry=False):
                 if _g == "cancel": cancel(o_, _gw, now)
                 if _g == "go": fills[o_["id"]] = (int(time.time() * 1000), float(o_["price"]))   # время входа = момент снятия цены (а не approved_t = начало цикла: при 39 парах разница 2-3 минуты, позиция «открывалась» задним числом и ловила стоп до реального входа, #236)
         for x in orders:  # заменённые правила: заблаговременные у границы (флаг) и ретест без подтверждения
-            if x["status"] == "pending" and ((x["rule"] in ("chan_top", "chan_bottom") and not CHAN_EDGE) or (x["rule"] in ("retest_up", "retest_down") and not x.get("rv"))):
+            if x["status"] == "pending" and not x.get("man") and ((x["rule"] in ("chan_top", "chan_bottom") and not CHAN_EDGE) or (x["rule"] in ("retest_up", "retest_down") and not x.get("rv"))):
                 cancel(x, "правило заменено: ретест с подтверждением удержания")
         for o in pend:  # update checked_t
             cur = by_id.get(o["id"])
@@ -713,6 +713,7 @@ def cycle(dry=False):
         for oid, (ft, fp) in sorted(fills.items(), key=lambda kv: kv[1][0]):  # earlier fill first
             o = by_id.get(oid)
             if not o or o["status"] != "pending": continue
+            if o.get("px_t") and ft < o["px_t"]: continue   # цену ордера вручную сдвинули после этой свечи: старую заливку не применяем
             sym = o["sym"] + "USDT"
             if any(p["status"] == "open" and p["sym"] == sym for p in ps_): cancel(o, "по паре уже есть позиция", ft); continue
             if n_open() >= slots_now(): cancel(o, "слоты заняты", ft); continue
@@ -736,6 +737,8 @@ def cycle(dry=False):
                 if (o["tp"] - fp) * side > 0.4 * R:
                     p["xr"] = "flat_brk"; p["thesis"] += " Правило выхода (флэт, пробой): на +0.4R закрыть 50% объёма, стоп остатка на -0.15R, на +0.8R в безубыток с учётом комиссий."
                 else: log("flat_brk skipped order %d %s: цель ближе 0.4R" % (o["id"], o["sym"]))
+            if o.get("man_tp") and o.get("tp") and (o["tp"] - fp) * side > 0:   # цель выставлена вручную на ордере: настройки выхода счёта её не заменяют
+                p["tp_manual"] = o["tp"]; p["tp_manual_t"] = ft; p["thesis"] += " Цель задана вручную на ордере: %.6g." % o["tp"]
             ps_.append(p); o.update(status="filled", fill_t=ft, fill_px=fp, pos_id=p["id"], t_end=ft)
             log("FILLED order %d %s %s %.6g -> position #%d" % (o["id"], o["sym"], o["side"], fp, p["id"]))
             tg_gate.emit({"type": "filled", "id": o["id"], "pos": p["id"]})
@@ -748,7 +751,7 @@ def cycle(dry=False):
             c0, a0, _ = closes[sym]; stt["last"][sym] = ti
             cur_o = [x for x in pend_now if x["sym"] == sym]
             for x in cur_o:  # failed retest / channel gone
-                if x["rule"] in ("retest_up", "retest_down"):
+                if x["rule"] in ("retest_up", "retest_down") and not x.get("man"):
                     lv = x["level"]["p"]
                     if (x["side"] == "long" and c0 < lv - 0.7 * a0) or (x["side"] == "short" and c0 > lv + 0.7 * a0): cancel(x, "пробой не удержался (закрытие за уровнем)", ti + TFM)
                     elif x.get("rv") in (2, 3) and ((x["side"] == "long" and (c0 - x["price"]) / a0 > AWAY_ATR) or (x["side"] == "short" and (x["price"] - c0) / a0 > AWAY_ATR)): cancel(x, "цена ушла от входа больше чем на %.1f ATR (в погоне не входим)" % AWAY_ATR, ti + TFM)
@@ -757,6 +760,7 @@ def cycle(dry=False):
                 if p["key"] and any(x.get("key") == p["key"] for x in orders): continue  # событие пробоя уже обработано
                 if tg_gate.ENABLED and any(x["sym"] == sym and x["rule"] == p["rule"] and x["side"] == p["side"] and x["status"] in ("rejected", "missed", "late") and now - (x.get("t_end") or 0) < 1800000 and abs(x["price"] - p["price"]) <= 0.5 * a0 for x in orders): continue  # после отказа/пропуска не повторять ту же точку 30 минут
                 same = [x for x in pend_sym if x["rule"] == p["rule"] and x["side"] == p["side"]]
+                if any(x.get("man") for x in same): continue   # вручную изменённый ордер: не пересчитываем и дубль рядом не ставим
                 if same and abs(same[0]["price"] - p["price"]) <= KEEP_ATR * a0: continue
                 for x in same: cancel(x, "пересчёт: граница сместилась", ti + TFM)
                 if n_open() >= slots_now() or sum(1 for x in orders if x["status"] in ("pending", "proposed")) >= MAXPEND: continue
@@ -766,7 +770,7 @@ def cycle(dry=False):
                 orders.append(p); pend_sym.append(p)
                 log("PLACED order %d %s %s %s %.6g stop %.6g tp %.6g" % (p["id"], sym, p["rule"], p["side"], p["price"], p["stop"], p["tp"]))
                 log("SHADOW order %d agree=%s" % (p["id"], json.dumps((p.get("shadow") or {}).get("agree", {}))))
-            for x in [x for x in pend_sym if x["status"] in ("pending", "proposed") and x["rule"] in ("chan_top", "chan_bottom") and not any(pp["rule"] == x["rule"] and pp["side"] == x["side"] for pp in props_)]:
+            for x in [x for x in pend_sym if x["status"] in ("pending", "proposed") and x["rule"] in ("chan_top", "chan_bottom") and not x.get("man") and not any(pp["rule"] == x["rule"] and pp["side"] == x["side"] for pp in props_)]:
                 cancel(x, "условия исчезли (канал, расстояние или цель)", ti + TFM)
         # слоты заполнены: лишние заявки не держим
         if n_open() >= slots_now():
@@ -774,6 +778,59 @@ def cycle(dry=False):
                 if x["status"] in ("pending", "proposed"): cancel(x, "слоты заняты")
         save_orders(orders); save_state(stt); save_events(evs)
     for _j in _tg_jobs: _tg_journal(*_j)
+
+def manual_order(o):
+    """Ручное управление ждущим ордером (страница онлайн -> live_web -> acct-api -> pos.api_action). Действия: ord_cancel; ord_edit с любыми из price (вход), stop, tp.
+    Всё под pos.lock(), как и cycle(), поэтому орудие бота и ручная правка не пересекаются. Ордер с правкой получает флаг man: автоматика (пересчёт границы, «условия исчезли») его не трогает."""
+    act = o.get("action")
+    try: oid = int(o.get("id"))
+    except Exception: return {"error": "не указан ордер"}
+    def num(k):
+        v = o.get(k)
+        if v is None or v == "": return None
+        v = float(str(v).replace(",", "."))
+        if not (v > 0 and v < 1e12): raise ValueError(k)
+        return v
+    try: np_, ns, nt = num("price"), num("stop"), num("tp")
+    except Exception: return {"error": "цена должна быть положительным числом"}
+    now = int(time.time() * 1000)
+    with pos.lock():
+        orders = load_orders(); x = next((v for v in orders if v["id"] == oid), None)
+        if not x or x.get("status") != "pending": return {"error": "ордер не найден или уже не ждёт исполнения (исполнен, отменён или истёк)"}
+        if act == "ord_cancel":
+            why = "отменён пользователем (страница онлайн)"
+            x.update(status="cancelled", reason=why, t_end=now); x.setdefault("edits", []).append({"t": now, "what": "cancel"})
+            save_orders(orders); log("ORDER %d %s %s: %s" % (oid, x["sym"], x["side"], why))
+            return {"ok": True, "id": oid}
+        if act != "ord_edit": return {"error": "неизвестное действие"}
+        if np_ is None and ns is None and nt is None: return {"error": "нечего менять"}
+        if x.get("rule") == "tg_market": return {"error": "рыночный ордер исполняется сразу, менять нечего (его можно только отменить)"}
+        try: cur = float(pos.price(x["sym"] + "USDT"))
+        except Exception as e: return {"error": "нет текущей цены: %s" % e}
+        lg = x["side"] == "long"; sd = 1 if lg else -1
+        price = np_ if np_ is not None else x["price"]; stop = ns if ns is not None else x["stop"]; tp = nt if nt is not None else x["tp"]
+        if np_ is not None:
+            if x.get("rule") == "tg_stop":
+                if not ((price > cur * 1.0002) if lg else (price < cur * 0.9998)): return {"error": "стоп-ордер на вход: цена должна быть %s текущей %.8g" % ("выше" if lg else "ниже", cur)}
+            elif not ((price < cur * 0.9998) if lg else (price > cur * 1.0002)):
+                return {"error": "лимит %s должен стоять %s текущей цены %.8g (иначе исполнится сразу; для входа сейчас отмените ордер и выставьте по рынку)" % (x["side"], "ниже" if lg else "выше", cur)}
+        if not sd * (price - stop) > 0: return {"error": "стоп должен быть %s входа %.8g" % ("ниже" if lg else "выше", price)}
+        if not sd * (tp - price) > 0: return {"error": "цель должна быть %s входа %.8g" % ("выше" if lg else "ниже", price)}
+        if abs(tp - price) < price * 0.0015: return {"error": "цель ближе 0.15% от входа: комиссии съедят прибыль"}
+        liq = price * (1 - sd * pos.LIQ / 100)
+        if not ((stop > liq) if lg else (stop < liq)): return {"error": "стоп за ценой ликвидации %.8g" % liq}
+        if np_ is not None and ((now // 60000) + 1) * 60000 >= x["expire_t"]: return {"error": "срок жизни ордера почти вышел, переставлять поздно"}
+        old = {"price": x["price"], "stop": x["stop"], "tp": x["tp"]}
+        x.update(price=price, stop=stop, tp=tp, man=True, edit_t=now)
+        if nt is not None: x["man_tp"] = True
+        if np_ is not None and np_ != old["price"]:
+            x["px_t"] = now; x.setdefault("placed_t0", x["placed_t"]); x["placed_t"] = ((now // 60000) + 1) * 60000   # без заглядывания в прошлое: проверка касания с начала следующей минуты
+        if not x.get("approved_t"): x["approved_t"] = now   # ручная правка = пользователь подтвердил ордер (сон его не отменит)
+        x.setdefault("edits", []).append({"t": now, "from": old, "to": {"price": price, "stop": stop, "tp": tp}})
+        save_orders(orders)
+        log("ORDER %d %s %s edited by user: price %.6g->%.6g stop %.6g->%.6g tp %.6g->%.6g" % (oid, x["sym"], x["side"], old["price"], price, old["stop"], stop, old["tp"], tp))
+        return {"ok": True, "id": oid, "price": price, "stop": stop, "tp": tp}
+
 
 def pair_view(sym):
     """Разметка сканера по паре (без заявки): что бот видит на 5m - канал, опорные точки, линии."""
