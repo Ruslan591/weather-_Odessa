@@ -242,6 +242,12 @@ def _apply_stop():
     save(ps); r = snapshot(); r["applied"] = n; return r
 
 def api_action(o):
+    if o.get("action") in ("ord_cancel", "ord_edit"):   # ручное управление ждущим ордером (страница онлайн)
+        try:
+            import chan_orders
+            return chan_orders.manual_order(o)
+        except Exception as e:
+            return {"error": str(e)}
     if o.get("action") == "chart":
         try:
             import chan_orders
