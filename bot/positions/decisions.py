@@ -115,6 +115,22 @@ def watch(w, action, kl, reason=None, reason_text=None, latency_s=None, n=None, 
         rec.update(kw); rec.update(ctx); _write(rec)
     except Exception as e: print("decisions watch err", e, flush=True)
 
+def ord_manual(b, a, action, px=None, kl=None, o=None, **kw):
+    """Ручное действие пользователя по ждущему ордеру со страницы онлайн (ord_cancel / ord_edit). b и a - ордер до и после правки (a = None при отмене). Источник для обучения: что и во что поправил, на каком расстоянии цены."""
+    try:
+        now = int(time.time() * 1000); o = o or {}
+        f = lambda x: {k: _r(x.get(k) or 0, 8) for k in ("price", "stop", "tp")} if x else None
+        cur = a or b; risk = lambda x: abs(x["price"] - x["stop"]) / x["price"] * 100 if x and x.get("price") else None
+        rr = lambda x: round(abs(x["tp"] - x["price"]) / abs(x["price"] - x["stop"]), 2) if x and x.get("price") and x["price"] != x["stop"] else None
+        p = dict(sym=b["sym"] + "USDT", side=b["side"], entry=b["price"], R=abs(b["price"] - b["stop"]), id=b["id"], t_in=b.get("placed_t", now), atr1h=None)
+        ctx = _context(p, px or b["price"], kl, now); atr = b.get("atr") or 0
+        rec = dict(t=now, kind="ord_manual", by="manual", action=action, order_id=b["id"], sym=b["sym"], side=b["side"], rule=b.get("rule"), setup=b.get("setup"), line=b.get("line"), counter=b.get("counter"),
+                   ctype=b.get("ctype"), src_watch=b.get("src_watch"), auto=b.get("auto_express"), edits=len(b.get("edits") or []), age_min=round((now - (b.get("placed_t") or now)) / 60000, 1),
+                   px_now=_r(px or 0, 8), atr=_r(atr, 6), dist_atr=round((px - b["price"]) / atr, 2) if px and atr else None, risk_pct_from=round(risk(b), 3) if risk(b) else None, risk_pct_to=round(risk(cur), 3) if risk(cur) else None,
+                   rr_from=rr(b), rr_to=rr(cur), tag=str(o.get("tag") or "")[:60], note=str(o.get("note") or "")[:300], **{"from": f(b), "to": f(a)})
+        rec.update(kw); rec.update(ctx); _write(rec)
+    except Exception as e: print("decisions ord_manual err", e, flush=True)
+
 def manual(p, px, kl, kind, old, new, o=None, **kw):
     """Ручное действие пользователя (kind: stop, tp, trail, release, tp_release, close). old/new - цены до и после. tag и note берутся из запроса o."""
     try:

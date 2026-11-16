@@ -186,6 +186,8 @@ def watch_buttons(wid, kind, V=None, retro_done=False):
             else: rows.append([{"text": "📝 Записано: %s" % ("согласен" if V["ans"] else "не согласен"), "callback_data": "xn"}])
         if V and LRN and LRN.enabled(): rows.append(retro_row(retro_done))
         return rows + [[{"text": "⚡ Выключить экспресс", "callback_data": "ex:0"}] + off]
+    if kind != "alert" and (watch_get(wid) or {}).get("keep"):     # галочка «Следить» (страница): вопроса о продолжении нет
+        return [[{"text": "📌 Выставить ордер", "callback_data": "wp:%d" % wid}, {"text": "⏹ Перестать следить", "callback_data": "ws:%d" % wid}], off]
     if kind == "alert": return [[{"text": "👁 Следить", "callback_data": "wa:%d" % wid}, {"text": "❌ Отклонить", "callback_data": "wr:%d" % wid}], off]
     return [[{"text": "▶️ Продолжать следить", "callback_data": "wc:%d" % wid}, {"text": "⏹ Перестать следить", "callback_data": "ws:%d" % wid}], [{"text": "📌 Выставить ордер", "callback_data": "wp:%d" % wid}], off]
 
@@ -232,6 +234,7 @@ def send_watch(wid, kind):
         except Exception as e: log("strip old buttons: %s" % e)
     kl = jload("/tmp/klcache/%s_5m_1000.json" % w["sym"], [])
     cap = T.caption_watch(w, kind); V = None; Bk = None; auto = None
+    if w.get("keep") and not express_on(): cap += "\n🔒 Галочка «Следить»: без вопросов, без сна"
     try:
         rgl = RG.line(w.get("side")) if RG else ""
         if rgl: cap += "\n" + rgl
@@ -422,6 +425,36 @@ def handle_event(ev):
             rec = msgs_load().get("w%d" % wid) or {}
             if rec.get("v") and LRN and LRN.enabled(): keep = [retro_row(bool(LRN.has_mark(rec.get("mid"), 2)))]
         edit_watch(wid, "⏹ " + why, keep)
+    elif t == "web_pos":     # действие со страницы онлайн по позиции (порт 18111)
+        try:
+            fp_ = lambda v: ("%.8g" % float(v)) if v not in (None, "") else "—"
+            a = ev.get("act"); nm = "#%s %s %s" % (ev.get("id"), str(ev.get("sym", "")).replace("USDT", ""), str(ev.get("side", "")).upper())
+            what = {"close": "закрыта по рынку (~%s)" % fp_(ev.get("px")), "stop": "стоп → %s" % fp_(ev.get("price")), "tp": "цель → %s" % fp_(ev.get("price")), "tp_auto": "цель возвращена автоматике",
+                    "auto": "стоп возвращён автоматике", "trail": "трейлинг %s%% от цены" % ev.get("pct")}.get(a, str(a))
+            extra = ""
+            if a == "close" and ev.get("net_pct") is not None: extra = "\nИтог: %+.2f%%%s%s" % (float(ev["net_pct"]), (", %+.2f R" % float(ev["r_mult"])) if ev.get("r_mult") is not None else "", (", %+.3f $" % float(ev["pnl_usd"])) if ev.get("pnl_usd") is not None else "")
+            api("sendMessage", chat_id=CHAT, text="🖥 Со страницы: позиция %s: %s\nВход %s · стоп %s · цель %s · цена %s%s" % (nm, what, fp_(ev.get("entry")), fp_(ev.get("stop")), fp_(ev.get("tp")), fp_(ev.get("px")), extra))
+        except Exception as e: log("web_pos event: %s" % e)
+    elif t == "web_ord":     # действие со страницы онлайн по ждущему ордеру
+        try:
+            fp_ = lambda v: ("%.8g" % float(v)) if v not in (None, "") else "—"
+            nm = "#%s %s %s" % (ev.get("id"), ev.get("sym"), str(ev.get("side", "")).upper()); b = ev.get("from") or {}; a = ev.get("to") or {}
+            if ev.get("act") == "ord_cancel": txt = "🖥 Со страницы: ордер %s отменён\nВход %s · стоп %s · цель %s · цена %s" % (nm, fp_(b.get("price")), fp_(b.get("stop")), fp_(b.get("tp")), fp_(ev.get("px")))
+            else:
+                ch = [("вход", "price"), ("стоп", "stop"), ("цель", "tp")]; lines = ["%s: %s → %s" % (n_, fp_(b.get(k)), fp_(a.get(k))) for n_, k in ch if b.get(k) != a.get(k)]
+                txt = "🖥 Со страницы: ордер %s изменён\n%s\nЦена сейчас %s. Автоматика этот ордер больше не пересчитывает." % (nm, "\n".join(lines) or "без изменений", fp_(ev.get("px")))
+            api("sendMessage", chat_id=CHAT, text=txt)
+        except Exception as e: log("web_ord event: %s" % e)
+    elif t == "watch_keep":     # галочка «Следить» на странице онлайн
+        try:
+            wid = ev.get("wid"); on = bool(ev.get("on")); w = watch_get(wid) or {}
+            nm = "%s %s (%s линия)" % (ev.get("sym"), str(ev.get("side", "")).upper(), "верхняя" if ev.get("line") == "upper" else "нижняя")
+            if on:
+                api("sendMessage", chat_id=CHAT, text="🔒 Со страницы: слежение %s включено галочкой «Следить». Бот ведёт его без вопросов о продолжении, график придёт после каждой свечи; пока оно идёт, в сон бот автоматически не уходит. Снять: галочка на странице или «⏹ Перестать следить»." % nm)
+                if ev.get("was") == "alert": edit_watch(wid, "👁 Слежу (галочка на странице). Следующий график пришлю после закрытия свечи.", watch_buttons(wid, "update"))
+            else:
+                api("sendMessage", chat_id=CHAT, text="🔓 Со страницы: галочка «Следить» снята у слежения %s. Дальше обычные правила: вопрос о продолжении после каждой свечи, остановка без ответа." % nm)
+        except Exception as e: log("watch_keep event: %s" % e)
     elif t == "max_watch":
         api("sendMessage", chat_id=CHAT, text="👁 Слежений одновременно: %d (максимум сейчас %d: столько сделок позволяет баланс).%s" % (ev.get("n", 0), ev.get("cap", 0), "\nПросили %s, ограничено максимумом." % ev.get("asked") if ev.get("asked") and ev.get("asked") != ev.get("n") else ""), reply_markup={"inline_keyboard": menu()})
     elif t == "autoorder":

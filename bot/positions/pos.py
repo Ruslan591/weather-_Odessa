@@ -241,11 +241,22 @@ def _apply_stop():
         p.setdefault("stop_hist", []).append({"t": now, "from": old, "to": ns, "by": "exit_cfg"})
     save(ps); r = snapshot(); r["applied"] = n; return r
 
+def _web_pos_notify(act, p, px, o, now):
+    """Действие со страницы онлайн по позиции -> сообщение в Telegram (событие web_pos). Журнал обучения пишет decisions.manual в самом действии."""
+    try:
+        import tg_gate
+        try: tp = exit_cfg.levels(p)["tp"]
+        except Exception: tp = None
+        tg_gate.emit_any({"type": "web_pos", "act": act, "id": p["id"], "sym": p["sym"], "side": p["side"], "px": px, "entry": p.get("entry"), "stop": p.get("stop"), "tp": tp,
+                          "price": o.get("price"), "pct": o.get("pct"), "net_pct": p.get("net_pct"), "r_mult": p.get("r_mult"), "pnl_usd": p.get("pnl_usd")})
+    except Exception as e: print("web pos notify err", e, flush=True)
+
+
 def api_action(o):
-    if o.get("action") in ("ord_cancel", "ord_edit"):   # ручное управление ждущим ордером (страница онлайн)
+    if o.get("action") in ("ord_cancel", "ord_edit", "watch_keep"):   # ручное управление ждущим ордером и слежением (страница онлайн)
         try:
             import chan_orders
-            return chan_orders.manual_order(o)
+            return chan_orders.manual_watch(o) if o.get("action") == "watch_keep" else chan_orders.manual_order_j(o)
         except Exception as e:
             return {"error": str(e)}
     if o.get("action") == "chart":
@@ -323,6 +334,7 @@ def api_action(o):
                 decisions.manual(p, px, kl, "trail", _os, p["stop"], o, pct=pct)
         else: return {"error": "неизвестное действие"}
         save(ps)
+        _web_pos_notify(act, p, px, o, now)     # сообщение в Telegram о действии со страницы
     return snapshot()
 
 def cmd_status():

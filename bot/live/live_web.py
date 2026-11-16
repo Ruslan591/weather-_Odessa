@@ -15,7 +15,7 @@ SNAP = "http://127.0.0.1:%s/api/claude" % os.environ.get("ACCT_PORT", "18102")
 BWS = "wss://data-stream.binance.vision/stream"
 REST = "https://data-api.binance.vision/api/v3/ticker/price"
 KL = "https://data-api.binance.vision/api/v3/klines"
-IVS = {"1m": 60000, "5m": 300000, "15m": 900000, "1h": 3600000}
+IVS = {"1m": 60000, "5m": 300000, "15m": 900000, "1h": 3600000, "4h": 14400000, "1d": 86400000}
 MAXC = 3
 
 
@@ -141,7 +141,7 @@ def derive(snap):
         if w.get("status") in ("alert", "watching"):
             L = w.get("last") or {}; line = L.get("Rn") if w.get("line") == "upper" else L.get("Sn")
             watch.append({"id": w["id"], "sym": w["sym"], "side": w.get("side"), "line": w.get("line"), "lp": line if line is not None else w.get("line_px"),
-                          "atr": L.get("atr") or w.get("atr"), "state": w.get("state"), "nb": w.get("n_beyond"), "ct": w.get("ctype"), "st": w.get("status"), "upd": w.get("updates"), "tf": w.get("t_follow") or w.get("created"), "ch": w.get("chan")})
+                          "atr": L.get("atr") or w.get("atr"), "state": w.get("state"), "nb": w.get("n_beyond"), "ct": w.get("ctype"), "st": w.get("status"), "upd": w.get("updates"), "tf": w.get("t_follow") or w.get("created"), "ch": w.get("chan"), "keep": bool(w.get("keep"))})
     watch = watch[-20:]
     s = snap if isinstance(snap, dict) else {}
     st = {"t": "state", "acc": s.get("account"), "open": [dict({k: p.get(k) for k in OPEN_F}, ch=CHANS.get(p.get("order_id"))) for p in (s.get("open") or [])], "pend": pend, "watch": watch,
@@ -287,7 +287,7 @@ async def handle_candles(sess, ws, q):
     await ws.send_str(json.dumps({"t": "candles", "rid": rid, "sym": sym, "iv": iv, "c": c, "ch": ch, "srv": int(time.time() * 1000)}))
 
 
-ACTS = {"close", "stop", "tp", "tp_auto", "auto", "trail", "ord_cancel", "ord_edit"}
+ACTS = {"close", "stop", "tp", "tp_auto", "auto", "trail", "ord_cancel", "ord_edit", "watch_keep"}
 ACT_LOCK = asyncio.Lock()
 
 
@@ -303,6 +303,7 @@ async def handle_act(sess, ws, q, ip):
         body = {"action": a, "id": int(q.get("id"))}
         if a in ("stop", "tp"): body["price"] = float(q.get("price"))
         if a == "trail": body["pct"] = float(q.get("pct"))
+        if a == "watch_keep": body["on"] = bool(q.get("on"))
         if a == "ord_edit":
             for k_ in ("price", "stop", "tp"):
                 if q.get(k_) is not None:

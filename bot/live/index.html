@@ -86,7 +86,7 @@ addEventListener('load',()=>{try{Telegram.WebApp.ready();Telegram.WebApp.expand(
 setInterval(dirty,1000);
 
 /* ---------- графики ---------- */
-const IVMS={'1m':60000,'5m':300000,'15m':900000,'1h':3600000};
+const IVMS={'1m':60000,'5m':300000,'15m':900000,'1h':3600000,'4h':14400000,'1d':86400000};
 let CH=null,rid=0;const P=new Map();let G=null;
 function chanAt(l,t){return l?l.p1+l.s*(t-l.t1):null}
 function clampLim(x){return Math.max(100,Math.min(1000,Math.round(x)))}
@@ -123,7 +123,14 @@ function toast(t,ok){const e=$('#toast');e.textContent=t;e.style.borderColor=ok?
 function sheet(title,detail,btns){const e=$('#sheet');e.replaceChildren();e.append(h('div','t',title),h('div','d',detail));const r=h('div','r');
   for(const [l,f,c] of btns){const b=h('button','cb'+(c?' '+c:''),l);b.onclick=()=>{e.hidden=true;CH&&(CH.drag=null);dirty();f&&f()};r.append(b)}e.append(r);e.hidden=false}
 function act(a,extra){const r=Math.random().toString(36).slice(2,8);pendAct=r;send(Object.assign({q:'act',a,id:CH.sid,rid:r},extra||{}));toast('Отправляю…',true)}
-function gotAck(m){if(m.rid!==pendAct)return;pendAct=null;if(m.ok)toast('Выполнено. Бот подтвердил.',true);else toast('Отказ: '+(m.err||'ошибка'),false)}
+function xlab(t,iv){const d=new Date(t);if(iv>=864e5)return d.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'});if(iv>=144e5)return d.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'})+' '+String(d.getHours()).padStart(2,'0');return d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}
+let pendW=null;
+function keepRow(w){const lb=document.createElement('label');lb.className='small';lb.style.cssText='display:flex;align-items:center;gap:8px;margin-top:8px;padding:6px 0;cursor:pointer';
+  const cb=document.createElement('input');cb.type='checkbox';cb.checked=!!w.keep;cb.disabled=!S.ctl;cb.style.cssText='width:20px;height:20px;flex:none';
+  lb.onclick=e=>e.stopPropagation();
+  cb.onchange=()=>{const r=Math.random().toString(36).slice(2,8);pendW=r;send({q:'act',a:'watch_keep',id:w.id,on:cb.checked,rid:r})};
+  lb.append(cb,h('span',w.keep?'g':'mut',w.keep?'Следить: бот ведёт без вопросов и не уходит в сон':(S.ctl?'Следить':'Следить (управление только на порту 18111)')));return lb}
+function gotAck(m){if(m.rid===pendW){pendW=null;if(!m.ok)alert('Отказ: '+(m.err||'ошибка'));return}if(m.rid!==pendAct)return;pendAct=null;if(m.ok)toast('Выполнено. Бот подтвердил.',true);else toast('Отказ: '+(m.err||'ошибка'),false)}
 function pnlTxt(){const p=px(CH.sym),sd=CH.side==='long'?1:-1;if(p==null||!CH.entry)return '';const pc=sd*(p/CH.entry-1)*100,r=CH.R?sd*(p-CH.entry)/CH.R:null;return 'Сейчас '+sg(pc,2)+'%'+(r!=null?' ('+sg(r,2)+' R)':'')}
 function buildCtl(){
   const pn=$('#ch_c');pn.replaceChildren();const on=S.ctl&&CH&&(CH.kind==='pos'||CH.kind==='pend');pn.hidden=!on;if(!on)return;if(CH.kind==='pend')return buildOrdCtl(pn);
@@ -209,7 +216,7 @@ function scaleY(f){const y=freezeY();if(!y)return;const c=(y.lo+y.hi)/2,hf=(y.hi
 function buildChartHead(){
   const hd=$('#ch_h');hd.replaceChildren();
   const x=h('button','cb','✕');x.onclick=closeChart;hd.append(x,h('b',null,usd(CH.sym).replace('USDT','')),CH.side?side(CH.side):h('span'),CH.id!=null?h('span','mut small','#'+CH.id):h('span'),S.ctl?h('span',null,'упр.'):h('span'),h('span','sp'));
-  for(const iv of Object.keys(IVMS)){const b=h('button','cb'+(CH.iv===iv?' on':''),iv);b.onclick=()=>{CH.iv=iv;CH.cs=[];CH.cross=null;fitView();buildChartHead();reqCandles();saveSoon()};hd.append(b)}
+  for(const iv of Object.keys(IVMS)){const b=h('button','cb'+(CH.iv===iv?' on':''),({'4h':'H4','1d':'D1'})[iv]||iv);b.onclick=()=>{CH.iv=iv;CH.cs=[];CH.cross=null;fitView();buildChartHead();reqCandles();saveSoon()};hd.append(b)}
   const tb=$('#ch_t');tb.replaceChildren();const iv=()=>IVMS[CH.iv];
   const B=[['◀',()=>panTo(leftT()-CH.view.n*iv()*.25)],['▶',()=>panTo(leftT()+CH.view.n*iv()*.25)],['↔−',()=>setN(CH.view.n*1.25,curBase())],['↔+',()=>setN(CH.view.n*.8,curBase())],
     ['↕−',()=>scaleY(1.25)],['↕+',()=>scaleY(1/1.25)],
@@ -279,7 +286,7 @@ function drawChart(){
   if(cur!=null&&!CH.closed)drawL(cur,'#e6e9ef','сейчас',0,'до закрытия '+mmss(iv/1000-((Date.now()+S.off)%iv)/1000));
   c.restore();
   c.fillStyle='#8b94a7';for(let i=0;i<=4;i++){const x=lo+(hi-lo)*i/4;c.fillText(fp(x),pw+4,Y(x)+3)}
-  const nl=Math.max(2,Math.min(8,Math.round(v.n/5)));for(let i=0;i<nl;i++){const t=t0+(t1-t0)*i/nl;c.fillText(new Date(Math.round(t/iv)*iv).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),Math.max(2,Math.min(X(t),pw-34)),H-6)}
+  const nl=Math.max(2,Math.min(8,Math.round(v.n/5)));for(let i=0;i<nl;i++){const t=t0+(t1-t0)*i/nl;c.fillText(xlab(Math.round(t/iv)*iv,iv),Math.max(2,Math.min(X(t),pw-34)),H-6)}
   layoutLabels(lab,PT,PT+ph);CH.labs=lab.filter(L=>L.key).map(L=>({key:L.key,cy:L.t+L.h/2}));
   if(CH.drag){const pr=priceAtY(CH.drag.y);CH.drag.price=pr;c.save();c.setLineDash([5,3]);c.strokeStyle='#fff';c.lineWidth=1.5;c.beginPath();c.moveTo(0,CH.drag.y);c.lineTo(pw,CH.drag.y);c.stroke();c.restore();const tx=(CH.drag.key==='stop'?'стоп → ':CH.drag.key==='entry'?'вход → ':'цель → ')+fp(pr);c.fillStyle='#fff';c.fillRect(pw+1,CH.drag.y-8,PR-1,16);c.fillStyle='#0b0e14';c.fillText(tx,pw+3,CH.drag.y+3.5,PR-5)}
   for(const L of lab){const w=Math.min(Math.max(c.measureText(L.tx).width,L.sub?c.measureText(L.sub).width:0)+8,PR-1);
@@ -337,7 +344,7 @@ function render(){
   const ws_=(st.watch||[]).map(w=>{const x=px(w.sym);return Object.assign({x,dist:x&&w.lp&&w.atr?(x-w.lp)/w.atr:null},w)}).sort((p,q)=>Math.abs(p.dist??99)-Math.abs(q.dist??99));
   for(const w of ws_){const c=h('div','card tap'),t=h('div','row');c.onclick=()=>openChart({kind:'watch',sid:w.id,sym:w.sym,side:w.side,line_px:w.lp,ch:w.ch});
     t.append(h('b',null,w.sym),side(w.side),h('span','mut small',(w.line==='upper'?'верх':'низ')+' · '+(w.state||'')),h('span','sp'),h('b',null,w.dist==null?'—':sg(w.dist,2)+' ATR'),h('span','mut','📈'));c.append(t);
-    c.append(h('div','small mut','цена '+fp(w.x)+' · линия '+fp(w.lp)+(w.tf?' · слежу с '+tm(w.tf):'')));we.append(c)}
+    c.append(h('div','small mut','цена '+fp(w.x)+' · линия '+fp(w.lp)+(w.tf?' · слежу с '+tm(w.tf):'')));c.append(keepRow(w));we.append(c)}
   if(!ws_.length)we.append(h('div','card mut','Активных слежений нет'));
   const ev_=$('#evt');ev_.replaceChildren();const evOpen=!ev_.hidden;$('#evt_n').textContent='('+S.evt.length+(S.evt.length?', последнее '+tm(S.evt[0].t):'')+')';$('#evt_a').textContent=evOpen?'▾':'▸';
   if(evOpen){

@@ -84,6 +84,40 @@ def emit(ev):
     except Exception as e: print("tg_gate emit err", e, flush=True)
 
 
+def emit_any(ev):
+    """Событие в очередь tg_bot независимо от TG_GATE (нужно процессу acct-api, где шлюз выключен). Только если для счёта работает tg_bot (есть tg_msgs.json)."""
+    try:
+        if not os.path.exists(os.path.join(D, "tg_msgs.json")): return
+        ev = dict(ev); ev.setdefault("ts", int(time.time() * 1000))
+        with open(OUTF, "a", encoding="utf-8") as f: f.write(json.dumps(ev, ensure_ascii=False, separators=(",", ":")) + "\n")
+    except Exception as e: print("tg_gate emit_any err", e, flush=True)
+
+
+def keep_active(W=None):
+    """Есть ли слежения с галочкой «Следить» (они не дают боту уйти в сон)."""
+    W = W or _wload()
+    return any(x.get("keep") and x["status"] in ("alert", "watching") for x in W["items"])
+
+
+def web_keep(wid, on, now=None):
+    """Галочка «Следить» со страницы онлайн (вызывать под pos.lock()). on: слежение идёт без вопросов о продолжении и не заканчивается по таймеру, по «нет ответа» и «цена ушла»;
+    бот с такими слежениями автоматически в сон не уходит. Алерт без ответа галочка превращает в слежение. Возвращает (копия слежения, ошибка)."""
+    now = now or int(time.time() * 1000)
+    W = _wload(); x = next((i for i in W["items"] if i["id"] == wid), None)
+    if not x or x["status"] not in ("alert", "watching"): return None, "слежение уже не актуально (закончилось)"
+    m = load_mode()
+    if m["mode"] != "monitor": return None, "слежение работает только в режиме Монитор"
+    was = x["status"]
+    if on:
+        if was == "alert": x.update(status="watching", t_follow=now)
+        x.update(keep=True, keep_t=now, unanswered=0)
+        if m.get("missed"): m["missed"] = 0; save_mode(m)
+    else:
+        x.update(keep=False, unanswered=0, t_follow=now)     # снятие галочки: чистый счёт, чтобы слежение не закрылось сразу
+    _wsave(W, now)
+    return dict(x, was=was), None
+
+
 def mode():
     return load_mode()["mode"] if ENABLED else "auto"
 
@@ -174,7 +208,8 @@ def watch_scan(info, now):
             x["last"] = _last(info); x["chan"] = info.get("chan") or x.get("chan"); x["updates"] += 1; x["unanswered"] += 1; ch = True
             x["state"] = ep["state"] if ep else "away"; x["n_beyond"] = ep["n_beyond"] if ep else 0
             x["away_n"] = (int(x.get("away_n") or 0) + 1) if x["state"] == "away" else 0     # подряд свечей вдали от линии
-            if not exp and x["unanswered"] > int(m.get("watch_unanswered", 3)): x.update(status="done", reason="нет ответа на обновления", t_end=now); emit({"type": "watch_end", "wid": x["id"], "why": "нет ответа на %d обновления подряд" % int(m.get("watch_unanswered", 3))})
+            if x.get("keep"): emit({"type": "watch_update", "wid": x["id"]})     # галочка «Следить»: без вопросов, без остановки по времени, «нет ответа» и «цена ушла»
+            elif not exp and x["unanswered"] > int(m.get("watch_unanswered", 3)): x.update(status="done", reason="нет ответа на обновления", t_end=now); emit({"type": "watch_end", "wid": x["id"], "why": "нет ответа на %d обновления подряд" % int(m.get("watch_unanswered", 3))})
             elif not exp and now - x["t_follow"] > float(m.get("watch_hours", 4)) * 3600000: x.update(status="done", reason="прошло %s ч" % m.get("watch_hours", 4), t_end=now); emit({"type": "watch_end", "wid": x["id"], "why": "слежение длится дольше %s ч" % m.get("watch_hours", 4)})
             elif exp and x["away_n"] >= int(m.get("express_away", 6)): x.update(status="done", reason="цена ушла от линии", t_end=now); emit({"type": "watch_end", "wid": x["id"], "why": "цена %d свечей подряд вдали от линии: слежение закончено (новое касание даст новый алерт)" % x["away_n"]})
             elif exp and now - x["t_follow"] > float(m.get("express_hours", 2)) * 3600000: x.update(status="done", reason="предел времени экспресса", t_end=now); emit({"type": "watch_end", "wid": x["id"], "why": "слежение длится дольше %s ч: закончено (новое касание даст новый алерт)" % m.get("express_hours", 2)})
@@ -189,7 +224,7 @@ def watch_scan(info, now):
             cool = any(x["sym"] == sym and x["side"] == side and x["status"] == "done" and now - x.get("t_end", 0) < 1800000 for x in items)
             if not ep or cool: continue
             if len(active) >= maxw(m):     # мест нет: освобождаем его у самого «залежавшегося» слежения, где цена уже ушла от линии (не меньше 2 свечей подряд); иначе новое касание пропускаем
-                gone = [y for y in active if y["status"] == "watching" and int(y.get("away_n") or 0) >= 2]
+                gone = [y for y in active if y["status"] == "watching" and not y.get("keep") and int(y.get("away_n") or 0) >= 2]
                 if not gone: break
                 y = max(gone, key=lambda z: int(z.get("away_n") or 0)); y.update(status="done", reason="место отдано новому касанию", t_end=now)
                 emit({"type": "watch_end", "wid": y["id"], "why": "цена ушла от линии: место отдано новому касанию (%s)" % sym}); active.remove(y); ch = True
@@ -335,7 +370,7 @@ def apply(orders, now, cancel, touched, mkorder=None, price_fn=None):
             x.update(status="done", reason="нет ответа", t_end=now); m["missed"] += 0 if m.get("express") else 1; wch = True
             emit({"type": "watch_end", "wid": x["id"], "why": "нет ответа", "missed": m["missed"]}); jobs.append((dict(x, _w=1), "w_missed", {"n": m["missed"]}))
     if wch: _wsave(W, now)
-    if m["mode"] == "monitor" and not m.get("express"):
+    if m["mode"] == "monitor" and not m.get("express") and not keep_active(W):     # слежение с галочкой «Следить» не даёт уйти в сон по пропускам и таймеру
         why = "missed" if m["missed"] >= m["max_missed"] else ("timer" if m.get("until") and now >= m["until"] else None)
         if why:
             m["mode"] = "sleep"; n = m["missed"]; m["until"] = None

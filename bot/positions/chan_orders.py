@@ -832,6 +832,40 @@ def manual_order(o):
         return {"ok": True, "id": oid, "price": price, "stop": stop, "tp": tp}
 
 
+def manual_order_j(o):
+    """manual_order со страницы онлайн + журнал обучения (decisions kind=ord_manual) + сообщение в Telegram (событие web_ord)."""
+    act = o.get("action")
+    try: oid = int(o.get("id"))
+    except Exception: return manual_order(o)
+    before = next((dict(v) for v in load_orders() if v["id"] == oid), None)
+    res = manual_order(o)
+    if before and isinstance(res, dict) and res.get("ok"):
+        try:
+            after = None if act == "ord_cancel" else next((dict(v) for v in load_orders() if v["id"] == oid), None)
+            try: px = float(pos.price(before["sym"] + "USDT"))
+            except Exception: px = None
+            import decisions
+            decisions.ord_manual(before, after, act, px, pos.kl, o)
+            g = lambda x: {k: x.get(k) for k in ("price", "stop", "tp")} if x else None
+            tg_gate.emit_any({"type": "web_ord", "id": oid, "act": act, "sym": before["sym"], "side": before["side"], "rule": before.get("rule"), "from": g(before), "to": g(after), "px": px})
+        except Exception as e: log("web order journal/notify: %s" % e)
+    return res
+
+
+def manual_watch(o):
+    """Галочка «Следить» у слежения (страница онлайн -> live_web -> acct-api -> pos.api_action). Под pos.lock(); журнал w_keep / w_keep_off; сообщение в Telegram (событие watch_keep)."""
+    try: wid = int(o.get("id"))
+    except Exception: return {"error": "не указано слежение"}
+    on = bool(o.get("on"))
+    with pos.lock():
+        x, err = tg_gate.web_keep(wid, on)
+    if err: return {"error": err}
+    _tg_journal(dict(x, _w=1), "w_keep" if on else "w_keep_off", {"via": "page", "was": x.get("was")})
+    tg_gate.emit_any({"type": "watch_keep", "wid": wid, "on": on, "sym": x["sym"], "side": x.get("side"), "line": x.get("line"), "was": x.get("was")})
+    log("WATCH %d %s keep=%s (page)" % (wid, x["sym"], on))
+    return {"ok": True, "id": wid, "keep": on}
+
+
 def pair_view(sym):
     """Разметка сканера по паре (без заявки): что бот видит на 5m - канал, опорные точки, линии."""
     sym = (sym or "").upper().replace("USDT", "")
