@@ -1,1 +1,1 @@
-{"task_id": "lag_read", "cmd": "cat /tmp/lag.out; if pgrep -f /tmp/lag.py >/dev/null; then echo RUNNING; fi", "timeout": 90}
+{"task_id": "lag_read2", "cmd": "cat /tmp/lag.out; if pgrep -f '[l]ag.py' >/dev/null; then echo RUNNING; else echo FINISHED; fi", "timeout": 90}
