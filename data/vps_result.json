@@ -1,7 +1,7 @@
 {
-  "task_id": "diag3b_1794823693",
-  "returncode": 0,
-  "stdout": "##### pos (git -> vps)\n116,119d115\n<     try:   #  :       (trade_mgr),  \n<         import trade_mgr; _r = trade_mgr.ladder(p, side, t + 60000)\n<         if _r: decisions.auto(p, \"mgr_ladder\", _r[0], _r[1], t + 60000, c, mfe_r=_r[2], lvl=_r[3])\n<     except Exception as e: print(\"mgr ladder err\", p.get(\"sym\"), e, flush=True)\n130,133d125\n<         try:\n<             import trade_mgr\n<             if trade_mgr.attach(p): changed = True\n<         except Exception as e: print(\"mgr attach err\", p.get(\"sym\"), e, flush=True)\n140,143d131\n<                 _b = p.get(\"base\")\n<                 if _b and _b[\"status\"] == \"open\":   #        (trade_mgr):   \n<                     try: step(_b, k); _b[\"last_t\"] = int(k[0])\n<                     except Exception as e: print(\"base step err\", p.get(\"sym\"), e, flush=True)\n146,160c134,135\n<     for p in ps:   #          \n<         _b = p.get(\"base\")\n<         if _b and _b.get(\"status\") == \"open\" and p[\"status\"] != \"open\":\n<             try:\n<                 while _b[\"status\"] == \"open\":\n<                     d = [k for k in kl(_b[\"sym\"], \"1m\", 1000, _b[\"last_t\"] + 60000) if int(k[0]) + 60000 <= now]\n<                     if not d: break\n<                     for k in d:\n<                         step(_b, k); _b[\"last_t\"] = int(k[0]); changed = True\n<                         if _b[\"status\"] != \"open\": break\n<                     if len(d) < 1000: break\n<             except Exception as e: print(\"base finish err\", p.get(\"sym\"), e, flush=True)\n<     for p0 in ps:   #  6:        / (sr_stop.py);      \n<       for p in (p0, p0.get(\"base\")):\n<         if p and p[\"status\"] == \"open\" and p.get(\"armed\") and exit_cfg.load()[\"sr\"][\"on\"]:\n---\n>     for p in ps:   #  6:        / (sr_stop.py)\n>         if p[\"status\"] == \"open\" and p.get(\"armed\") and exit_cfg.load()[\"sr\"][\"on\"]:\n##### chan_orders (git -> vps)\n732,734d731\n<             try:\n<                 import trade_mgr; p[\"cls\"] = trade_mgr.classify(o)   #  :     (trade_mgr.attach           )\n<             except Exception as e: log(\"cls skipped: %s\" % e)\nLOG\n99e94ef task diag_1794820574\n",
-  "stderr": "",
-  "completed_at_utc": "2026-11-16T10:09:01Z"
+  "task_id": "diag4_1794823795",
+  "returncode": 2,
+  "stdout": "",
+  "stderr": "/bin/sh: 8: Syntax error: end of file unexpected (expecting \"}\")\n",
+  "completed_at_utc": "2026-11-16T10:10:01Z"
 }
