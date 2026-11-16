@@ -132,9 +132,9 @@ def derive(snap):
             ev(now, "ord", "Ордер %s: %s%s" % (nm, {"cancelled": "отменён", "expired": "истёк", "filled": "исполнен"}.get(st, str(st)), (" - %s" % o.get("reason")) if o.get("reason") else ""), o.get("sym"))
         elif l1.get("ok") == 0:
             bo, bc = l1.get("o"), l1.get("c")
-            ev(now, "l1m", "⏳ %s: свеча BTC 1m не по ходу (%+.3f%%), попытка %s" % (nm, (bc / bo - 1) * 100 if bo else 0, o.get("live1m_tries")), o.get("sym"))
+            ev(now, "l1m", "⏳ %s: свеча %s 1m не по ходу (%+.3f%%), попытка %s" % (nm, "BTC" if l1.get("src", "btc") == "btc" else o.get("sym"), (bc / bo - 1) * 100 if bo else 0, o.get("live1m_tries")), o.get("sym"))
         elif l1.get("ok") == 1:
-            ev(now, "l1m", "✅ %s: свеча BTC 1m по ходу, вход открыт (попытка %s)" % (nm, o.get("live1m_tries")), o.get("sym"))
+            ev(now, "l1m", "✅ %s: свеча %s 1m по ходу, вход открыт (попытка %s)" % (nm, "BTC" if l1.get("src", "btc") == "btc" else o.get("sym"), o.get("live1m_tries")), o.get("sym"))
     BASE["orders"] = True
     watch = []
     for w in W.get("items", []):
@@ -287,7 +287,7 @@ async def handle_candles(sess, ws, q):
     await ws.send_str(json.dumps({"t": "candles", "rid": rid, "sym": sym, "iv": iv, "c": c, "ch": ch, "srv": int(time.time() * 1000)}))
 
 
-ACTS = {"close", "stop", "tp", "tp_auto", "auto", "trail", "ord_cancel", "ord_edit", "watch_keep"}
+ACTS = {"close", "stop", "tp", "tp_auto", "auto", "trail", "ord_cancel", "ord_edit", "watch_keep", "watch_order"}
 ACT_LOCK = asyncio.Lock()
 
 
@@ -304,6 +304,7 @@ async def handle_act(sess, ws, q, ip):
         if a in ("stop", "tp"): body["price"] = float(q.get("price"))
         if a == "trail": body["pct"] = float(q.get("pct"))
         if a == "watch_keep": body["on"] = bool(q.get("on"))
+        if a == "watch_order": body.update(entry=str(q.get("entry")), setup=str(q.get("setup")), target=str(q.get("target")))
         if a == "ord_edit":
             for k_ in ("price", "stop", "tp"):
                 if q.get(k_) is not None:

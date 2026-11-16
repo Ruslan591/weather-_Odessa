@@ -118,28 +118,43 @@ function syncCtx(){      // линии графика берутся из ЖИВ
   else if(CH.kind==='watch'){const w=(st.watch||[]).find(x=>x.id===CH.sid);if(w){CH.line_px=w.lp;if(w.ch)CH.ch=w.ch;CH.gone=0}else CH.gone=1}
 }
 /* ---- управление (только на порту управления через туннель) ---- */
-let pendAct=null;
+let pendAct=null,lastA=null;
 function toast(t,ok){const e=$('#toast');e.textContent=t;e.style.borderColor=ok?'#2ebd85':'#f6465d';e.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>e.hidden=true,3500)}
 function sheet(title,detail,btns){const e=$('#sheet');e.replaceChildren();e.append(h('div','t',title),h('div','d',detail));const r=h('div','r');
   for(const [l,f,c] of btns){const b=h('button','cb'+(c?' '+c:''),l);b.onclick=()=>{e.hidden=true;CH&&(CH.drag=null);dirty();f&&f()};r.append(b)}e.append(r);e.hidden=false}
-function act(a,extra){const r=Math.random().toString(36).slice(2,8);pendAct=r;send(Object.assign({q:'act',a,id:CH.sid,rid:r},extra||{}));toast('Отправляю…',true)}
+function act(a,extra){const r=Math.random().toString(36).slice(2,8);pendAct=r;lastA=a;send(Object.assign({q:'act',a,id:CH.sid,rid:r},extra||{}));toast('Отправляю…',true)}
 function xlab(t,iv){const d=new Date(t);if(iv>=864e5)return d.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'});if(iv>=144e5)return d.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'})+' '+String(d.getHours()).padStart(2,'0');return d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}
 let pendW=null;
-function keepRow(w){const lb=document.createElement('label');lb.className='small';lb.style.cssText='display:flex;align-items:center;gap:8px;margin-top:8px;padding:6px 0;cursor:pointer';
-  const cb=document.createElement('input');cb.type='checkbox';cb.checked=!!w.keep;cb.disabled=!S.ctl;cb.style.cssText='width:20px;height:20px;flex:none';
-  lb.onclick=e=>e.stopPropagation();
+function keepRow(w){const lb=document.createElement('div');lb.className='small';lb.style.cssText='display:flex;align-items:center;gap:12px;margin-top:8px;padding:4px 0';
+  const cb=document.createElement('input');cb.type='checkbox';cb.checked=!!w.keep;cb.disabled=!S.ctl;cb.style.cssText='width:30px;height:30px;flex:none;margin:0';
+  cb.onclick=e=>e.stopPropagation();
   cb.onchange=()=>{const r=Math.random().toString(36).slice(2,8);pendW=r;send({q:'act',a:'watch_keep',id:w.id,on:cb.checked,rid:r})};
   lb.append(cb,h('span',w.keep?'g':'mut',w.keep?'Следить: бот ведёт без вопросов и не уходит в сон':(S.ctl?'Следить':'Следить (управление только на порту 18111)')));return lb}
-function gotAck(m){if(m.rid===pendW){pendW=null;if(!m.ok)alert('Отказ: '+(m.err||'ошибка'));return}if(m.rid!==pendAct)return;pendAct=null;if(m.ok)toast('Выполнено. Бот подтвердил.',true);else toast('Отказ: '+(m.err||'ошибка'),false)}
+function gotAck(m){if(m.rid===pendW){pendW=null;if(!m.ok)alert('Отказ: '+(m.err||'ошибка'));return}if(m.rid!==pendAct)return;pendAct=null;if(m.ok)toast(lastA==='watch_order'?'Запрос принят: ордер поставит бот в ближайшем цикле, итог придёт в Telegram':'Выполнено. Бот подтвердил.',true);else toast('Отказ: '+(m.err||'ошибка'),false)}
 function pnlTxt(){const p=px(CH.sym),sd=CH.side==='long'?1:-1;if(p==null||!CH.entry)return '';const pc=sd*(p/CH.entry-1)*100,r=CH.R?sd*(p-CH.entry)/CH.R:null;return 'Сейчас '+sg(pc,2)+'%'+(r!=null?' ('+sg(r,2)+' R)':'')}
 function buildCtl(){
-  const pn=$('#ch_c');pn.replaceChildren();const on=S.ctl&&CH&&(CH.kind==='pos'||CH.kind==='pend');pn.hidden=!on;if(!on)return;if(CH.kind==='pend')return buildOrdCtl(pn);
+  const pn=$('#ch_c');pn.replaceChildren();const on=S.ctl&&CH&&(CH.kind==='pos'||CH.kind==='pend'||(CH.kind==='watch'&&!CH.gone));pn.hidden=!on;if(!on)return;if(CH.kind==='pend')return buildOrdCtl(pn);if(CH.kind==='watch')return buildWatchCtl(pn);
   const sd=CH.side==='long'?1:-1;
   const B=[['Закрыть',()=>sheet('Закрыть '+CH.side.toUpperCase()+' '+usd(CH.sym).replace('USDT','')+' по рынку?',pnlTxt(),[['Отмена'],['Закрыть',()=>act('close'),'red']]),'red'],
     ['Стоп в БУ',()=>{const be=CH.entry*(1-sd*0.0008);sheet('Стоп в безубыток',pnlTxt()+' · стоп '+fp(CH.stop)+' → '+fp(be)+' (вход с запасом на комиссии)',[['Отмена'],['Подтвердить',()=>act('stop',{price:be}),'grn']])}],
     ['Трейлинг',()=>sheet('Трейлинг-стоп',pnlTxt()+' · расстояние от цены:',[['0.3%',()=>act('trail',{pct:0.3})],['0.5%',()=>act('trail',{pct:0.5})],['1%',()=>act('trail',{pct:1})],['Отмена']])],
     ['Бот ведёт',()=>sheet('Вернуть управление боту?','Ручные стоп и цель снимаются, бот снова ведёт позицию по своим правилам.',[['Отмена'],['Вернуть',()=>{act('auto');setTimeout(()=>{if(CH&&CH.tman)send({q:'act',a:'tp_auto',id:CH.sid,rid:'t'+Date.now()})},900)},'grn']])]];
   for(const [l,f,c] of B){const b=h('button','cb'+(c?' '+c:''),l);b.onclick=f;pn.append(b)}
+}
+/* ---- постановка ордера из слежения (как кнопки в Telegram: сценарий -> вход -> цель) ---- */
+function buildWatchCtl(pn){
+  const bs=CH.side.toUpperCase(),ks=CH.side==='short'?'LONG':'SHORT';
+  for(const [l,s] of [['↩ Отбой '+bs,'b'],['💥 Пробой '+ks,'k']]){const b=h('button','cb',l);b.onclick=()=>wEntry(s);pn.append(b)}
+}
+function wEntry(s){
+  const k=s==='k',way=k?(CH.side==='short'?'LONG':'SHORT'):CH.side.toUpperCase(),nm=usd(CH.sym).replace('USDT','');
+  const E=k?[['Рынок','market'],['Стоп за линией','stop'],['Лимит на ретесте','limit']]:[['Рынок','market'],['Лимит у линии','limit'],['Стоп-ордер','stop']];
+  sheet((k?'Пробой ':'Отбой ')+way+' '+nm,'Как входить:',E.map(([l,e])=>[l,()=>wTarget(s,e,l)]).concat([['Отмена']]))
+}
+function wTarget(s,e,el){
+  const k=s==='k',way=k?(CH.side==='short'?'LONG':'SHORT'):CH.side.toUpperCase(),nm=usd(CH.sym).replace('USDT','');
+  const T=k?[['0.5 канала','h05'],['1 канал','h1'],['1.5 канала','h15']]:[['Противоп. линия','opp'],['Середина','mid'],['1/4 канала','q1'],['3/4 канала','q3']];
+  sheet((k?'Пробой ':'Отбой ')+way+' '+nm+' · '+el,'Цель: доля канала или высота канала за линией',T.map(([l,t])=>[l,()=>act('watch_order',{entry:e,setup:s,target:t}),'grn']).concat([['Отмена']]))
 }
 /* ---- управление ждущим ордером ---- */
 function buildOrdCtl(pn){
@@ -326,7 +341,7 @@ function render(){
     if(u==null)all=false;else unreal+=u;
     const t=h('div','row');t.append(h('b',null,p.sym.replace('USDT','')),side(p.side),h('span','mut small','#'+p.id+' · '+(p.t_in?tm(p.t_in):'')),h('span','sp'),h('b','big '+cls(pct),pct==null?'—':sg(pct,2)+'%'),h('span','mut','📈'));c.append(t);
     const g=h('div','grid');for(const [l,v,cl] of [['сейчас',fp(x)],['P&L',u==null?'—':sg(u,3)+' $',cls(u)],['R',r==null?'—':sg(r,2)+' R',cls(r)]]){const e=h('div');e.append(h('span','mut small',l),h('b',cl,v));g.append(e)}c.append(g);
-    if(p.tp!=null&&p.stop!=null&&p.tp!==p.stop){const f=v=>Math.max(0,Math.min(100,(v-p.stop)/(p.tp-p.stop)*100));const br=h('div','bar'),i=h('i'),uu=h('u');i.style.left=(x?f(x):50)+'%';uu.style.left=f(p.entry)+'%';br.append(uu,i);c.append(br);
+    if(p.tp!=null&&p.stop!=null&&p.tp!==p.stop){const f=v=>Math.max(0,Math.min(100,(v-p.stop)/(p.tp-p.stop)*100));const br=h('div','bar'),i=h('i'),uu=h('u');i.style.left=(x?f(x):50)+'%';uu.style.left=f(p.entry)+'%';if((p.side==='long'?1:-1)*(p.stop-p.entry)>=-p.entry*0.0002)br.style.background='linear-gradient(90deg,#1d6b4d,var(--g))';br.append(uu,i);c.append(br);
       const l=h('div','row small mut');l.append(h('span',null,'стоп '+fp(p.stop)),h('span','sp'),h('span',null,'вход '+fp(p.entry)),h('span','sp'),h('span',null,'цель '+fp(p.tp)));c.append(l)}
     op.append(c)}
   if(!(st.open||[]).length)op.append(h('div','card mut','Открытых позиций нет'));

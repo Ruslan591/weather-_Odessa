@@ -400,12 +400,13 @@ def handle_event(ev):
     elif t == "live1m":     # живая проверка BTC 1m в момент открытия (chan_orders._live1m_gate)
         try:
             bo, bc = float(ev["o"]), float(ev["c"]); pc = (bc / bo - 1) * 100 if bo else 0.0
+            cn = "BTC" if (ev.get("src") == "btc" or not ev.get("sym")) else ev["sym"]     # свеча какой пары проверялась
             way = "short" if ev.get("side") == "short" else "long"
             dist = (", цена %+.2f ATR от линии (лимит %.2f)" % (ev["moved"], ev["mx"])) if ev.get("moved") is not None and ev.get("mx") is not None else ""
             if ev.get("state") == "wait":
-                edit_order(oid, "⏳ Вход не открыт: свеча BTC 1m не по ходу %s (%+.3f%%)%s. Повторю проверку, попытка %s, %s" % (way.upper(), pc, dist, ev.get("n"), datetime.fromtimestamp(ev.get("ts", 0) / 1000, T._tz()).strftime("%H:%M:%S")), [[{"text": "❌ Отменить ордер", "callback_data": "r:%d" % oid}]])
+                edit_order(oid, "⏳ Вход не открыт: свеча %s 1m не по ходу %s (%+.3f%%)%s. Повторю проверку, попытка %s, %s" % (cn, way.upper(), pc, dist, ev.get("n"), datetime.fromtimestamp(ev.get("ts", 0) / 1000, T._tz()).strftime("%H:%M:%S")), [[{"text": "❌ Отменить ордер", "callback_data": "r:%d" % oid}]])
             else:
-                edit_order(oid, "✅ Свеча BTC 1m по ходу %s (%+.3f%%): вход открыт, попыток %s%s" % (way.upper(), pc, ev.get("n"), dist))
+                edit_order(oid, "✅ Свеча %s 1m по ходу %s (%+.3f%%): вход открыт, попыток %s%s" % (cn, way.upper(), pc, ev.get("n"), dist))
         except Exception as e: log("live1m event fail %s: %s" % (oid, e))
     elif t == "alert": send_watch(ev["wid"], "alert")
     elif t == "watch_update": send_watch(ev["wid"], "update")
@@ -445,15 +446,10 @@ def handle_event(ev):
                 txt = "🖥 Со страницы: ордер %s изменён\n%s\nЦена сейчас %s. Автоматика этот ордер больше не пересчитывает." % (nm, "\n".join(lines) or "без изменений", fp_(ev.get("px")))
             api("sendMessage", chat_id=CHAT, text=txt)
         except Exception as e: log("web_ord event: %s" % e)
-    elif t == "watch_keep":     # галочка «Следить» на странице онлайн
+    elif t == "watch_keep":     # галочка «Следить» на странице онлайн: сообщений о включении и снятии нет (тихо); у алерта убираем кнопки
         try:
-            wid = ev.get("wid"); on = bool(ev.get("on")); w = watch_get(wid) or {}
-            nm = "%s %s (%s линия)" % (ev.get("sym"), str(ev.get("side", "")).upper(), "верхняя" if ev.get("line") == "upper" else "нижняя")
-            if on:
-                api("sendMessage", chat_id=CHAT, text="🔒 Со страницы: слежение %s включено галочкой «Следить». Бот ведёт его без вопросов о продолжении, график придёт после каждой свечи; пока оно идёт, в сон бот автоматически не уходит. Снять: галочка на странице или «⏹ Перестать следить»." % nm)
-                if ev.get("was") == "alert": edit_watch(wid, "👁 Слежу (галочка на странице). Следующий график пришлю после закрытия свечи.", watch_buttons(wid, "update"))
-            else:
-                api("sendMessage", chat_id=CHAT, text="🔓 Со страницы: галочка «Следить» снята у слежения %s. Дальше обычные правила: вопрос о продолжении после каждой свечи, остановка без ответа." % nm)
+            wid = ev.get("wid")
+            if ev.get("on") and ev.get("was") == "alert": edit_watch(wid, "👁 Слежу (галочка на странице). Следующий график пришлю после закрытия свечи.", watch_buttons(wid, "update"))
         except Exception as e: log("watch_keep event: %s" % e)
     elif t == "max_watch":
         api("sendMessage", chat_id=CHAT, text="👁 Слежений одновременно: %d (максимум сейчас %d: столько сделок позволяет баланс).%s" % (ev.get("n", 0), ev.get("cap", 0), "\nПросили %s, ограничено максимумом." % ev.get("asked") if ev.get("asked") and ev.get("asked") != ev.get("n") else ""), reply_markup={"inline_keyboard": menu()})

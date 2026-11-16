@@ -483,9 +483,21 @@ def _btc_live_candle():
     return None
 
 
+def _pair_live_candle(sym):
+    """Текущая (ещё не закрытая) свеча 1m самой пары (SYMUSDT): (open, last) или None при ошибке."""
+    import urllib.request
+    u = "https://data-api.binance.vision/api/v3/klines?symbol=%sUSDT&interval=1m&limit=1" % sym
+    for _ in range(2):
+        try:
+            k = json.load(urllib.request.urlopen(u, timeout=5))[-1]
+            return float(k[1]), float(k[4])
+        except Exception: time.sleep(0.3)
+    return None
+
+
 def _l1m_emit(o, state, bo, bc, moved=None, mx=None):
     """Событие для поста ордера в Telegram (tg_bot.handle_event, тип live1m): wait - ждём свечу BTC 1m по ходу, go - вошли."""
-    try: tg_gate.emit({"type": "live1m", "id": o["id"], "state": state, "o": bo, "c": bc, "n": o.get("live1m_tries"), "moved": moved, "mx": mx, "side": o["side"]})
+    try: tg_gate.emit({"type": "live1m", "id": o["id"], "state": state, "o": bo, "c": bc, "n": o.get("live1m_tries"), "moved": moved, "mx": mx, "side": o["side"], "sym": o["sym"], "src": (o.get("live1m") or {}).get("src")})
     except Exception as e: log("live1m emit: %s" % e)
 
 
@@ -503,21 +515,23 @@ def _live1m_gate(o, now, cfg=None, price_fn=None, candle_fn=None):
     if lp is not None and atr > 0:
         moved = (px - float(lp)) * s / atr          # путь цены от линии по ходу сделки, ATR (минус: цена ушла за линию против сделки)
         if abs(moved) > mx:
-            return "cancel", "вход по рынку не открыт: цена ушла от линии на %.2f ATR (лимит %.2f), подтверждения BTC 1m не было" % (moved, mx)
-    cd = (candle_fn or _btc_live_candle)()
-    if not cd: log("live1m %s: нет свечи BTC 1m, вход без проверки" % o["sym"]); return "go", None
+            return "cancel", "вход по рынку не открыт: цена ушла от линии на %.2f ATR (лимит %.2f), подтверждения свечи 1m не было" % (moved, mx)
+    src = "btc" if str(cfg.get("source", "pair")) == "btc" else "pair"     # по умолчанию свеча 1m самой пары; {"source": "btc"} в tg_live1m.json возвращает проверку по BTC
+    cd = (candle_fn or ((lambda: _btc_live_candle()) if src == "btc" else (lambda: _pair_live_candle(o["sym"]))))()
+    nmc = "BTC" if (src == "btc" and not candle_fn) else o["sym"]
+    if not cd: log("live1m %s: нет свечи %s 1m, вход без проверки" % (o["sym"], nmc)); return "go", None
     bo, bc = cd; o["live1m_tries"] = int(o.get("live1m_tries") or 0) + 1
     mv = None if (lp is None or atr <= 0) else round((px - float(lp)) * s / atr, 2)
     if (bc - bo) * s <= 0:
-        o["live1m"] = {"ok": 0, "o": bo, "c": bc, "px": px, "t": now}
-        log("live1m %s %s: свеча BTC 1m не по ходу (o %.2f c %.2f), ждём (попытка %d)" % (o["sym"], o["side"], bo, bc, o["live1m_tries"]))
+        o["live1m"] = {"ok": 0, "o": bo, "c": bc, "px": px, "t": now, "src": src}
+        log("live1m %s %s: свеча %s 1m не по ходу (o %.8g c %.8g), ждём (попытка %d)" % (o["sym"], o["side"], nmc, bo, bc, o["live1m_tries"]))
         _l1m_emit(o, "wait", bo, bc, mv, mx); return "wait", None
     newp = px * (1 + s * 0.0003); delta = newp - float(o["price"])
     o["price"] = newp; o["stop"] = float(o["stop"]) + delta
     if (float(o["tp"]) - newp) * s < max(0.0015 * newp, 0.5 * atr):
-        return "cancel", "BTC 1m подтвердил, но цель уже слишком близко к цене входа"
-    o["live1m"] = {"ok": 1, "o": bo, "c": bc, "px": px, "t": now, "tries": o["live1m_tries"]}
-    log("live1m %s %s: свеча BTC 1m по ходу (o %.2f c %.2f), вход по %.6g (попытка %d)" % (o["sym"], o["side"], bo, bc, newp, o["live1m_tries"]))
+        return "cancel", "свеча 1m подтвердила, но цель уже слишком близко к цене входа"
+    o["live1m"] = {"ok": 1, "o": bo, "c": bc, "px": px, "t": now, "tries": o["live1m_tries"], "src": src}
+    log("live1m %s %s: свеча %s 1m по ходу (o %.8g c %.8g), вход по %.6g (попытка %d)" % (o["sym"], o["side"], nmc, bo, bc, newp, o["live1m_tries"]))
     _l1m_emit(o, "go", bo, bc, mv, mx); return "go", None
 
 
@@ -864,6 +878,25 @@ def manual_watch(o):
     tg_gate.emit_any({"type": "watch_keep", "wid": wid, "on": on, "sym": x["sym"], "side": x.get("side"), "line": x.get("line"), "was": x.get("was")})
     log("WATCH %d %s keep=%s (page)" % (wid, x["sym"], on))
     return {"ok": True, "id": wid, "keep": on}
+
+
+WP_ENTRY = ("market", "limit", "stop")
+WP_TGT = {"b": ("opp", "mid", "q1", "q3"), "k": ("h05", "h1", "h15")}
+
+
+def manual_watch_order(o):
+    """Постановка ордера из слежения со страницы онлайн: то же, что кнопки Telegram (сценарий -> вход -> цель). Кладёт событие w_place в очередь tg_gate; ордер, проверки и сообщения делает ближайший цикл (как для кнопки в Telegram)."""
+    try: wid = int(o.get("id"))
+    except Exception: return {"error": "не указано слежение"}
+    st = "k" if o.get("setup") == "k" else "b"; entry = o.get("entry"); tgt = o.get("target")
+    if entry not in WP_ENTRY: return {"error": "неизвестный тип входа"}
+    if tgt not in WP_TGT[st]: return {"error": "неизвестная цель"}
+    W = tg_gate._wload(); x = next((i for i in W["items"] if i["id"] == wid), None)
+    if not x or x["status"] not in ("alert", "watching"): return {"error": "слежение уже не актуально"}
+    if tg_gate.load_mode()["mode"] != "monitor": return {"error": "ордер из слежения ставится только в режиме Монитор"}
+    tg_gate.inbox_any({"type": "w_place", "wid": wid, "entry": entry, "target": tgt, "setup": "breakout" if st == "k" else "bounce", "via": "page"})
+    log("WATCH %d %s: ордер со страницы поставлен в очередь (%s, %s, цель %s)" % (wid, x["sym"], "пробой" if st == "k" else "отбой", entry, tgt))
+    return {"ok": True, "id": wid, "queued": True}
 
 
 def pair_view(sym):

@@ -93,6 +93,12 @@ def emit_any(ev):
     except Exception as e: print("tg_gate emit_any err", e, flush=True)
 
 
+def inbox_any(ev):
+    """Событие пользователя в очередь tg_gate (как нажатие кнопки в Telegram) из другого процесса, например со страницы онлайн через acct-api."""
+    ev = dict(ev); ev.setdefault("ts", int(time.time() * 1000))
+    with open(INF, "a", encoding="utf-8") as f: f.write(json.dumps(ev, ensure_ascii=False, separators=(",", ":")) + "\n")
+
+
 def keep_active(W=None):
     """Есть ли слежения с галочкой «Следить» (они не дают боту уйти в сон)."""
     W = W or _wload()
@@ -300,7 +306,7 @@ def _wevent(e, W, m, orders, now, mkorder, price_fn, jobs):
         orders.append(o)
         x.update(status="done", reason="ордер #%d" % o["id"], t_end=now, order_id=o["id"]); m["missed"] = 0
         emit({"type": "placed", "id": o["id"], "src": "watch", "wid": x["id"], "auto": auto}); emit({"type": "watch_end", "wid": x["id"], "why": ("🤖 Автоордер: ордер #%d выставлен" if auto else "ордер #%d выставлен") % o["id"], "order": o["id"], "auto": auto})
-        jobs.append((dict(x, _w=1), "w_place", {"entry": e.get("entry"), "target": e.get("target"), "setup": e.get("setup") or "bounce", "order_id": o["id"], "price": o["price"], "auto": auto})); return True
+        jobs.append((dict(x, _w=1), "w_place", {"entry": e.get("entry"), "target": e.get("target"), "setup": e.get("setup") or "bounce", "order_id": o["id"], "price": o["price"], "auto": auto, "via": e.get("via")})); return True
     return False
 
 

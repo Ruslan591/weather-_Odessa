@@ -253,10 +253,10 @@ def _web_pos_notify(act, p, px, o, now):
 
 
 def api_action(o):
-    if o.get("action") in ("ord_cancel", "ord_edit", "watch_keep"):   # ручное управление ждущим ордером и слежением (страница онлайн)
+    if o.get("action") in ("ord_cancel", "ord_edit", "watch_keep", "watch_order"):   # ручное управление ждущим ордером и слежением (страница онлайн)
         try:
             import chan_orders
-            return chan_orders.manual_watch(o) if o.get("action") == "watch_keep" else chan_orders.manual_order_j(o)
+            return {"watch_keep": chan_orders.manual_watch, "watch_order": chan_orders.manual_watch_order}.get(o.get("action"), chan_orders.manual_order_j)(o)
         except Exception as e:
             return {"error": str(e)}
     if o.get("action") == "chart":
