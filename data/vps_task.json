@@ -1,1 +1,1 @@
-{"task_id": "lrs1-1794956432", "cmd": "cd /opt/weather-pipeline/repo && git fetch -q origin && mkdir -p /tmp/lrs && for f in pos exit_cfg decisions trade_mgr; do git show origin/main:bot/positions/$f.py > /tmp/lrs/$f.py; done; git show origin/main:scripts/lock_retest_sim.py > /tmp/lrs/lock_retest_sim.py && cd /tmp/lrs && (nohup python3 lock_retest_sim.py > out.txt 2>&1 &) ; sleep 2; echo started", "timeout": 60}
+{"task_id": "lrs-poll0-1794956481", "cmd": "tail -c 3500 /tmp/lrs/out.txt 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 30}
