@@ -22,8 +22,10 @@ def candles(sym, start, end):
     out = []; t = start
     while t < end and len(out) < 3000:
         u = "%s?symbol=%s&interval=1m&limit=1000&startTime=%d" % (pos.BASE, sym, t)
-        try: d = json.load(urllib.request.urlopen(u, timeout=20))
-        except Exception: time.sleep(1.5); continue
+        d = None
+        for _try in range(3):
+            try: d = json.load(urllib.request.urlopen(u, timeout=20)); break
+            except Exception: time.sleep(1.5)
         if not d: break
         out += d; t = int(d[-1][0]) + 60000
         if len(d) < 1000: break
@@ -62,8 +64,9 @@ trades = []
 for p in snap["closed"]:
     if not p.get("t_in") or not p.get("t_out") or p.get("entry") is None: continue
     t_in = p["t_in"]
-    ks = candles(p["sym"], (t_in // 60000) * 60000, p["t_out"] + 3600000 * 6)
+    ks = candles(p["sym"], (t_in // 60000) * 60000, min(p["t_out"] + 3600000 * 6, int(time.time() * 1000)))
     if ks: trades.append((p, orders.get(p.get("order_id")) or {}, ks))
+    if len(trades) % 25 == 0: print("loaded", len(trades), flush=True)
 print("closed trades with paths: %d of %d" % (len(trades), len(snap["closed"])), flush=True)
 ids = sorted(p["id"] for p, _, _ in trades); half = ids[len(ids) // 2]
 
