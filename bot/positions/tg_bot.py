@@ -10,6 +10,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tg_notify as T
 try: import tg_express as X        # мнение бота в экспрессе; удалить файл -> работает без него
 except Exception: X = None
+try: import tg_post as PST        # компактная подпись поста экспресса: вердикт, затем параметры ✓/✗; удалить файл или tg_post.json {"enabled": false} -> прежний длинный пост
+except Exception: PST = None
+try: import tg_htf as HT          # свечи H1/H4 (цвет, тело от среднего, фаза) - строка в постах без мнения; удалить файл -> без строки
+except Exception: HT = None
 try: import tg_fit as FIT         # вписывание подписи поста в лимит Telegram (1024) без обрезки на середине строки; удалить файл -> старая обрезка по длине
 except Exception: FIT = None
 try: import tg_target as TGT      # самообучение цели (Авто и экспресс); см. tg_target.py
@@ -258,17 +262,26 @@ def send_watch(wid, kind):
             r5l = X.rsi5_line(w, kl)
             if r5l: cap += "\n" + r5l
         except Exception as e: log("rsi5 line: %s" % e)
+    if HT and not express_on():     # без мнения бота: цвет, тело от среднего и фаза свечей H1/H4 строкой
+        try:
+            hl = HT.line(w["sym"])
+            if hl: cap += "\n" + hl
+        except Exception as e: log("htf line: %s" % e)
     if X and express_on():     # экспресс: добавляем мнение бота (заходить или ждать) и, если заходить, подсказку из журнала
         try:
             V = X.verdict(w, kl)
             if V:
-                cap = cap.replace("\nСледить или отклонить?", "\n⚡ Экспресс: слежу автоматически.") + "\n\n" + V["text"]
-                if V["call"] == "enter" and LRN and LRN.enabled():
-                    try: cap += "\n" + LRN.note(V)
-                    except Exception as e: log("learn note: %s" % e)
                 try: Bk = X.verdict_break(w, kl) if hasattr(X, "verdict_break") else None
                 except Exception as e: log("express break: %s" % e); Bk = None
-                if Bk: cap += "\n\n" + Bk["text"]
+                note = ""
+                if V["call"] == "enter" and LRN and LRN.enabled():
+                    try: note = LRN.note(V)
+                    except Exception as e: log("learn note: %s" % e)
+                pc = None
+                try: pc = PST.compose(w, V, Bk) if PST else None       # компактный пост: вердикт, параметры ✓/✗ по строке; None -> прежний длинный
+                except Exception as e: log("post compose: %s" % e)
+                if pc: cap = pc + (("\n" + note) if note else "")
+                else: cap = cap.replace("\nСледить или отклонить?", "\n⚡ Экспресс: слежу автоматически.") + "\n\n" + V["text"] + (("\n" + note) if note else "") + (("\n\n" + Bk["text"]) if Bk else "")
                 if ao_on():
                     auto = ao_pick(V, Bk)
                     if auto and slots_full(): cap += "\n\n🤖 Все слоты позиций заняты: ордер не ставлю."; auto = None
