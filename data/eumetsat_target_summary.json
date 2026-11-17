@@ -1,12 +1,17 @@
 {
-  "timestamp": "2026-11-17T13:57:22Z",
-  "status": "ok",
+  "timestamp": "2026-11-17T14:03:10Z",
+  "status": "suppressed_known_false_positive",
   "cloud_forecast_timestamp": "2026-11-17T13:30:00.000Z",
-  "target_id": 2,
-  "target_area_km2": 65.4,
-  "target_distance_km": 125.7,
-  "target_bearing_deg": 188.0,
-  "target_compass": "Ю",
+  "suppressed_target": {
+    "signature": "-15_-95",
+    "area_km2": 77.4,
+    "distance_km": 98.2,
+    "bearing_deg": 190.0,
+    "compass": "Ю",
+    "not_confirmed_streak": 4,
+    "total_not_confirmed": 4,
+    "excluded_since": "2026-11-17T13:52:51Z"
+  },
   "system": {
     "target_id": 0,
     "area_km2": 85637.9,
@@ -19,7 +24,7 @@
     "frontlike": false,
     "window_spanning": true,
     "phase_label": "безоблачно",
-    "cloud_fraction": 0.2,
+    "cloud_fraction": 0.078,
     "has_precip": false,
     "has_lightning": false
   },
@@ -27,43 +32,6 @@
   "local_suppressed_count": 2,
   "system_candidates": [],
   "system_suppressed_count": 1,
-  "frontal_tracks": [],
-  "also_suppressed_nearby": {
-    "signature": "-15_-95",
-    "area_km2": 77.4
-  },
-  "target_phase": {
-    "label": "безоблачно",
-    "cloud_fraction": 0.0
-  },
-  "existence": {
-    "modules": {
-      "ir_motion": {
-        "confirmed": false,
-        "timestamp": "2026-11-17T13:30:00.000Z"
-      },
-      "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-11-17T13:30:00.000Z"
-      },
-      "cloud_phase_type": {
-        "confirmed": false,
-        "timestamp": "2026-11-17T13:47:49Z"
-      }
-    },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
-  },
-  "phenomena": {
-    "precip_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-11-17T13:42:41Z"
-    },
-    "lightning_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-11-17T13:57:05Z"
-    }
-  },
-  "verdict": "CLM отметил цель в 126км Ю, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (85638км²) в 34км З (площадь/форма ненадёжны — объект упирается в границы окна обзора)."
+  "verdict": "Известный шумовой объект в 98км Ю (~77км²) — подавлено (не подтверждался 4 раз подряд). Отдельно: система синоптического масштаба (85638км²) в 34км З (площадь/форма ненадёжны — объект упирается в границы окна обзора).",
+  "frontal_tracks": []
 }
