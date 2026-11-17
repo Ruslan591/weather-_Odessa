@@ -1,1 +1,1 @@
-{"task_id": "lrs-poll15-1794957877", "cmd": "tail -c 3500 /tmp/lrs/out.txt 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 30}
+{"task_id": "lrs-poll16-1794958113", "cmd": "{ python3 -c \"import json;print('closed',len(json.load(open('/tmp/lrs/snap.json'))['closed']))\"; tail -n 3 /tmp/lrs/out.txt; } 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 30}
