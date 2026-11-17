@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-11-17T08:53:29Z",
+  "timestamp": "2026-11-17T08:57:24Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-11-17T08:30:00.000Z",
-  "target_id": 0,
-  "target_area_km2": 173.5,
-  "target_distance_km": 156.8,
-  "target_bearing_deg": 271.0,
-  "target_compass": "З",
+  "target_id": 2,
+  "target_area_km2": 194.8,
+  "target_distance_km": 180.6,
+  "target_bearing_deg": 293.0,
+  "target_compass": "СЗ",
   "system": {
     "target_id": 1,
     "area_km2": 1032.7,
@@ -20,6 +20,7 @@
     "window_spanning": false,
     "phase_label": "безоблачно",
     "cloud_fraction": 0.222,
+    "has_precip": false,
     "has_lightning": false
   },
   "local_candidates": [
@@ -136,6 +137,10 @@
       "front_type_confidence": null
     }
   ],
+  "also_suppressed_nearby": {
+    "signature": "-155_0",
+    "area_km2": 173.5
+  },
   "target_phase": {
     "label": "безоблачно",
     "cloud_fraction": 0.186
@@ -147,7 +152,7 @@
         "timestamp": "2026-11-17T08:30:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": false,
+        "confirmed": true,
         "timestamp": "2026-11-17T08:30:00.000Z"
       },
       "cloud_phase_type": {
@@ -155,19 +160,19 @@
         "timestamp": "2026-11-17T08:52:40Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
       "confirmed": false,
-      "timestamp": "2026-11-17T08:38:24Z"
+      "timestamp": "2026-11-17T08:57:08Z"
     },
     "lightning_forecast": {
       "confirmed": false,
       "timestamp": "2026-11-17T08:53:03Z"
     }
   },
-  "verdict": "CLM отметил цель в 157км З, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (1033км²) в 163км З."
+  "verdict": "Цель в 181км СЗ, безоблачно — каналы расходятся: geocolour_motion подтверждают, ir_motion/cloud_phase_type нет. Отдельно: система синоптического масштаба (1033км²) в 163км З."
 }
