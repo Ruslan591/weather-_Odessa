@@ -88,20 +88,22 @@ def metrics(sym):
 
 
 def verdict(m):
-    """(ключ, короткий текст): lag - альт отстаёт от BTC (в сторону BTC), own - живёт сама (rho мала), none."""
+    """(ключ, короткий текст): lag - альт отстаёт от BTC (ждём движение в сторону BTC), ok - сильная связь (BTC 1m годится как ориентир), mid - средняя связь, own - живёт сама (BTC 1m не ориентир), none - нет данных.
+    Вывод исследования 2026-11-17 (scripts/leadlag_study.py, docs/topics/lead_lag.md): на 1m связь почти вся на лаге 0, поэтому главный показатель - rho; отставание zG устойчивого догоняющего хода не дало."""
     c = cfg()
     if not m: return None, ""
-    if m["rho"] < 0.4: return "own", "своя жизнь"
     if m["rho"] >= float(c["rho_min"]) and abs(m["zB"]) >= float(c["zb_min"]) and m["zG"] >= float(c["zg_min"]):
         return "lag", "отстаёт, ждём %s" % ("вверх" if m["mb"] > 0 else "вниз")
-    return "none", "сигнала нет"
+    if m["rho"] >= float(c["rho_min"]): return "ok", "BTC-ориентир ок"
+    if m["rho"] >= 0.4: return "mid", "связь средняя"
+    return "own", "своя жизнь, BTC не ориентир"
 
 
 def line(m):
-    """Короткая строка для поста (до ~110 символов) или ''."""
+    """Короткая строка для поста (около 110 символов) или ''."""
     if not m: return ""
     key, txt = verdict(m)
-    return "📡 1m к BTC: ρ%.2f β%.1f лаг%d · BTC %+.2f%% (z%+.1f) пара %+.2f%% · отст. z%+.1f · %s" % (m["rho"], m["beta"], m["L"], m["mb"], m["zB"], m["ma"], m["zG"], txt)
+    return "📡 BTC %dм %+.2f%% (z%+.1f), пара %+.2f%%, отст. z%+.1f · ρ%.2f β%.1f лаг%d · %s" % (m["k"], m["mb"], m["zB"], m["ma"], m["zG"], m["rho"], m["beta"], m["L"], txt)
 
 
 def rec(m):
