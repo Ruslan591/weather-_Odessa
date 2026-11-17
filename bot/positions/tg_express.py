@@ -13,6 +13,8 @@ try: import tg_lead as LD       # «паровозик»: связь альта 
 except Exception: LD = None
 try: import tg_regime as RG     # режим рынка BTC 1h: фильтр по течению (RG.cond); удалить файл или tg_regime_cfg.json {"filter": false} -> без фильтра
 except Exception: RG = None
+try: import tg_htf as HT      # свечи H1/H4 (цвет, размер от среднего, фаза): доп. фильтр; удалить файл или tg_htf.json {"mode": "off"} -> без условия
+except Exception: HT = None
 import json, os
 RSI5_CFG = os.path.join(os.environ.get("POS_DIR", "/opt/trading-bot/positions_regr"), "tg_rsi5.json")
 BRKCR_CFG = os.path.join(os.environ.get("POS_DIR", "/opt/trading-bot/positions_regr"), "tg_brk_cr.json")
@@ -156,6 +158,26 @@ def rsi5_line(w, kl):
 _DEF = {"wick_min": 0.4, "dist_max": 0.9, "rr_add": 0.0, "rr_add_counter": 0.0, "brk_n_min": 2, "brk_body_min": 0.3, "brk_beyond_max": 1.5}
 
 
+class _K(tuple):
+    key = None
+
+
+def _k(key, t):
+    """Условие (ok, good, bad) с ключом key (для компактного поста tg_post); ведёт себя как обычный кортеж."""
+    x = _K(t); x.key = key; return x
+
+
+def _rows(conds):
+    return [(bool(c[0]), getattr(c, "key", None), c[1] if c[0] else c[2]) for c in conds]
+
+
+def _htf(side, w):
+    """Условие по свечам H1/H4 и запись для feat; (None, None), если выключено или нет данных."""
+    if not HT: return None, None
+    try: return HT.cond(side, w.get("sym"))
+    except Exception: return None, None
+
+
 def _C():
     try: return RV.corr() if RV else dict(_DEF)
     except Exception: return dict(_DEF)
@@ -226,21 +248,23 @@ def verdict(w, kl=None):
     reaction = (favor and cpos >= 0.5 and wick >= max(0.0, C["wick_min"] - 0.4)) or wick >= C["wick_min"]
     ftxt = {0.25: "1/4", 0.33: "1/3", 0.5: "1/2", 0.75: "3/4", 1.0: "линия"}.get(f, "%.2f" % f)
     conds = [
-        (st not in ("cross", "break"), "закрытий за линией нет" if st == "touch" else "за линию не закрывались",
-         "свеча(и) закрылись за линией: риск пробоя"),
-        (-0.15 <= dist <= C["dist_max"], "цена у линии (%+.2f ATR)" % dist, "цена в %.2f ATR от линии: %s" % (dist, "поздно" if dist > C["dist_max"] else "за линией")),
-        (reaction, "есть реакция от линии (хвост %d%%)" % round(wick * 100), "реакции от линии пока нет (хвост %d%%)" % round(wick * 100)),
-        (rr_t >= need, "до цели %s R:R %.1f" % (ftxt, rr_t), "до цели %s R:R %.1f < %.1f" % (ftxt, rr_t, need)),
-        (sh is None or abs(sh) < 0.5, "канал стабилен", "канал перестроился (%+.1f ATR)" % (sh or 0)),
+        _k("line", (st not in ("cross", "break"), "закрытий за линией нет" if st == "touch" else "за линию не закрывались",
+         "свеча(и) закрылись за линией: риск пробоя")),
+        _k("dist", (-0.15 <= dist <= C["dist_max"], "цена у линии (%+.2f ATR)" % dist, "цена в %.2f ATR от линии: %s" % (dist, "поздно" if dist > C["dist_max"] else "за линией"))),
+        _k("react", (reaction, "есть реакция от линии (хвост %d%%)" % round(wick * 100), "реакции от линии пока нет (хвост %d%%)" % round(wick * 100))),
+        _k("rr", (rr_t >= need, "до цели %s R:R %.1f" % (ftxt, rr_t), "до цели %s R:R %.1f < %.1f" % (ftxt, rr_t, need))),
+        _k("chan", (sh is None or abs(sh) < 0.5, "канал стабилен", "канал перестроился (%+.1f ATR)" % (sh or 0))),
     ]
     b1 = _btc1m("long" if s > 0 else "short", "bounce")
-    if b1: conds.append(b1[:3])
+    if b1: conds.append(_k("btc", b1[:3]))
     rgc, rgs = _regime("long" if s > 0 else "short")
-    if rgc: conds.append(rgc)
+    if rgc: conds.append(_k("regime", rgc))
     r5, r5p = _rsi5_pair(w, kl); r5c = _rsi5_cond("long" if s > 0 else "short", r5, r5p)
-    if r5c: conds.append(r5c)
+    if r5c: conds.append(_k("rsi", r5c))
     bcc, bcr = _bcc_cond("long" if s > 0 else "short", w, kl)
-    if bcc: conds.append(bcc)
+    if bcc: conds.append(_k("corr", bcc))
+    htfc, htfr = _htf("long" if s > 0 else "short", w)
+    if htfc: conds.append(_k("htf", htfc))
     call = "enter" if all(x[0] for x in conds) else "wait"
     side = "long" if s > 0 else "short"; stop = c - s * risk
     plan = {"side": side, "entry": c, "stop": stop, "tp": tp, "f": f, "rr": round(rr_t, 2), "rr_opp": round(rr_opp, 2)}
@@ -264,11 +288,12 @@ def verdict(w, kl=None):
     if tgt: text += "\n🎯 Если заходить: " + tgt["text"] + (" ≈ %s" % _fmt(tp))
     feat = {"dist": round(dist, 3), "wick": round(wick, 3), "cpos": round(cpos, 3), "favor": int(favor), "rr": round(rr_t, 2), "st": st, "counter": int(counter), "width": round(H / a, 2), "nb": nb, "rsi5": None if r5 is None else round(r5, 1)}
     if bcr: feat["bc"] = bcr
+    if htfr: feat["h"] = htfr
     if ldm:
         try: feat["ll"] = LD.rec(ldm)     # [rho, beta, zB, zG, лаг, ход BTC %, ход пары %] за последние k 1m свечи
         except Exception: pass
     geo = {"line": line, "H": H, "risk": risk, "a": a}
-    return {"call": call, "text": text, "feat": feat, "plan": plan, "geo": geo, "t": int(L.get("t") or 0), "sym": w.get("sym"), "side": side, "b1": b1[3] if b1 else None, "rg": rgs}
+    return {"call": call, "text": text, "feat": feat, "plan": plan, "geo": geo, "t": int(L.get("t") or 0), "sym": w.get("sym"), "side": side, "b1": b1[3] if b1 else None, "rg": rgs, "rows": _rows(conds)}
 
 
 def verdict_break(w, kl=None):
@@ -289,32 +314,35 @@ def verdict_break(w, kl=None):
     rng = max(h - l, 1e-12); beyond = (c - line) * s / a; body = (c - o) * s / rng
     risk = max(1.2 * a, 0.005 * c); tp = line + s * 0.5 * H; rr = (tp - c) * s / risk; sh = w.get("shift")
     conds = [
-        (int(w.get("n_beyond") or 0) >= int(C["brk_n_min"]), "%d закрытия за линией подряд" % int(w.get("n_beyond") or 0), "закрытий за линией меньше %d" % int(C["brk_n_min"])),
-        (0.2 <= beyond <= C["brk_beyond_max"], "цена за линией на %.2f ATR" % beyond, "цена за линией на %.2f ATR: %s" % (beyond, "ещё не ушла" if beyond < 0.2 else "уже далеко, в погоню не идём")),
-        (body >= C["brk_body_min"], "последняя свеча идёт в сторону пробоя (тело %d%%)" % round(body * 100), "последняя свеча не поддерживает пробой (тело %d%%)" % round(body * 100)),
-        (rr >= 1.0, "до цели 0.5 канала R:R %.1f" % rr, "до цели 0.5 канала R:R %.1f < 1.0" % rr),
-        (sh is None or abs(sh) < 0.5, "канал стабилен", "канал перестроился (%+.1f ATR)" % (sh or 0)),
+        _k("n", (int(w.get("n_beyond") or 0) >= int(C["brk_n_min"]), "%d закрытия за линией подряд" % int(w.get("n_beyond") or 0), "закрытий за линией меньше %d" % int(C["brk_n_min"]))),
+        _k("beyond", (0.2 <= beyond <= C["brk_beyond_max"], "цена за линией на %.2f ATR" % beyond, "цена за линией на %.2f ATR: %s" % (beyond, "ещё не ушла" if beyond < 0.2 else "уже далеко, в погоню не идём"))),
+        _k("body", (body >= C["brk_body_min"], "последняя свеча идёт в сторону пробоя (тело %d%%)" % round(body * 100), "последняя свеча не поддерживает пробой (тело %d%%)" % round(body * 100))),
+        _k("rr", (rr >= 1.0, "до цели 0.5 канала R:R %.1f" % rr, "до цели 0.5 канала R:R %.1f < 1.0" % rr)),
+        _k("chan", (sh is None or abs(sh) < 0.5, "канал стабилен", "канал перестроился (%+.1f ATR)" % (sh or 0))),
     ]
     b1 = _btc1m("long" if s > 0 else "short", "breakout")
-    if b1: conds.append(b1[:3])
+    if b1: conds.append(_k("btc", b1[:3]))
     rgc, rgs = _regime("long" if s > 0 else "short")
-    if rgc: conds.append(rgc)
+    if rgc: conds.append(_k("regime", rgc))
     r5 = _rsi5(w, kl); r5c = _rsi5_brk("long" if s > 0 else "short", r5)
-    if r5c: conds.append(r5c)
+    if r5c: conds.append(_k("rsi", r5c))
     bcc, bcr = _bcc_cond("long" if s > 0 else "short", w, kl)
-    if bcc: conds.append(bcc)
+    if bcc: conds.append(_k("corr", bcc))
     cr = _brk_cr_cfg(); rgm = (rgs or {}).get("regime"); nb_ = int(w.get("n_beyond") or 0); against = bool(rgm) and ((s > 0 and rgm == "down") or (s < 0 and rgm == "up"))
     if cr.get("enabled", True) and against:   # пробой против режима: только сильная свеча и без погони (в разборах такие пробои чаще всего уходили в стоп сразу после входа)
         bmin, nmax = float(cr["body"]), int(cr["nmax"]); okc = body >= bmin and nb_ <= nmax
         if body < bmin: bad = "пробой против режима рынка (%s): тело свечи %d%% < %d%%, слабый импульс" % ("лонг при падающем" if s > 0 else "шорт при растущем", round(body * 100), round(bmin * 100))
         else: bad = "пробой против режима рынка: %d закрытий за линией (> %d), это погоня за ушедшей ценой" % (nb_, nmax)
-        conds.append((okc, "пробой против режима рынка, но свежий и сильный: тело %d%%, закрытий за линией %d" % (round(body * 100), nb_), bad))
+        conds.append(_k("cr", (okc, "пробой против режима рынка, но свежий и сильный: тело %d%%, закрытий за линией %d" % (round(body * 100), nb_), bad)))
+    htfc, htfr = _htf("long" if s > 0 else "short", w)
+    if htfc: conds.append(_k("htf", htfc))
     call = "enter" if all(x[0] for x in conds) else "wait"
     side = "long" if s > 0 else "short"; stop = c - s * risk
     plan = {"side": side, "entry": c, "stop": stop, "tp": tp, "target": "h05", "rr": round(rr, 2)}
     feat = {"beyond": round(beyond, 3), "body": round(body, 3), "rr": round(rr, 2), "n": int(w.get("n_beyond") or 0), "width": round(H / a, 2), "counter": int(bool(w.get("counter"))), "rsi5": None if r5 is None else round(r5, 1)}
     if against: feat["cr"] = 1
     if bcr: feat["bc"] = bcr
+    if htfr: feat["h"] = htfr
     if LD:
         try:
             ldm_ = LD.metrics(w.get("sym"))
@@ -324,4 +352,4 @@ def verdict_break(w, kl=None):
     lines += _strict_lines(b1)
     if call == "enter": head = "💥 Пробой линии: ✅ можно заходить — %s по рынку ~%s, стоп %s, цель %s (0.5 высоты канала за линией), R:R %.1f" % (side.upper(), _fmt(c), _fmt(stop), _fmt(tp), rr)
     else: head = "💥 Пробой линии формируется: ⏳ ждём — %s" % next(bad for ok, good, bad in conds if not ok)
-    return {"call": call, "text": head + "\n" + "\n".join(lines), "plan": plan, "feat": feat, "t": int(L.get("t") or 0), "sym": w.get("sym"), "side": side, "b1": b1[3] if b1 else None, "rg": rgs}
+    return {"call": call, "text": head + "\n" + "\n".join(lines), "plan": plan, "feat": feat, "t": int(L.get("t") or 0), "sym": w.get("sym"), "side": side, "b1": b1[3] if b1 else None, "rg": rgs, "rows": _rows(conds)}
