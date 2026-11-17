@@ -1,1 +1,1 @@
-{"task_id": "lrs2-1794957196", "cmd": "pkill -f lock_retest_sim; cd /opt/weather-pipeline/repo && git fetch -q origin && git show origin/main:scripts/lock_retest_sim.py > /tmp/lrs/lock_retest_sim.py && cd /tmp/lrs && (nohup python3 lock_retest_sim.py > out.txt 2>&1 &) ; sleep 20; tail -c 600 out.txt", "timeout": 60}
+{"task_id": "lrs-poll13-1794957380", "cmd": "{ pgrep -f lock_retest_sim | head -1; tail -c 3000 /tmp/lrs/out.txt; } 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 30}
