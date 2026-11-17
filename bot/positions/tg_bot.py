@@ -10,6 +10,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tg_notify as T
 try: import tg_express as X        # мнение бота в экспрессе; удалить файл -> работает без него
 except Exception: X = None
+try: import tg_fit as FIT         # вписывание подписи поста в лимит Telegram (1024) без обрезки на середине строки; удалить файл -> старая обрезка по длине
+except Exception: FIT = None
 try: import tg_target as TGT      # самообучение цели (Авто и экспресс); см. tg_target.py
 except Exception: TGT = None
 try: import tg_regime as RG        # режим рынка (падающий/растущий/флэт): пока только показ и запись; удалить файл -> без режима
@@ -223,6 +225,14 @@ def ao_pick(V, B):
     return None
 
 
+def fitcap(cap, lim=1020):
+    """Подпись не длиннее lim: через tg_fit (сжатие строк), без модуля или при сбое - обрезка по длине."""
+    try:
+        if FIT: return FIT.fit(cap, lim)
+    except Exception as e: log("fit: %s" % e)
+    return cap if len(cap) <= lim else cap[:lim - 3] + "..."
+
+
 def send_watch(wid, kind):
     w = watch_get(wid)
     if not w: return
@@ -263,8 +273,8 @@ def send_watch(wid, kind):
                     auto = ao_pick(V, Bk)
                     if auto and slots_full(): cap += "\n\n🤖 Все слоты позиций заняты: ордер не ставлю."; auto = None
                     elif auto: cap += "\n\n🤖 Автоордер: ставлю %s по рынку (цель: %s)." % ("пробой" if auto[0] == "breakout" else "отбой", auto[1])
-                if len(cap) > 1020: cap = cap[:1017] + "..."
         except Exception as e: log("express verdict: %s" % e); V = None; auto = None
+    cap = fitcap(cap)
     prop = bool(V and V.get("call") == "enter") or bool(Bk and Bk.get("call") == "enter")     # предложение «заходить» остаётся в основном чате; «ждём» уходит в канал «Монитор»
     dest = MONCHAT if (mon_on() and X and express_on() and V is not None and not prop) else CHAT
     btn = [retro_row(False)] if (dest == MONCHAT and V and LRN and LRN.enabled()) else ([] if dest == MONCHAT else watch_buttons(wid, kind, V))
@@ -295,7 +305,7 @@ def edit_watch(wid, status, buttons=None):
     if not rec: api("sendMessage", chat_id=CHAT, text="Слежение %d: %s" % (wid, status)); return
     ch = kchat(rec["mid"]); rm = rmid(rec["mid"])
     if buttons is None and ch == MONCHAT and rec.get("v") and LRN and LRN.enabled(): buttons = [retro_row(bool(LRN.has_mark(rec["mid"], 2)))]     # у последнего поста «Монитора» отметка остаётся и после конца слежения
-    cap = rec["cap"] + "\n\n" + status; kb = {"inline_keyboard": buttons or []}
+    cap = fitcap(rec["cap"], 1020 - len(status) - 2) + "\n\n" + status; kb = {"inline_keyboard": buttons or []}
     try:
         if rec.get("photo"): api("editMessageCaption", chat_id=ch, message_id=rm, caption=cap, reply_markup=kb)
         else: api("editMessageText", chat_id=ch, message_id=rm, text=cap, reply_markup=kb)
