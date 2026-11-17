@@ -1,1 +1,1 @@
-{"task_id": "cc3c155f774", "cmd": "ls /tmp/ll_cache | wc -l; tail -n 3 /tmp/ll_out.txt | LC_ALL=C tr -cd '\\11\\12\\40-\\176'; pgrep -f leadlag_study | head -1", "timeout": 60}
+{"task_id": "cad17957c7f", "cmd": "head -c 600 /opt/trading-bot/positions_regr/pairs.json | LC_ALL=C tr -cd '\\11\\12\\40-\\176'; echo; grep -o 'sym_' /dev/null; ls /tmp/ll_cache; (time curl -s -o /dev/null -w '%{time_total}' 'https://data-api.binance.vision/api/v3/klines?symbol=ADAUSDT&interval=1m&limit=1000') 2>&1 | tail -4", "timeout": 60}
