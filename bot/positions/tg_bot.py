@@ -262,18 +262,7 @@ def send_watch(wid, kind):
             r5l = X.rsi5_line(w, kl)
             if r5l: cap += "\n" + r5l
         except Exception as e: log("rsi5 line: %s" % e)
-    plain_ok = False
-    if X and PST and PST.enabled() and not express_on() and jload(PST.CFG, {}).get("plain", True):     # вне экспресса тоже компактный вердикт (только показ: без записи v, кнопок обучения, Автоордера и маршрута в «Монитор»); выключить: tg_post.json {"plain": false}
-        try:
-            V0 = X.verdict(w, kl)
-            if V0:
-                try: B0 = X.verdict_break(w, kl) if hasattr(X, "verdict_break") else None
-                except Exception as e: log("plain break: %s" % e); B0 = None
-                pc0 = PST.compose(w, V0, B0)
-                if pc0:
-                    cap = pc0 + ("\n🔒 Галочка «Следить»: без вопросов, без сна" if w.get("keep") else ""); plain_ok = True
-        except Exception as e: log("plain verdict: %s" % e)
-    if HT and not express_on() and not plain_ok:     # без мнения бота: цвет, тело от среднего и фаза свечей H1/H4 строкой
+    if HT and not express_on():     # без мнения бота: цвет, тело от среднего и фаза свечей H1/H4 строкой
         try:
             hl = HT.line(w["sym"])
             if hl: cap += "\n" + hl
