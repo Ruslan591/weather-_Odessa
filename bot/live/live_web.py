@@ -268,6 +268,52 @@ async def ws_handler(req):
     return ws
 
 
+REG_LO, REG_HI, REG_K, REG_FLAT = 40, 350, 2.0, 0.03     # те же параметры, что у источника regr (chan_src.regression_at)
+RGC = {}; RG_TTL = {"1m": 30, "1h": 120, "4h": 300}
+
+
+def reg_channel(rows, per):
+    """rows: свечи Binance (последняя может быть формирующейся). Канал регрессии по close закрытых свечей: окно 40..350 с максимальным |Пирсона|, границы +-2 сигма (n-2).
+    Возвращает {win, r, dir, t0, upper{t1,p1,s}, lower{...}, mid{...}} в формате страницы (цена = p1 + s*(t - t1), t в мс) или None."""
+    now = int(time.time() * 1000)
+    k = [x for x in rows if int(x[0]) + per <= now][-REG_HI:]; n = len(k)
+    if n < REG_LO + 2: return None
+    y = [float(x[4]) for x in k]
+    Px = [0.0]; Pxx = [0.0]; Py = [0.0]; Pxy = [0.0]; Pyy = [0.0]
+    for i, v in enumerate(y): Px.append(Px[-1] + i); Pxx.append(Pxx[-1] + i * i); Py.append(Py[-1] + v); Pxy.append(Pxy[-1] + i * v); Pyy.append(Pyy[-1] + v * v)
+    best = None
+    for L in range(REG_LO, n + 1):
+        a = n - L; sx = Px[n] - Px[a]; sxx = Pxx[n] - Pxx[a]; sy = Py[n] - Py[a]; sxy = Pxy[n] - Pxy[a]; syy = Pyy[n] - Pyy[a]
+        vx = sxx - sx * sx / L; vy = syy - sy * sy / L; cv = sxy - sx * sy / L
+        if vx <= 0 or vy <= 0: continue
+        r = abs(cv) / (vx * vy) ** 0.5
+        if best is None or r > best[0]: best = (r, L, vx, vy, cv, sx, sy)
+    if not best: return None
+    r, L, vx, vy, cv, sx, sy = best
+    slope = cv / vx; yk = sy / L + slope * ((n - 1) - sx / L); sd = (max(vy - slope * cv, 0.0) / max(L - 2, 1)) ** 0.5
+    trs = [max(float(k[i][2]) - float(k[i][3]), abs(float(k[i][2]) - y[i - 1]), abs(float(k[i][3]) - y[i - 1])) for i in range(max(1, n - 14), n)]
+    atr = sum(trs) / len(trs) if trs else 0.0
+    d = 1 if slope > REG_FLAT * atr else (-1 if slope < -REG_FLAT * atr else 0)
+    t1 = int(k[-1][0]); s = slope / per; line = lambda p: {"t1": t1, "p1": p, "s": s}
+    return {"win": L, "r": round(r, 3), "dir": d, "t0": int(k[n - L][0]), "upper": line(yk + REG_K * sd), "lower": line(yk - REG_K * sd), "mid": line(yk)}
+
+
+async def _reg_one(sess, sym, iv):
+    key = (sym, iv); now = time.time(); c = RGC.get(key)
+    if c and now - c[0] < RG_TTL[iv]: return c[1]
+    try:
+        async with sess.get(KL, params={"symbol": sym, "interval": iv, "limit": REG_HI + 2}) as r: rows = await r.json()
+        ch = reg_channel(rows, IVS[iv]); RGC[key] = (now, ch); return ch
+    except Exception as e:
+        log("reg %s %s: %s" % (sym, iv, e)); return c[1] if (c and now - c[0] < 900) else None
+
+
+async def reg_all(sess, sym):
+    """Каналы регрессии 1m, 1h, 4h (кэш 30 с / 2 мин / 5 мин): {iv: канал}; нет данных по таймфрейму - ключа нет."""
+    res = await asyncio.gather(*[_reg_one(sess, sym, iv) for iv in RG_TTL])
+    return {iv: ch for iv, ch in zip(RG_TTL, res) if ch}
+
+
 async def handle_candles(sess, ws, q):
     now = time.time(); k = id(ws)
     if now - LASTQ.get(k, 0) < 0.1: return
@@ -284,7 +330,11 @@ async def handle_candles(sess, ws, q):
     if c and sym not in PX: PX[sym] = c[-1][4]; DIRTY.add(sym)
     try: ch = CHANS.get(int(q["oid"])) if q.get("oid") is not None else None
     except Exception: ch = None
-    await ws.send_str(json.dumps({"t": "candles", "rid": rid, "sym": sym, "iv": iv, "c": c, "ch": ch, "srv": int(time.time() * 1000)}))
+    rg = None
+    if q.get("rg"):
+        try: rg = await reg_all(sess, sym)
+        except Exception as e: log("reg_all %s: %s" % (sym, e))
+    await ws.send_str(json.dumps({"t": "candles", "rid": rid, "sym": sym, "iv": iv, "c": c, "ch": ch, "rg": rg, "srv": int(time.time() * 1000)}))
 
 
 ACTS = {"close", "stop", "tp", "tp_auto", "auto", "trail", "ord_cancel", "ord_edit", "watch_keep", "watch_order"}
