@@ -1,1 +1,1 @@
-{"task_id": "md5chk_1117a", "cmd": "{ md5sum /opt/tg-notify/tg_express.py /opt/tg-notify/tg_bot.py; ls /opt/tg-notify | head -40; systemctl is-active tg-bot-regr; } 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 60}
+{"task_id": "deploy_post_1117a", "cmd": "{ cd /opt/weather-pipeline/repo && git fetch -q origin main 2>&1; git show origin/main:scripts/deploy_tg_post.sh | bash -s tg_htf=NEW tg_post=NEW tg_express=cc30483094f0e5e92feee0e3b53b1c50 tg_bot=0ef0f059fc7aacffe43931ff088e680f; } 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 280}
