@@ -1,25 +1,20 @@
 {
-  "timestamp": "2026-11-17T14:03:10Z",
-  "status": "suppressed_known_false_positive",
-  "cloud_forecast_timestamp": "2026-11-17T13:30:00.000Z",
-  "suppressed_target": {
-    "signature": "-15_-95",
-    "area_km2": 77.4,
-    "distance_km": 98.2,
-    "bearing_deg": 190.0,
-    "compass": "Ю",
-    "not_confirmed_streak": 4,
-    "total_not_confirmed": 4,
-    "excluded_since": "2026-11-17T13:52:51Z"
-  },
+  "timestamp": "2026-11-17T14:08:04Z",
+  "status": "ok",
+  "cloud_forecast_timestamp": "2026-11-17T13:45:00.000Z",
+  "target_id": 1,
+  "target_area_km2": 294.9,
+  "target_distance_km": 28.0,
+  "target_bearing_deg": 330.0,
+  "target_compass": "СЗ",
   "system": {
     "target_id": 0,
-    "area_km2": 85637.9,
-    "distance_km": 34.0,
-    "bearing_deg": 283.0,
-    "compass": "З",
-    "elongation_aspect_ratio": 3.05,
-    "elongation_axis_deg": 0.0,
+    "area_km2": 112169.0,
+    "distance_km": 0.8,
+    "bearing_deg": 326.0,
+    "compass": "СЗ",
+    "elongation_aspect_ratio": 2.66,
+    "elongation_axis_deg": 4.0,
     "elongation_axis_compass": "С-Ю",
     "frontlike": false,
     "window_spanning": true,
@@ -29,9 +24,57 @@
     "has_lightning": false
   },
   "local_candidates": [],
-  "local_suppressed_count": 2,
-  "system_candidates": [],
-  "system_suppressed_count": 1,
-  "verdict": "Известный шумовой объект в 98км Ю (~77км²) — подавлено (не подтверждался 4 раз подряд). Отдельно: система синоптического масштаба (85638км²) в 34км З (площадь/форма ненадёжны — объект упирается в границы окна обзора).",
-  "frontal_tracks": []
+  "local_suppressed_count": 12,
+  "system_candidates": [
+    {
+      "target_id": 0,
+      "area_km2": 112169.0,
+      "distance_km": 0.8,
+      "bearing_deg": 326.0,
+      "compass": "СЗ",
+      "elongation_aspect_ratio": 2.66,
+      "elongation_axis_deg": 4.0,
+      "elongation_axis_compass": "С-Ю",
+      "frontlike": false,
+      "window_spanning": true,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
+      "has_precip": false,
+      "has_lightning": false,
+      "ir_confirmed": true,
+      "geocolour_confirmed": false
+    }
+  ],
+  "system_suppressed_count": 3,
+  "frontal_tracks": [],
+  "existence": {
+    "modules": {
+      "ir_motion": {
+        "confirmed": false,
+        "timestamp": "2026-11-17T13:40:00.000Z"
+      },
+      "geocolour_motion": {
+        "confirmed": false,
+        "timestamp": "2026-11-17T13:40:00.000Z"
+      },
+      "cloud_phase_type": {
+        "confirmed": null,
+        "timestamp": "2026-11-17T14:02:05Z"
+      }
+    },
+    "votes_confirmed": 0,
+    "votes_not_confirmed": 2,
+    "consensus": "not_confirmed"
+  },
+  "phenomena": {
+    "precip_forecast": {
+      "confirmed": null,
+      "timestamp": "2026-11-17T14:02:39Z"
+    },
+    "lightning_forecast": {
+      "confirmed": false,
+      "timestamp": "2026-11-17T14:07:46Z"
+    }
+  },
+  "verdict": "CLM отметил цель в 28км СЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (112169км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора)."
 }
