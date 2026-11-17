@@ -107,8 +107,14 @@ def fm(v, f="%.1f"): return "-" if v is None else f % v
 
 
 def main():
-    syms = sorted(os.path.basename(p).split("_")[0] for p in glob.glob("/tmp/klcache/*_5m_1000.json")); syms = [s for s in syms if s != "BTC"]
+    try: syms = [s for s in json.load(open("/opt/trading-bot/positions_regr/pairs.json"))["pairs"] if s != "BTC"]    # пары бота (ликвидные, minvol 8M)
+    except Exception: syms = sorted(os.path.basename(p).split("_")[0] for p in glob.glob("/tmp/klcache/*_5m_1000.json")); syms = [s for s in syms if s != "BTC"]
     print("pairs", len(syms), "days", DAYS); sys.stdout.flush()
+    from concurrent.futures import ThreadPoolExecutor
+    def _pf(s):
+        try: fetch(s)
+        except Exception as e: print("fetch fail", s, str(e)[:60])
+    with ThreadPoolExecutor(6) as ex: list(ex.map(_pf, ["BTC"] + syms))
     cb = fetch("BTC"); print("btc candles", len(cb)); sys.stdout.flush()
     allev = []; res1 = {}
     for s in syms:
