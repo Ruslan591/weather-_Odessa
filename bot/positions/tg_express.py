@@ -9,6 +9,8 @@ try: import tg_review as RV     # пороги с коррекцией по оп
 except Exception: RV = None
 try: import tg_btc1m as B1      # фильтр по BTC 1m (свечи, EMA9, RSI14, блокировки); удалить файл или {"enabled": false} в tg_btc1m.json -> без фильтра
 except Exception: B1 = None
+try: import tg_lead as LD       # «паровозик»: связь альта с BTC на 1m (rho, beta, z хода BTC, отставание, лаг), только показ и запись; удалить файл или tg_lead.json {"mode": "off"} -> без строки
+except Exception: LD = None
 try: import tg_regime as RG     # режим рынка BTC 1h: фильтр по течению (RG.cond); удалить файл или tg_regime_cfg.json {"filter": false} -> без фильтра
 except Exception: RG = None
 import json, os
@@ -243,6 +245,11 @@ def verdict(w, kl=None):
     side = "long" if s > 0 else "short"; stop = c - s * risk
     plan = {"side": side, "entry": c, "stop": stop, "tp": tp, "f": f, "rr": round(rr_t, 2), "rr_opp": round(rr_opp, 2)}
     lines = ["%s %s" % ("✓" if ok else "✗", good if ok else bad) for ok, good, bad in conds]
+    ldm = None; ldl = ""
+    if LD:
+        try: ldm = LD.metrics(w.get("sym")); ldl = LD.line(ldm)
+        except Exception: ldm = None; ldl = ""
+    if ldl: lines.append(ldl)
     lines += _strict_lines(b1)
     if call == "enter":
         head = "🧠 Моё мнение: ✅ можно заходить — %s по рынку ~%s, стоп %s, цель %s (%s канала), R:R %.1f" % (side.upper(), _fmt(c), _fmt(stop), _fmt(tp), ftxt, rr_t)
@@ -257,6 +264,9 @@ def verdict(w, kl=None):
     if tgt: text += "\n🎯 Если заходить: " + tgt["text"] + (" ≈ %s" % _fmt(tp))
     feat = {"dist": round(dist, 3), "wick": round(wick, 3), "cpos": round(cpos, 3), "favor": int(favor), "rr": round(rr_t, 2), "st": st, "counter": int(counter), "width": round(H / a, 2), "nb": nb, "rsi5": None if r5 is None else round(r5, 1)}
     if bcr: feat["bc"] = bcr
+    if ldm:
+        try: feat["ll"] = LD.rec(ldm)     # [rho, beta, zB, zG, лаг, ход BTC %, ход пары %] за последние k 1m свечи
+        except Exception: pass
     geo = {"line": line, "H": H, "risk": risk, "a": a}
     return {"call": call, "text": text, "feat": feat, "plan": plan, "geo": geo, "t": int(L.get("t") or 0), "sym": w.get("sym"), "side": side, "b1": b1[3] if b1 else None, "rg": rgs}
 
@@ -305,6 +315,11 @@ def verdict_break(w, kl=None):
     feat = {"beyond": round(beyond, 3), "body": round(body, 3), "rr": round(rr, 2), "n": int(w.get("n_beyond") or 0), "width": round(H / a, 2), "counter": int(bool(w.get("counter"))), "rsi5": None if r5 is None else round(r5, 1)}
     if against: feat["cr"] = 1
     if bcr: feat["bc"] = bcr
+    if LD:
+        try:
+            ldm_ = LD.metrics(w.get("sym"))
+            if ldm_: feat["ll"] = LD.rec(ldm_)
+        except Exception: pass
     lines = ["%s %s" % ("✓" if ok else "✗", good if ok else bad) for ok, good, bad in conds]
     lines += _strict_lines(b1)
     if call == "enter": head = "💥 Пробой линии: ✅ можно заходить — %s по рынку ~%s, стоп %s, цель %s (0.5 высоты канала за линией), R:R %.1f" % (side.upper(), _fmt(c), _fmt(stop), _fmt(tp), rr)
