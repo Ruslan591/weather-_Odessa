@@ -22,7 +22,6 @@ D = os.environ.get("POS_DIR", "/opt/trading-bot/positions")
 ENABLED = os.environ.get("TG_GATE", "0") == "1"
 WATCHF = os.path.join(D, "tg_watch.json"); MODEF = os.path.join(D, "tg_mode.json"); OUTF = os.path.join(D, "tg_outbox.jsonl"); INF = os.path.join(D, "tg_inbox.jsonl"); OFFF = os.path.join(D, "tg_inbox.off")
 MODES = ("sleep", "monitor", "auto"); TFM = 300000
-TFS = {"5m": 300000, "15m": 900000, "1h": 3600000, "4h": 14400000, "1d": 86400000}     # таймфреймы сканера слежения (кнопка «Таймфрейм» в Мониторе)
 def reg_snap():
     """Снимок режима рынка (tg_regime.json пишет tg_bot) для записи в ордер: {regime, raw, strength, t} или None."""
     try:
@@ -61,7 +60,7 @@ def maxw(m):
 MAXW_HARD = 15     # потолок настройки числа слежений (нагрузка и поток постов)
 
 
-DEFAULT = {"mode": "auto", "missed": 0, "max_missed": 3, "answer_win": 3, "until": None, "max_watch": 8, "watch_unanswered": 3, "watch_hours": 4, "alerts_off": False, "express": False, "autoorder": False, "express_away": 6, "express_hours": 2, "tf": "5m"}
+DEFAULT = {"mode": "auto", "missed": 0, "max_missed": 3, "answer_win": 3, "until": None, "max_watch": 8, "watch_unanswered": 3, "watch_hours": 4, "alerts_off": False, "express": False, "autoorder": False, "express_away": 6, "express_hours": 2}
 
 
 def load_mode():
@@ -75,12 +74,6 @@ def save_mode(m):
     tmp = MODEF + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f: json.dump(m, f, ensure_ascii=False)
     os.replace(tmp, MODEF)
-
-
-def cur_tf(m=None):
-    """Таймфрейм сканера слежения (только Монитор): 5m | 15m | 1h | 4h | 1d; по умолчанию 5m. Авто и ордера по правилам Авто всегда на 5m."""
-    tf = (m or load_mode()).get("tf")
-    return tf if tf in TFS else "5m"
 
 
 def emit(ev):
@@ -208,21 +201,14 @@ def _shift(x, info):
     except Exception: return None
 
 
-def _dur(h, kk):
-    return "%s ч" % h if kk == 1 else "%d свечей" % round(float(h) * 12)
-
-
-def watch_scan(info, now, tf=None):
-    """Раз на новую закрытую свечу пары (из cycle). info: sym, t, o, h, l, c, atr, ctype, R, S, Rn, Sn, chan. tf - таймфрейм свечей info (по умолчанию выбранный в боте); сроки слежения (часы, кулдаун) растягиваются пропорционально размеру свечи, число свечей как на 5m."""
+def watch_scan(info, now):
+    """Раз на новую закрытую свечу пары (из cycle). info: sym, t, o, h, l, c, atr, ctype, R, S, Rn, Sn, chan."""
     if not ENABLED: return
     m = load_mode()
     if m["mode"] != "monitor": return
-    tf = tf or cur_tf(m)
-    if tf != cur_tf(m): return     # таймфрейм сменили, пока считался цикл
-    tfm = TFS[tf]; kk = tfm / float(TFM)
     W = _wload(); items = W["items"]; ch = False; sym = info["sym"]; exp = bool(m.get("express"))     # экспресс: слежения не завершаются из-за отсутствия ответа и времени
     for x in items:
-        if x["sym"] == sym and x["status"] == "watching" and (x.get("tf") or "5m") == tf and info["t"] > (x.get("last") or {}).get("t", 0):
+        if x["sym"] == sym and x["status"] == "watching" and info["t"] > (x.get("last") or {}).get("t", 0):
             ep = _episode(info, x.get("line")) if info.get("ctype") else None
             x["shift"] = _shift(x, info) if info.get("ctype") else None
             x["last"] = _last(info); x["chan"] = info.get("chan") or x.get("chan"); x["updates"] += 1; x["unanswered"] += 1; ch = True
@@ -230,9 +216,9 @@ def watch_scan(info, now, tf=None):
             x["away_n"] = (int(x.get("away_n") or 0) + 1) if x["state"] == "away" else 0     # подряд свечей вдали от линии
             if x.get("keep"): emit({"type": "watch_update", "wid": x["id"]})     # галочка «Следить»: без вопросов, без остановки по времени, «нет ответа» и «цена ушла»
             elif not exp and x["unanswered"] > int(m.get("watch_unanswered", 3)): x.update(status="done", reason="нет ответа на обновления", t_end=now); emit({"type": "watch_end", "wid": x["id"], "why": "нет ответа на %d обновления подряд" % int(m.get("watch_unanswered", 3))})
-            elif not exp and now - x["t_follow"] > float(m.get("watch_hours", 4)) * 3600000 * kk: x.update(status="done", reason="прошло %s" % _dur(m.get("watch_hours", 4), kk), t_end=now); emit({"type": "watch_end", "wid": x["id"], "why": "слежение длится дольше %s" % _dur(m.get("watch_hours", 4), kk)})
+            elif not exp and now - x["t_follow"] > float(m.get("watch_hours", 4)) * 3600000: x.update(status="done", reason="прошло %s ч" % m.get("watch_hours", 4), t_end=now); emit({"type": "watch_end", "wid": x["id"], "why": "слежение длится дольше %s ч" % m.get("watch_hours", 4)})
             elif exp and x["away_n"] >= int(m.get("express_away", 6)): x.update(status="done", reason="цена ушла от линии", t_end=now); emit({"type": "watch_end", "wid": x["id"], "why": "цена %d свечей подряд вдали от линии: слежение закончено (новое касание даст новый алерт)" % x["away_n"]})
-            elif exp and now - x["t_follow"] > float(m.get("express_hours", 2)) * 3600000 * kk: x.update(status="done", reason="предел времени экспресса", t_end=now); emit({"type": "watch_end", "wid": x["id"], "why": "слежение длится дольше %s: закончено (новое касание даст новый алерт)" % _dur(m.get("express_hours", 2), kk)})
+            elif exp and now - x["t_follow"] > float(m.get("express_hours", 2)) * 3600000: x.update(status="done", reason="предел времени экспресса", t_end=now); emit({"type": "watch_end", "wid": x["id"], "why": "слежение длится дольше %s ч: закончено (новое касание даст новый алерт)" % m.get("express_hours", 2)})
             else: emit({"type": "watch_update", "wid": x["id"]})
     active = [x for x in items if x["status"] in ("alert", "watching")]
     if not m.get("alerts_off") and info.get("ctype") and info.get("R") is not None and not any(x["sym"] == sym for x in active) and info["R"] - info["S"] >= 1.5 * info["atr"]:
@@ -241,7 +227,7 @@ def watch_scan(info, now, tf=None):
         for line in lines:
             side = "short" if line == "upper" else "long"      # side = направление отбоя от этой линии
             ep = _episode(info, line)
-            cool = any(x["sym"] == sym and x["side"] == side and x["status"] == "done" and (x.get("tf") or "5m") == tf and now - x.get("t_end", 0) < 1800000 * kk for x in items)
+            cool = any(x["sym"] == sym and x["side"] == side and x["status"] == "done" and now - x.get("t_end", 0) < 1800000 for x in items)
             if not ep or cool: continue
             if len(active) >= maxw(m):     # мест нет: освобождаем его у самого «залежавшегося» слежения, где цена уже ушла от линии (не меньше 2 свечей подряд); иначе новое касание пропускаем
                 gone = [y for y in active if y["status"] == "watching" and not y.get("keep") and int(y.get("away_n") or 0) >= 2]
@@ -249,8 +235,8 @@ def watch_scan(info, now, tf=None):
                 y = max(gone, key=lambda z: int(z.get("away_n") or 0)); y.update(status="done", reason="место отдано новому касанию", t_end=now)
                 emit({"type": "watch_end", "wid": y["id"], "why": "цена ушла от линии: место отдано новому касанию (%s)" % sym}); active.remove(y); ch = True
             W["seq"] += 1; line_px = info["R"] if line == "upper" else info["S"]
-            x = {"id": W["seq"], "sym": sym, "tf": tf, "side": side, "line": line, "counter": line != main_line, "status": "alert", "ctype": info["ctype"], "chan": info.get("chan"), "chan0": info.get("chan"), "t_alert": info["t"], "created": now,
-                 "deadline": now + min(int(m.get("answer_win", 3)) * tfm, 4 * 3600000), "line_px": line_px, "touch_px": ep["start_px"], "atr": a, "last": _last(info), "updates": 0, "unanswered": 0,
+            x = {"id": W["seq"], "sym": sym, "side": side, "line": line, "counter": line != main_line, "status": "alert", "ctype": info["ctype"], "chan": info.get("chan"), "chan0": info.get("chan"), "t_alert": info["t"], "created": now,
+                 "deadline": now + int(m.get("answer_win", 3)) * TFM, "line_px": line_px, "touch_px": ep["start_px"], "atr": a, "last": _last(info), "updates": 0, "unanswered": 0,
                  "state0": ep["state"], "state": ep["state"], "n_beyond": ep["n_beyond"], "n_run": ep["n_run"], "t_ref": ep["t_start"], "shift": None}
             if exp: x.update(status="watching", t_follow=now, auto_follow=True)     # экспресс: следим сразу, ответа не ждём
             items.append(x); emit({"type": "alert", "wid": x["id"]}); ch = True; break
@@ -295,7 +281,7 @@ def _wevent(e, W, m, orders, now, mkorder, price_fn, jobs):
         if ts > x["deadline"]:
             x.update(status="done", reason="поздно: время на ответ вышло", t_end=now); emit({"type": "watch_end", "wid": x["id"], "why": "поздно: время на ответ вышло"}); return True
         x.update(status="watching", t_follow=now, unanswered=0); m["missed"] = 0
-        emit({"type": "watch_ack", "wid": x["id"], "ok": True, "what": "follow"}); jobs.append((dict(x, _w=1), "w_follow", {"latency_s": round((ts - x["created"]) / 1000)})); return True
+        emit({"type": "watch_ack", "wid": x["id"], "ok": True, "what": "follow"}); (None if m.get("express") else emit({"type": "watch_update", "wid": x["id"], "first": 1})); jobs.append((dict(x, _w=1), "w_follow", {"latency_s": round((ts - x["created"]) / 1000)})); return True
     if t == "w_continue":
         x["unanswered"] = 0; m["missed"] = 0; emit({"type": "watch_ack", "wid": x["id"], "ok": True, "what": "continue"}); jobs.append((dict(x, _w=1), "w_continue", {"n": x["updates"]})); return True
     if t == "w_stop":
@@ -340,13 +326,6 @@ def apply(orders, now, cancel, touched, mkorder=None, price_fn=None):
             if m["mode"] == "auto": _end_watches(W, now, "режим авто"); wch = True
             if m["mode"] == "sleep": W = _wload()
             emit({"type": "mode", "mode": m["mode"], "until": m["until"], "why": "user", "cancelled": nc})
-        elif t == "tf":     # кнопка «Таймфрейм» (меню Монитора): 5m | 15m | 1h | 4h | 1d; алерты и слежения прежнего таймфрейма снимаются, сканер перечитывает пары сразу (tf_epoch)
-            ntf = e.get("tf")
-            if ntf in TFS and ntf != cur_tf(m):
-                nc = _end_watches(W, now, "смена таймфрейма на %s" % ntf); wch = wch or bool(nc)
-                m["tf"] = ntf; m["tf_epoch"] = int(now); m["missed"] = 0
-                emit({"type": "tf", "tf": ntf, "cancelled": nc, "ok": True})
-            else: emit({"type": "tf", "tf": ntf if ntf in TFS else cur_tf(m), "cancelled": 0, "ok": ntf in TFS, "same": ntf == cur_tf(m)})
         elif t == "express":     # кнопка «Экспресс слежение» (только в Мониторе): счётчик пропусков и таймер не действуют
             on = bool(e.get("on")); refused = on and m["mode"] != "monitor"; on = on and not refused
             m["express"] = on; m["missed"] = 0

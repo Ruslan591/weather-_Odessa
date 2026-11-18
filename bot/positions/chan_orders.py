@@ -69,46 +69,44 @@ def pairs_now():
     return [str(x) for x in (d.get("pairs") or [])] or PAIRS0
 
 
-def _radar_save(new, now, tf="5m"):
+def _radar_save(new, now):
     """Строки для карточки «Радар» (tg_bot): канал, ATR и линии по парам; пишется раз на новую свечу пары."""
     f = os.path.join(D, "radar_state.json")
-    try: o_ = json.load(open(f)); old = (o_.get("rows") or {}) if (o_.get("tf") or "5m") == tf else {}     # строки другого таймфрейма не смешиваем
+    try: old = json.load(open(f)).get("rows") or {}
     except Exception: old = {}
     keep = set(pairs_now()); rows = {k: v for k, v in old.items() if k in keep}; rows.update(new)
-    tmp = f + ".tmp"; json.dump({"t": now, "tf": tf, "rows": rows}, open(tmp, "w")); os.replace(tmp, f)
+    tmp = f + ".tmp"; json.dump({"t": now, "rows": rows}, open(tmp, "w")); os.replace(tmp, f)
 TFM = 300000; MAK = 0.02
-TFMS = {"5m": 300000, "15m": 900000, "1h": 3600000, "4h": 14400000, "1d": 86400000}     # таймфреймы сканера слежения (tg_gate.TFS)
 STOP_ATR = 1.2; MIN_RISK = 0.5; TPBUF = 0.1
 # Источник каналов счёта: classic (наш автоканал, по умолчанию) | afd | regr | combo (chan_src.py). Счёт определяется POS_DIR + CHAN_SRC (+ CHAN_EDGE).
 SRC = os.environ.get("CHAN_SRC", "classic")
 KLC = os.environ.get("KL_CACHE_DIR", "/tmp/klcache")
-def kl_shared(sym, now, tf="5m"):
-    """Свечи таймфрейма tf (по умолчанию 5m; 1000) с общим файловым кэшем для всех счетов: кэш годен, пока последняя свеча в нём формируется (закрытые свечи в нём полные); новый запрос раз в 5 минут на пару."""
-    tfm = TFMS.get(tf, TFM); f = os.path.join(KLC, "%s_%s_1000.json" % (sym, tf))
+def kl_shared(sym, now):
+    """5m свечи (1000) с общим файловым кэшем для всех счетов: кэш годен, пока последняя свеча в нём формируется (закрытые свечи в нём полные); новый запрос раз в 5 минут на пару."""
+    f = os.path.join(KLC, "%s_5m_1000.json" % sym)
     try:
         d = json.load(open(f))
-        if d and int(now) < int(d[-1][0]) + tfm: return d
+        if d and int(now) < int(d[-1][0]) + TFM: return d
     except Exception: pass
-    d = pos.kl(sym + "USDT", tf, 1000)
+    d = pos.kl(sym + "USDT", "5m", 1000)
     try:
         os.makedirs(KLC, exist_ok=True); tmp = f + ".tmp%d" % os.getpid(); json.dump(d, open(tmp, "w")); os.replace(tmp, f)
     except Exception: pass
     return d
-def prefetch_tf(pairs, now, tf="5m"):
+def prefetch_5m(pairs, now):
     """Параллельная подкачка общего кэша 5m: запрос к Binance с VPS идёт 1-2 с, последовательный обход 39 пар давал минуты (задержка входа 2-3 мин)."""
     def need(sym):
         try:
-            d = json.load(open(os.path.join(KLC, "%s_%s_1000.json" % (sym, tf))))
-            return not (d and int(now) < int(d[-1][0]) + TFMS.get(tf, TFM))
+            d = json.load(open(os.path.join(KLC, "%s_5m_1000.json" % sym)))
+            return not (d and int(now) < int(d[-1][0]) + TFM)
         except Exception: return True
     def one(sym):
-        try: kl_shared(sym, now, tf)
-        except Exception as e: log("prefetch %s %s error: %s" % (sym, tf, e))
+        try: kl_shared(sym, now)
+        except Exception as e: log("prefetch %s error: %s" % (sym, e))
     todo = [x for x in pairs if need(x)]
     if todo:
         with cf.ThreadPoolExecutor(max_workers=min(40, len(todo))) as ex: list(ex.map(one, todo))
     return len(todo)
-def prefetch_5m(pairs, now): return prefetch_tf(pairs, now, "5m")
 _TM = {}; _tm_log = [0.0]
 VALID_A = 12; VALID_B = 24; MAXPEND = 8; SLOTS = 3; MAXH = 24      # SLOTS - минимум слотов; реальное число растёт с балансом (slots_state)
 SLOT_EQ = float(os.environ.get("CHAN_SLOT_EQ", "2.0"))     # баланса на одну сделку: маржа 1.2 $ (позиция 6 $, плечо 5x) + 0.8 $ запас на просадку; 7 $ -> 3 слота, 8 $ -> 4, 10 $ -> 5
@@ -166,13 +164,13 @@ def load_state():
 def save_state(s):
     tmp = STF + ".tmp"; json.dump(s, open(tmp, "w")); os.replace(tmp, STF)
 
-def analyze(sym, now, tf="5m"):
+def analyze(sym, now):
     import numpy as np
     if CLASSIC not in sys.path: sys.path.insert(0, CLASSIC)
     import classic_trendline as tl
-    raw = kl_shared(sym, now, tf); tfm = TFMS.get(tf, TFM)
+    raw = kl_shared(sym, now)
     if SRC == "classic": raw = raw[-500:]
-    d = [k for k in raw if int(k[0]) + tfm <= now]; M = len(d)
+    d = [k for k in raw if int(k[0]) + TFM <= now]; M = len(d)
     if M < (220 if SRC == "classic" else 420): return None
     t = [int(k[0]) for k in d]; o = np.array([float(k[1]) for k in d]); h = np.array([float(k[2]) for k in d]); l = np.array([float(k[3]) for k in d]); c = np.array([float(k[4]) for k in d])
     atr = np.zeros(M); a = None
@@ -183,17 +181,16 @@ def analyze(sym, now, tf="5m"):
     def st_at(i): return tl.structure_at(hh, ll, c, atr, i, [q for q in lows if q["conf"] <= i][-8:], [q for q in highs if q["conf"] <= i][-8:])
     if SRC != "classic":
         import chan_src
-        st_at = chan_src.make_st_at(SRC, sym if tf == "5m" else "%s@%s" % (sym, tf), t, h, l, c, atr)
-    return dict(t=t, o=o, h=h, l=l, c=c, atr=atr, M=M, st_at=st_at, tl=tl, tf=tf, tfm=tfm)
+        st_at = chan_src.make_st_at(SRC, sym, t, h, l, c, atr)
+    return dict(t=t, o=o, h=h, l=l, c=c, atr=atr, M=M, st_at=st_at, tl=tl)
 
 try: import tg_target as TGT      # цель по статистике дальности отбоя (самообучение); удалить файл или TG_TARGET=0 -> цель «противоположная линия»
 except Exception: TGT = None
-def ldict(ln, t, tfm=TFM):
-    i1 = int(ln[0]); return {"t1": t[i1], "p1": float(ln[1]), "s": float(ln[4]) / tfm}
+def ldict(ln, t):
+    i1 = int(ln[0]); return {"t1": t[i1], "p1": float(ln[1]), "s": float(ln[4]) / TFM}
 def mk(sym, rule, side, price, stop, tp, a, t_placed, valid, chan, level=None, key=None, ctype="", **extra):
-    tf_ = extra.pop("tf", "5m"); tfm_ = TFMS.get(tf_, TFM)
-    o = dict(sym=sym, rule=rule, side=side, price=float(price), stop=float(stop), tp=float(tp), atr=float(a), tf=tf_, placed_t=int(t_placed),
-             expire_t=int(t_placed + valid * tfm_), status="pending", chan=chan, level=level, key=key, ctype=ctype, checked_t=int(t_placed - 60000))
+    o = dict(sym=sym, rule=rule, side=side, price=float(price), stop=float(stop), tp=float(tp), atr=float(a), tf="5m", placed_t=int(t_placed),
+             expire_t=int(t_placed + valid * TFM), status="pending", chan=chan, level=level, key=key, ctype=ctype, checked_t=int(t_placed - 60000))
     o.update(extra); return o
 def tok(ms): return "@@%d@@" % ms
 def P(x): return "%.5g" % x
@@ -452,10 +449,10 @@ _miss_t = 0
 def _tg_info(sym, A):
     """Последняя закрытая свеча и канал по паре для режима слежения (tg_gate.watch_scan)."""
     i = A["M"] - 1; t = A["t"]; tl = A["tl"]; a = float(A["atr"][i]); st = A["st_at"](i)
-    info = dict(sym=sym, t=int(t[i]), o=float(A["o"][i]), h=float(A["h"][i]), l=float(A["l"][i]), c=float(A["c"][i]), atr=a, ctype=None, tf=A.get("tf", "5m"))
+    info = dict(sym=sym, t=int(t[i]), o=float(A["o"][i]), h=float(A["h"][i]), l=float(A["l"][i]), c=float(A["c"][i]), atr=a, ctype=None)
     if st and st.get("lower") and st.get("upper") and st["type"] in ("channel_down", "channel_up"):
         R, S = st["upper"], st["lower"]
-        info.update(ctype=st["type"], R=float(tl.at(R, i)), S=float(tl.at(S, i)), Rn=float(tl.at(R, i + 1)), Sn=float(tl.at(S, i + 1)), chan={"type": st["type"], "upper": ldict(R, t, A.get("tfm", TFM)), "lower": ldict(S, t, A.get("tfm", TFM))})
+        info.update(ctype=st["type"], R=float(tl.at(R, i)), S=float(tl.at(S, i)), Rn=float(tl.at(R, i + 1)), Sn=float(tl.at(S, i + 1)), chan={"type": st["type"], "upper": ldict(R, t), "lower": ldict(S, t)})
         info["hist"] = [[int(t[j]), float(A["o"][j]), float(A["h"][j]), float(A["l"][j]), float(A["c"][j]), float(tl.at(R, j)), float(tl.at(S, j))] for j in range(max(0, i - 11), i + 1)]   # свечи и ТЕКУЩИЕ линии на них
     return info
 
@@ -604,11 +601,9 @@ def _tg_mkorder(w, entry, target, px, setup="bounce"):
     t_pl = (int(time.time() * 1000) // 60000 + 1) * 60000
     why = [("Ордер выставлен Автоордером (экспресс: мнение бота «заходить»): " if w.get("_auto") else "Ордер выставлен вами из режима слежения: ") + "%s %s линии, вход %s, цель %s. Канал %s%s." % ("пробой" if brk else "отбой от", "верхней" if up else "нижней", TG_ENTRY_RU[entry], TG_TGT_RU.get(target, "%s высоты канала от линии" % str(target)[1:] if str(target).startswith("f") else target), "нисходящий" if ct == "channel_down" else "восходящий", ", сделка против направления канала" if counter else ", сделка по направлению канала"),
            "Касание линии было на свече %s, слежение шло %d свечей." % (tok(int(w["t_alert"])), int(w.get("updates", 0))), risk_text(a, price, risk, stop, "long" if s > 0 else "short")]
-    if (w.get("tf") or "5m") != "5m": why.append("Таймфрейм сканера: %s (канал, ATR, стоп и цель считаются по свечам этого таймфрейма; максимум удержания позиции %d ч)." % (w["tf"], max(MAXH, 48.0 * TFMS.get(w["tf"], TFM) / 3600000.0)))
     mark = {"market": "вход по рынку", "limit": "лимит выставлен", "stop": "стоп-ордер выставлен"}[entry]
-    o = mk(w["sym"], TG_RULE[entry], "long" if s > 0 else "short", price, stop, tp, a, t_pl, VALID_A, w["chan"], ctype=w["ctype"], why=why, atr_c=float(L["c"]), setup=setup, line="upper" if up else "lower", counter=counter, mark=mark, tf=(w.get("tf") or "5m"))
+    o = mk(w["sym"], TG_RULE[entry], "long" if s > 0 else "short", price, stop, tp, a, t_pl, VALID_A, w["chan"], ctype=w["ctype"], why=why, atr_c=float(L["c"]), setup=setup, line="upper" if up else "lower", counter=counter, mark=mark)
     o["line_px"] = line
-    if o["tf"] != "5m": o["max_h"] = max(MAXH, 48.0 * TFMS.get(o["tf"], TFM) / 3600000.0)     # позиция на старшем таймфрейме живёт дольше 24 ч (48 свечей, не меньше MAXH)
     return o, None
 
 
@@ -632,55 +627,44 @@ def _tg_journal(o, action, extra):
     except Exception as e: log("tg journal error: %s" % e)
 
 
-def _tf_scan(pairs, now, tf, stt, radar_):
-    """Сканер слежения на таймфрейме tf (15m | 1h | 4h | 1d): те же каналы (источник SRC) и tg_gate.watch_scan, что на 5m, но по свечам выбранного таймфрейма. Пара пересчитывается только после закрытия новой свечи этого таймфрейма или после смены таймфрейма в боте (tf_epoch); до тех пор строка радара берётся из состояния. Пары с короткой историей (для канала regr нужно 420 свечей) пропускаются."""
-    tfm = TFMS[tf]; ep = tg_gate.load_mode().get("tf_epoch"); st = stt.get("tfscan") or {}
-    if st.get("tf") != tf or st.get("ep") != ep: st = {"tf": tf, "ep": ep, "last": {}, "radar": {}}
-    prefetch_tf(pairs, now, tf); n = 0
-    for sym in pairs:
-        try:
-            raw = kl_shared(sym, now, tf)
-            ti = max([int(k[0]) for k in raw[-3:] if int(k[0]) + tfm <= now] or [0])
-            if not ti: continue
-            if st["last"].get(sym) == ti and sym in st["radar"]:
-                if st["radar"][sym]: radar_[sym] = st["radar"][sym]
-                continue
-            A = analyze(sym, now, tf); st["last"][sym] = ti
-            if not A: st["radar"][sym] = None; continue
-            info_ = _tg_info(sym, A); row = {k: info_.get(k) for k in ("t", "c", "atr", "ctype", "R", "S", "Rn", "Sn")}
-            st["radar"][sym] = row; radar_[sym] = row; n += 1
-            if tg_gate.watch_needed(sym): tg_gate.watch_scan(info_, now, tf)
-        except Exception as e: log("tf scan %s %s error: %s" % (tf, sym, e))
-    stt["tfscan"] = st
-    return n
+def _tg_free(now):
+    """Есть ли свободное место под новое слежение (Монитор, алерты включены, активных меньше max_watch)."""
+    try:
+        if not tg_gate.ENABLED: return False
+        m = tg_gate.load_mode()
+        if m["mode"] != "monitor" or m.get("alerts_off"): return False
+        return sum(1 for x in tg_gate._wload()["items"] if x["status"] in ("alert", "watching")) < tg_gate.maxw(m)
+    except Exception: return False
 
 
 def cycle(dry=False):
     now = int(time.time() * 1000); stt = load_state(); props = {}; closes = {}; evs = load_events(); radar_ = {}
-    tf_cur = tg_gate.cur_tf() if tg_gate.ENABLED else "5m"     # таймфрейм сканера слежения (Монитор); Авто и всё остальное остаётся на 5m
     _t0 = time.time(); pairs_ = pairs_now(); _TM["fetched"] = prefetch_5m(pairs_, now); _TM["prefetch"] = round(time.time() - _t0, 1); _shq = []
+    _free_ = _tg_free(now)
     for sym in pairs_:
         try:
             A = analyze(sym, now)
             if not A: continue
             ti = A["t"][A["M"] - 1]; closes[sym] = (float(A["c"][A["M"] - 1]), float(A["atr"][A["M"] - 1]), ti)
-            if stt["last"].get(sym) == ti: continue
+            if stt["last"].get(sym) == ti:
+                if _free_:     # слот свободен (слежение отменено или закончилось): новая пара берётся сразу по последней закрытой свече, без ожидания следующей
+                    try:
+                        info_ = _tg_info(sym, A); tg_gate.watch_scan(info_, now); _free_ = _tg_free(now)
+                    except Exception as e_: log("refill %s error: %s" % (sym, e_))
+                continue
             ps = propose(sym, A, evs) + eval_events(sym, A, evs)
             for p in ps: _shq.append((sym, p))   # тень тренда считаем после скана, одним параллельным заходом (раньше: до 6 запросов по 1-2 с на каждое предложение прямо в скане)
             props[sym] = (ti, ps)
-            if tg_gate.ENABLED and tf_cur == "5m":
+            if tg_gate.ENABLED:
                 try:
                     need = tg_gate.watch_needed(sym)
                     if need or tg_gate.load_mode().get("mode") == "monitor":
                         info_ = _tg_info(sym, A)
-                        if need: tg_gate.watch_scan(info_, now, "5m")
+                        if need: tg_gate.watch_scan(info_, now)
                         radar_[sym] = {k: info_.get(k) for k in ("t", "c", "atr", "ctype", "R", "S", "Rn", "Sn")}
                 except Exception as e_: log("watch %s error: %s" % (sym, e_))
         except Exception as e:
             log("scan %s error: %s" % (sym, e))
-    if tg_gate.ENABLED and tf_cur != "5m" and tg_gate.load_mode().get("mode") == "monitor":
-        try: _TM["tfscan"] = _tf_scan(pairs_, now, tf_cur, stt, radar_)
-        except Exception as e_: log("tf scan %s error: %s" % (tf_cur, e_))
     _t1 = time.time()
     if _shq:
         try: trend_shadow.prefetch([("BTC", "5m"), ("BTC", "15m"), ("ETH", "5m"), ("ETH", "15m")] + [(x, tf) for x in {x for x, _ in _shq} for tf in ("15m", "1h")])
@@ -690,7 +674,7 @@ def cycle(dry=False):
             except Exception as e_: log("shadow %s error: %s" % (sym_, e_))
     _TM["scan"] = round(_t1 - _t0 - _TM["prefetch"], 1); _TM["shadow"] = round(time.time() - _t1, 1); _TM["nprop"] = len(_shq)
     if radar_:
-        try: _radar_save(radar_, now, tf_cur)
+        try: _radar_save(radar_, now)
         except Exception as e_: log("radar save error: %s" % e_)
     # fills for pending orders (no lock while fetching)
     pend = [o for o in load_orders() if o["status"] == "pending"]; fills = {}; expired = []; _t2 = time.time(); _fd = {}
@@ -774,11 +758,8 @@ def cycle(dry=False):
             else: th = "Лимит %s %s по правилу «%s», выставлен %s UTC на %.6g, исполнен %s UTC (сквозь уровень)." % (o["side"], o["sym"], RULE_RU.get(o["rule"], o["rule"]), pos.tstr(o["placed_t"]), o["price"], pos.tstr(ft))
             p = {"id": max([x["id"] for x in ps_] + [0]) + 1, "sym": sym, "side": o["side"], "t_in": ft, "entry": fp, "px_signal": o["price"], "stop0": stp, "stop": stp, "tp": o["tp"],
                  "R": R, "R_pct": R / fp * 100, "be_r": 1.0, "lock_pct": 0.2, "be_px": fp + side * R, "lock_px": fp * (1 + side * 0.2 / 100), "armed": False,
-                 "trail_dist": 1.5 * a1, "atr1h": a1, "max_h": (o.get("max_h") or MAXH), "stake": pos.STAKE, "lev": pos.LEV, "thesis": th, "last_t": (ft // 60000) * 60000, "hi": fp, "lo": fp, "status": "open",
+                 "trail_dist": 1.5 * a1, "atr1h": a1, "max_h": MAXH, "stake": pos.STAKE, "lev": pos.LEV, "thesis": th, "last_t": (ft // 60000) * 60000, "hi": fp, "lo": fp, "status": "open",
                  "src": "chan", "order_id": o["id"], "rule": o["rule"], "placed_t": o["placed_t"], "fee_in": MAK, "fee_tp": MAK}
-            try:
-                import trade_mgr; p["cls"] = trade_mgr.classify(o)   # менеджер сделки: класс для правил выхода (trade_mgr.attach вешает правила и копию «что было бы» на первом цикле трекера)
-            except Exception as e: log("cls skipped: %s" % e)
             if o.get("setup") == "breakout" and (o.get("regime") or {}).get("regime") == "flat":   # правило выхода «флэт + пробой»: 50% на +0.4R, остаток в БУ с комиссиями
                 if (o["tp"] - fp) * side > 0.4 * R:
                     p["xr"] = "flat_brk"; p["thesis"] += " Правило выхода (флэт, пробой): на +0.4R закрыть 50% объёма, стоп остатка на -0.15R, на +0.8R в безубыток с учётом комиссий."
@@ -910,6 +891,17 @@ def manual_watch(o):
     tg_gate.emit_any({"type": "watch_keep", "wid": wid, "on": on, "sym": x["sym"], "side": x.get("side"), "line": x.get("line"), "was": x.get("was")})
     log("WATCH %d %s keep=%s (page)" % (wid, x["sym"], on))
     return {"ok": True, "id": wid, "keep": on}
+
+
+def manual_watch_cancel(o):
+    """Галочка «Отменить» у слежения (страница онлайн): то же, что «Перестать следить» в Telegram. Кладёт w_stop в очередь tg_gate; закрытие слежения и сообщение в Telegram (watch_end) делает ближайший цикл."""
+    try: wid = int(o.get("id"))
+    except Exception: return {"error": "не указано слежение"}
+    W = tg_gate._wload(); x = next((i for i in W["items"] if i["id"] == wid), None)
+    if not x or x["status"] not in ("alert", "watching"): return {"error": "слежение уже не актуально (закончилось)"}
+    tg_gate.inbox_any({"type": "w_stop", "wid": wid, "via": "page"})
+    log("WATCH %d %s: отмена со страницы поставлена в очередь" % (wid, x["sym"]))
+    return {"ok": True, "id": wid, "queued": True}
 
 
 WP_ENTRY = ("market", "limit", "stop")
