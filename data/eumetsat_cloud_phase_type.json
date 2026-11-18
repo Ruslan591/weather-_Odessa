@@ -1,18 +1,18 @@
 {
-  "timestamp": "2026-11-18T10:08:09Z",
+  "timestamp": "2026-11-18T10:24:12Z",
   "mode": "day",
-  "unclassified_fraction_now": 0.865,
-  "phase_ordinal_now": 1.47,
-  "phase_ordinal_delta": -0.87,
+  "unclassified_fraction_now": 0.879,
+  "phase_ordinal_now": 1.42,
+  "phase_ordinal_delta": -1.21,
   "phase_verdict": "смещается к воде (распад/ослабление)",
-  "type_group_now": 2.0,
-  "type_group_delta": 0.82,
+  "type_group_now": 1.96,
+  "type_group_delta": 0.72,
   "type_verdict": "становится плотнее/выше",
   "target_confirmation": {
     "confirmed": true,
     "target_id": 1,
     "target_area_km2": 81.4,
-    "roi_cloud_fraction": 0.934,
+    "roi_cloud_fraction": 0.905,
     "roi_dominant_phase_ordinal": 0.0,
     "roi_dominant_phase_label": "безоблачно",
     "verdict": "Phase/Type подтверждает: в ROI CLM-цели преобладает облачность"
@@ -21,7 +21,7 @@
     "available": true,
     "target_id": 0,
     "area_km2": 1623.8,
-    "roi_cloud_fraction": 0.92,
+    "roi_cloud_fraction": 0.71,
     "roi_dominant_phase_ordinal": 0.0,
     "roi_dominant_phase_label": "безоблачно",
     "roi_dominant_type_label": "плотная/высокая"
@@ -30,35 +30,35 @@
     {
       "target_id": 0,
       "available": true,
-      "roi_cloud_fraction": 0.92,
+      "roi_cloud_fraction": 0.71,
       "roi_dominant_phase_label": "безоблачно",
       "roi_dominant_type_label": "плотная/высокая"
     },
     {
       "target_id": 2,
       "available": true,
-      "roi_cloud_fraction": 0.675,
+      "roi_cloud_fraction": 0.809,
       "roi_dominant_phase_label": "безоблачно",
       "roi_dominant_type_label": "плотная/высокая"
     },
     {
       "target_id": 4,
       "available": true,
-      "roi_cloud_fraction": 0.829,
-      "roi_dominant_phase_label": "безоблачно",
+      "roi_cloud_fraction": 0.926,
+      "roi_dominant_phase_label": "средняя водяная",
       "roi_dominant_type_label": "плотная/высокая"
     },
     {
       "target_id": 7,
       "available": true,
-      "roi_cloud_fraction": 0.908,
+      "roi_cloud_fraction": 0.849,
       "roi_dominant_phase_label": "безоблачно",
       "roi_dominant_type_label": "плотная/высокая"
     },
     {
       "target_id": 9,
       "available": true,
-      "roi_cloud_fraction": 0.913,
+      "roi_cloud_fraction": 0.896,
       "roi_dominant_phase_label": "безоблачно",
       "roi_dominant_type_label": "плотная/высокая"
     }
@@ -67,7 +67,7 @@
     {
       "target_id": 1,
       "available": true,
-      "roi_cloud_fraction": 0.934,
+      "roi_cloud_fraction": 0.905,
       "confirmed": true,
       "roi_dominant_phase_label": "безоблачно",
       "roi_dominant_type_label": "плотная/высокая"
@@ -75,7 +75,7 @@
     {
       "target_id": 3,
       "available": true,
-      "roi_cloud_fraction": 0.928,
+      "roi_cloud_fraction": 0.931,
       "confirmed": true,
       "roi_dominant_phase_label": "безоблачно",
       "roi_dominant_type_label": "плотная/высокая"
@@ -83,43 +83,40 @@
     {
       "target_id": 5,
       "available": true,
-      "roi_cloud_fraction": 0.208,
-      "confirmed": false,
+      "roi_cloud_fraction": 0.933,
+      "confirmed": true,
       "roi_dominant_phase_label": "безоблачно",
       "roi_dominant_type_label": "плотная/высокая"
     },
     {
       "target_id": 6,
       "available": true,
-      "roi_cloud_fraction": 0.222,
-      "confirmed": false,
-      "roi_dominant_phase_label": "безоблачно",
+      "roi_cloud_fraction": 1.0,
+      "confirmed": true,
+      "roi_dominant_phase_label": "средняя водяная",
       "roi_dominant_type_label": "плотная/высокая"
     },
     {
       "target_id": 8,
       "available": true,
-      "roi_cloud_fraction": 0.929,
+      "roi_cloud_fraction": 1.0,
       "confirmed": true,
-      "roi_dominant_phase_label": "безоблачно",
+      "roi_dominant_phase_label": "средняя водяная",
       "roi_dominant_type_label": "плотная/высокая"
     },
     {
       "target_id": 10,
-      "available": true,
-      "roi_cloud_fraction": 0.981,
-      "confirmed": true,
-      "roi_dominant_phase_label": "безоблачно",
-      "roi_dominant_type_label": "плотная/высокая"
+      "available": false,
+      "reason": "мало классифицированных пикселей в ROI (облачно, но цвет неуверенный, либо вне окна)"
     }
   ],
   "buffer_status": {
-    "frames_in_memory": 13,
+    "frames_in_memory": 11,
     "frames_target": 13,
-    "span_minutes_now": 120,
+    "span_minutes_now": 100,
     "span_minutes_target": 120,
-    "eta_full_window_min": 0,
-    "note": "буфер заполнен (13/13), тренд по полному окну ~120 мин"
+    "eta_full_window_min": 20,
+    "note": "в памяти 11/13 снимков (~100 мин истории), полное 120-минутное окно накопится через ~20 мин"
   },
   "method_note": "[День] Персистентный буфер до 13 кадров Cloud Phase RGB + Cloud Type RGB (шаг 10 мин, до 2 часов). Анкеры цвета — HSV-диапазоны, ПЕРВАЯ, не откалиброванная по реальным сценам версия (у обоих слоёв нет официальной легенды — это настоящие RGB-композиты, GetLegendGraphic возвращает не легенду). phase_ordinal (0..8) — безоблачно -> вода (низкая/средняя/плотная) -> лёд (тонкий/плотный) -> смешанная фаза -> холодные верхушки Cb -> гроза. type_group (0..2) — безоблачно/низкая-средняя/плотная-высокая. Тренд — сравнение первого и последнего кадра буфера в радиусе 50км. unclassified_fraction_now — доля пикселей, не попавших уверенно ни в одно цветовое правило: при большом значении анкеры нужно пересматривать."
 }
