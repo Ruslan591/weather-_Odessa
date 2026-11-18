@@ -1,0 +1,28 @@
+#!/bin/bash
+# Выкладка версии 8 страницы онлайн: галочка «Отменить» в карточке слежения (то же, что «Перестать следить» в Telegram).
+# Патч накладывается на файлы, которые РАБОТАЮТ на VPS. Идемпотентно (повтор: ALREADY). Откат при ошибке.
+# Запуск (через мост): cd /opt/weather-pipeline/repo && git show origin/main:scripts/deploy_web_ctl4.sh | bash -s
+set -u
+R=/opt/weather-pipeline/repo; P=/opt/trading-bot/positions; L=/opt/trading-bot/live; VPY=/opt/trading-bot/venv/bin/python; TS=$(date +%Y%m%d_%H%M%S); B=/opt/trading-bot/bak_web4_$TS; N=/tmp/webnew4
+cd $R || exit 1
+git update-ref -d refs/remotes/origin/main 2>/dev/null
+ok=0; for i in 1 2 3 4 5; do git fetch -q origin main:refs/remotes/origin/main && ok=1 && break; sleep 6; done
+[ $ok = 1 ] || { echo FETCH_FAIL; exit 1; }
+rm -rf $N; mkdir -p $N $B
+git show origin/main:scripts/patch_web_ctl4.py > $N/patch_web_ctl4.py || { echo SHOW_FAIL; exit 1; }
+cp $P/chan_orders.py $P/pos.py $L/live_web.py $L/index.html $B/
+cp $P/chan_orders.py $P/pos.py $L/live_web.py $L/index.html $N/
+$VPY $N/patch_web_ctl4.py $N/chan_orders.py $N/pos.py $N/live_web.py $N/index.html || { echo PATCH_FAIL; exit 1; }
+for f in chan_orders.py pos.py live_web.py; do $VPY -m py_compile $N/$f || { echo COMPILE_FAIL $f; exit 1; }; done
+install -o tbot -g tbot -m 644 $N/chan_orders.py $P/chan_orders.py; install -o tbot -g tbot -m 644 $N/pos.py $P/pos.py
+install -o tbot -g tbot -m 644 $N/live_web.py $L/live_web.py; install -o tbot -g tbot -m 644 $N/index.html $L/index.html
+systemctl restart acct-api-regr chan-orders-regr live-web; sleep 8
+A=$(systemctl is-active acct-api-regr); C=$(systemctl is-active chan-orders-regr); W=$(systemctl is-active live-web)
+H=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18110/live/health)
+T=$(curl -s -m 20 -X POST http://127.0.0.1:18102/api/claude -H 'Content-Type: application/json' -d '{"action":"watch_cancel","id":0}')
+echo "acct=$A chan=$C live=$W health=$H test=$T"
+if [ "$A" != active ] || [ "$C" != active ] || [ "$W" != active ] || [ "$H" != 200 ] || ! echo "$T" | grep -q '"error"'; then
+  cp $B/chan_orders.py $B/pos.py $P/; cp $B/live_web.py $B/index.html $L/
+  systemctl restart acct-api-regr chan-orders-regr live-web; sleep 5; echo ROLLBACK acct=$(systemctl is-active acct-api-regr) chan=$(systemctl is-active chan-orders-regr) live=$(systemctl is-active live-web); exit 1
+fi
+echo WEB_CTL4_DONE $TS backup=$B
