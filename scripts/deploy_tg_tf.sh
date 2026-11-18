@@ -1,5 +1,5 @@
 #!/bin/bash
-# deploy_tg_tf.sh <parent_commit>: переключаемый таймфрейм сканера отбоя/пробоя (5m 15m 1h 4h 1d), кнопка и /tf в боте.
+# deploy_tg_tf.sh <parent_commit> (PAR2=<второй> в окружении): переключаемый таймфрейм сканера отбоя/пробоя (5m 15m 1h 4h 1d), кнопка и /tf в боте.
 # positions (chan-orders-regr): chan_orders.py tg_gate.py; /opt/tg-notify (tg-bot-regr): tg_bot tg_express tg_post tg_notify tg_learn tg_review tg_target (tg_target и в positions).
 # Бэкап, DIVERGED (сравнение с родительским коммитом), компиляция, импорт, проверка расчёта каналов по 15m/1h/4h/1d на живых свечах, автооткат. Переключение таймфрейма не делает: по умолчанию 5m.
 set -u
@@ -12,7 +12,10 @@ mkdir -p /tmp/tft $N/bak
 for pair in $PAIRS; do f=${pair%%:*}; d=${pair##*:}
   [ -f $d/$f ] || { echo "SKIP_NOFILE $d/$f"; continue; }
   git show origin/main:bot/positions/$f > /tmp/tft/$f || { echo SHOW_FAIL $f; exit 1; }
-  if [ -n "$PAR" ]; then git show $PAR:bot/positions/$f > /tmp/tft/$f.par && cmp -s /tmp/tft/$f.par $d/$f || { echo "DIVERGED $d/$f"; diff /tmp/tft/$f.par $d/$f | head -8; exit 1; }; fi
+  if [ -n "$PAR" ]; then   # VPS должен совпасть с одним из родительских коммитов (PAR, PAR2)
+    same=0; for pc in $PAR ${PAR2:-}; do git show $pc:bot/positions/$f > /tmp/tft/$f.par 2>/dev/null && cmp -s /tmp/tft/$f.par $d/$f && same=1 && break; done
+    [ $same = 1 ] || { echo "DIVERGED $d/$f"; diff /tmp/tft/$f.par $d/$f | head -8; exit 1; }
+  fi
   $VPY -m py_compile /tmp/tft/$f || { echo COMPILE_FAIL $f; exit 1; }
 done
 for pair in $PAIRS; do f=${pair%%:*}; d=${pair##*:}; [ -f $d/$f ] && cp $d/$f $N/bak/$f.$(basename $d).tf$TS; done
