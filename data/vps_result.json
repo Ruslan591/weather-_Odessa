@@ -1,7 +1,7 @@
 {
-  "task_id": "chk3",
+  "task_id": "tf_deploy_1",
   "returncode": 0,
-  "stdout": "mode {'mode': 'monitor', 'alerts_off': False, 'express': True, 'max_watch': 1}\nactive [('ZEC', 'watching')]\ncooldown_30min [('NEAR', 'long', ' ', 16), ('ASTER', 'short', ' ', 16), ('LINK', 'long', '   ', 17), ('SUI', 'long', ' ', 16), ('BREV', 'long', ' ', 16), ('NIL', 'long', ' ', 15), ('REZ', 'long', ' ', 5)]\nradar_keys ['t', 'rows']\npairs 1\n99.00 rows no channel\n",
+  "stdout": "DIVERGED /opt/trading-bot/positions/chan_orders.py\n629a630,639\n> def _tg_free(now):\n>     \"\"\"       (,  ,   max_watch).\"\"\"\n>     try:\n>         if not tg_gate.ENABLED: return False\n>         m = tg_gate.load_mode()\n>         if m[\"mode\"] != \"monitor\" or m.get(\"alerts_off\"): return False\n>         return sum(1 for x in tg_gate._wload()[\"items\"] if x[\"status\"] in (\"alert\", \"watching\")) < tg_gate.maxw(m)\n",
   "stderr": "",
-  "completed_at_utc": "2026-11-18T08:53:02Z"
+  "completed_at_utc": "2026-11-18T21:15:03Z"
 }
