@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-18T00:30:00.000Z",
+  "timestamp": "2026-11-18T00:40:00.000Z",
   "buffer_size": 6,
   "buffer_span_minutes": 50,
   "observed_area": {
@@ -12,104 +12,70 @@
     "local_trend_radius_km": 50
   },
   "valid": true,
-  "speed_kmh": 107.7,
+  "speed_kmh": 106.9,
   "direction_compass": "ЮВ",
-  "bearing_deg": 116.7,
+  "bearing_deg": 115.8,
   "frame_pairs_used": 5,
-  "acceleration_kmh": 3.5,
-  "turning_deg": -4.2,
+  "acceleration_kmh": 3.1,
+  "turning_deg": -4.9,
   "acceleration_verdict": "скорость стабильна",
   "turning_verdict": "направление стабильно",
   "forecast_displacement": {
     "30min": {
-      "distance_km": 56.1,
-      "bearing_deg": 112.0,
-      "compass": "В"
-    },
-    "60min": {
-      "distance_km": 114.7,
+      "distance_km": 55.6,
       "bearing_deg": 110.0,
       "compass": "В"
     },
+    "60min": {
+      "distance_km": 113.6,
+      "bearing_deg": 107.0,
+      "compass": "В"
+    },
     "120min": {
-      "distance_km": 240.6,
-      "bearing_deg": 105.0,
+      "distance_km": 238.7,
+      "bearing_deg": 102.0,
       "compass": "В"
     }
   },
   "area_fraction_over_time": [
-    0.39,
-    0.6,
-    0.732,
-    0.845,
-    0.946,
-    0.958
+    0.393,
+    0.528,
+    0.616,
+    0.763,
+    0.827,
+    0.885
   ],
-  "area_trend_delta": 0.568,
+  "area_trend_delta": 0.492,
   "area_trend_verdict": "растёт",
   "mean_brightness_over_time": [
-    126.1,
     144.4,
     155.9,
     163.7,
     175.6,
-    182.4
+    182.4,
+    188.8
   ],
-  "brightness_trend_delta": 56.3,
+  "brightness_trend_delta": 44.3,
   "station_state": "cloud",
-  "station_area_fraction": 0.952,
-  "cloud_mass_distance_km": 13.9,
-  "cloud_mass_bearing_deg": 273.0,
+  "station_area_fraction": 0.964,
+  "cloud_mass_distance_km": 2.5,
+  "cloud_mass_bearing_deg": 286.0,
   "cloud_mass_compass": "З",
-  "cloud_mass_area_km2": 1689,
-  "cloud_mass_contrast_sigma": 1.22,
+  "cloud_mass_area_km2": 1398,
+  "cloud_mass_contrast_sigma": 1.13,
   "temperature_trend_verdict": "похолодание верхней границы (возможно усиление конвекции)",
   "target_confirmation": {
-    "confirmed": false,
-    "target_id": 2,
-    "target_area_km2": 226.8,
-    "roi_contrast_sigma": -1.68,
-    "verdict": "ИК НЕ подтверждает: в ROI CLM-цели нет значимого контраста — возможна тонкая/низкая облачность, невидимая на ИК, либо расхождение слоёв"
+    "confirmed": null,
+    "reason": "среди кандидатов нет локальных масс (только системы синоптического масштаба)"
   },
   "system_analysis_all": [
     {
       "target_id": 0,
       "available": true,
-      "roi_contrast_sigma": -1.65,
-      "confirmed": false
-    },
-    {
-      "target_id": 1,
-      "available": true,
-      "roi_contrast_sigma": -1.72,
-      "confirmed": false
-    },
-    {
-      "target_id": 4,
-      "available": true,
-      "roi_contrast_sigma": -1.91,
-      "confirmed": false
-    },
-    {
-      "target_id": 5,
-      "available": true,
-      "roi_contrast_sigma": -2.0,
+      "roi_contrast_sigma": -0.09,
       "confirmed": false
     }
   ],
-  "local_analysis_all": [
-    {
-      "target_id": 2,
-      "available": true,
-      "roi_contrast_sigma": -1.68,
-      "confirmed": false
-    },
-    {
-      "target_id": 3,
-      "available": true,
-      "roi_contrast_sigma": -1.86,
-      "confirmed": false
-    }
-  ],
+  "local_analysis_all": [],
   "method_note": "Буфер 6/6 кадров mtg_fd:ir105_hrfi (10.5мкм, 1км, шаг 10 мин, crs=EPSG:4326, всегда явный TIME — не 'latest'), хранится персистентно между прогонами (FIFO) — обычный прогон докачивает только 1 новый кадр. Скорость/направление — phase correlation + despeckle по всем кадрам буфера. Ускорение/поворот — сравнение первой половины буфера со второй. Площадь/температура — доля пикселей теплее фикс. порога (60-й перцентиль самого старого кадра) и средняя яркость в радиусе 50км, шкала НЕ калибрована в °C. cloud_mass_* — положение (не движение) ближайшей значимой облачной массы относительно станции. Прогноз смещения — линейная экстраполяция v*t+0.5*a*t² по недавнему тренду, не физическая модель атмосферы, ошибка растёт с горизонтом (особенно на 120 мин)."
 }
