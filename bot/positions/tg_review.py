@@ -219,7 +219,7 @@ def run(limit=3):
         if pid in seen: continue
         if len(out) >= limit: break
         o = orders.get(p.get("order_id"))
-        if not o or not str(o.get("rule", "")).startswith("tg_") or not o.get("chan"): seen.add(pid); continue
+        if not o or not str(o.get("rule", "")).startswith("tg_") or not o.get("chan") or (o.get("tf") or "5m") != "5m": seen.add(pid); continue     # разбор и коррекции порогов считаются по 5m: сделки старших таймфреймов не разбираем
         ks = _fetch(p["sym"], int(p["t_in"]) - 4 * BAR, int(p["t_out"]) + BAR)
         if not ks: continue            # свечей нет (сеть): попробуем в следующий раз
         try: A = analyze(p, o, ks)

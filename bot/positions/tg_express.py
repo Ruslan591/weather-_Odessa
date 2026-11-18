@@ -19,6 +19,36 @@ import json, os
 RSI5_CFG = os.path.join(os.environ.get("POS_DIR", "/opt/trading-bot/positions_regr"), "tg_rsi5.json")
 BRKCR_CFG = os.path.join(os.environ.get("POS_DIR", "/opt/trading-bot/positions_regr"), "tg_brk_cr.json")
 BTCCORR_CFG = os.path.join(os.environ.get("POS_DIR", "/opt/trading-bot/positions_regr"), "tg_btc_corr.json")
+TF_CFG = os.path.join(os.environ.get("POS_DIR", "/opt/trading-bot/positions"), "tg_tf.json")
+
+
+def btc_blocks(tf):
+    """BTC 1m как жёсткое условие входа: на 5m всегда (как раньше), на старших таймфреймах только из списка tg_tf.json {"btc1m_tfs": ["5m", "15m"]} (по умолчанию 5m и 15m); на 1h/4h/1d минутный фильтр показывается справочно и не блокирует вход."""
+    tf = tf or "5m"
+    if tf == "5m": return True
+    try: tfs = json.load(open(TF_CFG, encoding="utf-8")).get("btc1m_tfs") or ["5m", "15m"]
+    except Exception: tfs = ["5m", "15m"]
+    return tf in tfs
+
+
+def _btcc(b1, tf):
+    """Условие (ok, good, bad) по BTC 1m: блокирующее или, на старших таймфреймах, справочное (всегда ok)."""
+    if btc_blocks(tf): return b1[:3]
+    return (True, "BTC 1m (справочно, не блокирует на %s): %s" % (tf, b1[1] if b1[0] else b1[2]), "")
+
+
+def _relabel(V, w):
+    """На таймфреймах кроме 5m метки «RSI 5m» в тексте и строках мнения заменяются на «RSI <tf>» (RSI считается по свечам таймфрейма слежения); в мнение пишется tf."""
+    tf = (w or {}).get("tf") or "5m"
+    if V is None or tf == "5m": return V
+    V["tf"] = tf
+    try:
+        V["text"] = V["text"].replace("RSI 5m", "RSI " + tf)
+        V["rows"] = [(ok, k, (t or "").replace("RSI 5m", "RSI " + tf)) for ok, k, t in V.get("rows") or []]
+    except Exception: pass
+    return V
+
+
 BTC5_KL = "/tmp/klcache/BTC_5m_1000.json"   # 5m свечи BTC, их обновляет сканер chan_orders
 
 
@@ -152,7 +182,7 @@ def rsi5_line(w, kl):
     if r is None: return ""
     mk = lambda x: "—" if not x else ("✅" if x[0] else "⛔")
     ar = "↘" if r < rp else ("↗" if r > rp else "→")
-    return "📈 RSI 5m: %.0f%s | отбой: SHORT %s LONG %s | пробой: SHORT %s LONG %s" % (r, ar, mk(_rsi5_cond("short", r, rp)), mk(_rsi5_cond("long", r, rp)), mk(_rsi5_brk("short", r)), mk(_rsi5_brk("long", r)))
+    return "📈 RSI %s: %.0f%s | отбой: SHORT %s LONG %s | пробой: SHORT %s LONG %s" % (w.get("tf") or "5m", r, ar, mk(_rsi5_cond("short", r, rp)), mk(_rsi5_cond("long", r, rp)), mk(_rsi5_brk("short", r)), mk(_rsi5_brk("long", r)))
 
 
 _DEF = {"wick_min": 0.4, "dist_max": 0.9, "rr_add": 0.0, "rr_add_counter": 0.0, "brk_n_min": 2, "brk_body_min": 0.3, "brk_beyond_max": 1.5}
@@ -222,6 +252,10 @@ def _regime(side):
 
 
 def verdict(w, kl=None):
+    return _relabel(_verdict0(w, kl), w)
+
+
+def _verdict0(w, kl=None):
     """w: элемент tg_watch.json (слежение). Возвращает {call: enter|wait, text, feat, plan, geo, t, sym, side} или None, если данных нет."""
     L = w.get("last") or {}
     if L.get("Rn") is None or not L.get("atr"): return None
@@ -256,12 +290,12 @@ def verdict(w, kl=None):
         _k("chan", (sh is None or abs(sh) < 0.5, "канал стабилен", "канал перестроился (%+.1f ATR)" % (sh or 0))),
     ]
     b1 = _btc1m("long" if s > 0 else "short", "bounce")
-    if b1: conds.append(_k("btc", b1[:3]))
+    if b1: conds.append(_k("btc", _btcc(b1, w.get("tf"))))
     rgc, rgs = _regime("long" if s > 0 else "short")
     if rgc: conds.append(_k("regime", rgc))
     r5, r5p = _rsi5_pair(w, kl); r5c = _rsi5_cond("long" if s > 0 else "short", r5, r5p)
     if r5c: conds.append(_k("rsi", r5c))
-    bcc, bcr = _bcc_cond("long" if s > 0 else "short", w, kl)
+    bcc, bcr = _bcc_cond("long" if s > 0 else "short", w, kl if (w.get("tf") or "5m") == "5m" else None)
     if bcc: conds.append(_k("corr", bcc))
     htfc, htfr = _htf("long" if s > 0 else "short", w)
     if htfc: conds.append(_k("htf", htfc))
@@ -293,10 +327,14 @@ def verdict(w, kl=None):
         try: feat["ll"] = LD.rec(ldm)     # [rho, beta, zB, zG, лаг, ход BTC %, ход пары %] за последние k 1m свечи
         except Exception: pass
     geo = {"line": line, "H": H, "risk": risk, "a": a}
-    return {"call": call, "text": text, "feat": feat, "plan": plan, "geo": geo, "t": int(L.get("t") or 0), "sym": w.get("sym"), "side": side, "b1": b1[3] if b1 else None, "rg": rgs, "rows": _rows(conds)}
+    return {"call": call, "text": text, "feat": feat, "plan": plan, "geo": geo, "t": int(L.get("t") or 0), "sym": w.get("sym"), "side": side, "b1": b1[3] if b1 else None, "rg": rgs, "rows": _rows(conds), "tf": w.get("tf") or "5m"}
 
 
 def verdict_break(w, kl=None):
+    return _relabel(_verdict_break0(w, kl), w)
+
+
+def _verdict_break0(w, kl=None):
     """Мнение по ПРОБОЮ линии (для Автоордера): пробой формируется, когда >=2 свечи подряд закрылись за линией (состояние break).
     Дополняет verdict (отбой): у отбоя условие «за линию не закрывались», поэтому вместе они не пересекаются.
     Условия: (1) >=2 закрытия за линией, последняя свеча за линией; (2) не гонимся: цена за линией на 0.2..1.5 ATR; (3) последняя свеча идёт в сторону пробоя (тело >=30% диапазона);
@@ -321,12 +359,12 @@ def verdict_break(w, kl=None):
         _k("chan", (sh is None or abs(sh) < 0.5, "канал стабилен", "канал перестроился (%+.1f ATR)" % (sh or 0))),
     ]
     b1 = _btc1m("long" if s > 0 else "short", "breakout")
-    if b1: conds.append(_k("btc", b1[:3]))
+    if b1: conds.append(_k("btc", _btcc(b1, w.get("tf"))))
     rgc, rgs = _regime("long" if s > 0 else "short")
     if rgc: conds.append(_k("regime", rgc))
     r5 = _rsi5(w, kl); r5c = _rsi5_brk("long" if s > 0 else "short", r5)
     if r5c: conds.append(_k("rsi", r5c))
-    bcc, bcr = _bcc_cond("long" if s > 0 else "short", w, kl)
+    bcc, bcr = _bcc_cond("long" if s > 0 else "short", w, kl if (w.get("tf") or "5m") == "5m" else None)
     if bcc: conds.append(_k("corr", bcc))
     cr = _brk_cr_cfg(); rgm = (rgs or {}).get("regime"); nb_ = int(w.get("n_beyond") or 0); against = bool(rgm) and ((s > 0 and rgm == "down") or (s < 0 and rgm == "up"))
     if cr.get("enabled", True) and against:   # пробой против режима: только сильная свеча и без погони (в разборах такие пробои чаще всего уходили в стоп сразу после входа)
@@ -352,4 +390,4 @@ def verdict_break(w, kl=None):
     lines += _strict_lines(b1)
     if call == "enter": head = "💥 Пробой линии: ✅ можно заходить — %s по рынку ~%s, стоп %s, цель %s (0.5 высоты канала за линией), R:R %.1f" % (side.upper(), _fmt(c), _fmt(stop), _fmt(tp), rr)
     else: head = "💥 Пробой линии формируется: ⏳ ждём — %s" % next(bad for ok, good, bad in conds if not ok)
-    return {"call": call, "text": head + "\n" + "\n".join(lines), "plan": plan, "feat": feat, "t": int(L.get("t") or 0), "sym": w.get("sym"), "side": side, "b1": b1[3] if b1 else None, "rg": rgs, "rows": _rows(conds)}
+    return {"call": call, "text": head + "\n" + "\n".join(lines), "plan": plan, "feat": feat, "t": int(L.get("t") or 0), "sym": w.get("sym"), "side": side, "b1": b1[3] if b1 else None, "rg": rgs, "rows": _rows(conds), "tf": w.get("tf") or "5m"}

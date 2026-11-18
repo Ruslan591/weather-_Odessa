@@ -108,7 +108,7 @@ def learn_positions(limit=2, src="auto", workers=1):
         pid = p.get("id", p.get("order_id"))
         if pid in seen or p.get("t_out") is None: continue
         o = orders.get(p.get("order_id"))
-        if not o or not o.get("chan") or o.get("setup") == "breakout" or o.get("rule") in ("retest_up", "retest_down"): seen.add(pid); continue
+        if not o or not o.get("chan") or o.get("setup") == "breakout" or o.get("rule") in ("retest_up", "retest_down") or (o.get("tf") or "5m") != "5m": seen.add(pid); continue
         if now - int(p["t_in"]) < (HORIZON + 3) * BAR_MS: continue
         todo.append((pid, p, o))
         if len(todo) >= limit: break

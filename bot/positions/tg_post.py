@@ -51,7 +51,7 @@ def _val(key, ok, t):
     if key == "chan":
         return "стабилен" if ok else _cut(t.replace("канал ", ""), 30)
     if key == "rsi":
-        m = re.search(r"RSI 5m (\d+)", t); r = m.group(1) if m else "?"
+        m = re.search(r"RSI (?:5m|15m|1h|4h|1d) (\d+)", t); r = m.group(1) if m else "?"
         if ok: return r + (" · сильный" if "сильный" in t else "")
         m2 = re.search(r"(?:только при RSI|зоне|ниже|выше) ([<>]? ?[\d.\-]+)", t)
         return "%s · нужно %s" % (r, m2.group(1)) if m2 else "%s · не проходит" % r
@@ -78,9 +78,11 @@ def compose(w, V, Bk=None):
     if not enabled(): return None
     M = V if (V and V.get("call") == "enter") else (Bk or V)
     if not M or not M.get("rows"): return None
-    brk = M is Bk; plan = M.get("plan") or {}; side = M.get("side") or plan.get("side") or "?"
+    brk = M is Bk; plan = M.get("plan") or {}; side = M.get("side") or plan.get("side") or "?"; tf = w.get("tf") or "5m"; lbl = dict(LBL)
+    if tf != "5m": lbl["rsi"] = "RSI " + tf
     up = (w.get("line") or ("upper" if w.get("side") == "short" else "lower")) == "upper"
     kind = ("пробой %s линии" % ("верхней" if up else "нижней")) if brk else ("отбой от %s линии" % ("верхней" if up else "нижней"))
+    if tf != "5m": kind += " · " + tf
     rows = M["rows"]; bad = [r for r in rows if not r[0]]
     sym = w.get("sym") or "?"
     if M.get("call") == "enter":
@@ -88,7 +90,7 @@ def compose(w, V, Bk=None):
         pl = "вход ~%s · стоп %s · цель %s · R:R %s" % (_px(plan.get("entry")), _px(plan.get("stop")), _px(plan.get("tp")), plan.get("rr"))
     else:
         head = "⏳ ЖДЁМ · %s %s · %s" % (sym, _side_ru(side), kind)
-        pl = "не хватает: " + ", ".join(LBL.get(r[1], str(r[1])) for r in bad)
+        pl = "не хватает: " + ", ".join(lbl.get(r[1], str(r[1])) for r in bad)
     out = [head, pl]
     if w.get("counter") or (V and V.get("feat", {}).get("counter")): out.append("⚠️ против тренда канала")
     out.append("")
@@ -105,7 +107,7 @@ def compose(w, V, Bk=None):
                     mk = {"✓": "✓", "✗": ("✗" if not ok else "⚠"), "⚠": "⚠", "·": "➖"}.get(mkx or "✓", "✓")     # ⚠: свеча против, но в режиме shadow вердикт не меняет
                     out.append("%s %s %s тело %s×ср · %s%% свечи" % (mk, nm, col, bx, ph))
                 continue
-            out.append("%s %s: %s" % ("✓" if ok else "✗", LBL.get(key, key), _val(key, ok, t)))
+            out.append("%s %s: %s" % ("✓" if ok else "✗", lbl.get(key, key), _val(key, ok, t)))
     for ok, key, t in rows:      # условия с неизвестным ключом не теряем
         if key not in ORD: out.append("%s %s" % ("✓" if ok else "✗", _cut(t, 60)))
     return "\n".join(out)

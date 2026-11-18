@@ -10,6 +10,12 @@ from datetime import datetime, timezone, timedelta
 
 ENV = "/opt/trading-bot/tg.env"
 BAR_MS = 300000
+TFMS = {"5m": 300000, "15m": 900000, "1h": 3600000, "4h": 14400000, "1d": 86400000}     # таймфреймы сканера слежения
+
+
+def _tfmt(bar):
+    """Формат подписей времени по размеру свечи: минуты и часы, для 4h дата и время, для 1d только дата."""
+    return "%H:%M" if bar < 14400000 else ("%d.%m %H:%M" if bar < 86400000 else "%d.%m")
 UP, DOWN, FLAT = "#48a67e", "#c95b65", "#89919e"      # цвета канала как в индикаторе: растущий, падающий, flat
 BG, GRID, TXT = "#0b0e14", "#1b212c", "#c9d1d9"
 
@@ -59,6 +65,7 @@ def render_order(o, kl, nbars=96, title=None, watch=False):
     import matplotlib.pyplot as plt
     from matplotlib.patches import Rectangle
     tz = _tz()
+    BAR_MS = TFMS.get(o.get("tf") or "5m", globals()["BAR_MS"]); TFT = _tfmt(BAR_MS)     # размер свечи по таймфрейму ордера / слежения (5m по умолчанию)
     t_end = int(o.get("expire_t") or (o["placed_t"] + 12 * BAR_MS)) + 8 * BAR_MS
     t_start = int(o["placed_t"]) - (nbars - 20) * BAR_MS
     ks = [k for k in kl if t_start <= k[0] <= t_end]
@@ -129,10 +136,10 @@ def render_order(o, kl, nbars=96, title=None, watch=False):
     last = [i for i, k in enumerate(ks) if k[0] <= o["placed_t"]][-1]; ratio = float(ks[last][5]) / ma[last] if ma[last] else 0
     axv.text(0.005, 0.95, ("объём · линия = среднее за 20 свечей · на свече касания ×%.1f" if watch else "объём · линия = среднее за 20 свечей · на свече выставления ×%.1f") % ratio, transform=axv.transAxes, color=TXT, fontsize=7, va="top")
     axv.set_ylim(0, max(float(k[5]) for k in ks) * 1.15)
-    ax.text(xp, 1.0, " " + o.get("mark", "лимит выставлен") + " " + datetime.fromtimestamp(o["placed_t"] / 1000, tz).strftime("%H:%M"), transform=ax.get_xaxis_transform(), color=TXT, fontsize=7.5, va="top", ha="left")
+    ax.text(xp, 1.0, " " + o.get("mark", "лимит выставлен") + " " + datetime.fromtimestamp(o["placed_t"] / 1000, tz).strftime(TFT), transform=ax.get_xaxis_transform(), color=TXT, fontsize=7.5, va="top", ha="left")
     ax.set_xlim(-1, xr + 14)
     step = 12; xt = [i for i in range(0, int(xr) + 1, step)]
-    axv.set_xticks(xt); axv.set_xticklabels([datetime.fromtimestamp((x0 + i * BAR_MS) / 1000, tz).strftime("%H:%M") for i in xt], color=TXT, fontsize=7.5)
+    axv.set_xticks(xt); axv.set_xticklabels([datetime.fromtimestamp((x0 + i * BAR_MS) / 1000, tz).strftime(TFT) for i in xt], color=TXT, fontsize=7.5)
     ax.tick_params(axis="x", labelbottom=False); ax.tick_params(axis="y", labelleft=False, labelright=False, left=False)
     axv.tick_params(axis="y", labelleft=False, left=False)
     for a_ in (ax, axv): a_.grid(color=GRID, lw=0.6); [sp.set_color(GRID) for sp in a_.spines.values()]
@@ -165,17 +172,23 @@ def render_watch(w, kl):
     """График слежения: свечи, текущие границы канала, отметка касания, цена, объём."""
     L = w.get("last") or {}; last_t = int(L.get("t") or w["t_alert"])
     mark = {"touch": "касание", "cross": "выход за линию", "break": "начало пробоя", "back": "выход и возврат"}.get(w.get("state0"), "касание")
-    o = {"sym": w["sym"], "side": w["side"], "rule": "watch", "placed_t": int(w.get("t_ref") or w["t_alert"]), "expire_t": last_t + 2 * BAR_MS, "ctype": w.get("ctype"), "chan": w.get("chan"), "chan0": w.get("chan0"), "touch_px": w.get("touch_px"), "mark": mark}
-    return render_order(o, kl, title="%s  %s  слежение за касанием линии" % (w["sym"], str(w["side"]).upper()), watch=True)
+    o = {"sym": w["sym"], "side": w["side"], "rule": "watch", "tf": w.get("tf") or "5m", "placed_t": int(w.get("t_ref") or w["t_alert"]), "expire_t": last_t + 2 * TFMS.get(w.get("tf") or "5m", BAR_MS), "ctype": w.get("ctype"), "chan": w.get("chan"), "chan0": w.get("chan0"), "touch_px": w.get("touch_px"), "mark": mark}
+    return render_order(o, kl, title="%s  %s  слежение за касанием линии%s" % (w["sym"], str(w["side"]).upper(), "" if (w.get("tf") or "5m") == "5m" else " · " + w["tf"]), watch=True)
 
 
 STATE_RU = {"touch": "касание линии", "cross": "свеча закрылась за линией (первая)", "break": "ПРОБОЙ ФОРМИРУЕТСЯ: несколько закрытий за линией", "back": "выход за линию и возврат внутрь", "away": "цена отошла от линии"}
 
 
 def caption_watch(w, kind):
+    txt = _caption_watch0(w, kind); tf = w.get("tf") or "5m"
+    if tf != "5m": txt = txt.replace("⚡ %s:" % w["sym"], "⚡ %s [%s]:" % (w["sym"], tf), 1).replace("👁 %s:" % w["sym"], "👁 %s [%s]:" % (w["sym"], tf), 1)
+    return txt
+
+
+def _caption_watch0(w, kind):
     """kind: alert | update. Состояние у линии считается по текущим линиям канала на последних свечах."""
     L = w.get("last") or {}; down = w["side"] == "short"; line = "верхнюю" if down else "нижнюю"; ctd = w.get("ctype") == "channel_down"; ct = "нисходящего" if ctd else "восходящего"; a = float(w.get("atr") or L.get("atr") or 0)
-    hm = lambda ms: datetime.fromtimestamp(int(ms) / 1000, _tz()).strftime("%H:%M")
+    hm = lambda ms: datetime.fromtimestamp(int(ms) / 1000, _tz()).strftime(_tfmt(TFMS.get(w.get("tf") or "5m", BAR_MS)))
     pos_ = ""
     if L.get("R") is not None and L["R"] != L["S"]: pos_ = " · в канале на %d%% высоты" % round((float(L["c"]) - L["S"]) / (L["R"] - L["S"]) * 100)
     if kind == "alert":

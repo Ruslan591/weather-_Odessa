@@ -83,6 +83,7 @@ def mode_state(): return jload(MODEF, {"mode": "auto", "missed": 0, "max_missed"
 def mode_text():
     m = mode_state(); s = "Режим счёта «%s»: %s" % (ACCT, MODE_RU.get(m["mode"], m["mode"]))
     if m["mode"] == "monitor":
+        s += "\n⏱ Таймфрейм сканера: %s (кнопка «Таймфрейм»)" % TFRU.get(m.get("tf"), "5м")
         s += "\nПропущено подряд: %d из %d" % (m.get("missed", 0), m.get("max_missed", 3))
         if m.get("until"): s += "\nТаймер до %s%s" % (hhmm(m["until"]), " (в экспрессе не действует)" if m.get("express") else "")
         if m.get("express"): s += "\n⚡ Экспресс слежение ВКЛ: счётчик пропусков и таймер не действуют, анализ с мнением бота приходит после каждой закрытой свечи, пока не выключите." + ("\n🧠 Обучение (запись ваших ответов): %s" % ("вкл" if LRN and LRN.enabled() else "выкл") if LRN else "")
@@ -92,6 +93,30 @@ def mode_text():
           "monitor": "\nБот присылает момент, когда цена касается или пересекает линию канала. Вы решаете: «Отклонить» или «Следить», а при слежении после каждой свечи можно выставить ордер. Одновременно не больше трёх графиков в работе.",
           "auto": "\nБот ставит ордера сам и присылает график."}.get(m["mode"], "")
     return s
+
+
+TFRU = {"5m": "5м", "15m": "15м", "1h": "1ч", "4h": "4ч", "1d": "1д"}     # таймфреймы сканера слежения (tg_gate.TFS)
+
+
+def cur_tf():
+    t = mode_state().get("tf")
+    return t if t in TFRU else "5m"
+
+
+def klf(sym, tf=None):
+    """Файл свечей пары в общем кэше chan_orders для таймфрейма tf (по умолчанию 5m)."""
+    return "/tmp/klcache/%s_%s_1000.json" % (sym, tf if tf in TFRU else "5m")
+
+
+def lok(v=None):
+    """Обучение (кнопки «Согласен», «Здесь надо было заходить», запись ответов) ведётся только по 5m: исходы считаются по свечам 5m."""
+    return bool(LRN and LRN.enabled() and ((v or {}).get("tf") or "5m") == "5m")
+
+
+def tf_picker():
+    cur = cur_tf()
+    kb = [[{"text": ("✅ " if k == cur else "") + TFRU[k], "callback_data": "tf:" + k} for k in ("5m", "15m", "1h", "4h", "1d")]]
+    api("sendMessage", chat_id=CHAT, text="⏱ Таймфрейм сканера отбоя и пробоя (сейчас %s).\nПосле переключения алерты и слежения прежнего таймфрейма снимаются, каналы и сигналы считаются по свечам выбранного таймфрейма. Авто, ордера по правилам Авто и сопровождение позиций остаются на 5м." % TFRU[cur], reply_markup={"inline_keyboard": kb})
 
 
 MENU = [[{"text": "😴 Сон", "callback_data": "m:sleep"}, {"text": "👁 Монитор", "callback_data": "m:monitor"}, {"text": "🤖 Авто", "callback_data": "m:auto"}], [{"text": "💼 Счёт и позиции", "callback_data": "st"}, {"text": "📋 Ордера", "callback_data": "ol"}]]
@@ -106,6 +131,7 @@ def menu(off=None):
     rows = MENU + [[{"text": "🔔 Включить алерты" if off else "🔕 Отключить алерты", "callback_data": "al:1" if off else "al:0"}]]
     ex = bool(m.get("express"))
     rows.append([{"text": "👁 Слежений одновременно: %d (изменить)" % int(m.get("max_watch", 8)), "callback_data": "mw"}])
+    rows.append([{"text": "⏱ Таймфрейм: %s (изменить)" % TFRU.get(m.get("tf"), "5м"), "callback_data": "tf"}])
     rows.append([{"text": "⚡ Выключить экспресс" if ex else "⚡ Экспресс слежение", "callback_data": "ex:0" if ex else "ex:1"}])
     if ex:
         ao = bool(m.get("autoorder"))
@@ -187,10 +213,10 @@ def watch_buttons(wid, kind, V=None, retro_done=False):
     if express_on():     # экспресс: слежение уже идёт само, «Продолжать» не нужно
         if V is None: V = (msgs_load().get("w%d" % wid) or {}).get("v")
         rows = [[{"text": "📌 Выставить ордер", "callback_data": "wp:%d" % wid}, {"text": "❌ Отклонить", "callback_data": "wr:%d" % wid}, {"text": "⏹ Стоп", "callback_data": "ws:%d" % wid}]]
-        if V and V.get("call") == "enter" and LRN and LRN.enabled():
+        if V and V.get("call") == "enter" and lok(V):
             if V.get("ans") is None: rows.append([{"text": "✅ Согласен открыть сейчас", "callback_data": "xa:%d:1" % wid}, {"text": "🚫 Не согласен", "callback_data": "xa:%d:0" % wid}])
             else: rows.append([{"text": "📝 Записано: %s" % ("согласен" if V["ans"] else "не согласен"), "callback_data": "xn"}])
-        if V and LRN and LRN.enabled(): rows.append(retro_row(retro_done))
+        if V and lok(V): rows.append(retro_row(retro_done))
         return rows + [[{"text": "⚡ Выключить экспресс", "callback_data": "ex:0"}] + off]
     if kind != "alert" and (watch_get(wid) or {}).get("keep"):     # галочка «Следить» (страница): вопроса о продолжении нет
         return [[{"text": "📌 Выставить ордер", "callback_data": "wp:%d" % wid}, {"text": "⏹ Перестать следить", "callback_data": "ws:%d" % wid}], off]
@@ -243,10 +269,10 @@ def send_watch(wid, kind):
     key = "w%d" % wid; m = msgs_load(); old = m.get(key)
     if old and kind == "update":     # у предыдущего графика этой пары снимаем кнопки (в экспрессе остаётся только отметка «здесь надо было заходить»)
         try:
-            keep = [retro_row(bool(LRN and LRN.has_mark(old["mid"], 2)))] if (old.get("v") and LRN and LRN.enabled()) else []
+            keep = [retro_row(bool(LRN and LRN.has_mark(old["mid"], 2)))] if (old.get("v") and lok(old.get("v"))) else []
             api("editMessageReplyMarkup", chat_id=kchat(old["mid"]), message_id=rmid(old["mid"]), reply_markup={"inline_keyboard": keep})
         except Exception as e: log("strip old buttons: %s" % e)
-    kl = jload("/tmp/klcache/%s_5m_1000.json" % w["sym"], [])
+    kl = jload(klf(w["sym"], w.get("tf")), [])
     cap = T.caption_watch(w, kind); V = None; Bk = None; auto = None
     if w.get("keep") and not express_on(): cap += "\n🔒 Галочка «Следить»: без вопросов, без сна"
     try:
@@ -274,7 +300,7 @@ def send_watch(wid, kind):
                 try: Bk = X.verdict_break(w, kl) if hasattr(X, "verdict_break") else None
                 except Exception as e: log("express break: %s" % e); Bk = None
                 note = ""
-                if V["call"] == "enter" and LRN and LRN.enabled():
+                if V["call"] == "enter" and lok(V):
                     try: note = LRN.note(V)
                     except Exception as e: log("learn note: %s" % e)
                 pc = None
@@ -290,7 +316,7 @@ def send_watch(wid, kind):
     cap = fitcap(cap)
     prop = bool(V and V.get("call") == "enter") or bool(Bk and Bk.get("call") == "enter")     # предложение «заходить» остаётся в основном чате; «ждём» уходит в канал «Монитор»
     dest = MONCHAT if (mon_on() and X and express_on() and V is not None and not prop) else CHAT
-    btn = [retro_row(False)] if (dest == MONCHAT and V and LRN and LRN.enabled()) else ([] if dest == MONCHAT else watch_buttons(wid, kind, V))
+    btn = [retro_row(False)] if (dest == MONCHAT and V and lok(V)) else ([] if dest == MONCHAT else watch_buttons(wid, kind, V))
     prev = post_last_mid(w["sym"], dest); photo = True       # ответ на предыдущий пост этой пары в том же чате: в Telegram виден как цитата, нажатие переносит к нему
     rto = rmid(prev) if prev else None; silent = dest == MONCHAT
     try: r = T.send_photo(T.render_watch(w, kl), cap, btn, reply_to=rto, chat=dest, silent=silent)
@@ -298,17 +324,17 @@ def send_watch(wid, kind):
         log("render watch fail %s: %s" % (wid, e)); r = T.send_text(cap, btn, reply_to=rto, chat=dest, silent=silent); photo = False
     mid_new = kmid(dest, r["result"]["message_id"])
     m = msgs_load(); m[key] = {"mid": mid_new, "cap": cap, "kind": kind, "photo": photo, "chat": "mon" if dest == MONCHAT else "main"}
-    if V: m[key]["v"] = {k: V.get(k) for k in ("call", "feat", "plan", "geo", "t", "sym", "side", "b1", "rg")}; m[key]["v"]["ans"] = None
+    if V: m[key]["v"] = {k: V.get(k) for k in ("call", "feat", "plan", "geo", "t", "sym", "side", "b1", "rg", "tf")}; m[key]["v"]["ans"] = None
     msgs_save(m)
     post_add({"mid": mid_new, "wid": wid, "sym": w["sym"], "kind": kind, "ts": int(time.time() * 1000), "prev": prev, "v": m[key].get("v"), "chat": "mon" if dest == MONCHAT else "main"})
     if auto and ao_on():     # Автоордер: ставим через тот же путь, что кнопка «Выставить ордер» (w_place), отметка auto
         inbox({"type": "w_place", "wid": wid, "entry": "market", "target": auto[1], "setup": auto[0], "auto": 1}); log("autoorder %s %s %s" % (wid, auto[0], auto[1]))
-        if auto[0] == "bounce" and V and LRN and LRN.enabled():     # Автоордер = автоматическое «Согласен открыть сейчас»: запись в базу обучения как при нажатии кнопки (пробой в базу отбоя не пишем: другое направление плана)
+        if auto[0] == "bounce" and V and lok(V):     # Автоордер = автоматическое «Согласен открыть сейчас»: запись в базу обучения как при нажатии кнопки (пробой в базу отбоя не пишем: другое направление плана)
             try:
                 LRN.record(V, 1, wid, mid_new); mm = msgs_load(); rec_ = mm.get(key) or {}
                 if rec_.get("v"): rec_["v"]["ans"] = 1; mm[key] = rec_; msgs_save(mm)
             except Exception as e: log("autoorder learn: %s" % e)
-        elif auto[0] == "breakout" and Bk and LRN and LRN.enabled():     # база по пробоям (отдельная от базы отбоев)
+        elif auto[0] == "breakout" and Bk and lok(Bk):     # база по пробоям (отдельная от базы отбоев)
             try: LRN.record_brk(Bk, 1, wid, mid_new)
             except Exception as e: log("autoorder learn brk: %s" % e)
 
@@ -317,7 +343,7 @@ def edit_watch(wid, status, buttons=None):
     m = msgs_load(); rec = m.get("w%d" % wid)
     if not rec: api("sendMessage", chat_id=CHAT, text="Слежение %d: %s" % (wid, status)); return
     ch = kchat(rec["mid"]); rm = rmid(rec["mid"])
-    if buttons is None and ch == MONCHAT and rec.get("v") and LRN and LRN.enabled(): buttons = [retro_row(bool(LRN.has_mark(rec["mid"], 2)))]     # у последнего поста «Монитора» отметка остаётся и после конца слежения
+    if buttons is None and ch == MONCHAT and rec.get("v") and lok(rec.get("v")): buttons = [retro_row(bool(LRN.has_mark(rec["mid"], 2)))]     # у последнего поста «Монитора» отметка остаётся и после конца слежения
     cap = fitcap(rec["cap"], 1020 - len(status) - 2) + "\n\n" + status; kb = {"inline_keyboard": buttons or []}
     try:
         if rec.get("photo"): api("editMessageCaption", chat_id=ch, message_id=rm, caption=cap, reply_markup=kb)
@@ -377,7 +403,7 @@ def entry_menu(wid, setup):
 
 
 def send_order(o, kind):
-    kl = jload("/tmp/klcache/%s_5m_1000.json" % o["sym"], [])
+    kl = jload(klf(o["sym"], o.get("tf")), [])
     cap = T.caption_order(o, ACCT)
     if kind == "proposal":
         cap += "\n\n⏳ Нужно решение до %s (Киев). Без ответа ордер не ставится." % hhmm(o["ans_deadline"])
@@ -447,7 +473,7 @@ def handle_event(ev):
         keep = None
         if ev.get("auto"):     # после Автоордера у поста остаётся отметка «здесь надо было заходить»
             rec = msgs_load().get("w%d" % wid) or {}
-            if rec.get("v") and LRN and LRN.enabled(): keep = [retro_row(bool(LRN.has_mark(rec.get("mid"), 2)))]
+            if rec.get("v") and lok(rec.get("v")): keep = [retro_row(bool(LRN.has_mark(rec.get("mid"), 2)))]
         edit_watch(wid, "⏹ " + why, keep)
     elif t == "web_pos":     # действие со страницы онлайн по позиции (порт 18111)
         try:
@@ -486,6 +512,11 @@ def handle_event(ev):
     elif t == "express":
         if ev.get("refused"): api("sendMessage", chat_id=CHAT, text="⚡ Экспресс доступен только в режиме Монитор. Сначала включите Монитор: /mode", reply_markup={"inline_keyboard": menu()})
         else: api("sendMessage", chat_id=CHAT, text=("⚡ Экспресс слежение включено.\n" if ev.get("on") else "⚡ Экспресс выключен: счётчик пропусков и таймер снова действуют.\n") + mode_text(), reply_markup={"inline_keyboard": menu()})
+    elif t == "tf":
+        tf = ev.get("tf") or "5m"
+        if ev.get("ok") is False: api("sendMessage", chat_id=CHAT, text="⏱ Неизвестный таймфрейм.", reply_markup={"inline_keyboard": menu()})
+        elif ev.get("same"): api("sendMessage", chat_id=CHAT, text="⏱ Таймфрейм сканера уже %s." % TFRU.get(tf, tf), reply_markup={"inline_keyboard": menu()})
+        else: api("sendMessage", chat_id=CHAT, text="⏱ Таймфрейм сканера: %s.\nАлерты и слежения прежнего таймфрейма сняты (%d). Каналы и сигналы теперь по свечам %s; первые алерты придут в течение минуты (по парам, у которых последняя закрытая свеча у линии). Авто, ордера по правилам Авто и сопровождение позиций остаются на 5м.\n\n%s" % (TFRU.get(tf, tf), ev.get("cancelled", 0), TFRU.get(tf, tf), mode_text()), reply_markup={"inline_keyboard": menu()})
     elif t == "alerts":
         off = bool(ev.get("off")); n = ev.get("cancelled", 0)
         txt = ("🔕 Алерты отключены. Новых алертов не будет" + (", алерты без ответа сняты (%d)" % n if n else "") + ". Идущие слежения продолжаются. Выставленные ордера и позиции работают как раньше, таймер идёт.\nВключить: кнопка ниже или /alerts") if off else "🔔 Алерты включены. Новые касания линий снова будут приходить."
@@ -660,6 +691,9 @@ def on_callback(cq):
             inbox({"type": "mode", "mode": p[1]}); api("answerCallbackQuery", callback_query_id=cid, text="Переключаю: %s" % MODE_RU[p[1]])
     elif p[0] == "ex":
         inbox({"type": "express", "on": p[1] == "1"}); api("answerCallbackQuery", callback_query_id=cid, text="Включаю экспресс…" if p[1] == "1" else "Выключаю экспресс…")
+    elif p[0] == "tf":      # выбор таймфрейма сканера слежения
+        if len(p) < 2: api("answerCallbackQuery", callback_query_id=cid); tf_picker()
+        else: inbox({"type": "tf", "tf": p[1]}); api("answerCallbackQuery", callback_query_id=cid, text="Переключаю таймфрейм: %s" % TFRU.get(p[1], p[1]))
     elif p[0] == "cr":      # откат коррекции порога
         txt = RV.revert(int(p[1])) if RV else "Самообучение недоступно."
         api("answerCallbackQuery", callback_query_id=cid, text=txt[:180], show_alert="true"); api("sendMessage", chat_id=(msg.get("chat") or {}).get("id", CHAT), text="↩ " + txt)
@@ -816,12 +850,13 @@ def on_message(m):
         except Exception as e: api("sendMessage", chat_id=CHAT, text="Режим рынка: ошибка расчёта (%s)" % e)
     elif t.startswith(("/learn", "/corr")):
         api("sendMessage", chat_id=CHAT, text=(RV.summary(LRN) if RV else "Самообучение недоступно."))
+    elif t.startswith("/tf"): tf_picker()
     elif t.startswith("/alerts"):
         on = bool(mode_state().get("alerts_off")); inbox({"type": "alerts", "on": on})
         api("sendMessage", chat_id=CHAT, text="Включаю алерты…" if on else "Отключаю алерты…")
     elif t.startswith(("/orders", "/ordera")): txt, kb = orders_list(); api("sendMessage", chat_id=CHAT, text=txt, reply_markup={"inline_keyboard": kb})
     elif t.startswith(("/status", "/balance")): status_card()
-    else: api("sendMessage", chat_id=CHAT, text="Команды: /mode (режим), /alerts (алерты вкл/выкл), /status (состояние), /orders (ордера и отмена).")
+    else: api("sendMessage", chat_id=CHAT, text="Команды: /mode (режим), /tf (таймфрейм сканера), /alerts (алерты вкл/выкл), /status (состояние), /orders (ордера и отмена).")
 
 
 # ---------- Живая карточка счёта в канале TG_CHAT_LIVE (картинка редко, подпись часто) ----------
@@ -929,6 +964,9 @@ def radar_text():
     """Данные по каналам пар пишет chan_orders (radar_state.json: ATR, линии на последней закрытой свече). Цена живая (один запрос к Binance), RSI 5m альта и BTC 1m считаются теми же функциями, что и в мнении бота (tg_express._rsi5_cond / _rsi5_brk, tg_btc1m.gate)."""
     st = jload(RADARF, {}); rows = st.get("rows") or {}
     if not rows or not X: return None
+    rtf = st.get("tf") or "5m"
+    if rtf != cur_tf(): return "📡 Радар: жду данные сканера по таймфрейму %s (пересчёт после смены таймфрейма, около минуты)." % TFRU.get(cur_tf(), cur_tf())
+    blk = X.btc_blocks(rtf) if hasattr(X, "btc_blocks") else True     # на 1h/4h/1d BTC 1m не блокирует вход (справочно)
     px = {}
     try: px = live_prices([k + "USDT" for k in rows])
     except Exception as e: log("radar: цены не получены: %s" % e)
@@ -946,17 +984,17 @@ def radar_text():
             if R - S < 1.5 * a: n_narrow += 1; continue
             p = px.get(sym + "USDT") or float(r["c"]); du = (R - p) / a; dd = (p - S) / a; up = du <= dd; d = du if up else dd
             sb = "short" if up else "long"; sk = "long" if up else "short"
-            r5 = X._rsi5({"last": {"t": r["t"], "c": r["c"]}}, jload("/tmp/klcache/%s_5m_1000.json" % sym, []))
+            r5 = X._rsi5({"last": {"t": r["t"], "c": r["c"]}}, jload(klf(sym, rtf), []))
             cb = X._rsi5_cond(sb, r5) if r5 is not None else None; ck = X._rsi5_brk(sk, r5) if r5 is not None else None
             gb = bg.get((sb, "bounce")); gk = bg.get((sk, "breakout"))
-            okb = bool(cb and cb[0]) and (gb is None or bool(gb["ok"])); okk = bool(ck and ck[0]) and (gk is None or bool(gk["ok"]))
+            okb = bool(cb and cb[0]) and (gb is None or not blk or bool(gb["ok"])); okk = bool(ck and ck[0]) and (gk is None or not blk or bool(gk["ok"]))
             cand.append(dict(sym=sym, up=up, d=d, r5=r5, sb=sb, sk=sk, okb=okb, okk=okk, cb=cb, ck=ck, gb=gb, gk=gk))
         except Exception as e: log("radar %s: %s" % (sym, e))
 
     def fmt(c, ok):
         ln = "верх." if c["up"] else "ниж."; rs = ("%.0f" % c["r5"]) if c["r5"] is not None else "-"
         pos_ = ("%.1f ATR до %s линии" % (c["d"], ln)) if c["d"] >= 0 else ("за %s линией на %.1f ATR" % (ln, -c["d"]))
-        s_ = "%s %s %s · RSI 5m %s" % (c["sym"], "↑" if c["up"] else "↓", pos_, rs)
+        s_ = "%s %s %s · RSI %s %s" % (c["sym"], "↑" if c["up"] else "↓", pos_, rtf, rs)
         if ok:
             rgm = ((RG.snap() or {}).get("regime") if RG else None)
             agn = (c["sk"] == "long" and rgm == "down") or (c["sk"] == "short" and rgm == "up")
@@ -965,16 +1003,16 @@ def radar_text():
         cond, g = (c["cb"], c["gb"]) if c["d"] >= 0 else (c["ck"], c["gk"])
         if cond is None: why = "нет данных RSI"
         elif not cond[0]: why = cond[2].split(": ", 1)[-1][:60]
-        elif g is not None and not g["ok"]: why = "BTC 1m: " + g["bad"].split(": ", 1)[-1][:45]
+        elif g is not None and blk and not g["ok"]: why = "BTC 1m: " + g["bad"].split(": ", 1)[-1][:45]
         else: why = "условия не сошлись"
-        return s_ + " ✗ " + why
+        return s_ + " ✗ " + why.replace("RSI 5m", "RSI " + rtf)
     NEAR = 1.0
     ready = sorted([c for c in cand if -NEAR <= c["d"] <= NEAR and (c["okb"] or c["okk"])], key=lambda c: abs(c["d"]))
     coming = sorted([c for c in cand if NEAR < c["d"] <= 3.0 and c["okb"]], key=lambda c: c["d"])
     stuck = sorted([c for c in cand if -NEAR <= c["d"] <= NEAR and not (c["okb"] or c["okk"])], key=lambda c: abs(c["d"]))
     mk = lambda g: "-" if g is None else ("✅" if g["ok"] else "⛔")
     sn = (bg.get(("short", "bounce")) or {}).get("snap") or {}
-    L = ["📡 Радар · %s · пар %d, с каналом %d" % (datetime.now(T._tz()).strftime("%H:%M"), len(rows), len(cand) + n_narrow)]
+    L = ["📡 Радар · %s%s · пар %d, с каналом %d" % ((TFRU[rtf] + " · ") if rtf != "5m" else "", datetime.now(T._tz()).strftime("%H:%M"), len(rows), len(cand) + n_narrow)]
     try: fl = RG.factors() if RG else ""   # порядок «Радара»: сначала глобальные условия: 6 факторов режима, затем BTC 1m, затем группы пар
     except Exception: fl = ""
     if fl: L.append(fl)
@@ -1157,7 +1195,7 @@ def seen_chat(c):
 
 def main():
     log("tg_bot start, POS_DIR=%s" % D)
-    try: api("setMyCommands", commands=[{"command": "mode", "description": "Режим: сон / монитор / авто"}, {"command": "status", "description": "Счёт, баланс, позиции"}, {"command": "orders", "description": "Выставленные ордера и отмена"}, {"command": "alerts", "description": "Алерты: отключить / включить"}])
+    try: api("setMyCommands", commands=[{"command": "mode", "description": "Режим: сон / монитор / авто"}, {"command": "status", "description": "Счёт, баланс, позиции"}, {"command": "tf", "description": "Таймфрейм сканера"}, {"command": "orders", "description": "Выставленные ордера и отмена"}, {"command": "alerts", "description": "Алерты: отключить / включить"}])
     except Exception as e: log("setMyCommands fail: %s" % e)
     threading.Thread(target=outbox_loop, daemon=True).start()
     threading.Thread(target=live_loop, daemon=True).start()
