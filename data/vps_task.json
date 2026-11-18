@@ -1,1 +1,1 @@
-{"task_id": "ctl7run1", "cmd": "{ cd /opt/weather-pipeline/repo && git update-ref -d refs/remotes/origin/main; git fetch -q origin main:refs/remotes/origin/main && git show origin/main:scripts/deploy_web_ctl7.sh | bash -s; } 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 240}
+{"task_id": "chk1", "cmd": "{ find /opt/trading-bot -name tg_watch.json -o -name tg_mode.json -o -name 'radar*.json' 2>/dev/null | head; } 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 240}
