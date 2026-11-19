@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-19T01:50:00.000Z",
+  "timestamp": "2026-11-19T02:00:00.000Z",
   "buffer_size": 6,
   "buffer_span_minutes": 50,
   "observed_area": {
@@ -12,24 +12,48 @@
     "local_trend_radius_km": 50,
     "state_radius_km": 12
   },
-  "valid": false,
-  "verdict": "нет значимой облачности для оценки движения",
+  "valid": true,
+  "speed_kmh": 82.3,
+  "direction_compass": "СВ",
+  "bearing_deg": 37.2,
+  "frame_pairs_used": 5,
+  "acceleration_kmh": -2.1,
+  "turning_deg": -2.4,
+  "acceleration_verdict": "скорость стабильна",
+  "turning_verdict": "направление стабильно",
+  "forecast_displacement": {
+    "30min": {
+      "distance_km": 39.9,
+      "bearing_deg": 34.0,
+      "compass": "СВ"
+    },
+    "60min": {
+      "distance_km": 78.7,
+      "bearing_deg": 33.0,
+      "compass": "СВ"
+    },
+    "120min": {
+      "distance_km": 153.2,
+      "bearing_deg": 29.0,
+      "compass": "СВ"
+    }
+  },
   "area_fraction_over_time": [
     0.001,
     0.001,
     0.001,
-    0.001,
     0.004,
-    0.001
+    0.001,
+    0.949
   ],
-  "area_trend_delta": 0.0,
-  "area_trend_verdict": "без существенных изменений",
-  "station_state": "clear",
-  "station_area_fraction": 0.0,
-  "cloud_mass_distance_km": 64.3,
-  "cloud_mass_bearing_deg": 206.0,
-  "cloud_mass_compass": "ЮЗ",
-  "cloud_mass_area_km2": 22902,
+  "area_trend_delta": 0.948,
+  "area_trend_verdict": "растёт",
+  "station_state": "cloud",
+  "station_area_fraction": 1.0,
+  "cloud_mass_distance_km": 0.8,
+  "cloud_mass_bearing_deg": 325.0,
+  "cloud_mass_compass": "СЗ",
+  "cloud_mass_area_km2": 152438,
   "target_confirmation": {
     "confirmed": null,
     "reason": "среди кандидатов нет локальных масс (только системы синоптического масштаба)"
@@ -38,8 +62,8 @@
     {
       "target_id": 0,
       "available": true,
-      "roi_cloud_fraction": 0.13,
-      "confirmed": false
+      "roi_cloud_fraction": 0.739,
+      "confirmed": true
     }
   ],
   "local_analysis_all": [],
