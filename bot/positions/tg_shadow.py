@@ -85,8 +85,10 @@ def _load():
         d = json.load(open(F, encoding="utf-8"))
         S["seq"] = int(d.get("seq", 0)); S["items"] = list(d.get("items") or []); S["msg"] = dict(d.get("msg") or {})
     except Exception: pass
-    for it in S["items"]:     # записи первой версии (простая модель без боевого движка): открытые снимаем, закрытые остаются как есть
-        if it.get("status") == "open" and "o" not in it and "p" not in it: it["status"] = "void"; it["why"] = "модель v1 снята"
+    for it in S["items"]:     # записи первой версии (простая модель без боевого движка): архивные, движок и Telegram их не трогают, страница показывает; открытые снимаем
+        if "o" not in it and "p" not in it and "t0" not in it:
+            it["legacy"] = 1; it.setdefault("t0", it.get("t_in") or 0)
+            if it.get("status") == "open": it["status"] = "void"; it["why"] = "модель v1 снята"
     S["loaded"] = True
 
 
@@ -98,7 +100,7 @@ def _save():
 
 def snapshot():
     """Копия записей для чтения (страница, Telegram)."""
-    with lock: _load(); return copy.deepcopy(S["items"])
+    with lock: _load(); return copy.deepcopy([i for i in S["items"] if not i.get("legacy")])
 
 
 def msg_get(iid):
@@ -271,7 +273,7 @@ def tick():
     if not enabled(): return
     E = eng()
     if not E: return
-    with lock: _load(); ids = [i["id"] for i in S["items"] if i.get("status") in ("gate", "open", "filtered", "closed") and (i.get("status") != "closed" or not i.get("chk"))]
+    with lock: _load(); ids = [i["id"] for i in S["items"] if not i.get("legacy") and i.get("status") in ("gate", "open", "filtered", "closed") and (i.get("status") != "closed" or not i.get("chk"))]
     ords = None; now = now_ms()
     for iid in ids:
         with lock: it0 = next((i for i in S["items"] if i["id"] == iid), None); it = copy.deepcopy(it0) if it0 else None
@@ -297,7 +299,7 @@ def tick():
                 if it0 is not None: it0.clear(); it0.update(it)
                 _save()
     with lock:      # чистка
-        cl = sorted([i for i in S["items"] if i.get("status") in ("closed", "filtered", "taken", "void")], key=lambda x: x.get("t_out") or x.get("t_end") or x["t0"]); kc = int(cfg().get("keep_closed", 300))
+        cl = sorted([i for i in S["items"] if i.get("status") in ("closed", "filtered", "taken", "void")], key=lambda x: x.get("t_out") or x.get("t_end") or x.get("t0") or 0); kc = int(cfg().get("keep_closed", 300))
         if len(cl) > kc:
             drop = {i["id"] for i in cl[:len(cl) - kc]}; S["items"] = [i for i in S["items"] if i["id"] not in drop]
             for d in drop: S["msg"].pop(str(d), None)
