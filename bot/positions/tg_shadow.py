@@ -443,3 +443,60 @@ def summary_text(hhmm=None, last=8):
     cl = sorted([i for i in its if i.get("status") == "closed"], key=lambda x: x.get("t_out") or 0, reverse=True)[:last]
     for i in cl: L.append("#%s %s %s %s: %s %s R" % (i["id"], i["sym"], i["side"].upper(), KD.get(i["kind"], i["kind"]), RS.get(i["p"].get("reason"), i["p"].get("reason")), _sg(i["p"].get("r_mult"))))
     return "\n".join(L)[:3800]
+
+
+# ---------- статистика по выбору (меню в канале: таймфрейм и вид сделки) ----------
+TFL = ("5m", "15m", "1h", "4h", "1d")
+KIND_RU = {"all": "всё", "bl": "отбой LONG", "bs": "отбой SHORT", "brk": "пробой"}
+
+
+def _sel(it, tf, kind):
+    if tf != "all" and it.get("tf") != tf: return False
+    k, sd = it.get("kind"), it.get("side")
+    return kind == "all" or (kind == "bl" and k == "bounce" and sd == "long") or (kind == "bs" and k == "bounce" and sd == "short") or (kind == "brk" and k == "break")
+
+
+def _agg(xs, get):
+    v = [get(i) for i in xs if get(i) is not None]; n = len(v); w = sum(1 for x in v if x > 0)
+    return n, w, round(sum(v), 2)
+
+
+def stats_text(tf="all", kind="all"):
+    """Сводка по выбору: таймфрейм (all | 5m | 15m | 1h | 4h | 1d) и вид (all | bl отбой LONG | bs отбой SHORT | brk пробой). Итоги в R после комиссий."""
+    its = [i for i in snapshot() if _sel(i, tf, kind)]
+    cl = [i for i in its if i.get("status") == "closed" and i.get("p")]; fl = [i for i in its if i.get("status") == "filtered"]; op = [i for i in its if i.get("status") in ("gate", "open")]
+    L = ["📊 Тени · %s · %s" % ("все таймфреймы" if tf == "all" else tf, KIND_RU.get(kind, kind)),
+         "Сигналов: %d · в работе %d · вошли %d (закрыто) · фильтр входа не пустил %d" % (len(its), len(op), len(cl), len(fl))]
+    n, w, r = _agg(cl, lambda i: i["p"].get("r_mult"))
+    if n:
+        mf = [i.get("mfe_r") or 0 for i in cl]; ma = [abs(i.get("mae_r") or 0) for i in cl]
+        L.append("Закрыто %d: плюс %d (%d%%), минус %d · итого %s R · среднее %s R" % (n, w, round(w / n * 100), n - w, _sg(r), _sg(r / n)))
+        L.append("В среднем пик +%.2f R, против до -%.2f R" % (sum(mf) / n, sum(ma) / n))
+        for rs in ("target", "trail/BE", "stop", "time", "liquidation"):
+            xs = [i for i in cl if i["p"].get("reason") == rs]
+            if xs: nn, ww, rr = _agg(xs, lambda i: i["p"].get("r_mult")); L.append("  %s: %d (%s R)" % (RS.get(rs, rs), nn, _sg(rr)))
+    else: L.append("Закрытых сделок пока нет.")
+    if fl:
+        nn, ww, rr = _agg(fl, cf_r)
+        L.append("Фильтр входа не пустил %d; без фильтра было бы %s R (в плюс %d из %d посчитанных)" % (len(fl), _sg(rr), ww, nn))
+    if tf == "all":
+        parts = []
+        for t in TFL:
+            xs = [i for i in cl if i.get("tf") == t]
+            if xs: nn, ww, rr = _agg(xs, lambda i: i["p"].get("r_mult")); parts.append("%s: %d (%s R)" % (t, nn, _sg(rr)))
+        if parts: L.append("По таймфреймам: " + " · ".join(parts))
+    if kind == "all":
+        parts = []
+        for k_, ru in (("bl", "отбой LONG"), ("bs", "отбой SHORT"), ("brk", "пробой")):
+            xs = [i for i in cl if _sel(i, "all", k_)]
+            if xs: nn, ww, rr = _agg(xs, lambda i: i["p"].get("r_mult")); parts.append("%s: %d (%s R)" % (ru, nn, _sg(rr)))
+        if parts: L.append("По видам: " + " · ".join(parts))
+    L.append("Обновлено " + time.strftime("%H:%M", time.localtime()))
+    return "\n".join(L)[:3800]
+
+
+def menu_keyboard(tf="all", kind="all"):
+    mk = lambda lab, t, k, on: {"text": ("✓ " if on else "") + lab, "callback_data": "shs:%s:%s" % (t, k)}
+    r1 = [mk("Все", "all", kind, tf == "all")] + [mk(t, t, kind, tf == t) for t in TFL]
+    r2 = [mk("Всё", tf, "all", kind == "all"), mk("Отбой LONG", tf, "bl", kind == "bl"), mk("Отбой SHORT", tf, "bs", kind == "bs"), mk("Пробой", tf, "brk", kind == "brk")]
+    return [r1[:3], r1[3:], r2[:2], r2[2:], [{"text": "🔄 Обновить", "callback_data": "shs:%s:%s" % (tf, kind)}]]
