@@ -1,25 +1,20 @@
 {
-  "timestamp": "2026-11-19T18:33:04Z",
-  "status": "suppressed_known_false_positive",
-  "cloud_forecast_timestamp": "2026-11-19T17:45:00.000Z",
-  "suppressed_target": {
-    "signature": "145_-40",
-    "area_km2": 69.4,
-    "distance_km": 151.9,
-    "bearing_deg": 106.0,
-    "compass": "В",
-    "not_confirmed_streak": 8,
-    "total_not_confirmed": 32,
-    "excluded_since": "2026-11-19T17:07:53Z"
-  },
+  "timestamp": "2026-11-19T18:38:35Z",
+  "status": "ok",
+  "cloud_forecast_timestamp": "2026-11-19T18:00:00.000Z",
+  "target_id": 1,
+  "target_area_km2": 53.4,
+  "target_distance_km": 117.2,
+  "target_bearing_deg": 71.0,
+  "target_compass": "В",
   "system": {
     "target_id": 0,
-    "area_km2": 174946.4,
+    "area_km2": 182574.6,
     "distance_km": 0.8,
     "bearing_deg": 326.0,
     "compass": "СЗ",
-    "elongation_aspect_ratio": 1.73,
-    "elongation_axis_deg": 169.0,
+    "elongation_aspect_ratio": 1.67,
+    "elongation_axis_deg": 171.0,
     "elongation_axis_compass": "Ю-С",
     "frontlike": false,
     "window_spanning": true,
@@ -31,13 +26,13 @@
   "local_candidates": [
     {
       "target_id": 1,
-      "area_km2": 69.4,
-      "distance_km": 151.9,
-      "bearing_deg": 106.0,
+      "area_km2": 53.4,
+      "distance_km": 117.2,
+      "bearing_deg": 71.0,
       "compass": "В",
-      "elongation_aspect_ratio": 2.31,
-      "elongation_axis_deg": 90.0,
-      "elongation_axis_compass": "В-З",
+      "elongation_aspect_ratio": 1.63,
+      "elongation_axis_deg": 19.0,
+      "elongation_axis_compass": "С-Ю",
       "frontlike": false,
       "phase_label": "безоблачно",
       "type_label": "безоблачно",
@@ -50,6 +45,39 @@
   "local_suppressed_count": 0,
   "system_candidates": [],
   "system_suppressed_count": 1,
-  "verdict": "Известный шумовой объект в 152км В (~69км²) — подавлено (не подтверждался 8 раз подряд). Отдельно: система синоптического масштаба (174946км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора, осадки).",
-  "frontal_tracks": []
+  "frontal_tracks": [],
+  "target_phase": {
+    "label": "безоблачно",
+    "cloud_fraction": 0.0
+  },
+  "existence": {
+    "modules": {
+      "ir_motion": {
+        "confirmed": false,
+        "timestamp": "2026-11-19T18:10:00.000Z"
+      },
+      "geocolour_motion": {
+        "confirmed": true,
+        "timestamp": "2026-11-19T18:10:00.000Z"
+      },
+      "cloud_phase_type": {
+        "confirmed": false,
+        "timestamp": "2026-11-19T16:52:20Z"
+      }
+    },
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
+  },
+  "phenomena": {
+    "precip_forecast": {
+      "confirmed": null,
+      "timestamp": "2026-11-19T18:27:31Z"
+    },
+    "lightning_forecast": {
+      "confirmed": null,
+      "timestamp": "2026-11-19T18:32:05Z"
+    }
+  },
+  "verdict": "Цель в 117км В, безоблачно — каналы расходятся: geocolour_motion подтверждают, ir_motion/cloud_phase_type нет. Отдельно: система синоптического масштаба (182575км²) в 1км СЗ (площадь/форма ненадёжны — объект упирается в границы окна обзора, осадки)."
 }
