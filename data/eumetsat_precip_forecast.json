@@ -1,37 +1,44 @@
 {
-  "timestamp": "2026-11-19T19:07:54Z",
+  "timestamp": "2026-11-19T19:27:06Z",
   "current_state": "precip",
   "target_type": "clearing",
-  "distance_km_now": 2.1,
-  "bearing_deg": 193.0,
-  "compass": "Ю",
-  "speed_kmh": 28.7,
-  "direction_compass": "ЮВ",
-  "cpa_km": 2.1,
-  "eta_min": 0.0,
-  "blob_area_km2": 132045.0,
-  "verdict": "уже у города",
+  "distance_km_now": 60.8,
+  "bearing_deg": 126.0,
+  "compass": "ЮВ",
+  "speed_kmh": 62.9,
+  "direction_compass": "В",
+  "cpa_km": 60.8,
+  "eta_min": null,
+  "blob_area_km2": 111320.0,
+  "verdict": "удаляется",
   "approaching": false,
   "frame_pairs_used": 3,
   "method_note": "Скорость усреднена по 4 кадрам msg_fes:h60b (шаг 15 мин, phase correlation). Presence = непрозрачный пиксель. Край ищется только среди связных областей >= 40px (~53км²). Линейная экстраполяция, годится на ~1 час.",
   "target_confirmation": {
     "confirmed": null,
-    "reason": "среди кандидатов нет локальных масс (только системы синоптического масштаба)"
+    "reason": "известный шумовой объект в этой точке подавлен (сигнатура 170_-95), других локальных целей нет"
   },
   "system_analysis": {
     "available": true,
     "target_id": 0,
-    "area_km2": 201725.7,
-    "roi_precip_fraction": 0.381,
+    "area_km2": 207311.1,
+    "roi_precip_fraction": 0.476,
     "has_precip": true
   },
   "system_analysis_all": [
     {
       "target_id": 0,
       "available": true,
-      "roi_precip_fraction": 0.381,
+      "roi_precip_fraction": 0.476,
       "has_precip": true
     }
   ],
-  "local_analysis_all": []
+  "local_analysis_all": [
+    {
+      "target_id": 1,
+      "available": true,
+      "roi_precip_fraction": 0.0,
+      "has_precip": false
+    }
+  ]
 }
