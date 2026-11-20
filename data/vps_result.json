@@ -1,7 +1,7 @@
 {
-  "task_id": "claude-acc7da59ba",
+  "task_id": "claude-f19779310a",
   "returncode": 0,
-  "stdout": "ALREADY chan_orders.py\nAPPLIED helpers\nAPPLIED candle\nAPPLIED age\nAPPLIED l_against\nAPPLIED l_ok\nAPPLIED cap\nAPPLIED tg_bot.py hms\nAPPLIED tg_bot.py t1\nAPPLIED tg_bot.py t2\nAPPLIED tg_bot.py t3\nAPPLIED tg_bot.py t4\nAPPLIED tg_bot.py j1\nAPPLIED tg_bot.py j2\nAPPLIED tg_bot.py bskip\nAPPLIED tg_bot.py note\nAPPLIED tg_bot.py upd\nAPPLIED live_web.py var\nAPPLIED index.html renderShadow\ngate wait go wait go wait go wait go\nengine True True\nbot import ok True\npending tg_market orders: 0\nchan=active tg=active live=active health=200 errors=0\nNov 20 10:28:04 weather-odessa-vps python[3857324]: 10:28:04 shadow:  \nNov 20 10:28:04 weather-odessa-vps python[3857324]: 10:28:04 shadow:  -1004456742556\n11-20 10:25:08 EVENT  YB   0.0501638 ( 0.0501638) - ,  \n11-20 10:28:09 cycle 5.6s {\"fetched\": 0, \"prefetch\": 0.1, \"scan\": 0.5, \"shadow\": 0.0, \"nprop\": 0, \"fills\": 0.0}\nSHADOW4_DONE 20261120_102802 backup=/opt/trading-bot/bak_shadow4_20261120_102802\n",
+  "stdout": "# /etc/systemd/system/tg-bot-regr.service\n[Unit]\nDescription=Telegram bot for Regression account (modes sleep/monitor/auto)\nAfter=network-online.target\n[Service]\nUser=tbot\nEnvironment=POS_DIR=/opt/trading-bot/positions_regr\nEnvironment=MPLCONFIGDIR=/tmp/mpl-tg\nEnvironment=TG_ACCT_NAME=M-PM- M-PM-5M-PM-3M-QM-^@M-PM-5M-QM-^AM-QM-^AM-PM-8M-QM-^O\nWorkingDirectory=/opt/tg-notify\nExecStart=/opt/tg-notify/venv/bin/python /opt/tg-notify/tg_bot.py\nRestart=always\nRestartSec=5\n[Install]\nWantedBy=multi-user.target\n\n# /etc/systemd/system/tg-bot-regr.service.d/acct.conf\n[Service]\nEnvironment=ACCT_PORT=18102\n               total        used        free      shared  buff/cache   available\nMem:           11927        1703        3479           5        6970       10223\n2\n 10:30:01 up 86 days,  6:57,  1 user,  load average: 0.97, 1.16, 1.24\n",
   "stderr": "",
-  "completed_at_utc": "2026-11-20T10:28:34Z"
+  "completed_at_utc": "2026-11-20T10:30:01Z"
 }
