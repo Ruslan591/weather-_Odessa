@@ -13,13 +13,16 @@
 
 Файлы в POS_DIR: shadow.json {seq, items[], msg{}} (пишет только tg_bot через этот модуль), shadow_paths.jsonl (ход цены по 5m в R для каждой закрытой), shadow_cfg.json {"enabled", "max_wait_min", "max_open", "keep_closed", "path", "cf"}.
 Отключение: shadow_cfg.json {"enabled": false} или удалить этот файл. Если боевой код недоступен (SHADOW_CODE_DIR, по умолчанию /opt/trading-bot/positions), тень ничего не делает и пишет причину в журнал."""
-import copy, json, os, sys, threading, time, urllib.parse, urllib.request
+import copy, json, math, os, re, sys, threading, time, urllib.parse, urllib.request
 
 D = os.environ.get("POS_DIR", "/opt/trading-bot/positions_regr")
 CODE = os.environ.get("SHADOW_CODE_DIR", "/opt/trading-bot/positions")
+QF = os.path.join(D, "shadow_in.jsonl"); QOFF = os.path.join(D, "shadow_in.off"); NF = os.path.join(D, "shadow_notes.jsonl")
 F = os.path.join(D, "shadow.json"); PF = os.path.join(D, "shadow_paths.jsonl"); ORDF = os.path.join(D, "orders.json"); CFGF = os.path.join(D, "shadow_cfg.json")
 KL = "https://data-api.binance.vision/api/v3/klines"
-DEF = {"enabled": True, "max_wait_min": 10, "keep_closed": 300, "path": True, "cf": True}      # число одновременных теней не ограничено (не привязаны к балансу и слотам)
+DEF = {"enabled": True, "max_wait_min": 10, "keep_closed": 300, "path": True, "cf": True, "b_enabled": True, "b_post": False, "reg_k": 2.0}      # число одновременных теней не ограничено (не привязаны к балансу и слотам)
+TFMS = {"1m": 60000, "5m": 300000, "15m": 900000, "1h": 3600000, "4h": 14400000, "1d": 86400000}
+REG_LO, REG_HI, REG_FLAT = 40, 350, 0.03      # как chan_src (регрессионный канал: окно 40..350 свечей по максимуму |r|)
 WK = ("id", "sym", "side", "line", "ctype", "t_alert", "updates", "tf", "last", "chan")      # поля слежения, нужные для _tg_mkorder
 lock = threading.RLock()
 S = {"loaded": False, "seq": 0, "items": [], "msg": {}}
@@ -71,7 +74,7 @@ def eng():
         sys.path[:] = [x for x in sys.path if os.path.abspath(x) != os.path.abspath(CODE)] + [CODE]     # chan_orders ставит свой каталог первым; наши модули должны искаться раньше
         decisions.auto = _hook                  # тень не пишет в журнал решений счёта
         CO._l1m_emit = lambda *a, **k: None     # проверка входа не шлёт события в посты настоящих ордеров
-        CO.log = lambda m: log("кодсчёта: " + str(m)[:200])     # и не пишет в chan.log
+        CO.log = lambda m: None                 # и не пишет в chan.log (ход проверки хранится в записи: it["o"]["live1m"], it["g"])
         _E[0] = {"pos": pos, "exit_cfg": exit_cfg, "CO": CO}
     except Exception as e:
         _E[0] = False; log("боевой код недоступен (%s): тени отключены" % repr(e)[:200])
@@ -114,7 +117,7 @@ def msg_set(iid, **kw):
 
 # ---------- запись сигнала ----------
 def record(w, V, Bk=None, mid=None, chat="main", ao=None, now=None):
-    """Из tg_bot.send_watch после поста с мнением «заходить» без ордера Автоордера. ao = ao_pick(V, Bk) -> (setup, цель). Возвращает id записи или None."""
+    """Из tg_bot.send_watch после поста с мнением «заходить» без ордера Автоордера (и из очереди сканера других таймфреймов). ao = (setup, цель). Создаёт две тени: A (как ваш ручной вход) и B (то же + пробой канала регрессии свечи контроля по ходу сделки). Возвращает id записи A или None."""
     try:
         c = cfg()
         if not c.get("enabled", True) or not ao or not eng(): return None     # без боевого кода тень не создаётся
@@ -122,21 +125,111 @@ def record(w, V, Bk=None, mid=None, chat="main", ao=None, now=None):
         if not X: return None
         p = X.get("plan") or {}; sym = str(w.get("sym") or "")
         if not sym or p.get("side") not in ("long", "short"): return None
-        t0 = int(now or now_ms())
+        t0 = int(now or now_ms()); first = None
         with lock:
             _load()
             tf = str(w.get("tf") or X.get("tf") or "5m")
-            if any(i.get("status") in ("gate", "open") and i.get("sym") == sym and i.get("side") == p["side"] and i.get("tf") == tf for i in S["items"]): return None     # одна открытая тень на пару, сторону и таймфрейм
-            S["seq"] += 1
-            it = {"id": S["seq"], "sym": sym, "side": p["side"], "kind": kind, "tf": tf, "wid": w.get("id"), "mid": mid, "pchat": chat,
-                  "t_sig": X.get("t"), "t0": t0, "status": "gate", "setup": ao[0], "target": ao[1], "plan": _clean({k: p.get(k) for k in ("entry", "stop", "tp", "rr", "f", "side")}),
-                  "feat": _clean(X.get("feat")), "rows": _clean(X.get("rows")), "b1": _clean(X.get("b1")), "rg": _clean(X.get("rg")), "geo": _clean(X.get("geo")),
-                  "w": _clean({k: w.get(k) for k in WK}), "o": None, "ev": []}
-            S["items"].append(it); _save()
-        log("сигнал #%s %s %s %s (%s, цель %s)" % (it["id"], sym, p["side"], kind, ao[0], ao[1]))
-        return it["id"]
+            for var in (("A", "B") if c.get("b_enabled", True) else ("A",)):
+                if any(i.get("status") in ("gate", "open") and i.get("sym") == sym and i.get("side") == p["side"] and i.get("tf") == tf and (i.get("var") or "A") == var for i in S["items"]): continue     # одна открытая тень на пару, сторону, таймфрейм и вариант
+                S["seq"] += 1
+                it = {"id": S["seq"], "var": var, "sym": sym, "side": p["side"], "kind": kind, "tf": tf, "wid": w.get("id"), "mid": mid, "pchat": chat,
+                      "t_sig": X.get("t"), "t0": t0, "status": "gate", "setup": ao[0], "target": ao[1], "plan": _clean({k: p.get(k) for k in ("entry", "stop", "tp", "rr", "f", "side")}),
+                      "feat": _clean(X.get("feat")), "rows": _clean(X.get("rows")), "b1": _clean(X.get("b1")), "rg": _clean(X.get("rg")), "geo": _clean(X.get("geo")),
+                      "w": _clean({k: w.get(k) for k in WK}), "o": None, "ev": []}
+                if var == "B" and first: it["ref"] = first
+                S["items"].append(it); first = first or it["id"]
+                log("сигнал #%s%s %s %s %s %s (%s, цель %s)" % (it["id"], var, sym, p["side"], kind, tf, ao[0], ao[1]))
+            if first: _save()
+        return first
     except Exception as e:
         log("record error: %r" % e); return None
+
+
+def consume_queue():
+    """Сигналы от сканера других таймфреймов (tg_shadow_scan.py пишет shadow_in.jsonl): читаем с сохранённой позиции."""
+    try: off = int(open(QOFF).read().strip() or 0)
+    except Exception: off = 0
+    try: sz = os.path.getsize(QF)
+    except Exception: return 0
+    if sz <= off: return 0
+    n = 0
+    with open(QF, "rb") as f:
+        f.seek(off); data = f.read()
+    end = data.rfind(b"\n")
+    if end < 0: return 0
+    for ln in data[:end + 1].decode("utf-8", "replace").splitlines():
+        try:
+            sg = json.loads(ln); w = dict(sg["w"]); w["id"] = None
+            if record(w, sg.get("V"), sg.get("Bk"), None, "scan", tuple(sg["ao"]), sg.get("t")): n += 1
+        except Exception as e: log("очередь: %r" % e)
+    open(QOFF, "w").write(str(off + end + 1)); return n
+
+
+# ---------- регрессия свечи контроля (как канал регрессии, наложенный на график) ----------
+def reg_fit(c, atr_k, lo=REG_LO, hi=REG_HI, flat=REG_FLAT):
+    """Порт chan_src.regression_at на чистом Python: окно L (lo..hi) с максимальным |r| по последним hi закрытиям; vk - значение линии на последней свече, slope - наклон на свечу, sd - разброс остатков."""
+    n = len(c)
+    if n < lo + 2: return None
+    hn = min(hi, n); y = c[n - hn:][::-1]; Sx = Sxx = Sy = Sxy = Syy = 0.0; best = None
+    for i in range(hn):
+        x = float(i); v = y[i]; Sx += x; Sxx += x * x; Sy += v; Sxy += x * v; Syy += v * v; L = i + 1
+        if L < lo: continue
+        vx = Sxx - Sx * Sx / L; vy = Syy - Sy * Sy / L; cv = Sxy - Sx * Sy / L
+        if vx <= 0 or vy <= 0: continue
+        r = abs(cv) / math.sqrt(vx * vy)
+        if best is None or r > best[0]: best = (r, L, vx, vy, cv, Sy)
+    if not best: return None
+    r, L, vx, vy, cv, Sy_ = best; rev = cv / vx; sse = max(vy - rev * cv, 0.0); sd = math.sqrt(sse / max(L - 2, 1)); slope = -rev; vk = Sy_ / L - rev * (L - 1) / 2.0
+    th = flat * atr_k
+    return {"win": L, "r": r, "slope": slope, "vk": vk, "sd": sd, "dir": 1 if slope > th else (-1 if slope < -th else 0)}
+
+
+_KC = {}
+
+
+def _klines_last(sym, iv, limit=400, ttl=20):
+    """Последние свечи пары (кэш на ttl секунд: B и A по одной паре не дублируют запросы)."""
+    key = (sym, iv, limit); c = _KC.get(key)
+    if c and time.time() - c[0] < ttl: return c[1]
+    q = urllib.parse.urlencode({"symbol": sym + "USDT", "interval": iv, "limit": limit})
+    with urllib.request.urlopen(urllib.request.Request(KL + "?" + q, headers={"User-Agent": "tg-shadow"}), timeout=12) as r: d = json.loads(r.read().decode("utf-8"))
+    _KC[key] = (time.time(), d)
+    if len(_KC) > 200:
+        for k_ in [k_ for k_, v_ in _KC.items() if time.time() - v_[0] > 120]: _KC.pop(k_, None)
+    return d
+
+
+def reg_info(sym, ctf, side, px, k=None, rows=None):
+    """Канал регрессии свечей контроля (ctf) на момент px: линия на следующую свечу, полосы ±K·sd, z-оценка цены, пробой канала по ходу сделки (long: выше верхней, short: ниже нижней). None, если данных мало."""
+    ms = TFMS.get(ctf, 60000); rows = rows or _klines_last(sym, ctf, 400); cl = [r for r in rows if int(r[0]) + ms <= now_ms()]
+    if len(cl) < REG_LO + 15: return None
+    c = [float(r[4]) for r in cl]; tr = [max(float(r[2]) - float(r[3]), abs(float(r[2]) - c[i - 1]), abs(float(r[3]) - c[i - 1])) for i, r in enumerate(cl) if i > 0]
+    atr = sum(tr[-14:]) / 14.0; f = reg_fit(c, atr)
+    if not f: return None
+    K = float(k or cfg().get("reg_k", 2.0)); mid = f["vk"] + f["slope"]; sd = f["sd"]; up, lo_ = mid + K * sd, mid - K * sd; sgn = 1 if side == "long" else -1
+    return {"tf": ctf, "win": f["win"], "r": round(f["r"], 3), "dir": f["dir"], "slope_atr": round(f["slope"] / atr, 3) if atr else None, "z": round((px - mid) / sd, 2) if sd > 0 else None,
+            "mid": mid, "up": up, "lo": lo_, "k": K, "px": px, "brk": bool((px > up) if sgn > 0 else (px < lo_))}
+
+
+# ---------- заметки пользователя из канала ----------
+def find_by_msg(mid):
+    """id тени по id сообщения канала (сигнал, график или разбор), на которое ответил пользователь."""
+    if not mid: return None
+    with lock:
+        _load()
+        for k, m in S["msg"].items():
+            if k.isdigit() and mid in (m.get("a"), m.get("b"), m.get("c")): return int(k)
+    return None
+
+
+def note_add(text, mid=None, reply_to=None, t=None):
+    """Сохраняет заметку пользователя в shadow_notes.jsonl: текст, привязка к тени (ответ на её сообщение или #номер в тексте). Возвращает список id теней."""
+    ids = []; r = find_by_msg(reply_to)
+    if r: ids.append(r)
+    for x in re.findall(r"#\s?(\d{1,5})", text or ""):
+        if int(x) not in ids: ids.append(int(x))
+    with open(NF, "a", encoding="utf-8") as f: f.write(json.dumps({"t": int(t or now_ms()), "mid": mid, "reply_to": reply_to, "trades": ids, "text": text}, ensure_ascii=False, separators=(",", ":")) + "\n")
+    return ids
 
 
 # ---------- вход: ордер, фильтр 1m, позиция ----------
@@ -184,10 +277,17 @@ def _tick_gate(E, it):
     if it.get("o") is None:
         if not _create_order(E, it): return
         if it["status"] != "gate": return
-    o = it["o"]; wait = int(cfg().get("max_wait_min", 10)) * 60000
-    if now - it["t0"] > wait: return _filtered(E, it, "рыночный вход не выполнен за %d минут: свеча 1m пары так и не пошла по ходу сделки (попыток %s)" % (wait // 60000, o.get("live1m_tries") or 0), now)
-    g, why = CO._live1m_gate(o, now)
+    o = it["o"]; wait = CO._gate_cap_ms(o) if hasattr(CO, "_gate_cap_ms") else int(cfg().get("max_wait_min", 10)) * 60000; ctf = (o.get("live1m") or {}).get("ctf") or (CO._ctrl_tf(o) if hasattr(CO, "_ctrl_tf") else "1m")
+    if now - it["t0"] > wait:
+        return _filtered(E, it, ("вариант B: пробоя канала регрессии %s по ходу сделки не было за %d мин (попыток %s)" if it.get("var") == "B" else "вход по рынку не выполнен за %d мин: свеча контроля %s так и не показала ход по сделке (попыток %s)") % ((ctf, wait // 60000, o.get("live1m_tries") or 0) if it.get("var") == "B" else (wait // 60000, ctf, o.get("live1m_tries") or 0)), now)
+    if now - it.get("gt", 0) < 8000: return      # как цикл боевого сервиса (~9 с): не чаще раза в 8 секунд на тень
+    it["gt"] = now; g, why = CO._live1m_gate(o, now)
     it["g"] = {"n": o.get("live1m_tries"), "l1": o.get("live1m"), "t": now}
+    if g == "go":      # снимок канала регрессии свечи контроля на входе (для всех теней, для разбора), у варианта B это ещё и условие входа
+        try: ri = reg_info(it["sym"], ctf, it["side"], float(o["price"]))
+        except Exception as e: ri = None; log_once("reg", "регрессия: %r" % e)
+        it["reg"] = ri; it["g"]["reg"] = ri
+        if it.get("var") == "B" and ri is not None and not ri["brk"]: return      # B ждёт пробоя канала по ходу сделки
     if g == "cancel": return _filtered(E, it, why or "вход отменён фильтром", now)
     if g == "go":
         a1 = _snap(E["pos"].atr1h, it["sym"] + "USDT") or o["atr"] * 3.46
@@ -273,6 +373,8 @@ def tick():
     if not enabled(): return
     E = eng()
     if not E: return
+    try: consume_queue()
+    except Exception as e: log("очередь: %r" % e)
     with lock: _load(); ids = [i["id"] for i in S["items"] if not i.get("legacy") and i.get("status") in ("gate", "open", "filtered", "closed") and (i.get("status") != "closed" or not i.get("chk"))]
     ords = None; now = now_ms()
     for iid in ids:
@@ -334,13 +436,13 @@ def cf_r(it):
 
 def text_gate(it, hhmm, link=None):
     pl = it.get("plan") or {}; o = it.get("o") or {}; side = it["side"].upper()
-    L = ["👻 ТЕНЬ #%s · %s %s · %s" % (it["id"], it["sym"], side, KD.get(it["kind"], it["kind"])),
+    L = ["👻 ТЕНЬ #%s%s · %s %s · %s · %s" % (it["id"], " (B)" if it.get("var") == "B" else "", it["sym"], side, KD.get(it["kind"], it["kind"]), it.get("tf") or "5m"),
          "сигнал %s%s · план бота: вход ~%s · стоп %s · цель %s · R:R %s" % (hhmm(it["t0"]), (" · " + link) if link else "", fpx(pl.get("entry")), fpx(pl.get("stop")), fpx(pl.get("tp")), pl.get("rr") if pl.get("rr") is not None else "—")]
-    st = it["status"]; l1 = o.get("live1m") or {}
+    st = it["status"]; l1 = o.get("live1m") or {}; ctf = l1.get("ctf") or "1m"
     if st == "gate":
-        L.append("⏳ проверка входа (как при ручном ордере): ждём, чтобы свеча 1m пары шла по ходу сделки" + ((" · сейчас o %s c %s не по ходу, попытка %s" % (fpx(l1.get("o")), fpx(l1.get("c")), o.get("live1m_tries"))) if l1 and not l1.get("ok") else ""))
+        L.append("⏳ проверка входа (как при ручном ордере): ждём, чтобы свеча %s пары шла по ходу сделки" % ctf + ((" · сейчас o %s c %s %s, попытка %s" % (fpx(l1.get("o")), fpx(l1.get("c")), "ещё слишком молодая" if l1.get("young") else "не по ходу", o.get("live1m_tries"))) if l1 and not l1.get("ok") else ""))
     elif st in ("open", "closed"):
-        p = it["p"]; L.append("✅ вход %s по %s (свеча 1m пары по ходу: o %s c %s, попыток %s) · стоп %s · цель %s" % (hhmm(it.get("t_fill") or p["t_in"]), fpx(p["entry"]), fpx(l1.get("o")), fpx(l1.get("c")), o.get("live1m_tries") or 1, fpx(p["stop0"]), fpx(p["tp"])))
+        p = it["p"]; L.append("✅ вход %s по %s (свеча %s пары по ходу: o %s c %s, попыток %s) · стоп %s · цель %s" % (hhmm(it.get("t_fill") or p["t_in"]), fpx(p["entry"]), ctf, fpx(l1.get("o")), fpx(l1.get("c")), o.get("live1m_tries") or 1, fpx(p["stop0"]), fpx(p["tp"])))
         L.append("позиция и итог ниже ⬇")
     elif st == "filtered":
         L.append("⛔ не вошла: " + str(it.get("why")))
@@ -385,20 +487,23 @@ def caption(it, hhmm, last_px=None):
 
 def postmortem(it, hhmm):
     """Разбор итога: что видел фильтр входа, как шла сделка, где возможна ошибка. Факты и правила, без выводов по одной сделке."""
-    L = []; o = it.get("o") or {}; l1 = o.get("live1m") or {}; plan = it.get("plan") or {}
+    L = []; o = it.get("o") or {}; l1 = o.get("live1m") or {}; plan = it.get("plan") or {}; vtag = " (вариант B)" if it.get("var") == "B" else ""
     if it["status"] == "filtered":
         c = it.get("cf"); r = cf_r(it)
-        L.append("👻 ТЕНЬ #%s %s %s: вход не состоялся" % (it["id"], it["sym"], it["side"].upper()))
+        L.append("👻 ТЕНЬ #%s%s %s %s: вход не состоялся" % (it["id"], vtag, it["sym"], it["side"].upper()))
         L.append("Причина фильтра: %s" % it.get("why"))
         if r is not None:
             L.append("Без фильтра (вход сразу по цене сигнала %s): %s, %s R, пик +%.2f R, против -%.2f R." % (fpx(c["entry"]), RS.get(c.get("reason"), c.get("reason")), _sg(r), _R(c, c.get("mfe_pct")) or 0, abs(_R(c, c.get("mae_pct")) or 0)))
             L.append("➡ Фильтр сработал верно: уберёг от убытка." if r < 0 else "➡ Фильтр лишил прибыли: проверить, не слишком ли строго ждём свечу 1m / лимит ухода от линии (tg_live1m.json).")
     else:
         p = it["p"]; mins = int(((p.get("t_out") or now_ms()) - p["t_in"]) / 60000); mfe, mae = it.get("mfe_r") or 0, abs(it.get("mae_r") or 0); delay = int((p["t_in"] - it["t0"]) / 60000)
-        L.append("👻 ТЕНЬ #%s %s %s: %s · %s R · net %s%%" % (it["id"], it["sym"], p["side"].upper(), RS.get(p.get("reason"), p.get("reason")), _sg(p.get("r_mult")), _sg(p.get("net_pct"))))
+        L.append("👻 ТЕНЬ #%s%s %s %s: %s · %s R · net %s%%" % (it["id"], vtag, it["sym"], p["side"].upper(), RS.get(p.get("reason"), p.get("reason")), _sg(p.get("r_mult")), _sg(p.get("net_pct"))))
         slip = (p["entry"] / float(plan["entry"]) - 1) * 100 * (1 if p["side"] == "long" else -1) if plan.get("entry") else None
-        L.append("Вход: сигнал %s → вход %s (%s мин ожидания свечи 1m, попыток %s) по %s%s. Свеча 1m пары на входе: o %s c %s." % (hhmm(it["t0"]), hhmm(p["t_in"]), delay, o.get("live1m_tries") or 1, fpx(p["entry"]),
-                 (" (хуже плана на %s%%)" % ("%.2f" % slip)) if slip is not None and slip > 0.02 else "", fpx(l1.get("o")), fpx(l1.get("c"))))
+        ctf = l1.get("ctf") or "1m"
+        L.append("Вход: сигнал %s → вход %s (%s мин ожидания свечи %s, попыток %s) по %s%s. Свеча %s пары на входе: o %s c %s." % (hhmm(it["t0"]), hhmm(p["t_in"]), delay, ctf, o.get("live1m_tries") or 1, fpx(p["entry"]),
+                 (" (хуже плана на %s%%)" % ("%.2f" % slip)) if slip is not None and slip > 0.02 else "", ctf, fpx(l1.get("o")), fpx(l1.get("c"))))
+        rg = it.get("reg")
+        if rg: L.append("Регрессия %s на входе: окно %s, r %s, наклон %s ATR, цена %s σ от линии, пробой канала по ходу сделки: %s." % (rg.get("tf"), rg.get("win"), rg.get("r"), rg.get("slope_atr"), rg.get("z"), "да" if rg.get("brk") else "нет"))
         L.append("Ход: пик +%.2f R, против до -%.2f R, длительность %s мин." % (mfe, mae, mins))
         evs = _mid_events(it, hhmm)
         if evs: L.append("События: " + " · ".join(evs))
@@ -433,7 +538,7 @@ def stats(items=None):
 
 def summary_text(hhmm=None, last=8):
     hhmm = hhmm or (lambda ms: time.strftime("%H:%M", time.localtime(ms / 1000)))
-    its = snapshot(); s = stats(its); a = s["all"]; f = s["filtered"]
+    its = [i for i in snapshot() if i.get("var") != "B"]; s = stats(its); a = s["all"]; f = s["filtered"]
     if not its: return "👻 Теневых сделок пока нет: сигналы «ЗАХОДИТЬ», по которым вы не открыли сделку, ведутся на бумаге по тем же правилам, что ваш ручной вход."
     L = ["👻 Тени (пропущенные сигналы «ЗАХОДИТЬ», на счёт не влияют)", "Сейчас в работе: %d · вошли и закрыты: %d (плюс %d / минус %d, итого %s R, среднее %s R)" % (s["open"], a["n"], a["win"], a["n"] - a["win"], _sg(a["R"]), _sg(a["avg"]))]
     if f["n"]: L.append("Отфильтрованы входом: %d; если бы входили без фильтра: %s R (%d из них в плюс)" % (f["n"], _sg(f["cf"]["R"]), f["cf"]["win"]))
@@ -463,7 +568,7 @@ def _agg(xs, get):
 
 def stats_text(tf="all", kind="all"):
     """Сводка по выбору: таймфрейм (all | 5m | 15m | 1h | 4h | 1d) и вид (all | bl отбой LONG | bs отбой SHORT | brk пробой). Итоги в R после комиссий."""
-    its = [i for i in snapshot() if _sel(i, tf, kind)]
+    allits = [i for i in snapshot() if _sel(i, tf, kind)]; its = [i for i in allits if i.get("var") != "B"]; itsB = [i for i in allits if i.get("var") == "B"]
     cl = [i for i in its if i.get("status") == "closed" and i.get("p")]; fl = [i for i in its if i.get("status") == "filtered"]; op = [i for i in its if i.get("status") in ("gate", "open")]
     L = ["📊 Тени · %s · %s" % ("все таймфреймы" if tf == "all" else tf, KIND_RU.get(kind, kind)),
          "Сигналов: %d · в работе %d · вошли %d (закрыто) · фильтр входа не пустил %d" % (len(its), len(op), len(cl), len(fl))]
@@ -479,6 +584,9 @@ def stats_text(tf="all", kind="all"):
     if fl:
         nn, ww, rr = _agg(fl, cf_r)
         L.append("Фильтр входа не пустил %d; без фильтра было бы %s R (в плюс %d из %d посчитанных)" % (len(fl), _sg(rr), ww, nn))
+    if itsB:
+        clB = [i for i in itsB if i.get("status") == "closed" and i.get("p")]; flB = [i for i in itsB if i.get("status") == "filtered"]; nB, wB, rB = _agg(clB, lambda i: i["p"].get("r_mult"))
+        L.append("Вариант B (вход ждёт пробоя канала регрессии свечи контроля по ходу): сигналов %d, вошли %d%s, не вошли %d, в работе %d" % (len(itsB), nB, (" (плюс %d, итого %s R, среднее %s R)" % (wB, _sg(rB), _sg(rB / nB))) if nB else "", len(flB), len([i for i in itsB if i.get("status") in ("gate", "open")])))
     if tf == "all":
         parts = []
         for t in TFL:
