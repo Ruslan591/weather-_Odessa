@@ -20,7 +20,7 @@ CODE = os.environ.get("SHADOW_CODE_DIR", "/opt/trading-bot/positions")
 QF = os.path.join(D, "shadow_in.jsonl"); QOFF = os.path.join(D, "shadow_in.off"); NF = os.path.join(D, "shadow_notes.jsonl")
 F = os.path.join(D, "shadow.json"); PF = os.path.join(D, "shadow_paths.jsonl"); ORDF = os.path.join(D, "orders.json"); CFGF = os.path.join(D, "shadow_cfg.json")
 KL = "https://data-api.binance.vision/api/v3/klines"
-DEF = {"enabled": True, "max_wait_min": 10, "keep_closed": 300, "path": True, "cf": True, "b_enabled": True, "b_post": False, "reg_k": 2.0}      # число одновременных теней не ограничено (не привязаны к балансу и слотам)
+DEF = {"enabled": True, "max_wait_min": 10, "keep_closed": 300, "path": True, "cf": True, "b_enabled": True, "b_post": False, "reg_k": 2.0, "tfs": ["5m"]}      # tfs: на каких таймфреймах ведутся тени (пока только 5m: решение пользователя 20.11, выше 5m входы остановлены)      # число одновременных теней не ограничено (не привязаны к балансу и слотам)
 TFMS = {"1m": 60000, "5m": 300000, "15m": 900000, "1h": 3600000, "4h": 14400000, "1d": 86400000}
 REG_LO, REG_HI, REG_FLAT = 40, 350, 0.03      # как chan_src (регрессионный канал: окно 40..350 свечей по максимуму |r|)
 WK = ("id", "sym", "side", "line", "ctype", "t_alert", "updates", "tf", "last", "chan")      # поля слежения, нужные для _tg_mkorder
@@ -129,6 +129,7 @@ def record(w, V, Bk=None, mid=None, chat="main", ao=None, now=None):
         with lock:
             _load()
             tf = str(w.get("tf") or X.get("tf") or "5m")
+            if tf not in (c.get("tfs") or ["5m"]): return None      # таймфрейм не разрешён (shadow_cfg.json: tfs)
             for var in (("A", "B") if c.get("b_enabled", True) else ("A",)):
                 if any(i.get("status") in ("gate", "open") and i.get("sym") == sym and i.get("side") == p["side"] and i.get("tf") == tf and (i.get("var") or "A") == var for i in S["items"]): continue     # одна открытая тень на пару, сторону, таймфрейм и вариант
                 S["seq"] += 1
@@ -149,6 +150,10 @@ def consume_queue():
     """Сигналы от сканера других таймфреймов (tg_shadow_scan.py пишет shadow_in.jsonl): читаем с сохранённой позиции."""
     try: off = int(open(QOFF).read().strip() or 0)
     except Exception: off = 0
+    if cfg().get("scan", True) is False:      # сканер таймфреймов выключен: очередь не разбираем и не копим
+        try: open(QF, "w").close(); open(QOFF, "w").write("0")
+        except Exception: pass
+        return 0
     try: sz = os.path.getsize(QF)
     except Exception: return 0
     if sz <= off: return 0
@@ -388,7 +393,9 @@ def tick():
                     if ords is None: ords = _orders()
                     o = next((x for x in ords if x.get("src_watch") == it["wid"] and (x.get("approved_t") or 0) >= it["t0"] - 120000), None)
                     if o: it.update(status="taken", taken_oid=o.get("id"), chk=1)
-            if it["status"] == "gate": _tick_gate(E, it)
+            if it.get("tf") not in (cfg().get("tfs") or ["5m"]) and it["status"] in ("gate", "open", "filtered"):      # таймфрейм отключён: открытые и ждущие входа снимаем, холостые прогоны не продолжаем
+                if it["status"] in ("gate", "open"): it.update(status="void", why="таймфрейм %s отключён" % it.get("tf"), t_end=now)
+            elif it["status"] == "gate": _tick_gate(E, it)
             elif it["status"] == "open":
                 if _advance(E, it, "p") and it["p"]["status"] == "closed": _finish(it)
             elif it["status"] == "filtered" and it.get("cf") and it["cf"]["status"] == "open": _advance(E, it, "cf")
