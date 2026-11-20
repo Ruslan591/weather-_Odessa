@@ -1,7 +1,7 @@
 {
-  "task_id": "claude-f19779310a",
+  "task_id": "claude-ce11827160",
   "returncode": 0,
-  "stdout": "# /etc/systemd/system/tg-bot-regr.service\n[Unit]\nDescription=Telegram bot for Regression account (modes sleep/monitor/auto)\nAfter=network-online.target\n[Service]\nUser=tbot\nEnvironment=POS_DIR=/opt/trading-bot/positions_regr\nEnvironment=MPLCONFIGDIR=/tmp/mpl-tg\nEnvironment=TG_ACCT_NAME=M-PM- M-PM-5M-PM-3M-QM-^@M-PM-5M-QM-^AM-QM-^AM-PM-8M-QM-^O\nWorkingDirectory=/opt/tg-notify\nExecStart=/opt/tg-notify/venv/bin/python /opt/tg-notify/tg_bot.py\nRestart=always\nRestartSec=5\n[Install]\nWantedBy=multi-user.target\n\n# /etc/systemd/system/tg-bot-regr.service.d/acct.conf\n[Service]\nEnvironment=ACCT_PORT=18102\n               total        used        free      shared  buff/cache   available\nMem:           11927        1703        3479           5        6970       10223\n2\n 10:30:01 up 86 days,  6:57,  1 user,  load average: 0.97, 1.16, 1.24\n",
+  "stdout": "ExecStart=/opt/trading-bot/venv/bin/python /opt/trading-bot/positions/chan_orders.py loop\nEnvironment=POS_DIR=/opt/trading-bot/positions_regr\nEnvironment=CHAN_SRC=regr\nEnvironment=CHAN_EDGE=1\nEnvironment=TG_GATE=1\n/opt/trading-bot/classic/backup_20261028_154103/classic_trendline.py\n/opt/trading-bot/classic/classic_trendline.py\n/opt/trading-bot/classic/backup_20261021_225602/classic_trendline.py\n",
   "stderr": "",
-  "completed_at_utc": "2026-11-20T10:30:01Z"
+  "completed_at_utc": "2026-11-20T10:31:01Z"
 }
