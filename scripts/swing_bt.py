@@ -56,6 +56,9 @@ def load_items():
 if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) > 1 else "grid"
     items = load_items(); print("items", len(items), flush=True)
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(8) as ex: list(ex.map(lambda q: klines(q), items))      # свечи грузим параллельно (сеть медленная)
+    print("klines loaded", len(KL), flush=True)
     base = {}; t0 = time.time()
     for q in items:
         try: r = run(q, False); base[q["_src"]] = r.get("r_mult") if r["status"] == "closed" else None
