@@ -31,8 +31,19 @@ _CUR = [None]          # (рабочая копия записи, "p" | "cf") н
 _log_once = set()
 
 
-def num(it): return int(it.get("n") or it["id"])
+def num(it): return int(it.get("sn") or it["id"])      # показываемый номер сигнала (поле sn; старое поле n других записей это не оно)
 def tag(it): return "%s%s" % (num(it), "B" if it.get("var") == "B" else "")      # показываемый номер: 42 или 42B
+
+
+def tags(ids):
+    """Показываемые номера по внутренним id (для подтверждения заметки): 61 -> 61, 62 -> 61B."""
+    with lock:
+        _load(); by = {i["id"]: i for i in S["items"]}
+    out = []
+    for x in ids:
+        t = tag(by[x]) if x in by else str(x)
+        if t not in out: out.append(t)
+    return out
 
 
 def log(m): print(time.strftime("%H:%M:%S"), "shadow:", m, flush=True)
@@ -96,7 +107,11 @@ def _load():
         if "o" not in it and "p" not in it and "t0" not in it:
             it["legacy"] = 1; it.setdefault("t0", it.get("t_in") or 0)
             if it.get("status") == "open": it["status"] = "void"; it["why"] = "модель v1 снята"
-    S["nseq"] = max([S.get("nseq", 0)] + [int(i.get("n") or i.get("id") or 0) for i in S["items"]])      # номер сигнала для показа: A и B одного сигнала делят номер (#42 и #42B)
+    byid = {}      # показываемый номер sn: у A это его id, у B номер его A (ref) с буквой B; записи без ref берут свой id
+    for i in sorted(S["items"], key=lambda x: x["id"]):
+        if not i.get("sn"): i["sn"] = (byid.get(i.get("ref")) or i.get("ref") or i["id"]) if i.get("var") == "B" else i["id"]
+        byid[i["id"]] = i["sn"]
+    S["nseq"] = max([0] + [int(i["sn"]) for i in S["items"]])      # следующий новый сигнал: nseq + 1, у A и B одного сигнала один номер без пропусков
     S["loaded"] = True
 
 
@@ -140,13 +155,13 @@ def record(w, V, Bk=None, mid=None, chat="main", ao=None, now=None):
                 if any(i.get("status") in ("gate", "open") and i.get("sym") == sym and i.get("side") == p["side"] and i.get("tf") == tf and (i.get("var") or "A") == var for i in S["items"]): continue     # одна открытая тень на пару, сторону, таймфрейм и вариант
                 S["seq"] += 1
                 if nn is None: S["nseq"] += 1; nn = S["nseq"]      # один номер на сигнал, у B та же цифра с буквой B (не раздуваем нумерацию)
-                it = {"id": S["seq"], "n": nn, "var": var, "sym": sym, "side": p["side"], "kind": kind, "tf": tf, "wid": w.get("id"), "mid": mid, "pchat": chat,
+                it = {"id": S["seq"], "sn": nn, "var": var, "sym": sym, "side": p["side"], "kind": kind, "tf": tf, "wid": w.get("id"), "mid": mid, "pchat": chat,
                       "t_sig": X.get("t"), "t0": t0, "status": "gate", "setup": ao[0], "target": ao[1], "plan": _clean({k: p.get(k) for k in ("entry", "stop", "tp", "rr", "f", "side")}),
                       "feat": _clean(X.get("feat")), "rows": _clean(X.get("rows")), "b1": _clean(X.get("b1")), "rg": _clean(X.get("rg")), "geo": _clean(X.get("geo")),
                       "w": _clean({k: w.get(k) for k in WK}), "o": None, "ev": []}
                 if var == "B" and first: it["ref"] = first
                 S["items"].append(it); first = first or it["id"]
-                log("сигнал #%s%s %s %s %s %s (%s, цель %s)" % (it["n"], var, sym, p["side"], kind, tf, ao[0], ao[1]))
+                log("сигнал #%s%s %s %s %s %s (%s, цель %s)" % (it["sn"], var, sym, p["side"], kind, tf, ao[0], ao[1]))
             if first: _save()
         return first
     except Exception as e:
@@ -241,7 +256,7 @@ def note_add(text, mid=None, reply_to=None, t=None):
     with lock:
         _load(); its = list(S["items"])
     for x, v in re.findall(r"#\s?(\d{1,5})\s?([AaBbАаВв]?)", text or ""):      # #42 - сигнал 42 (A и B), #42B - только вариант B
-        m = [i for i in its if int(i.get("n") or 0) == int(x)] or [i for i in its if i["id"] == int(x)]
+        m = [i for i in its if int(i.get("sn") or 0) == int(x)] or [i for i in its if i["id"] == int(x)]
         if v and v.upper() in ("B", "В"): m = [i for i in m if i.get("var") == "B"]
         for i in (m or [{"id": int(x)}]):
             if i["id"] not in ids: ids.append(i["id"])
