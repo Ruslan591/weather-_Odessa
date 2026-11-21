@@ -287,6 +287,10 @@ def _mkpos(E, it, o, fp, ft, a1):
         import swing_stop
         if swing_stop.load().get("enabled", True): p["sw"] = 1
     except Exception as e: log_once("sw", "swing_stop: %r" % e)
+    try:      # цель дальше при запасе хода (tp_ext, #38): флаг ext только для теней, у копии pb его нет
+        import tp_ext
+        if tp_ext.load().get("enabled", True): p["ext"] = 1
+    except Exception as e: log_once("ext", "tp_ext: %r" % e)
     if o.get("setup") == "breakout" and (o.get("regime") or {}).get("regime") == "flat":     # правило выхода «флэт + пробой»: 50% на +0.4R, остаток в БУ
         if (o["tp"] - fp) * side > 0.4 * R: p["xr"] = "flat_brk"
     return p, None
@@ -330,7 +334,7 @@ def _tick_gate(E, it):
         p, why = _mkpos(E, it, o, float(o["price"]), now, a1)
         if not p: it.update(status="void", why=why, t_end=now); return
         it.update(status="open", p=p, t_fill=now); it.setdefault("ev", []).append({"t": now, "k": "entry", "px": p["entry"]})
-        if p.get("sw"): pb = copy.deepcopy(p); pb.pop("sw", None); pb["src"] = "shadow_pb"; it["pb"] = pb      # копия без переноса стопа: что было бы без правила
+        if p.get("sw"): pb = copy.deepcopy(p); pb.pop("sw", None); pb.pop("ext", None); pb["src"] = "shadow_pb"; it["pb"] = pb      # копия без переноса стопа: что было бы без правила
         log("вход #%s %s %s по %.6g (попыток %s)" % (it["id"], it["sym"], it["side"], p["entry"], o.get("live1m_tries")))
 
 
