@@ -25,10 +25,14 @@ TFMS = {"1m": 60000, "5m": 300000, "15m": 900000, "1h": 3600000, "4h": 14400000,
 REG_LO, REG_HI, REG_FLAT = 40, 350, 0.03      # как chan_src (регрессионный канал: окно 40..350 свечей по максимуму |r|)
 WK = ("id", "sym", "side", "line", "ctype", "t_alert", "updates", "tf", "last", "chan")      # поля слежения, нужные для _tg_mkorder
 lock = threading.RLock()
-S = {"loaded": False, "seq": 0, "items": [], "msg": {}}
+S = {"loaded": False, "seq": 0, "nseq": 0, "items": [], "msg": {}}
 _E = [None]            # боевой код: None - не пробовали, False - не загрузился, dict - модули
 _CUR = [None]          # (рабочая копия записи, "p" | "cf") на время шага движка: сюда hook пишет события сопровождения
 _log_once = set()
+
+
+def num(it): return int(it.get("n") or it["id"])
+def tag(it): return "%s%s" % (num(it), "B" if it.get("var") == "B" else "")      # показываемый номер: 42 или 42B
 
 
 def log(m): print(time.strftime("%H:%M:%S"), "shadow:", m, flush=True)
@@ -86,18 +90,19 @@ def _load():
     if S["loaded"]: return
     try:
         d = json.load(open(F, encoding="utf-8"))
-        S["seq"] = int(d.get("seq", 0)); S["items"] = list(d.get("items") or []); S["msg"] = dict(d.get("msg") or {})
+        S["seq"] = int(d.get("seq", 0)); S["items"] = list(d.get("items") or []); S["msg"] = dict(d.get("msg") or {}); S["nseq"] = int(d.get("nseq", 0))
     except Exception: pass
     for it in S["items"]:     # записи первой версии (простая модель без боевого движка): архивные, движок и Telegram их не трогают, страница показывает; открытые снимаем
         if "o" not in it and "p" not in it and "t0" not in it:
             it["legacy"] = 1; it.setdefault("t0", it.get("t_in") or 0)
             if it.get("status") == "open": it["status"] = "void"; it["why"] = "модель v1 снята"
+    S["nseq"] = max([S.get("nseq", 0)] + [int(i.get("n") or i.get("id") or 0) for i in S["items"]])      # номер сигнала для показа: A и B одного сигнала делят номер (#42 и #42B)
     S["loaded"] = True
 
 
 def _save():
     tmp = F + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f: json.dump({"seq": S["seq"], "items": S["items"], "msg": S["msg"]}, f, ensure_ascii=False, separators=(",", ":"), default=str)
+    with open(tmp, "w", encoding="utf-8") as f: json.dump({"seq": S["seq"], "nseq": S.get("nseq", 0), "items": S["items"], "msg": S["msg"]}, f, ensure_ascii=False, separators=(",", ":"), default=str)
     os.replace(tmp, F)
 
 
@@ -130,16 +135,18 @@ def record(w, V, Bk=None, mid=None, chat="main", ao=None, now=None):
             _load()
             tf = str(w.get("tf") or X.get("tf") or "5m")
             if tf not in (c.get("tfs") or ["5m"]): return None      # таймфрейм не разрешён (shadow_cfg.json: tfs)
+            nn = None
             for var in (("A", "B") if c.get("b_enabled", True) else ("A",)):
                 if any(i.get("status") in ("gate", "open") and i.get("sym") == sym and i.get("side") == p["side"] and i.get("tf") == tf and (i.get("var") or "A") == var for i in S["items"]): continue     # одна открытая тень на пару, сторону, таймфрейм и вариант
                 S["seq"] += 1
-                it = {"id": S["seq"], "var": var, "sym": sym, "side": p["side"], "kind": kind, "tf": tf, "wid": w.get("id"), "mid": mid, "pchat": chat,
+                if nn is None: S["nseq"] += 1; nn = S["nseq"]      # один номер на сигнал, у B та же цифра с буквой B (не раздуваем нумерацию)
+                it = {"id": S["seq"], "n": nn, "var": var, "sym": sym, "side": p["side"], "kind": kind, "tf": tf, "wid": w.get("id"), "mid": mid, "pchat": chat,
                       "t_sig": X.get("t"), "t0": t0, "status": "gate", "setup": ao[0], "target": ao[1], "plan": _clean({k: p.get(k) for k in ("entry", "stop", "tp", "rr", "f", "side")}),
                       "feat": _clean(X.get("feat")), "rows": _clean(X.get("rows")), "b1": _clean(X.get("b1")), "rg": _clean(X.get("rg")), "geo": _clean(X.get("geo")),
                       "w": _clean({k: w.get(k) for k in WK}), "o": None, "ev": []}
                 if var == "B" and first: it["ref"] = first
                 S["items"].append(it); first = first or it["id"]
-                log("сигнал #%s%s %s %s %s %s (%s, цель %s)" % (it["id"], var, sym, p["side"], kind, tf, ao[0], ao[1]))
+                log("сигнал #%s%s %s %s %s %s (%s, цель %s)" % (it["n"], var, sym, p["side"], kind, tf, ao[0], ao[1]))
             if first: _save()
         return first
     except Exception as e:
@@ -231,8 +238,13 @@ def note_add(text, mid=None, reply_to=None, t=None):
     """Сохраняет заметку пользователя в shadow_notes.jsonl: текст, привязка к тени (ответ на её сообщение или #номер в тексте). Возвращает список id теней."""
     ids = []; r = find_by_msg(reply_to)
     if r: ids.append(r)
-    for x in re.findall(r"#\s?(\d{1,5})", text or ""):
-        if int(x) not in ids: ids.append(int(x))
+    with lock:
+        _load(); its = list(S["items"])
+    for x, v in re.findall(r"#\s?(\d{1,5})\s?([AaBbАаВв]?)", text or ""):      # #42 - сигнал 42 (A и B), #42B - только вариант B
+        m = [i for i in its if int(i.get("n") or 0) == int(x)] or [i for i in its if i["id"] == int(x)]
+        if v and v.upper() in ("B", "В"): m = [i for i in m if i.get("var") == "B"]
+        for i in (m or [{"id": int(x)}]):
+            if i["id"] not in ids: ids.append(i["id"])
     with open(NF, "a", encoding="utf-8") as f: f.write(json.dumps({"t": int(t or now_ms()), "mid": mid, "reply_to": reply_to, "trades": ids, "text": text}, ensure_ascii=False, separators=(",", ":")) + "\n")
     return ids
 
@@ -441,15 +453,22 @@ def cf_r(it):
     return c.get("r_mult") if c and c.get("status") == "closed" else None
 
 
+def chain_txt(l1, ctf="1m"):
+    """Свечи контроля входа: 15m 150/150 с ✓ · 5m 20/50 с ✗ (сколько секунд цена держится по ходу из нужных)."""
+    ch = (l1 or {}).get("chain") or []
+    if not ch: return ctf
+    return " · ".join("%s %s/%s с %s" % (c["tf"], int(c.get("run") or 0), int(c.get("need") or 0), "✓" if c.get("ok") else ("✗" if c.get("side") else "✗ против")) for c in ch)
+
+
 def text_gate(it, hhmm, link=None):
     pl = it.get("plan") or {}; o = it.get("o") or {}; side = it["side"].upper()
-    L = ["👻 ТЕНЬ #%s%s · %s %s · %s · %s" % (it["id"], " (B)" if it.get("var") == "B" else "", it["sym"], side, KD.get(it["kind"], it["kind"]), it.get("tf") or "5m"),
+    L = ["👻 ТЕНЬ #%s · %s %s · %s · %s" % (tag(it), it["sym"], side, KD.get(it["kind"], it["kind"]), it.get("tf") or "5m"),
          "сигнал %s%s · план бота: вход ~%s · стоп %s · цель %s · R:R %s" % (hhmm(it["t0"]), (" · " + link) if link else "", fpx(pl.get("entry")), fpx(pl.get("stop")), fpx(pl.get("tp")), pl.get("rr") if pl.get("rr") is not None else "—")]
     st = it["status"]; l1 = o.get("live1m") or {}; ctf = l1.get("ctf") or "1m"
     if st == "gate":
-        L.append("⏳ проверка входа (как при ручном ордере): ждём, чтобы свеча %s пары шла по ходу сделки" % ctf + ((" · сейчас o %s c %s %s, попытка %s" % (fpx(l1.get("o")), fpx(l1.get("c")), "ещё слишком молодая" if l1.get("young") else "не по ходу", o.get("live1m_tries"))) if l1 and not l1.get("ok") else ""))
+        L.append("⏳ проверка входа (как при ручном ордере): ждём, чтобы свечи пары %s шли по ходу сделки" % chain_txt(l1, ctf) + ((" · сейчас o %s c %s %s, попытка %s" % (fpx(l1.get("o")), fpx(l1.get("c")), "ещё слишком молодая" if l1.get("young") else "не по ходу", o.get("live1m_tries"))) if l1 and not l1.get("ok") else ""))
     elif st in ("open", "closed"):
-        p = it["p"]; L.append("✅ вход %s по %s (свеча %s пары по ходу: o %s c %s, попыток %s) · стоп %s · цель %s" % (hhmm(it.get("t_fill") or p["t_in"]), fpx(p["entry"]), ctf, fpx(l1.get("o")), fpx(l1.get("c")), o.get("live1m_tries") or 1, fpx(p["stop0"]), fpx(p["tp"])))
+        p = it["p"]; L.append("✅ вход %s по %s (свечи пары по ходу: %s; o %s c %s, попыток %s) · стоп %s · цель %s" % (hhmm(it.get("t_fill") or p["t_in"]), fpx(p["entry"]), chain_txt(l1, ctf), fpx(l1.get("o")), fpx(l1.get("c")), o.get("live1m_tries") or 1, fpx(p["stop0"]), fpx(p["tp"])))
         L.append("позиция и итог ниже ⬇")
     elif st == "filtered":
         L.append("⛔ не вошла: " + str(it.get("why")))
@@ -482,10 +501,10 @@ def caption(it, hhmm, last_px=None):
     p = it["p"]; side = 1 if p["side"] == "long" else -1; sym = it["sym"]; cl = p.get("status") == "closed"
     if cl:
         ic = "✅" if (p.get("net_pct") or 0) > 0 else ("❌" if (p.get("net_pct") or 0) < 0 else "⚪")
-        L = ["%s 👻 ТЕНЬ #%s %s %s · %s · %s R · net %s%%" % (ic, it["id"], sym, p["side"].upper(), RS.get(p.get("reason"), p.get("reason")), _sg(p.get("r_mult")), _sg(p.get("net_pct"))),
+        L = ["%s 👻 ТЕНЬ #%s %s %s · %s · %s R · net %s%%" % (ic, tag(it), sym, p["side"].upper(), RS.get(p.get("reason"), p.get("reason")), _sg(p.get("r_mult")), _sg(p.get("net_pct"))),
              "вход %s → выход %s · пик +%s R, против до -%s R" % (fpx(p["entry"]), fpx(p.get("exit")), "%.2f" % (it.get("mfe_r") or 0), "%.2f" % abs(it.get("mae_r") or 0))]
     else:
-        L = ["🟢 👻 ТЕНЬ #%s %s %s · идёт с %s" % (it["id"], sym, p["side"].upper(), hhmm(p["t_in"])), "вход %s · стоп %s · цель %s · БУ: %s%s" % (fpx(p["entry"]), fpx(p["stop"]), fpx(p.get("tp")), "да" if p.get("armed") else "нет", " · часть закрыта" if p.get("rem", 1) < 0.999 else "")]
+        L = ["🟢 👻 ТЕНЬ #%s %s %s · идёт с %s" % (tag(it), sym, p["side"].upper(), hhmm(p["t_in"])), "вход %s · стоп %s · цель %s · БУ: %s%s" % (fpx(p["entry"]), fpx(p["stop"]), fpx(p.get("tp")), "да" if p.get("armed") else "нет", " · часть закрыта" if p.get("rem", 1) < 0.999 else "")]
         if last_px: L.append("цена %s · %s%% до комиссий" % (fpx(last_px), _sg(side * (last_px / p["entry"] - 1) * 100)))
     ev = _mid_events(it, hhmm)[-6:]
     if ev: L.append("События: " + " · ".join(ev))
@@ -494,17 +513,17 @@ def caption(it, hhmm, last_px=None):
 
 def postmortem(it, hhmm):
     """Разбор итога: что видел фильтр входа, как шла сделка, где возможна ошибка. Факты и правила, без выводов по одной сделке."""
-    L = []; o = it.get("o") or {}; l1 = o.get("live1m") or {}; plan = it.get("plan") or {}; vtag = " (вариант B)" if it.get("var") == "B" else ""
+    L = []; o = it.get("o") or {}; l1 = o.get("live1m") or {}; plan = it.get("plan") or {}; vtag = ""
     if it["status"] == "filtered":
         c = it.get("cf"); r = cf_r(it)
-        L.append("👻 ТЕНЬ #%s%s %s %s: вход не состоялся" % (it["id"], vtag, it["sym"], it["side"].upper()))
+        L.append("👻 ТЕНЬ #%s%s %s %s: вход не состоялся" % (tag(it), vtag, it["sym"], it["side"].upper()))
         L.append("Причина фильтра: %s" % it.get("why"))
         if r is not None:
             L.append("Без фильтра (вход сразу по цене сигнала %s): %s, %s R, пик +%.2f R, против -%.2f R." % (fpx(c["entry"]), RS.get(c.get("reason"), c.get("reason")), _sg(r), _R(c, c.get("mfe_pct")) or 0, abs(_R(c, c.get("mae_pct")) or 0)))
             L.append("➡ Фильтр сработал верно: уберёг от убытка." if r < 0 else "➡ Фильтр лишил прибыли: проверить, не слишком ли строго ждём свечу 1m / лимит ухода от линии (tg_live1m.json).")
     else:
         p = it["p"]; mins = int(((p.get("t_out") or now_ms()) - p["t_in"]) / 60000); mfe, mae = it.get("mfe_r") or 0, abs(it.get("mae_r") or 0); delay = int((p["t_in"] - it["t0"]) / 60000)
-        L.append("👻 ТЕНЬ #%s%s %s %s: %s · %s R · net %s%%" % (it["id"], vtag, it["sym"], p["side"].upper(), RS.get(p.get("reason"), p.get("reason")), _sg(p.get("r_mult")), _sg(p.get("net_pct"))))
+        L.append("👻 ТЕНЬ #%s%s %s %s: %s · %s R · net %s%%" % (tag(it), vtag, it["sym"], p["side"].upper(), RS.get(p.get("reason"), p.get("reason")), _sg(p.get("r_mult")), _sg(p.get("net_pct"))))
         slip = (p["entry"] / float(plan["entry"]) - 1) * 100 * (1 if p["side"] == "long" else -1) if plan.get("entry") else None
         ctf = l1.get("ctf") or "1m"
         L.append("Вход: сигнал %s → вход %s (%s мин ожидания свечи %s, попыток %s) по %s%s. Свеча %s пары на входе: o %s c %s." % (hhmm(it["t0"]), hhmm(p["t_in"]), delay, ctf, o.get("live1m_tries") or 1, fpx(p["entry"]),
@@ -553,7 +572,7 @@ def summary_text(hhmm=None, last=8):
         parts = ["%s %d (%s R)" % (ru.get(k, k), v["n"], _sg(v["R"])) for k, v in s[key].items()]
         if parts: L.append(" · ".join(parts))
     cl = sorted([i for i in its if i.get("status") == "closed"], key=lambda x: x.get("t_out") or 0, reverse=True)[:last]
-    for i in cl: L.append("#%s %s %s %s: %s %s R" % (i["id"], i["sym"], i["side"].upper(), KD.get(i["kind"], i["kind"]), RS.get(i["p"].get("reason"), i["p"].get("reason")), _sg(i["p"].get("r_mult"))))
+    for i in cl: L.append("#%s %s %s %s: %s %s R" % (tag(i), i["sym"], i["side"].upper(), KD.get(i["kind"], i["kind"]), RS.get(i["p"].get("reason"), i["p"].get("reason")), _sg(i["p"].get("r_mult"))))
     return "\n".join(L)[:3800]
 
 
