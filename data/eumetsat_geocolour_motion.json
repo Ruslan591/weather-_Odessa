@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-21T14:00:00.000Z",
+  "timestamp": "2026-11-21T14:20:00.000Z",
   "buffer_size": 6,
   "buffer_span_minutes": 50,
   "observed_area": {
@@ -12,28 +12,52 @@
     "local_trend_radius_km": 50,
     "state_radius_km": 12
   },
-  "valid": false,
-  "verdict": "нет значимой облачности для оценки движения",
+  "valid": true,
+  "speed_kmh": 0.0,
+  "direction_compass": "ЮВ",
+  "bearing_deg": 156.7,
+  "frame_pairs_used": 5,
+  "acceleration_kmh": -0.0,
+  "turning_deg": -149.2,
+  "acceleration_verdict": "скорость стабильна",
+  "turning_verdict": "меняет направление (против часовой)",
+  "forecast_displacement": {
+    "30min": {
+      "distance_km": 0.1,
+      "bearing_deg": 12.0,
+      "compass": "С"
+    },
+    "60min": {
+      "distance_km": 0.2,
+      "bearing_deg": 9.0,
+      "compass": "С"
+    },
+    "120min": {
+      "distance_km": 0.8,
+      "bearing_deg": 7.0,
+      "compass": "С"
+    }
+  },
   "area_fraction_over_time": [
-    0.152,
-    0.064,
     0.024,
     0.024,
     0.027,
-    0.029
+    0.029,
+    0.029,
+    0.034
   ],
-  "area_trend_delta": -0.122,
-  "area_trend_verdict": "сокращается",
+  "area_trend_delta": 0.01,
+  "area_trend_verdict": "без существенных изменений",
   "station_state": "variable",
-  "station_area_fraction": 0.31,
+  "station_area_fraction": 0.268,
   "cloud_mass_distance_km": 0.8,
   "cloud_mass_bearing_deg": 325.0,
   "cloud_mass_compass": "СЗ",
-  "cloud_mass_area_km2": 141,
+  "cloud_mass_area_km2": 119,
   "target_confirmation": {
     "confirmed": false,
-    "target_id": 5,
-    "target_area_km2": 68.0,
+    "target_id": 6,
+    "target_area_km2": 198.8,
     "roi_cloud_fraction": 0.0,
     "verdict": "GeoColour НЕ подтверждает: в ROI CLM-цели облачность не преобладает — возможно расхождение слоёв"
   },
@@ -41,7 +65,7 @@
     {
       "target_id": 0,
       "available": true,
-      "roi_cloud_fraction": 0.071,
+      "roi_cloud_fraction": 0.097,
       "confirmed": false
     }
   ],
