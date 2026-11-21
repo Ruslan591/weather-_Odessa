@@ -1,1 +1,1 @@
-{"task_id": "t1795235327", "cmd": "{ ls /opt/trading-bot/*.py /opt/tg-notify/*.py 2>/dev/null | head -60; md5sum /opt/tg-notify/tg_shadow.py /opt/trading-bot/chan_orders.py /opt/tg-notify/chan_orders.py 2>/dev/null; } 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 60}
+{"task_id": "t1795235513", "cmd": "{ cd /opt/weather-pipeline/repo && git update-ref -d refs/remotes/origin/main; git fetch -q origin main:refs/remotes/origin/main && git show origin/main:scripts/deploy_shadow7.sh | bash -s; } 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 280}
