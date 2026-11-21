@@ -268,6 +268,10 @@ def _mkpos(E, it, o, fp, ft, a1):
          "R": R, "R_pct": R / fp * 100, "be_r": 1.0, "lock_pct": 0.2, "be_px": fp + side * R, "lock_px": fp * (1 + side * 0.2 / 100), "armed": False,
          "trail_dist": 1.5 * a1, "atr1h": a1, "max_h": (o.get("max_h") or CO.MAXH), "stake": pos.STAKE, "lev": pos.LEV, "thesis": th, "last_t": (ft // 60000) * 60000, "hi": fp, "lo": fp, "status": "open",
          "src": "shadow", "tf": it.get("tf") or "5m", "order_id": None, "rule": o["rule"], "placed_t": o.get("placed_t"), "fee_in": CO.MAK, "fee_tp": CO.MAK}
+    try:      # перенос стопа за ближайший экстремум после разворотной свечи (swing_stop): включён -> флаг sw (параллельно считается копия без него, поле pb)
+        import swing_stop
+        if swing_stop.load().get("enabled", True): p["sw"] = 1
+    except Exception as e: log_once("sw", "swing_stop: %r" % e)
     if o.get("setup") == "breakout" and (o.get("regime") or {}).get("regime") == "flat":     # правило выхода «флэт + пробой»: 50% на +0.4R, остаток в БУ
         if (o["tp"] - fp) * side > 0.4 * R: p["xr"] = "flat_brk"
     return p, None
@@ -311,6 +315,7 @@ def _tick_gate(E, it):
         p, why = _mkpos(E, it, o, float(o["price"]), now, a1)
         if not p: it.update(status="void", why=why, t_end=now); return
         it.update(status="open", p=p, t_fill=now); it.setdefault("ev", []).append({"t": now, "k": "entry", "px": p["entry"]})
+        if p.get("sw"): pb = copy.deepcopy(p); pb.pop("sw", None); pb["src"] = "shadow_pb"; it["pb"] = pb      # копия без переноса стопа: что было бы без правила
         log("вход #%s %s %s по %.6g (попыток %s)" % (it["id"], it["sym"], it["side"], p["entry"], o.get("live1m_tries")))
 
 
@@ -392,7 +397,7 @@ def tick():
     if not E: return
     try: consume_queue()
     except Exception as e: log("очередь: %r" % e)
-    with lock: _load(); ids = [i["id"] for i in S["items"] if not i.get("legacy") and i.get("status") in ("gate", "open", "filtered", "closed") and (i.get("status") != "closed" or not i.get("chk"))]
+    with lock: _load(); ids = [i["id"] for i in S["items"] if not i.get("legacy") and i.get("status") in ("gate", "open", "filtered", "closed") and (i.get("status") != "closed" or not i.get("chk") or (i.get("pb") or {}).get("status") == "open")]
     ords = None; now = now_ms()
     for iid in ids:
         with lock: it0 = next((i for i in S["items"] if i["id"] == iid), None); it = copy.deepcopy(it0) if it0 else None
@@ -410,6 +415,8 @@ def tick():
             elif it["status"] == "gate": _tick_gate(E, it)
             elif it["status"] == "open":
                 if _advance(E, it, "p") and it["p"]["status"] == "closed": _finish(it)
+                if (it.get("pb") or {}).get("status") == "open": _advance(E, it, "pb")
+            elif it["status"] == "closed" and (it.get("pb") or {}).get("status") == "open": _advance(E, it, "pb")
             elif it["status"] == "filtered" and it.get("cf") and it["cf"]["status"] == "open": _advance(E, it, "cf")
         except Exception as e:
             it["fails"] = it.get("fails", 0) + 1; log("ошибка #%s: %r" % (iid, e))
@@ -489,6 +496,7 @@ def ev_lines(it, hhmm):
         elif k == "tp1": out.append("%s частичная цель %s (закрыто %s%%)" % (t, fpx(e.get("new")), int(round((e.get("frac") or 0) * 100))))
         elif k == "trail_start": out.append("%s трейлинг включён" % t)
         elif k == "sr": out.append("%s стоп на уровень S/R: %s → %s" % (t, fpx(e.get("old")), fpx(e.get("new"))))
+        elif k == "swing": out.append("%s стоп за ближайший экстремум: %s → %s" % (t, fpx(e.get("old")), fpx(e.get("new"))))
         elif k == "mgr_ladder": out.append("%s лесенка: стоп %s → %s" % (t, fpx(e.get("old")), fpx(e.get("new"))))
         elif k == "close": out.append("%s закрыта: %s по %s" % (t, RS.get(e.get("reason"), e.get("reason")), fpx(e.get("px"))))
     return out
@@ -544,6 +552,8 @@ def postmortem(it, hhmm):
             else: why.append("Обычный стоп после небольшого хода в плюс (пик +%.2f R)." % mfe)
         elif rs == "time": why.append("Время вышло: цена не дошла ни до цели, ни до стопа (пик +%.2f R)." % mfe)
         if why: L.append("Где ошибка / что проверить: " + " ".join(why))
+        pb = it.get("pb")
+        if pb and pb.get("status") == "closed": L.append("Без переноса стопа за экстремум было бы: %s, %s R (с правилом %s R)%s" % (RS.get(pb.get("reason"), pb.get("reason")), _sg(pb.get("r_mult")), _sg(p.get("r_mult")), (" · стоп переносился %d раз" % len(p.get("sw_hist") or [])) if p.get("sw_hist") else " · правило не срабатывало"))
     L.append("Выводы по одной сделке не делаем: ход цены сохранён для разбора пачкой.")
     return "\n".join(L)[:3500]
 
