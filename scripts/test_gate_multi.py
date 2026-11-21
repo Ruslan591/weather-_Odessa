@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Тест правила входа (patch_gate_multi.py): запускается из каталога с chan_orders.py, env POS_DIR/CHAN_SRC/CHAN_EDGE/TG_GATE как у сервиса. Печатает строку gate ... и строки проверок."""
-import time
+import time, sys, os
+sys.path.insert(0, os.getcwd())
 import chan_orders as C
 C._l1m_emit = lambda *a, **k: None; C.log = lambda m: None
 far = int(time.time() * 1000) - 5 * 3600000
