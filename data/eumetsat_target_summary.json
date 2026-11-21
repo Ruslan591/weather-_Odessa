@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-11-21T06:27:20Z",
+  "timestamp": "2026-11-21T06:32:36Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-11-21T06:00:00.000Z",
-  "target_id": 0,
-  "target_area_km2": 173.5,
-  "target_distance_km": 117.2,
-  "target_bearing_deg": 249.0,
-  "target_compass": "З",
+  "target_id": 3,
+  "target_area_km2": 272.2,
+  "target_distance_km": 128.0,
+  "target_bearing_deg": 113.0,
+  "target_compass": "ЮВ",
   "system": {
     "target_id": 1,
     "area_km2": 14031.5,
@@ -18,8 +18,8 @@
     "elongation_axis_compass": "СВ-ЮЗ",
     "frontlike": false,
     "window_spanning": false,
-    "phase_label": "безоблачно",
-    "cloud_fraction": 0.329,
+    "phase_label": "средняя водяная",
+    "cloud_fraction": 0.327,
     "has_precip": false,
     "has_lightning": false
   },
@@ -85,35 +85,32 @@
       "front_type_confidence": null
     }
   ],
-  "target_movement": {
-    "speed_kmh": 0.0,
-    "direction_compass": "С",
-    "cpa_km": 97.5,
-    "eta_min": null,
-    "verdict": "почти стоит на месте"
+  "also_suppressed_nearby": {
+    "signature": "-110_-40",
+    "area_km2": 173.5
   },
   "target_phase": {
     "label": "безоблачно",
-    "cloud_fraction": 0.043
+    "cloud_fraction": 0.607
   },
   "existence": {
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-11-21T06:00:00.000Z"
+        "timestamp": "2026-11-21T06:10:00.000Z"
       },
       "geocolour_motion": {
         "confirmed": false,
         "timestamp": "2026-11-21T06:00:00.000Z"
       },
       "cloud_phase_type": {
-        "confirmed": false,
-        "timestamp": "2026-11-21T06:17:13Z"
+        "confirmed": true,
+        "timestamp": "2026-11-21T06:32:04Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -125,5 +122,5 @@
       "timestamp": "2026-11-21T06:27:08Z"
     }
   },
-  "verdict": "CLM отметил цель в 117км З, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (14032км²) в 123км ЮВ."
+  "verdict": "Цель в 128км ЮВ, безоблачно — каналы расходятся: cloud_phase_type подтверждают, ir_motion/geocolour_motion нет. Отдельно: система синоптического масштаба (14032км²) в 123км ЮВ (средняя водяная)."
 }
