@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-11-21T11:53:28Z",
+  "timestamp": "2026-11-21T11:57:32Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-11-21T11:30:00.000Z",
-  "target_id": 1,
-  "target_area_km2": 61.4,
-  "target_distance_km": 38.2,
-  "target_bearing_deg": 97.0,
-  "target_compass": "В",
+  "target_id": 3,
+  "target_area_km2": 105.4,
+  "target_distance_km": 42.7,
+  "target_bearing_deg": 271.0,
+  "target_compass": "З",
   "system": {
     "target_id": 2,
     "area_km2": 716.5,
@@ -38,7 +38,7 @@
       "phase_label": "безоблачно",
       "type_label": "плотная/высокая",
       "has_precip": null,
-      "has_lightning": null,
+      "has_lightning": false,
       "ir_confirmed": false,
       "geocolour_confirmed": true
     }
@@ -230,13 +230,6 @@
     "signature": "-30_-20",
     "area_km2": 56.0
   },
-  "target_movement": {
-    "speed_kmh": 0.1,
-    "direction_compass": "Ю",
-    "cpa_km": 38.2,
-    "eta_min": null,
-    "verdict": "почти стоит на месте"
-  },
   "target_phase": {
     "label": "низкая водяная",
     "cloud_fraction": 0.015
@@ -248,17 +241,17 @@
         "timestamp": "2026-11-21T11:30:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-11-21T11:20:00.000Z"
+        "confirmed": true,
+        "timestamp": "2026-11-21T11:30:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": false,
         "timestamp": "2026-11-21T11:52:56Z"
       }
     },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
+    "votes_confirmed": 1,
+    "votes_not_confirmed": 2,
+    "consensus": "disputed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -267,8 +260,8 @@
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-11-21T11:47:07Z"
+      "timestamp": "2026-11-21T11:57:07Z"
     }
   },
-  "verdict": "CLM отметил цель в 38км В, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (716км²) в 43км СЗ (вытянута СВ-ЮЗ (30°), похоже на фронт)."
+  "verdict": "Цель в 43км З, низкая водяная — каналы расходятся: geocolour_motion подтверждают, ir_motion/cloud_phase_type нет. Отдельно: система синоптического масштаба (716км²) в 43км СЗ (вытянута СВ-ЮЗ (30°), похоже на фронт)."
 }
