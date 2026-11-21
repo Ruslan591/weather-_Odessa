@@ -1,1 +1,1 @@
-{"task_id": "t1795254085", "cmd": "{ grep -n -i 'shadow' /opt/trading-bot/live/live_web.py | head -40; } 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176' | cut -c1-260", "timeout": 120}
+{"task_id": "t1795254134", "cmd": "{ sed -n 123,172p /opt/trading-bot/live/live_web.py | base64 -w0; echo; grep -n -o 'it.id[^;]\\{0,60\\}\\|\\.sid[^;]\\{0,40\\}' /opt/trading-bot/live/*.html /opt/trading-bot/live/*.js 2>/dev/null | head -5; ls /opt/trading-bot/live; } 2>&1 | LC_ALL=C tr -cd 'A-Za-z0-9+/=\\n\\11\\40-\\57'", "timeout": 120}
