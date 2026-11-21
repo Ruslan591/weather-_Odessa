@@ -1,1 +1,1 @@
-{"task_id": "t1795290314", "cmd": "{ base64 -w0 /opt/trading-bot/live/index.html | cut -c64001-69120; } 2>&1 | LC_ALL=C tr -cd 'A-Za-z0-9+/='", "timeout": 60}
+{"task_id": "t1795290376", "cmd": "{ md5sum /opt/trading-bot/live/live_web.py | cut -c1-32; wc -c < /opt/trading-bot/live/live_web.py; } 2>&1 | LC_ALL=C tr -cd 'a-f0-9\\n'", "timeout": 60}
