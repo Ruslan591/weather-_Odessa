@@ -1,1 +1,1 @@
-{"task_id": "t1795275046", "cmd": "{ cat /tmp/bt_diag.out; } 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 120}
+{"task_id": "t1795275084", "cmd": "{ ls -l --time-style=+%m-%d_%H:%M /opt/trading-bot/positions_regr/*.json | awk '{print $6, $7}' | grep -v 'shadow\\|positions.json\\|decisions' ; date -u +%m-%d_%H:%M; ls -l --time-style=+%m-%d_%H:%M /opt/trading-bot/positions/pos.py | awk '{print $6,$7}'; } 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 120}
