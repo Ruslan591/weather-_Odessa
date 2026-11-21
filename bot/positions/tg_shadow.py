@@ -516,6 +516,7 @@ def ev_lines(it, hhmm):
         elif k == "trail_start": out.append("%s трейлинг включён" % t)
         elif k == "sr": out.append("%s стоп на уровень S/R: %s → %s" % (t, fpx(e.get("old")), fpx(e.get("new"))))
         elif k == "swing": out.append("%s стоп за ближайший экстремум: %s → %s" % (t, fpx(e.get("old")), fpx(e.get("new"))))
+        elif k == "tp_ext": out.append("%s цель дальше: %s → %s, стоп %s → %s" % (t, fpx(e.get("old")), fpx(e.get("new")), fpx(e.get("stop_from")), fpx(e.get("stop_to"))))
         elif k == "mgr_ladder": out.append("%s лесенка: стоп %s → %s" % (t, fpx(e.get("old")), fpx(e.get("new"))))
         elif k == "close": out.append("%s закрыта: %s по %s" % (t, RS.get(e.get("reason"), e.get("reason")), fpx(e.get("px"))))
     return out
