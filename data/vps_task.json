@@ -1,1 +1,1 @@
-{"task_id": "t1795237800", "cmd": "{ cat /tmp/swbt/base.log; ps aux | grep swing_bt | grep -v grep | wc -l; } 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 100}
+{"task_id": "t1795237849", "cmd": "{ cd /opt/weather-pipeline/repo && git update-ref -d refs/remotes/origin/main; git fetch -q origin main:refs/remotes/origin/main && git show origin/main:scripts/deploy_shadow8.sh | bash -s; } 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 280}
