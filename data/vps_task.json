@@ -1,1 +1,1 @@
-{"task_id": "t1795254492", "cmd": "{ grep -n '\u043a \u0442\u0435\u043d\u0438' /opt/tg-notify/tg_bot.py /opt/tg-notify/tg_shadow.py | head -6 | base64 -w0; echo; grep -n 'note_add\\|shadow_note\\|SH\\.note' /opt/tg-notify/tg_bot.py | head -8 | base64 -w0; echo; } 2>&1 | LC_ALL=C tr -cd 'A-Za-z0-9+/=\\n'", "timeout": 60}
+{"task_id": "t1795254566", "cmd": "{ grep -n 'SH\\.' /opt/tg-notify/tg_bot.py | cut -c1-230 | base64 -w0; echo; } 2>&1 | LC_ALL=C tr -cd 'A-Za-z0-9+/=\\n'", "timeout": 60}
