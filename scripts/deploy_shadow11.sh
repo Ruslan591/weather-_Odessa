@@ -20,7 +20,7 @@ echo "$T" | grep -q "^ext (102.5, 100.8, 1) None (102.5, 100.8, 1) (97.5, 99.2, 
 grep -n 'swing_stop.apply' $N/pos/pos.py | head -2; grep -n 'import tp_ext; _x' $N/pos/pos.py | head -2
 install -o tbot -g tbot -m 644 $N/pos/tp_ext.py $PC/tp_ext.py; install -o tbot -g tbot -m 644 $N/pos/pos.py $PC/pos.py; install -o tbot -g tbot -m 644 $N/tg_shadow.py $TN/tg_shadow.py
 rollback() { echo ROLLBACK; cp $B/pos.py $PC/; rm -f $PC/tp_ext.py; cp $B/tg_shadow.py $TN/; systemctl restart tg-bot-regr; sleep 10; echo ROLLED tg=$(systemctl is-active tg-bot-regr); exit 1; }
-(cd $TN && POS_DIR=$PR $VPY -c "import tg_bot; import tp_ext; print('import ok', tp_ext.load()['trig'])") || { echo IMPORT_FAIL; rollback; }
+(cd $TN && POS_DIR=$PR $VPY -c "import sys; sys.path.insert(0, '$PC'); import tg_bot; import tp_ext; print('import ok', tp_ext.load()['trig'])") || { echo IMPORT_FAIL; rollback; }
 systemctl restart tg-bot-regr; sleep 30
 G=$(systemctl is-active tg-bot-regr); E=$(journalctl -u tg-bot-regr --since "-35sec" --no-pager 2>/dev/null | grep -ci "Traceback\|tp_ext err")
 echo "tg=$G errors=$E"
