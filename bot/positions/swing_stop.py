@@ -9,12 +9,12 @@ Hi (для short) или Lo (для long) перед этим экстремум
   2. Свеча i идёт против сделки (закрытие ниже открытия), тело не меньше min_body доли диапазона.
   3. Ход к пику j был не меньше min_mfe R от входа.
   4. Новый стоп: минимум lo среди m свечей перед пиком j (самый ближайший локальный Lo), минус буфер buf_pct. Он должен быть не ближе min_gap_r R к текущему закрытию и строже текущего стопа (только ужесточение).
-Параметры: POS_DIR/swing_cfg.json (enabled: включает флаг для новых теней; остальные ключи как в DEFAULT); применяются сразу."""
+near: 1 = уровень берётся по ближайшему экстремуму, то есть по самой свече пика j (для short её Hi), 0 = старое окно из m свечей перед пиком (на истории хуже: заметка №8, #67). Параметры: POS_DIR/swing_cfg.json (enabled: включает флаг для новых теней; остальные ключи как в DEFAULT); применяются сразу."""
 import json, os
 
 D = os.environ.get("POS_DIR", "/opt/trading-bot/positions")
 CF = os.path.join(D, "swing_cfg.json")
-DEFAULT = {"enabled": True, "sw_k": 2, "m": 3, "min_mfe": 0.3, "min_body": 0.0, "min_gap_r": 0.2, "buf_pct": 0.02, "keep": 12}
+DEFAULT = {"enabled": True, "sw_k": 2, "m": 3, "min_mfe": 0.3, "min_body": 0.0, "min_gap_r": 0.2, "buf_pct": 0.02, "keep": 12, "near": 1}
 OVERRIDE = {}      # для бэктеста: подмена параметров без файла
 _cache = [None, None]
 
@@ -52,8 +52,11 @@ def apply(p, side, k, cfg=None):
     if rng > 0 and (fo[i] - fc[i]) / rng < float(c["min_body"]): return None
     R = p["R"]; en = p["entry"] * s
     if (fh[j] - en) / R < float(c["min_mfe"]): return None
-    lo_ix = max(0, j - mm)
-    lvl = min(fl[lo_ix:j]) if j > lo_ix else fl[j]
+    nr = int(c.get("near", 0))
+    if nr > 0: seg = fl[max(0, j - nr + 1):j + 1]                    # ближайший экстремум: последние nr свечей, включая саму свечу пика j (для short ближайший Hi)
+    else:
+        lo_ix = max(0, j - mm); seg = fl[lo_ix:j] if j > lo_ix else [fl[j]]
+    lvl = min(seg)
     lvl -= p["entry"] * float(c["buf_pct"]) / 100.0
     if lvl > fc[i] - float(c["min_gap_r"]) * R: return None                       # слишком близко к цене: выбьет шумом
     old = p["stop"]
