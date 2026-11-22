@@ -55,98 +55,92 @@
   "cloud_mass_compass": "ЮВ",
   "cloud_mass_area_km2": 73808,
   "target_confirmation": {
-    "confirmed": true,
-    "target_id": 5,
-    "target_area_km2": 153.4,
-    "roi_cloud_fraction": 0.617,
-    "verdict": "GeoColour подтверждает: в ROI CLM-цели преобладает облачность"
+    "confirmed": false,
+    "target_id": 0,
+    "target_area_km2": 124.1,
+    "roi_cloud_fraction": 0.311,
+    "verdict": "GeoColour НЕ подтверждает: в ROI CLM-цели облачность не преобладает — возможно расхождение слоёв"
   },
   "system_analysis_all": [
     {
-      "target_id": 0,
+      "target_id": 1,
       "available": true,
-      "roi_cloud_fraction": 0.678,
+      "roi_cloud_fraction": 0.675,
       "confirmed": true
     },
     {
       "target_id": 3,
       "available": true,
-      "roi_cloud_fraction": 0.477,
-      "confirmed": false
-    },
-    {
-      "target_id": 9,
-      "available": true,
-      "roi_cloud_fraction": 0.664,
-      "confirmed": true
-    },
-    {
-      "target_id": 12,
-      "available": true,
-      "roi_cloud_fraction": 0.778,
-      "confirmed": true
-    }
-  ],
-  "local_analysis_all": [
-    {
-      "target_id": 1,
-      "available": true,
-      "roi_cloud_fraction": 0.0,
-      "confirmed": false
-    },
-    {
-      "target_id": 2,
-      "available": true,
-      "roi_cloud_fraction": 0.026,
-      "confirmed": false
-    },
-    {
-      "target_id": 4,
-      "available": true,
-      "roi_cloud_fraction": 0.456,
-      "confirmed": false
-    },
-    {
-      "target_id": 5,
-      "available": true,
-      "roi_cloud_fraction": 0.617,
-      "confirmed": true
-    },
-    {
-      "target_id": 6,
-      "available": true,
-      "roi_cloud_fraction": 0.75,
+      "roi_cloud_fraction": 0.515,
       "confirmed": true
     },
     {
       "target_id": 7,
       "available": true,
-      "roi_cloud_fraction": 0.179,
-      "confirmed": false
-    },
-    {
-      "target_id": 8,
-      "available": true,
-      "roi_cloud_fraction": 0.619,
+      "roi_cloud_fraction": 0.705,
       "confirmed": true
     },
     {
-      "target_id": 10,
+      "target_id": 9,
       "available": true,
-      "roi_cloud_fraction": 0.596,
+      "roi_cloud_fraction": 0.593,
       "confirmed": true
     },
     {
       "target_id": 11,
       "available": true,
-      "roi_cloud_fraction": 0.274,
+      "roi_cloud_fraction": 0.535,
+      "confirmed": true
+    }
+  ],
+  "local_analysis_all": [
+    {
+      "target_id": 0,
+      "available": true,
+      "roi_cloud_fraction": 0.311,
       "confirmed": false
     },
     {
-      "target_id": 13,
+      "target_id": 2,
       "available": true,
-      "roi_cloud_fraction": 0.566,
+      "roi_cloud_fraction": 0.0,
+      "confirmed": false
+    },
+    {
+      "target_id": 4,
+      "available": true,
+      "roi_cloud_fraction": 0.675,
       "confirmed": true
+    },
+    {
+      "target_id": 5,
+      "available": true,
+      "roi_cloud_fraction": 0.505,
+      "confirmed": true
+    },
+    {
+      "target_id": 6,
+      "available": true,
+      "roi_cloud_fraction": 0.482,
+      "confirmed": false
+    },
+    {
+      "target_id": 8,
+      "available": true,
+      "roi_cloud_fraction": 0.713,
+      "confirmed": true
+    },
+    {
+      "target_id": 10,
+      "available": true,
+      "roi_cloud_fraction": 0.232,
+      "confirmed": false
+    },
+    {
+      "target_id": 12,
+      "available": true,
+      "roi_cloud_fraction": 0.193,
+      "confirmed": false
     }
   ],
   "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
