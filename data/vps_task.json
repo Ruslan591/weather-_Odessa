@@ -1,1 +1,1 @@
-{"task_id": "f13", "cmd": "{ curl -s https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/scripts/shadow_an7.py | python3 -; } 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 120}
+{"task_id": "f14", "cmd": "{ cd /opt/tg-notify && wc -l tg_shadow.py && grep -n \"def \\|filtered\\|regime\\|shadow_cfg\" tg_shadow.py | head -120; ls /opt/weather-pipeline/repo/scripts | grep -i deploy_shadow | tail -5; } 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 120}
