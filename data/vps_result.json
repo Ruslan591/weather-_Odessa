@@ -1,7 +1,7 @@
 {
-  "task_id": "t1795321524",
+  "task_id": "t1795321610",
   "returncode": 0,
-  "stdout": "91309589e7fc34edfa537657bf2865d0\n",
+  "stdout": "# /etc/systemd/system/tg-shadow-scan.service\n[Unit]\nDescription=Shadow signals scanner for timeframes without live watching (Regression account)\nAfter=network-online.target\n[Service]\nUser=tbot\nEnvironment=POS_DIR=/opt/trading-bot/positions_regr\nEnvironment=CHAN_SRC=regr\nEnvironment=CHAN_EDGE=1\nEnvironment=TG_GATE=1\nEnvironment=PYTHONUNBUFFERED=1\nWorkingDirectory=/opt/tg-notify\nExecStart=/opt/trading-bot/venv/bin/python /opt/tg-notify/tg_shadow_scan.py\nRestart=always\ninactive\ntg_shadow_scan.py\n",
   "stderr": "",
-  "completed_at_utc": "2026-11-22T04:26:01Z"
+  "completed_at_utc": "2026-11-22T04:27:02Z"
 }
