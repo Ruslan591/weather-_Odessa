@@ -1,13 +1,25 @@
-import json
+import json,collections,statistics as S,datetime as D
 d=json.load(open("/opt/trading-bot/positions_regr/shadow.json"))
 L=d["items"]
-C=[x for x in L if x.get("status")=="closed" and "p" in x]
-print(len(C))
-x=C[-1]
-def sh(o,dep=0):
-    if isinstance(o,dict): return {k:sh(v,dep+1) for k,v in o.items() if k not in("rows","feat","ch")}
-    if isinstance(o,list): return [sh(v,dep+1) for v in o[:6]]+(["..%d"%len(o)] if len(o)>6 else [])
-    return o
-print(json.dumps(sh({k:v for k,v in x.items() if k in("id","sn","sym","tf","kind","side","var","status","p","pb","gt","ref","reg","plan","target","setup","w","o","o0","g","t_sig","t_fill","mfe_r","mae_r","why")}),ensure_ascii=True)[:6000])
-F=[y for y in L if y.get("status")=="filtered"]
-print(json.dumps(sh({k:v for k,v in F[-1].items() if k in("id","sn","var","why","cf","t_end","gt")}),ensure_ascii=True)[:2500])
+def hm(t): return D.datetime.fromtimestamp(t/1000,D.UTC).strftime("%d %H:%M")
+C=[x for x in L if x.get("status")=="closed" and x.get("p") and x.get("pb") and x["pb"].get("r_mult") is not None and x["p"].get("r_mult") is not None]
+print("n",len(C))
+rows=[]
+for x in sorted(C,key=lambda x:x["p"]["t_in"]):
+    p=x["p"];b=x["pb"]
+    rows.append((x["p"]["r_mult"]-b["r_mult"],x))
+    print("#%s %s %s %s %s in %s | p %s %.2f out %s mfe %.2f | pb %s %.2f out %s | sw %d ext %d"%(x["sn"],x["sym"],x["tf"],x["kind"][:2],x["side"][0],hm(p["t_in"]),p["reason"],p["r_mult"],hm(p["t_out"]),p["mfe_pct"]/p["R_pct"],b["reason"],b["r_mult"],hm(b["t_out"]),len(p.get("sw_hist") or []),len(p.get("ext_hist") or p.get("ext_n") and [1] or [])))
+better=[r for r,_ in rows if r>0.05];worse=[r for r,_ in rows if r<-0.05]
+print("better",len(better),"%.2f"%sum(better),"worse",len(worse),"%.2f"%sum(worse),"equal",len(rows)-len(better)-len(worse))
+print("pkeys",sorted(k for k in C[0]["p"].keys() if k.startswith(("ext","sw","tp","be","sr","tr","x"))))
+# all closed with pb (incl. B) overall p vs pb
+# clusters: time buckets of A+B entries
+ins=sorted((x["p"]["t_in"],x["sym"],x["side"],x["tf"],x.get("var"),x["p"]["r_mult"]) for x in L if x.get("status")=="closed" and x.get("p") and x["p"].get("r_mult") is not None and x.get("var")=="A")
+cl=[];cur=[ins[0]]
+for e in ins[1:]:
+    if e[0]-cur[-1][0]<=3600000: cur.append(e)
+    else: cl.append(cur);cur=[e]
+cl.append(cur)
+print("A clusters (<=1h gap):",len(cl),"for",len(ins),"trades")
+for c in cl:
+    if len(c)>=3: print("  ",hm(c[0][0]),"n=%d"%len(c),"sides",collections.Counter(e[2] for e in c),"sumR %.2f"%sum(e[5] for e in c),[e[1] for e in c])
