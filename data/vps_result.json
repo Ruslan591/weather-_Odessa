@@ -1,7 +1,7 @@
 {
-  "task_id": "t1795321610",
+  "task_id": "t1795321692",
   "returncode": 0,
-  "stdout": "# /etc/systemd/system/tg-shadow-scan.service\n[Unit]\nDescription=Shadow signals scanner for timeframes without live watching (Regression account)\nAfter=network-online.target\n[Service]\nUser=tbot\nEnvironment=POS_DIR=/opt/trading-bot/positions_regr\nEnvironment=CHAN_SRC=regr\nEnvironment=CHAN_EDGE=1\nEnvironment=TG_GATE=1\nEnvironment=PYTHONUNBUFFERED=1\nWorkingDirectory=/opt/tg-notify\nExecStart=/opt/trading-bot/venv/bin/python /opt/tg-notify/tg_shadow_scan.py\nRestart=always\ninactive\ntg_shadow_scan.py\n",
+  "stdout": "APPLIED chan_orders.py\nAPPLIED chan_orders.py\ngate wait go wait go wait go wait go\nrun wait go wait wait wait wait wait go\ncap [600000, 600000, 1500000, 5100000, 29100000]\nlive1s -1 -1\nwhy_backfill 91 of 600\ncfg {'scan': True, 'tfs': ['5m', '15m', '1h', '4h', '1d']}\nCreated symlink /etc/systemd/system/multi-user.target.wants/tg-shadow-scan.service  /etc/systemd/system/tg-shadow-scan.service.\nchan=active tg=active scan=active errors=0\nSHADOW13_DONE 20261122_042901 backup=/opt/trading-bot/bak_shadow13_20261122_042901\n",
   "stderr": "",
-  "completed_at_utc": "2026-11-22T04:27:02Z"
+  "completed_at_utc": "2026-11-22T04:30:32Z"
 }
