@@ -63,7 +63,7 @@ GUST_STEP = 4.0        # повторное предупреждение при 
 GUST_QUIET_POLLS = 3   # столько опросов подряд без порывов = эпизод окончен
 RAIN_MM_H = 0.1        # порог осадков, мм/ч
 RAIN_END_DRY = 3       # сухих сводок подряд для конца дождя
-CITY_WIDE = 5          # дождь в >= 5 районах из 9 = «по всему городу»
+CITY_WIDE_MIN = 3      # «по всему городу»: дождь в >= 3 районах и в более чем половине работающих станций
 STALE_MIN = 30         # станция без свежих данных считается офлайн
 LAT, LON = 46.4825, 30.7233
 FC_WINDOW_STEPS = 12   # 3 часа по 15 минут
@@ -159,8 +159,8 @@ def parse_obs(o):
     pr = m.get("pressureMin")
     if pr is None:
         pr = m.get("pressureMax")
-    if m.get("tempAvg") is None and pr is None:
-        return None  # пустая сводка (датчики не передали данные)
+    if m.get("tempAvg") is None:
+        return None  # сводка без температуры/ветра/осадков (работает только барометр)
     return {
         "ts": ts,
         "temp": m.get("tempAvg"),
@@ -247,6 +247,10 @@ def mean_dir(items):
     if abs(x) < 1e-6 and abs(y) < 1e-6:
         return None
     return (math.degrees(math.atan2(x, y)) + 360) % 360
+
+
+def city_wide(n, total):
+    return n >= CITY_WIDE_MIN and n > total / 2.0
 
 
 def esc(s):
@@ -376,7 +380,7 @@ def main():
     if raining and not city_active:
         raining.sort(key=lambda s: -s["int"])
         n = len(raining)
-        if n >= CITY_WIDE:
+        if city_wide(n, len(ok)):
             top = ", ".join("%s — %s мм/ч" % (esc(s["name"]), f1(s["int"])) for s in raining[:3])
             txt = "🌧 <b>Дождь по всему городу</b> (%d из %d районов).\nСильнее всего: %s." % (n, len(ok), top)
         elif n == 1:
@@ -504,7 +508,7 @@ def main():
             lines.append("💨 Порывы: " + "; ".join("%s %s" % (esc(s["name"]), f1(s["gust"])) for s in gusty[:5]) + " м/с")
         if raining:
             raining.sort(key=lambda s: -s["int"])
-            if len(raining) >= CITY_WIDE:
+            if city_wide(len(raining), len(ok)):
                 lines.append("🌧 Дождь по всему городу, сильнее: " + ", ".join(
                     "%s %s мм/ч" % (esc(s["name"]), f1(s["int"])) for s in raining[:3]))
             else:
