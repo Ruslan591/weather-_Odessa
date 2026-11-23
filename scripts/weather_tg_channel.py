@@ -209,7 +209,8 @@ def delta(obs, key, minutes, tol_min=12):
 def fetch_forecast():
     url = "https://api.open-meteo.com/v1/forecast?" + urllib.parse.urlencode({
         "latitude": LAT, "longitude": LON, "minutely_15": "precipitation",
-        "forecast_minutely_15": 24, "timezone": "Europe/Kyiv"})
+        "forecast_minutely_15": 24, "hourly": "pressure_msl", "forecast_hours": 24,
+        "timezone": "Europe/Kyiv"})
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "weather-tg/1.0"})
         with urllib.request.urlopen(req, timeout=20) as r:
@@ -220,7 +221,13 @@ def fetch_forecast():
         for t, p in zip(times, pr):
             dt = datetime.fromisoformat(t).replace(tzinfo=KYIV)
             steps.append([dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), p or 0.0])
-        return steps
+        press = []
+        for t, p in zip(d["hourly"]["time"], d["hourly"]["pressure_msl"]):
+            if p is None:
+                continue
+            dt = datetime.fromisoformat(t).replace(tzinfo=KYIV)
+            press.append([dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), p])
+        return steps, press
     except Exception as e:
         log("Open-Meteo: %s" % type(e).__name__)
         return None
@@ -281,6 +288,77 @@ def now_summary(ok):
     if h is not None:
         parts.append("влажность %s%%" % f0(h))
     return ", ".join(parts)
+
+
+def parse_iso(t):
+    return datetime.strptime(t, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+
+
+def rain_outlook(steps, now):
+    """Первый эпизод осадков по прогнозу: начало, конец, пик (мм/ч), сумма."""
+    seq = []
+    for t, mm in steps:
+        end = parse_iso(t)
+        if end > now:
+            seq.append((end - timedelta(minutes=15), end, mm))
+    ep = []
+    dry = 0
+    started = False
+    for b, e, mm in seq:
+        if mm >= FC_MIN_MM:
+            started = True
+            dry = 0
+            ep.append((b, e, mm))
+        elif started:
+            dry += 1
+            if dry >= 2:
+                break
+            ep.append((b, e, mm))
+    while ep and ep[-1][2] < FC_MIN_MM:
+        ep.pop()
+    if not ep:
+        return None
+    peak = max(ep, key=lambda x: x[2])
+    return {"start": ep[0][0], "end": ep[-1][1], "peak_b": peak[0], "peak_e": peak[1],
+            "peak_rate": peak[2] * 4.0, "total": sum(x[2] for x in ep)}
+
+
+def pressure_outlook(press, now):
+    """Минимум давления в ближайшие 12 ч и самый быстрый спад (прогноз MSL, относительные величины)."""
+    pts = [(parse_iso(t), p) for t, p in press]
+    pts = [x for x in pts if x[0] >= now - timedelta(minutes=59)]
+    if len(pts) < 4:
+        return None
+    hz = pts[:13]
+    p0 = hz[0][1]
+    tmin, pmin = min(hz, key=lambda x: x[1])
+    best = None
+    for a, b in zip(hz, hz[1:]):
+        d = b[1] - a[1]
+        if best is None or d < best[0]:
+            best = (d, a[0], b[0])
+    return {"drop": p0 - pmin, "tmin": tmin, "falling_on": hz[-1][1] == pmin,
+            "fast_rate": best[0], "fast_b": best[1], "fast_e": best[2]}
+
+
+def forecast_lines(fc, now):
+    lines = []
+    ro = rain_outlook(fc.get("steps", []), now)
+    if ro:
+        lines.append("📈 Пик осадков: %s–%s, до %s мм/ч. Осадки с %s до ~%s, всего ~%s мм." % (
+            hhmm(ro["peak_b"]), hhmm(ro["peak_e"]), f1(ro["peak_rate"]),
+            hhmm(ro["start"]), hhmm(ro["end"]), f1(ro["total"])))
+    po = pressure_outlook(fc.get("press", []), now) if fc.get("press") else None
+    if po and po["drop"] >= 1.0:
+        if po["falling_on"]:
+            mn = "падение продолжится минимум до %s" % hhmm(po["tmin"])
+        else:
+            mn = "минимум около %s" % hhmm(po["tmin"])
+        fast = ""
+        if po["fast_rate"] <= -0.5:
+            fast = ", быстрее всего %s–%s (%s гПа/ч)" % (hhmm(po["fast_b"]), hhmm(po["fast_e"]), f1(po["fast_rate"]).replace("-", "−"))
+        lines.append("📉 Давление по прогнозу: %s (−%s гПа к текущему)%s." % (mn, f1(po["drop"]), fast))
+    return lines
 
 
 def hhmm(dt):
@@ -439,16 +517,16 @@ def main():
 
     # 5. прогноз осадок
     fc = state.get("fc") or {}
-    need = True
+    need = "press" not in fc
     try:
-        need = (now - datetime.strptime(fc.get("t", ""), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        need = need or (now - datetime.strptime(fc.get("t", ""), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
                 ).total_seconds() > FC_REFRESH_MIN * 60
     except Exception:
         need = True
     if need:
-        steps = fetch_forecast()
-        if steps is not None:
-            fc = {"t": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "steps": steps}
+        res = fetch_forecast()
+        if res is not None:
+            fc = {"t": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "steps": res[0], "press": res[1]}
             state["fc"] = fc
     upcoming = []
     for t, mm in fc.get("steps", []):
@@ -462,12 +540,15 @@ def main():
     wet_steps = [(b, mm) for b, mm in upcoming if mm >= FC_MIN_MM]
     if wet_steps and not state.get("rain_city") and not raining:
         if not state.get("fc_warned"):
-            b0 = wet_steps[0][0]
+            ro = rain_outlook(fc.get("steps", []), now)
+            b0 = ro["start"] if ro else wet_steps[0][0]
             lead = max(0, int(round((b0 - now).total_seconds() / 60.0)))
-            total = sum(mm for _, mm in upcoming)
             lead_txt = "в ближайшие минуты" if lead < 10 else "через ~%d мин" % (round(lead / 5.0) * 5)
-            alerts.append(("☔ <b>По прогнозу осадки</b> %s (около %s), за ближайшие 3 ч до %s мм.\nСейчас: %s.\n🕐 %s" % (
-                lead_txt, hhmm(b0), f1(total), now_summary(ok), hhmm(now)), False))
+            body = ["☔ <b>По прогнозу осадки</b> %s (около %s)." % (lead_txt, hhmm(b0))]
+            body += forecast_lines(fc, now)
+            body.append("Сейчас: %s." % now_summary(ok))
+            body.append("🕐 %s" % hhmm(now))
+            alerts.append(("\n".join(body), False))
             state["fc_warned"] = True
     elif not wet_steps:
         state["fc_warned"] = False
