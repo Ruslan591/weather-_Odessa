@@ -54,17 +54,20 @@ STATE_FILE = os.path.join(BASE, "state.json")
 LOG_FILE = os.path.join(BASE, "run.log")
 CACHE_DIR = os.path.join(BASE, "cache")
 
+# Названия районов; поправка давления станции к уровню моря (pws_stations.js)
 STATIONS = [
     ("IODESA137", "пос. Котовского"),
     ("IODESA138", "Центр"),
     ("IODESA139", "Чудо Город"),
-    ("IODESS41", "Судостроительная"),
+    ("IODESS41", "Адмиральский"),
     ("IODESS44", "Аркадия"),
     ("IODESS16", "Таирова"),
     ("IODESS31", "Савиньон"),
     ("IODESS37", "Застава"),
     ("IKRASN91", "пос. Степовое"),
 ]
+P_OFFSET = {"IODESA137": -5.3, "IODESA138": 10.3, "IODESA139": 1.2, "IODESS41": 4.2, "IODESS44": -1.8,
+            "IODESS16": 1.2, "IODESS31": 17.9, "IODESS37": 8.2, "IKRASN91": -1.5}
 
 GUST_MS = 8.0          # порог порыва, м/с
 GUST_STEP = 4.0        # повторное предупреждение при усилении на столько м/с
@@ -480,19 +483,109 @@ def rain_text_upcoming(ro):
     return s
 
 
-def rain_text_ongoing(ro, now):
+def current_rate(hours, now):
+    """Прогнозная интенсивность (мм/ч) в текущем часе и время, до которого она сохранится."""
+    cur = None
+    idx = None
+    for i, h in enumerate(hours):
+        if h["R"] is not None and h["dt"] - timedelta(hours=1) <= now < h["dt"]:
+            cur, idx = h["R"], i
+            break
+    if cur is None:
+        return None, None
+    run_end = hours[idx]["dt"]
+    tol = max(0.1, 0.3 * cur)
+    for h in hours[idx + 1:]:
+        if h["R"] is None or abs(h["R"] - cur) > tol:
+            break
+        run_end = h["dt"]
+    return cur, run_end
+
+
+def rain_text_ongoing(ro, now, hours, peak=None):
     if ro["beyond"]:
-        s = "⏱ По прогнозу Ансамбля осадки продолжатся не менее чем до %s" % hhmm(ro["end"])
+        s = "⏱ По прогнозу осадки продолжатся не менее чем до %s" % hhmm(ro["end"])
     else:
-        s = "⏱ По прогнозу Ансамбля осадки закончатся около %s" % hhmm(ro["end"])
-    extra = []
-    if ro["peak_e"] > now:
-        when = ("сейчас, до %s" % hhmm(ro["peak_e"])) if ro["peak_b"] <= now else (
-            "%s–%s" % (hhmm(ro["peak_b"]), hhmm(ro["peak_e"])))
-        extra.append("наибольшая интенсивность ~%s мм/ч (%s)" % (f1(ro["peak_rate"]), when))
+        s = "⏱ По прогнозу осадки закончатся около %s" % hhmm(ro["end"])
+    cur, run_end = current_rate(hours or [], now)
+    if peak:
+        if peak["recent"]:
+            s += "; наибольшая интенсивность наблюдается сейчас"
+        elif peak["e"] - peak["b"] >= timedelta(minutes=30):
+            s += "; наибольшая интенсивность наблюдалась с %s до %s" % (hhmm(peak["b"]), hhmm(peak["e"]))
+        else:
+            s += "; наибольшая интенсивность наблюдалась в %s" % hhmm(peak["t"])
+        if cur is not None and cur >= 0.05:
+            s += ", сейчас ~%s мм/ч" % f1(cur)
+    elif cur is not None and cur >= 0.05:
+        s += "; сейчас ~%s мм/ч" % f1(cur)
+    s += "."
+    tail = []
+    if cur is not None and cur >= 0.05 and run_end is not None:
+        if run_end >= ro["end"]:
+            tail.append("Такая интенсивность сохранится до конца осадков")
+        else:
+            tail.append("Такая интенсивность будет наблюдаться до %s" % hhmm(run_end))
+    if ro["peak_b"] > now and ro["peak_rate"] >= 1.5 * max(cur or 0.0, 0.1):
+        tail.append("усиление до ~%s мм/ч ожидается с %s до %s" % (
+            f1(ro["peak_rate"]), hhmm(ro["peak_b"]), hhmm(ro["peak_e"])))
     if ro["remaining"] >= 0.1:
-        extra.append("до конца ещё ~%s мм" % f1(ro["remaining"]))
-    return s + ("; " + "; ".join(extra) if extra else "") + "."
+        tail.append("до конца ожидается ещё ~%s мм" % f1(ro["remaining"]))
+    if tail:
+        t = "; ".join(tail)
+        s += " " + t[0].upper() + t[1:] + "."
+    return s
+
+
+def episode_info(ok, state, now):
+    """Текущий дождь по городу: стабильное начало, накопленная сумма (по станциям эпизода)."""
+    ep_st = [s for s in ok if s.get("ep") and (now - s["ep"]["last_wet"]) <= timedelta(minutes=90)]
+    if not ep_st:
+        return None
+    start = min(s["ep"]["start"] for s in ep_st)
+    prev = state.get("ep_start")
+    if prev:
+        try:
+            start = min(start, parse_iso(prev))
+        except Exception:
+            pass
+    best = max(ep_st, key=lambda s: s["ep"]["acc"])
+    return {"start": start, "acc": best["ep"]["acc"], "name": best["name"],
+            "mean": statistics.mean(s["ep"]["acc"] for s in ep_st), "stations": ep_st}
+
+
+def observed_peak(epi, now):
+    """Когда по наблюдениям частных станций дождь был сильнее всего (по 10-минутным интервалам)."""
+    if not epi:
+        return None
+    buckets = {}
+    best_t = {}
+    for s in epi["stations"]:
+        for o in s["obs"]:
+            if o["ts"] < epi["start"]:
+                continue
+            k = o["ts"].replace(minute=(o["ts"].minute // 10) * 10, second=0, microsecond=0)
+            if o["int"] > buckets.get(k, 0.0):
+                buckets[k] = o["int"]
+                best_t[k] = o["ts"]
+    if not buckets:
+        return None
+    ks = sorted(buckets)
+    pk = max(ks, key=lambda k: buckets[k])
+    pv = buckets[pk]
+    if pv < RAIN_MM_H:
+        return None
+    i = ks.index(pk)
+    lo = hi = i
+    thr = 0.75 * pv
+    step = timedelta(minutes=10)
+    while lo > 0 and ks[lo - 1] == ks[lo] - step and buckets[ks[lo - 1]] >= thr:
+        lo -= 1
+    while hi < len(ks) - 1 and ks[hi + 1] == ks[hi] + step and buckets[ks[hi + 1]] >= thr:
+        hi += 1
+    end = ks[hi] + step
+    return {"t": best_t[pk], "b": ks[lo], "e": end, "value": pv,
+            "recent": (now - end) <= timedelta(minutes=15)}
 
 
 # ---------------------------------------------------------------- единый пост: ГМЦ + частные станции + прогноз
@@ -500,24 +593,25 @@ def rain_text_ongoing(ro, now):
 def official_lines(sy, now):
     t = sy["time"]
     age = (now - t).total_seconds() / 3600.0
-    head = "🏛 <b>Официальная сводка ГМЦ</b> (Одесса, 33837), срок %s (%s UTC)" % (
+    head = "🏛 <b>Официальная сводка ГМЦ</b> (Одесса), наблюдения %s (%s UTC)" % (
         hhmm(t), t.strftime("%H:%M"))
     if age > SYNOP_MAX_AGE_H + 1:
         head += " ⚠ данные устарели (%d ч назад)" % round(age)
     L = [head]
     p1 = []
     if sy["temp"] is not None:
-        s = "🌡 %s °C" % f1(sy["temp"])
-        if sy["dew"] is not None:
-            s += " (точка росы %s °C%s)" % (f1(sy["dew"]), (", влажность ~%s%%" % f0(sy["rh"])) if sy["rh"] is not None else "")
-        p1.append(s)
+        p1.append("🌡 %s °C" % f1(sy["temp"]))
+    if sy["rh"] is not None:
+        p1.append("влажность %s%%" % f0(sy["rh"]))
     if sy["p_sea"] is not None:
         s = "давление %s гПа" % f1(sy["p_sea"])
         if sy["tend"] is not None:
             if abs(sy["tend"]) < 0.1:
-                s += " (без изменений за 3 ч)"
+                s += " (за 3 ч без изменений)"
+            elif sy["tend"] < 0:
+                s += " (за 3 ч упало на %s гПа)" % f1(abs(sy["tend"]))
             else:
-                s += " (%s %s гПа за 3 ч)" % ("падение" if sy["tend"] < 0 else "рост", f1(abs(sy["tend"])))
+                s += " (за 3 ч выросло на %s гПа)" % f1(sy["tend"])
         p1.append(s)
     if p1:
         L.append(" · ".join(p1))
@@ -536,7 +630,7 @@ def official_lines(sy, now):
         L.append(" · ".join(p2))
     p3 = []
     if sy.get("ww_text"):
-        p3.append("в срок: %s" % sy["ww_text"])
+        p3.append("В момент наблюдения %s" % sy["ww_text"])
     if sy["precip"] is not None and (sy["precip"] > 0 or sy["precip_trace"]):
         amt = "следы" if sy["precip_trace"] and sy["precip"] == 0 else "%s мм" % f1(sy["precip"])
         p3.append("осадки%s: %s" % ((" за %d ч" % sy["precip_h"]) if sy["precip_h"] else "", amt))
@@ -547,7 +641,7 @@ def official_lines(sy, now):
     return L
 
 
-def private_lines(ok, raining, gusty, now):
+def private_lines(ok, raining, gusty, now, epi):
     out = []
     parts = []
     temps = sorted(s["temp"] for s in ok if s["temp"] is not None)
@@ -574,17 +668,13 @@ def private_lines(ok, raining, gusty, now):
     if raining:
         rs_ = sorted(raining, key=lambda s: -s["int"])
         if city_wide(len(rs_), len(ok)):
-            out.append("🌧 Дождь по всему городу (%d из %d районов), сильнее: %s." % (
-                len(rs_), len(ok), ", ".join("%s %s мм/ч" % (esc(s["name"]), f1(s["int"])) for s in rs_[:3])))
+            out.append("🌧 Дождь по всему городу, сильнее: %s." % (
+                ", ".join("%s %s мм/ч" % (esc(s["name"]), f1(s["int"])) for s in rs_[:3])))
         else:
             out.append("🌧 Дождь: %s." % ", ".join("%s %s мм/ч" % (esc(s["name"]), f1(s["int"])) for s in rs_))
-        eps = [(s["ep"]["acc"], s["name"], s["ep"]["start"]) for s in raining if s.get("ep")]
-        if eps:
-            best = max(eps)
-            mean_acc = statistics.mean(a for a, _, _ in eps)
-            t0 = min(t for _, _, t in eps)
-            out.append("С %s выпало до %s мм (%s), в среднем %s мм." % (
-                hhmm(t0), f1(best[0]), esc(best[1]), f1(mean_acc)))
+        if epi:
+            out.append("Дождь идёт с %s: выпало до %s мм (%s), в среднем %s мм." % (
+                hhmm(epi["start"]), f1(epi["acc"]), esc(epi["name"]), f1(epi["mean"])))
     elif not gusty:
         out.append("Порывов и осадков сейчас нет.")
     daily = [(s["ptot"], s["name"]) for s in ok if s.get("ptot") is not None and s["ptot"] >= 0.1]
@@ -594,32 +684,32 @@ def private_lines(ok, raining, gusty, now):
     return out
 
 
-def forecast_block(hours, ro, fo, raining, now):
+def forecast_block(hours, ro, fo, raining, now, peak=None):
     L = []
     if fo:
         L += front_text(fo)
     if raining:
         if ro:
-            L.append(rain_text_ongoing(ro, now))
+            L.append(rain_text_ongoing(ro, now, hours, peak))
         elif hours:
-            L.append("⏱ По прогнозу Ансамбля значимых осадков в ближайшие часы нет.")
+            L.append("⏱ По прогнозу значимых осадков в ближайшие часы нет.")
     elif ro and ro["start"] < now + timedelta(hours=12):
         L.append(rain_text_upcoming(ro))
     return L
 
 
-def build_digest(ok, raining, gusty, sy, hours, ro, fo, now):
+def build_digest(ok, raining, gusty, sy, hours, ro, fo, now, official, epi=None, peak=None):
     lnow = now.astimezone(KYIV)
     L = ["📋 <b>Сводка по Одессе, %s</b>" % lnow.strftime("%H:%M")]
-    if sy:
+    if official and sy:
         L += official_lines(sy, now)
-    L.append("")
-    L.append("📡 <b>Частные станции</b> (%d из %d)" % (len(ok), len(STATIONS)))
-    L += private_lines(ok, raining, gusty, now)
-    fb = forecast_block(hours, ro, fo, raining, now)
+        L.append("")
+    L.append("📡 <b>Частные метеостанции</b>")
+    L += private_lines(ok, raining, gusty, now, epi)
+    fb = forecast_block(hours, ro, fo, raining, now, peak)
     if fb:
         L.append("")
-        L.append("🔮 <b>Прогноз (Ансамбль)</b>")
+        L.append("🔮 <b>Прогноз</b>")
         L += fb
     return "\n".join(L)
 
@@ -688,7 +778,8 @@ def main():
         gobs = max(recent, key=lambda o: o["gust"] or 0)
         st[sid] = {
             "name": name, "ok": True, "age": age, "obs": obs,
-            "temp": last["temp"], "hum": last["hum"], "wind": last["wind"], "p": last["p"],
+            "temp": last["temp"], "hum": last["hum"], "wind": last["wind"],
+            "p": (last["p"] + P_OFFSET.get(sid, 0.0)) if last["p"] is not None else None,
             "dir": last["dir"], "gust": gobs["gust"] or 0.0,
             "gust_dir": gobs["dir"], "wind_at_gust": gobs["wind"],
             "int": max(o["int"] for o in recent),
@@ -716,7 +807,15 @@ def main():
     raining = [s for sid, s in st.items() if s["ok"] and rs.get(sid)]
     gusty = sorted([s for s in ok if s["gust"] >= GUST_MS], key=lambda s: -s["gust"])
 
-    # 3. Ансамбль и официальная сводка ГМЦ
+    # 3. эпизод дождя по городу (стабильное начало) и наблюдаемый пик
+    epi = episode_info(ok, state, now) if (raining or state.get("rain_city")) else None
+    if epi:
+        state["ep_start"] = epi["start"].strftime("%Y-%m-%dT%H:%M:%SZ")
+    peak = observed_peak(epi, now) if (epi and raining) else None
+    if not raining and not state.get("rain_city"):
+        state.pop("ep_start", None)
+
+    # 3б. Ансамбль и официальная сводка ГМЦ
     hours = get_ensemble(state, now, source)
     ro = rain_outlook(hours, now) if hours else None
     fo = front_outlook(hours, now) if hours else None
@@ -731,31 +830,28 @@ def main():
         n = len(raining)
         if city_wide(n, len(ok)):
             top = ", ".join("%s — %s мм/ч" % (esc(s["name"]), f1(s["int"])) for s in raining[:3])
-            txt = "🌧 <b>Дождь по всему городу</b> (%d из %d районов).\nСильнее всего: %s." % (n, len(ok), top)
+            txt = "🌧 <b>Дождь по всему городу.</b>\nСильнее всего: %s." % top
         elif n == 1:
-            txt = "🌧 <b>Начался дождь</b> в районе: %s (%s мм/ч)." % (esc(raining[0]["name"]), f1(raining[0]["int"]))
+            txt = "🌧 <b>Начался дождь:</b> %s (%s мм/ч)." % (esc(raining[0]["name"]), f1(raining[0]["int"]))
         else:
             lst = ", ".join("%s (%s мм/ч)" % (esc(s["name"]), f1(s["int"])) for s in raining)
-            txt = "🌧 <b>Начался дождь</b> в районах: %s." % lst
+            txt = "🌧 <b>Начался дождь:</b> %s." % lst
         if ro and ro["start"] <= now + timedelta(hours=1):
-            txt += "\n" + rain_text_ongoing(ro, now)
+            txt += "\n" + rain_text_ongoing(ro, now, hours, None)
         alerts.append(("%s\n🕐 %s" % (txt, hhmm(now)), False))
         state["rain_city"] = True
         state["fc_warned"] = False
     elif not raining and city_active:
-        eps = [(s["ep"], s["name"]) for s in ok if s.get("ep") and (now - s["ep"]["last_wet"]) <= timedelta(minutes=120)]
         extra = ""
-        if eps:
-            t0 = min(e["start"] for e, _ in eps)
-            t1 = max(e["last_wet"] for e, _ in eps)
-            extra = " Шёл с %s до %s." % (hhmm(t0), hhmm(t1))
-            best = max(eps, key=lambda x: x[0]["acc"])
-            if best[0]["acc"] >= 0.1:
-                mean_acc = statistics.mean(e["acc"] for e, _ in eps)
-                extra += " Выпало до %s мм (%s), в среднем %s мм." % (f1(best[0]["acc"]), esc(best[1]), f1(mean_acc))
+        if epi:
+            t1 = max(st_["ep"]["last_wet"] for st_ in epi["stations"])
+            extra = " Шёл с %s до %s." % (hhmm(epi["start"]), hhmm(t1))
+            if epi["acc"] >= 0.1:
+                extra += " Выпало до %s мм (%s), в среднем %s мм." % (f1(epi["acc"]), esc(epi["name"]), f1(epi["mean"]))
         alerts.append(("🌤 <b>Дождь закончился.</b>%s\n🕐 %s" % (extra, hhmm(now)), False))
         state["rain_city"] = False
         state["fc_warned"] = False
+        state.pop("ep_start", None)
 
     # 5. порывы ветра
     gmax = gusty[0]["gust"] if gusty else 0.0
@@ -769,7 +865,7 @@ def main():
             if d is not None and w is not None:
                 tail = "\nВетер %s, %s м/с." % (compass(d), f0(w))
             head = "💨 <b>Порывы усилились</b>" if state.get("gust_active") else "💨 <b>Порывы ветра</b>"
-            alerts.append(("%s до <b>%s м/с</b>\nРайоны: %s (м/с).%s\n🕐 %s" % (
+            alerts.append(("%s до <b>%s м/с</b>\n%s (м/с).%s\n🕐 %s" % (
                 head, f1(gmax), lst, tail, hhmm(now)), False))
             state["gust_active"] = True
             state["gust_level"] = gmax
@@ -791,7 +887,7 @@ def main():
     if warn_rain and not state.get("fc_warned"):
         lead = max(0, int(round((ro["start"] - now).total_seconds() / 60.0)))
         lead_txt = "в ближайшее время" if lead < 15 else "через ~%d мин" % (round(lead / 5.0) * 5)
-        body = ["☔ <b>Ожидаются осадки</b> (прогноз Ансамбля) %s, около %s." % (lead_txt, hhmm(max(ro["start"], now)))]
+        body = ["☔ <b>Ожидаются осадки</b> %s, около %s." % (lead_txt, hhmm(max(ro["start"], now)))]
         if fo:
             body += front_text(fo)
         body.append(rain_text_upcoming(ro))
@@ -853,7 +949,7 @@ def main():
     hourly = new_hour and not alerts and (gusty or raining)
     messages = list(alerts)
     if hourly or synop_new or force_digest:
-        messages.append((build_digest(ok, raining, gusty, sy, hours, ro, fo, now), True))
+        messages.append((build_digest(ok, raining, gusty, sy, hours, ro, fo, now, official=synop_new or force_digest, epi=epi, peak=peak), True))
         if synop_new and sy_iso:
             state["synop_sent"] = sy_iso
     if new_hour:
