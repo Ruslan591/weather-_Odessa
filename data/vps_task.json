@@ -1,1 +1,1 @@
-{"task_id": "wtg-peakfix-20261123r", "cmd": "cd /opt/weather-tg && curl -fsSL -H 'Accept: application/vnd.github.raw' https://api.github.com/repos/ruslan591/weather-_Odessa/contents/scripts/weather_tg_channel.py -o weather_tg_channel.py.new && python3 -m py_compile weather_tg_channel.py.new && mv weather_tg_channel.py.new weather_tg_channel.py && date -u +%H:%M && tail -3 run.log", "timeout": 60}
+{"task_id": "wtg-checkrun-20261123s", "cmd": "date -u +%H:%M; tail -6 /opt/weather-tg/run.log | cut -c1-200", "timeout": 60}
