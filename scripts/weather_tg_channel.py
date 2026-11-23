@@ -487,8 +487,9 @@ def rain_text_ongoing(ro, now):
         s = "⏱ По прогнозу Ансамбля осадки закончатся около %s" % hhmm(ro["end"])
     extra = []
     if ro["peak_e"] > now:
-        extra.append("наибольшая интенсивность ~%s мм/ч (%s–%s)" % (
-            f1(ro["peak_rate"]), hhmm(max(ro["peak_b"], now)), hhmm(ro["peak_e"])))
+        when = ("сейчас, до %s" % hhmm(ro["peak_e"])) if ro["peak_b"] <= now else (
+            "%s–%s" % (hhmm(ro["peak_b"]), hhmm(ro["peak_e"])))
+        extra.append("наибольшая интенсивность ~%s мм/ч (%s)" % (f1(ro["peak_rate"]), when))
     if ro["remaining"] >= 0.1:
         extra.append("до конца ещё ~%s мм" % f1(ro["remaining"]))
     return s + ("; " + "; ".join(extra) if extra else "") + "."
