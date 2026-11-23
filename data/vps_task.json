@@ -1,1 +1,1 @@
-{"task_id": "wtg-stale-20261123h", "cmd": "cd /opt/weather-tg && curl -fsSL -H 'Accept: application/vnd.github.raw' https://api.github.com/repos/ruslan591/weather-_Odessa/contents/scripts/weather_tg_channel.py -o weather_tg_channel.py && python3 -m py_compile weather_tg_channel.py && grep -c 'STALE_MIN = 45' weather_tg_channel.py; date -u +%H:%M; tail -8 run.log 2>/dev/null", "timeout": 60}
+{"task_id": "wtg-checklog-20261123j", "cmd": "date -u +%H:%M; tail -12 /opt/weather-tg/run.log; ls -l /opt/weather-tg | cut -c1-60", "timeout": 60}
