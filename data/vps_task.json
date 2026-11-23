@@ -1,1 +1,1 @@
-{"task_id": "f29", "cmd": "{ curl -s https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/scripts/deploy_shadow15.sh | bash; } 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 300}
+{"task_id": "f30", "cmd": "{ grep -n 'score_filter' /opt/tg-notify/tg_shadow.py | LC_ALL=C tr -cd '\\11\\12\\40-\\176' | cut -c1-300; ls /opt/trading-bot/ | grep bak_shadow1 | tail -3; systemctl is-active tg-bot-regr; } 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 120}
