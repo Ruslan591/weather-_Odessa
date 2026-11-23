@@ -1,12 +1,17 @@
 {
-  "timestamp": "2026-11-23T15:37:39Z",
-  "status": "ok",
+  "timestamp": "2026-11-23T15:42:53Z",
+  "status": "suppressed_known_false_positive",
   "cloud_forecast_timestamp": "2026-11-23T15:15:00.000Z",
-  "target_id": 0,
-  "target_area_km2": 202.8,
-  "target_distance_km": 119.3,
-  "target_bearing_deg": 148.0,
-  "target_compass": "ЮВ",
+  "suppressed_target": {
+    "signature": "65_-100",
+    "area_km2": 202.8,
+    "distance_km": 119.3,
+    "bearing_deg": 148.0,
+    "compass": "ЮВ",
+    "not_confirmed_streak": 5,
+    "total_not_confirmed": 5,
+    "excluded_since": "2026-11-23T15:37:39Z"
+  },
   "system": {
     "target_id": 1,
     "area_km2": 7267.9,
@@ -18,6 +23,8 @@
     "elongation_axis_compass": "С-Ю",
     "frontlike": false,
     "window_spanning": false,
+    "phase_label": "безоблачно",
+    "cloud_fraction": 0.0,
     "has_precip": false,
     "has_lightning": false
   },
@@ -25,46 +32,6 @@
   "local_suppressed_count": 1,
   "system_candidates": [],
   "system_suppressed_count": 2,
-  "frontal_tracks": [],
-  "target_movement": {
-    "speed_kmh": 85.4,
-    "direction_compass": "СВ",
-    "cpa_km": 119.3,
-    "eta_min": null,
-    "verdict": "пройдёт мимо, город, скорее всего, не заденет"
-  },
-  "target_phase": {
-    "label": "безоблачно",
-    "cloud_fraction": 0.0
-  },
-  "existence": {
-    "modules": {
-      "ir_motion": {
-        "confirmed": false,
-        "timestamp": "2026-11-23T15:10:00.000Z"
-      },
-      "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-11-23T15:10:00.000Z"
-      },
-      "cloud_phase_type": {
-        "confirmed": false,
-        "timestamp": "2026-11-23T15:27:39Z"
-      }
-    },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
-  },
-  "phenomena": {
-    "precip_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-11-23T15:37:25Z"
-    },
-    "lightning_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-11-23T15:37:26Z"
-    }
-  },
-  "verdict": "CLM отметил цель в 119км ЮВ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (7268км²) в 135км ЮВ."
+  "verdict": "Известный шумовой объект в 119км ЮВ (~203км²) — подавлено (не подтверждался 5 раз подряд). Отдельно: система синоптического масштаба (7268км²) в 135км ЮВ.",
+  "frontal_tracks": []
 }
