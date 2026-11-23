@@ -511,6 +511,7 @@ def rain_text_ongoing(ro, now, hours, peak=None):
     if peak:
         if peak["recent"]:
             s += "; наибольшая интенсивность наблюдается сейчас"
+            cur = None
         elif peak["e"] - peak["b"] >= timedelta(minutes=30):
             s += "; наибольшая интенсивность наблюдалась с %s до %s" % (hhmm(peak["b"]), hhmm(peak["e"]))
         else:
