@@ -318,9 +318,15 @@ def rain_outlook(steps, now):
         ep.pop()
     if not ep:
         return None
-    peak = max(ep, key=lambda x: x[2])
-    return {"start": ep[0][0], "end": ep[-1][1], "peak_b": peak[0], "peak_e": peak[1],
-            "peak_rate": peak[2] * 4.0, "total": sum(x[2] for x in ep)}
+    imax = max(range(len(ep)), key=lambda i: ep[i][2])
+    pm = ep[imax][2]
+    lo = hi = imax
+    while lo > 0 and ep[lo - 1][2] >= 0.9 * pm:
+        lo -= 1
+    while hi < len(ep) - 1 and ep[hi + 1][2] >= 0.9 * pm:
+        hi += 1
+    return {"start": ep[0][0], "end": ep[-1][1], "peak_b": ep[lo][0], "peak_e": ep[hi][1],
+            "peak_rate": pm * 4.0, "total": sum(x[2] for x in ep)}
 
 
 def pressure_outlook(press, now):
