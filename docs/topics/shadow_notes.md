@@ -132,3 +132,5 @@
 Включено 23.11 01:22 UTC (shadow_cfg.json): side_filter, score_filter (bull-bear режима BTC 1h против стороны, из tg_regime.json), btc_rsi_filter, counter_filter, rsi5_filter = true; width_filter = false. Код tg_shadow._side_block (patch_filters2.py), бэкап /opt/trading-bot/bak_shadow15_20261123_012202. Отфильтрованное ведётся вхолостую (cf) с причиной «фильтр ...», сводка покажет, сколько отрезано и чем.
 Проверка выкладки: сервис active, тесты _side_block верны; ошибки журнала «strip old buttons: HTTP 400» были и до выкладки (не связаны). С #125 статусы: filtered 9, gate 2, closed 1.
 Проверка вперёд: смотреть cf отфильтрованных по причинам; если отрезанные по причине выходят в плюс, выключить причину.
+
+Включено 23.11 (после №16) по решению пользователя: width_filter = true, width_max = 8 (ширина канала >= 8 ATR отфильтровывается, ведётся вхолостую cf). Выключатель: shadow_cfg.json width_filter. Проверка вперёд: cf отфильтрованных по ширине.
