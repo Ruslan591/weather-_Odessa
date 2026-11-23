@@ -159,6 +159,8 @@ def parse_obs(o):
     pr = m.get("pressureMin")
     if pr is None:
         pr = m.get("pressureMax")
+    if m.get("tempAvg") is None and pr is None:
+        return None  # пустая сводка (датчики не передали данные)
     return {
         "ts": ts,
         "temp": m.get("tempAvg"),
@@ -459,7 +461,7 @@ def main():
             b0 = wet_steps[0][0]
             lead = max(0, int(round((b0 - now).total_seconds() / 60.0)))
             total = sum(mm for _, mm in upcoming)
-            lead_txt = "уже сейчас" if lead < 10 else "через ~%d мин" % (round(lead / 5.0) * 5)
+            lead_txt = "в ближайшие минуты" if lead < 10 else "через ~%d мин" % (round(lead / 5.0) * 5)
             alerts.append(("☔ <b>По прогнозу осадки</b> %s (около %s), за ближайшие 3 ч до %s мм.\nСейчас: %s.\n🕐 %s" % (
                 lead_txt, hhmm(b0), f1(total), now_summary(ok), hhmm(now)), False))
             state["fc_warned"] = True
