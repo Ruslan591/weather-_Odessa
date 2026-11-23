@@ -66,3 +66,6 @@
 
 ## Фильтр стороны по режиму рынка (с 22.11 21:09 UTC, deploy_shadow14)
 В tg_shadow._tick_gate после создания ордера: режим down и сторона long, либо режим up и сторона short - тень отфильтрована (причина «фильтр стороны...»), ведётся вхолостую (cf). flat и нет данных: обе стороны. Режим берётся из it[rg] на момент сигнала. Выключатель shadow_cfg.json side_filter (true/false, сразу). Анализ и откат: shadow_notes.md №14, бэкап /opt/trading-bot/bak_shadow14_*.
+
+## Предфильтры теней (с 23.11 01:22 UTC, deploy_shadow15)
+shadow_cfg.json, каждый ключ отдельно (применяется сразу): side_filter (режим down - только short, up - только long), score_filter (счёт bull-bear режима BTC 1h против стороны), btc_rsi_filter (RSI14 BTC 1m вне 40-60), counter_filter (сигнал против тренда канала), rsi5_filter (RSI5 монеты экстремум против отбоя), width_filter + width_max (ширина канала в ATR, выключен). Отфильтрованное ведётся вхолостую (cf). Код tg_shadow._side_block; бэкапы /opt/trading-bot/bak_shadow14_*, bak_shadow15_*. Анализ: shadow_notes.md №14-№16.
