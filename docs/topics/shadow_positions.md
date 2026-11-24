@@ -69,3 +69,6 @@
 
 ## Предфильтры теней (с 23.11 01:22 UTC, deploy_shadow15)
 shadow_cfg.json, каждый ключ отдельно (применяется сразу): side_filter (режим down - только short, up - только long), score_filter (счёт bull-bear режима BTC 1h против стороны), btc_rsi_filter (RSI14 BTC 1m вне 40-60), counter_filter (сигнал против тренда канала), rsi5_filter (RSI5 монеты экстремум против отбоя), width_filter + width_max (ширина канала в ATR, выключен). Отфильтрованное ведётся вхолостую (cf). Код tg_shadow._side_block; бэкапы /opt/trading-bot/bak_shadow14_*, bak_shadow15_*. Анализ: shadow_notes.md №14-№16.
+
+## Виртуальный баланс теней (с 24.11 01:57 UTC, deploy_ledger1)
+Две линии «с фильтрами» и «без фильтра» от эквити счёта на старте, правила слотов/маржи как у счёта, закрытые сделки в shadow_bal_trades.json, настройки shadow_bal.json. Показывается в панели 18111 в блоке «Теневые». Подробности: shadow_notes.md №18.
