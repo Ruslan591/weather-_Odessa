@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import weather_tg_channel as ch  # noqa: E402
 
 KYIV = ch.KYIV
-MORNING_H = 7        # местный час утреннего выпуска
+MORNING_H = 6        # местный час утреннего выпуска (ежедневно; позже опросить подписчиков)
 EVENING_H = 21       # местный час вечерних итогов
 ISSUE_SILENT = True  # выпуски без звука (предупреждения остаются со звуком)
 ISSUE_STATE = os.path.join(ch.BASE, "issue_state.json")
@@ -205,6 +205,102 @@ def rain_phrase(d):
     return "%s %s, всего ~%s мм" % (kind, per, mm_txt(d["rain"]))
 
 
+
+# ---------- море ----------
+PIPE_DATA = "/opt/weather-pipeline/repo/data"
+SST_WINDOW_DAYS, SST_MIN_N = 30, 10   # как в marine.js
+
+
+def wave_word(h):
+    if h < 0.25:
+        return "почти штиль"
+    if h < 0.5:
+        return "слабое волнение"
+    if h < 1.25:
+        return "умеренное волнение"
+    if h < 2.5:
+        return "значительное волнение"
+    return "сильное волнение"
+
+
+def sea_facts(now):
+    """Море: температура воды с поправкой по ГМЦ ЧАМ (как marine.js), волны, ветер над морем. None, если данных нет."""
+    try:
+        hist = json.load(open(os.path.join(PIPE_DATA, "marine_history.json"), encoding="utf-8"))
+        tel = json.load(open(os.path.join(PIPE_DATA, "hmcbas_telegram_sea_temp.json"), encoding="utf-8"))
+    except Exception as e:
+        ch.log("issue: нет данных моря: %s" % e)
+        return None
+    pts = []
+    for o in hist:
+        try:
+            pts.append((datetime.fromisoformat(o["time"]), o))
+        except Exception:
+            continue
+    if not pts:
+        return None
+    last_t, last = pts[-1]
+    if (now - last_t) > timedelta(hours=4):
+        return None
+    sst_pts = [(t, o["sst"]) for t, o in pts if o.get("sst") is not None]
+    diffs = []
+    since = now - timedelta(days=SST_WINDOW_DAYS)
+    for e in tel:
+        try:
+            ts = datetime.fromisoformat(e["timestamp"])
+        except Exception:
+            continue
+        if e.get("sea_temp") is None or ts < since:
+            continue
+        near_ = min(sst_pts, key=lambda x: abs((x[0] - ts).total_seconds()), default=None)
+        if near_ and abs((near_[0] - ts).total_seconds()) <= 3 * 3600:
+            diffs.append(near_[1] - e["sea_temp"])
+    raw = last.get("sst")
+    bias = statistics.mean(diffs) if len(diffs) >= SST_MIN_N else None
+    sst = round(raw - bias, 1) if (raw is not None and bias is not None) else raw
+    day_ago = None
+    old = [(abs((t - (last_t - timedelta(hours=24))).total_seconds()), o["sst"]) for t, o in pts if o.get("sst") is not None]
+    if old:
+        dd, v = min(old)
+        if dd <= 3 * 3600 and raw is not None and bias is not None:
+            day_ago = round(raw - bias, 1) - round(v - bias, 1)
+    return {"sst": sst, "d24": day_ago, "wave": last.get("waveH"), "wave_dir": last.get("waveDir"), "period": last.get("wavePeriod"),
+            "swell": last.get("swellH"), "wind": last.get("seaWindSpeed"), "gust": last.get("seaWindGust"), "wind_dir": last.get("seaWindDir"),
+            "corrected": bias is not None}
+
+
+def sea_line(sea):
+    if not sea or (sea["sst"] is None and sea["wave"] is None):
+        return None
+    bits = []
+    if sea["sst"] is not None:
+        b = "вода %s°" % tv(sea["sst"], 1)
+        if sea["d24"] is not None and abs(sea["d24"]) >= 0.2:
+            b += " (за сутки %s°)" % tv(sea["d24"], 1)
+        bits.append(b)
+    if sea["wave"] is not None:
+        bits.append("волны %s м, %s" % (ch.f1(sea["wave"]), wave_word(sea["wave"])))
+    if sea["wind"] is not None:
+        bits.append("ветер над морем %s%s м/с" % ((ch.compass(sea["wind_dir"]) + " ") if sea["wind_dir"] is not None else "", ch.f0(sea["wind"])))
+    return "🌊 Море: " + ", ".join(bits) + "."
+
+
+def sea_pro(sea):
+    if not sea:
+        return None
+    bits = []
+    if sea["period"] is not None:
+        bits.append("период волны %s с" % ch.f1(sea["period"]))
+    if sea["swell"] is not None:
+        bits.append("зыбь %s м" % ch.f1(sea["swell"]))
+    if sea["wave_dir"] is not None:
+        bits.append("волна идёт с %s" % ch.compass(sea["wave_dir"]))
+    if sea["gust"] is not None:
+        bits.append("порывы над морем до %s м/с" % ch.f0(sea["gust"]))
+    bits.append("температура воды скорректирована по данным ГМЦ ЧАМ" if sea["corrected"] else "температура воды по модели, без поправки")
+    return "Море: " + ", ".join(bits) + "."
+
+
 # ---------- утренний выпуск ----------
 def morning_headline(rng, d, fo, rain_txt):
     if fo and fo["kind"] == "cold":
@@ -299,6 +395,10 @@ def build_morning(st, hours, now):
                 ch.f1(night["spread"]), esc(night["warm"][1]), tv(night["warm"][0], 1), esc(night["cold"][1]), tv(night["cold"][0], 1)))
         else:
             lines.append("🌙 Ночью по городу около %s°." % tv(night["city"]))
+    sea = sea_facts(now)
+    sl = sea_line(sea)
+    if sl:
+        lines.append(sl)
     dg, dtxt = digit_of_day(d, fo, night)
     lines += ["", "🔢 <b>Цифра дня:</b> %s — %s." % (dg, dtxt), ""]
     pro = []
@@ -320,6 +420,9 @@ def build_morning(st, hours, now):
         pro.append("Фронт: %s, минимум давления %s гПа около %s, затем %s °C к %s." % (
             {"cold": "холодный", "warm": "тёплый"}.get(fo["kind"], "барическая ложбина"), ch.f1(fo["pmin"]), hhmm(fo["tmin"]),
             tv(fo["T_after"]), hhmm(fo["t_after"])))
+    sp = sea_pro(sea)
+    if sp:
+        pro.append(sp)
     parts = {"head": lines[0], "date": lines[1], "facts": "\n".join(lines[3:]), "pro": "\n".join(pro), "tag": "#утро",
              "headline": re.sub(r"<[^>]+>", "", lines[0])[2:], "days": [ln]}
     lines.append("<blockquote expandable><b>Для профи</b>\n%s</blockquote>" % esc("\n".join(pro)))
@@ -371,6 +474,10 @@ def build_evening(st, hours, now, hist):
         lines.append("💨 Самый сильный порыв: %s м/с (%s, %s)." % (ch.f1(g), esc(gust[1]), hhmm(gust[2])))
     else:
         lines.append("💨 Ветер весь день спокойный: порывы не выше %s м/с." % ch.f0(g))
+    sea = sea_facts(now)
+    sl = sea_line(sea)
+    if sl:
+        lines.append(sl)
     # прогноз против факта
     today = hist.get("today")
     if today and today.get("date") == ln.strftime("%Y-%m-%d"):
@@ -413,6 +520,9 @@ def build_evening(st, hours, now, hist):
         pro.append("Порыв %s м/с: %s, %s." % (ch.f1(g), gust[1], hhmm(gust[2])))
     if had_rain:
         pro.append("Осадки по районам: " + ", ".join("%s %s" % (k, mm_txt(v)) for k, v in sorted(pt.items(), key=lambda kv: -kv[1])[:4]) + " (мм).")
+    sp = sea_pro(sea)
+    if sp:
+        pro.append(sp)
     parts = {"head": lines[0], "date": lines[1], "facts": "\n".join(lines[3:]), "pro": "\n".join(pro), "tag": "#итоги",
              "headline": re.sub(r"<[^>]+>", "", lines[0])[2:], "days": [ln, ln + timedelta(days=1)]}
     lines += ["", "<blockquote expandable><b>Для профи</b>\n%s</blockquote>" % esc("\n".join(pro)), "", "#итоги"]
@@ -435,6 +545,7 @@ STYLE = (
     "как добираться, когда лучше выйти), причину явления объясняй простыми словами только если она есть в сводке; "
     "3) последняя строка: «Цифра дня» одной яркой фразой с числом из сводки. "
     "ПРАВИЛА ТОЧНОСТИ, нарушать нельзя: используй только числа, время, районы и явления из сводки; ничего не придумывай; "
+    "о море пиши только факты из сводки (температура воды, волны, ветер над морем) и не упоминай купание, плавание, суда, лодки, катера, яхты, пляжи, рыбалку и любые занятия на воде; "
     "числа и время переписывай без изменений и только цифрами (14:00, а не «два часа дня», не «к четырём»); ничего не домысливай: не приписывай районам и ветру поступков и событий, которых нет в сводке, образность допустима лишь в подаче факта; не упоминай модели, ансамбли, номера станций, источники данных; "
     "не называй дат и дней недели, кроме тех, что есть в сводке; если про осадки, ветер или фронт в сводке не сказано, не пиши о них. "
     "Формат ответа: только JSON {\"headline\": \"...\", \"body\": \"...\"}. headline до 70 знаков, без эмодзи и без HTML. "
@@ -511,7 +622,7 @@ def validate(art, facts, pro, parts):
     wrong = [w for w in WD_STEMS if w in low and w not in ok_wd]
     if wrong:
         probs.append("лишние дни недели: " + ", ".join(wrong))
-    for w in ("ансамбл", "модел", "gemini", "станци"):
+    for w in ("купан", "купат", "плавани", "плавать", "яхт", "лодк", "катер", "судов", "судн", "корабл", "пляж", "парус", "серф", "сёрф", "рыбал", "морж", "ансамбл", "модел", "gemini", "станци"):
         if w in low:
             probs.append("упоминание запретного слова: " + w)
     tags = set(re.findall(r"</?([a-z]+)", b + h))
