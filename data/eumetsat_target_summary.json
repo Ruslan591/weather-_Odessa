@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-24T11:05:27Z",
+  "timestamp": "2026-11-24T11:08:47Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-11-24T10:30:00.000Z",
   "target_id": 1,
@@ -19,7 +19,7 @@
     "frontlike": false,
     "window_spanning": true,
     "phase_label": "безоблачно",
-    "cloud_fraction": 0.319,
+    "cloud_fraction": 0.316,
     "has_precip": false,
     "has_lightning": false
   },
@@ -34,8 +34,8 @@
       "elongation_axis_deg": 25.0,
       "elongation_axis_compass": "СВ-ЮЗ",
       "frontlike": false,
-      "phase_label": "безоблачно",
-      "type_label": "плотная/высокая",
+      "phase_label": null,
+      "type_label": null,
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
@@ -73,21 +73,57 @@
       "elongation_axis_compass": "С-Ю",
       "frontlike": false,
       "window_spanning": false,
-      "phase_label": null,
-      "type_label": null,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
+      "has_precip": false,
+      "has_lightning": false,
+      "ir_confirmed": false,
+      "geocolour_confirmed": true
+    },
+    {
+      "target_id": 9,
+      "area_km2": 369.6,
+      "distance_km": 186.1,
+      "bearing_deg": 240.0,
+      "compass": "ЮЗ",
+      "elongation_aspect_ratio": 1.25,
+      "elongation_axis_deg": 110.0,
+      "elongation_axis_compass": "В-З",
+      "frontlike": false,
+      "window_spanning": false,
+      "phase_label": "средняя водяная",
+      "type_label": "плотная/высокая",
+      "has_precip": false,
+      "has_lightning": false,
+      "ir_confirmed": false,
+      "geocolour_confirmed": true
+    },
+    {
+      "target_id": 12,
+      "area_km2": 647.1,
+      "distance_km": 245.9,
+      "bearing_deg": 224.0,
+      "compass": "ЮЗ",
+      "elongation_aspect_ratio": 2.78,
+      "elongation_axis_deg": 12.0,
+      "elongation_axis_compass": "С-Ю",
+      "frontlike": true,
+      "window_spanning": false,
+      "phase_label": "безоблачно",
+      "type_label": "плотная/высокая",
       "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
       "geocolour_confirmed": true
     }
   ],
-  "system_suppressed_count": 3,
+  "system_suppressed_count": 1,
   "frontal_tracks": [
     {
       "track_id": 3463,
       "first_seen": "2026-11-24T09:15:00.000Z",
       "last_seen": "2026-11-24T10:30:00.000Z",
-      "points_count": 4,
+      "points_count": 6,
       "age_minutes": 75.0,
       "distance_from_odessa_km": 245.9,
       "dx_km": -170.2,
@@ -132,19 +168,53 @@
       },
       "direction_compass": "ЮЗ",
       "current_target_id": 12,
-      "has_precip": null,
-      "has_lightning": null,
-      "ahead_obs": null,
-      "behind_obs": null,
-      "front_type": null,
-      "front_type_confidence": null
+      "has_precip": false,
+      "has_lightning": false,
+      "ahead_obs": {
+        "obs_time": "2026-11-24T10:00:00Z",
+        "raw": "15480,2026,11,24,10,00,AAXX 24101 15480 24570 12704 10065 21001 30193 40211 50004 81100 333 55310 00740 21654 30195 60005 91009 90710 91109==",
+        "temp": 6.5,
+        "station_pressure": 1019.3,
+        "sea_pressure": 1021.1,
+        "pressure_tendency_code": "0",
+        "pressure_tendency_value": 0.4,
+        "total_cloud_okta": 1,
+        "wind_dir_deg": 270,
+        "wind_speed_ms": 4,
+        "precip_mm": null,
+        "precip_period_hours": null,
+        "present_weather_code": null,
+        "present_weather_label": null,
+        "is_extreme_weather": false,
+        "obs_source": "SYNOP"
+      },
+      "behind_obs": {
+        "obs_time": "2026-11-24T10:00:00Z",
+        "raw": "15335,2026,11,24,10,00,AAXX 24101 15335 24970 02905 10071 21045 30191 40198 50007 333 55310 21566 60005 91008 90710 91108==",
+        "temp": 7.1,
+        "station_pressure": 1019.1,
+        "sea_pressure": 1019.8,
+        "pressure_tendency_code": "0",
+        "pressure_tendency_value": 0.7,
+        "total_cloud_okta": 0,
+        "wind_dir_deg": 290,
+        "wind_speed_ms": 5,
+        "precip_mm": null,
+        "precip_period_hours": null,
+        "present_weather_code": null,
+        "present_weather_label": null,
+        "is_extreme_weather": false,
+        "obs_source": "SYNOP"
+      },
+      "front_type": "warm",
+      "front_type_confidence": "station"
     }
   ],
   "existence": {
     "modules": {
       "ir_motion": {
         "confirmed": false,
-        "timestamp": "2026-11-24T10:20:00.000Z"
+        "timestamp": "2026-11-24T10:40:00.000Z"
       },
       "geocolour_motion": {
         "confirmed": true,
@@ -152,7 +222,7 @@
       },
       "cloud_phase_type": {
         "confirmed": null,
-        "timestamp": "2026-11-24T10:47:06Z"
+        "timestamp": "2026-11-24T11:07:18Z"
       }
     },
     "votes_confirmed": 1,
@@ -166,7 +236,7 @@
     },
     "lightning_forecast": {
       "confirmed": false,
-      "timestamp": "2026-11-24T10:57:09Z"
+      "timestamp": "2026-11-24T11:08:22Z"
     }
   },
   "verdict": "Цель в 29км С — каналы расходятся: geocolour_motion подтверждают, ir_motion нет. Отдельно: система синоптического масштаба (135799км²) в 10км В (площадь/форма ненадёжны — объект упирается в границы окна обзора)."
