@@ -1,1 +1,1 @@
-{"task_id": "wg6", "cmd": "{ cd /opt/weather-tg; curl -s -H \"Accept: application/vnd.github.raw\" \"https://api.github.com/repos/ruslan591/weather-_Odessa/contents/scripts/weather_tg_issue.py?ref=main\" -o weather_tg_issue.py; python3 -m py_compile weather_tg_issue.py && echo DEPLOYED; } 2>&1", "timeout": 120}
+{"task_id": "wc1", "cmd": "{ sed -i \"/weather_tg_issue/{s/^#//;s/\\\\\\\\//g}\" /etc/cron.d/weather-tg; cat /etc/cron.d/weather-tg; ls -l /etc/cron.d/weather-tg; } 2>&1", "timeout": 120}
