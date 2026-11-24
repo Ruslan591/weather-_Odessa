@@ -300,6 +300,56 @@ def tg_send(env, text, silent):
     return False
 
 
+def tg_send_photo(env, png, caption, silent):
+    b = "----wtg%d" % int(time.time() * 1000)
+    parts = []
+    for k, v in (("chat_id", env["WEATHER_TG_CHAT_ID"]), ("caption", caption if len(caption) <= 1000 else caption[:caption.rfind("\n", 0, 1000)]), ("parse_mode", "HTML"),
+                 ("disable_notification", "true" if silent else "false")):
+        parts.append(("--%s\r\nContent-Disposition: form-data; name=\"%s\"\r\n\r\n%s\r\n" % (b, k, v)).encode())
+    parts.append(("--%s\r\nContent-Disposition: form-data; name=\"photo\"; filename=\"card.png\"\r\n"
+                  "Content-Type: image/png\r\n\r\n" % b).encode() + png + b"\r\n")
+    parts.append(("--%s--\r\n" % b).encode())
+    req = urllib.request.Request("https://api.telegram.org/bot%s/sendPhoto" % env["WEATHER_TG_TOKEN"],
+                                 data=b"".join(parts), headers={"Content-Type": "multipart/form-data; boundary=" + b})
+    try:
+        with urllib.request.urlopen(req, timeout=40) as r:
+            return json.loads(r.read().decode()).get("ok", False)
+    except urllib.error.HTTPError as e:
+        log("TG photo HTTP %s %s" % (e.code, e.read()[:200]))
+    except Exception as e:
+        log("TG photo %s" % type(e).__name__)
+    return False
+
+
+def card_data(ok, raining, now, epi, lines):
+    import re
+    def med(key):
+        v = [s[key] for s in ok if s.get(key) is not None]
+        return statistics.median(v) if v else None
+    items = [(s["dir"], s["wind"]) for s in ok if s.get("dir") is not None and s.get("wind") is not None]
+    dp = [d for d in (delta(s["obs"], "p", 180) for s in ok) if d is not None]
+    g = max([s["gust"] for s in ok if s.get("gust") is not None] or [0.0])
+    d = {"title": "Одесса", "subtitle": "Частные метеостанции", "badge": "обновлено %s" % hhmm(now),
+         "temp": med("temp"), "hum": med("hum"), "wind": med("wind"), "gust": g,
+         "wind_dir": mean_dir(items) if items else None, "pressure": med("p"),
+         "p_trend": statistics.median(dp) if len(dp) >= 3 else None}
+    if raining:
+        rate = max(s["int"] for s in raining)
+        d["rain_rate"] = rate
+        d["rain_label"] = "Слабый" if rate < 2.5 else ("Умеренный" if rate < 8 else "Сильный")
+        if epi:
+            d["rain_total"] = epi["acc"]
+            d["rain_total_label"] = "Осадки с %s" % hhmm(epi["start"])
+    clean = []
+    for l in lines:
+        l = re.sub(r"<[^>]+>", "", html.unescape(l))
+        l = "".join(ch for ch in l if ord(ch) < 0x2300).strip()
+        if l:
+            clean.append(l)
+    d["lines"] = clean[:4]
+    return d
+
+
 # ---------------------------------------------------------------- основной цикл
 
 
@@ -934,6 +984,18 @@ def main():
             alerts.append(("🌡 <b>Резкое изменение температуры:</b> %s °C за час (сейчас %s °C).\n🕐 %s" % (
                 ("+" if m > 0 else "−") + f1(abs(m)), f0(cur), hhmm(now)), False))
             an["t"] = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    if "--card" in args:   # тест карточки: одно фото в канал, состояние не сохраняется
+        import weather_tg_card as card
+        fb = forecast_block(hours, ro, fo, bool(raining), now, peak)
+        png = card.render_card(card_data(ok, raining, now, epi, fb))
+        cap = build_digest(ok, raining, gusty, sy, hours, ro, fo, now, official=bool(sy), epi=epi, peak=peak)
+        if dry:
+            open("/tmp/card.png", "wb").write(png)
+            print("card.png %d bytes; caption %d chars" % (len(png), len(cap)))
+            return 0
+        print("sent:", tg_send_photo(env, png, cap, True))
+        return 0
 
     # 8. единый пост (без звука): ГМЦ + частные станции + прогноз
     hour_key = lnow.strftime("%Y-%m-%dT%H")
