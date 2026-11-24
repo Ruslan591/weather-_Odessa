@@ -1,1 +1,1 @@
-{"task_id": "wc1", "cmd": "{ sed -i \"/weather_tg_issue/{s/^#//;s/\\\\\\\\//g}\" /etc/cron.d/weather-tg; cat /etc/cron.d/weather-tg; ls -l /etc/cron.d/weather-tg; } 2>&1", "timeout": 120}
+{"task_id": "ms1", "cmd": "cd /opt/weather-pipeline/repo/data; ls -l --time-style=long-iso marine_history.json hmcbas_telegram_sea_temp.json; python3 - <<EOF\nimport json\nd=json.load(open(\"marine_history.json\")); print(len(d)); print(json.dumps(d[-1],ensure_ascii=True)); print(json.dumps(d[-50],ensure_ascii=True))\nEOF\n", "timeout": 120}
