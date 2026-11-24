@@ -1,12 +1,17 @@
 {
-  "timestamp": "2026-11-24T17:52:29Z",
-  "status": "ok",
+  "timestamp": "2026-11-24T17:57:32Z",
+  "status": "suppressed_known_false_positive",
   "cloud_forecast_timestamp": "2026-11-24T17:30:00.000Z",
-  "target_id": 5,
-  "target_area_km2": 129.4,
-  "target_distance_km": 119.9,
-  "target_bearing_deg": 223.0,
-  "target_compass": "ЮЗ",
+  "suppressed_target": {
+    "signature": "-30_-20",
+    "area_km2": 56.0,
+    "distance_km": 35.6,
+    "bearing_deg": 238.0,
+    "compass": "ЮЗ",
+    "not_confirmed_streak": 8,
+    "total_not_confirmed": 126,
+    "excluded_since": "2026-11-24T15:48:42Z"
+  },
   "system": {
     "target_id": 0,
     "area_km2": 84244.9,
@@ -57,50 +62,13 @@
       "window_spanning": true,
       "phase_label": null,
       "type_label": null,
-      "has_precip": null,
+      "has_precip": false,
       "has_lightning": false,
       "ir_confirmed": false,
       "geocolour_confirmed": true
     }
   ],
   "system_suppressed_count": 0,
-  "frontal_tracks": [],
-  "also_suppressed_nearby": {
-    "signature": "-30_-20",
-    "area_km2": 56.0
-  },
-  "target_phase": {
-    "label": "безоблачно",
-    "cloud_fraction": 0.0
-  },
-  "existence": {
-    "modules": {
-      "ir_motion": {
-        "confirmed": false,
-        "timestamp": "2026-11-24T17:30:00.000Z"
-      },
-      "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-11-24T17:30:00.000Z"
-      },
-      "cloud_phase_type": {
-        "confirmed": false,
-        "timestamp": "2026-11-24T16:52:46Z"
-      }
-    },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
-  },
-  "phenomena": {
-    "precip_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-11-24T17:42:05Z"
-    },
-    "lightning_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-11-24T17:47:12Z"
-    }
-  },
-  "verdict": "CLM отметил цель в 120км ЮЗ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (84245км²) в 13км Ю (площадь/форма ненадёжны — объект упирается в границы окна обзора, осадки)."
+  "verdict": "Известный шумовой объект в 36км ЮЗ (~56км²) — подавлено (не подтверждался 8 раз подряд). Отдельно: система синоптического масштаба (84245км²) в 13км Ю (площадь/форма ненадёжны — объект упирается в границы окна обзора, осадки).",
+  "frontal_tracks": []
 }
