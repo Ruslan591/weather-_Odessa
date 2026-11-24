@@ -1,1 +1,1 @@
-{"task_id": "wg1", "cmd": "ls -la /opt/weather-tg/; grep -c GEMINI_API_KEY /opt/weather-tg/.env /opt/*/.env 2>&1 | head; grep -o \"^[A-Z_]*=\" /opt/weather-tg/.env", "timeout": 120}
+{"task_id": "wg2", "cmd": "for f in $(find / -maxdepth 4 -name .env -not -path \"*/proc/*\" 2>/dev/null); do echo \"$f: $(grep -c ^GEMINI_API_KEY= $f) keys; flags: $(grep -o \"^GEMINI[A-Z_]*=\" $f | tr \"\\n\" \" \")\"; done; ls -d /opt/*/ ", "timeout": 120}
