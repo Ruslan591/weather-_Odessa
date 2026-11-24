@@ -347,6 +347,8 @@ def gmc_data(sy):
     lines = []
     if sy.get("vis") is not None:
         lines.append("Видимость %s км" % (f1(sy["vis"]) if sy["vis"] < 10 else f0(sy["vis"])))
+    if sy.get("n_total") is not None:
+        lines.append("Облачность %d/8 (%s)" % (sy["n_total"], synop.cloud_text(sy["n_total"])) if sy["n_total"] < 9 else synop.cloud_text(9).capitalize())
     if sy.get("precip") is not None and (sy["precip"] > 0 or sy.get("precip_trace")):
         amt = "следы" if sy.get("precip_trace") and sy["precip"] == 0 else "%s мм" % f1(sy["precip"])
         lines.append("Осадки%s: %s" % ((" за %d ч" % sy["precip_h"]) if sy.get("precip_h") else "", amt))
@@ -710,9 +712,16 @@ def official_lines(sy, now):
         p2.append("видимость %s км" % (f1(sy["vis"]) if sy["vis"] < 10 else f0(sy["vis"])))
     if p2:
         L.append(" · ".join(p2))
+    if sy.get("n_total") is not None:
+        cl = "☁ облачность %d/8, %s" % (sy["n_total"], synop.cloud_text(sy["n_total"])) if sy["n_total"] < 9 else "☁ %s" % synop.cloud_text(9)
+        if sy.get("base_m") and 0 < (sy["n_total"] or 0) < 9:
+            cl += ", нижняя граница %s" % sy["base_m"]
+        L.append(cl)
     p3 = []
     if sy.get("ww_text"):
         p3.append("В момент наблюдения %s" % sy["ww_text"])
+    elif sy.get("ww") is not None:
+        p3.append("в момент наблюдения явлений нет")
     if sy["precip"] is not None and (sy["precip"] > 0 or sy["precip_trace"]):
         amt = "следы" if sy["precip_trace"] and sy["precip"] == 0 else "%s мм" % f1(sy["precip"])
         p3.append("осадки%s: %s" % ((" за %d ч" % sy["precip_h"]) if sy["precip_h"] else "", amt))
@@ -786,14 +795,11 @@ def build_digest(ok, raining, gusty, sy, hours, ro, fo, now, official, epi=None,
     if official and sy:
         L += official_lines(sy, now)
         L.append("")
-    L.append("📡 <b>Частные метеостанции</b>")
-    L += private_lines(ok, raining, gusty, now, epi)
     fb = forecast_block(hours, ro, fo, raining, now, peak)
     if fb:
-        L.append("")
         L.append("🔮 <b>Прогноз</b>")
         L += fb
-    return "\n".join(L)
+    return "\n".join(L).strip()
 
 
 def main():
@@ -1044,7 +1050,7 @@ def main():
                 synop_new = True
             else:
                 state["synop_sent"] = sy_iso  # старый срок не объявляем
-    hourly = new_hour and not alerts and (gusty or raining)
+    hourly = False   # PWS переехали в закреплённое «табло» (weather_tg_board.py), в ленте только ГМЦ и тревоги
     messages = list(alerts)
     if hourly or synop_new or force_digest:
         messages.append((build_digest(ok, raining, gusty, sy, hours, ro, fo, now, official=synop_new or force_digest, epi=epi, peak=peak), True))
