@@ -1,7 +1,7 @@
 {
-  "task_id": "wi3",
+  "task_id": "wi4",
   "returncode": 0,
-  "stdout": "*/10 * * * * root cd /opt/weather-tg && PYTHONIOENCODING=utf-8 /usr/bin/python3 weather_tg_channel.py >> run.log 2>&1\nTue Nov 24 18:52:01 UTC 2026\n               Local time: Tue 2026-11-24 18:52:01 UTC\n           Universal time: Tue 2026-11-24 18:52:01 UTC\n                 RTC time: Tue 2026-11-24 18:52:02\n",
+  "stdout": "deployed\n*/10 * * * * root cd /opt/weather-tg && PYTHONIOENCODING=utf-8 /usr/bin/python3 weather_tg_channel.py >> run.log 2>&1\n#0 4,5 * * * root cd /opt/weather-tg \\&\\& PYTHONIOENCODING=utf-8 /usr/bin/python3 weather_tg_issue.py morning >> run.log 2>\\&1\n#0 18,19 * * * root cd /opt/weather-tg \\&\\& PYTHONIOENCODING=utf-8 /usr/bin/python3 weather_tg_issue.py evening >> run.log 2>\\&1\n",
   "stderr": "",
-  "completed_at_utc": "2026-11-24T18:52:01Z"
+  "completed_at_utc": "2026-11-24T18:53:01Z"
 }
