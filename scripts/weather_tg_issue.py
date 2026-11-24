@@ -125,16 +125,25 @@ def city_series(st, key, t0, t1):
 
 
 def station_extreme(st, key, t0, t1, fn):
-    """Станция с экстремумом (fn = max/min) по ключу: (значение, имя, время)."""
-    best = None
+    """Станция с экстремумом (fn = max/min): (значение, имя, время).
+    Для порывов одиночный выброс (в 1,6 раза выше следующей станции) отбрасывается."""
+    per = []
     for sid, s in st.items():
+        best = None
         for o in s["obs"]:
             v = o.get(key)
             if v is None or not (t0 <= o["ts"] < t1):
                 continue
             if best is None or fn(v, best[0]) == v and v != best[0]:
                 best = (v, s["name"], o["ts"])
-    return best
+        if best:
+            per.append(best)
+    if not per:
+        return None
+    per.sort(key=lambda x: -x[0] if fn is max else x[0])
+    if key == "gust" and len(per) >= 3 and per[0][0] > 1.6 * per[1][0]:
+        return per[1]
+    return per[0]
 
 
 # ---------- прогноз по Ансамблю ----------
@@ -399,7 +408,7 @@ def build_evening(st, hours, now, hist):
     pro.append("Максимум температуры по городу (медиана станций): %s °C в %s." % (tv(tmx[1], 1), hhmm(tmx[0])))
     if gust:
         pro.append("Порыв %s м/с: %s, %s." % (ch.f1(g), gust[1], hhmm(gust[2])))
-    if pt:
+    if had_rain:
         pro.append("Осадки по районам: " + ", ".join("%s %s" % (k, mm_txt(v)) for k, v in sorted(pt.items(), key=lambda kv: -kv[1])[:4]) + " (мм).")
     lines += ["", "<blockquote expandable><b>Для профи</b>\n%s</blockquote>" % esc("\n".join(pro)), "", "#итоги"]
     return "\n".join(lines), {"date": ln.strftime("%Y-%m-%d"), "obs_tmax": round(tmx[1], 1)}
