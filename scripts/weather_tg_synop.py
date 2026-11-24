@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 STATION = "33837"
 URL = "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/data/synop_%d.txt"
 
+BASE_M = {"0": "ниже 50 м", "1": "50–100 м", "2": "100–200 м", "3": "200–300 м", "4": "300–600 м",
+          "5": "600–1000 м", "6": "1000–1500 м", "7": "1500–2000 м", "8": "2000–2500 м", "9": None}
 PRECIP_HOURS = {"1": 6, "2": 12, "3": 18, "4": 24, "5": 1, "6": 2, "7": 3, "8": 9, "9": 15}
 
 
@@ -47,6 +49,16 @@ def ww_text(code):
     if 20 <= c <= 29:
         return "явления за последний час"
     return None  # 00-09, 13-16, 30-39: без осадков / не значимо
+
+
+def cloud_text(n):
+    """Общая облачность (окты) словами."""
+    if n is None:
+        return None
+    if n == 9:
+        return "небо не видно (туман или осадки)"
+    return {0: "ясно", 1: "малооблачно", 2: "малооблачно", 3: "переменная облачность", 4: "переменная облачность",
+            5: "облачно с прояснениями", 6: "облачно", 7: "облачно", 8: "пасмурно"}[n]
 
 
 def _signed(g):
@@ -122,7 +134,11 @@ def parse(line):
     d = {"temp": None, "dew": None, "p_sea": None, "p_sta": None, "tend": None,
          "wind_dir": None, "wind": None, "gust": None, "vis": None, "ww": None,
          "precip": None, "precip_h": None, "precip_trace": False, "daily": None,
-         "tmin": None, "tmax": None}
+         "tmin": None, "tmax": None, "n_total": None, "base_m": None}
+    if len(wg) == 5 and wg[0].isdigit():
+        d["n_total"] = int(wg[0])   # общая облачность, окты (9 = небо не видно)
+    if len(irixhvv) == 5 and irixhvv[2].isdigit():
+        d["base_m"] = BASE_M.get(irixhvv[2])
     if len(wg) == 5 and wg.isdigit():
         rd = int(wg[1:3])
         d["wind_dir"] = None if rd in (0, 99) else rd * 10
@@ -168,6 +184,8 @@ def parse(line):
         if re.match(r"^6\d{4}$", g):
             amt = int(g[1:4])
             d["daily"] = float(amt) if amt <= 988 else None
+    if d["ww"] is None and len(irixhvv) == 5 and irixhvv[1] == "2":
+        d["ww"] = "00"   # ix=2: группа погоды опущена, значимых явлений нет
     d["ww_text"] = ww_text(d["ww"]) if d["ww"] is not None else None
     d["rh"] = humidity(d["temp"], d["dew"])
     return d
