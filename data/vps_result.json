@@ -1,7 +1,7 @@
 {
-  "task_id": "wg6",
+  "task_id": "wc1",
   "returncode": 0,
-  "stdout": "DEPLOYED\n",
+  "stdout": "*/10 * * * * root cd /opt/weather-tg && PYTHONIOENCODING=utf-8 /usr/bin/python3 weather_tg_channel.py >> run.log 2>&1\n0 4,5 * * * root cd /opt/weather-tg && PYTHONIOENCODING=utf-8 /usr/bin/python3 weather_tg_issue.py morning >> run.log 2>&1\n0 18,19 * * * root cd /opt/weather-tg && PYTHONIOENCODING=utf-8 /usr/bin/python3 weather_tg_issue.py evening >> run.log 2>&1\n-rw-r--r-- 1 root root 366 Nov 24 20:55 /etc/cron.d/weather-tg\n",
   "stderr": "",
-  "completed_at_utc": "2026-11-24T20:40:02Z"
+  "completed_at_utc": "2026-11-24T20:55:01Z"
 }
