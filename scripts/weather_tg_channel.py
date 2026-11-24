@@ -321,33 +321,64 @@ def tg_send_photo(env, png, caption, silent):
     return False
 
 
-def card_data(ok, raining, now, epi, lines):
-    import re
+def card_data(ok, raining, now, epi):
+    """Данные для карточки PWS (медианы по частным станциям)."""
     def med(key):
         v = [s[key] for s in ok if s.get(key) is not None]
         return statistics.median(v) if v else None
     items = [(s["dir"], s["wind"]) for s in ok if s.get("dir") is not None and s.get("wind") is not None]
     dp = [d for d in (delta(s["obs"], "p", 180) for s in ok) if d is not None]
     g = max([s["gust"] for s in ok if s.get("gust") is not None] or [0.0])
-    d = {"title": "Одесса", "subtitle": "Частные метеостанции", "badge": "обновлено %s" % hhmm(now),
+    d = {"title": "В среднем по городу", "subtitle": "Частные метеостанции",
+         "badge": "обновлено %s" % hhmm(now),
          "temp": med("temp"), "hum": med("hum"), "wind": med("wind"), "gust": g,
          "wind_dir": mean_dir(items) if items else None, "pressure": med("p"),
-         "p_trend": statistics.median(dp) if len(dp) >= 3 else None}
+         "p_trend": statistics.median(dp) if len(dp) >= 3 else None, "lines": []}
     if raining:
-        rate = max(s["int"] for s in raining)
-        d["rain_rate"] = rate
-        d["rain_label"] = "Слабый" if rate < 2.5 else ("Умеренный" if rate < 8 else "Сильный")
+        d["rain_rate"] = max(s["int"] for s in raining)
         if epi:
             d["rain_total"] = epi["acc"]
-            d["rain_total_label"] = "Осадки с %s" % hhmm(epi["start"])
-    clean = []
-    for l in lines:
-        l = re.sub(r"<[^>]+>", "", html.unescape(l))
-        l = "".join(ch for ch in l if ord(ch) < 0x2300).strip()
-        if l:
-            clean.append(l)
-    d["lines"] = clean[:4]
+            d["rain_total_sub"] = "с %s" % hhmm(epi["start"])
     return d
+
+
+def gmc_data(sy):
+    t = sy["time"]
+    lines = []
+    if sy.get("vis") is not None:
+        lines.append("Видимость %s км" % (f1(sy["vis"]) if sy["vis"] < 10 else f0(sy["vis"])))
+    if sy.get("precip") is not None and (sy["precip"] > 0 or sy.get("precip_trace")):
+        amt = "следы" if sy.get("precip_trace") and sy["precip"] == 0 else "%s мм" % f1(sy["precip"])
+        lines.append("Осадки%s: %s" % ((" за %d ч" % sy["precip_h"]) if sy.get("precip_h") else "", amt))
+    if sy.get("daily") is not None and sy["daily"] > 0:
+        lines.append("Суточная сумма осадков: %s мм" % f0(sy["daily"]))
+    ww = sy.get("ww_text") or ""
+    return {"obs_local": t.astimezone(KYIV).strftime("%d.%m %H:%M"), "obs_utc": t.strftime("%H:%M"),
+            "temp": sy.get("temp"), "hum": sy.get("rh"), "wind": sy.get("wind"), "wind_dir": sy.get("wind_dir"),
+            "gust": sy.get("gust"), "pressure": sy.get("p_sea"), "p_trend": sy.get("tend"),
+            "ww_text": ww, "rain": any(x in ww for x in ("дожд", "морос", "ливн", "гроз", "снег", "лив")),
+            "lines": lines}
+
+
+def caption_pws(ok, raining, gusty, now, epi, fb):
+    L = ["📡 <b>Частные метеостанции, %s</b>" % hhmm(now)]
+    pl = private_lines(ok, raining, gusty, now, epi)
+    if pl and pl[0].startswith("🌡"):
+        pl = pl[1:]
+    L += pl
+    if fb:
+        L.append("")
+        L.append("🔮 <b>Прогноз</b>")
+        L += fb
+    return "\n".join(L)
+
+
+def caption_gmc(sy, now):
+    ol = official_lines(sy, now)
+    L = [ol[0]]
+    if ol and ol[-1].startswith("🌧"):
+        L.append(ol[-1])
+    return "\n".join(L)
 
 
 # ---------------------------------------------------------------- основной цикл
@@ -985,16 +1016,20 @@ def main():
                 ("+" if m > 0 else "−") + f1(abs(m)), f0(cur), hhmm(now)), False))
             an["t"] = now.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    if "--card" in args:   # тест карточки: одно фото в канал, состояние не сохраняется
+    if "--card" in args:   # тест карточек: PWS и ГМЦ (если есть) отправляются в канал, состояние не сохраняется
         import weather_tg_card as card
         fb = forecast_block(hours, ro, fo, bool(raining), now, peak)
-        png = card.render_card(card_data(ok, raining, now, epi, fb))
-        cap = build_digest(ok, raining, gusty, sy, hours, ro, fo, now, official=bool(sy), epi=epi, peak=peak)
+        pngs = [(card.render_pws(card_data(ok, raining, now, epi)), caption_pws(ok, raining, gusty, now, epi, fb))]
+        if sy:
+            pngs.append((card.render_gmc(gmc_data(sy)), caption_gmc(sy, now)))
         if dry:
-            open("/tmp/card.png", "wb").write(png)
-            print("card.png %d bytes; caption %d chars" % (len(png), len(cap)))
+            for i, (p, c) in enumerate(pngs):
+                open("/tmp/card%d.png" % i, "wb").write(p)
+                print("card%d.png %d bytes; caption %d chars" % (i, len(p), len(c)))
+                print(c)
             return 0
-        print("sent:", tg_send_photo(env, png, cap, True))
+        for p, c in pngs:
+            print("sent:", tg_send_photo(env, p, c, True))
         return 0
 
     # 8. единый пост (без звука): ГМЦ + частные станции + прогноз
