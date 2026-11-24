@@ -69,6 +69,7 @@ def collect(env, now):
         obs.sort(key=lambda o: o["ts"])
         if not obs or (now - obs[-1]["ts"]) > timedelta(minutes=FRESH_MIN):
             continue
+        ch.wet_flags(obs)   # добавляет o["int"] (интенсивность осадков)
         last = obs[-1]
         recent = obs[-2:]
         out.append({"name": name, "obs": obs, "temp": last["temp"], "hum": last["hum"], "wind": last["wind"], "dir": last["dir"],
@@ -99,7 +100,10 @@ def build_board(ok, now):
     L.append("")
     items = [(s["dir"], s["wind"]) for s in ok if s.get("dir") is not None and s.get("wind") is not None]
     md = ch.mean_dir(items) if items else None
-    g = max((s["gust"] for s in ok if s.get("gust") is not None), default=None)
+    gl = sorted((s["gust"] for s in ok if s.get("gust") is not None), reverse=True)
+    g = gl[0] if gl else None
+    if len(gl) >= 3 and gl[0] > 1.6 * gl[1]:
+        g = gl[1]   # одиночный выброс датчика не показываем
     if w is not None:
         wl = "💨 ветер %s%s м/с" % ((ch.compass(md) + " ") if md is not None else "", ch.f0(w))
         if g is not None and g >= 3:
