@@ -13,6 +13,7 @@
 import json
 import os
 import random
+import re
 import statistics
 import sys
 import time
@@ -275,7 +276,7 @@ def build_morning(st, hours, now):
     b = ln.replace(hour=23, minute=0, second=0, microsecond=0)
     d = dayfc(hours, a, b)
     if not d:
-        return None, None
+        return None, None, None
     fo = ch.front_outlook(hours, now)
     rain_txt = rain_phrase(d)
     night = night_stats(st, now) if st else None
@@ -319,10 +320,12 @@ def build_morning(st, hours, now):
         pro.append("Фронт: %s, минимум давления %s гПа около %s, затем %s °C к %s." % (
             {"cold": "холодный", "warm": "тёплый"}.get(fo["kind"], "барическая ложбина"), ch.f1(fo["pmin"]), hhmm(fo["tmin"]),
             tv(fo["T_after"]), hhmm(fo["t_after"])))
+    parts = {"head": lines[0], "date": lines[1], "facts": "\n".join(lines[3:]), "pro": "\n".join(pro), "tag": "#утро",
+             "headline": re.sub(r"<[^>]+>", "", lines[0])[2:], "days": [ln]}
     lines.append("<blockquote expandable><b>Для профи</b>\n%s</blockquote>" % esc("\n".join(pro)))
     lines += ["", "#утро"]
     rec = {"date": ln.strftime("%Y-%m-%d"), "pred_tmax": round(d["tmax"], 1), "pred_rain": round(d["rain"], 2)}
-    return "\n".join(lines), rec
+    return "\n".join(lines), rec, parts
 
 
 # ---------- вечерние итоги ----------
@@ -332,7 +335,7 @@ def build_evening(st, hours, now, hist):
     t0 = ln.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
     ts = city_series(st, "temp", t0, now + timedelta(minutes=1))
     if len(ts) < 12:
-        return None, None
+        return None, None, None
     tmx = max(ts, key=lambda x: x[1])
     tmn = min(ts, key=lambda x: x[1])
     gust = station_extreme(st, "gust", t0, now + timedelta(minutes=1), max)
@@ -410,9 +413,147 @@ def build_evening(st, hours, now, hist):
         pro.append("Порыв %s м/с: %s, %s." % (ch.f1(g), gust[1], hhmm(gust[2])))
     if had_rain:
         pro.append("Осадки по районам: " + ", ".join("%s %s" % (k, mm_txt(v)) for k, v in sorted(pt.items(), key=lambda kv: -kv[1])[:4]) + " (мм).")
+    parts = {"head": lines[0], "date": lines[1], "facts": "\n".join(lines[3:]), "pro": "\n".join(pro), "tag": "#итоги",
+             "headline": re.sub(r"<[^>]+>", "", lines[0])[2:], "days": [ln, ln + timedelta(days=1)]}
     lines += ["", "<blockquote expandable><b>Для профи</b>\n%s</blockquote>" % esc("\n".join(pro)), "", "#итоги"]
-    return "\n".join(lines), {"date": ln.strftime("%Y-%m-%d"), "obs_tmax": round(tmx[1], 1)}
+    return "\n".join(lines), {"date": ln.strftime("%Y-%m-%d"), "obs_tmax": round(tmx[1], 1)}, parts
 
+
+
+# ---------- Gemini: публицистический текст ----------
+USE_GEMINI = True
+PIPELINE_ENV = "/opt/weather-pipeline/repo/.env"   # там лежит GEMINI_API_KEY основного пайплайна
+GEMINI_CHAIN = [("gemini-3.7-flash", {"thinkingLevel": "low"}), ("gemini-3.5-flash", {"thinkingLevel": "low"}),
+                ("gemini-3.8-flash", {"thinkingLevel": "low"}), ("gemini-2.5-flash", None)]
+MAX_BODY = 1100
+STYLE = (
+    "Ты шеф-редактор Telegram-канала «Погода в Одессе». Превращай сухую сводку в короткий выпуск, который приятно читать "
+    "и профессионалу, и обывателю и ради которого хочется заглянуть сюда снова. "
+    "Голос: умный, тёплый, чуть ироничный одессит-метеоролог. Живой публицистический язык, конкретные образы, "
+    "никакого канцелярита и штампов («погодные условия», «синоптическая обстановка»), без кликбейта: заголовок обещает только то, что есть в сводке. "
+    "Структура body: 1) лид: главное одной-двумя фразами; 2) один-два абзаца: что это значит для человека (что надеть, брать ли зонт, "
+    "как добираться, когда лучше выйти), причину явления объясняй простыми словами только если она есть в сводке; "
+    "3) последняя строка: «Цифра дня» одной яркой фразой с числом из сводки. "
+    "ПРАВИЛА ТОЧНОСТИ, нарушать нельзя: используй только числа, время, районы и явления из сводки; ничего не придумывай; "
+    "числа и время переписывай без изменений; не упоминай модели, ансамбли, номера станций, источники данных; "
+    "не называй дат и дней недели, кроме тех, что есть в сводке; если про осадки, ветер или фронт в сводке не сказано, не пиши о них. "
+    "Формат ответа: только JSON {\"headline\": \"...\", \"body\": \"...\"}. headline до 70 знаков, без эмодзи и без HTML. "
+    "body до 900 знаков, абзацы через пустую строку, 2-4 эмодзи, из HTML только <b> и <i>. Блок «Для профи» не пиши, его добавят отдельно."
+)
+WD_STEMS = ["понедельник", "вторник", "сред", "четверг", "пятниц", "суббот", "воскресень"]
+
+
+def gemini_key():
+    try:
+        with open(PIPELINE_ENV, encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("GEMINI_API_KEY="):
+                    return line.strip().split("=", 1)[1].strip().strip('"').strip("'")
+    except Exception:
+        pass
+    return os.environ.get("GEMINI_API_KEY")
+
+
+def gemini_json(system, prompt, key):
+    import urllib.request
+    import urllib.error
+    last = None
+    for model, thinking in GEMINI_CHAIN:
+        for attempt in (1, 2):
+            body = {"contents": [{"parts": [{"text": prompt}]}], "systemInstruction": {"parts": [{"text": system}]},
+                    "generationConfig": {"responseMimeType": "application/json"}}
+            if thinking:
+                body["generationConfig"]["thinkingConfig"] = thinking
+            url = "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s" % (model, key)
+            try:
+                req = urllib.request.Request(url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"}, method="POST")
+                with urllib.request.urlopen(req, timeout=90) as r:
+                    resp = json.loads(r.read().decode())
+                cand = resp["candidates"][0]
+                txt = "".join(p.get("text", "") for p in cand["content"]["parts"] if not p.get("thought"))
+                return json.loads(txt), model
+            except urllib.error.HTTPError as e:
+                last = "%s HTTP %s" % (model, e.code)
+                if e.code in (500, 502, 503, 504, 429) and attempt == 1:
+                    time.sleep(5)
+                    continue
+                break
+            except Exception as e:
+                last = "%s %s" % (model, str(e)[:100])
+                break
+    raise RuntimeError(last or "gemini failed")
+
+
+def nums(t):
+    return set(x.replace(".", ",") for x in re.findall(r"\d+(?:[.,]\d+)?", t))
+
+
+def validate(art, facts, pro, parts):
+    """Проверка текста Gemini: новых чисел/дат/дней недели быть не должно. Возвращает список проблем."""
+    h, b = str(art.get("headline", "")).strip(), str(art.get("body", "")).strip()
+    probs = []
+    if not h or not b:
+        return ["пустой заголовок или текст"]
+    if len(b) > MAX_BODY:
+        probs.append("body длиннее %d знаков" % MAX_BODY)
+    if len(h) > 90:
+        probs.append("headline слишком длинный")
+    allowed = nums(facts) | nums(pro) | nums(parts["date"]) | {"0", "00"}
+    bad = sorted(nums(h + " " + b) - allowed)
+    if bad:
+        probs.append("числа, которых нет в сводке: " + ", ".join(bad))
+    low = (h + " " + b).lower()
+    ok_wd = set()
+    for d in parts["days"]:
+        ok_wd.add(WD_STEMS[d.weekday()])
+    wrong = [w for w in WD_STEMS if w in low and w not in ok_wd]
+    if wrong:
+        probs.append("лишние дни недели: " + ", ".join(wrong))
+    for w in ("ансамбл", "модел", "gemini", "станци"):
+        if w in low:
+            probs.append("упоминание запретного слова: " + w)
+    tags = set(re.findall(r"</?([a-z]+)", b + h))
+    if tags - {"b", "i"}:
+        probs.append("недопустимые HTML-теги")
+    for t in ("b", "i"):
+        if b.count("<%s>" % t) != b.count("</%s>" % t):
+            probs.append("не закрыт тег <%s>" % t)
+    return probs
+
+
+def ai_text(kind, parts, ist):
+    """Публицистический текст от Gemini с проверкой; None при неудаче (тогда шаблон)."""
+    key = gemini_key()
+    if not USE_GEMINI or not key:
+        ch.log("issue: Gemini выключен или нет ключа, шаблон")
+        return None
+    facts = re.sub(r"<[^>]+>", "", parts["facts"])
+    rub = ("Утренний выпуск (выходит в 07:00, пишем про сегодняшний день)" if kind == "morning"
+           else "Вечерние итоги (выходят в 21:00: итоги прошедшего дня и коротко про завтра)")
+    recent = [x for x in ist.get("headlines", [])[-8:]]
+    base = ("Рубрика: %s.\nСегодня: %s.\n\nСВОДКА (единственный источник фактов):\n%s\n" % (rub, re.sub(r"<[^>]+>", "", parts["date"]), facts))
+    if recent:
+        base += "\nЗаголовки недавних выпусков (не повторяй их слова и конструкции):\n- " + "\n- ".join(recent) + "\n"
+    prompt = base + "\nВерни только JSON."
+    for attempt in (1, 2):
+        try:
+            art, model = gemini_json(STYLE, prompt, key)
+        except Exception as e:
+            ch.log("issue: Gemini ошибка: %s" % e)
+            return None
+        probs = validate(art, facts, parts["pro"], parts)
+        if not probs:
+            return {"headline": str(art["headline"]).strip(), "body": str(art["body"]).strip(), "model": model}
+        ch.log("issue: Gemini текст отклонён (%s): %s" % (model, "; ".join(probs)))
+        prompt = base + "\nПредыдущий вариант отклонён: %s. Исправь и верни только JSON." % "; ".join(probs)
+    return None
+
+
+def assemble(kind, art, parts):
+    emoji = "🌅" if kind == "morning" else "🌙"
+    sub = parts["date"] if kind == "morning" else parts["date"]
+    return "\n".join([emoji + " <b>%s</b>" % esc(art["headline"]), sub, "", art["body"], "",
+                      "<blockquote expandable><b>Для профи</b>\n%s</blockquote>" % esc(parts["pro"]), "", parts["tag"]])
 
 # ---------- запуск ----------
 def load_issue_state():
@@ -458,20 +599,27 @@ def main():
         if not hours:
             ch.log("issue: Ансамбль не посчитан, утренний выпуск пропущен")
             return 1
-        text, rec = build_morning(st, hours, now)
+        text, rec, parts = build_morning(st, hours, now)
     else:
-        text, rec = build_evening(st, hours, now, ist)
+        text, rec, parts = build_evening(st, hours, now, ist)
+    src = "шаблон"
+    if text and "--no-ai" not in flags:
+        art = ai_text(kind, parts, ist)
+        if art:
+            text, src = assemble(kind, art, parts), "Gemini " + art["model"]
+            parts["headline"] = art["headline"]
     if not text:
         ch.log("issue: %s: мало данных, выпуск пропущен" % kind)
         return 1
     if dry:
         print(text)
-        print("--- %d символов" % len(text))
+        print("--- %d символов, текст: %s" % (len(text), src))
         return 0
     if not ch.tg_send(env, text, ISSUE_SILENT):
         ch.log("issue: %s НЕ отправлен" % kind)
         return 1
     ist["sent_" + kind] = key
+    ist["headlines"] = (ist.get("headlines", []) + [parts["headline"]])[-12:]
     if kind == "morning":
         ist["today"] = rec
     else:
@@ -481,7 +629,7 @@ def main():
             days.append({"date": key, "pred_tmax": t["pred_tmax"], "obs_tmax": rec["obs_tmax"]})
         ist["days"] = days[-HIST_DAYS:]
     save_issue_state(ist)
-    ch.log("issue: %s отправлен (%d символов)" % (kind, len(text)))
+    ch.log("issue: %s отправлен (%d символов, %s)" % (kind, len(text), src))
     return 0
 
 
