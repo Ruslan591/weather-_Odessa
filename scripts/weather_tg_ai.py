@@ -64,6 +64,13 @@ def gemini_json(system, prompt, key, per_try=60, chain=None):
                 return json.loads("".join(p.get("text", "") for p in parts if not p.get("thought"))), model
             except urllib.error.HTTPError as e:
                 last = "%s HTTP %s" % (model, e.code)
+                try:
+                    ebody = e.read().decode("utf-8", "ignore").lower()
+                except Exception:
+                    ebody = ""
+                if e.code == 429 and ("quota" in ebody or "billing" in ebody):
+                    last += " (квота ключа исчерпана или нет доступа к модели)"
+                    break   # ждать бесполезно, следующая модель цепочки
                 if e.code in (500, 502, 503, 504, 429) and attempt == 1:
                     time.sleep(5)
                     continue
