@@ -56,40 +56,34 @@
   "cloud_mass_area_km2": 157440,
   "target_confirmation": {
     "confirmed": true,
-    "target_id": 6,
-    "target_area_km2": 210.8,
-    "roi_cloud_fraction": 0.992,
+    "target_id": 4,
+    "target_area_km2": 96.1,
+    "roi_cloud_fraction": 0.958,
     "verdict": "GeoColour подтверждает: в ROI CLM-цели преобладает облачность"
   },
   "system_analysis_all": [
     {
       "target_id": 0,
       "available": true,
-      "roi_cloud_fraction": 0.718,
-      "confirmed": true
-    },
-    {
-      "target_id": 4,
-      "available": true,
-      "roi_cloud_fraction": 0.992,
+      "roi_cloud_fraction": 0.722,
       "confirmed": true
     },
     {
       "target_id": 5,
       "available": true,
-      "roi_cloud_fraction": 0.798,
+      "roi_cloud_fraction": 0.947,
       "confirmed": true
     },
     {
-      "target_id": 7,
+      "target_id": 6,
       "available": true,
-      "roi_cloud_fraction": 0.943,
+      "roi_cloud_fraction": 0.774,
       "confirmed": true
     },
     {
       "target_id": 8,
       "available": true,
-      "roi_cloud_fraction": 0.977,
+      "roi_cloud_fraction": 0.974,
       "confirmed": true
     }
   ],
@@ -113,10 +107,16 @@
       "confirmed": false
     },
     {
-      "target_id": 6,
+      "target_id": 4,
       "available": true,
-      "roi_cloud_fraction": 0.992,
+      "roi_cloud_fraction": 0.958,
       "confirmed": true
+    },
+    {
+      "target_id": 7,
+      "available": true,
+      "roi_cloud_fraction": 0.118,
+      "confirmed": false
     }
   ],
   "method_note": "Буфер 6/6 кадров mtg_fd:rgb_geocolour (шаг 10 мин), круглосуточно (day/night GeoColour-композит, ночью облака синие от подсветки ИК, огни городов жёлтые — явно исключены из классификации облачности). Скорость/направление — phase correlation по сырой яркости с despeckle (огни городов вычищаются как точечные источники перед корреляцией). Area-fraction/позиция — АБСОЛЮТНАЯ HSV-классификация (не относительный перцентиль, как в ИК) — первая, не откалиброванная по реальным сценам версия. Прогноз смещения — линейная экстраполяция, не физическая модель атмосферы."
