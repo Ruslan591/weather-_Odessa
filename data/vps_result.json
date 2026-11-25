@@ -1,7 +1,7 @@
 {
-  "task_id": "j2",
+  "task_id": "dl3",
   "returncode": 0,
-  "stdout": "9:POS = os.environ.get(\"POS_DIR\", \"/opt/trading-bot/positions_regr\")\nReadWritePaths=/opt/trading-bot/live\nReadOnlyPaths=\nInaccessiblePaths=\nPrivateTmp=yes\nProtectHome=yes\nProtectSystem=strict\n# /etc/systemd/system/live-web.service\n[Unit]\nDescription=Live page of the bot (read-only WebSocket)\nAfter=network-online.target acct-api-regr.service\n\n[Service]\nUser=tbot\nEnvironment=POS_DIR=/opt/trading-bot/positions_regr\nEnvironment=LIVE_PORT=18110\nEnvironment=LIVE_CTL_PORT=18111\nEnvironment=ACCT_PORT=18102\nExecStart=/opt/trading-bot/venv/bin/python /opt/trading-bot/live/live_web.py\nRestart=always\nRestartSec=3\nNice=10\nCPUQuota=25%\nMemoryMax=200M\nNoNewPrivileges=true\nProtectSystem=strict\nProtectHome=true\nPrivateTmp=true\nReadWritePaths=/opt/trading-bot/live\n\n[Install]\nWantedBy=multi-user.target\nwritable_by_tbot\n/tmp/ldg_AFT/shadow_bal_trades.json\n/tmp/ldg_BEF/shadow_bal_trades.json\n/tmp/prev/shadow_bal_trades.json\n",
+  "stdout": "4\nactive=active health=ok\n--- how live_web calls ledger\n11:    import sys as _sys; _sys.path.insert(0, \"/opt/trading-bot/positions\"); import shadow_ledger as SL\n--- trades file\n-rw-r--r--  1 tbot tbot      105 2026-11-24 03:57 shadow_bal.json\nExecStart={ path=/opt/trading-bot/venv/bin/python ; argv[]=/opt/trading-bot/venv/bin/python /opt/trading-bot/live/live_web.py ; ignore_errors=no ; start_time=[Wed 2026-11-25 17:30:02 UTC] ; stop_time=[n/a] ; pid=315030 ; code=(null) ; status=0/0 }\nWorkingDirectory=\nUser=tbot\nDEPLOYED 20261125_173002\nTraceback (most recent call last):\n  File \"<string>\", line 1, in <module>\nFileNotFoundError: [Errno 2] No such file or directory: '/opt/trading-bot/live/shadow_bal_trades.json'\n",
   "stderr": "",
-  "completed_at_utc": "2026-11-25T17:29:24Z"
+  "completed_at_utc": "2026-11-25T17:30:33Z"
 }
