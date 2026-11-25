@@ -1,1 +1,1 @@
-{"task_id": "tt1", "cmd": "{ cd /opt/weather-tg; curl -s -H \"Accept: application/vnd.github.raw\" \"https://api.github.com/repos/ruslan591/weather-_Odessa/contents/scripts/t_alerts.py?ref=main\" -o t_alerts.py; nohup sh -c \"python3 weather_tg_issue.py morning --dry --force > /tmp/t_morning.txt 2>&1; python3 t_alerts.py > /tmp/t_alerts.txt 2>&1\" >/dev/null 2>&1 & echo STARTED; }", "timeout": 120}
+{"task_id": "tt2", "cmd": "ls -la /tmp/t_morning.txt /tmp/t_alerts.txt; base64 -w0 /tmp/t_alerts.txt", "timeout": 120}
