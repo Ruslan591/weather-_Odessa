@@ -70,6 +70,21 @@ STATIONS = [
 # Ближний пригород: в статистику «по городу» входит, но районом города НЕ называется (решение пользователя 25.11.2026).
 # Савиньон (46.328N 30.680E, ~18 км ЮЮЗ от Центра) и пос. Степовое (46.664N 30.805E, ~20 км на север). К имени добавлено «(пригород)».
 SUBURB_SIDS = {"IKRASN91", "IODESS31"}
+# Датчик дождя на станции «Чудо Город» даёт ложные импульсы: учитывать его осадки только вместе с другими станциями
+# (решение пользователя 26.11.2026). Один такой датчик не создаёт ни «начался дождь», ни «осадки за сутки».
+RAIN_UNRELIABLE = {"IODESA139"}
+
+
+def rain_day(items):
+    """Осадки за сутки по станциям: items [(мм, имя, sid)]. Дождь подтверждён, если >=0,2 мм у двух станций и хотя бы
+    у одной надёжной. Возвращает ((мм, имя, sid) максимума среди надёжных, число станций) или None."""
+    conf = [x for x in items if x[0] is not None and x[0] >= 0.2]
+    rel = [x for x in conf if x[2] not in RAIN_UNRELIABLE]
+    if len(conf) < 2 or not rel:
+        return None
+    return max(rel), len(conf)
+
+
 P_OFFSET = {"IODESA137": -5.3, "IODESA138": 10.3, "IODESA139": 1.2, "IODESS41": 4.2, "IODESS44": -1.8,
             "IODESS16": 1.2, "IODESS31": 17.9, "IODESS37": 8.2, "IKRASN91": -1.5}
 
@@ -906,7 +921,10 @@ def main():
             rs[sid] = False
         else:
             rs.setdefault(sid, False)
-    raining = [s for sid, s in st.items() if s["ok"] and rs.get(sid)]
+    raining_ids = [sid for sid, s in st.items() if s["ok"] and rs.get(sid)]
+    if raining_ids and all(sid in RAIN_UNRELIABLE for sid in raining_ids):
+        raining_ids = []   # один ненадёжный датчик дождя не считается
+    raining = [st[sid] for sid in raining_ids]
     gusty = sorted([s for s in ok if s["gust"] >= GUST_MS], key=lambda s: -s["gust"])
 
     # 3. эпизод дождя по городу (стабильное начало) и наблюдаемый пик
