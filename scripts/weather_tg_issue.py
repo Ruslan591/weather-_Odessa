@@ -579,6 +579,13 @@ def nums(t):
     return set(x.replace(".", ",") for x in re.findall(r"\d+(?:[.,]\d+)?", t))
 
 
+MONTH_RE = re.compile(r"\b(январ|феврал|март|апрел|июн|июл|август|сентябр|октябр|ноябр|декабр)|\bмая\b")
+
+
+def has_month(t):
+    return bool(MONTH_RE.search(t.lower()))
+
+
 def validate(art, facts, pro, parts):
     """Проверка текста Gemini: новых чисел/дат/дней недели быть не должно. Возвращает список проблем."""
     h, b = str(art.get("headline", "")).strip(), str(art.get("body", "")).strip()
@@ -591,10 +598,10 @@ def validate(art, facts, pro, parts):
         probs.append("headline слишком длинный")
     if "Море:" in facts and not re.search(r"мор|вода|воды|волн", b.lower()):
         probs.append("в сводке есть строка про море, она обязательна в тексте")
-    if any(m[:-1] in b.lower() for m in MONTHS):
+    if has_month(b):
         probs.append("в body нельзя называть дату или месяц (дата уже под заголовком)")
     hl = h.lower()
-    if any(w in hl for w in WD_STEMS) or any(m[:-1] in hl for m in MONTHS) or "сводк" in hl:
+    if any(w in hl for w in WD_STEMS) or has_month(h) or "сводк" in hl:
         probs.append("в заголовке нельзя дату, день недели и слово «сводка»")
     allowed = nums(facts) | nums(pro) | nums(parts["date"]) | {"0", "00"}
     bad = sorted(nums(h + " " + b) - allowed)
