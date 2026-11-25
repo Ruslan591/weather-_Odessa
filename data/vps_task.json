@@ -1,1 +1,1 @@
-{"task_id": "ab4", "cmd": "pgrep -f ab_models.py >/dev/null && echo RUNNING || echo DONE; base64 -w0 /tmp/ab_out.txt; echo; tail -3 /tmp/ab_err.txt | cut -c1-200", "timeout": 120}
+{"task_id": "ab5", "cmd": "pgrep -f ab_models.py >/dev/null && echo RUNNING || echo DONE; wc -c /tmp/ab_out.txt; tail -3 /tmp/ab_err.txt | cut -c1-200", "timeout": 120}
