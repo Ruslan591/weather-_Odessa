@@ -195,7 +195,7 @@ def precip_word(d):
 
 def rain_phrase(d):
     """Осадки одной фразой: «дождь около 15:00–18:00, до 1,2 мм» или None."""
-    if not d["groups"] or d["rain"] < 0.2:
+    if not d["groups"] or d["rain"] < 0.5:
         return None
     w = precip_word(d)
     gs = d["groups"][:2]
@@ -339,7 +339,7 @@ def morning_lead(rng, d, fo, rain_txt):
 
 def digit_of_day(d, fo, night):
     if d["gmax"] and d["gmax"]["G"] >= 12:
-        return "%s м/с" % ch.f0(d["gmax"]["G"]), "порывы ветра около %s" % hhmm(d["gmax"]["dt"])
+        return "%s м/с (около %s км/ч)" % (ch.f0(d["gmax"]["G"]), ch.f0(d["gmax"]["G"] * 3.6)), "порывы ветра около %s, против такого ветра трудно идти" % hhmm(d["gmax"]["dt"])
     if d["rain"] >= 1.0:
         return "%s мм" % mm_txt(d["rain"]), "столько осадков выпадет за день"
     if fo:
@@ -368,7 +368,7 @@ def night_stats(st, now):
             "city": statistics.median(allv), "suburb": sub}
 
 
-def build_morning(st, hours, now):
+def build_morning(st, hours, now, ist=None):
     ln = now.astimezone(KYIV)
     rng = random.Random(ln.strftime("%Y-%m-%d") + "m")
     a = ln.replace(hour=7, minute=0, second=0, microsecond=0)
@@ -387,6 +387,12 @@ def build_morning(st, hours, now):
              "<i>%s</i>" % date_ru(ln), "",
              esc(morning_lead(rng, d, fo, rain_txt)), "",
              "🌡 Утром %s°, днём до %s°, вечером %s°." % (tv(h8["T"]), tv(d["tmax"]), tv(h20["T"] if h20 else None))]
+    yd = (ln - timedelta(days=1)).strftime("%Y-%m-%d")
+    prev = [x for x in (ist or {}).get("days", []) if x.get("date") == yd and "obs_tmax" in x]
+    if prev:
+        df = d["tmax"] - prev[0]["obs_tmax"]
+        lines.append("📈 Вчера максимум был %s°, сегодня ожидается до %s° (%s)." % (
+            tv(prev[0]["obs_tmax"]), tv(d["tmax"]), "почти так же" if abs(df) < 0.5 else "на %s° %s" % (ch.f1(abs(df)), "теплее" if df > 0 else "холоднее")))
     lines.append("🧥 Одевайтесь так: %s." % clothes(f_cold))
     if rain_txt:
         lines.append("☔ Зонт нужен: %s." % esc(rain_txt))
@@ -431,7 +437,7 @@ def build_morning(st, hours, now):
         pro.append(sp)
     parts = {"head": lines[0], "date": lines[1], "facts": "\n".join(lines[3:]), "pro": "\n".join(pro), "tag": "#утро",
              "headline": re.sub(r"<[^>]+>", "", lines[0])[2:], "days": [ln]}
-    lines.append("<blockquote expandable><b>Для профи</b>\n%s</blockquote>" % esc("\n".join(pro)))
+    lines.append("<blockquote expandable><b>Подробно</b>\n%s</blockquote>" % esc("\n".join(pro)))
     lines += ["", "#утро"]
     rec = {"date": ln.strftime("%Y-%m-%d"), "pred_tmax": round(d["tmax"], 1), "pred_rain": round(d["rain"], 2)}
     return "\n".join(lines), rec, parts
@@ -449,14 +455,14 @@ def build_evening(st, hours, now, hist):
     tmn = min(ts, key=lambda x: x[1])
     gust = station_extreme(st, "gust", t0, now + timedelta(minutes=1), max)
     ps = city_series(st, "p", t0, now + timedelta(minutes=1))
-    pt = {}
-    for sid, s in st.items():
-        v = [o["ptot"] for o in s["obs"] if o["ts"] >= t0 and o["ptot"] is not None]
+    pt = []
+    for sid, s_ in st.items():
+        v = [o["ptot"] for o in s_["obs"] if o["ts"] >= t0 and o["ptot"] is not None]
         if v:
-            pt[s["name"]] = max(v)
-    rain_max = max(pt.items(), key=lambda kv: kv[1]) if pt else None
-    rain_mean = statistics.mean(pt.values()) if pt else 0.0
-    had_rain = bool(rain_max and rain_max[1] >= 0.2)
+            pt.append((max(v), s_["name"], sid))
+    rd = ch.rain_day(pt)   # дождь подтверждён только если его видят минимум две станции, одиночный датчик не считается
+    had_rain = rd is not None
+    rain_max = (rd[0][1], rd[0][0]) if rd else None
     g = gust[0] if gust else 0.0
 
     if had_rain and rain_max[1] >= 1.0:
@@ -472,10 +478,16 @@ def build_evening(st, hours, now, hist):
     lines = ["🌙 <b>%s</b>" % esc(head), "<i>%s · итоги дня</i>" % date_ru(ln), ""]
     lines.append("🌡 Днём максимум %s° в %s, минимум %s° в %s." % (tv(tmx[1]), hhmm(tmx[0]), tv(tmn[1]), hhmm(tmn[0])))
     if had_rain:
-        lines.append("🌧 Осадки за сутки: до %s мм (%s), в среднем по городу %s мм." % (
-            mm_txt(rain_max[1]), esc(rain_max[0]), mm_txt(rain_mean)))
+        lines.append("🌧 Осадки за сутки: до %s мм (%s), дождь зафиксировали %d станции." % (
+            mm_txt(rain_max[1]), esc(rain_max[0]), rd[1]))
     else:
         lines.append("☀️ Осадков за день не было.")
+    yd = (ln - timedelta(days=1)).strftime("%Y-%m-%d")
+    prev = [x for x in hist.get("days", []) if x.get("date") == yd and "obs_tmax" in x]
+    dfy = (tmx[1] - prev[0]["obs_tmax"]) if prev else None
+    if prev:
+        lines.append("📈 Вчера максимум был %s°, сегодня %s° (%s)." % (
+            tv(prev[0]["obs_tmax"]), tv(tmx[1]), "почти так же" if abs(dfy) < 0.5 else "на %s° %s" % (ch.f1(abs(dfy)), "теплее" if dfy > 0 else "холоднее")))
     if gust and g >= 8:
         lines.append("💨 Самый сильный порыв: %s м/с (%s, %s)." % (ch.f1(g), esc(gust[1]), hhmm(gust[2])))
     else:
@@ -484,6 +496,15 @@ def build_evening(st, hours, now, hist):
     sl = sea_line(sea)
     if sl:
         lines.append(sl)
+    # цифра дня: число + понятный масштаб
+    if g >= 12:
+        lines.append("🔢 Цифра дня: %s м/с (около %s км/ч), сильнейший порыв за сутки." % (ch.f1(g), ch.f0(g * 3.6)))
+    elif had_rain and rain_max[1] >= 1.0:
+        lines.append("🔢 Цифра дня: %s мм, столько осадков выпало за сутки." % mm_txt(rain_max[1]))
+    elif dfy is not None and abs(dfy) >= 2.0:
+        lines.append("🔢 Цифра дня: %s°, на столько дневной максимум %s, чем вчера." % (ch.f1(abs(dfy)), "выше" if dfy > 0 else "ниже"))
+    else:
+        lines.append("🔢 Цифра дня: %s°, разница между самым тёплым и самым холодным часом суток." % ch.f1(tmx[1] - tmn[1]))
     # прогноз против факта
     today = hist.get("today")
     if today and today.get("date") == ln.strftime("%Y-%m-%d"):
@@ -525,13 +546,13 @@ def build_evening(st, hours, now, hist):
     if gust:
         pro.append("Порыв %s м/с: %s, %s." % (ch.f1(g), gust[1], hhmm(gust[2])))
     if had_rain:
-        pro.append("Осадки по районам: " + ", ".join("%s %s" % (k, mm_txt(v)) for k, v in sorted(pt.items(), key=lambda kv: -kv[1])[:4]) + " (мм).")
+        pro.append("Осадки по станциям: " + ", ".join("%s %s" % (n, mm_txt(v)) for v, n, sid in sorted(pt, reverse=True) if v >= 0.2 and sid not in ch.RAIN_UNRELIABLE)[:200] + " (мм).")
     sp = sea_pro(sea)
     if sp:
         pro.append(sp)
     parts = {"head": lines[0], "date": lines[1], "facts": "\n".join(lines[3:]), "pro": "\n".join(pro), "tag": "#итоги",
              "headline": re.sub(r"<[^>]+>", "", lines[0])[2:], "days": [ln, ln + timedelta(days=1)]}
-    lines += ["", "<blockquote expandable><b>Для профи</b>\n%s</blockquote>" % esc("\n".join(pro)), "", "#итоги"]
+    lines += ["", "<blockquote expandable><b>Подробно</b>\n%s</blockquote>" % esc("\n".join(pro)), "", "#итоги"]
     return "\n".join(lines), {"date": ln.strftime("%Y-%m-%d"), "obs_tmax": round(tmx[1], 1)}, parts
 
 
@@ -551,17 +572,19 @@ STYLE = (
     "Ты шеф-редактор Telegram-канала «Погода в Одессе». Пишешь выпуск, который читают и профессионалы, и обычные горожане и ради которого возвращаются завтра. "
     "Тон: нейтрально-журналистский, наблюдательный, точный, как колонка в хорошем городском издании. Один ясный образ или наблюдение на весь текст, без сюсюканья, "
     "без обращений к читателям («одесситы», «друзья», «дорогие») и пожеланий, без штампов («расслабляться не стоит», «порадует», «не будут лишними», «главный нюанс»), без восклицаний. "
-    "Не пересказывай все цифры подряд: выбери главное и объясни, что оно значит для человека (что надеть, брать ли зонт, как добираться, когда лучше выйти); подробности остаются в блоке «Для профи». "
-    "Объём body 800-1200 знаков. Структура: 1) лид одной-двумя фразами; 2) два-три абзаца с главным и практикой; 3) отдельный короткий абзац про море, если в сводке есть строка «Море» (ОБЯЗАТЕЛЬНО, температура воды, волны, ветер над морем); 4) последняя строка «Цифра дня» с числом из сводки. Все блоки сводки (ночью по районам, осадки, фронт, море, светлое время) должны найти место в тексте. "
+    "Не пересказывай все цифры подряд: выбери главное и объясни, что оно значит для человека (что надеть, брать ли зонт, как добираться, когда лучше выйти); подробности остаются в блоке «Подробно». "
+    "Объём body 800-1200 знаков. Структура: 1) лид одной-двумя фразами; 2) два-три абзаца с главным и практикой; 3) отдельный короткий абзац про море, если в сводке есть строка «Море» (ОБЯЗАТЕЛЬНО, температура воды, волны, ветер над морем); 4) последняя строка «Цифра дня»: число из сводки в понятном масштабе (км/ч, разница с прогнозом или со вчера) и один вывод, что оно значит, без повтора фактов из текста выше. Все блоки сводки (ночью по районам, осадки, фронт, море, светлое время) должны найти место в тексте. "
     "Савиньон и пос. Степовое это пригород, а не районы города: никогда не называй их районами. "
+    "Дни недели в тексте не называй (ни «среда», ни «четверг»): пиши «сегодня», «вчера», «завтра». Небо описывай прилагательными и наречиями (ясно, пасмурно, облачно), без существительных «пасмурность», «ясность». Не используй оборот «главной особенностью дня стал». Заголовок вечерних итогов не содержит слов «итоги дня» (они уже стоят в строке даты). "
     "Заголовок короткий и конкретный, без даты, дня недели и слова «сводка» (дата уже стоит под заголовком), и в body дату тоже не повторяй. Блок «Ночью» в сводке описывает уже прошедшую ночь: пиши о нём в прошедшем времени. "
     "ПРАВИЛА ТОЧНОСТИ, нарушать нельзя: используй только числа, время, районы и явления из сводки; ничего не придумывай; "
     "о море пиши только факты из сводки (температура воды, волны, ветер над морем) и не упоминай купание, плавание, суда, лодки, катера, яхты, пляжи, рыбалку и любые занятия на воде; "
     "числа и время переписывай без изменений и только цифрами (14:00, а не «два часа дня», не «к четырём»); ничего не домысливай: не приписывай районам и ветру поступков и событий, которых нет в сводке, образность допустима лишь в подаче факта; не упоминай модели, ансамбли, номера станций, источники данных; "
     "не называй дат и дней недели, кроме тех, что есть в сводке; если про осадки, ветер или фронт в сводке не сказано, не пиши о них. "
     "Формат ответа: только JSON {\"headline\": \"...\", \"body\": \"...\"}. headline до 70 знаков, без эмодзи и без HTML. "
-    "body до 900 знаков, абзацы через пустую строку, 2-4 эмодзи, из HTML только <b> и <i>. Блок «Для профи» не пиши, его добавят отдельно."
+    "body до 900 знаков, абзацы через пустую строку, 2-4 эмодзи, из HTML только <b> и <i>. Блок «Подробно» не пиши, его добавят отдельно."
 )
+WD_RE = re.compile(r"\b(понедельник\w*|вторник\w*|четверг\w*|пятниц\w*|суббот\w*|воскресень\w*|сред(?:а|ы|е|у|ой|ою)\b)")
 WD_STEMS = ["понедельник", "вторник", "сред", "четверг", "пятниц", "суббот", "воскресень"]
 
 
@@ -595,7 +618,7 @@ def validate(art, facts, pro, parts):
     if has_month(b):
         probs.append("в body нельзя называть дату или месяц (дата уже под заголовком)")
     hl = h.lower()
-    if any(w in hl for w in WD_STEMS) or has_month(h) or "сводк" in hl:
+    if WD_RE.search(hl) or has_month(h) or "сводк" in hl:
         probs.append("в заголовке нельзя дату, день недели и слово «сводка»")
     allowed = nums(facts) | nums(pro) | nums(parts["date"]) | {"0", "00"}
     bad = sorted(nums(h + " " + b) - allowed)
@@ -604,12 +627,10 @@ def validate(art, facts, pro, parts):
     low = (h + " " + b).lower()
     if re.search(r"(одного|одному|двух|двум|трёх|трём|трех|трем|четырёх|четырём|четырех|четырем|пяти|шести|семи|восьми|девяти|десяти|одиннадцати|двенадцати|полдень|полночь)\s+час", low) or re.search(r"\b(полдень|полдня|полночь)\b", low):
         probs.append("время словами вместо цифр (пиши 14:00)")
-    ok_wd = set()
-    for d in parts["days"]:
-        ok_wd.add(WD_STEMS[d.weekday()])
-    wrong = [w for w in WD_STEMS if w in low and w not in ok_wd]
-    if wrong:
-        probs.append("лишние дни недели: " + ", ".join(wrong))
+    if WD_RE.search(low):
+        probs.append("дни недели в тексте не называем: пиши «сегодня», «вчера», «завтра»")
+    if parts["tag"] == "#итоги" and "итог" in hl:
+        probs.append("в заголовке вечерних итогов нельзя слово «итоги»")
     for w in BANNED_WORDS:
         if w in low:
             probs.append("упоминание запретного слова: " + w)
@@ -662,7 +683,7 @@ def assemble(kind, art, parts):
     emoji = "🌅" if kind == "morning" else "🌙"
     sub = parts["date"] if kind == "morning" else parts["date"]
     return "\n".join([emoji + " <b>%s</b>" % esc(art["headline"]), sub, "", art["body"], "",
-                      "<blockquote expandable><b>Для профи</b>\n%s</blockquote>" % esc(parts["pro"]), "", parts["tag"]])
+                      "<blockquote expandable><b>Подробно</b>\n%s</blockquote>" % esc(parts["pro"]), "", parts["tag"]])
 
 # ---------- запуск ----------
 def load_issue_state():
@@ -708,7 +729,7 @@ def main():
         if not hours:
             ch.log("issue: Ансамбль не посчитан, утренний выпуск пропущен")
             return 1
-        text, rec, parts = build_morning(st, hours, now)
+        text, rec, parts = build_morning(st, hours, now, ist)
     else:
         text, rec, parts = build_evening(st, hours, now, ist)
     src = "шаблон"
