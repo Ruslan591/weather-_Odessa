@@ -22,6 +22,8 @@ BANNED_WORDS = ("купан", "купат", "плавани", "плавать", 
                 "одессит", "дорогие", "дорогой", "дорогих", "друзья", "друзей", "уважаем", "подписчик", "читател", "наслаждайтесь",
                 "спокойной ночи", "хорошего дня", "доброе утро", "добрый вечер")
 _deadline = [None]
+CALLER = None   # если задан: функция (system, prompt) -> (dict, имя_модели) вместо Gemini (для Claude и сравнения моделей)
+USAGE = []      # (модель, токены входа, токены выхода) для расчёта стоимости
 
 
 def budget(sec):
@@ -79,6 +81,40 @@ def gemini_json(system, prompt, key, per_try=60, chain=None):
                 last = "%s %s" % (model, str(e)[:100])
                 break
     raise RuntimeError(last or "gemini failed")
+
+
+def anthropic_key():
+    try:
+        with open(PIPELINE_ENV, encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("ANTHROPIC_API_KEY="):
+                    return line.strip().split("=", 1)[1].strip().strip('"').strip("'")
+    except Exception:
+        pass
+    return os.environ.get("ANTHROPIC_API_KEY")
+
+
+def claude_json(model, max_tokens=1500):
+    """Фабрика CALLER для Claude: возвращает функцию (system, prompt) -> (dict, model)."""
+    def call(system, prompt):
+        key = anthropic_key()
+        if not key:
+            raise RuntimeError("нет ANTHROPIC_API_KEY")
+        rem = left()
+        body = {"model": model, "max_tokens": max_tokens, "system": system, "messages": [{"role": "user", "content": prompt}]}
+        req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=json.dumps(body).encode(), method="POST",
+                                     headers={"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=min(90, rem) if rem else 90) as r:
+                resp = json.loads(r.read().decode())
+        except urllib.error.HTTPError as e:
+            raise RuntimeError("%s HTTP %s %s" % (model, e.code, e.read().decode("utf-8", "ignore")[:160]))
+        txt = "".join(b.get("text", "") for b in resp.get("content", []) if b.get("type") == "text")
+        u = resp.get("usage", {})
+        USAGE.append((model, u.get("input_tokens", 0), u.get("output_tokens", 0)))
+        a, b = txt.find("{"), txt.rfind("}")
+        return json.loads(txt[a:b + 1]), model
+    return call
 
 
 def nums(t):
@@ -147,13 +183,13 @@ def check(text, facts, max_len, dark=False):
 
 def _ask(system, prompt, field, facts, max_len, log, dark=False):
     key = gemini_key()
-    if not key:
+    if not key and not CALLER:
         log("ai: нет ключа Gemini")
         return None
     p = prompt
     for attempt in (1, 2):
         try:
-            art, model = gemini_json(system, p, key)
+            art, model = CALLER(system, p) if CALLER else gemini_json(system, p, key)
         except Exception as e:
             log("ai: Gemini ошибка: %s" % e)
             return None
