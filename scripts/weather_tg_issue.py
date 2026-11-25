@@ -554,45 +554,7 @@ STYLE = (
 WD_STEMS = ["понедельник", "вторник", "сред", "четверг", "пятниц", "суббот", "воскресень"]
 
 
-def gemini_key():
-    try:
-        with open(PIPELINE_ENV, encoding="utf-8") as f:
-            for line in f:
-                if line.startswith("GEMINI_API_KEY="):
-                    return line.strip().split("=", 1)[1].strip().strip('"').strip("'")
-    except Exception:
-        pass
-    return os.environ.get("GEMINI_API_KEY")
-
-
-def gemini_json(system, prompt, key):
-    import urllib.request
-    import urllib.error
-    last = None
-    for model, thinking in GEMINI_CHAIN:
-        for attempt in (1, 2):
-            body = {"contents": [{"parts": [{"text": prompt}]}], "systemInstruction": {"parts": [{"text": system}]},
-                    "generationConfig": {"responseMimeType": "application/json"}}
-            if thinking:
-                body["generationConfig"]["thinkingConfig"] = thinking
-            url = "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s" % (model, key)
-            try:
-                req = urllib.request.Request(url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"}, method="POST")
-                with urllib.request.urlopen(req, timeout=90) as r:
-                    resp = json.loads(r.read().decode())
-                cand = resp["candidates"][0]
-                txt = "".join(p.get("text", "") for p in cand["content"]["parts"] if not p.get("thought"))
-                return json.loads(txt), model
-            except urllib.error.HTTPError as e:
-                last = "%s HTTP %s" % (model, e.code)
-                if e.code in (500, 502, 503, 504, 429) and attempt == 1:
-                    time.sleep(5)
-                    continue
-                break
-            except Exception as e:
-                last = "%s %s" % (model, str(e)[:100])
-                break
-    raise RuntimeError(last or "gemini failed")
+from weather_tg_ai import gemini_key, gemini_json, BANNED_WORDS  # noqa: E402
 
 
 def nums(t):
@@ -622,7 +584,7 @@ def validate(art, facts, pro, parts):
     wrong = [w for w in WD_STEMS if w in low and w not in ok_wd]
     if wrong:
         probs.append("лишние дни недели: " + ", ".join(wrong))
-    for w in ("купан", "купат", "плавани", "плавать", "яхт", "лодк", "катер", "судов", "судн", "корабл", "пляж", "парус", "серф", "сёрф", "рыбал", "морж", "ансамбл", "модел", "gemini", "станци"):
+    for w in BANNED_WORDS:
         if w in low:
             probs.append("упоминание запретного слова: " + w)
     tags = set(re.findall(r"</?([a-z]+)", b + h))
