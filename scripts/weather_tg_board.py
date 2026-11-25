@@ -48,13 +48,15 @@ def feels(t, w, rh):
     return t + 0.33 * e - 0.70 * (w or 0.0) - 4.00
 
 
-def scale(f):
+def scale(f, t=None):
     i = max(0, min(9, int((f + 20) // 6)))
     bar = "".join("⚪" if k == i else seg for k, seg in enumerate(SEGS))
     cat = CATS[0][1]
     for lim, name in CATS:
         if f >= lim:
             cat = name
+    if t is not None and t > 0 and cat in ("сильный мороз", "мороз", "морозно"):
+        cat = "холодно"   # при плюсовой температуре воздуха «мороз» не пишем
     return bar, cat
 
 
@@ -92,7 +94,7 @@ def build_board(ok, now):
         return None
     w, rh, p = med(ok, "wind"), med(ok, "hum"), med(ok, "p")
     f = feels(t, w, rh)
-    bar, cat = scale(f)
+    bar, cat = scale(f, t)
     temps = sorted(s["temp"] for s in dist if s["temp"] is not None)
     L = ["📡 <b>Одесса сейчас</b> · %s" % ln.strftime("%H:%M"), ""]
     L.append("🌡 <b>%s°</b> · ощущается как <b>%s°</b>" % (tv(t, 1), tv(f)))
@@ -116,7 +118,7 @@ def build_board(ok, now):
         parts.append("💧 влажность %s%%" % ch.f0(rh))
     if p is not None:
         dp = [d for d in (ch.delta(s["obs"], "p", 180) for s in ok) if d is not None]
-        s_ = "🧭 %s гПа" % ch.f0(p)
+        s_ = "🧭 давление %s гПа" % ch.f0(p)
         if len(dp) >= 3:
             d = statistics.median(dp)
             s_ += " (%s)" % ("без изменений" if abs(d) < 0.3 else ("↓ %s за 3 ч" % ch.f1(abs(d)) if d < 0 else "↑ %s за 3 ч" % ch.f1(d)))
@@ -124,15 +126,16 @@ def build_board(ok, now):
     if parts:
         L.append(" · ".join(parts))
     rain = [s for s in ok if s.get("int") and s["int"] >= 0.1]
-    daily = [(s["ptot"], s["name"]) for s in ok if s.get("ptot") is not None and s["ptot"] >= 0.1]
+    if rain and all(s["sid"] in ch.RAIN_UNRELIABLE for s in rain):
+        rain = []   # один ненадёжный датчик дождя не считается
+    rd = ch.rain_day([(s["ptot"], s["name"], s["sid"]) for s in ok if s.get("ptot") is not None])
     if rain:
         top = max(rain, key=lambda s: s["int"])
         L.append("🌧 идёт дождь: до %s мм/ч (%s)" % (ch.f1(top["int"]), ch.esc(top["name"])))
     else:
         L.append("☂ осадков сейчас нет")
-    if daily:
-        b = max(daily)
-        L.append("за сутки с 00:00: до %s мм (%s)" % (ch.f1(b[0]), ch.esc(b[1])))
+    if rd:
+        L.append("за сутки с 00:00: до %s мм (%s)" % (ch.f1(rd[0][0]), ch.esc(rd[0][1])))
     sp = ["%s %s°" % (ch.esc(x["name"].replace(" (пригород)", "")), tv(x["temp"], 1)) for x in sub if x.get("temp") is not None]
     if sp:
         L.append("🏘 пригород: " + ", ".join(sp))
