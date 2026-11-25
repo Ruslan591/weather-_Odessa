@@ -129,13 +129,14 @@ def env_flag(name):
 
 
 def smart_call(system, prompt):
-    """Порядок моделей: Gemini 3.5 Flash; если квота/сбой и в .env CHANNEL_CLAUDE_FALLBACK=true, то Claude Haiku 5.5 (копейки);
+    """Порядок моделей: Gemini 4 Hydrogen, затем 3.5 Flash; если квота/сбой и в .env CHANNEL_CLAUDE_FALLBACK=true, то Claude Haiku 5.5 (копейки);
     затем Gemini 2.5 Flash (качество ниже). Без флага Claude не используется и ничего не тратится."""
     key = gemini_key()
     errs = []
     if key:
         try:
-            return gemini_json(system, prompt, key, chain=[("gemini-3.5-flash", {"thinkingLevel": "low"})])
+            # gemini-4-hydrogen отвечает на бесплатной квоте ключа (проверено 25.11.2026), текст богаче; затем 3.5 flash
+            return gemini_json(system, prompt, key, per_try=90, chain=[("gemini-4-hydrogen", None), ("gemini-3.5-flash", {"thinkingLevel": "low"})])
         except Exception as e:
             errs.append(str(e)[:80])
     if env_flag("CHANNEL_CLAUDE_FALLBACK"):
