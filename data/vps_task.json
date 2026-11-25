@@ -1,1 +1,1 @@
-{"task_id": "cf1", "cmd": "{ curl -s https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/scripts/chk_f.py | sudo -u tbot /opt/trading-bot/venv/bin/python -W ignore -; } 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 90}
+{"task_id": "p1", "cmd": "{ F=/opt/trading-bot/live/index.html; grep -n 'cf_r\\|r.var\\|\\.sn\\b' $F | cut -c1-260 | head -24; echo ---; grep -n 'function.*[Ss]h\\|shRow\\|SHAD' $F | cut -c1-200 | head -20; } 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 60}
