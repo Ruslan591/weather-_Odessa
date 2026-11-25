@@ -655,7 +655,7 @@ def ai_text(kind, parts, ist):
         rise, sset = _ai.sun_times(parts["days"][0])
         facts += "\nСветлое время сегодня: восход %s, закат %s." % (rise.strftime("%H:%M"), sset.strftime("%H:%M"))
         if kind == "morning":
-            facts += "\nВыпуск выходит в %02d:00, пока на улице темно." % MORNING_H if rise.hour >= MORNING_H else ""
+            facts += "\nСейчас раннее утро, на улице ещё темно." if rise.hour >= MORNING_H else ""
     except Exception:
         pass
     rub = ("Утренний выпуск (выходит в 07:00, пишем про сегодняшний день)" if kind == "morning"
