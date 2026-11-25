@@ -72,7 +72,7 @@ def collect(env, now):
         ch.wet_flags(obs)   # добавляет o["int"] (интенсивность осадков)
         last = obs[-1]
         recent = obs[-2:]
-        out.append({"name": name, "obs": obs, "temp": last["temp"], "hum": last["hum"], "wind": last["wind"], "dir": last["dir"],
+        out.append({"sid": sid, "name": name, "obs": obs, "temp": last["temp"], "hum": last["hum"], "wind": last["wind"], "dir": last["dir"],
                     "p": (last["p"] + ch.P_OFFSET.get(sid, 0.0)) if last["p"] is not None else None,
                     "gust": max((o["gust"] or 0.0) for o in recent), "int": max(o["int"] for o in recent), "ptot": last["ptot"]})
     return out
@@ -83,8 +83,10 @@ def med(ok, key):
     return statistics.median(v) if v else None
 
 
-def build_board(ok, now):
+def build_board(ok_all, now):
     ln = now.astimezone(KYIV)
+    ok = [s for s in ok_all if s["sid"] not in ch.SUBURB_SIDS]   # «по городу»: без пригорода
+    sub = [s for s in ok_all if s["sid"] in ch.SUBURB_SIDS]
     t = med(ok, "temp")
     if t is None:
         return None
@@ -131,6 +133,9 @@ def build_board(ok, now):
     if daily:
         b = max(daily)
         L.append("за сутки с 00:00: до %s мм (%s)" % (ch.f1(b[0]), ch.esc(b[1])))
+    if sub and sub[0].get("temp") is not None:
+        x = sub[0]
+        L.append("🏘 за городом (%s): %s°, ветер %s м/с" % (ch.esc(x["name"]), tv(x["temp"], 1), ch.f0(x["wind"]) if x.get("wind") is not None else "—"))
     L += ["", "<i>Частные станции, медиана по городу. Обновляется каждые 15 минут.</i>"]
     return "\n".join(L)
 
