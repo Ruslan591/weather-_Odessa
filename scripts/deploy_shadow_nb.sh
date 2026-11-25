@@ -1,7 +1,7 @@
 #!/bin/bash
-LV=/opt/trading-bot/live; VPY=/opt/trading-bot/venv/bin/python; RAW=https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/scripts
+LV=/opt/trading-bot/live; VPY=/opt/trading-bot/venv/bin/python; RAW=https://raw.githubusercontent.com/ruslan591/weather-_Odessa/${1:-main}/scripts
 TS=$(date +%Y%m%d_%H%M%S); B=/opt/trading-bot/bak_shnb_$TS; N=/tmp/shnb; rm -rf $N; mkdir -p $B $N; cp $LV/live_web.py $LV/index.html $B/; cp $LV/live_web.py $LV/index.html $N/
-curl -s "$RAW/patch_shadow_nb.py?$(date +%s)" -o $N/patch.py
+curl -s "$RAW/patch_shadow_nb.py" -o $N/patch.py
 OUT=$($VPY $N/patch.py $N/live_web.py $N/index.html 2>&1); echo "patch: $OUT"
 case "$OUT" in ALREADY*) exit 0;; PATCHED*) ;; *) echo PATCH_FAIL; exit 1;; esac
 cp $N/live_web.py $LV/live_web.py; cp $N/index.html $LV/index.html; chown tbot:tbot $LV/live_web.py $LV/index.html
