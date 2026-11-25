@@ -339,21 +339,19 @@ def card_data(ok, raining, now, epi):
          "temp": med("temp"), "hum": med("hum"), "wind": med("wind"), "gust": g,
          "wind_dir": mean_dir(items) if items else None, "pressure": med("p"),
          "p_trend": statistics.median(dp) if len(dp) >= 3 else None, "lines": []}
+    import weather_tg_card as _card
+    d["feels"] = _card.feels_like(d["temp"], d["wind"], d["hum"])
+    daily = [s["ptot"] for s in ok if s.get("ptot") is not None]
+    d["rain_total"] = max(daily) if daily else 0.0
+    d["rain_total_sub"] = "за сутки, макс. по районам"
     if raining:
         d["rain_rate"] = max(s["int"] for s in raining)
-        if epi:
-            d["rain_total"] = epi["acc"]
-            d["rain_total_sub"] = "с %s" % hhmm(epi["start"])
     return d
 
 
 def gmc_data(sy):
     t = sy["time"]
     lines = []
-    if sy.get("vis") is not None:
-        lines.append("Видимость %s км" % (f1(sy["vis"]) if sy["vis"] < 10 else f0(sy["vis"])))
-    if sy.get("n_total") is not None:
-        lines.append("Облачность %d/8 (%s)" % (sy["n_total"], synop.cloud_text(sy["n_total"])) if sy["n_total"] < 9 else synop.cloud_text(9).capitalize())
     if sy.get("precip") is not None and (sy["precip"] > 0 or sy.get("precip_trace")):
         amt = "следы" if sy.get("precip_trace") and sy["precip"] == 0 else "%s мм" % f1(sy["precip"])
         lines.append("Осадки%s: %s" % ((" за %d ч" % sy["precip_h"]) if sy.get("precip_h") else "", amt))
@@ -363,7 +361,8 @@ def gmc_data(sy):
     return {"obs_local": t.astimezone(KYIV).strftime("%d.%m %H:%M"), "obs_utc": t.strftime("%H:%M"),
             "temp": sy.get("temp"), "hum": sy.get("rh"), "wind": sy.get("wind"), "wind_dir": sy.get("wind_dir"),
             "gust": sy.get("gust"), "pressure": sy.get("p_sea"), "p_trend": sy.get("tend"),
-            "ww_text": ww, "rain": any(x in ww for x in ("дожд", "морос", "ливн", "гроз", "снег", "лив")),
+            "n_total": sy.get("n_total"), "cloud_txt": synop.cloud_text(sy.get("n_total")), "vis": sy.get("vis"),
+            "ww_known": sy.get("ww") is not None, "ww_text": ww, "rain": any(x in ww for x in ("дожд", "морос", "ливн", "гроз", "снег", "лив")),
             "lines": lines}
 
 
@@ -1064,8 +1063,16 @@ def main():
                 state["synop_sent"] = sy_iso  # старый срок не объявляем
     hourly = False   # PWS переехали в закреплённое «табло» (weather_tg_board.py), в ленте только ГМЦ и тревоги
     messages = list(alerts)
+    digest_meta = None
     if hourly or synop_new or force_digest:
         messages.append((build_digest(ok, raining, gusty, sy, hours, ro, fo, now, official=synop_new or force_digest, epi=epi, peak=peak), True))
+        if sy and (synop_new or force_digest) and "--text" not in args:
+            try:
+                import weather_tg_card as _card
+                digest_meta = {"idx": len(messages) - 1, "png": _card.render_gmc(gmc_data(sy)), "sy": sy,
+                               "fb": forecast_block(hours, ro, fo, raining, now, peak)}
+            except Exception as e:
+                log("карточка ГМЦ не собралась (%s), будет текст" % type(e).__name__)
         if synop_new and sy_iso:
             state["synop_sent"] = sy_iso
     if new_hour:
@@ -1091,6 +1098,19 @@ def main():
                     state["verdicts"] = (state.get("verdicts", []) + [line])[-8:]
             new_msgs.append((t, silent))
         messages = new_msgs
+    if digest_meta:
+        verdict = None
+        for ln_ in messages[digest_meta["idx"]][0].split("\n")[1:2]:
+            if ln_.startswith("💬"):
+                verdict = ln_
+        cap = ["🏛 <b>Сводка ГМЦ</b>, наблюдения %s" % hhmm(digest_meta["sy"]["time"])]
+        if verdict:
+            cap.append(verdict)
+        if digest_meta["fb"]:
+            cap.append("")
+            cap.append("🔮 <b>Прогноз</b>")
+            cap += digest_meta["fb"]
+        digest_meta["caption"] = "\n".join(cap)
 
     # 9. вывод и отправка
     if dry:
@@ -1102,14 +1122,24 @@ def main():
             print("%-10s %-18s возраст %4.0f мин  T %5s  ветер %4s  порыв %4s  осадки %4s мм/ч  дождь:%s" % (
                 sid, s["name"], s["age"], s["temp"], f1(s["wind"] or 0), f1(s["gust"]), f1(s["int"]),
                 "ДА" if rs.get(sid) else "нет"))
+        if digest_meta:
+            open("/tmp/card_gmc.png", "wb").write(digest_meta["png"])
+            print("--- карточка ГМЦ: /tmp/card_gmc.png, подпись:\n%s\n---" % digest_meta.get("caption", ""))
         print("--- сообщения (не отправлены, --dry): %d ---" % len(messages))
         for t, silent in messages:
             print(("[тихо] " if silent else "[звук] ") + t)
             print()
         return 0
 
-    for t, silent in messages:
-        if tg_send(env, t, silent):
+    for i, (t, silent) in enumerate(messages):
+        sent = False
+        if digest_meta and i == digest_meta["idx"]:
+            sent = tg_send_photo(env, digest_meta["png"], digest_meta["caption"], silent)
+            if sent:
+                log("отправлено фото: карточка ГМЦ")
+        if not sent:
+            sent = tg_send(env, t, silent)
+        if sent:
             log("отправлено: " + t.split("\n")[0][:80])
         else:
             log("НЕ отправлено: " + t.split("\n")[0][:80])
