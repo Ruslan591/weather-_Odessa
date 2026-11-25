@@ -17,7 +17,10 @@ GEMINI_CHAIN = [("gemini-3.7-flash", {"thinkingLevel": "low"}), ("gemini-3.5-fla
                 ("gemini-3.8-flash", {"thinkingLevel": "low"}), ("gemini-2.5-flash", None)]
 # запрещённые слова: занятия на воде (война), технические термины
 BANNED_WORDS = ("купан", "купат", "плавани", "плавать", "яхт", "лодк", "катер", "судов", "судн", "корабл", "пляж", "парус",
-                "серф", "сёрф", "рыбал", "морж", "ансамбл", "модел", "gemini", "станци")
+                "серф", "сёрф", "рыбал", "морж", "ансамбл", "модел", "gemini", "станци",
+                # обращения к читателям и пожелания (решение пользователя: без этого)
+                "одессит", "дорогие", "дорогой", "дорогих", "друзья", "друзей", "уважаем", "подписчик", "читател", "наслаждайтесь",
+                "спокойной ночи", "хорошего дня", "доброе утро", "добрый вечер")
 _deadline = [None]
 
 
@@ -40,10 +43,10 @@ def gemini_key():
     return os.environ.get("GEMINI_API_KEY")
 
 
-def gemini_json(system, prompt, key, per_try=60):
+def gemini_json(system, prompt, key, per_try=60, chain=None):
     """JSON-ответ Gemini по цепочке моделей, не дольше общего бюджета времени."""
     last = None
-    for model, thinking in GEMINI_CHAIN:
+    for model, thinking in (chain or GEMINI_CHAIN):
         for attempt in (1, 2):
             rem = left()
             if rem is not None and rem < 10:
@@ -75,7 +78,42 @@ def nums(t):
     return set(x.replace(".", ",") for x in re.findall(r"\d+(?:[.,]\d+)?", t))
 
 
-def check(text, facts, max_len):
+def sun_times(day):
+    """Восход и закат в Одессе (приближение NOAA) для даты day (aware datetime Киев). Возвращает (восход, закат) aware."""
+    import math
+    from datetime import datetime, timedelta, timezone
+    lat, lon = 46.48, 30.72
+    n = day.timetuple().tm_yday
+    g = 2 * math.pi / 365 * (n - 1)
+    eq = 229.18 * (0.000075 + 0.001868 * math.cos(g) - 0.032077 * math.sin(g) - 0.014615 * math.cos(2 * g) - 0.040849 * math.sin(2 * g))
+    dec = 0.006918 - 0.399912 * math.cos(g) + 0.070257 * math.sin(g) - 0.006758 * math.cos(2 * g) + 0.000907 * math.sin(2 * g)
+    la = math.radians(lat)
+    ha = math.degrees(math.acos(math.cos(math.radians(90.833)) / (math.cos(la) * math.cos(dec)) - math.tan(la) * math.tan(dec)))
+    base = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
+    rise = base + timedelta(minutes=720 - 4 * (lon + ha) - eq)
+    sset = base + timedelta(minutes=720 - 4 * (lon - ha) - eq)
+    return rise.astimezone(day.tzinfo), sset.astimezone(day.tzinfo)
+
+
+def sun_context(now_local):
+    """Фраза для промпта: что за окном сейчас. Возвращает (текст, тёмное_время)."""
+    from datetime import timedelta
+    rise, sset = sun_times(now_local)
+    if now_local < rise - timedelta(minutes=40) or now_local > sset + timedelta(minutes=40):
+        phase, dark = "на улице ночь", True
+    elif now_local < rise + timedelta(minutes=30):
+        phase, dark = "рассвет", False
+    elif now_local > sset - timedelta(minutes=40):
+        phase, dark = "сумерки, вечер", False
+    else:
+        phase, dark = "светлое время суток", False
+    return "Сейчас %s местного времени: %s (сегодня восход %s, закат %s)." % (now_local.strftime("%H:%M"), phase, rise.strftime("%H:%M"), sset.strftime("%H:%M")), dark
+
+
+DARK_WORDS = ("солн", "светл", "светает", "светле", "рассвет", "ярк")
+
+
+def check(text, facts, max_len, dark=False):
     """Проблемы короткого текста: новые числа, запретные слова, теги, длина, время словами."""
     probs = []
     if not text:
@@ -89,6 +127,10 @@ def check(text, facts, max_len):
     for w in BANNED_WORDS:
         if w in low:
             probs.append("запретное слово: " + w)
+    if dark:
+        for w in DARK_WORDS:
+            if w in low:
+                probs.append("сейчас тёмное время суток, нельзя писать про «%s»" % w)
     if re.search(r"<[^>]+>", text):
         probs.append("HTML-теги недопустимы")
     if re.search(r"(одного|одному|двух|двум|трёх|трём|четырёх|четырём|пяти|шести|семи|восьми|девяти|десяти)\s+час|\b(полдень|полночь)\b", low):
@@ -96,7 +138,7 @@ def check(text, facts, max_len):
     return probs
 
 
-def _ask(system, prompt, field, facts, max_len, log):
+def _ask(system, prompt, field, facts, max_len, log, dark=False):
     key = gemini_key()
     if not key:
         log("ai: нет ключа Gemini")
@@ -109,7 +151,7 @@ def _ask(system, prompt, field, facts, max_len, log):
             log("ai: Gemini ошибка: %s" % e)
             return None
         txt = str(art.get(field, "")).strip()
-        probs = check(txt, facts, max_len)
+        probs = check(txt, facts, max_len, dark)
         if not probs:
             log("ai: %s ok (%s, %d знаков, осталось %s с)" % (field, model, len(txt), "?" if left() is None else int(left())))
             return txt
@@ -122,24 +164,35 @@ BASE = ("Ты редактор Telegram-канала «Погода в Одес�
         "ПРАВИЛА ТОЧНОСТИ: используй только факты из сводки, ничего не придумывай, не добавляй чисел и времени, которых нет в сводке (лучше вообще без чисел), "
         "время только цифрами, не упоминай модели, станции, источники и занятия на воде (купание, суда, лодки, пляжи). "
         "Слова «мороз», «морозно», «заморозки» только если температура в сводке ниже 0°; при температуре выше 0° говори «холодно» или «прохладно». "
+        "Тон нейтрально-журналистский, спокойный и точный; без обращений к читателям («одесситы», «друзья», «дорогие»), без пожеланий («спокойной ночи», «наслаждайтесь», «хорошего дня»), без восклицаний и сюсюканья. "
         "Без HTML и без списков. ")
 
 
-def verdict(digest_text, recent, log):
+def verdict(digest_text, recent, log, now_local=None):
     """Фраза-вердикт к сводке ГМЦ (до 140 знаков)."""
     facts = re.sub(r"<[^>]+>", "", digest_text)
+    sun, dark = sun_context(now_local) if now_local else ("", False)
     sys_ = BASE + ("Напиши ОДНУ фразу-вердикт до 140 знаков: что эта погода значит для горожанина прямо сейчас. "
                    "Допустим один эмодзи в начале. Формат ответа: только JSON {\"verdict\": \"...\"}.")
     pr = "СВОДКА:\n%s\n" % facts
+    if sun:
+        pr += "\n%s Учитывай время суток: ночью не пиши про солнце и свет, небо описывай только по облачности из сводки (облачность убывает: «проясняется», растёт: «затягивается»).\n" % sun
     if recent:
         pr += "\nНедавние вердикты (не повторяй слова и конструкции):\n- " + "\n- ".join(recent[-6:]) + "\n"
-    return _ask(sys_, pr + "\nВерни только JSON.", "verdict", facts, 160, log)
+    return _ask(sys_, pr + "\nВерни только JSON.", "verdict", facts, 160, log, dark)
 
 
-def alert_line(alert_text, log):
-    """Короткая практическая строка к тревоге: что делать (до 170 знаков)."""
+def alert_line(alert_text, log, recent=None):
+    """Короткая практическая строка к тревоге: что делать (до 170 знаков).
+    Для порывов ниже 10 м/с строки нет (не пугаем); про деревья и балконы можно только при порывах от 10 м/с."""
     facts = re.sub(r"<[^>]+>", "", alert_text)
+    m = re.search(r"Порывы ветра до ([\d]+(?:[.,]\d+)?)", facts)
+    if m and float(m.group(1).replace(",", ".")) < 10.0:
+        return None
     sys_ = BASE + ("Дан пост-предупреждение. Напиши ОДНУ короткую практическую строку до 170 знаков: что делать горожанину прямо сейчас "
                    "(зонт, осторожность, куда не идти, что убрать с балкона и т.п.) строго по фактам поста. Без запугивания и без повторения поста. "
                    "Формат ответа: только JSON {\"advice\": \"...\"}.")
-    return _ask(sys_, "ПОСТ-ПРЕДУПРЕЖДЕНИЕ:\n%s\n\nВерни только JSON." % facts, "advice", facts, 190, log)
+    pr = "ПОСТ-ПРЕДУПРЕЖДЕНИЕ:\n%s\n" % facts
+    if recent:
+        pr += "\nНедавние советы (не повторяй их и не повторяй одни и те же предметы советов):\n- " + "\n- ".join(recent[-6:]) + "\n"
+    return _ask(sys_, pr + "\nВерни только JSON.", "advice", facts, 190, log)
