@@ -558,6 +558,7 @@ STYLE = (
 WD_STEMS = ["понедельник", "вторник", "сред", "четверг", "пятниц", "суббот", "воскресень"]
 
 
+import weather_tg_ai as ai  # noqa: E402
 from weather_tg_ai import gemini_key, gemini_json, BANNED_WORDS  # noqa: E402
 
 
@@ -606,7 +607,7 @@ def validate(art, facts, pro, parts):
 def ai_text(kind, parts, ist):
     """Публицистический текст от Gemini с проверкой; None при неудаче (тогда шаблон)."""
     key = gemini_key()
-    if not USE_GEMINI or not key:
+    if not USE_GEMINI or not (key or ai.CALLER):
         ch.log("issue: Gemini выключен или нет ключа, шаблон")
         return None
     facts = re.sub(r"<[^>]+>", "", parts["facts"])
@@ -627,7 +628,7 @@ def ai_text(kind, parts, ist):
     prompt = base + "\nВерни только JSON."
     for attempt in (1, 2):
         try:
-            art, model = gemini_json(STYLE, prompt, key, chain=ISSUE_CHAIN)
+            art, model = ai.CALLER(STYLE, prompt) if ai.CALLER else gemini_json(STYLE, prompt, key, chain=ISSUE_CHAIN)
         except Exception as e:
             ch.log("issue: Gemini ошибка: %s" % e)
             return None
