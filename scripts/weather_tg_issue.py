@@ -113,8 +113,6 @@ def city_series(st, key, t0, t1):
     """Медиана по станциям в 10-минутных корзинах: [(время UTC, значение)]."""
     b = {}
     for sid, s in st.items():
-        if sid in ch.SUBURB_SIDS:
-            continue   # пригород не входит в «по городу»
         for o in s["obs"]:
             v = o.get(key)
             if v is None or not (t0 <= o["ts"] < t1):
@@ -122,7 +120,7 @@ def city_series(st, key, t0, t1):
             if key == "p":
                 v += ch.P_OFFSET.get(sid, 0.0)
             b.setdefault(int(o["ts"].timestamp() // 600), []).append(v)
-    need = 2 if len([x for x in st if x not in ch.SUBURB_SIDS]) >= 2 else 1
+    need = 2 if len(st) >= 2 else 1
     return sorted((datetime.fromtimestamp(k * 600, timezone.utc), statistics.median(v))
                   for k, v in b.items() if len(v) >= need)
 
@@ -132,8 +130,6 @@ def station_extreme(st, key, t0, t1, fn):
     Для порывов одиночный выброс (в 1,6 раза выше следующей станции) отбрасывается."""
     per = []
     for sid, s in st.items():
-        if sid in ch.SUBURB_SIDS:
-            continue
         best = None
         for o in s["obs"]:
             v = o.get(key)
@@ -355,22 +351,21 @@ def digit_of_day(d, fo, night):
 
 
 def night_stats(st, now):
+    """Ночные минимумы: районы города (разброс считается только по ним), пригород отдельно, медиана по всем."""
     ln = now.astimezone(KYIV)
     t0 = (ln - timedelta(days=1)).replace(hour=21, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
-    mins, sub = [], None
+    mins, sub = [], []
     for sid, s in st.items():
         v = [o["temp"] for o in s["obs"] if t0 <= o["ts"] <= now and o["temp"] is not None]
         if len(v) < 6:
             continue
-        if sid in ch.SUBURB_SIDS:
-            sub = (min(v), s["name"])
-        else:
-            mins.append((min(v), s["name"]))
+        (sub if sid in ch.SUBURB_SIDS else mins).append((min(v), s["name"].replace(" (пригород)", "")))
     if len(mins) < 3:
         return None
     mins.sort()
+    allv = [m for m, _ in mins] + [m for m, _ in sub]
     return {"cold": mins[0], "warm": mins[-1], "spread": mins[-1][0] - mins[0][0],
-            "city": statistics.median(m for m, _ in mins), "suburb": sub}
+            "city": statistics.median(allv), "suburb": sub}
 
 
 def build_morning(st, hours, now):
@@ -403,9 +398,9 @@ def build_morning(st, hours, now):
                 ch.f1(night["spread"]), esc(night["warm"][1]), tv(night["warm"][0], 1), esc(night["cold"][1]), tv(night["cold"][0], 1)))
         else:
             lines.append("🌙 Ночью по городу около %s°." % tv(night["city"]))
-        if night.get("suburb") and abs(night["suburb"][0] - night["city"]) >= 1.0:
-            lines.append("🏘 За городом (%s) ночью было %s°, %s, чем в городе." % (
-                esc(night["suburb"][1]), tv(night["suburb"][0], 1), "холоднее" if night["suburb"][0] < night["city"] else "теплее"))
+        far = [x for x in night.get("suburb", []) if abs(x[0] - night["city"]) >= 1.0]
+        if far:
+            lines.append("🏘 В пригороде ночью: %s." % ", ".join("%s %s°" % (esc(n), tv(m, 1)) for m, n in far))
     sea = sea_facts(now)
     sl = sea_line(sea)
     if sl:
@@ -456,8 +451,6 @@ def build_evening(st, hours, now, hist):
     ps = city_series(st, "p", t0, now + timedelta(minutes=1))
     pt = {}
     for sid, s in st.items():
-        if sid in ch.SUBURB_SIDS:
-            continue
         v = [o["ptot"] for o in s["obs"] if o["ts"] >= t0 and o["ptot"] is not None]
         if v:
             pt[s["name"]] = max(v)
@@ -560,6 +553,7 @@ STYLE = (
     "без обращений к читателям («одесситы», «друзья», «дорогие») и пожеланий, без штампов («расслабляться не стоит», «порадует», «не будут лишними», «главный нюанс»), без восклицаний. "
     "Не пересказывай все цифры подряд: выбери главное и объясни, что оно значит для человека (что надеть, брать ли зонт, как добираться, когда лучше выйти); подробности остаются в блоке «Для профи». "
     "Объём body 800-1200 знаков. Структура: 1) лид одной-двумя фразами; 2) два-три абзаца с главным и практикой; 3) отдельный короткий абзац про море, если в сводке есть строка «Море» (ОБЯЗАТЕЛЬНО, температура воды, волны, ветер над морем); 4) последняя строка «Цифра дня» с числом из сводки. Все блоки сводки (ночью по районам, осадки, фронт, море, светлое время) должны найти место в тексте. "
+    "Савиньон и пос. Степовое это пригород, а не районы города: никогда не называй их районами. "
     "Заголовок короткий и конкретный, без даты, дня недели и слова «сводка» (дата уже стоит под заголовком), и в body дату тоже не повторяй. Блок «Ночью» в сводке описывает уже прошедшую ночь: пиши о нём в прошедшем времени. "
     "ПРАВИЛА ТОЧНОСТИ, нарушать нельзя: используй только числа, время, районы и явления из сводки; ничего не придумывай; "
     "о море пиши только факты из сводки (температура воды, волны, ветер над морем) и не упоминай купание, плавание, суда, лодки, катера, яхты, пляжи, рыбалку и любые занятия на воде; "
