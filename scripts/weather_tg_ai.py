@@ -117,6 +117,40 @@ def claude_json(model, max_tokens=1500):
     return call
 
 
+def env_flag(name):
+    try:
+        with open(PIPELINE_ENV, encoding="utf-8") as f:
+            for line in f:
+                if line.startswith(name + "="):
+                    return line.strip().split("=", 1)[1].strip().strip('"').strip("'").lower() in ("1", "true", "yes", "on")
+    except Exception:
+        pass
+    return os.environ.get(name, "").lower() in ("1", "true", "yes", "on")
+
+
+def smart_call(system, prompt):
+    """Порядок моделей: Gemini 3.5 Flash; если квота/сбой и в .env CHANNEL_CLAUDE_FALLBACK=true, то Claude Haiku 5.5 (копейки);
+    затем Gemini 2.5 Flash (качество ниже). Без флага Claude не используется и ничего не тратится."""
+    key = gemini_key()
+    errs = []
+    if key:
+        try:
+            return gemini_json(system, prompt, key, chain=[("gemini-3.5-flash", {"thinkingLevel": "low"})])
+        except Exception as e:
+            errs.append(str(e)[:80])
+    if env_flag("CHANNEL_CLAUDE_FALLBACK"):
+        try:
+            return claude_json("claude-haiku-5-5")(system, prompt)
+        except Exception as e:
+            errs.append(str(e)[:80])
+    if key:
+        try:
+            return gemini_json(system, prompt, key, chain=[("gemini-2.5-flash", None)])
+        except Exception as e:
+            errs.append(str(e)[:80])
+    raise RuntimeError("; ".join(errs) or "нет моделей")
+
+
 def nums(t):
     return set(x.replace(".", ",") for x in re.findall(r"\d+(?:[.,]\d+)?", t))
 
@@ -156,7 +190,7 @@ def sun_context(now_local):
 DARK_WORDS = ("солн", "светл", "светает", "светле", "рассвет", "ярк")
 
 
-def check(text, facts, max_len, dark=False):
+def check(text, facts, max_len, dark=False, extra_banned=()):
     """Проблемы короткого текста: новые числа, запретные слова, теги, длина, время словами."""
     probs = []
     if not text:
@@ -170,6 +204,9 @@ def check(text, facts, max_len, dark=False):
     for w in BANNED_WORDS:
         if w in low:
             probs.append("запретное слово: " + w)
+    for w in extra_banned:
+        if w in low:
+            probs.append("для такой силы ветра нельзя писать про «%s»" % w)
     if dark:
         for w in DARK_WORDS:
             if w in low:
@@ -181,7 +218,7 @@ def check(text, facts, max_len, dark=False):
     return probs
 
 
-def _ask(system, prompt, field, facts, max_len, log, dark=False):
+def _ask(system, prompt, field, facts, max_len, log, dark=False, extra_banned=()):
     key = gemini_key()
     if not key and not CALLER:
         log("ai: нет ключа Gemini")
@@ -189,12 +226,12 @@ def _ask(system, prompt, field, facts, max_len, log, dark=False):
     p = prompt
     for attempt in (1, 2):
         try:
-            art, model = CALLER(system, p) if CALLER else gemini_json(system, p, key)
+            art, model = CALLER(system, p) if CALLER else smart_call(system, p)
         except Exception as e:
             log("ai: Gemini ошибка: %s" % e)
             return None
         txt = str(art.get(field, "")).strip()
-        probs = check(txt, facts, max_len, dark)
+        probs = check(txt, facts, max_len, dark, extra_banned)
         if not probs:
             log("ai: %s ok (%s, %d знаков, осталось %s с)" % (field, model, len(txt), "?" if left() is None else int(left())))
             return txt
@@ -226,16 +263,25 @@ def verdict(digest_text, recent, log, now_local=None):
 
 
 def alert_line(alert_text, log, recent=None):
-    """Короткая практическая строка к тревоге: что делать (до 170 знаков).
-    Для порывов ниже 10 м/с строки нет (не пугаем); про деревья и балконы можно только при порывах от 10 м/с."""
+    """Короткая практическая строка к тревоге (до 170 знаков).
+    Порывы <8 м/с: строки нет. 8-10 м/с: про тактильный дискомфорт, без «сдует/деревья/балконы».
+    От 10 м/с: можно про незакреплённые предметы, балконы, осторожность у деревьев и конструкций."""
     facts = re.sub(r"<[^>]+>", "", alert_text)
     m = re.search(r"Порывы ветра до ([\d]+(?:[.,]\d+)?)", facts)
-    if m and float(m.group(1).replace(",", ".")) < 10.0:
+    g = float(m.group(1).replace(",", ".")) if m else None
+    if g is not None and g < 8.0:
         return None
-    sys_ = BASE + ("Дан пост-предупреждение. Напиши ОДНУ короткую практическую строку до 170 знаков: что делать горожанину прямо сейчас "
-                   "(зонт, осторожность, куда не идти, что убрать с балкона и т.п.) строго по фактам поста. Без запугивания и без повторения поста. "
-                   "Формат ответа: только JSON {\"advice\": \"...\"}.")
+    extra = ()
+    wind_rule = ""
+    if g is not None and g < 10.0:
+        extra = ("дерев", "балкон", "сдует", "унесёт", "унесет", "упасть", "упад", "конструкц", "рекламн", "подоконник", "ветк", "предмет")
+        wind_rule = ("Порывы 8-10 м/с неопасны, но ветер ощутим и неприятен: пиши про тактильный дискомфорт (дует, холоднее ощущается, "
+                     "трудно идти против ветра, поднять воротник или капюшон, придержать шапку) и ничего не говори о падении или уносе предметов, деревьях, балконах. ")
+    elif g is not None:
+        wind_rule = "Порывы от 10 м/с: можно напомнить убрать незакреплённые предметы с балкона и быть осторожнее рядом с деревьями и конструкциями. "
+    sys_ = BASE + ("Дан пост-предупреждение. Напиши ОДНУ короткую практическую строку до 170 знаков: что делать горожанину прямо сейчас, строго по фактам поста. "
+                   + wind_rule + "Без запугивания и без повторения поста. Формат ответа: только JSON {\"advice\": \"...\"}.")
     pr = "ПОСТ-ПРЕДУПРЕЖДЕНИЕ:\n%s\n" % facts
     if recent:
         pr += "\nНедавние советы (не повторяй их и не повторяй одни и те же предметы советов):\n- " + "\n- ".join(recent[-6:]) + "\n"
-    return _ask(sys_, pr + "\nВерни только JSON.", "advice", facts, 190, log)
+    return _ask(sys_, pr + "\nВерни только JSON.", "advice", facts, 190, log, False, extra)
