@@ -1086,12 +1086,13 @@ def main():
         for i, (t, silent) in enumerate(messages):
             line = None
             try:
-                line = ai.alert_line(t, log) if i < n_al else ai.verdict(t, state.get("verdicts", []), log)
+                line = ai.alert_line(t, log, state.get("advice", [])) if i < n_al else ai.verdict(t, state.get("verdicts", []), log, now.astimezone(KYIV))
             except Exception as e:
                 log("ai: сбой %s" % type(e).__name__)
             if line:
                 if i < n_al:
                     t = t + "\n💬 <i>%s</i>" % esc(line)
+                    state["advice"] = (state.get("advice", []) + [line])[-8:]
                 else:
                     head, _, rest = t.partition("\n")
                     t = head + "\n💬 <i>%s</i>\n" % esc(line) + rest
