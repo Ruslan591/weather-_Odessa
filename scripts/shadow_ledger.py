@@ -6,7 +6,7 @@
 Правила как у счёта: ставка stake (нотионал), плечо lev, маржа stake/lev на сделку,
 слотов max(min_slots, int(баланс // slot_eq)), свободная маржа не меньше маржи сделки.
 Результат сделки: stake * net_pct / 100 (net_pct уже с комиссиями, как pos.py).
-Закрытые сделки копятся в shadow_bal_trades.json (не теряются при чистке shadow.json).
+Закрытые сделки копятся в shadow_bal_trades.json (не теряются при чистке shadow.json); файл лежит в /opt/trading-bot/live (единственная папка с правом записи у live-web), иначе в pos_dir.
 Фильтр обеих линий (shadow_bal.json: skip_tf, skip_regime; по умолчанию ["5m"] и ["flat"]): сделки с таким таймфреймом или режимом
 на момент сигнала (x.rg.regime) в баланс не берутся. Пустые списки отключают фильтр. Решение 2026-11-25 по разбору сливов (shadow_notes №20).
 """
@@ -47,7 +47,8 @@ def _simulate(trades, start, stake, lev, slot_eq, min_slots):
 
 
 def compute(pos_dir):
-    cfgp = os.path.join(pos_dir, "shadow_bal.json"); shp = os.path.join(pos_dir, "shadow.json"); trp = os.path.join(pos_dir, "shadow_bal_trades.json")
+    cfgp = os.path.join(pos_dir, "shadow_bal.json"); shp = os.path.join(pos_dir, "shadow.json"); jd = os.environ.get("LEDGER_JOURNAL_DIR", "/opt/trading-bot/live")   # live-web пишет только в /opt/trading-bot/live (ProtectSystem=strict)
+    trp = os.path.join(jd if os.access(jd, os.W_OK) else pos_dir, "shadow_bal_trades.json")
     cfg = _load(cfgp)
     if not cfg or not cfg.get("on", True): return None
     try: mt = (os.path.getmtime(shp), os.path.getmtime(cfgp))
