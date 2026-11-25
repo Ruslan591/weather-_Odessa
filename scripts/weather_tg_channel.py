@@ -25,6 +25,7 @@
        --digest (принудительно сформировать единый пост),
        --ens (только проверить расчёт Ансамбля и прогнозные строки).
 """
+import fcntl
 import html
 import json
 import math
@@ -87,6 +88,10 @@ SYNOP_MAX_AGE_H = 3.5  # старше — не объявляем как нов�
 P_CHANGE_HPA = 3.0     # аномалия: изменение давления за 3 часа
 T_CHANGE_C = 4.0       # аномалия: изменение температуры за 1 час
 ANOM_COOLDOWN_H = 3
+
+import weather_tg_ai as ai  # noqa: E402
+
+AI_BUDGET_S = 240   # общий бюджет ожидания Gemini на запуск (решение пользователя: до ~5 минут)
 
 
 def log(msg):
@@ -804,6 +809,13 @@ def build_digest(ok, raining, gusty, sy, hours, ro, fo, now, official, epi=None,
 
 def main():
     args = set(sys.argv[1:])
+    if "--dry" not in args and "--card" not in args:
+        _lk = open(os.path.join(BASE, "main.lock"), "w")
+        try:
+            fcntl.flock(_lk, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            log("предыдущий запуск ещё идёт (ожидание Gemini), пропуск")
+            return 0
     dry = "--dry" in args
     force_digest = "--digest" in args
     ens_only = "--ens" in args
@@ -1058,6 +1070,27 @@ def main():
             state["synop_sent"] = sy_iso
     if new_hour:
         state["digest_hour"] = hour_key
+
+    # 8б. ИИ: практическая строка к тревогам и вердикт к сводке ГМЦ (при неудаче публикуется шаблон)
+    if messages and (not dry or "--ai" in args):
+        ai.budget(AI_BUDGET_S)
+        n_al = len(alerts)
+        new_msgs = []
+        for i, (t, silent) in enumerate(messages):
+            line = None
+            try:
+                line = ai.alert_line(t, log) if i < n_al else ai.verdict(t, state.get("verdicts", []), log)
+            except Exception as e:
+                log("ai: сбой %s" % type(e).__name__)
+            if line:
+                if i < n_al:
+                    t = t + "\n💬 <i>%s</i>" % esc(line)
+                else:
+                    head, _, rest = t.partition("\n")
+                    t = head + "\n💬 <i>%s</i>\n" % esc(line) + rest
+                    state["verdicts"] = (state.get("verdicts", []) + [line])[-8:]
+            new_msgs.append((t, silent))
+        messages = new_msgs
 
     # 9. вывод и отправка
     if dry:
