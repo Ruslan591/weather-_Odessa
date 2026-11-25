@@ -113,6 +113,8 @@ def city_series(st, key, t0, t1):
     """Медиана по станциям в 10-минутных корзинах: [(время UTC, значение)]."""
     b = {}
     for sid, s in st.items():
+        if sid in ch.SUBURB_SIDS:
+            continue   # пригород не входит в «по городу»
         for o in s["obs"]:
             v = o.get(key)
             if v is None or not (t0 <= o["ts"] < t1):
@@ -120,7 +122,7 @@ def city_series(st, key, t0, t1):
             if key == "p":
                 v += ch.P_OFFSET.get(sid, 0.0)
             b.setdefault(int(o["ts"].timestamp() // 600), []).append(v)
-    need = 2 if len(st) >= 2 else 1
+    need = 2 if len([x for x in st if x not in ch.SUBURB_SIDS]) >= 2 else 1
     return sorted((datetime.fromtimestamp(k * 600, timezone.utc), statistics.median(v))
                   for k, v in b.items() if len(v) >= need)
 
@@ -130,6 +132,8 @@ def station_extreme(st, key, t0, t1, fn):
     Для порывов одиночный выброс (в 1,6 раза выше следующей станции) отбрасывается."""
     per = []
     for sid, s in st.items():
+        if sid in ch.SUBURB_SIDS:
+            continue
         best = None
         for o in s["obs"]:
             v = o.get(key)
@@ -353,16 +357,20 @@ def digit_of_day(d, fo, night):
 def night_stats(st, now):
     ln = now.astimezone(KYIV)
     t0 = (ln - timedelta(days=1)).replace(hour=21, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
-    mins = []
+    mins, sub = [], None
     for sid, s in st.items():
         v = [o["temp"] for o in s["obs"] if t0 <= o["ts"] <= now and o["temp"] is not None]
-        if len(v) >= 6:
+        if len(v) < 6:
+            continue
+        if sid in ch.SUBURB_SIDS:
+            sub = (min(v), s["name"])
+        else:
             mins.append((min(v), s["name"]))
     if len(mins) < 3:
         return None
     mins.sort()
     return {"cold": mins[0], "warm": mins[-1], "spread": mins[-1][0] - mins[0][0],
-            "city": statistics.median(m for m, _ in mins)}
+            "city": statistics.median(m for m, _ in mins), "suburb": sub}
 
 
 def build_morning(st, hours, now):
@@ -395,6 +403,9 @@ def build_morning(st, hours, now):
                 ch.f1(night["spread"]), esc(night["warm"][1]), tv(night["warm"][0], 1), esc(night["cold"][1]), tv(night["cold"][0], 1)))
         else:
             lines.append("🌙 Ночью по городу около %s°." % tv(night["city"]))
+        if night.get("suburb") and abs(night["suburb"][0] - night["city"]) >= 1.0:
+            lines.append("🏘 За городом (%s) ночью было %s°, %s, чем в городе." % (
+                esc(night["suburb"][1]), tv(night["suburb"][0], 1), "холоднее" if night["suburb"][0] < night["city"] else "теплее"))
     sea = sea_facts(now)
     sl = sea_line(sea)
     if sl:
@@ -445,6 +456,8 @@ def build_evening(st, hours, now, hist):
     ps = city_series(st, "p", t0, now + timedelta(minutes=1))
     pt = {}
     for sid, s in st.items():
+        if sid in ch.SUBURB_SIDS:
+            continue
         v = [o["ptot"] for o in s["obs"] if o["ts"] >= t0 and o["ptot"] is not None]
         if v:
             pt[s["name"]] = max(v)
@@ -535,7 +548,7 @@ USE_GEMINI = True
 PIPELINE_ENV = "/opt/weather-pipeline/repo/.env"   # там лежит GEMINI_API_KEY основного пайплайна
 GEMINI_CHAIN = [("gemini-3.7-flash", {"thinkingLevel": "low"}), ("gemini-3.5-flash", {"thinkingLevel": "low"}),
                 ("gemini-3.8-flash", {"thinkingLevel": "low"}), ("gemini-2.5-flash", None)]
-MAX_BODY = 1100
+MAX_BODY = 1500
 # для выпусков (2 в сутки) берём модель посильнее; при сбое откат на flash. ISSUE_MODEL в окружении переопределяет для экспериментов
 ISSUE_CHAIN = [("gemini-3.1-pro-preview", {"thinkingLevel": "low"}), ("gemini-3.5-flash", {"thinkingLevel": "low"}),
                ("gemini-3.7-flash", {"thinkingLevel": "low"}), ("gemini-2.5-flash", None)]
@@ -546,7 +559,7 @@ STYLE = (
     "Тон: нейтрально-журналистский, наблюдательный, точный, как колонка в хорошем городском издании. Один ясный образ или наблюдение на весь текст, без сюсюканья, "
     "без обращений к читателям («одесситы», «друзья», «дорогие») и пожеланий, без штампов («расслабляться не стоит», «порадует», «не будут лишними», «главный нюанс»), без восклицаний. "
     "Не пересказывай все цифры подряд: выбери главное и объясни, что оно значит для человека (что надеть, брать ли зонт, как добираться, когда лучше выйти); подробности остаются в блоке «Для профи». "
-    "Структура body: 1) лид одной-двумя фразами; 2) один-два абзаца с главным и практикой; 3) последняя строка «Цифра дня» одной фразой с числом из сводки. "
+    "Объём body 800-1200 знаков. Структура: 1) лид одной-двумя фразами; 2) два-три абзаца с главным и практикой; 3) отдельный короткий абзац про море, если в сводке есть строка «Море» (ОБЯЗАТЕЛЬНО, температура воды, волны, ветер над морем); 4) последняя строка «Цифра дня» с числом из сводки. Все блоки сводки (ночью по районам, осадки, фронт, море, светлое время) должны найти место в тексте. "
     "Заголовок короткий и конкретный, без даты, дня недели и слова «сводка» (дата уже стоит под заголовком). "
     "ПРАВИЛА ТОЧНОСТИ, нарушать нельзя: используй только числа, время, районы и явления из сводки; ничего не придумывай; "
     "о море пиши только факты из сводки (температура воды, волны, ветер над морем) и не упоминай купание, плавание, суда, лодки, катера, яхты, пляжи, рыбалку и любые занятия на воде; "
@@ -576,6 +589,8 @@ def validate(art, facts, pro, parts):
         probs.append("body длиннее %d знаков" % MAX_BODY)
     if len(h) > 90:
         probs.append("headline слишком длинный")
+    if "Море:" in facts and not re.search(r"мор|вода|воды|волн", b.lower()):
+        probs.append("в сводке есть строка про море, она обязательна в тексте")
     hl = h.lower()
     if any(w in hl for w in WD_STEMS) or any(m[:-1] in hl for m in MONTHS) or "сводк" in hl:
         probs.append("в заголовке нельзя дату, день недели и слово «сводка»")
@@ -628,7 +643,7 @@ def ai_text(kind, parts, ist):
     prompt = base + "\nВерни только JSON."
     for attempt in (1, 2):
         try:
-            art, model = ai.CALLER(STYLE, prompt) if ai.CALLER else gemini_json(STYLE, prompt, key, chain=ISSUE_CHAIN)
+            art, model = ai.CALLER(STYLE, prompt) if ai.CALLER else ai.smart_call(STYLE, prompt)
         except Exception as e:
             ch.log("issue: Gemini ошибка: %s" % e)
             return None
