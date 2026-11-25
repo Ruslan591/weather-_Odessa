@@ -1,1 +1,1 @@
-{"task_id": "tt3", "cmd": "base64 -w0 /tmp/t_morning.txt", "timeout": 120}
+{"task_id": "tt4", "cmd": "{ cd /opt/weather-tg; curl -s -H \"Accept: application/vnd.github.raw\" \"https://api.github.com/repos/ruslan591/weather-_Odessa/contents/scripts/weather_tg_issue.py?ref=main\" -o weather_tg_issue.py; python3 -m py_compile weather_tg_issue.py && echo OK; nohup sh -c \"python3 weather_tg_issue.py morning --dry --force > /tmp/t_morning.txt 2>&1\" >/dev/null 2>&1 & }", "timeout": 120}
