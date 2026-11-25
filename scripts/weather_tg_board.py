@@ -83,17 +83,17 @@ def med(ok, key):
     return statistics.median(v) if v else None
 
 
-def build_board(ok_all, now):
+def build_board(ok, now):
     ln = now.astimezone(KYIV)
-    ok = [s for s in ok_all if s["sid"] not in ch.SUBURB_SIDS]   # «по городу»: без пригорода
-    sub = [s for s in ok_all if s["sid"] in ch.SUBURB_SIDS]
+    dist = [s for s in ok if s["sid"] not in ch.SUBURB_SIDS]   # районы города (пригород районом не называем)
+    sub = [s for s in ok if s["sid"] in ch.SUBURB_SIDS]
     t = med(ok, "temp")
     if t is None:
         return None
     w, rh, p = med(ok, "wind"), med(ok, "hum"), med(ok, "p")
     f = feels(t, w, rh)
     bar, cat = scale(f)
-    temps = sorted(s["temp"] for s in ok if s["temp"] is not None)
+    temps = sorted(s["temp"] for s in dist if s["temp"] is not None)
     L = ["📡 <b>Одесса сейчас</b> · %s" % ln.strftime("%H:%M"), ""]
     L.append("🌡 <b>%s°</b> · ощущается как <b>%s°</b>" % (tv(t, 1), tv(f)))
     L.append("%s %s" % (bar, cat))
@@ -133,10 +133,10 @@ def build_board(ok_all, now):
     if daily:
         b = max(daily)
         L.append("за сутки с 00:00: до %s мм (%s)" % (ch.f1(b[0]), ch.esc(b[1])))
-    if sub and sub[0].get("temp") is not None:
-        x = sub[0]
-        L.append("🏘 за городом (%s): %s°, ветер %s м/с" % (ch.esc(x["name"]), tv(x["temp"], 1), ch.f0(x["wind"]) if x.get("wind") is not None else "—"))
-    L += ["", "<i>Частные станции, медиана по городу. Обновляется каждые 15 минут.</i>"]
+    sp = ["%s %s°" % (ch.esc(x["name"].replace(" (пригород)", "")), tv(x["temp"], 1)) for x in sub if x.get("temp") is not None]
+    if sp:
+        L.append("🏘 пригород: " + ", ".join(sp))
+    L += ["", "<i>Частные станции, медиана по городу и ближнему пригороду. Обновляется каждые 15 минут.</i>"]
     return "\n".join(L)
 
 
