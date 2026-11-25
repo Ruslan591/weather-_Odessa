@@ -1,1 +1,1 @@
-{"task_id": "dp2", "cmd": "cd /opt/weather-tg; curl -s -H \"Accept: application/vnd.github.raw\" \"https://api.github.com/repos/ruslan591/weather-_Odessa/contents/scripts/weather_tg_ai.py?ref=main\" -o weather_tg_ai.py; python3 -m py_compile weather_tg_ai.py && echo OK", "timeout": 120}
+{"task_id": "cl1", "cmd": "grep -o \"^[A-Z_]*ANTHROPIC[A-Z_]*=\\|^CLAUDE[A-Z_]*=\" /opt/weather-pipeline/repo/.env; grep -i \"claude\\|anthropic\" /opt/weather-pipeline/repo/.env | sed \"s/=.*/=<hidden>/\"", "timeout": 120}
