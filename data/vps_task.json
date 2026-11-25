@@ -1,1 +1,1 @@
-{"task_id": "fx5", "cmd": "base64 -w0 /tmp/t_mor.txt; echo; base64 -w0 /tmp/t_board.txt", "timeout": 120}
+{"task_id": "fx6", "cmd": "{ cd /opt/weather-tg; for f in weather_tg_issue t_synth_eve; do curl -s -H \"Accept: application/vnd.github.raw\" \"https://api.github.com/repos/ruslan591/weather-_Odessa/contents/scripts/$f.py?ref=main\" -o $f.py; done; nohup sh -c \"python3 t_synth_eve.py > /tmp/t_se.txt 2>&1\" >/dev/null 2>&1 & echo STARTED; }", "timeout": 120}
