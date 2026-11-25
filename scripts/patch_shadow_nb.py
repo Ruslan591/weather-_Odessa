@@ -7,8 +7,8 @@ a1 = 'd = jl("shadow.json"); its = d.get("items") if isinstance(d, dict) else No
 n1 = a1 + '    _bc = jl("shadow_bal.json"); _bc = _bc if isinstance(_bc, dict) else {}; _stf = set(_bc.get("skip_tf", ["5m"])); _srg = set(_bc.get("skip_regime", ["flat"]))\n'
 a2 = '        out.append(r)\n    out.sort(key=lambda x: (x["status"] in ("gate", "open")'
 n2 = '        if (i.get("tf") in _stf) or ((i.get("rg") or {}).get("regime") in _srg): r["nb"] = 1   # не идёт в баланс (фильтр)\n' + a2
-b1 = "h('b',null,p.sym.replace('USDT',''))"
-nb1 = b1 + ",...(p.nb?[h('span','small a','\u00a0вне баланса')]:[])"
+b1 = "h('b',null,p.sym.replace('USDT','')),side(p.side),h('span','small mut',(p.kind=="
+nb1 = "h('b',null,p.sym.replace('USDT','')),side(p.side),...(p.nb?[h('span','small a','вне баланса')]:[]),h('span','small mut',(p.kind=="
 if s.count(a1) != 1 or s.count(a2) != 1 or h.count(b1) != 1: print("ANCHOR_FAIL", s.count(a1), s.count(a2), h.count(b1)); sys.exit(1)
 s = s.replace(a1, n1).replace(a2, n2); h = h.replace(b1, nb1)
 open(lw, "w", encoding="utf-8").write(s); open(ix, "w", encoding="utf-8").write(h)
