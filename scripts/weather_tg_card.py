@@ -54,6 +54,19 @@ RR_ST = st([(0, "#c8e05f"), (.1, "#5fe08f"), (.3, "#58aeff"), (.6, "#3a8fff"), (
 RT_ST = st([(0, "#c8e05f"), (.05, "#5fe08f"), (.2, "#58aeff"), (.5, "#3a8fff"), (1, "#a855f7")])
 
 
+def feels_like(t, w, rh):
+    """Ощущаемая температура: охлаждение ветром (T<=10 °C, ветер >4,8 км/ч), иначе кажущаяся по Стедману. w в м/с."""
+    if t is None:
+        return None
+    v = (w or 0.0) * 3.6
+    if t <= 10 and v > 4.8:
+        return 13.12 + 0.6215 * t - 11.37 * v ** 0.16 + 0.3965 * t * v ** 0.16
+    if rh is None:
+        return t
+    e = rh / 100.0 * 6.105 * math.exp(17.27 * t / (237.7 + t))
+    return t + 0.33 * e - 0.70 * (w or 0.0) - 4.00
+
+
 def fmt1(x):
     return ("%.1f" % x).replace(".", ",")
 
@@ -224,6 +237,21 @@ def gauge_tile(d, x, y, w, title, kind, **kw):
                    sub=kw.get("sub"), sub_col=(130, 130, 136), major_len=8, major_w=1.8)
 
 
+def chip(d, x, y, w, h, label, value, sub, col):
+    """Узкая плитка: подпись, крупное значение, пояснение."""
+    tile(d, x, y, w, h)
+    cx = x + w / 2.0
+    tx(d, (cx, y + 30), label, font(21), DIM, "mm")
+    vs = 40 if len(value) <= 7 else (30 if len(value) <= 12 else 24)
+    tx(d, (cx, y + 78), value, font(vs, True), col, "mm")
+    if sub:
+        tx(d, (cx, y + 120), sub, font(21), (170, 170, 176), "mm")
+
+
+def vis_word(km):
+    return "очень плохая" if km < 1 else "плохая" if km < 4 else "умеренная" if km < 10 else "хорошая" if km < 20 else "отличная"
+
+
 def header_pws(d, title, subtitle, badge, temp):
     tx(d, (PAD + 6, 40), title, font(44, True), TXT)
     if subtitle:
@@ -256,12 +284,10 @@ def footer(g, y, lines):
 
 
 def render_pws(d):
-    """d: title, subtitle, badge, temp, hum, wind, gust, wind_dir, pressure, p_trend,
-    rain_rate, rain_total, rain_total_sub, lines[]"""
-    rain = d.get("rain_rate") is not None or d.get("rain_total") is not None
+    """d: title, subtitle, badge, temp, feels, hum, wind, gust, wind_dir, pressure, p_trend,
+    rain_rate (если идёт дождь), rain_total, rain_total_sub, lines[]"""
     lines = d.get("lines") or []
-    rows = 3 if rain else 2
-    H = 200 + rows * (TH + GAP) + (52 + 38 * len(lines) if lines else 0) + 24
+    H = 200 + 3 * (TH + GAP) + (52 + 38 * len(lines) if lines else 0) + 24
     img = Image.new("RGB", (W * S, H * S), BG)
     g = ImageDraw.Draw(img)
     header_pws(g, d.get("title", "В среднем по городу"), d.get("subtitle"), d.get("badge"), d.get("temp"))
@@ -269,15 +295,17 @@ def render_pws(d):
     xs = (PAD, PAD + tw + GAP)
     y = 200
     gauge_tile(g, xs[0], y, tw, "Температура", "temp", v=d.get("temp"))
-    gauge_tile(g, xs[1], y, tw, "Влажность", "hum", v=d.get("hum"))
+    gauge_tile(g, xs[1], y, tw, "Ощущается как", "temp", v=d.get("feels"))
     y += TH + GAP
     gauge_tile(g, xs[0], y, tw, "Ветер", "wind", speed=d.get("wind"), gust=d.get("gust"), deg=d.get("wind_dir"))
     gauge_tile(g, xs[1], y, tw, "Давление", "pres", v=d.get("pressure"), trend=d.get("p_trend"))
     y += TH + GAP
-    if rain:
-        gauge_tile(g, xs[0], y, tw, "Интенсивность", "rrate", v=d.get("rain_rate"))
-        gauge_tile(g, xs[1], y, tw, "Осадки", "rtotal", v=d.get("rain_total"), sub=d.get("rain_total_sub"))
-        y += TH + GAP
+    gauge_tile(g, xs[0], y, tw, "Влажность", "hum", v=d.get("hum"))
+    if d.get("rain_rate") is not None:
+        gauge_tile(g, xs[1], y, tw, "Интенсивность дождя", "rrate", v=d.get("rain_rate"))
+    else:
+        gauge_tile(g, xs[1], y, tw, "Осадки за сутки", "rtotal", v=d.get("rain_total") or 0.0, sub=d.get("rain_total_sub") or "с 00:00")
+    y += TH + GAP
     footer(g, y - GAP + 6, lines)
     return finish(img)
 
@@ -296,10 +324,11 @@ def cloud(d, x, y, sz, drops):
 
 
 def render_gmc(d):
-    """d: obs_local, obs_utc, temp, hum, wind, wind_dir, gust, pressure, p_trend, ww_text, rain (bool), lines[]"""
+    """d: obs_local, temp, hum, wind, wind_dir, gust, pressure, p_trend, n_total, cloud_txt, vis, ww_text, ww_known, rain, lines[]"""
     lines = d.get("lines") or []
-    has_ww = bool(d.get("ww_text"))
-    top = 330 + (170 if has_ww else 0)
+    band = 150
+    by = 344
+    top = by + band + GAP
     H = top + 2 * (TH + GAP) + (52 + 38 * len(lines) if lines else 0) + 24 - GAP
     img = Image.new("RGB", (W * S, H * S), BG)
     g = ImageDraw.Draw(img)
@@ -310,10 +339,29 @@ def render_gmc(d):
     t = d.get("temp")
     tc = gcol(T_ST, ((t if t is not None else 10) + 20) / 60.0)
     tx(g, (PAD + 6, 222), (fmt1(t) + "°C") if t is not None else "—", font(96, True), tc)
-    if has_ww:
-        txt = d["ww_text"][:1].upper() + d["ww_text"][1:]
-        tx(g, (PAD + 6, 410), txt, font(40), TXT, "lm")
-        cloud(g, W - PAD - 170, 346, 128, d.get("rain"))
+    # три плитки: облачность, видимость, явления
+    cw = (W - 2 * PAD - 2 * GAP) // 3
+    cx0 = PAD
+    n = d.get("n_total")
+    if n is not None and n < 9:
+        chip(g, cx0, by, cw, band, "Облачность", "%d/8" % n, d.get("cloud_txt"), gcol(st([(0, "#ffd84d"), (.5, "#cde0e8"), (1, "#8fa3ad")]), n / 8.0))
+    elif n == 9:
+        chip(g, cx0, by, cw, band, "Облачность", "не видна", d.get("cloud_txt"), (170, 170, 176))
+    else:
+        chip(g, cx0, by, cw, band, "Облачность", "нет данных", None, (110, 110, 116))
+    v = d.get("vis")
+    if v is not None:
+        chip(g, cx0 + cw + GAP, by, cw, band, "Видимость", ("%s км" % (fmt1(v) if v < 10 else "%d" % round(v))), vis_word(v),
+             gcol(st([(0, "#ff6b3a"), (.2, "#ffd84d"), (1, "#5fe08f")]), min(v, 20) / 20.0))
+    else:
+        chip(g, cx0 + cw + GAP, by, cw, band, "Видимость", "нет данных", None, (110, 110, 116))
+    ww = d.get("ww_text")
+    if ww:
+        chip(g, cx0 + 2 * (cw + GAP), by, cw, band, "Явления", ww[:1].upper() + ww[1:], "в срок наблюдения", (76, 170, 240) if d.get("rain") else (255, 190, 80))
+    elif d.get("ww_known"):
+        chip(g, cx0 + 2 * (cw + GAP), by, cw, band, "Явления", "нет", "без явлений", (112, 226, 150))
+    else:
+        chip(g, cx0 + 2 * (cw + GAP), by, cw, band, "Явления", "нет данных", None, (110, 110, 116))
     tw = (W - 2 * PAD - GAP) // 2
     xs = (PAD, PAD + tw + GAP)
     y = top
