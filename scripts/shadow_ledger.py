@@ -7,6 +7,8 @@
 слотов max(min_slots, int(баланс // slot_eq)), свободная маржа не меньше маржи сделки.
 Результат сделки: stake * net_pct / 100 (net_pct уже с комиссиями, как pos.py).
 Закрытые сделки копятся в shadow_bal_trades.json (не теряются при чистке shadow.json).
+Фильтр обеих линий (shadow_bal.json: skip_tf, skip_regime; по умолчанию ["5m"] и ["flat"]): сделки с таким таймфреймом или режимом
+на момент сигнала (x.rg.regime) в баланс не берутся. Пустые списки отключают фильтр. Решение 2026-11-25 по разбору сливов (shadow_notes №20).
 """
 import json, os, time
 
@@ -69,7 +71,8 @@ def compute(pos_dir):
         if src["t_in"] < t0: continue
         done = src.get("status") == "closed" and src.get("t_out") and src.get("net_pct") is not None
         rec = {"id": iid, "sn": x.get("sn"), "sym": x.get("sym"), "side": x.get("side"), "tf": x.get("tf"), "k": k, "t_in": int(src["t_in"]),
-               "t_out": int(src["t_out"]) if done else None, "net_pct": float(src["net_pct"]) if done else None, "r": src.get("r_mult") if done else None}
+               "t_out": int(src["t_out"]) if done else None, "net_pct": float(src["net_pct"]) if done else None, "r": src.get("r_mult") if done else None,
+               "rg": (x.get("rg") or {}).get("regime")}
         key = iid + k
         if done: cur[key] = rec
         else: live[key] = rec
@@ -82,10 +85,14 @@ def compute(pos_dir):
     allr = dict(live); allr.update(saved)          # закрытые из журнала, незакрытые из shadow.json
     for key in list(allr):                           # запись, ушедшая из shadow.json и не закрытая, не учитывается
         if key not in saved and key not in live: allr.pop(key)
+    skip_tf = set(cfg.get("skip_tf", ["5m"])); skip_rg = set(cfg.get("skip_regime", ["flat"]))
+    for key in list(allr):                           # фильтр «не flat и не 5m» для обеих линий
+        r = allr[key]
+        if r.get("tf") in skip_tf or (r.get("rg") is not None and r.get("rg") in skip_rg): allr.pop(key)
     F = [r for r in allr.values() if r["k"] == "in"]; N = list(allr.values())
     lines = [dict(k="f", name="с фильтрами", **_simulate(F, start, stake, lev, slot_eq, min_slots)),
              dict(k="n", name="без фильтра", **_simulate(N, start, stake, lev, slot_eq, min_slots))]
-    out = {"t0": t0, "start": start, "stake": stake, "lev": lev, "slot_eq": slot_eq, "min_slots": min_slots, "lines": lines, "now": int(time.time() * 1000)}
+    out = {"t0": t0, "start": start, "stake": stake, "lev": lev, "slot_eq": slot_eq, "min_slots": min_slots, "lines": lines, "skip_tf": sorted(skip_tf), "skip_regime": sorted(skip_rg), "now": int(time.time() * 1000)}
     out["now"] = 0   # не меняем подпись без изменения данных
     _CACHE["mt"] = mt; _CACHE["out"] = out
     return out
