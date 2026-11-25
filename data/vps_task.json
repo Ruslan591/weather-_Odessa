@@ -1,1 +1,1 @@
-{"task_id": "ab5", "cmd": "pgrep -f ab_models.py >/dev/null && echo RUNNING || echo DONE; wc -c /tmp/ab_out.txt; tail -3 /tmp/ab_err.txt | cut -c1-200", "timeout": 120}
+{"task_id": "ab6", "cmd": "pgrep -f ab_models.py >/dev/null && echo RUNNING || echo DONE; wc -c /tmp/ab_out.txt; ls -la /opt/weather-tg/ab_mapping.json 2>&1 | tail -1; grep \"ai:\\|issue:\" /opt/weather-tg/run.log | tail -6 | cut -c1-180", "timeout": 120}
