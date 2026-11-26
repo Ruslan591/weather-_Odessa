@@ -1,1 +1,1 @@
-{"task_id": "cdd928721", "cmd": "cd /opt/trading-bot/positions_regr && cp shadow_cfg.json shadow_cfg.json.bak_w_20261126 && python3 -c \"import json;p='shadow_cfg.json';c=json.load(open(p));c['width_filter']=False;json.dump(c,open(p+'.tmp','w'));import os;os.replace(p+'.tmp',p);print(json.load(open(p)))\"; ls -l shadow_cfg.json; stat -c %U shadow_cfg.json.bak_w_20261126", "timeout": 60}
+{"task_id": "c57aaa932", "cmd": "cd /opt/trading-bot/positions_regr && o=$(stat -c %U:%G shadow_bal.json) && chown $o shadow_cfg.json && ls -l shadow_cfg.json shadow_bal.json", "timeout": 60}
