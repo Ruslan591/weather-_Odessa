@@ -1,12 +1,17 @@
 {
-  "timestamp": "2026-11-26T13:53:00Z",
-  "status": "ok",
+  "timestamp": "2026-11-26T13:57:16Z",
+  "status": "suppressed_known_false_positive",
   "cloud_forecast_timestamp": "2026-11-26T13:30:00.000Z",
-  "target_id": 0,
-  "target_area_km2": 196.1,
-  "target_distance_km": 181.4,
-  "target_bearing_deg": 150.0,
-  "target_compass": "ЮВ",
+  "suppressed_target": {
+    "signature": "90_-155",
+    "area_km2": 196.1,
+    "distance_km": 181.4,
+    "bearing_deg": 150.0,
+    "compass": "ЮВ",
+    "not_confirmed_streak": 4,
+    "total_not_confirmed": 4,
+    "excluded_since": "2026-11-26T13:53:00Z"
+  },
   "system": {
     "target_id": 1,
     "area_km2": 705.8,
@@ -26,6 +31,7 @@
   "local_suppressed_count": 1,
   "system_candidates": [],
   "system_suppressed_count": 1,
+  "verdict": "Известный шумовой объект в 181км ЮВ (~196км²) — подавлено (не подтверждался 4 раз подряд). Отдельно: система синоптического масштаба (706км²) в 260км ЮВ (вытянута ЮВ-СЗ (116°), похоже на фронт).",
   "frontal_tracks": [
     {
       "track_id": 3564,
@@ -86,46 +92,5 @@
       "front_type": null,
       "front_type_confidence": null
     }
-  ],
-  "target_movement": {
-    "speed_kmh": 65.1,
-    "direction_compass": "В",
-    "cpa_km": 181.4,
-    "eta_min": null,
-    "verdict": "удаляется"
-  },
-  "target_phase": {
-    "label": "безоблачно",
-    "cloud_fraction": 0.085
-  },
-  "existence": {
-    "modules": {
-      "ir_motion": {
-        "confirmed": false,
-        "timestamp": "2026-11-26T13:30:00.000Z"
-      },
-      "geocolour_motion": {
-        "confirmed": false,
-        "timestamp": "2026-11-26T13:20:00.000Z"
-      },
-      "cloud_phase_type": {
-        "confirmed": false,
-        "timestamp": "2026-11-26T13:52:29Z"
-      }
-    },
-    "votes_confirmed": 0,
-    "votes_not_confirmed": 3,
-    "consensus": "not_confirmed"
-  },
-  "phenomena": {
-    "precip_forecast": {
-      "confirmed": null,
-      "timestamp": "2026-11-26T13:47:06Z"
-    },
-    "lightning_forecast": {
-      "confirmed": false,
-      "timestamp": "2026-11-26T13:52:45Z"
-    }
-  },
-  "verdict": "CLM отметил цель в 181км ЮВ, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (706км²) в 260км ЮВ (вытянута ЮВ-СЗ (116°), похоже на фронт)."
+  ]
 }
