@@ -1,1 +1,1 @@
-{"task_id": "cc0aa3856", "cmd": "{ cd /opt/trading-bot/live && ls -l live_web.py index.html; wc -c live_web.py index.html; grep -n 'ledger' live_web.py | head; echo ---; grep -n 'ledger\\|slots\\|\\.bal' index.html | cut -c1-220 | head -30; } 2>&1 | LC_ALL=C tr -cd '\\11\\12\\40-\\176'", "timeout": 90}
+{"task_id": "cac4a941d", "cmd": "cd /opt/trading-bot && tar czf - live/live_web.py live/index.html positions/shadow_ledger.py | base64 -w0", "timeout": 120}
