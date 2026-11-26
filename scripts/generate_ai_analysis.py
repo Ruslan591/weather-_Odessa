@@ -16,16 +16,14 @@ import verification
 BASE_DIR      = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUTPUT_FILE   = os.path.join(BASE_DIR, "data", "forecast_analysis_claude.json")
 OUTPUT_FILE_GEMINI = os.path.join(BASE_DIR, "data", "forecast_analysis_gemini.json")
-GEMINI_MODEL  = "gemini-3.7-flash"
-# [2026-10-05] Переход с gemini-2.5-flash (доступ в Developer API ограничен,
-# 503 по утрам, ~43 с и ~6800 токенов "размышлений" на промпт) на 3.x.
-# A/B на реальном промпте: 3.7 low 12 с / 4673 симв. / структура 1:1 с 2.5;
-# 3.8 low часто 503 (новая модель, высокий спрос) — в цепочке после 3.5.
+GEMINI_MODEL  = "gemini-4-hydrogen"
+# [2026-11-26] Первой в цепочке Gemini 4 Hydrogen, как в канале (weather_tg_ai.py): отвечает на бесплатной
+# квоте ключа, текст богаче 3.5 flash. 3.7 и 3.8 убраны: на этом ключе 3.7 даёт 429, 3.8 часто 503,
+# каждая тратила попытки и паузу 6 с. Дальше 3.5 flash, последним 2.5 flash (качество ниже).
 # Цепочка: если основная модель отвечает 5xx/429 — пробуем следующую.
 GEMINI_MODEL_CHAIN = [
-    ("gemini-3.7-flash", {"thinkingLevel": "low"}),
-    ("gemini-3.5-flash", {"thinkingLevel": "low"}),   # стабильная (>=12 мес.), отвечала, когда 3.7/3.8 давали 503
-    ("gemini-3.8-flash", {"thinkingLevel": "low"}),   # новая, 05.10 утром 503 почти на каждый запрос
+    ("gemini-4-hydrogen", None),
+    ("gemini-3.5-flash", {"thinkingLevel": "low"}),
     ("gemini-2.5-flash", None),
 ]
 GEMINI_LAST_MODEL = None
