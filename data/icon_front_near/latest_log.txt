@@ -1,56 +1,48 @@
-[2026-11-26T09:06:03.542396+00:00] Синхронизирую репозиторий...
-[2026-11-26T09:06:04.056643+00:00] Ищу самый свежий опубликованный run+lead ICON-EU...
-[2026-11-26T09:06:05.206989+00:00] run=2026-11-26T06:00:00+00:00 lead=3 valid_time=2026-11-26T09:00:00+00:00
-[2026-11-26T09:06:05.208028+00:00] Тиры к обновлению: ['near', 'far', 'very_far']
-[2026-11-26T09:06:05.208076+00:00] скачиваю pmsl: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/pmsl/icon-eu_europe_regular-lat-lon_single-level_2026112606_003_PMSL.grib2.bz2
-[2026-11-26T09:06:11.038962+00:00] скачиваю fi500: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/fi/icon-eu_europe_regular-lat-lon_pressure-level_2026112606_003_500_FI.grib2.bz2
-[2026-11-26T09:06:14.737296+00:00] скачиваю fi1000: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/fi/icon-eu_europe_regular-lat-lon_pressure-level_2026112606_003_1000_FI.grib2.bz2
-[2026-11-26T09:06:19.094595+00:00] скачиваю u850: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/u/icon-eu_europe_regular-lat-lon_pressure-level_2026112606_003_850_U.grib2.bz2
-[2026-11-26T09:06:23.280380+00:00] скачиваю v850: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/v/icon-eu_europe_regular-lat-lon_pressure-level_2026112606_003_850_V.grib2.bz2
-[2026-11-26T09:06:28.232925+00:00] скачиваю relhum850: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/relhum/icon-eu_europe_regular-lat-lon_pressure-level_2026112606_003_850_RELHUM.grib2.bz2
-[2026-11-26T09:06:34.112983+00:00] скачиваю t850: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/t/icon-eu_europe_regular-lat-lon_pressure-level_2026112606_003_850_T.grib2.bz2
-[2026-11-26T09:06:37.602729+00:00] скачиваю fr_land: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/fr_land/icon-eu_europe_regular-lat-lon_time-invariant_2026112606_FR_LAND.grib2.bz2
-[2026-11-26T09:06:42.557557+00:00] скачиваю fr_lake: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/fr_lake/icon-eu_europe_regular-lat-lon_time-invariant_2026112606_FR_LAKE.grib2.bz2
-[2026-11-26T09:06:47.157472+00:00] скачиваю hsurf: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/hsurf/icon-eu_europe_regular-lat-lon_time-invariant_2026112606_HSURF.grib2.bz2
-[2026-11-26T09:06:51.637204+00:00] Скачано всего ~8.07 МБ (на все три тира сразу)
-[2026-11-26T09:06:51.693117+00:00] L/H диагностика [L]: окно 500км, порог 1.5 гПа, выделенность p50=3.99 p90=7.72 p99=9.91 max=11.77, найдено 2
-[2026-11-26T09:06:51.717686+00:00] L/H диагностика [H]: окно 1200км, порог 1.0 гПа, выделенность p50=7.02 p90=11.95 p99=15.95 max=16.87, найдено 2
-[2026-11-26T09:06:51.717759+00:00] L/H: найдено 4 центров в области
-[2026-11-26T09:06:52.600600+00:00] фронты: сегментов 10, суммарно 3901 км; |∇θe850| К/100км p50=1.22 p90=4.06 max=12.88; порог(адапт.) 4.00 (перцентиль 88.0, p99=8.59), валидных точек 10.7%
-[2026-11-26T09:06:52.601016+00:00] [near] считаю P_front...
-[2026-11-26T09:06:52.938227+00:00] [near] запрашиваю EUMETSAT GeoColour...
-[2026-11-26T09:06:53.384660+00:00] [near]  2026-11-26T08:50:00Z недоступен (попытка 1: HTTP 200, content-type='text/xml;charset=UTF-8', len=472: <?xml version="1.0" encoding="UTF-8"?><ServiceExceptionReport version="1.3.0" xmlns="http://www.opengis.net/ogc" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/ogc https://view.eumetsat.int/geoserver/schemas/wms/1.3.0/exceptions_1_3_0.xsd">   <Servic); пробую раньше
-[2026-11-26T09:06:53.803556+00:00] [near]  2026-11-26T08:45:00Z недоступен (попытка 1: HTTP 200, content-type='text/xml;charset=UTF-8', len=472: <?xml version="1.0" encoding="UTF-8"?><ServiceExceptionReport version="1.3.0" xmlns="http://www.opengis.net/ogc" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/ogc https://view.eumetsat.int/geoserver/schemas/wms/1.3.0/exceptions_1_3_0.xsd">   <Servic); пробую раньше
-[2026-11-26T09:06:54.196619+00:00] [near]  2026-11-26T08:55:00Z недоступен (попытка 1: HTTP 200, content-type='text/xml;charset=UTF-8', len=472: <?xml version="1.0" encoding="UTF-8"?><ServiceExceptionReport version="1.3.0" xmlns="http://www.opengis.net/ogc" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/ogc https://view.eumetsat.int/geoserver/schemas/wms/1.3.0/exceptions_1_3_0.xsd">   <Servic); пробую раньше
-[2026-11-26T09:06:55.050455+00:00] [near]  точного кадра не было, использован ближайший: 2026-11-26T08:40:00Z (-20 мин)
-[2026-11-26T09:06:55.417458+00:00] [near] ИК сохранён (12 КБ)
-[2026-11-26T09:06:55.417489+00:00] [near] рендерю изобары и P_front...
-[2026-11-26T09:06:55.593533+00:00] изобары: над рельефом (>800 м) продолжено 44813 клеток
-[2026-11-26T09:06:55.627591+00:00] изобары: оставлено 10 линий, отброшено 1 мелких/над-горных фрагментов
-[2026-11-26T09:06:55.627650+00:00] L/H: нарисовано 0 центров
-[2026-11-26T09:06:55.741646+00:00] [near] фронты: 0 линий в кадре
-[2026-11-26T09:06:55.742404+00:00] [far] считаю P_front...
-[2026-11-26T09:06:55.968273+00:00] [far] запрашиваю EUMETSAT GeoColour...
-[2026-11-26T09:06:56.266199+00:00] [far]  2026-11-26T08:50:00Z недоступен (попытка 1: HTTP 200, content-type='text/xml;charset=UTF-8', len=472: <?xml version="1.0" encoding="UTF-8"?><ServiceExceptionReport version="1.3.0" xmlns="http://www.opengis.net/ogc" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/ogc https://view.eumetsat.int/geoserver/schemas/wms/1.3.0/exceptions_1_3_0.xsd">   <Servic); пробую раньше
-[2026-11-26T09:06:56.401567+00:00] [far]  2026-11-26T08:45:00Z недоступен (попытка 1: HTTP 200, content-type='text/xml;charset=UTF-8', len=472: <?xml version="1.0" encoding="UTF-8"?><ServiceExceptionReport version="1.3.0" xmlns="http://www.opengis.net/ogc" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/ogc https://view.eumetsat.int/geoserver/schemas/wms/1.3.0/exceptions_1_3_0.xsd">   <Servic); пробую раньше
-[2026-11-26T09:06:56.550166+00:00] [far]  2026-11-26T08:55:00Z недоступен (попытка 1: HTTP 200, content-type='text/xml;charset=UTF-8', len=472: <?xml version="1.0" encoding="UTF-8"?><ServiceExceptionReport version="1.3.0" xmlns="http://www.opengis.net/ogc" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/ogc https://view.eumetsat.int/geoserver/schemas/wms/1.3.0/exceptions_1_3_0.xsd">   <Servic); пробую раньше
-[2026-11-26T09:06:57.639932+00:00] [far]  точного кадра не было, использован ближайший: 2026-11-26T08:40:00Z (-20 мин)
-[2026-11-26T09:06:58.643346+00:00] [far] ИК сохранён (59 КБ)
-[2026-11-26T09:06:58.643378+00:00] [far] рендерю изобары и P_front...
-[2026-11-26T09:06:58.794022+00:00] изобары: над рельефом (>800 м) продолжено 44813 клеток
-[2026-11-26T09:06:58.864438+00:00] изобары: оставлено 31 линий, отброшено 5 мелких/над-горных фрагментов
-[2026-11-26T09:06:58.864515+00:00] L/H: нарисовано 0 центров
-[2026-11-26T09:06:59.887617+00:00] [far] фронты: 4 линий в кадре
-[2026-11-26T09:06:59.888992+00:00] [very_far] считаю P_front...
-[2026-11-26T09:07:00.120648+00:00] [very_far] запрашиваю EUMETSAT GeoColour...
-[2026-11-26T09:07:00.432317+00:00] [very_far]  2026-11-26T08:50:00Z недоступен (попытка 1: HTTP 200, content-type='text/xml;charset=UTF-8', len=472: <?xml version="1.0" encoding="UTF-8"?><ServiceExceptionReport version="1.3.0" xmlns="http://www.opengis.net/ogc" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/ogc https://view.eumetsat.int/geoserver/schemas/wms/1.3.0/exceptions_1_3_0.xsd">   <Servic); пробую раньше
-[2026-11-26T09:07:00.785115+00:00] [very_far]  2026-11-26T08:45:00Z недоступен (попытка 1: HTTP 200, content-type='text/xml;charset=UTF-8', len=472: <?xml version="1.0" encoding="UTF-8"?><ServiceExceptionReport version="1.3.0" xmlns="http://www.opengis.net/ogc" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/ogc https://view.eumetsat.int/geoserver/schemas/wms/1.3.0/exceptions_1_3_0.xsd">   <Servic); пробую раньше
-[2026-11-26T09:07:04.465100+00:00] [very_far]  2026-11-26T08:55:00Z недоступен (попытка 1: HTTP 200, content-type='text/xml;charset=UTF-8', len=472: <?xml version="1.0" encoding="UTF-8"?><ServiceExceptionReport version="1.3.0" xmlns="http://www.opengis.net/ogc" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/ogc https://view.eumetsat.int/geoserver/schemas/wms/1.3.0/exceptions_1_3_0.xsd">   <Servic); пробую раньше
-[2026-11-26T09:07:07.434640+00:00] [very_far]  точного кадра не было, использован ближайший: 2026-11-26T08:40:00Z (-20 мин)
-[2026-11-26T09:07:09.865254+00:00] [very_far] ИК сохранён (64 КБ)
-[2026-11-26T09:07:09.865288+00:00] [very_far] рендерю изобары и P_front...
-[2026-11-26T09:07:10.186772+00:00] изобары: над рельефом (>800 м) продолжено 44813 клеток
-[2026-11-26T09:07:10.376605+00:00] изобары: оставлено 37 линий, отброшено 6 мелких/над-горных фрагментов
-[2026-11-26T09:07:10.377158+00:00] L/H: нарисовано 1 центров
-[2026-11-26T09:07:11.374014+00:00] [very_far] фронты: 9 линий в кадре
-[2026-11-26T09:07:12.046771+00:00] [near] удалён старый снимок 2026-11-25T09:00:00+00:00
+[2026-11-26T10:06:02.808258+00:00] Синхронизирую репозиторий...
+[2026-11-26T10:06:03.306921+00:00] Ищу самый свежий опубликованный run+lead ICON-EU...
+[2026-11-26T10:06:03.675616+00:00] run=2026-11-26T06:00:00+00:00 lead=4 valid_time=2026-11-26T10:00:00+00:00
+[2026-11-26T10:06:03.677459+00:00] Тиры к обновлению: ['near', 'far', 'very_far']
+[2026-11-26T10:06:03.677510+00:00] скачиваю pmsl: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/pmsl/icon-eu_europe_regular-lat-lon_single-level_2026112606_004_PMSL.grib2.bz2
+[2026-11-26T10:06:08.677143+00:00] скачиваю fi500: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/fi/icon-eu_europe_regular-lat-lon_pressure-level_2026112606_004_500_FI.grib2.bz2
+[2026-11-26T10:06:12.282430+00:00] скачиваю fi1000: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/fi/icon-eu_europe_regular-lat-lon_pressure-level_2026112606_004_1000_FI.grib2.bz2
+[2026-11-26T10:06:16.703859+00:00] скачиваю u850: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/u/icon-eu_europe_regular-lat-lon_pressure-level_2026112606_004_850_U.grib2.bz2
+[2026-11-26T10:06:21.825271+00:00] скачиваю v850: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/v/icon-eu_europe_regular-lat-lon_pressure-level_2026112606_004_850_V.grib2.bz2
+[2026-11-26T10:06:25.506533+00:00] скачиваю relhum850: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/relhum/icon-eu_europe_regular-lat-lon_pressure-level_2026112606_004_850_RELHUM.grib2.bz2
+[2026-11-26T10:06:29.165075+00:00] скачиваю t850: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/t/icon-eu_europe_regular-lat-lon_pressure-level_2026112606_004_850_T.grib2.bz2
+[2026-11-26T10:06:33.969735+00:00] скачиваю fr_land: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/fr_land/icon-eu_europe_regular-lat-lon_time-invariant_2026112606_FR_LAND.grib2.bz2
+[2026-11-26T10:06:38.519461+00:00] скачиваю fr_lake: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/fr_lake/icon-eu_europe_regular-lat-lon_time-invariant_2026112606_FR_LAKE.grib2.bz2
+[2026-11-26T10:06:43.268355+00:00] скачиваю hsurf: https://opendata.dwd.de/weather/nwp/icon-eu/grib/06/hsurf/icon-eu_europe_regular-lat-lon_time-invariant_2026112606_HSURF.grib2.bz2
+[2026-11-26T10:06:48.068601+00:00] Скачано всего ~8.08 МБ (на все три тира сразу)
+[2026-11-26T10:06:48.123555+00:00] L/H диагностика [L]: окно 500км, порог 1.5 гПа, выделенность p50=3.95 p90=7.64 p99=10.15 max=12.62, найдено 3
+[2026-11-26T10:06:48.148479+00:00] L/H диагностика [H]: окно 1200км, порог 1.0 гПа, выделенность p50=6.97 p90=12.02 p99=15.90 max=17.03, найдено 1
+[2026-11-26T10:06:48.148544+00:00] L/H: найдено 4 центров в области
+[2026-11-26T10:06:49.151124+00:00] фронты: сегментов 8, суммарно 3499 км; |∇θe850| К/100км p50=1.22 p90=4.07 max=12.71; порог(адапт.) 4.00 (перцентиль 88.0, p99=8.60), валидных точек 10.6%
+[2026-11-26T10:06:49.151520+00:00] [near] считаю P_front...
+[2026-11-26T10:06:49.455605+00:00] [near] запрашиваю EUMETSAT GeoColour...
+[2026-11-26T10:06:59.524570+00:00] [near]  2026-11-26T09:50:00Z недоступен (попытка 1: HTTPSConnectionPool(host='view.eumetsat.int', port=443): Read timed out. (read timeout=10)); пробую раньше
+[2026-11-26T10:07:08.247999+00:00] [near]  точного кадра не было, использован ближайший: 2026-11-26T09:45:00Z (-15 мин)
+[2026-11-26T10:07:16.320886+00:00] [near] ИК сохранён (12 КБ)
+[2026-11-26T10:07:16.320926+00:00] [near] рендерю изобары и P_front...
+[2026-11-26T10:07:16.723372+00:00] изобары: над рельефом (>800 м) продолжено 44813 клеток
+[2026-11-26T10:07:16.900902+00:00] изобары: оставлено 11 линий, отброшено 1 мелких/над-горных фрагментов
+[2026-11-26T10:07:16.900960+00:00] L/H: нарисовано 0 центров
+[2026-11-26T10:07:17.353373+00:00] [near] фронты: 0 линий в кадре
+[2026-11-26T10:07:17.356941+00:00] [far] считаю P_front...
+[2026-11-26T10:07:17.821573+00:00] [far] запрашиваю EUMETSAT GeoColour...
+[2026-11-26T10:07:18.838724+00:00] [far]  точного кадра не было, использован ближайший: 2026-11-26T09:50:00Z (-10 мин)
+[2026-11-26T10:07:20.082656+00:00] [far] ИК сохранён (61 КБ)
+[2026-11-26T10:07:20.082695+00:00] [far] рендерю изобары и P_front...
+[2026-11-26T10:07:20.238864+00:00] изобары: над рельефом (>800 м) продолжено 44813 клеток
+[2026-11-26T10:07:20.312291+00:00] изобары: оставлено 32 линий, отброшено 4 мелких/над-горных фрагментов
+[2026-11-26T10:07:20.312356+00:00] L/H: нарисовано 0 центров
+[2026-11-26T10:07:21.497037+00:00] [far] фронты: 4 линий в кадре
+[2026-11-26T10:07:21.498222+00:00] [very_far] считаю P_front...
+[2026-11-26T10:07:21.948702+00:00] [very_far] запрашиваю EUMETSAT GeoColour...
+[2026-11-26T10:07:22.510021+00:00] [very_far]  точного кадра не было, использован ближайший: 2026-11-26T09:50:00Z (-10 мин)
+[2026-11-26T10:07:22.970108+00:00] [very_far] ИК сохранён (65 КБ)
+[2026-11-26T10:07:22.970145+00:00] [very_far] рендерю изобары и P_front...
+[2026-11-26T10:07:23.237981+00:00] изобары: над рельефом (>800 м) продолжено 44813 клеток
+[2026-11-26T10:07:23.362676+00:00] изобары: оставлено 36 линий, отброшено 12 мелких/над-горных фрагментов
+[2026-11-26T10:07:23.363091+00:00] L/H: нарисовано 1 центров
+[2026-11-26T10:07:24.496002+00:00] [very_far] фронты: 7 линий в кадре
+[2026-11-26T10:07:25.048467+00:00] [near] удалён старый снимок 2026-11-25T10:00:00+00:00
