@@ -6,6 +6,7 @@
 Правила как у счёта: ставка stake (нотионал), плечо lev, маржа stake/lev на сделку,
 слотов max(min_slots, int(баланс // slot_eq)), свободная маржа не меньше маржи сделки.
 Результат сделки: stake * net_pct / 100 (net_pct уже с комиссиями, как pos.py).
+Линия full: стартовый баланс need, при котором не пропущена ни одна сделка, и итог при нём; open_list: открытые сделки (для живого баланса на странице).
 Закрытые сделки копятся в shadow_bal_trades.json (не теряются при чистке shadow.json); файл лежит в /opt/trading-bot/live/data (папка tbot внутри единственного пути записи live-web), иначе в pos_dir.
 Фильтр обеих линий (shadow_bal.json: skip_tf, skip_regime; по умолчанию ["5m"] и ["flat"]): сделки с таким таймфреймом или режимом
 на момент сигнала (x.rg.regime) в баланс не берутся. Пустые списки отключают фильтр. Решение 2026-11-25 по разбору сливов (shadow_notes №20).
@@ -43,7 +44,26 @@ def _simulate(trades, start, stake, lev, slot_eq, min_slots):
         bal += stake * o["net_pct"] / 100.0; wins += 1 if o["net_pct"] > 0 else 0; opn.remove(o)
     closed = taken - len(opn)
     return {"bal": round(bal, 3), "pnl": round(bal - start, 3), "taken": taken, "closed": closed, "wins": wins, "open": len(opn),
-            "skipped": skipped, "maxc": maxc, "slots": max(min_slots, int(bal // slot_eq))}
+            "skipped": skipped, "maxc": maxc, "slots": max(min_slots, int(bal // slot_eq)),
+            "open_list": [{"sym": o.get("sym"), "side": o.get("side"), "entry": o.get("entry")} for o in opn]}
+
+
+def _full(trades, start, stake, lev, slot_eq, min_slots):
+    """Какой стартовый баланс нужен, чтобы ни одна сделка линии не была пропущена (слоты и маржа), и что вышло бы при нём."""
+    def run(s0): return _simulate(trades, s0, stake, lev, slot_eq, min_slots)
+    lo = float(start); r = run(lo)
+    if r["skipped"] == 0: need = lo
+    else:
+        hi = lo * 2.0; rh = run(hi)
+        while rh["skipped"] and hi < 1e6: hi *= 2.0; rh = run(hi)
+        for _ in range(45):
+            mid = (lo + hi) / 2.0; rm = run(mid)
+            if rm["skipped"] == 0: hi, rh = mid, rm
+            else: lo = mid
+        need = hi; r = rh
+    need = round(need + 0.0005, 3); r = run(need)
+    r["need"] = need
+    return r
 
 
 def compute(pos_dir):
@@ -73,7 +93,7 @@ def compute(pos_dir):
         done = src.get("status") == "closed" and src.get("t_out") and src.get("net_pct") is not None
         rec = {"id": iid, "sn": x.get("sn"), "sym": x.get("sym"), "side": x.get("side"), "tf": x.get("tf"), "k": k, "t_in": int(src["t_in"]),
                "t_out": int(src["t_out"]) if done else None, "net_pct": float(src["net_pct"]) if done else None, "r": src.get("r_mult") if done else None,
-               "rg": (x.get("rg") or {}).get("regime")}
+               "rg": (x.get("rg") or {}).get("regime"), "entry": src.get("entry")}
         key = iid + k
         if done: cur[key] = rec
         else: live[key] = rec
@@ -93,6 +113,10 @@ def compute(pos_dir):
     F = [r for r in allr.values() if r["k"] == "in"]; N = list(allr.values())
     lines = [dict(k="f", name="с фильтрами", **_simulate(F, start, stake, lev, slot_eq, min_slots)),
              dict(k="n", name="без фильтра", **_simulate(N, start, stake, lev, slot_eq, min_slots))]
+    for ln, T in zip(lines, (F, N)):
+        if ln["skipped"]:
+            try: ln["full"] = _full(T, start, stake, lev, slot_eq, min_slots)
+            except Exception: pass
     out = {"t0": t0, "start": start, "stake": stake, "lev": lev, "slot_eq": slot_eq, "min_slots": min_slots, "lines": lines, "skip_tf": sorted(skip_tf), "skip_regime": sorted(skip_rg), "now": int(time.time() * 1000)}
     out["now"] = 0   # не меняем подпись без изменения данных
     _CACHE["mt"] = mt; _CACHE["out"] = out
