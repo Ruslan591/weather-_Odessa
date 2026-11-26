@@ -23,6 +23,7 @@ BANNED_WORDS = ("купан", "купат", "плавани", "плавать", 
                 "спокойной ночи", "хорошего дня", "доброе утро", "добрый вечер",
                 "пасмурност", "ясност")
 _deadline = [None]
+ERRS = []   # ошибки моделей текущего вызова (для лога: почему сработал запасной вариант)
 CALLER = None   # если задан: функция (system, prompt) -> (dict, имя_модели) вместо Gemini (для Claude и сравнения моделей)
 USAGE = []      # (модель, токены входа, токены выхода) для расчёта стоимости
 
@@ -67,6 +68,7 @@ def gemini_json(system, prompt, key, per_try=60, chain=None):
                 return json.loads("".join(p.get("text", "") for p in parts if not p.get("thought"))), model
             except urllib.error.HTTPError as e:
                 last = "%s HTTP %s" % (model, e.code)
+                ERRS.append(last)
                 try:
                     ebody = e.read().decode("utf-8", "ignore").lower()
                 except Exception:
@@ -80,6 +82,7 @@ def gemini_json(system, prompt, key, per_try=60, chain=None):
                 break
             except Exception as e:
                 last = "%s %s" % (model, str(e)[:100])
+                ERRS.append(last)
                 break
     raise RuntimeError(last or "gemini failed")
 
@@ -134,12 +137,14 @@ def smart_call(system, prompt):
     затем Gemini 2.5 Flash (качество ниже). Без флага Claude не используется и ничего не тратится."""
     key = gemini_key()
     errs = []
+    del ERRS[:]
     if key:
         try:
             # gemini-4-hydrogen отвечает на бесплатной квоте ключа (проверено 25.11.2026), текст богаче; затем 3.5 flash
             return gemini_json(system, prompt, key, per_try=90, chain=[("gemini-4-hydrogen", None), ("gemini-3.5-flash", {"thinkingLevel": "low"})])
         except Exception as e:
             errs.append(str(e)[:80])
+            ERRS.append(str(e)[:120])
     if env_flag("CHANNEL_CLAUDE_FALLBACK"):
         try:
             return claude_json("claude-haiku-5-5")(system, prompt)
@@ -235,6 +240,8 @@ def _ask(system, prompt, field, facts, max_len, log, dark=False, extra_banned=()
         txt = str(art.get(field, "")).strip()
         probs = check(txt, facts, max_len, dark, extra_banned)
         if not probs:
+            if ERRS:
+                log("ai: запасной вариант (%s)" % "; ".join(ERRS))
             log("ai: %s ok (%s, %d знаков, осталось %s с)" % (field, model, len(txt), "?" if left() is None else int(left())))
             return txt
         log("ai: %s отклонён (%s): %s" % (field, model, "; ".join(probs)))
