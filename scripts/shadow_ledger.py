@@ -6,6 +6,7 @@
 Правила как у счёта: ставка stake (нотионал), плечо lev, маржа stake/lev на сделку,
 слотов max(min_slots, int(баланс // slot_eq)), свободная маржа не меньше маржи сделки.
 Результат сделки: stake * net_pct / 100 (net_pct уже с комиссиями, как pos.py).
+Линии l<N> (shadow_bal.json: one_per_sym, max_side=[3,2]): сделки «без фильтра» с правилами «не больше одной позиции на монету» и «не больше N в одну сторону».
 Линия full: стартовый баланс need, при котором не пропущена ни одна сделка, и итог при нём; open_list: открытые сделки (для живого баланса на странице).
 Закрытые сделки копятся в shadow_bal_trades.json (не теряются при чистке shadow.json); файл лежит в /opt/trading-bot/live/data (папка tbot внутри единственного пути записи live-web), иначе в pos_dir.
 Фильтр обеих линий (shadow_bal.json: skip_tf, skip_regime; по умолчанию ["5m"] и ["flat"]): сделки с таким таймфреймом или режимом
@@ -28,15 +29,17 @@ def _save(p, o):
     os.replace(tmp, p)
 
 
-def _simulate(trades, start, stake, lev, slot_eq, min_slots):
+def _simulate(trades, start, stake, lev, slot_eq, min_slots, one_sym=False, max_side=None):
     """trades: [{t_in, t_out|None, net_pct|None}] -> итог одной линии."""
     margin = stake / lev
-    bal = float(start); opn = []; taken = skipped = wins = maxc = 0
+    bal = float(start); opn = []; taken = skipped = wins = maxc = skip_rule = 0
     for tr in sorted(trades, key=lambda x: x["t_in"]):
         ex = sorted([o for o in opn if o["t_out"] is not None and o["t_out"] <= tr["t_in"]], key=lambda o: o["t_out"])
         for o in ex:
             bal += stake * o["net_pct"] / 100.0; wins += 1 if o["net_pct"] > 0 else 0; opn.remove(o)
         slots = max(min_slots, int(bal // slot_eq))
+        if (one_sym and any(o.get("sym") == tr.get("sym") for o in opn)) or (max_side and sum(1 for o in opn if o.get("side") == tr.get("side")) >= max_side):
+            skipped += 1; skip_rule += 1; continue        # правила: одна позиция на монету, не больше max_side в одну сторону
         if len(opn) < slots and bal - len(opn) * margin >= margin:
             opn.append(tr); taken += 1; maxc = max(maxc, len(opn))
         else: skipped += 1
@@ -44,21 +47,21 @@ def _simulate(trades, start, stake, lev, slot_eq, min_slots):
         bal += stake * o["net_pct"] / 100.0; wins += 1 if o["net_pct"] > 0 else 0; opn.remove(o)
     closed = taken - len(opn)
     return {"bal": round(bal, 3), "pnl": round(bal - start, 3), "taken": taken, "closed": closed, "wins": wins, "open": len(opn),
-            "skipped": skipped, "maxc": maxc, "slots": max(min_slots, int(bal // slot_eq)),
+            "skipped": skipped, "skip_rule": skip_rule, "skip_slots": skipped - skip_rule, "maxc": maxc, "slots": max(min_slots, int(bal // slot_eq)),
             "open_list": [{"sym": o.get("sym"), "side": o.get("side"), "entry": o.get("entry")} for o in opn]}
 
 
-def _full(trades, start, stake, lev, slot_eq, min_slots):
+def _full(trades, start, stake, lev, slot_eq, min_slots, one_sym=False, max_side=None):
     """Какой стартовый баланс нужен, чтобы ни одна сделка линии не была пропущена (слоты и маржа), и что вышло бы при нём."""
-    def run(s0): return _simulate(trades, s0, stake, lev, slot_eq, min_slots)
+    def run(s0): return _simulate(trades, s0, stake, lev, slot_eq, min_slots, one_sym, max_side)
     lo = float(start); r = run(lo)
-    if r["skipped"] == 0: need = lo
+    if r["skip_slots"] == 0: need = lo
     else:
         hi = lo * 2.0; rh = run(hi)
-        while rh["skipped"] and hi < 1e6: hi *= 2.0; rh = run(hi)
+        while rh["skip_slots"] and hi < 1e6: hi *= 2.0; rh = run(hi)
         for _ in range(45):
             mid = (lo + hi) / 2.0; rm = run(mid)
-            if rm["skipped"] == 0: hi, rh = mid, rm
+            if rm["skip_slots"] == 0: hi, rh = mid, rm
             else: lo = mid
         need = hi; r = rh
     need = round(need + 0.0005, 3); r = run(need)
@@ -113,9 +116,15 @@ def compute(pos_dir):
     F = [r for r in allr.values() if r["k"] == "in"]; N = list(allr.values())
     lines = [dict(k="f", name="с фильтрами", **_simulate(F, start, stake, lev, slot_eq, min_slots)),
              dict(k="n", name="без фильтра", **_simulate(N, start, stake, lev, slot_eq, min_slots))]
-    for ln, T in zip(lines, (F, N)):
-        if ln["skipped"]:
-            try: ln["full"] = _full(T, start, stake, lev, slot_eq, min_slots)
+    one_sym = bool(cfg.get("one_per_sym", True)); sides = cfg.get("max_side", [3, 2]); sides = sides if isinstance(sides, list) else [sides]
+    lims = [(int(m), dict(k="l%d" % int(m), name="лимиты: 1 на монету, не больше %d в сторону" % int(m), **_simulate(N, start, stake, lev, slot_eq, min_slots, one_sym, int(m)))) for m in sides if m]
+    lines += [x[1] for x in lims]
+    TR = {"f": (F, False, None), "n": (N, False, None)}
+    for m, ln in lims: TR[ln["k"]] = (N, one_sym, m)
+    for ln in lines:
+        T, osy, ms = TR[ln["k"]]
+        if ln.get("skip_slots"):
+            try: ln["full"] = _full(T, start, stake, lev, slot_eq, min_slots, osy, ms)
             except Exception: pass
     out = {"t0": t0, "start": start, "stake": stake, "lev": lev, "slot_eq": slot_eq, "min_slots": min_slots, "lines": lines, "skip_tf": sorted(skip_tf), "skip_regime": sorted(skip_rg), "now": int(time.time() * 1000)}
     out["now"] = 0   # не меняем подпись без изменения данных
