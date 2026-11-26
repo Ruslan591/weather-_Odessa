@@ -7,6 +7,12 @@ import asyncio, collections, hashlib, hmac, json, os, re, signal, time, urllib.p
 from aiohttp import web, ClientSession, ClientTimeout, WSMsgType
 
 POS = os.environ.get("POS_DIR", "/opt/trading-bot/positions_regr")
+try:
+    import sys as _sys; _sys.path.insert(0, "/opt/trading-bot/positions"); import shadow_ledger as SL
+except Exception as _e: SL = None
+try:
+    import exit_cfg as EC
+except Exception: EC = None
 PORT = int(os.environ.get("LIVE_PORT", "18110"))
 CTL_PORT = int(os.environ.get("LIVE_CTL_PORT", "18111"))   # порт управления: только localhost, на VPS не проброшен наружу, доступен через туннель SSH из Termux
 AUDIT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ctl_audit.log")
@@ -15,7 +21,7 @@ SNAP = "http://127.0.0.1:%s/api/claude" % os.environ.get("ACCT_PORT", "18102")
 BWS = "wss://data-stream.binance.vision/stream"
 REST = "https://data-api.binance.vision/api/v3/ticker/price"
 KL = "https://data-api.binance.vision/api/v3/klines"
-IVS = {"1m": 60000, "5m": 300000, "15m": 900000, "1h": 3600000, "4h": 14400000, "1d": 86400000}
+IVS = {"1s": 1000, "1m": 60000, "5m": 300000, "15m": 900000, "1h": 3600000, "4h": 14400000, "1d": 86400000}
 MAXC = 3
 
 
@@ -117,6 +123,47 @@ CLOSED_F = ("id", "sym", "side", "entry", "exit", "stop0", "stop", "tp", "t_in",
 ORD_F = ("id", "sym", "side", "price", "stop", "tp", "atr", "line_px", "live1m", "live1m_tries", "rule", "approved_t", "placed_t", "setup")
 
 
+SH_V1 = ("id", "sym", "side", "kind", "tf", "entry", "stop", "tp", "t_in", "t_out", "exit", "reason", "net_pct", "r_mult", "mfe", "mae", "status", "rr")
+
+
+def _evc(ev):
+    """События сопровождения тени для графика панели (компактно, не больше 40 последних)."""
+    out = []
+    for e in (ev or [])[-40:]:
+        if isinstance(e, dict): out.append({k: e[k] for k in ("t", "k", "old", "new", "px", "frac", "reason", "stop_from", "stop_to", "n") if k in e})
+    return out
+
+
+def build_shadow():
+    """SHADOW_V2. Тени (пропущенные сигналы «заходить»): ждёт свечу 1m (gate), идёт (open), закрыта (closed), не вошла по фильтру входа (filtered, с итогом «без фильтра» cf_r). Файл shadow.json пишет tg_bot, здесь только чтение."""
+    d = jl("shadow.json"); its = d.get("items") if isinstance(d, dict) else None; out = []
+    _bc = jl("shadow_bal.json"); _bc = _bc if isinstance(_bc, dict) else {}; _stf = set(_bc.get("skip_tf", ["5m"])); _srg = set(_bc.get("skip_regime", ["flat"]))
+    for i in (its or []):
+        st = i.get("status")
+        if st not in ("gate", "open", "closed", "filtered"): continue
+        if "o" not in i and "p" not in i:      # записи первой версии
+            r = {k: i.get(k) for k in SH_V1}; r["ch"] = i.get("ch"); out.append(r); continue
+        p = i.get("p") or {}; cf = i.get("cf") or {}; o = i.get("o") or {}; pl = i.get("plan") or {}; src = p or cf
+        cl = (p if st in ("open", "closed") else cf) or {}; done = cl.get("status") == "closed"
+        ch = i.get("chan") or {}
+        r = {"id": i["id"], "sym": i["sym"], "side": i["side"], "kind": i.get("kind"), "tf": i.get("tf"), "status": st, "t_sig": i.get("t0"),
+             "entry": src.get("entry") or o.get("price") or pl.get("entry"), "stop": src.get("stop0") or o.get("stop") or pl.get("stop"), "tp": src.get("tp") or o.get("tp") or pl.get("tp"),
+             "t_in": src.get("t_in") or i.get("t0"), "t_out": cl.get("t_out") if done else None, "exit": cl.get("exit") if done else None, "reason": cl.get("reason") if done else None,
+             "net_pct": cl.get("net_pct") if done else None, "r_mult": (cl.get("r_mult") if done else None) if st != "filtered" else None, "cf_r": cf.get("r_mult") if (st == "filtered" and done) else None,
+             "mfe": i.get("mfe_r"), "mae": i.get("mae_r"), "why": i.get("why"), "tries": o.get("live1m_tries"), "rr": pl.get("rr"),
+             "ch": {k: ch[k] for k in ("upper", "lower", "type") if k in ch} or None, "var": i.get("var") or "A", "reg": i.get("reg"), "sn": i.get("sn") or ((i.get("ref") or i["id"]) if i.get("var") == "B" else i["id"]), "ev": _evc(i.get("ev"))}
+        if EC and src:      # цель на графике = цель движка (exit_cfg), план остаётся в tp_plan
+            try:
+                pp = dict(src); pp.setdefault("side", i.get("side")); pp.setdefault("entry", r["entry"])
+                tpe = EC.levels(pp).get("tp")
+                if tpe: r["tp_plan"] = r["tp"]; r["tp"] = tpe
+            except Exception: pass
+        if (i.get("tf") in _stf) or ((i.get("rg") or {}).get("regime") in _srg): r["nb"] = 1   # не идёт в баланс (фильтр)
+        out.append(r)
+    out.sort(key=lambda x: (x["status"] in ("gate", "open"), x.get("t_out") or x.get("t_sig") or x.get("t_in") or 0), reverse=True)
+    return out[:150]
+
+
 def derive(snap):
     orders = jl("orders.json") or []; W = jl("tg_watch.json") or {}
     b1 = jl("tg_btc1m_last.json"); reg = jl("tg_regime.json"); sl = jl("tg_slots.json"); mode = jl("tg_mode.json"); lc = jl("tg_live1m.json") or {}
@@ -146,7 +193,7 @@ def derive(snap):
     s = snap if isinstance(snap, dict) else {}
     st = {"t": "state", "acc": s.get("account"), "open": [dict({k: p.get(k) for k in OPEN_F}, ch=CHANS.get(p.get("order_id"))) for p in (s.get("open") or [])], "pend": pend, "watch": watch,
           "b1": b1, "reg": reg, "slots": sl, "mode": mode, "mx": float(lc.get("max_dist_atr", 0.9)) if lc.get("enabled", True) else None}
-    syms = {"BTCUSDT"} | {p["sym"] for p in st["open"]} | {o["sym"] + "USDT" for o in pend} | {w["sym"] + "USDT" for w in watch}
+    syms = {"BTCUSDT"} | {p["sym"] for p in st["open"]} | {o["sym"] + "USDT" for o in pend} | {w["sym"] + "USDT" for w in watch} | {x["sym"] + "USDT" for x in [y for y in build_shadow() if y["status"] == "open"][:6]}
     return st, set(list(syms)[:30])
 
 
@@ -180,6 +227,29 @@ async def state_loop(app):
             if isinstance(snap, dict):
                 arch = build_arch(snap); asig = (len(arch), arch[0]["id"] if arch else None, arch[0]["t_out"] if arch else None)
                 if asig != ST["asig"]: ST["asig"] = asig; ST["arch"] = arch; await bcast({"t": "arch", "a": arch})
+            try:
+                shl = build_shadow(); ssig = json.dumps(shl, sort_keys=True, ensure_ascii=False, default=str)
+                if ssig != ST.get("ssig"): ST["ssig"] = ssig; ST["sh"] = shl; await bcast({"t": "sh", "a": shl})
+            except Exception as e: log("shadow: %s" % e)
+            try:
+                bl = await loop.run_in_executor(None, SL.compute, POS) if SL else None
+                bsig = json.dumps(bl, sort_keys=True, ensure_ascii=False, default=str)
+                if bsig != ST.get("bsig"): ST["bsig"] = bsig; ST["bal"] = bl; await bcast({"t": "bal", "a": bl})
+            except Exception as e: log("bal: %s" % e)
+            try:    # LIVE_BAL: символы открытых сделок баланса и строк теней без подписки: цены раз в 5 с по REST
+                _ls = set()
+                for _L in ((ST.get("bal") or {}).get("lines") or []):
+                    for _o in list(_L.get("open_list") or []) + list((_L.get("full") or {}).get("open_list") or []):
+                        if _o.get("sym"): _ls.add(_o["sym"])
+                for _i in (ST.get("sh") or []):
+                    if _i.get("status") in ("gate", "open") or (_i.get("status") == "filtered" and _i.get("cf_r") is None): _ls.add(_i["sym"])
+                _lx = sorted(x for x in _ls if x not in syms)[:60]
+                if _lx and time.time() - ST.get("lpx_t", 0) > 5:
+                    ST["lpx_t"] = time.time()
+                    async with sess.get(REST, params={"symbols": json.dumps(_lx, separators=(",", ":"))}) as r:
+                        for x in await r.json():
+                            if isinstance(x, dict) and "price" in x: PX[x["symbol"]] = float(x["price"]); DIRTY.add(x["symbol"])
+            except Exception as e: log("livepx: %s" % e)
             ST["syms"] = syms; sig = json.dumps(st, sort_keys=True, ensure_ascii=False, default=str)
             if sig != ST["sig"]: ST["sig"] = sig; ST["state"] = st; await bcast(dict(st, srv=int(time.time() * 1000)))
             while NEW: await bcast({"t": "evt", "e": NEW.pop(0)})
@@ -257,7 +327,7 @@ async def ws_handler(req):
     CL.add(ws)
     try:
         ctl = (req.transport.get_extra_info("sockname") or ("", 0))[1] == CTL_PORT
-        await ws.send_str(json.dumps({"t": "hello", "ctl": ctl, "state": ST["state"], "arch": ST["arch"], "px": PX, "k": BTCK, "evt": list(EVT)[-80:], "srv": int(time.time() * 1000)}, ensure_ascii=False, default=str))
+        await ws.send_str(json.dumps({"t": "hello", "ctl": ctl, "state": ST["state"], "arch": ST["arch"], "sh": ST.get("sh") or [], "bal": ST.get("bal"), "px": PX, "k": BTCK, "evt": list(EVT)[-80:], "srv": int(time.time() * 1000)}, ensure_ascii=False, default=str))
         async for m in ws:
             if m.type != WSMsgType.TEXT: continue
             try: q = json.loads(m.data)
@@ -337,7 +407,7 @@ async def handle_candles(sess, ws, q):
     await ws.send_str(json.dumps({"t": "candles", "rid": rid, "sym": sym, "iv": iv, "c": c, "ch": ch, "rg": rg, "srv": int(time.time() * 1000)}))
 
 
-ACTS = {"close", "stop", "tp", "tp_auto", "auto", "trail", "ord_cancel", "ord_edit", "watch_keep", "watch_order"}
+ACTS = {"close", "stop", "tp", "tp_auto", "auto", "trail", "ord_cancel", "ord_edit", "watch_keep", "watch_order", "watch_cancel"}
 ACT_LOCK = asyncio.Lock()
 
 
