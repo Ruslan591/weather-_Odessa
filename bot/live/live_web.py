@@ -134,8 +134,14 @@ def _evc(ev):
     return out
 
 
+_BSC = {}
+
+
 def build_shadow():
     """SHADOW_V2. Тени (пропущенные сигналы «заходить»): ждёт свечу 1m (gate), идёт (open), закрыта (closed), не вошла по фильтру входа (filtered, с итогом «без фильтра» cf_r). Файл shadow.json пишет tg_bot, здесь только чтение."""
+    try: _mt = (os.path.getmtime(os.path.join(POS, "shadow.json")), os.path.getmtime(os.path.join(POS, "shadow_bal.json")))
+    except Exception: _mt = None
+    if _mt is not None and _BSC.get("mt") == _mt: return _BSC["out"]      # кэш: shadow.json 1.7 МБ не разбирать дважды в секунду
     d = jl("shadow.json"); its = d.get("items") if isinstance(d, dict) else None; out = []
     _bc = jl("shadow_bal.json"); _bc = _bc if isinstance(_bc, dict) else {}; _stf = set(_bc.get("skip_tf", ["5m"])); _srg = set(_bc.get("skip_regime", ["flat"]))
     for i in (its or []):
@@ -161,7 +167,8 @@ def build_shadow():
         if (i.get("tf") in _stf) or ((i.get("rg") or {}).get("regime") in _srg): r["nb"] = 1   # не идёт в баланс (фильтр)
         out.append(r)
     out.sort(key=lambda x: (x["status"] in ("gate", "open"), x.get("t_out") or x.get("t_sig") or x.get("t_in") or 0), reverse=True)
-    return out[:150]
+    _BSC["mt"] = _mt; _BSC["out"] = out[:150]
+    return _BSC["out"]
 
 
 def derive(snap):
