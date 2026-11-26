@@ -236,17 +236,18 @@ async def state_loop(app):
                 bsig = json.dumps(bl, sort_keys=True, ensure_ascii=False, default=str)
                 if bsig != ST.get("bsig"): ST["bsig"] = bsig; ST["bal"] = bl; await bcast({"t": "bal", "a": bl})
             except Exception as e: log("bal: %s" % e)
-            try:    # LIVE_BAL: символы открытых сделок баланса и строк теней без подписки: цены раз в 5 с по REST
+            try:    # LIVE_BAL: пары открытых сделок баланса и строк теней (в списках sym без USDT): подписка на поток цен + REST раз в 5 с как запасной путь
                 _ls = set()
                 for _L in ((ST.get("bal") or {}).get("lines") or []):
                     for _o in list(_L.get("open_list") or []) + list((_L.get("full") or {}).get("open_list") or []):
                         if _o.get("sym"): _ls.add(_o["sym"])
                 for _i in (ST.get("sh") or []):
                     if _i.get("status") in ("gate", "open") or (_i.get("status") == "filtered" and _i.get("cf_r") is None): _ls.add(_i["sym"])
-                _lx = sorted(x for x in _ls if x not in syms)[:60]
-                if _lx and time.time() - ST.get("lpx_t", 0) > 5:
+                _ls = sorted({(x if x.endswith("USDT") else x + "USDT") for x in _ls if x})[:60]
+                for _x in _ls: ST["extra"][_x] = time.time() + 30
+                if _ls and time.time() - ST.get("lpx_t", 0) > 5:
                     ST["lpx_t"] = time.time()
-                    async with sess.get(REST, params={"symbols": json.dumps(_lx, separators=(",", ":"))}) as r:
+                    async with sess.get(REST, params={"symbols": json.dumps(_ls, separators=(",", ":"))}) as r:
                         for x in await r.json():
                             if isinstance(x, dict) and "price" in x: PX[x["symbol"]] = float(x["price"]); DIRTY.add(x["symbol"])
             except Exception as e: log("livepx: %s" % e)
