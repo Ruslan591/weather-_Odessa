@@ -1121,14 +1121,18 @@ def main():
             new_msgs.append((t, silent))
         messages = new_msgs
     # 8в. краткосрочный прогноз в конце поста ГМЦ: только когда ничего существенного не ожидается (иначе блок прогноза уже есть)
-    if digest_meta and not digest_meta["fb"] and hours and not raining and not gusty and "--no-outlook" not in args:
+    force_ol = "--force-outlook" in args   # тест: показать краткосрочный прогноз, даже если блок прогноза уже есть
+    if digest_meta and (force_ol or (not digest_meta["fb"] and not raining and not gusty)) and hours and "--no-outlook" not in args:
         try:
             import weather_tg_outlook as outl
             ol = outl.outlook_lines(hours, now, state, log, use_ai=(not dry or "--ai" in args))
             if ol:
-                digest_meta["fb"] = [esc(x) for x in ol]
-                ix = digest_meta["idx"]
-                messages[ix] = (messages[ix][0] + "\n\n🔮 <b>Прогноз</b>\n" + "\n".join(digest_meta["fb"]), messages[ix][1])
+                if force_ol:
+                    digest_meta["fb"] = (digest_meta["fb"] or []) + [esc(x) for x in ol]
+                else:
+                    digest_meta["fb"] = [esc(x) for x in ol]
+                    ix = digest_meta["idx"]
+                    messages[ix] = (messages[ix][0] + "\n\n🔮 <b>Прогноз</b>\n" + "\n".join(digest_meta["fb"]), messages[ix][1])
         except Exception as e:
             log("outlook: сбой %s: %s" % (type(e).__name__, e))
     if digest_meta:
