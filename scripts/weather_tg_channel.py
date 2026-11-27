@@ -67,6 +67,16 @@ STATIONS = [
     ("IODESS37", "Застава"),
     ("IKRASN91", "пос. Степовое (пригород)"),
 ]
+# Как говорить о месте: «на Таирова» (решение пользователя 27.11), остальные по правилам русского языка; неизвестное имя остаётся как есть.
+STATION_AT = {"Таирова": "на Таирова", "Аркадия": "в Аркадии", "Центр": "в Центре", "Адмиральский": "в Адмиральском",
+              "пос. Котовского": "в пос. Котовского", "Застава": "на Заставе", "Чудо Город": "в Чудо Городе",
+              "Савиньон (пригород)": "в Савиньоне", "пос. Степовое (пригород)": "в пос. Степовом"}
+
+
+def at_station(name):
+    return STATION_AT.get(name, name)
+
+
 # Ближний пригород: в статистику «по городу» входит, но районом города НЕ называется (решение пользователя 25.11.2026).
 # Савиньон (46.328N 30.680E, ~18 км ЮЮЗ от Центра) и пос. Степовое (46.664N 30.805E, ~20 км на север). К имени добавлено «(пригород)».
 SUBURB_SIDS = {"IKRASN91", "IODESS31"}
@@ -434,6 +444,20 @@ def wet_episode(obs, flags):
 
 def parse_iso(t):
     return datetime.strptime(t, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+
+
+def rain_again_header(now, start, lead_txt, end_iso):
+    """Заголовок прогноза осадков со связкой с недавним окончанием дождя (меньше 2 ч назад), иначе None.
+    До часа между концом и новым началом: «Осадки возобновятся», до двух часов: «Снова ожидаются осадки»."""
+    try:
+        t_end = parse_iso(end_iso)
+    except Exception:
+        return None
+    if now < t_end or now - t_end > timedelta(hours=2):
+        return None
+    when = max(start, now)
+    word = "Осадки возобновятся" if when - t_end <= timedelta(hours=1) else "Снова ожидаются осадки"
+    return "☔ <b>%s</b> %s, около %s." % (word, lead_txt, hhmm(when))
 
 
 # ---------------------------------------------------------------- Ансамбль: часы и прогнозные выводы
@@ -949,6 +973,7 @@ def main():
     alerts = []   # (text, silent)
 
     # 4. дождь: начало / конец
+    end_idx, end_head = None, None   # конец дождя в этом запуске (для склейки с прогнозом новых осадков)
     city_active = state.get("rain_city", False)
     if raining and not city_active:
         raining.sort(key=lambda s: -s["int"])
@@ -972,8 +997,11 @@ def main():
             t1 = max(st_["ep"]["last_wet"] for st_ in epi["stations"])
             extra = " Шёл с %s до %s." % (hhmm(epi["start"]), hhmm(t1))
             if epi["acc"] >= 0.1:
-                extra += " Выпало до %s мм (%s), в среднем %s мм." % (f1(epi["acc"]), esc(epi["name"]), f1(epi["mean"]))
-        alerts.append(("🌤 <b>Дождь закончился.</b>%s\n🕐 %s" % (extra, hhmm(now)), False))
+                extra += " Выпало до %s мм (%s), в среднем %s мм." % (f1(epi["acc"]), esc(at_station(epi["name"])), f1(epi["mean"]))
+        end_head = "🌧 <b>Дождь закончился.</b>%s" % extra
+        alerts.append(("%s\n🕐 %s" % (end_head, hhmm(now)), False))
+        end_idx = len(alerts) - 1
+        state["rain_end_t"] = now.strftime("%Y-%m-%dT%H:%M:%SZ")
         state["rain_city"] = False
         state["fc_warned"] = False
         state.pop("ep_start", None)
@@ -1012,13 +1040,18 @@ def main():
     if warn_rain and not state.get("fc_warned"):
         lead = max(0, int(round((ro["start"] - now).total_seconds() / 60.0)))
         lead_txt = "в ближайшее время" if lead < 15 else "через ~%d мин" % (round(lead / 5.0) * 5)
-        body = ["☔ <b>Ожидаются осадки</b> %s, около %s." % (lead_txt, hhmm(max(ro["start"], now)))]
+        head = rain_again_header(now, ro["start"], lead_txt, state.get("rain_end_t", ""))
+        body = [head or "☔ <b>Ожидаются осадки</b> %s, около %s." % (lead_txt, hhmm(max(ro["start"], now)))]
         if fo:
             body += front_text(fo)
         body.append(rain_text_upcoming(ro))
         body.append("Сейчас: %s." % now_summary(ok))
         body.append("🕐 %s" % hhmm(now))
-        alerts.append(("\n".join(body), False))
+        if end_idx is not None and head:
+            # конец дождя и новые осадки в одном запуске: один пост вместо двух с разницей в минуты
+            alerts[end_idx] = ("%s\n\n%s" % (end_head, "\n".join(body)), False)
+        else:
+            alerts.append(("\n".join(body), False))
         state["fc_warned"] = True
         if fo:
             state["front_t"] = now.strftime("%Y-%m-%dT%H:%M:%SZ")
