@@ -1160,7 +1160,7 @@ def main():
         messages = new_msgs
     # 8в. краткосрочный прогноз в конце поста ГМЦ: только когда ничего существенного не ожидается (иначе блок прогноза уже есть)
     force_ol = "--force-outlook" in args   # тест: показать краткосрочный прогноз, даже если блок прогноза уже есть
-    if digest_meta and (force_ol or (not digest_meta["fb"] and not raining and not gusty)) and hours and "--no-outlook" not in args:
+    if digest_meta and (force_ol or not digest_meta["fb"]) and hours and "--no-outlook" not in args:   # порывы на станциях не повод пропускать: блока про них в сводке нет
         try:
             import weather_tg_outlook as outl
             ol = outl.outlook_lines(hours, now, state, log, use_ai=(not dry or "--ai" in args))
