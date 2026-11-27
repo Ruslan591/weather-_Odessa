@@ -26,6 +26,18 @@ _deadline = [None]
 ERRS = []   # ошибки моделей текущего вызова (для лога: почему сработал запасной вариант)
 CALLER = None   # если задан: функция (system, prompt) -> (dict, имя_модели) вместо Gemini (для Claude и сравнения моделей)
 USAGE = []      # (модель, токены входа, токены выхода) для расчёта стоимости
+PURPOSE = ""    # для чего сейчас запрос (verdict, alert, advice, outlook, review, issue...): пишется в журнал расхода
+USAGE_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gemini_usage.jsonl")
+
+
+def log_request(model, status):
+    """Каждое обращение к Gemini в журнал (время UTC, модель, назначение, статус): по нему считаем расход суточной квоты (20 запросов на модель)."""
+    try:
+        with open(USAGE_LOG, "a", encoding="utf-8") as f:
+            f.write(json.dumps({"ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "model": model, "purpose": PURPOSE, "status": status}, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
 
 
 def budget(sec):
@@ -89,10 +101,12 @@ def gemini_json(system, prompt, key, per_try=60, chain=None):
                 req = urllib.request.Request(url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"}, method="POST")
                 with urllib.request.urlopen(req, timeout=min(per_try, rem) if rem else per_try) as r:
                     resp = json.loads(r.read().decode())
+                log_request(model, 200)
                 parts = resp["candidates"][0]["content"]["parts"]
                 return json.loads("".join(p.get("text", "") for p in parts if not p.get("thought"))), model
             except urllib.error.HTTPError as e:
                 last = "%s HTTP %s" % (model, e.code)
+                log_request(model, e.code)
                 try:
                     raw = e.read().decode("utf-8", "ignore")
                 except Exception:
@@ -103,12 +117,13 @@ def gemini_json(system, prompt, key, per_try=60, chain=None):
                 ERRS.append(last)
                 if e.code == 429 and ("quota" in ebody or "billing" in ebody):
                     break   # ждать бесполезно, следующая модель цепочки
-                if e.code in (500, 502, 503, 504, 429) and attempt == 1:
+                if e.code == 429 and attempt == 1:   # минутный лимит: один повтор; 5xx не повторяем (каждый запрос тратит квоту 20/сутки), идём к следующей модели
                     time.sleep(5)
                     continue
                 break
             except Exception as e:
                 last = "%s %s" % (model, str(e)[:100])
+                log_request(model, "ERR")
                 ERRS.append(last)
                 break
     raise RuntimeError(last or "gemini failed")
@@ -160,7 +175,7 @@ def env_flag(name):
 
 
 def smart_call(system, prompt):
-    """Порядок моделей: Gemini 4 Hydrogen, затем 3.5 Flash; если квота/сбой и в .env CHANNEL_CLAUDE_FALLBACK=true, то Claude Haiku 5.5 (копейки);
+    """Порядок моделей: Gemini 4 Hydrogen, затем 3.8 Flash, затем 3.5 Flash; если квота/сбой и в .env CHANNEL_CLAUDE_FALLBACK=true, то Claude Haiku 5.5 (копейки);
     затем Gemini 2.5 Flash (качество ниже). Без флага Claude не используется и ничего не тратится."""
     key = gemini_key()
     errs = []
@@ -168,7 +183,7 @@ def smart_call(system, prompt):
     if key:
         try:
             # gemini-4-hydrogen отвечает на бесплатной квоте ключа (проверено 25.11.2026), текст богаче; затем 3.5 flash
-            return gemini_json(system, prompt, key, per_try=90, chain=[("gemini-4-hydrogen", None), ("gemini-3.5-flash", {"thinkingLevel": "low"})])
+            return gemini_json(system, prompt, key, per_try=90, chain=[("gemini-4-hydrogen", None), ("gemini-3.8-flash", {"thinkingLevel": "low"}), ("gemini-3.5-flash", {"thinkingLevel": "low"})])
         except Exception as e:
             errs.append(str(e)[:80])
             ERRS.append(str(e)[:120])
@@ -253,6 +268,8 @@ def check(text, facts, max_len, dark=False, extra_banned=()):
 
 
 def _ask(system, prompt, field, facts, max_len, log, dark=False, extra_banned=()):
+    global PURPOSE
+    PURPOSE = field
     key = gemini_key()
     if not key and not CALLER:
         log("ai: нет ключа Gemini")
