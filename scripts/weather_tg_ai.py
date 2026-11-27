@@ -47,6 +47,31 @@ def gemini_key():
     return os.environ.get("GEMINI_API_KEY")
 
 
+def quota_info(raw):
+    """Что именно исчерпано и когда сбросится, из тела ответа 429 (QuotaFailure, RetryInfo). Короткая строка для лога."""
+    try:
+        err = json.loads(raw).get("error", {})
+    except Exception:
+        return "[тело не разобрано: %s]" % raw[:120].replace("\n", " ")
+    bits = []
+    for d in err.get("details", []):
+        typ = str(d.get("@type", ""))
+        if typ.endswith("QuotaFailure"):
+            for v in d.get("violations", []):
+                q = str(v.get("quotaId") or v.get("quotaMetric") or "").split("/")[-1]
+                m = str(v.get("quotaMetric", "")).split("/")[-1]
+                dim = v.get("quotaDimensions") or {}
+                bits.append("лимит %s%s%s" % (q or "?", (" (%s)" % m) if m and m != q else "",
+                                              (" модель %s" % dim["model"]) if dim.get("model") else ""))
+                if "perday" in q.lower().replace("_", "") or "per_day" in q.lower():
+                    bits.append("суточный: сброс в 10:00 по Киеву")
+        elif typ.endswith("RetryInfo"):
+            bits.append("повтор через %s" % d.get("retryDelay", "?"))
+    if not bits:
+        bits.append((err.get("message") or "")[:140].replace("\n", " "))
+    return "[" + "; ".join(bits) + "]"
+
+
 def gemini_json(system, prompt, key, per_try=60, chain=None):
     """JSON-ответ Gemini по цепочке моделей, не дольше общего бюджета времени."""
     last = None
@@ -68,13 +93,15 @@ def gemini_json(system, prompt, key, per_try=60, chain=None):
                 return json.loads("".join(p.get("text", "") for p in parts if not p.get("thought"))), model
             except urllib.error.HTTPError as e:
                 last = "%s HTTP %s" % (model, e.code)
-                ERRS.append(last)
                 try:
-                    ebody = e.read().decode("utf-8", "ignore").lower()
+                    raw = e.read().decode("utf-8", "ignore")
                 except Exception:
-                    ebody = ""
+                    raw = ""
+                ebody = raw.lower()
+                if e.code == 429:
+                    last += " " + quota_info(raw)
+                ERRS.append(last)
                 if e.code == 429 and ("quota" in ebody or "billing" in ebody):
-                    last += " (квота ключа исчерпана или нет доступа к модели)"
                     break   # ждать бесполезно, следующая модель цепочки
                 if e.code in (500, 502, 503, 504, 429) and attempt == 1:
                     time.sleep(5)
