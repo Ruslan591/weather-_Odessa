@@ -24,6 +24,7 @@ GEMINI_MODEL  = "gemini-3.5-flash"
 # [2026-11-27] Hydrogen убран из анализа по решению пользователя: на Free Tier лимит 20 запросов/сутки на модель,
 # общий проект с каналом; Hydrogen оставлен только каналу (weather_tg_ai.py).
 GEMINI_MODEL_CHAIN = [
+    ("gemini-3.8-flash", {"thinkingLevel": "low"}),
     ("gemini-3.5-flash", {"thinkingLevel": "low"}),
     ("gemini-2.5-flash", None),
 ]
