@@ -24,7 +24,7 @@ SILENT = True
 SEND_HOUR = {"weekend": 12, "week": 18}                 # местный час (минуты задаёт cron: :30)
 SEND_DAYS = {"weekend": (3, 4), "week": (4, 5, 6)}      # чт, пт | пт, сб, вс (weekday(): пн=0)
 MODELS = ["ecmwf_ifs025", "gfs_global", "gem_global"]
-DAILY_URL = ("https://api.open-meteo.com/v1/forecast?latitude=46.43&longitude=30.74&timezone=Europe%2FKyiv&forecast_days=16"
+DAILY_URL = ("https://api.open-meteo.com/v1/forecast?latitude=46.43&longitude=30.74&timezone=Europe%2FKyiv&forecast_days=16&wind_speed_unit=ms"
              "&models=" + ",".join(MODELS) + "&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,snowfall_sum,wind_gusts_10m_max")
 WD = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
 WD_FULL = ["понедельник", "вторник", "среду", "четверг", "пятницу", "субботу", "воскресенье"]
