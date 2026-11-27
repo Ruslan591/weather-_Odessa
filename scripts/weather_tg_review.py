@@ -113,6 +113,7 @@ def weekend_bounds(ln):
 # ---------- ИИ ----------
 def ask_multi(sys_, prompt, fields, facts, log):
     """fields: {имя: макс. длина}. Возвращает {имя: текст} либо None. Проверка чисел/слов как в ai._ask."""
+    ai.PURPOSE = "review"
     if not ai.gemini_key() and not ai.CALLER:
         log("review: нет ключа Gemini")
         return None
