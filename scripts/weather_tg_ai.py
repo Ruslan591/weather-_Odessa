@@ -11,6 +11,7 @@ import re
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 
 PIPELINE_ENV = "/opt/weather-pipeline/repo/.env"
 GEMINI_CHAIN = [("gemini-3.7-flash", {"thinkingLevel": "low"}), ("gemini-3.5-flash", {"thinkingLevel": "low"}),
