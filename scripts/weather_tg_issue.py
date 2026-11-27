@@ -665,6 +665,7 @@ def ai_text(kind, parts, ist):
     if recent:
         base += "\nЗаголовки недавних выпусков (не повторяй их слова и конструкции):\n- " + "\n- ".join(recent) + "\n"
     prompt = base + "\nВерни только JSON."
+    ai.PURPOSE = "issue-" + kind
     for attempt in (1, 2):
         try:
             art, model = ai.CALLER(STYLE, prompt) if ai.CALLER else ai.smart_call(STYLE, prompt)
