@@ -608,39 +608,44 @@ def current_rate(hours, now):
 
 
 def rain_text_ongoing(ro, now, hours, peak=None):
+    """Текст про идущий дождь: конец, пик, текущая интенсивность, остаток. Короткими предложениями."""
     if ro["beyond"]:
-        s = "⏱ По прогнозу осадки продолжатся не менее чем до %s" % hhmm(ro["end"])
+        out = ["⏱ По прогнозу осадки продолжатся не менее чем до %s." % hhmm(ro["end"])]
     else:
-        s = "⏱ По прогнозу осадки закончатся около %s" % hhmm(ro["end"])
+        out = ["⏱ По прогнозу осадки закончатся около %s." % hhmm(ro["end"])]
     cur, run_end = current_rate(hours or [], now)
-    if peak:
-        if peak["recent"]:
-            s += "; наибольшая интенсивность наблюдается сейчас"
-            cur = None
-        elif peak["e"] - peak["b"] >= timedelta(minutes=30):
-            s += "; наибольшая интенсивность наблюдалась с %s до %s" % (hhmm(peak["b"]), hhmm(peak["e"]))
-        else:
-            s += "; наибольшая интенсивность наблюдалась в %s" % hhmm(peak["t"])
-        if cur is not None and cur >= 0.05:
-            s += ", сейчас ~%s мм/ч" % f1(cur)
-    elif cur is not None and cur >= 0.05:
-        s += "; сейчас ~%s мм/ч" % f1(cur)
-    s += "."
-    tail = []
+    keep = None   # «сохранится на этом уровне до ...»
     if cur is not None and cur >= 0.05 and run_end is not None:
-        if run_end >= ro["end"]:
-            tail.append("Такая интенсивность сохранится до конца осадков")
+        keep = "до конца осадков" if run_end >= ro["end"] else "до %s" % hhmm(run_end)
+    s2 = None
+    if peak:
+        pv = " (~%s мм/ч)" % f1(peak["value"]) if peak.get("value") else ""
+        if peak["recent"]:
+            s2 = "Сейчас наблюдается пик интенсивности%s" % pv
+            cur, keep = None, None
         else:
-            tail.append("Такая интенсивность будет наблюдаться до %s" % hhmm(run_end))
+            if peak["e"] - peak["b"] >= timedelta(minutes=30):
+                s2 = "Пик интенсивности пришёлся на период с %s до %s%s" % (hhmm(peak["b"]), hhmm(peak["e"]), pv)
+            else:
+                s2 = "Пик интенсивности пришёлся на %s%s" % (hhmm(peak["t"]), pv)
+            if cur is not None and cur >= 0.05:
+                if peak.get("value") and cur < peak["value"] - 0.05:
+                    s2 += ", сейчас она снизилась до ~%s мм/ч" % f1(cur)
+                else:
+                    s2 += ", сейчас ~%s мм/ч" % f1(cur)
+                if keep:
+                    s2 += " и сохранится на этом уровне %s" % keep
+    elif cur is not None and cur >= 0.05:
+        s2 = "Сейчас интенсивность ~%s мм/ч" % f1(cur)
+        if keep:
+            s2 += ", она сохранится на этом уровне %s" % keep
+    if s2:
+        out.append(s2 + ".")
     if ro["peak_b"] > now and ro["peak_rate"] >= 1.5 * max(cur or 0.0, 0.1):
-        tail.append("усиление до ~%s мм/ч ожидается с %s до %s" % (
-            f1(ro["peak_rate"]), hhmm(ro["peak_b"]), hhmm(ro["peak_e"])))
+        out.append("Усиление до ~%s мм/ч ожидается с %s до %s." % (f1(ro["peak_rate"]), hhmm(ro["peak_b"]), hhmm(ro["peak_e"])))
     if ro["remaining"] >= 0.1:
-        tail.append("до конца ожидается ещё ~%s мм" % f1(ro["remaining"]))
-    if tail:
-        t = "; ".join(tail)
-        s += " " + t[0].upper() + t[1:] + "."
-    return s
+        out.append("До окончания осадков ожидается ещё ~%s мм." % f1(ro["remaining"]))
+    return " ".join(out)
 
 
 def episode_info(ok, state, now):
