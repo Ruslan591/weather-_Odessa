@@ -6,7 +6,7 @@ function weatherAlerts(hours) {
         const feel    = h.apparent_temperature ?? t;
         const wind    = h.wind_speed_10m ?? 0;
         const gust    = h.wind_gusts_10m ?? wind;
-        const vis     = h.visibility ?? 10000;
+        const vis     = Math.max(0, h.visibility ?? 10000);
         const code    = h.weather_code ?? 0;
         const rain    = (h.rain ?? 0) + (h.showers ?? 0);
         const rh      = h.relative_humidity_2m ?? 50;

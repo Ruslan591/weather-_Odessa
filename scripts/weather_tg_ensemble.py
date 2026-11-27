@@ -131,6 +131,8 @@ def debias_model(mid, hours, model_bias, month_key):
                 hc[field] = ((val - b) % 360 + 360) % 360
             elif param == "wind":
                 hc[field] = max(0, jsround((val - b) * 10) / 10.0)
+            elif field == "visibility":
+                hc[field] = max(0, jsround((val - b) * 10) / 10.0)
             else:
                 hc[field] = jsround((val - b) * 10) / 10.0
         out.append(hc)
@@ -287,7 +289,7 @@ def apply_bias(value, key, overall, by_h, horizon_h, by_hour, hour_utc):
     if key == "windDir":
         return ((value - b) % 360 + 360) % 360
     r = jsround((value - b) * 10) / 10.0
-    if key in ("wind", "windGust"):
+    if key in ("wind", "windGust", "visibility"):
         r = max(0, r)
     return r
 

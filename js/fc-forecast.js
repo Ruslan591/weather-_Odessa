@@ -21,7 +21,7 @@ function comfortLevel(h){
     const r    = (h.rain ?? 0) + (h.showers ?? 0);
     const snow = h.snowfall ?? 0;
     const rh   = h.relative_humidity_2m ?? 50;
-    const vis  = h.visibility ?? 10000;
+    const vis  = Math.max(0, h.visibility ?? 10000);
     const code = h.weather_code ?? 0;
 
     if(code >= 95)               return { comfort:"Гроза ⚡",       color:"#f9ca24" };
@@ -114,7 +114,7 @@ async function load(){
         pressure_msl:          h.pressure_msl[i],
         relative_humidity_2m:  h.relative_humidity_2m[i],
         weather_code:          h.weather_code[i],
-        visibility:            h.visibility[i],
+        visibility:            h.visibility[i] == null ? h.visibility[i] : Math.max(0, h.visibility[i]),
         wind_speed_10m:        h.wind_speed_10m[i],
         wind_gusts_10m:        h.wind_gusts_10m[i],
         wind_direction_10m:    h.wind_direction_10m[i],
@@ -496,7 +496,7 @@ function renderHourCard(h){
                         <div><span class="label" style="font-size:12px;">Ветер</span><div class="val" style="font-size:15px;">${windDir(windDeg)} ${Math.round(h.wind_speed_10m)} м/с</div></div>
                         <div><span class="label" style="font-size:12px;">Порывы</span><div class="val" style="font-size:15px;">${Math.round(h.wind_gusts_10m)} м/с</div></div>
                         <div><span class="label" style="font-size:12px;">Давление</span><div class="val" style="font-size:15px;">${h.pressure_msl.toFixed(1)} гПа</div></div>
-                        <div><span class="label" style="font-size:12px;">Видимость</span><div class="val" style="font-size:15px;">${(h.visibility/1000).toFixed(0)} км</div></div>
+                        <div><span class="label" style="font-size:12px;">Видимость</span><div class="val" style="font-size:15px;">${(Math.max(0, h.visibility)/1000).toFixed(0)} км</div></div>
                         ${h.snowfall > 0 ? `<div><span class="label" style="font-size:12px;">Снег</span><div class="val" style="font-size:15px;">${h.snowfall} мм</div></div>` : ""}
                     </div>
                 </div>

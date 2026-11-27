@@ -80,6 +80,7 @@ function applyBias(value, key, biasOverall, byHorizon, horizonH, byHourUTC, hour
     var result = Math.round((value - b) * 10) / 10;
     if (key === "wind" || key === "windGust") result = Math.max(0, result);
     if (key === "humidity") result = Math.min(100, Math.max(0, result));
+    if (key === "visibility") result = Math.max(0, result);
     return result;
 }
 
@@ -134,6 +135,8 @@ function debiasModelHours(modelId, hours, modelBiasData) {
             if (param === "windDir") {
                 hc[field] = ((val - b) % 360 + 360) % 360;
             } else if (param === "wind") {
+                hc[field] = Math.max(0, Math.round((val - b) * 10) / 10);
+            } else if (field === "visibility") {
                 hc[field] = Math.max(0, Math.round((val - b) * 10) / 10);
             } else {
                 hc[field] = Math.round((val - b) * 10) / 10;
