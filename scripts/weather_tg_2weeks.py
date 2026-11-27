@@ -154,7 +154,8 @@ def build_nodes(dateline, overview, w1_title, groups, w2_title, w2_text, sea_lin
         nodes.append(N("p", N("b", lab + ". "), txt))
     nodes += [N("h4", w2_title), N("p", w2_text)]
     if sea_line:
-        nodes += [N("h4", "Море"), N("p", re.sub(r"^🌊\s*Море:\s*", "", sea_line))]
+        s = re.sub(r"^🌊\s*Море:\s*", "", sea_line)
+        nodes += [N("h4", "Море"), N("p", s[:1].upper() + s[1:])]
     nodes.append(N("p", N("em", "Автоматический прогноз, обновляется ежедневно.")))
     return nodes
 
