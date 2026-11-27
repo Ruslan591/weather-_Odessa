@@ -7,6 +7,13 @@ import urllib.request
 
 import weather_tg_ai as ai
 
+if "haiku" in sys.argv[1:]:
+    print("CHANNEL_CLAUDE_FALLBACK =", ai.env_flag("CHANNEL_CLAUDE_FALLBACK"))
+    try:
+        print("haiku:", ai.claude_json("claude-haiku-5-5")("Ответь только JSON", 'Верни {"verdict": "ок"}'))
+    except Exception as e:
+        print("haiku ERR", str(e)[:200])
+    sys.exit(0)
 key = ai.gemini_key()
 for model in (sys.argv[1:] or ["gemini-4-hydrogen", "gemini-3.5-flash", "gemini-2.5-flash"]):
     url = "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s" % (model, key)

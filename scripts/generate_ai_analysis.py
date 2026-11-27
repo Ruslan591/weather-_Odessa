@@ -16,13 +16,14 @@ import verification
 BASE_DIR      = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUTPUT_FILE   = os.path.join(BASE_DIR, "data", "forecast_analysis_claude.json")
 OUTPUT_FILE_GEMINI = os.path.join(BASE_DIR, "data", "forecast_analysis_gemini.json")
-GEMINI_MODEL  = "gemini-4-hydrogen"
+GEMINI_MODEL  = "gemini-3.5-flash"
 # [2026-11-26] Первой в цепочке Gemini 4 Hydrogen, как в канале (weather_tg_ai.py): отвечает на бесплатной
 # квоте ключа, текст богаче 3.5 flash. 3.7 и 3.8 убраны: на этом ключе 3.7 даёт 429, 3.8 часто 503,
 # каждая тратила попытки и паузу 6 с. Дальше 3.5 flash, последним 2.5 flash (качество ниже).
 # Цепочка: если основная модель отвечает 5xx/429 — пробуем следующую.
+# [2026-11-27] Hydrogen убран из анализа по решению пользователя: на Free Tier лимит 20 запросов/сутки на модель,
+# общий проект с каналом; Hydrogen оставлен только каналу (weather_tg_ai.py).
 GEMINI_MODEL_CHAIN = [
-    ("gemini-4-hydrogen", None),
     ("gemini-3.5-flash", {"thinkingLevel": "low"}),
     ("gemini-2.5-flash", None),
 ]
