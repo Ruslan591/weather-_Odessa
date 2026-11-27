@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-27T10:52:54Z",
+  "timestamp": "2026-11-27T10:57:15Z",
   "status": "ok",
   "cloud_forecast_timestamp": "2026-11-27T10:30:00.000Z",
   "target_id": 0,
@@ -8,26 +8,8 @@
   "target_bearing_deg": 158.0,
   "target_compass": "Ю",
   "system": null,
-  "local_candidates": [
-    {
-      "target_id": 0,
-      "area_km2": 53.4,
-      "distance_km": 214.6,
-      "bearing_deg": 158.0,
-      "compass": "Ю",
-      "elongation_aspect_ratio": 1.63,
-      "elongation_axis_deg": 19.0,
-      "elongation_axis_compass": "С-Ю",
-      "frontlike": false,
-      "phase_label": "безоблачно",
-      "type_label": "безоблачно",
-      "has_precip": false,
-      "has_lightning": false,
-      "ir_confirmed": false,
-      "geocolour_confirmed": true
-    }
-  ],
-  "local_suppressed_count": 0,
+  "local_candidates": [],
+  "local_suppressed_count": 1,
   "system_candidates": [],
   "system_suppressed_count": 0,
   "frontal_tracks": [],
@@ -42,17 +24,17 @@
         "timestamp": "2026-11-27T10:30:00.000Z"
       },
       "geocolour_motion": {
-        "confirmed": true,
-        "timestamp": "2026-11-27T10:20:00.000Z"
+        "confirmed": false,
+        "timestamp": "2026-11-27T10:30:00.000Z"
       },
       "cloud_phase_type": {
         "confirmed": false,
         "timestamp": "2026-11-27T10:52:19Z"
       }
     },
-    "votes_confirmed": 1,
-    "votes_not_confirmed": 2,
-    "consensus": "disputed"
+    "votes_confirmed": 0,
+    "votes_not_confirmed": 3,
+    "consensus": "not_confirmed"
   },
   "phenomena": {
     "precip_forecast": {
@@ -64,5 +46,5 @@
       "timestamp": "2026-11-27T10:52:41Z"
     }
   },
-  "verdict": "Цель в 215км Ю, безоблачно — каналы расходятся: geocolour_motion подтверждают, ir_motion/cloud_phase_type нет."
+  "verdict": "CLM отметил цель в 215км Ю, но остальные каналы облачность там не видят — вероятно, ложное срабатывание."
 }
