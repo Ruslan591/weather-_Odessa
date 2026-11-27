@@ -1,1 +1,1 @@
-{"task_id": "t1795770978", "cmd": "cat /etc/cron.d/weather-tg; echo CRON2_DONE", "timeout": 60}
+{"task_id": "t1795771295", "cmd": "cd /opt/weather-tg && echo WEEKEND; timeout 110 python3 weather_tg_review.py weekend --force --dry 2>&1 | tail -16; echo WEEK; timeout 110 python3 weather_tg_review.py week --force --dry 2>&1 | tail -22; echo AI_DONE", "timeout": 250}
