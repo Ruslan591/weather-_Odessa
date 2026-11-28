@@ -1,32 +1,34 @@
 {
-  "timestamp": "2026-11-28T04:37:30Z",
+  "timestamp": "2026-11-28T04:52:34Z",
   "current_state": "precip",
   "target_type": "clearing",
-  "distance_km_now": 3.8,
-  "bearing_deg": 22.0,
+  "distance_km_now": 3.5,
+  "bearing_deg": 352.0,
   "compass": "С",
-  "speed_kmh": 0.0,
-  "direction_compass": "ЮЗ",
-  "cpa_km": 3.8,
+  "speed_kmh": 0.1,
+  "direction_compass": "В",
+  "cpa_km": 3.5,
   "eta_min": null,
-  "blob_area_km2": 204789.0,
+  "blob_area_km2": 202361.0,
   "verdict": "почти стоит на месте",
-  "approaching": true,
-  "frame_pairs_used": 1,
+  "approaching": false,
+  "frame_pairs_used": 2,
   "method_note": "Скорость усреднена по 4 кадрам msg_fes:h60b (шаг 15 мин, phase correlation). Presence = непрозрачный пиксель. Край ищется только среди связных областей >= 40px (~53км²). Линейная экстраполяция, годится на ~1 час.",
   "target_confirmation": {
     "confirmed": false,
-    "target_id": 0,
-    "target_area_km2": 173.5,
+    "target_id": 2,
+    "target_area_km2": 134.8,
     "roi_precip_fraction": 0.0,
     "verdict": "Осадков из этой конкретной массы не наблюдается (сухое облако либо осадки не достигают земли)"
   },
   "system_analysis": {
-    "available": false,
-    "reason": "среди кандидатов нет систем синоптического масштаба (только локальные массы)"
+    "available": true,
+    "target_id": 0,
+    "area_km2": 559.1,
+    "roi_precip_fraction": 0.0,
+    "has_precip": false
   },
-  "system_analysis_all": [],
-  "local_analysis_all": [
+  "system_analysis_all": [
     {
       "target_id": 0,
       "available": true,
@@ -38,7 +40,9 @@
       "available": true,
       "roi_precip_fraction": 0.0,
       "has_precip": false
-    },
+    }
+  ],
+  "local_analysis_all": [
     {
       "target_id": 2,
       "available": true,
@@ -47,18 +51,6 @@
     },
     {
       "target_id": 3,
-      "available": true,
-      "roi_precip_fraction": 0.0,
-      "has_precip": false
-    },
-    {
-      "target_id": 4,
-      "available": true,
-      "roi_precip_fraction": 0.0,
-      "has_precip": false
-    },
-    {
-      "target_id": 5,
       "available": true,
       "roi_precip_fraction": 0.0,
       "has_precip": false
