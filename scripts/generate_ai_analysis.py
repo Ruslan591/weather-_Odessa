@@ -949,7 +949,7 @@ def generate_tts(text, out_path):
 
 def call_claude(prompt, api_key):
     payload = json.dumps({
-        "model": "claude-sonnet-4-5",
+        "model": claude_model(),
         "max_tokens": 2048,
         "messages": [{"role": "user", "content": prompt}]
     }).encode()
@@ -1017,7 +1017,7 @@ def call_gemini(prompt, api_key, model=None):
     """Цепочка моделей: GEMINI_MODEL_CHAIN, по 2 попытки на модель при 5xx/429."""
     global GEMINI_LAST_MODEL
     import time as _t
-    chain = GEMINI_MODEL_CHAIN if model is None else [(model, None)]
+    chain = gemini_chain() if model is None else [(model, None)]
     last = None
     for m, thinking in chain:
         for attempt in (1, 2):
@@ -1210,6 +1210,24 @@ def load_schedule():
         except Exception as e:
             print(f"  [AI] Ошибка чтения ai_schedule.json: {e}")
     return default
+
+def _thinking_for(name):
+    """Параметры мышления для выбранной в меню модели Gemini: 3.x flash на уровне low, остальным по умолчанию."""
+    import re as _re
+    return {"thinkingLevel": "low"} if _re.match(r"^gemini-3\.\d+-flash", name or "") else None
+
+def gemini_chain():
+    """Цепочка моделей Gemini: из ai_schedule.json (models.gemini, по порядку приоритета), иначе GEMINI_MODEL_CHAIN."""
+    names = (load_schedule().get("models") or {}).get("gemini")
+    if isinstance(names, str):
+        names = [names]
+    if not names:
+        return GEMINI_MODEL_CHAIN
+    return [(n, _thinking_for(n)) for n in names]
+
+def claude_model():
+    """Модель Claude: из ai_schedule.json (models.claude), иначе claude-sonnet-4-5."""
+    return (load_schedule().get("models") or {}).get("claude") or "claude-sonnet-4-5"
 
 def _provider_match(entry_provider, provider):
     """Проверяет, входит ли provider в entry_provider (строка/список/отсутствует=все)."""
