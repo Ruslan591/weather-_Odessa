@@ -683,8 +683,18 @@ def ai_text(kind, parts, ist):
 def assemble(kind, art, parts):
     emoji = "🌅" if kind == "morning" else "🌙"
     sub = parts["date"] if kind == "morning" else parts["date"]
-    return "\n".join([emoji + " <b>%s</b>" % esc(art["headline"]), sub, "", art["body"], "",
-                      "<blockquote expandable><b>Подробно</b>\n%s</blockquote>" % esc(parts["pro"]), "", parts["tag"]])
+    foot = ""
+    try:   # ссылки на актуальные редкие посты (на неделю, вторая неделя, до конца недели, выходные)
+        import weather_tg_links as lk
+        from datetime import datetime as _dt, timezone as _tz
+        foot = lk.footer(ch.load_env(), _dt.now(_tz.utc), ["week", "prelim", "rest", "weekend"])
+    except Exception:
+        foot = ""
+    lines = [emoji + " <b>%s</b>" % esc(art["headline"]), sub, "", art["body"], "",
+             "<blockquote expandable><b>Подробно</b>\n%s</blockquote>" % esc(parts["pro"]), ""]
+    if foot:
+        lines += [foot, ""]
+    return "\n".join(lines + [parts["tag"]])
 
 # ---------- запуск ----------
 def load_issue_state():
