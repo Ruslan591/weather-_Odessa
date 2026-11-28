@@ -140,7 +140,7 @@ def build(now, state, log, use_ai, with_chart=True):
     if with_chart:   # график: 14 дней от завтра, граница «на неделю» / «предварительно» в точке начала второй недели
         try:
             days14 = [today + timedelta(days=i) for i in range(1, 15)]
-            chart_src = chart.upload_telegraph(chart.temp_chart_png(days14, daily, (a - days14[0]).days))
+            chart_src = chart.host_in_repo(chart.temp_chart_png(days14, daily, (a - days14[0]).days), "prelim_" + today.isoformat())
         except Exception as e:
             log("2weeks: график не загружен (%s: %s)" % (type(e).__name__, str(e)[:120]))
     nodes = build_nodes("Погода Одесса, %s %d" % (rv.dm(today), today.year), overview, outlook, chart_src)
