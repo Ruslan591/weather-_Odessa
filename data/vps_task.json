@@ -1,1 +1,1 @@
-{"task_id": "t1795852521", "cmd": "cd /opt/weather-tg && timeout 200 python3 weather_tg_2weeks.py --force --page-only --no-ai 2>&1 | tail -3; echo PAGE2_DONE", "timeout": 250}
+{"task_id": "t1795853696", "cmd": "R=/opt/weather-pipeline/repo; echo VPS_FILE; cat $R/data/ai_schedule.json | tr -d \"\\n \"; echo; git -C $R log -3 --format=\"%h %cd %s\" --date=iso -- data/ai_schedule.json; echo SCHED_DONE", "timeout": 60}
