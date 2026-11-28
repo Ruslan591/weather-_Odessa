@@ -625,6 +625,9 @@ def validate(art, facts, pro, parts):
     if bad:
         probs.append("числа, которых нет в сводке: " + ", ".join(bad))
     low = (h + " " + b).lower()
+    ty = ai.typos(h + " " + b, facts + " " + pro)
+    if ty:
+        probs.append("возможна опечатка в словах: " + ", ".join(ty))
     if re.search(r"(одного|одному|двух|двум|трёх|трём|трех|трем|четырёх|четырём|четырех|четырем|пяти|шести|семи|восьми|девяти|десяти|одиннадцати|двенадцати|полдень|полночь)\s+час", low) or re.search(r"\b(полдень|полдня|полночь)\b", low):
         probs.append("время словами вместо цифр (пиши 14:00)")
     if WD_RE.search(low):
@@ -733,6 +736,18 @@ def main():
     key = ln.strftime("%Y-%m-%d")
     if not force and not dry and ist.get("sent_" + kind) == key:
         return 0
+    if not force and not dry and ln.minute < 30:
+        # выпуск идёт ПОСЛЕ сводки ГМЦ: ждём, пока канал объявит срок не старше (час выпуска − 1 ч), иначе выпуск оказывается в ленте раньше сводки;
+        # после :30 отправляем в любом случае (ГМЦ мог задержаться или не выйти)
+        try:
+            sy = ch.load_state().get("synop_sent")
+            term = ch.parse_iso(sy).astimezone(KYIV) if sy else None
+        except Exception:
+            term = None
+        need = ln.replace(hour=target, minute=0, second=0, microsecond=0) - timedelta(hours=1)
+        if term is None or term < need:
+            ch.log("issue: %s ждёт сводку ГМЦ (последняя объявленная: %s)" % (kind, term.strftime("%d.%m %H:%M") if term else "нет"))
+            return 0
     st = collect(env, now)
     mstate = ch.load_state()   # только чтение: берём свежий кэш Ансамбля
     hours = ch.get_ensemble(mstate, now)
