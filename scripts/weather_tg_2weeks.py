@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Пост «Предварительный прогноз: вторая неделя»: страница на Telegraph + анонс в канале (Instant View). Раз в неделю, воскресенье 09:30 по Киеву.
 
-  python3 weather_tg_2weeks.py [--dry] [--force] [--no-ai] [--no-publish] [--page-only] [--setup]
+  python3 weather_tg_2weeks.py [--dry] [--force] [--no-ai] [--no-publish] [--page-only] [--no-chart] [--setup]
 
 Страница: общий обзор второй недели (дни 8–14, встык за «Погодой на неделю») и «чего ждать и насколько надёжно». Первой недели нет: её закрывают краткосрочный прогноз и «на неделю».
 Без ссылок на сайт. Данные: дневной прогноз ECMWF, GFS, GEM (Open-Meteo, 16 суток), текст «Тенденция» с сайта
@@ -18,6 +18,8 @@ from datetime import datetime, timedelta, timezone
 
 import weather_tg_ai as ai
 import weather_tg_channel as ch
+import weather_tg_chart as chart
+import weather_tg_links as lk
 import weather_tg_outlook as outl
 import weather_tg_review as rv
 
@@ -44,15 +46,7 @@ def tendency_text():
     return ""
 
 
-def day_stats(rec):
-    hi = sum(rec["tmax"]) / len(rec["tmax"])
-    lo = sum(rec["tmin"]) / len(rec["tmin"])
-    n = len(rec["pr"]) or 1
-    wet = sum(1 for x in rec["pr"] if x >= 1.0)
-    snow = sum(1 for x in rec["sn"] if x >= 0.5)
-    return {"hi": hi, "lo": lo, "spread": max(rec["tmax"]) - min(rec["tmax"]),
-            "wet": 0 if wet == 0 else (2 if wet == n else 1), "snow": snow >= max(1, wet / 2.0) and wet > 0,
-            "pm": max(rec["pr"]) if rec["pr"] else 0, "gust": max(rec["g"]) if rec["g"] else 0}
+day_stats = rv.day_stat   # один расчёт показателей дня на «Предварительный» и «на неделю» (сравнение со снимком)
 
 
 # ---------- Telegraph ----------
@@ -72,9 +66,10 @@ def setup_account(log):
     log("2weeks: аккаунт Telegraph создан, токен записан в .env")
 
 
-def build_nodes(dateline, overview, outlook):
+def build_nodes(dateline, overview, outlook, chart_src=None):
     N = lambda tag, *ch_, **a: dict({"tag": tag, "children": list(ch_)}, **({"attrs": a} if a else {}))
-    return [N("p", N("em", dateline)), N("p", overview), N("h4", "Чего ждать и насколько это надёжно"), N("p", outlook),
+    fig = [N("figure", N("img", src=chart_src), N("figcaption", "Температура днём и ночью на 14 дней; полоса показывает разброс между моделями."))] if chart_src else []
+    return [N("p", N("em", dateline)), N("p", overview)] + fig + [N("h4", "Чего ждать и насколько это надёжно"), N("p", outlook),
             N("p", N("em", "Прогноз на вторую неделю предварительный: он уточняется, актуальный прогноз на неделю выходит по пятницам, субботам и воскресеньям. "
                           "Этот обзор обновляется раз в неделю, по воскресеньям."))]
 
@@ -90,7 +85,8 @@ def announce(env, text, url, silent=True):
         "disable_notification": "true" if silent else "false",
         "link_preview_options": json.dumps({"is_disabled": False, "url": url, "prefer_large_media": True})}).encode()
     with urllib.request.urlopen(urllib.request.Request("https://api.telegram.org/bot%s/sendMessage" % env["WEATHER_TG_TOKEN"], data=data), timeout=20) as r:
-        return json.loads(r.read().decode()).get("ok", False)
+        j = json.loads(r.read().decode())
+        return (j.get("result", {}).get("message_id") or True) if j.get("ok") else False
 
 
 # ---------- сборка ----------
@@ -102,7 +98,7 @@ def second_week(ln):
     return start, start + timedelta(days=6)
 
 
-def build(now, state, log, use_ai):
+def build(now, state, log, use_ai, with_chart=True):
     ln = now.astimezone(KYIV)
     today = ln.date()
     a, b = second_week(ln)
@@ -140,8 +136,15 @@ def build(now, state, log, use_ai):
     if not overview:   # шаблон при сбое ИИ
         overview = " ".join(summ)
         outlook = tend or "На таком горизонте прогноз предварительный и будет уточняться."
-    nodes = build_nodes("Погода Одесса, %s %d" % (rv.dm(today), today.year), overview, outlook)
-    return title, nodes, overview, ("ИИ" if res else "шаблон")
+    chart_src = None
+    if with_chart:   # график: 14 дней от завтра, граница «на неделю» / «предварительно» в точке начала второй недели
+        try:
+            days14 = [today + timedelta(days=i) for i in range(1, 15)]
+            chart_src = chart.upload_telegraph(chart.temp_chart_png(days14, daily, (a - days14[0]).days))
+        except Exception as e:
+            log("2weeks: график не загружен (%s: %s)" % (type(e).__name__, str(e)[:120]))
+    nodes = build_nodes("Погода Одесса, %s %d" % (rv.dm(today), today.year), overview, outlook, chart_src)
+    return title, nodes, overview, ("ИИ" if res else "шаблон"), (a, stats)
 
 
 def load_state():
@@ -167,10 +170,10 @@ def main():
     key = "sent_" + ln.strftime("%Y-%m-%d")
     if not force and not dry and st.get(key):
         return 0
-    r = build(now, st, ch.log, "--no-ai" not in flags)
+    r = build(now, st, ch.log, "--no-ai" not in flags, with_chart=not (dry or "--no-publish" in flags or "--no-chart" in flags))
     if not r:
         return 1
-    title, nodes, overview, src = r
+    title, nodes, overview, src, snap = r
     if dry or "--no-publish" in flags:
         print(title)
         print(json.dumps(nodes, ensure_ascii=False, indent=1)[:6000])
@@ -194,6 +197,8 @@ def main():
         ch.log("2weeks: анонс не отправлен")
         return 1
     st[key] = url
+    lk.record("prelim", url, now)                 # ссылка на страницу для выпусков и «на неделю»
+    rv.save_prelim(snap[0], snap[1], ln.date())   # снимок для сравнения с пятничным «на неделю»
     st = {k: v for k, v in st.items() if not k.startswith("sent_") or k[5:] >= (ln - timedelta(days=10)).strftime("%Y-%m-%d")}
     with open(STATE_FILE, "w", encoding="utf-8") as f:
         json.dump(st, f, ensure_ascii=False, indent=1)
