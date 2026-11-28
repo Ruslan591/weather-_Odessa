@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 
 import weather_tg_ai as ai
 import weather_tg_channel as ch
+import weather_tg_links as lk
 import weather_tg_outlook as outl
 
 KYIV = ch.KYIV
@@ -97,6 +98,73 @@ def day_facts(day, rec, today):
     if gust >= 12:
         s += ", порывы до %d м/с" % round(gust)
     return s + ", " + conf + "."
+
+
+SNAP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prelim_snapshot.json")
+
+
+def day_stat(rec):
+    """Показатели дня по моделям: средние днём и ночью, класс осадков (0 нет, 1 часть моделей, 2 все), снег, максимум, порывы."""
+    hi, lo = sum(rec["tmax"]) / len(rec["tmax"]), sum(rec["tmin"]) / len(rec["tmin"])
+    n = len(rec["pr"]) or 1
+    wet = sum(1 for x in rec["pr"] if x >= 1.0)
+    snow = sum(1 for x in rec["sn"] if x >= 0.5)
+    return {"hi": hi, "lo": lo, "spread": max(rec["tmax"]) - min(rec["tmax"]),
+            "wet": 0 if wet == 0 else (2 if wet == n else 1), "snow": snow >= max(1, wet / 2.0) and wet > 0,
+            "pm": max(rec["pr"]) if rec["pr"] else 0, "gust": max(rec["g"]) if rec["g"] else 0}
+
+
+def save_prelim(week_start, stats, made):
+    """Сохраняет воскресный «Предварительный прогноз» недели week_start для сравнения с пятничным «на неделю». stats: {дата: day_stat}."""
+    try:
+        with open(SNAP_FILE, encoding="utf-8") as f:
+            snap = json.load(f)
+    except Exception:
+        snap = {}
+    snap[week_start.isoformat()] = {"made": made.isoformat(),
+                                    "days": {d.isoformat(): {"hi": s["hi"], "lo": s["lo"], "wet": s["wet"]} for d, s in stats.items()}}
+    for k in sorted(snap)[:-4]:
+        del snap[k]
+    tmp = SNAP_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(snap, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, SNAP_FILE)
+
+
+def compare_prelim(days, daily, today):
+    """Одна строка «что изменилось с воскресного прогноза» или None, если сравнивать не с чем."""
+    try:
+        with open(SNAP_FILE, encoding="utf-8") as f:
+            snap = json.load(f).get(days[0].isoformat())
+    except Exception:
+        return None
+    if not snap:
+        return None
+    made = datetime.strptime(snap["made"], "%Y-%m-%d").date()
+    if not (0 < (today - made).days <= 14):
+        return None
+    pairs = []
+    for d in days:
+        old, rec = snap["days"].get(d.isoformat()), daily.get(d)
+        if old and rec and rec["tmax"] and rec["tmin"]:
+            pairs.append((d, old, day_stat(rec)))
+    if len(pairs) < 4:
+        return None
+    dhi = sum(n["hi"] - o["hi"] for _, o, n in pairs) / len(pairs)
+    dlo = sum(n["lo"] - o["lo"] for _, o, n in pairs) / len(pairs)
+    added = [d for d, o, n in pairs if n["wet"] and not o["wet"]]
+    gone = [d for d, o, n in pairs if o["wet"] and not n["wet"]]
+    bits = []
+    for name, v in (("днём", dhi), ("ночью", dlo)):
+        if abs(v) >= 1.5:
+            bits.append("%s %s на %d °C" % (name, "теплее" if v > 0 else "холоднее", round(abs(v))))
+    fmt = lambda ds: ", ".join("%s %02d.%02d" % (WD[d.weekday()], d.day, d.month) for d in ds)
+    if added:
+        bits.append("осадки добавились: %s" % fmt(added))
+    if gone:
+        bits.append("осадки ушли: %s" % fmt(gone))
+    head = "🔄 С прогноза от %02d.%02d (вторая неделя) " % (made.day, made.month)
+    return head + ("изменилось: " + "; ".join(bits) + "." if bits else "почти ничего не изменилось.")
 
 
 def week_bounds(ln):
@@ -193,6 +261,8 @@ def build_week(now, state, log, use_ai):
     daily = fetch_daily(log)
     days = [(a + timedelta(days=i)) for i in range(7)]
     lines = [day_facts(d, daily.get(d, {"tmax": [], "tmin": [], "pr": [], "sn": [], "g": []}), ln.date()) for d in days]
+    cmp_line = compare_prelim(days, daily, ln.date())
+    cmp_txt = ("\n\n" + esc(cmp_line)) if cmp_line else ""
     if sum(1 for x in lines if x) < 5:
         log("review: данных по неделе мало, пост пропущен")
         return None
@@ -215,11 +285,11 @@ def build_week(now, state, log, use_ai):
         res = ask_multi(sys_, pr + "\nВерни только JSON.", {"overview": 380, "first": 300, "second": 330}, facts, log)
     if res:
         body = "%s\n\n<b>Пн–Ср, %s – %s</b>\n%s\n\n<b>Чт–Вс, %s – %s</b>\n%s" % (
-            esc(res["overview"]), dm(days[0]), dm(days[2]), esc(res["first"]), dm(days[3]), dm(days[6]), esc(res["second"]))
+            esc(res["overview"]) + cmp_txt, dm(days[0]), dm(days[2]), esc(res["first"]), dm(days[3]), dm(days[6]), esc(res["second"]))
         state["week_texts"] = (state.get("week_texts", []) + [res["overview"]])[-3:]
         src = "ИИ " + str(res.get("_model"))
         return "%s\n\n%s\n\n%s" % (title, body, detail), src
-    return "%s\n\n%s" % (title, detail), "шаблон"
+    return "%s%s\n\n%s" % (title, cmp_txt, detail), "шаблон"
 
 
 def build_rest(now, state, log, use_ai):
@@ -311,9 +381,16 @@ def main():
         print(text)
         print("--- %d символов, текст: %s" % (len(text), src))
         return 0
-    if not ch.tg_send(env, text, SILENT):
+    if kind == "week":   # внизу «на неделю»: ссылка на актуальный «Предварительный прогноз»
+        foot = lk.footer(env, now, ["prelim"])
+        if foot:
+            text += "\n\n" + foot
+    mid = ch.tg_send(env, text, SILENT)
+    if not mid:
         ch.log("review: %s НЕ отправлен" % kind)
         return 1
+    if mid is not True:
+        lk.record(kind, mid, now)
     st["sent_" + key] = True
     st = {k: v for k, v in st.items() if not k.startswith("sent_") or k[-10:] >= (ln - timedelta(days=10)).strftime("%Y-%m-%d")}
     save_state(st)
