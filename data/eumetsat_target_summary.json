@@ -1,25 +1,125 @@
 {
-  "timestamp": "2026-11-28T06:32:25Z",
-  "status": "system_only",
-  "reason": "локальных компактных масс нет, есть только система(ы) синоптического масштаба",
-  "cloud_forecast_timestamp": "2026-11-28T06:00:00.000Z",
+  "timestamp": "2026-11-28T06:37:44Z",
+  "status": "ok",
+  "cloud_forecast_timestamp": "2026-11-28T06:15:00.000Z",
+  "target_id": 1,
+  "target_area_km2": 105.4,
+  "target_distance_km": 215.2,
+  "target_bearing_deg": 353.0,
+  "target_compass": "С",
   "system": {
     "target_id": 0,
-    "area_km2": 4524.6,
-    "distance_km": 149.9,
-    "bearing_deg": 16.0,
+    "area_km2": 5111.7,
+    "distance_km": 169.7,
+    "bearing_deg": 9.0,
     "compass": "С",
-    "elongation_aspect_ratio": 3.85,
-    "elongation_axis_deg": 90.0,
+    "elongation_aspect_ratio": 3.45,
+    "elongation_axis_deg": 85.0,
     "elongation_axis_compass": "В-З",
     "frontlike": true,
     "window_spanning": false,
     "phase_label": "безоблачно",
-    "cloud_fraction": 0.178,
+    "cloud_fraction": 0.398,
     "has_precip": false,
     "has_lightning": false
   },
+  "local_candidates": [],
+  "local_suppressed_count": 3,
   "system_candidates": [],
-  "system_suppressed_count": 4,
-  "verdict": "Локальных облачных масс нет. Система синоптического масштаба (4525км²) в 150км С (вытянута В-З (90°), похоже на фронт)."
+  "system_suppressed_count": 1,
+  "frontal_tracks": [
+    {
+      "track_id": 3574,
+      "first_seen": "2026-11-28T05:15:00.000Z",
+      "last_seen": "2026-11-28T06:15:00.000Z",
+      "points_count": 4,
+      "age_minutes": 60.0,
+      "distance_from_odessa_km": 169.7,
+      "dx_km": 26.37,
+      "dy_km": 167.68,
+      "area_km2": 5111.7,
+      "axis_deg": 85.0,
+      "aspect_ratio": 3.45,
+      "velocity_kmh": 90.3,
+      "movement_bearing_deg": 140.4,
+      "movement_bearing_compass": "ЮВ",
+      "axis_rotation_deg": 2.0,
+      "tile": "near",
+      "ahead_station": null,
+      "behind_station": {
+        "name": "UMAN'",
+        "ctry": "UP",
+        "lat": 48.767,
+        "lon": 30.233,
+        "elev_m": "+0216.0",
+        "dist_km_from_odessa": 261.8,
+        "wmo_synop_id": "33587",
+        "icao": null,
+        "usaf_raw": "335870",
+        "source": "synop",
+        "along_km": -113.4,
+        "perp_km": 6.1,
+        "dist_km": 113.6
+      },
+      "direction_compass": "С",
+      "current_target_id": 0,
+      "has_precip": false,
+      "has_lightning": false,
+      "ahead_obs": null,
+      "behind_obs": {
+        "obs_time": "2026-11-28T06:00:00Z",
+        "raw": "33587,2026,11,28,06,00,AAXX 28061 33587 02/// /0202 11063 21077 30076 40358 51027 60002 333 60007 70000 91004 555 60005==",
+        "temp": -6.3,
+        "station_pressure": 1007.6,
+        "sea_pressure": 1035.8,
+        "pressure_tendency_code": "1",
+        "pressure_tendency_value": 2.7,
+        "total_cloud_okta": null,
+        "wind_dir_deg": null,
+        "wind_speed_ms": null,
+        "precip_mm": 0.0,
+        "precip_period_hours": 18,
+        "present_weather_code": null,
+        "present_weather_label": null,
+        "is_extreme_weather": false,
+        "obs_source": "SYNOP"
+      },
+      "front_type": null,
+      "front_type_confidence": null
+    }
+  ],
+  "target_phase": {
+    "label": "безоблачно",
+    "cloud_fraction": 0.102
+  },
+  "existence": {
+    "modules": {
+      "ir_motion": {
+        "confirmed": false,
+        "timestamp": "2026-11-28T06:20:00.000Z"
+      },
+      "geocolour_motion": {
+        "confirmed": false,
+        "timestamp": "2026-11-28T06:10:00.000Z"
+      },
+      "cloud_phase_type": {
+        "confirmed": false,
+        "timestamp": "2026-11-28T06:37:22Z"
+      }
+    },
+    "votes_confirmed": 0,
+    "votes_not_confirmed": 3,
+    "consensus": "not_confirmed"
+  },
+  "phenomena": {
+    "precip_forecast": {
+      "confirmed": null,
+      "timestamp": "2026-11-28T06:22:54Z"
+    },
+    "lightning_forecast": {
+      "confirmed": false,
+      "timestamp": "2026-11-28T06:37:33Z"
+    }
+  },
+  "verdict": "CLM отметил цель в 215км С, но остальные каналы облачность там не видят — вероятно, ложное срабатывание. Отдельно: система синоптического масштаба (5112км²) в 170км С (вытянута В-З (85°), похоже на фронт)."
 }
