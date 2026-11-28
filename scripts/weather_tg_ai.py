@@ -240,6 +240,32 @@ def sun_context(now_local):
 DARK_WORDS = ("солн", "светл", "светает", "светле", "рассвет", "ярк")
 
 
+_MORPH = None
+
+
+def typos(text, facts=""):
+    """Слова, которых нет в словаре русского языка (опечатки вроде «перчих»). Слова из фактов (имена станций и т. п.) и слова с общим
+    началом из фактов пропускаются. Без библиотеки pymorphy3 проверка выключена (возвращает пусто)."""
+    global _MORPH
+    if _MORPH is None:
+        try:
+            import pymorphy3
+            _MORPH = pymorphy3.MorphAnalyzer()
+        except Exception:
+            _MORPH = False
+    if not _MORPH:
+        return []
+    fl = (facts or "").lower().replace("ё", "е")
+    out = []
+    for w in set(re.findall(r"[а-яё]{4,}", (text or "").lower())):
+        wn = w.replace("ё", "е")
+        if wn in fl or (len(wn) >= 6 and wn[:6] in fl):
+            continue
+        if not _MORPH.word_is_known(w):
+            out.append(w)
+    return sorted(out)
+
+
 def check(text, facts, max_len, dark=False, extra_banned=()):
     """Проблемы короткого текста: новые числа, запретные слова, теги, длина, время словами."""
     probs = []
@@ -265,6 +291,9 @@ def check(text, facts, max_len, dark=False, extra_banned=()):
         probs.append("HTML-теги недопустимы")
     if re.search(r"(одного|одному|двух|двум|трёх|трём|четырёх|четырём|пяти|шести|семи|восьми|девяти|десяти)\s+час|\b(полдень|полночь)\b", low):
         probs.append("время словами вместо цифр")
+    ty = typos(text, facts)
+    if ty:
+        probs.append("возможна опечатка в словах: " + ", ".join(ty))
     return probs
 
 
