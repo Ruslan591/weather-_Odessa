@@ -6,7 +6,7 @@
 Правила как у счёта: ставка stake (нотионал), плечо lev, маржа stake/lev на сделку,
 слотов max(min_slots, int(баланс // slot_eq)), свободная маржа не меньше маржи сделки.
 Результат сделки: stake * net_pct / 100 (net_pct уже с комиссиями, как pos.py).
-Линии l<N> (shadow_bal.json: one_per_sym, max_side=[3,2]): сделки «без фильтра» с правилами «не больше одной позиции на монету» и «не больше N в одну сторону».
+Линии l<N> (shadow_bal.json: one_per_sym, max_side=[3,2,1]): сделки «без фильтра» с правилами «не больше одной позиции на монету» и «не больше N в одну сторону».
 Линия full: стартовый баланс need, при котором не пропущена ни одна сделка, и итог при нём; open_list: открытые сделки (для живого баланса на странице).
 Закрытые сделки копятся в shadow_bal_trades.json (не теряются при чистке shadow.json); файл лежит в /opt/trading-bot/live/data (папка tbot внутри единственного пути записи live-web), иначе в pos_dir.
 Фильтр обеих линий (shadow_bal.json: skip_tf, skip_regime; по умолчанию ["5m"] и ["flat"]): сделки с таким таймфреймом или режимом
@@ -32,11 +32,11 @@ def _save(p, o):
 def _simulate(trades, start, stake, lev, slot_eq, min_slots, one_sym=False, max_side=None):
     """trades: [{t_in, t_out|None, net_pct|None}] -> итог одной линии."""
     margin = stake / lev
-    bal = float(start); opn = []; taken = skipped = wins = maxc = skip_rule = 0
+    bal = float(start); opn = []; taken = skipped = wins = maxc = skip_rule = 0; rsum = 0.0
     for tr in sorted(trades, key=lambda x: x["t_in"]):
         ex = sorted([o for o in opn if o["t_out"] is not None and o["t_out"] <= tr["t_in"]], key=lambda o: o["t_out"])
         for o in ex:
-            bal += stake * o["net_pct"] / 100.0; wins += 1 if o["net_pct"] > 0 else 0; opn.remove(o)
+            bal += stake * o["net_pct"] / 100.0; wins += 1 if o["net_pct"] > 0 else 0; rsum += o.get("r") or 0.0; opn.remove(o)
         slots = max(min_slots, int(bal // slot_eq))
         if (one_sym and any(o.get("sym") == tr.get("sym") for o in opn)) or (max_side and sum(1 for o in opn if o.get("side") == tr.get("side")) >= max_side):
             skipped += 1; skip_rule += 1; continue        # правила: одна позиция на монету, не больше max_side в одну сторону
@@ -44,11 +44,11 @@ def _simulate(trades, start, stake, lev, slot_eq, min_slots, one_sym=False, max_
             opn.append(tr); taken += 1; maxc = max(maxc, len(opn))
         else: skipped += 1
     for o in sorted([o for o in opn if o["t_out"] is not None], key=lambda o: o["t_out"]):
-        bal += stake * o["net_pct"] / 100.0; wins += 1 if o["net_pct"] > 0 else 0; opn.remove(o)
+        bal += stake * o["net_pct"] / 100.0; wins += 1 if o["net_pct"] > 0 else 0; rsum += o.get("r") or 0.0; opn.remove(o)
     closed = taken - len(opn)
     return {"bal": round(bal, 3), "pnl": round(bal - start, 3), "taken": taken, "closed": closed, "wins": wins, "open": len(opn),
             "skipped": skipped, "skip_rule": skip_rule, "skip_slots": skipped - skip_rule, "maxc": maxc, "slots": max(min_slots, int(bal // slot_eq)),
-            "open_list": [{"sym": o.get("sym"), "side": o.get("side"), "entry": o.get("entry")} for o in opn]}
+            "r": round(rsum, 3), "open_list": [{"sym": o.get("sym"), "side": o.get("side"), "entry": o.get("entry"), "rp": o.get("rp")} for o in opn]}
 
 
 def _full(trades, start, stake, lev, slot_eq, min_slots, one_sym=False, max_side=None):
@@ -96,7 +96,7 @@ def compute(pos_dir):
         done = src.get("status") == "closed" and src.get("t_out") and src.get("net_pct") is not None
         rec = {"id": iid, "sn": x.get("sn"), "sym": x.get("sym"), "side": x.get("side"), "tf": x.get("tf"), "k": k, "t_in": int(src["t_in"]),
                "t_out": int(src["t_out"]) if done else None, "net_pct": float(src["net_pct"]) if done else None, "r": src.get("r_mult") if done else None,
-               "rg": (x.get("rg") or {}).get("regime"), "entry": src.get("entry")}
+               "rg": (x.get("rg") or {}).get("regime"), "entry": src.get("entry"), "rp": src.get("R_pct")}
         key = iid + k
         if done: cur[key] = rec
         else: live[key] = rec
@@ -116,7 +116,7 @@ def compute(pos_dir):
     F = [r for r in allr.values() if r["k"] == "in"]; N = list(allr.values())
     lines = [dict(k="f", name="с фильтрами", **_simulate(F, start, stake, lev, slot_eq, min_slots)),
              dict(k="n", name="без фильтра", **_simulate(N, start, stake, lev, slot_eq, min_slots))]
-    one_sym = bool(cfg.get("one_per_sym", True)); sides = cfg.get("max_side", [3, 2]); sides = sides if isinstance(sides, list) else [sides]
+    one_sym = bool(cfg.get("one_per_sym", True)); sides = cfg.get("max_side", [3, 2, 1]); sides = sides if isinstance(sides, list) else [sides]
     lims = [(int(m), dict(k="l%d" % int(m), name="лимиты: 1 на монету, не больше %d в сторону" % int(m), **_simulate(N, start, stake, lev, slot_eq, min_slots, one_sym, int(m)))) for m in sides if m]
     lines += [x[1] for x in lims]
     TR = {"f": (F, False, None), "n": (N, False, None)}
