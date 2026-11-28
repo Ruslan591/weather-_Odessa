@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Обзорные посты канала: выходные (чт и пт 12:30) и обзор недели (пт, сб, вс 18:30). Время местное (Киев).
 
-  python3 weather_tg_review.py weekend|week [--dry] [--force] [--no-ai]
+  python3 weather_tg_review.py weekend|rest|week [--dry] [--force] [--no-ai]
 
 weekend: суббота и воскресенье по часовому Ансамблю канала (+ облачность/видимость Open-Meteo, море).
 week:    следующая неделя пн-вс по дневному прогнозу ECMWF, GFS, GEM (Open-Meteo): Ансамбль канала считает всего 5 суток.
@@ -21,8 +21,9 @@ import weather_tg_outlook as outl
 KYIV = ch.KYIV
 STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "review_state.json")
 SILENT = True
-SEND_HOUR = {"weekend": 12, "week": 18}                 # местный час (минуты задаёт cron: :30)
-SEND_DAYS = {"weekend": (3, 4), "week": (4, 5, 6)}      # чт, пт | пт, сб, вс (weekday(): пн=0)
+# Слоты отправки: {вид: {weekday (пн=0): местный час}}; минуты задаёт cron (:30). Схема v2 от 27.11:
+# ср 09:30 и чт 12:30 «до конца недели», пт 12:30 «на выходные», пт, сб, вс 18:30 «на неделю».
+SLOTS = {"weekend": {4: 12}, "rest": {2: 9, 3: 12}, "week": {4: 18, 5: 18, 6: 18}}
 MODELS = ["ecmwf_ifs025", "gfs_global", "gem_global"]
 DAILY_URL = ("https://api.open-meteo.com/v1/forecast?latitude=46.43&longitude=30.74&timezone=Europe%2FKyiv&forecast_days=16&wind_speed_unit=ms"
              "&models=" + ",".join(MODELS) + "&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,snowfall_sum,wind_gusts_10m_max")
@@ -221,6 +222,41 @@ def build_week(now, state, log, use_ai):
     return "%s\n\n%s" % (title, detail), "шаблон"
 
 
+def build_rest(now, state, log, use_ai):
+    """«Погода до конца недели»: завтра..воскресенье (ср: чт–вс, чт: пт–вс) по дневному прогнозу трёх моделей."""
+    ln = now.astimezone(KYIV)
+    d0 = ln.date()
+    sun = d0 + timedelta(days=(6 - d0.weekday()) % 7)
+    days = [d0 + timedelta(days=i) for i in range(1, (sun - d0).days + 1)]
+    if len(days) < 2:
+        log("review: до конца недели меньше двух дней, пост пропущен")
+        return None
+    daily = fetch_daily(log)
+    lines = [day_facts(d, daily.get(d, {"tmax": [], "tmin": [], "pr": [], "sn": [], "g": []}), d0) for d in days]
+    lines = [x for x in lines if x]
+    if len(lines) < len(days) - 1:
+        log("review: данных до конца недели мало, пост пропущен")
+        return None
+    facts = "\n".join(lines)
+    title = "🗓 <b>Погода до конца недели, %s</b>" % span_title(days[0], days[-1])
+    detail = "<blockquote expandable><b>Подробно по дням</b>\n%s</blockquote>" % esc(facts)
+    res = None
+    if use_ai:
+        ai.budget(150)
+        sys_ = ai.BASE + ("Напиши обзор погоды до конца недели для Telegram-канала (период указан в фактах). Поле JSON overview: 3-4 предложения, "
+                          "общий характер, когда холоднее или теплее, осадки, а если в строках указана неопределённость, скажи об этом. "
+                          "Не перечисляй дни подряд. Формат ответа: только JSON {\"overview\": \"...\"}.")
+        pr = "ПРОГНОЗ ПО ДНЯМ:\n%s\n" % facts
+        rec = state.get("rest_texts", [])
+        if rec:
+            pr += "\nНедавние обзоры (не повторяй конструкции):\n- " + "\n- ".join(x[:160] for x in rec[-2:]) + "\n"
+        res = ask_multi(sys_, pr + "\nВерни только JSON.", {"overview": 450}, facts, log)
+    if res:
+        state["rest_texts"] = (state.get("rest_texts", []) + [res["overview"]])[-3:]
+        return "%s\n\n%s\n\n%s" % (title, esc(res["overview"]), detail), "ИИ " + str(res.get("_model"))
+    return "%s\n\n%s" % (title, detail), "шаблон"
+
+
 # ---------- запуск ----------
 def load_state():
     try:
@@ -241,13 +277,13 @@ def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     flags = set(a for a in sys.argv[1:] if a.startswith("--"))
     kind = args[0] if args else ""
-    if kind not in SEND_HOUR:
-        print("usage: weather_tg_review.py weekend|week [--dry] [--force] [--no-ai]")
+    if kind not in SLOTS:
+        print("usage: weather_tg_review.py weekend|rest|week [--dry] [--force] [--no-ai]")
         return 2
     dry, force = "--dry" in flags, "--force" in flags
     now = datetime.now(timezone.utc)
     ln = now.astimezone(KYIV)
-    if not force and (ln.hour != SEND_HOUR[kind] or ln.weekday() not in SEND_DAYS[kind]):
+    if not force and SLOTS[kind].get(ln.weekday()) != ln.hour:
         return 0   # cron стоит на оба сезона (UTC), лишний запуск молча выходит
     env = ch.load_env()
     if not dry and ("WEATHER_TG_TOKEN" not in env or "WEATHER_TG_CHAT_ID" not in env):
@@ -264,6 +300,8 @@ def main():
             ch.log("review: Ансамбль не посчитан, выходные пропущены")
             return 1
         r = build_weekend(hours, now, st, ch.log, use_ai)
+    elif kind == "rest":
+        r = build_rest(now, st, ch.log, use_ai)
     else:
         r = build_week(now, st, ch.log, use_ai)
     if not r:
