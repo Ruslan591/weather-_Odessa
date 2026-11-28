@@ -18,6 +18,13 @@ DEFAULT = {
     "tolerance_min": 20
 }
 
+# Модели, которые можно выбрать в меню (можно ввести и своё имя). Порядок Gemini = порядок приоритета, остальные запасные.
+GEMINI_KNOWN = ["gemini-4-hydrogen", "gemini-3.8-flash", "gemini-3.5-flash", "gemini-2.5-flash"]
+CLAUDE_KNOWN = ["claude-sonnet-4-5", "claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5"]
+GEMINI_DEFAULT = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-2.5-flash"]   # как в generate_ai_analysis.py без выбора
+CLAUDE_DEFAULT = "claude-sonnet-4-5"
+DIRTY = False   # были изменения, не отправленные на GitHub
+
 def load():
     if os.path.exists(SCHEDULE_FILE):
         try:
@@ -26,16 +33,22 @@ def load():
             d.setdefault("time_points", [])
             d.setdefault("model_triggers", [])
             d.setdefault("tolerance_min", 20)
+            d.setdefault("models", {})
             return d
         except Exception as e:
             print(f"Ошибка чтения: {e}")
     return dict(DEFAULT)
 
 def save(d):
+    global DIRTY
     os.makedirs(os.path.dirname(SCHEDULE_FILE), exist_ok=True)
+    if not d.get("models"):
+        d.pop("models", None)   # пустой выбор моделей не пишем: работают значения по умолчанию
     with open(SCHEDULE_FILE, "w", encoding="utf-8") as f:
         json.dump(d, f, ensure_ascii=False, indent=2)
-    print("Сохранено.")
+    d.setdefault("models", {})
+    DIRTY = True
+    print("Сохранено локально. Чтобы изменения заработали на сервере, отправьте их на GitHub (пункт 7 или при выходе).")
 
 PROVIDERS = ["claude", "gemini"]
 
@@ -57,6 +70,9 @@ def show(d):
             prov = fmt_provider(tp.get("provider"))
             print(f"  [{i}] {tp['hour']:02d}:{tp['minute']:02d} UTC — {fmt_days(tp.get('days', list(range(7))))} [{prov}]")
     print(f"  Допуск: ±{d['tolerance_min']} мин")
+    m = d.get("models") or {}
+    print("  Модель Gemini: " + (" → ".join(m["gemini"]) if m.get("gemini") else "по умолчанию (" + " → ".join(GEMINI_DEFAULT) + ")"))
+    print("  Модель Claude: " + (m.get("claude") or "по умолчанию (" + CLAUDE_DEFAULT + ")"))
     if not d["model_triggers"]:
         print("  Триггеры по моделям: нет")
     else:
@@ -155,6 +171,61 @@ def set_tolerance(d):
     except Exception:
         print("  Неверное значение.")
 
+def _pick_model(known, title):
+    """Выбор из списка по номеру или ввод своего имени. Возвращает имя или None."""
+    for i, m in enumerate(known):
+        print(f"  {i}: {m}")
+    print(f"  m: ввести своё имя модели")
+    s = input(f"  {title} > ").strip()
+    if s.lower() == "m":
+        name = input("  Имя модели: ").strip()
+        return name or None
+    if s.isdigit() and 0 <= int(s) < len(known):
+        return known[int(s)]
+    return None
+
+def choose_models(d):
+    models = d.setdefault("models", {})
+    print("\n  Выбор модели ИИ для генерации анализа:")
+    print("  1) Gemini: порядок приоритета (первая основная, остальные запасные при ошибках 429/5xx)")
+    print("  2) Claude: одна модель")
+    print("  3) Сбросить обе на значения по умолчанию")
+    s = input("  > ").strip()
+    if s == "1":
+        for i, m in enumerate(GEMINI_KNOWN):
+            print(f"  {i}: {m}")
+        print("  Введите номера моделей по порядку приоритета через запятую (например 1,2); можно одну. Enter=отмена:")
+        raw = input("  > ").strip()
+        if not raw:
+            return
+        names = []
+        for x in raw.split(","):
+            x = x.strip()
+            if x.isdigit() and 0 <= int(x) < len(GEMINI_KNOWN) and GEMINI_KNOWN[int(x)] not in names:
+                names.append(GEMINI_KNOWN[int(x)])
+        if names:
+            models["gemini"] = names
+            save(d)
+        else:
+            print("  Ничего не выбрано.")
+    elif s == "2":
+        name = _pick_model(CLAUDE_KNOWN, "Номер")
+        if name:
+            models["claude"] = name
+            save(d)
+        else:
+            print("  Ничего не выбрано.")
+    elif s == "3":
+        d["models"] = {}
+        save(d)
+
+def push_to_github():
+    """Отправляет data/ai_schedule.json на GitHub через push_file_via_api.py; True при успехе."""
+    import subprocess, sys
+    r = subprocess.run([sys.executable, os.path.join(BASE_DIR, "scripts", "push_file_via_api.py"),
+                        "data/ai_schedule.json", "ai_schedule: update"], cwd=BASE_DIR)
+    return r.returncode == 0
+
 def generate_now():
     import subprocess, sys
     print("  Провайдер: 1=claude, 2=gemini, 3=оба (Enter=оба):")
@@ -181,6 +252,8 @@ def main():
         print("3) Переключить триггеры по моделям")
         print("4) Изменить допуск (±мин)")
         print("5) Генерировать немедленно")
+        print("6) Выбрать модель ИИ")
+        print("7) Отправить расписание на GitHub")
         print("0) Выход")
         choice = input("> ").strip()
         if choice == "1": add_time_point(d)
@@ -188,7 +261,22 @@ def main():
         elif choice == "3": toggle_model_trigger(d)
         elif choice == "4": set_tolerance(d)
         elif choice == "5": generate_now()
-        elif choice == "0": break
+        elif choice == "6": choose_models(d)
+        elif choice == "7":
+            global DIRTY
+            if push_to_github():
+                DIRTY = False
+            else:
+                print("  ✗ Не отправлено: проверьте ошибку выше (часто токен GH_DISPATCH_TOKEN в .env истёк).")
+        elif choice == "0":
+            if DIRTY:
+                ans = input("  Есть неотправленные изменения. Отправить на GitHub? [Y/n] ").strip().lower()
+                if ans in ("", "y", "д", "да"):
+                    if not push_to_github():
+                        again = input("  ✗ Не отправлено. Выйти всё равно? [y/N] ").strip().lower()
+                        if again not in ("y", "д", "да"):
+                            continue
+            break
         else: print("  ?")
 
 if __name__ == "__main__":
