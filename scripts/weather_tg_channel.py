@@ -1083,9 +1083,9 @@ def main():
         m = statistics.median(dp)
         if abs(m) >= P_CHANGE_HPA:
             cur = statistics.median([s["p"] for s in ok if s["p"] is not None])
-            word = "падение" if m < 0 else "рост"
-            alerts.append(("📉 <b>Быстрое %s давления:</b> %s гПа за 3 ч (сейчас ~%s гПа). Возможна смена погоды.\n🕐 %s" % (
-                word, ("+" if m > 0 else "−") + f1(abs(m)), f0(cur), hhmm(now)), False))
+            word = "Быстрое падение" if m < 0 else "Быстрый рост"   # согласование: «быстрое падение», «быстрый рост»
+            alerts.append(("%s <b>%s давления:</b> %s гПа за 3 ч (сейчас ~%s гПа). Возможна смена погоды.\n🕐 %s" % (
+                "📉" if m < 0 else "📈", word, ("+" if m > 0 else "−") + f1(abs(m)), f0(cur), hhmm(now)), False))
             an["p"] = now.strftime("%Y-%m-%dT%H:%M:%SZ")
     dtp = [d for d in (delta(s["obs"], "temp", 60) for s in ok) if d is not None]
     if len(dtp) >= 3 and not cool("t"):
