@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""График температуры на 14 дней с разбросом моделей (для страницы «Предварительный прогноз») и загрузка на Telegraph.
+"""График температуры на 14 дней с разбросом моделей (для страницы «Предварительный прогноз») и хостинг картинки в репозитории.
 
-  python3 weather_tg_chart.py [--upload]   тест: рисует по живым данным в /tmp/chart_test.png, с --upload грузит на Telegraph
+  python3 weather_tg_chart.py [--host]   тест: рисует по живым данным в /tmp/chart_test.png, с --host кладёт в репозиторий и печатает ссылку
 """
 import io
 import json
@@ -49,6 +49,39 @@ def temp_chart_png(days, daily, split_index):
     return buf.getvalue()
 
 
+REPO = "/opt/weather-pipeline/repo"
+RAW = "https://raw.githubusercontent.com/ruslan591/weather-_Odessa/main/"
+
+
+def host_in_repo(png, name):
+    """Telegraph не принимает анонимную загрузку картинок (400), поэтому PNG кладём в репозиторий (data/charts/<name>.png)
+    и отдаём ссылку raw.githubusercontent.com: Telegraph принимает внешний URL в img. Храним последние 8 графиков."""
+    import glob
+    import os
+    import subprocess
+    import time
+    rel = "data/charts/%s.png" % name
+    os.makedirs(os.path.join(REPO, "data", "charts"), exist_ok=True)
+    with open(os.path.join(REPO, rel), "wb") as f:
+        f.write(png)
+    for old in sorted(glob.glob(os.path.join(REPO, "data", "charts", "prelim_*.png")))[:-8]:
+        os.remove(old)
+
+    def git(*a):
+        return subprocess.run(["git", "-C", REPO] + list(a), capture_output=True, text=True, timeout=90)
+    git("add", "-A", "--", "data/charts")
+    git("commit", "-q", "-m", "charts: " + name, "--", "data/charts")
+    err = ""
+    for _ in range(3):
+        git("pull", "--rebase", "--autostash", "-q")
+        p = git("push", "-q", "origin", "main")
+        if p.returncode == 0:
+            return RAW + rel
+        err = p.stderr[:200]
+        time.sleep(4)
+    raise RuntimeError("git push: " + err)
+
+
 def upload_telegraph(png):
     """Загрузка PNG на Telegraph; возвращает полный URL или None."""
     b = uuid.uuid4().hex
@@ -71,8 +104,8 @@ if __name__ == "__main__":
     png = temp_chart_png(days, daily, 7)
     open("/tmp/chart_test.png", "wb").write(png)
     print("png", len(png), "байт")
-    if "--upload" in sys.argv:
+    if "--host" in sys.argv:
         try:
-            print("URL", upload_telegraph(png))
+            print("URL", host_in_repo(png, "prelim_" + ln.date().isoformat()))
         except Exception as e:
-            print("UPLOAD ERR", type(e).__name__, str(e)[:200], getattr(e, "read", lambda: b"")()[:200])
+            print("HOST ERR", type(e).__name__, str(e)[:200])
