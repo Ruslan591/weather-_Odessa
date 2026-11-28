@@ -327,7 +327,8 @@ def tg_send(env, text, silent):
     for attempt in range(2):
         try:
             with urllib.request.urlopen(urllib.request.Request(url, data=data), timeout=20) as r:
-                return json.loads(r.read().decode()).get("ok", False)
+                j = json.loads(r.read().decode())
+                return (j.get("result", {}).get("message_id") or True) if j.get("ok") else False   # id сообщения (для ссылок), True если id нет
         except urllib.error.HTTPError as e:
             log("TG HTTP %s" % e.code)
         except Exception as e:
